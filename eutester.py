@@ -19,9 +19,10 @@
 import re
 import paramiko
 import boto
+import random
 
 class EucaTester:
-    def __init__(self, config_file="../input/2b_tested.lst", host="CLC", password="foobar", keypath=None):
+    def __init__(self, config_file="cloud.conf", host="clc", password="foobar", keypath=None):
         """  
         EUCADIR => $eucadir, 
         VERIFY_LEVEL => $verify_level, 
@@ -45,19 +46,38 @@ class EucaTester:
         self.credpath = None
         self.timeout = 30
         self.exit_on_fail = 0
-        self.eucapath = "/"
+        
         self.fail_count = 0
         
         ### Read input file
-        self.read_config(config_file)
-        
+        config = self.read_config(config_file)
+        self.eucapath = "/opt/eucalyptus"
+        if "REPO" in config["machines"][0]["source"]:
+            self.eucapath="/"
+        print config["machines"]
+        ## CHOOSE A RANDOM HOST OF THIS COMPONENT TYPE
+        if len(host) < 5:
+            # Get a list of hosts with this role
+            machines_with_role = [machine['hostname'] for machine in config['machines'] if host in machine['components']]
+            print machines_with_role
+            host = random.choice(machines_with_role)
+            self.host = host
+            print host
         ### SETUP SSH CLIENT
-        self.ssh = paramiko.SSHClient()
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())            
         if keypath == None:
-            self.ssh.connect(host, password=password)
+            client.connect(host, username="root", password=password)
         else:
-            self.ssh.connect(host, keyfile_name=keypath)
-        
+            client.connect(host,  username="root", keyfile_name=keypath)
+        ### GET CREDENTIALS        
+        admin_cred_dir = "eucarc-eucalyptus-admin"
+        cmd_download_creds = self.eucapath + "/usr/sbin/euca_conf --get-credentials " + admin_cred_dir + "/creds.zip " + "--cred-user admin --cred-account eucalyptus" 
+        cmd_setup_cred_dir = ["rm -rf " + admin_cred_dir,"mkdir " + admin_cred_dir ,  cmd_download_creds , "unzip " + admin_cred_dir + "/creds.zip -d " + admin_cred_dir, "ls " + admin_cred_dir]
+        for cmd in cmd_setup_cred_dir:
+            print cmd
+            stdin, stdout, stderr = client.exec_command(cmd)
+            print stdout.readlines() + stderr.readlines()
         ### read the input file and return the config object/hash whatever it needs to be
     def set_config_file(self, filepath):
         self.config_file = filepath
@@ -86,8 +106,10 @@ class EucaTester:
     def __str__(self):
         s  = "+++++++++++++++++++++++++++++++++++++++++++++++++++++\n"
         s += "+" + "Host:" + self.host + "\n"
-        s += "+" + "Config File:" + self.config_file +"\n"
-        s += "+" + "Fail Count" +  str(self.fail_count) +"\n"
+        s += "+" + "Config File: " + self.config_file +"\n"
+        s += "+" + "Fail Count: " +  str(self.fail_count) +"\n"
+        s += "+" + "Eucalyptus Path: " +  str(self.eucapath) +"\n"
+        s += "+" + "Credential Path: " +  str(self.credpath) +"\n"
         s += "+++++++++++++++++++++++++++++++++++++++++++++++++++++"
         return s
     
@@ -97,20 +119,24 @@ class EucaTester:
         f = open(filepath, 'r')
         for line in f:
             ### LOOK for the line that is defining a machine description
-            re_machine_line = re.compile('^.+\t.+\t.+\t\d+\t.+\t')
+            line = line.strip()
+            re_machine_line = re.compile("\s+".join(
+                    ('(?:\d{1,3}\\.){3}\d{1,3}',  # IPv4
+                     '\w+', '\w+', '\w+', '\w+', '\\[[^\\]]+\\]')))
             if re_machine_line.match(line):
+                #print "Matched Machine :" + line
                 machine = {}
-                machine_details = line.split("\t")
+                machine_details = line.split(None, 5)
+                print machine_details
                 machine["hostname"] = machine_details[0]
                 machine["distro"] = machine_details[1]
                 machine["distro_ver"] = machine_details[2]
                 machine["arch"] = machine_details[3]
                 machine["source"] = machine_details[4]
-                machine["components"] = machine_details[5].strip('[]').split()
+                machine["components"] = map(str.lower, machine_details[5].strip('[]').split())
                 ### ADD the machine to the array of machines
                 machines.append(machine)
-            re_network = re.compile('NETWORK')
-            if re_network.match(line):
+            if line.find("NETWORK"):
                 config_hash["network"] = line.strip()
         config_hash["machines"] = machines 
         return config_hash
