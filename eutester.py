@@ -20,8 +20,9 @@ import re
 import paramiko
 import boto
 import random
+from bm_machine import bm_machine
 
-class EucaTester:
+class eutester:
     def __init__(self, config_file="cloud.conf", host="clc", password="foobar", keypath=None):
         """  
         EUCADIR => $eucadir, 
@@ -38,7 +39,6 @@ class EucaTester:
         3. Password to connect to the host
         4. 
         """
-        print "Constructing EucaTester Object"
         self.config_file = config_file        
         self.password = password
         self.keypath = keypath
@@ -46,23 +46,20 @@ class EucaTester:
         self.credpath = None
         self.timeout = 30
         self.exit_on_fail = 0
-        
+        self.exit_on_fail = 0
         self.fail_count = 0
-        
         ### Read input file
         config = self.read_config(config_file)
         self.eucapath = "/opt/eucalyptus"
-        if "REPO" in config["machines"][0]["source"]:
+        if "REPO" in config["machines"][0].source:
             self.eucapath="/"
         print config["machines"]
         ## CHOOSE A RANDOM HOST OF THIS COMPONENT TYPE
         if len(host) < 5:
             # Get a list of hosts with this role
-            machines_with_role = [machine['hostname'] for machine in config['machines'] if host in machine['components']]
-            print machines_with_role
+            machines_with_role = [machine.hostname for machine in config['machines'] if host in machine.components]
             host = random.choice(machines_with_role)
             self.host = host
-            print host
         ### SETUP SSH CLIENT
         client = paramiko.SSHClient()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())            
@@ -79,6 +76,53 @@ class EucaTester:
             stdin, stdout, stderr = client.exec_command(cmd)
             print stdout.readlines() + stderr.readlines()
         ### read the input file and return the config object/hash whatever it needs to be
+       
+    def read_config(self, filepath):
+        config_hash = {}
+        machines = []
+        f = None
+        try:
+            f = open(filepath, 'r')
+        except IOError as (errno, strerror):
+            print "Could not find config file " + self.config_file
+            exit(1)
+            #print "I/O error({0}): {1}".format(errno, strerror)
+            
+        for line in f:
+            ### LOOK for the line that is defining a machine description
+            line = line.strip()
+            re_machine_line = re.compile("\s+".join(
+                    ('(?:\d{1,3}\\.){3}\d{1,3}',  # IPv4
+                     '\w+', '\w+', '\w+', '\w+', '\\[[^\\]]+\\]')))
+            if re_machine_line.match(line):
+                #print "Matched Machine :" + line
+                machine_details = line.split(None, 5)
+                machine_dict = {}
+                machine_dict["hostname"] = machine_details[0]
+                machine_dict["distro"] = machine_details[1]
+                machine_dict["distro_ver"] = machine_details[2]
+                machine_dict["arch"] = machine_details[3]
+                machine_dict["source"] = machine_details[4]
+                machine_dict["components"] = map(str.lower, machine_details[5].strip('[]').split())
+                ### ADD the machine to the array of machine
+                machine = bm_machine(machine_dict["hostname"], machine_dict["distro"], machine_dict["distro_ver"], machine_dict["arch"], machine_dict["source"], machine_dict["components"])
+                machines.append(machine)
+                print machine
+            if line.find("NETWORK"):
+                config_hash["network"] = line.strip()
+        config_hash["machines"] = machines 
+        return config_hash
+    
+    def fail(self, message):
+        print "[TEST_REPORT] FAILED: " + message
+        if self.exit_on_fail == 1:
+            exit(1)
+        else:
+            return 0
+        
+    def test_name(self, message):
+        print "[TEST_REPORT] " + message
+    
     def set_config_file(self, filepath):
         self.config_file = filepath
     
@@ -87,18 +131,33 @@ class EucaTester:
         
     def set_host(self, host):
         self.host = host
-        
+    
+    def get_host(self):
+        return self.host
+    
     def set_credpath(self, path):
         self.credpath = path
+    
+    def get_credpath(self):
+        return self.credpath
         
     def set_timeout(self, seconds):
         self.timeout = seconds
-        
+    
+    def get_timeout(self):
+        return self.timeout
+            
     def set_eucapath(self, path):
         self.config_file = path
     
+    def get_eucapath(self):
+        return self.eucapath
+    
     def set_exit_on_fail(self, exit_on_fail):
         self.exit_on_fail = exit_on_fail
+    
+    def get_exit_on_fail(self):
+        return self.exit_on_fail
     
     def clear_fail_count(self):
         self.fail_count = 0
@@ -112,32 +171,4 @@ class EucaTester:
         s += "+" + "Credential Path: " +  str(self.credpath) +"\n"
         s += "+++++++++++++++++++++++++++++++++++++++++++++++++++++"
         return s
-    
-    def read_config(self, filepath):
-        config_hash = {}
-        machines = []
-        f = open(filepath, 'r')
-        for line in f:
-            ### LOOK for the line that is defining a machine description
-            line = line.strip()
-            re_machine_line = re.compile("\s+".join(
-                    ('(?:\d{1,3}\\.){3}\d{1,3}',  # IPv4
-                     '\w+', '\w+', '\w+', '\w+', '\\[[^\\]]+\\]')))
-            if re_machine_line.match(line):
-                #print "Matched Machine :" + line
-                machine = {}
-                machine_details = line.split(None, 5)
-                print machine_details
-                machine["hostname"] = machine_details[0]
-                machine["distro"] = machine_details[1]
-                machine["distro_ver"] = machine_details[2]
-                machine["arch"] = machine_details[3]
-                machine["source"] = machine_details[4]
-                machine["components"] = map(str.lower, machine_details[5].strip('[]').split())
-                ### ADD the machine to the array of machines
-                machines.append(machine)
-            if line.find("NETWORK"):
-                config_hash["network"] = line.strip()
-        config_hash["machines"] = machines 
-        return config_hash
-            
+ 
