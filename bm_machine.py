@@ -31,7 +31,7 @@ class bm_machine:
         s += "+" + "Hostname:" + self.hostname + "\n"
         s += "+" + "Distro: " + self.distro +"\n"
         s += "+" + "Distro Version: " +  self.distro_ver +"\n"
-        s += "+" + "Install Tyoe: " +  self.source +"\n"
+        s += "+" + "Install Type: " +  self.source +"\n"
         s += "+" + "Components: " +   str(self.components) +"\n"
         s += "+++++++++++++++++++++++++++++++++++++++++++++++++++++"
         return s
