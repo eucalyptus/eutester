@@ -26,7 +26,7 @@ import signal
 from bm_machine import bm_machine
 
 class eutester:
-    def __init__(self, config_file="cloud.conf", hostname="clc", password="foobar", keypath=None, credpath=None):
+    def __init__(self, config_file="cloud.conf", hostname="clc", password="foobar", keypath=None, credpath=None, debug=0):
         """  
         EUCADIR => $eucadir, 
         VERIFY_LEVEL => $verify_level, 
@@ -53,6 +53,7 @@ class eutester:
         self.exit_on_fail = 0
         self.fail_count = 0
         self.start_time = time.time()
+        self.key_dir = "./keypairs"
         ### Read input file
         config = self.read_config(config_file)
         self.eucapath = "/opt/eucalyptus"
@@ -84,8 +85,9 @@ class eutester:
         print self
         boto_access = self.get_access_key()
         boto_secret = self.get_secret_key()
-        self.ec2 = boto.connect_euca(host=self.hostname, aws_access_key_id=boto_access, aws_secret_access_key=boto_secret, debug=2)
-        self.walrus = boto.connect_walrus(host=self.hostname, aws_access_key_id=boto_access, aws_secret_access_key=boto_secret, debug=2)
+        self.debug = debug
+        self.ec2 = boto.connect_euca(host=self.hostname, aws_access_key_id=boto_access, aws_secret_access_key=boto_secret, debug=self.debug)
+        self.walrus = boto.connect_walrus(host=self.hostname, aws_access_key_id=boto_access, aws_secret_access_key=boto_secret, debug=self.debug)
                
         ### read the input file and return the config object/hash whatever it needs to be
     def get_access_key(self):
@@ -95,7 +97,36 @@ class eutester:
     def get_secret_key(self):
         secret_key = self.sys("cat ./" + self.credpath + "/eucarc | grep export | grep SECRET | awk 'BEGIN { FS = \"=\" } ; { print $2 }' ")      
         return secret_key[0].strip().strip("'")
-
+    
+    def add_keypair(self,key_name="keypair-" + str(int(time.time())) ):
+        print "Looking up keypair " + key_name 
+        key = self.ec2.get_all_key_pairs(keynames=[key_name])    
+        if key == []:
+            print 'Creating keypair: %s' % key_name
+            # Create an SSH key to use when logging into instances.
+            key = self.ec2.create_key_pair(key_name)
+        
+            # AWS will store the public key but the private key is
+            # generated and returned and needs to be stored locally.
+            # The save method will also chmod the file to protect
+            # your private key.
+            key.save(self.key_dir)
+            return key
+        else:
+            print "Key " + key_name + " already exists"
+    
+    def add_group(self, group_name="group-" + str(int(time.time())) ):
+        print "Looking up group " + group_name
+        group = self.ec2.get_all_security_groups(groupnames=[group_name])        
+        if group == []:
+            print 'Creating Security Group: %s' % group_name
+            # Create a security group to control access to instance via SSH.
+            group = self.ec2.create_security_group(group_name, group_name)
+            return group
+        else:
+             print "Group " + group_name + " already exists"
+             return group[0]
+    
     def read_config(self, filepath):
         config_hash = {}
         machines = []
