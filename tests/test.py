@@ -1,4 +1,4 @@
-from eutester import eutester
+from eutester import Eutester
 if __name__ == '__main__':
     clc_session = Eutester( credpath="eucarc-eucalyptus-admin", password="foobar")
     ### ACCESS THE CONNECTION TO EC2
@@ -6,5 +6,5 @@ if __name__ == '__main__':
     ### ACCESS THE CONNECTION TO WALRUS
     print clc_session.walrus.get_all_buckets()
     ### ACCESS THE SSH SESSION TO THE CLC
-    print clc_session.sys("free")
+    clc_session.sys("free")
     clc_session.do_exit()
