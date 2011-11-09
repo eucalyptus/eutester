@@ -1,0 +1,49 @@
+eutester version 0.0.1
+=====================
+
+eutester is an attempt to leverage existing test code to make test writing faster and standardized.
+
+Design:
+Eutester is designed to allow a user to quickly generate automated tests for testing a Eucalyptus cloud. There is a configuration file
+associated with the library that describes a few things about the clouds configuration including the bare metal machine configuration and IPs.
+
+The configuration file has the following structure:
+<ip or hostname>    CENTOS  5.7 64  REPO    [CC00 CLC SC00 WS]
+<ip or hostname>    VMWARE  ESX-4.0 64  REPO    [NC00]
+<ip or hostname>    VMWARE  ESXI-4.1    64  REPO    [NC00]
+
+Columns:
+    1. IP or hostname of machine
+    2. Distro installed on machine
+    3. Distro version on machine
+    4. Distro base architecture
+    5. List of components installed on this machine encapsulated in brackets []
+        - These components can be: 
+            a. CLC - Cloud Controller
+            b. WS - Walrus
+            c. SC00 - Storage controller for cluster 00
+            d. CC00 - Cluster controller for cluster 00
+            e. NC00 - A node controller in cluster 00
+
+The basic constructor will:
+    1. Connect to the machine denoted as CLC in the cloud.conf
+    2. Pull down credentials from the CLC if the credpath has not been provided
+    3. Setup boto connections to both ec2 and walrus on the cloud
+    4. Leave the SSH connection to the CLC up for further use
+
+SAMPLE FIRST SCRIPT
+
+from eutester import eutester
+if __name__ == '__main__':
+    clc_session = eutester.eutester( credpath="eucarc-eucalyptus-admin", password="foobar")
+    ### ACCESS THE CONNECTION TO EC2
+    print clc_session.ec2.get_all_images()
+    ### ACCESS THE CONNECTION TO WALRUS
+    print clc_session.walrus.get_all_buckets()
+    ### ACCESS THE SSH SESSION TO THE CLC
+    print clc_session.sys("free")
+    clc_session.do_exit()
+
+
+
+
