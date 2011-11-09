@@ -134,7 +134,7 @@ class eutester:
         try:
             f = open(filepath, 'r')
         except IOError as (errno, strerror):
-            print "Could not find config file " + self.config_file
+            print "ERROR: Could not find config file " + self.config_file
             exit(1)
             #print "I/O error({0}): {1}".format(errno, strerror)
             
