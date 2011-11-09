@@ -169,7 +169,7 @@ class eutester:
         else:
             return 0   
          
-    def timeout_handler(signum, frame):
+    def timeout_handler(self, signum, frame):
         self.fail("Command timeout after " + self.timeout + " seconds")
         raise Exception("Timeout Reached")
     
@@ -263,3 +263,4 @@ class eutester:
         s += "+" + "Credential Path: " +  str(self.credpath) +"\n"
         s += "+++++++++++++++++++++++++++++++++++++++++++++++++++++"
         return s
+    
