@@ -1,6 +1,6 @@
 from eutester import eutester
 if __name__ == '__main__':
-    clc_session = eutester.eutester( credpath="eucarc-eucalyptus-admin", password="foobar")
+    clc_session = Eutester( credpath="eucarc-eucalyptus-admin", password="foobar")
     ### ACCESS THE CONNECTION TO EC2
     print clc_session.ec2.get_all_images()
     ### ACCESS THE CONNECTION TO WALRUS
