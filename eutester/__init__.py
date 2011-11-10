@@ -128,6 +128,14 @@ class Eutester:
         secret_key = self.sys("cat ./" + self.credpath + "/eucarc | grep export | grep SECRET | awk 'BEGIN { FS = \"=\" } ; { print $2 }' ")      
         return secret_key[0].strip().strip("'")
     
+    def found(self, command, regex):
+        result = self.sys(command)
+        for line in result:
+            found = re.search(regex,line)
+            if found:
+                return 1
+        return 0
+    
     def add_keypair(self,key_name="keypair-" + str(int(time.time())) ):
         print "Looking up keypair " + key_name 
         key = self.ec2.get_all_key_pairs(keynames=[key_name])    
