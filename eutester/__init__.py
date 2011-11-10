@@ -41,7 +41,6 @@ import boto
 import random
 import time
 import signal
-
 from bm_machine import bm_machine
 
 class Eutester:
