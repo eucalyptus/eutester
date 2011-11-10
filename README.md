@@ -30,6 +30,7 @@ Columns
             e. NC00 - A node controller in cluster 00
 
 The basic constructor will:
+
     1. Connect to the machine denoted as CLC in the cloud.conf
     2. Pull down credentials from the CLC if the credpath has not been provided
     3. Setup boto connections to both ec2 and walrus on the cloud
@@ -38,16 +39,16 @@ The basic constructor will:
 SAMPLE FIRST SCRIPT
 -------------------
 
-from eutester import eutester
-if __name__ == '__main__':
-    clc_session = Eutester( credpath="eucarc-eucalyptus-admin", password="foobar")
-    ### ACCESS THE CONNECTION TO EC2
-    print clc_session.ec2.get_all_images()
-    ### ACCESS THE CONNECTION TO WALRUS
-    print clc_session.walrus.get_all_buckets()
-    ### ACCESS THE SSH SESSION TO THE CLC
-    print clc_session.sys("free")
-    clc_session.do_exit()
+    from eutester import eutester
+    if __name__ == '__main__':
+        clc_session = Eutester( credpath="eucarc-eucalyptus-admin", password="foobar")
+        ### ACCESS THE CONNECTION TO EC2
+        print clc_session.ec2.get_all_images()
+        ### ACCESS THE CONNECTION TO WALRUS
+        print clc_session.walrus.get_all_buckets()
+        ### ACCESS THE SSH SESSION TO THE CLC
+        print clc_session.sys("free")
+        clc_session.do_exit()
 
 
 
