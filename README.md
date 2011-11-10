@@ -23,12 +23,13 @@ Columns
 4. Distro base architecture
 5. List of components installed on this machine encapsulated in brackets []
 
-   These components can be: 
-   a. CLC - Cloud Controller
-   b. WS - Walrus
-   c. SC00 - Storage controller for cluster 00
-   d. CC00 - Cluster controller for cluster 00
-   e. NC00 - A node controller in cluster 00
+    These components can be: 
+
+    * CLC - Cloud Controller
+    * WS - Walrus
+    * SC00 - Storage controller for cluster 00
+    * CC00 - Cluster controller for cluster 00
+    * NC00 - A node controller in cluster 00
 
 The basic constructor will:
 
