@@ -76,7 +76,7 @@ class Eutester:
         ### Read input file
         config = self.read_config(config_file)
         self.eucapath = "/opt/eucalyptus"
-        print config["machines"]
+        #print config["machines"]
         if "REPO" in config["machines"][0].source:
             self.eucapath="/"
         ## CHOOSE A RANDOM HOST OF THIS COMPONENT TYPE
@@ -99,9 +99,9 @@ class Eutester:
             cmd_download_creds = self.eucapath + "/usr/sbin/euca_conf --get-credentials " + admin_cred_dir + "/creds.zip " + "--cred-user admin --cred-account eucalyptus" 
             cmd_setup_cred_dir = ["rm -rf " + admin_cred_dir,"mkdir " + admin_cred_dir ,  cmd_download_creds , "unzip " + admin_cred_dir + "/creds.zip -d " + admin_cred_dir, "ls " + admin_cred_dir]
             for cmd in cmd_setup_cred_dir:         
-                stdout = self.sys(cmd)
+                stdout = self.sys(cmd, verbose=0)
             self.credpath = admin_cred_dir
-        print self
+        
         boto_access = self.get_access_key()
         boto_secret = self.get_secret_key()
         self.debug = debug
@@ -118,14 +118,14 @@ class Eutester:
                                       host=self.hostname,
                                       port=8773,
                                       path="/services/Walrus")
-               
+        print self       
         ### read the input file and return the config object/hash whatever it needs to be
     def get_access_key(self):
-        access_key = self.sys( "cat ./" + self.credpath + "/eucarc | grep export | grep ACCESS | awk 'BEGIN { FS = \"=\" } ; { print $2 }' ")        
+        access_key = self.sys( "cat ./" + self.credpath + "/eucarc | grep export | grep ACCESS | awk 'BEGIN { FS = \"=\" } ; { print $2 }' ", verbose=0)        
         return access_key[0].strip().strip("'")
     
     def get_secret_key(self):
-        secret_key = self.sys("cat ./" + self.credpath + "/eucarc | grep export | grep SECRET | awk 'BEGIN { FS = \"=\" } ; { print $2 }' ")      
+        secret_key = self.sys("cat ./" + self.credpath + "/eucarc | grep export | grep SECRET | awk 'BEGIN { FS = \"=\" } ; { print $2 }' ", verbose=0)      
         return secret_key[0].strip().strip("'")
     
     def found(self, command, regex):
@@ -136,6 +136,13 @@ class Eutester:
                 return 1
         return 0
     
+    def modify_property(self, property, value):
+        command = self.eucapath + "/usr/sbin/euca-modify-property -p " + property + "=" + value
+        if self.found(command, property):
+            self.test_name("Properly modified property")
+        else:
+            self.fail("Could not modify " + property)
+            
     def add_keypair(self,key_name="keypair-" + str(int(time.time())) ):
         print "Looking up keypair " + key_name 
         key = self.ec2.get_all_key_pairs(keynames=[key_name])    
@@ -193,7 +200,7 @@ class Eutester:
                 ### ADD the machine to the array of machine
                 machine = bm_machine(machine_dict["hostname"], machine_dict["distro"], machine_dict["distro_ver"], machine_dict["arch"], machine_dict["source"], machine_dict["components"])
                 machines.append(machine)
-                print machine
+               # print machine
             if line.find("NETWORK"):
                 config_hash["network"] = line.strip()
         config_hash["machines"] = machines 
@@ -222,12 +229,14 @@ class Eutester:
         else:
             exit(0)
             
-    def sys(self, cmd):
+    def sys(self, cmd, verbose=1):
         time.sleep(self.delay)
         signal.signal(signal.SIGALRM, self.timeout_handler ) 
         signal.alarm(self.timeout) # triger alarm in timeout seconds
         cur_time = time.strftime("%I:%M:%S", time.gmtime())
-        print "[root@" + self.hostname + "-" + cur_time +"]# " + cmd
+        if verbose:
+            print "[root@" + self.hostname + "-" + cur_time +"]# " + cmd
+        
         try:
             if self.credpath != None:
                 cmd = ". " + self.credpath + "/eucarc && " + cmd
@@ -238,7 +247,8 @@ class Eutester:
             return
         signal.alarm(0)
         output = stdout.readlines()
-        print "".join(stderr.readlines()) + "".join(output) 
+        if verbose:
+            print "".join(stderr.readlines()) + "".join(output) 
         return output
     
     def test_name(self, message):
@@ -246,51 +256,9 @@ class Eutester:
     
     def get_exectuion_time(self):
         return time.time() - self.start_time
-    
-    def set_config_file(self, filepath):
-        self.config_file = filepath
-    
-    def get_config_file(self):
-        return self.config_file
-        
-    def set_host(self, host):
-        self.host = host
-    
-    def get_host(self):
-        return self.host
-    
-    def set_credpath(self, path):
-        self.credpath = path
-    
-    def get_credpath(self):
-        return self.credpath
-        
-    def set_timeout(self, seconds):
-        self.timeout = seconds
-    
-    def get_timeout(self):
-        return self.timeout
-            
-    def set_eucapath(self, path):
-        self.config_file = path
-    
-    def get_eucapath(self):
-        return self.eucapath
-    
-    def set_exit_on_fail(self, exit_on_fail):
-        self.exit_on_fail = exit_on_fail
-    
-    def get_exit_on_fail(self):
-        return self.exit_on_fail
-    
+       
     def clear_fail_count(self):
         self.fail_count = 0
-        
-    def set_delay(self, delay):
-        self.delay = delay
-    
-    def get_delay(self):
-        return self.delay
     
     def __str__(self):
         s  = "+++++++++++++++++++++++++++++++++++++++++++++++++++++\n"
