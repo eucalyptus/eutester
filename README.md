@@ -17,24 +17,24 @@ The configuration file has the following structure:
 Columns
 -------
 
-    1. IP or hostname of machine
-    2. Distro installed on machine
-    3. Distro version on machine
-    4. Distro base architecture
-    5. List of components installed on this machine encapsulated in brackets []
-        - These components can be: 
-            a. CLC - Cloud Controller
-            b. WS - Walrus
-            c. SC00 - Storage controller for cluster 00
-            d. CC00 - Cluster controller for cluster 00
-            e. NC00 - A node controller in cluster 00
+1. IP or hostname of machine
+2. Distro installed on machine
+3. Distro version on machine
+4. Distro base architecture
+5. List of components installed on this machine encapsulated in brackets []
+   These components can be: 
+      a. CLC - Cloud Controller
+      b. WS - Walrus
+      c. SC00 - Storage controller for cluster 00
+      d. CC00 - Cluster controller for cluster 00
+      e. NC00 - A node controller in cluster 00
 
 The basic constructor will:
 
-    1. Connect to the machine denoted as CLC in the cloud.conf
-    2. Pull down credentials from the CLC if the credpath has not been provided
-    3. Setup boto connections to both ec2 and walrus on the cloud
-    4. Leave the SSH connection to the CLC up for further use
+1. Connect to the machine denoted as CLC in the cloud.conf
+2. Pull down credentials from the CLC if the credpath has not been provided
+3. Setup boto connections to both ec2 and walrus on the cloud
+4. Leave the SSH connection to the CLC up for further use
 
 SAMPLE FIRST SCRIPT
 -------------------
