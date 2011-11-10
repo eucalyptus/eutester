@@ -32,7 +32,7 @@
 #         
 
 try:
-    from setuptools import setup, find_packages
+    from setuptools import setup
 except ImportError:
     from distutils.core import setup
 
@@ -45,7 +45,7 @@ setup(name = "eutester",
       author = "Victor Iglesias",
       author_email = "vic.iglesias@eucalyptus.com",
       url = "http://open.eucalyptus.com",
-      packages = find_packages(),
+      packages = ["eutester"],
       license = 'BSD (Simplified)',
       platforms = 'Posix; MacOS X; Windows',
       classifiers = [ 'Development Status :: Alpha',
