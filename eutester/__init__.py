@@ -41,6 +41,7 @@ import boto
 import random
 import time
 import signal
+from boto.ec2.regioninfo import RegionInfo
 from bm_machine import bm_machine
 
 class Eutester:
@@ -104,8 +105,19 @@ class Eutester:
         boto_access = self.get_access_key()
         boto_secret = self.get_secret_key()
         self.debug = debug
-        self.ec2 = boto.connect_euca(host=self.hostname, aws_access_key_id=boto_access, aws_secret_access_key=boto_secret, debug=self.debug)
-        self.walrus = boto.connect_walrus(host=self.hostname, aws_access_key_id=boto_access, aws_secret_access_key=boto_secret, debug=self.debug)
+#        self.ec2 = boto.connect_euca(host=self.hostname, aws_access_key_id=boto_access, aws_secret_access_key=boto_secret, debug=self.debug)
+        self.ec2 = boto.connect_ec2(aws_access_key_id=boto_access,
+                                    aws_secret_access_key=boto_secret,
+                                    is_secure=False,
+                                    region=RegionInfo(name="eucalyptus", endpoint=self.hostname),
+                                    port=8773,
+                                    path="/services/Eucalyptus")
+        self.walrus = boto.connect_s3(aws_access_key_id=boto_access,
+                                      aws_secret_access_key=boto_secret,
+                                      is_secure=False,
+                                      host=self.hostname,
+                                      port=8773,
+                                      path="/services/Walrus")
                
         ### read the input file and return the config object/hash whatever it needs to be
     def get_access_key(self):

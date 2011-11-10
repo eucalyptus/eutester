@@ -44,7 +44,7 @@ The basic constructor will:
 SAMPLE FIRST SCRIPT
 -------------------
 
-    from eutester import eutester
+    from eutester import Eutester
     if __name__ == '__main__':
         clc_session = Eutester( credpath="eucarc-eucalyptus-admin", password="foobar")
         ### ACCESS THE CONNECTION TO EC2
