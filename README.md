@@ -11,11 +11,11 @@ associated with the library that describes a few things about the clouds configu
 
 The configuration file has the following structure:
 
-<ip or hostname>    CENTOS  5.7 64  REPO    [CC00 CLC SC00 WS]
+clc.mydomain.com    CENTOS  5.7 64  REPO    [CC00 CLC SC00 WS]
 
-<ip or hostname>    VMWARE  ESX-4.0 64  REPO    [NC00]
+nc1.mydomain.com    VMWARE  ESX-4.0 64  REPO    [NC00]
 
-<ip or hostname>    VMWARE  ESXI-4.1    64  REPO    [NC00]
+nc2.mydomain.com    VMWARE  ESXI-4.1    64  REPO    [NC00]
 
 Columns
 -------
