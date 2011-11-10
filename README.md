@@ -1,9 +1,11 @@
 eutester version 0.0.1
-=====================
+======================
 
 eutester is an attempt to leverage existing test code to make test writing faster and standardized.
 
-Design:
+Design
+------
+
 Eutester is designed to allow a user to quickly generate automated tests for testing a Eucalyptus cloud. There is a configuration file
 associated with the library that describes a few things about the clouds configuration including the bare metal machine configuration and IPs.
 
@@ -12,7 +14,9 @@ The configuration file has the following structure:
 <ip or hostname>    VMWARE  ESX-4.0 64  REPO    [NC00]
 <ip or hostname>    VMWARE  ESXI-4.1    64  REPO    [NC00]
 
-Columns:
+Columns
+-------
+
     1. IP or hostname of machine
     2. Distro installed on machine
     3. Distro version on machine
@@ -32,6 +36,7 @@ The basic constructor will:
     4. Leave the SSH connection to the CLC up for further use
 
 SAMPLE FIRST SCRIPT
+-------------------
 
 from eutester import eutester
 if __name__ == '__main__':
