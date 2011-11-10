@@ -10,8 +10,11 @@ Eutester is designed to allow a user to quickly generate automated tests for tes
 associated with the library that describes a few things about the clouds configuration including the bare metal machine configuration and IPs.
 
 The configuration file has the following structure:
+
 <ip or hostname>    CENTOS  5.7 64  REPO    [CC00 CLC SC00 WS]
+
 <ip or hostname>    VMWARE  ESX-4.0 64  REPO    [NC00]
+
 <ip or hostname>    VMWARE  ESXI-4.1    64  REPO    [NC00]
 
 Columns
