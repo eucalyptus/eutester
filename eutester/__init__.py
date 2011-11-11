@@ -47,7 +47,7 @@ from boto.ec2.regioninfo import RegionInfo
 from bm_machine import bm_machine
 
 class Eutester:
-    def __init__(self, config_file="cloud.conf", hostname="clc", password="foobar", keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, debug=0):
+    def __init__(self, config_file="cloud.conf", hostname=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, debug=0):
         """  
         EUCADIR => $eucadir, 
         VERIFY_LEVEL => $verify_level, 
@@ -79,32 +79,44 @@ class Eutester:
         self.config = self.read_config(config_file)
         self.eucapath = "/opt/eucalyptus"
         self.debug = debug
-        
+        self.ssh = None
+        self.hostname = hostname
         #print config["machines"]
         if "REPO" in self.config["machines"][0].source:
             self.eucapath="/"
         ## CHOOSE A RANDOM HOST OF THIS COMPONENT TYPE
-        if len(hostname) < 5:
-            component_hostname = self.get_component_ip(hostname)
-            self.hostname = component_hostname
+        if self.hostname != None:
+            if len(hostname) < 5:
+                component_hostname = self.get_component_ip(hostname)
+                self.hostname = component_hostname
         
         ## IF I WASNT PROVIDED KEY TRY TO GET THEM FROM THE EUCARC IN CREDPATH
         if (aws_access_key_id == None) or (aws_secret_access_key == None):
             ## IF I WASNT GIVEN A CREDPATH GET THE CREDS AND DOWNLOAD THEM
             if (self.credpath == None):
+                if self.password == None and self.keypath == None:
+                    raise Exception("No root password or keypath given in absence of credpath or access and secret keys")
+                    exit(1)
                 client = paramiko.SSHClient()
                 client.set_missing_host_key_policy(paramiko.AutoAddPolicy())            
                 if keypath == None:
-                    client.connect(self.hostname, username="root", password=password)
+                    client.connect(self.get_component_ip("clc"), username="root", password=password)
                 else:
-                    client.connect(self.hostname,  username="root", keyfile_name=keypath)
-                self.clc_ssh = client    
-                self.credpath = self.get_credentials("eucalyptus", "admin")
-            
+                    client.connect(self.get_component_ip("clc"),  username="root", keyfile_name=keypath)
+                self.ssh = client    
+                self.credpath = self.get_credentials("eucalyptus", "admin")            
             aws_access_key_id = self.get_access_key()
             aws_secret_access_key = self.get_secret_key()
             
-        
+        if hostname != None:
+            client = paramiko.SSHClient()
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            if keypath == None:
+                client.connect(self.get_component_ip("clc"), username="root", password=password)
+            else:
+                client.connect(self.get_component_ip("clc"),  username="root", keyfile_name=keypath)
+            self.ssh = client
+            
 #       self.ec2 = boto.connect_euca(host=self.hostname, aws_access_key_id=boto_access, aws_secret_access_key=boto_secret, debug=self.debug)
         self.ec2 = boto.connect_ec2(aws_access_key_id=aws_access_key_id,
                                     aws_secret_access_key=aws_secret_access_key,
@@ -140,7 +152,7 @@ class Eutester:
         cmd_setup_cred_dir = ["rm -rf " + admin_cred_dir,"mkdir " + admin_cred_dir ,  cmd_download_creds, "unzip " + admin_cred_dir + "/creds.zip " + "-d " + admin_cred_dir]
         for cmd in cmd_setup_cred_dir:         
             stdout = self.sys(cmd, verbose=0)
-        sftp = self.clc_ssh.open_sftp()
+        sftp = self.ssh.open_sftp()
         pwd = subprocess.check_output("pwd").strip()
         sftp.chdir(admin_cred_dir)
         os.mkdir(admin_cred_dir)
@@ -259,6 +271,9 @@ class Eutester:
             exit(0)
             
     def sys(self, cmd, verbose=1):
+        if self.ssh == None:
+            raise Exception("Cannot run sys commands as ssh session has not been setup ")
+            return
         time.sleep(self.delay)
         signal.signal(signal.SIGALRM, self.timeout_handler ) 
         signal.alarm(self.timeout) # triger alarm in timeout seconds
@@ -269,7 +284,7 @@ class Eutester:
         try:
             if self.credpath != None:
                 cmd = ". " + self.credpath + "/eucarc && " + cmd
-            stdin, stdout, stderr = self.clc_ssh.exec_command(cmd)   
+            stdin, stdout, stderr = self.ssh.exec_command(cmd)   
         except Exception, e:
             self.fail("Command timeout after " + str(self.timeout) + " seconds\nException:" + str(e)) 
             print e
