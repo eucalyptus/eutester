@@ -36,6 +36,8 @@
 __version__ = '0.0.1'
 
 import re
+import os
+import subprocess
 import paramiko
 import boto
 import random
@@ -45,7 +47,7 @@ from boto.ec2.regioninfo import RegionInfo
 from bm_machine import bm_machine
 
 class Eutester:
-    def __init__(self, config_file="cloud.conf", hostname="clc", password="foobar", keypath=None, credpath=None, debug=0):
+    def __init__(self, config_file="cloud.conf", hostname="clc", password="foobar", keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, debug=0):
         """  
         EUCADIR => $eucadir, 
         VERIFY_LEVEL => $verify_level, 
@@ -74,59 +76,77 @@ class Eutester:
         self.start_time = time.time()
         self.key_dir = "./keypairs"
         ### Read input file
-        config = self.read_config(config_file)
+        self.config = self.read_config(config_file)
         self.eucapath = "/opt/eucalyptus"
+        self.debug = debug
+        
         #print config["machines"]
-        if "REPO" in config["machines"][0].source:
+        if "REPO" in self.config["machines"][0].source:
             self.eucapath="/"
         ## CHOOSE A RANDOM HOST OF THIS COMPONENT TYPE
         if len(hostname) < 5:
-            # Get a list of hosts with this role
-            machines_with_role = [machine.hostname for machine in config['machines'] if hostname in machine.components]
-            hostname = random.choice(machines_with_role)
-            self.hostname = hostname
-        ### SETUP SSH CLIENT
-        client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())            
-        if keypath == None:
-            client.connect(self.hostname, username="root", password=password)
-        else:
-            client.connect(self.hostname,  username="root", keyfile_name=keypath)
-        ### GET CREDENTIALS
-        self.clc_ssh = client    
-        if credpath == None:    
-            admin_cred_dir = "eucarc-eucalyptus-admin"
-            cmd_download_creds = self.eucapath + "/usr/sbin/euca_conf --get-credentials " + admin_cred_dir + "/creds.zip " + "--cred-user admin --cred-account eucalyptus" 
-            cmd_setup_cred_dir = ["rm -rf " + admin_cred_dir,"mkdir " + admin_cred_dir ,  cmd_download_creds , "unzip " + admin_cred_dir + "/creds.zip -d " + admin_cred_dir, "ls " + admin_cred_dir]
-            for cmd in cmd_setup_cred_dir:         
-                stdout = self.sys(cmd, verbose=0)
-            self.credpath = admin_cred_dir
+            component_hostname = self.get_component_ip(hostname)
+            self.hostname = component_hostname
         
-        boto_access = self.get_access_key()
-        boto_secret = self.get_secret_key()
-        self.debug = debug
-#        self.ec2 = boto.connect_euca(host=self.hostname, aws_access_key_id=boto_access, aws_secret_access_key=boto_secret, debug=self.debug)
-        self.ec2 = boto.connect_ec2(aws_access_key_id=boto_access,
-                                    aws_secret_access_key=boto_secret,
+        ## IF I WASNT PROVIDED KEY TRY TO GET THEM FROM THE EUCARC IN CREDPATH
+        if (aws_access_key_id == None) or (aws_secret_access_key == None):
+            ## IF I WASNT GIVEN A CREDPATH GET THE CREDS AND DOWNLOAD THEM
+            if (self.credpath == None):
+                client = paramiko.SSHClient()
+                client.set_missing_host_key_policy(paramiko.AutoAddPolicy())            
+                if keypath == None:
+                    client.connect(self.hostname, username="root", password=password)
+                else:
+                    client.connect(self.hostname,  username="root", keyfile_name=keypath)
+                self.clc_ssh = client    
+                self.credpath = self.get_credentials("eucalyptus", "admin")
+            
+            aws_access_key_id = self.get_access_key()
+            aws_secret_access_key = self.get_secret_key()
+            
+        
+#       self.ec2 = boto.connect_euca(host=self.hostname, aws_access_key_id=boto_access, aws_secret_access_key=boto_secret, debug=self.debug)
+        self.ec2 = boto.connect_ec2(aws_access_key_id=aws_access_key_id,
+                                    aws_secret_access_key=aws_secret_access_key,
                                     is_secure=False,
-                                    region=RegionInfo(name="eucalyptus", endpoint=self.hostname),
+                                    region=RegionInfo(name="eucalyptus", endpoint=self.get_component_ip("clc")),
                                     port=8773,
                                     path="/services/Eucalyptus")
-        self.walrus = boto.connect_s3(aws_access_key_id=boto_access,
-                                      aws_secret_access_key=boto_secret,
+        self.walrus = boto.connect_s3(aws_access_key_id=aws_access_key_id,
+                                      aws_secret_access_key=aws_secret_access_key,
                                       is_secure=False,
-                                      host=self.hostname,
+                                      host=self.get_component_ip("ws"),
                                       port=8773,
                                       path="/services/Walrus")
-        print self       
+        #print self       
         ### read the input file and return the config object/hash whatever it needs to be
     def get_access_key(self):
-        access_key = self.sys( "cat ./" + self.credpath + "/eucarc | grep export | grep ACCESS | awk 'BEGIN { FS = \"=\" } ; { print $2 }' ", verbose=0)        
-        return access_key[0].strip().strip("'")
+        with open( self.credpath + "/eucarc") as eucarc:
+            for line in eucarc.readlines():
+                if re.search("EC2_ACCESS_KEY",line):
+                    return line.split("=")[1].strip().strip("'")
+            raise Exception("Unable to find access key in eucarc")   
     
     def get_secret_key(self):
-        secret_key = self.sys("cat ./" + self.credpath + "/eucarc | grep export | grep SECRET | awk 'BEGIN { FS = \"=\" } ; { print $2 }' ", verbose=0)      
-        return secret_key[0].strip().strip("'")
+        with open( self.credpath + "/eucarc") as eucarc:
+            for line in eucarc.readlines():
+                if re.search("EC2_SECRET_KEY", line):
+                    return line.split("=")[1].strip().strip("'")
+            raise Exception("Unable to find access key in eucarc")   
+    
+    def get_credentials(self, account, user):
+        admin_cred_dir = "eucarc-" + account + "-" + user
+        cmd_download_creds = self.eucapath + "/usr/sbin/euca_conf --get-credentials " + admin_cred_dir + "/creds.zip " + "--cred-user "+ user +" --cred-account " + account 
+        cmd_setup_cred_dir = ["rm -rf " + admin_cred_dir,"mkdir " + admin_cred_dir ,  cmd_download_creds, "unzip " + admin_cred_dir + "/creds.zip " + "-d " + admin_cred_dir]
+        for cmd in cmd_setup_cred_dir:         
+            stdout = self.sys(cmd, verbose=0)
+        sftp = self.clc_ssh.open_sftp()
+        pwd = subprocess.check_output("pwd").strip()
+        sftp.chdir(admin_cred_dir)
+        os.mkdir(admin_cred_dir)
+        sftp.get("creds.zip" , admin_cred_dir + "/creds.zip")
+        os.system("unzip " + admin_cred_dir + "/creds.zip -d " + admin_cred_dir )
+        return admin_cred_dir
     
     def found(self, command, regex):
         result = self.sys(command)
@@ -172,6 +192,15 @@ class Eutester:
              print "Group " + group_name + " already exists"
              return group[0]
     
+    def get_component_ip(self, component):
+        #loop through machines looking for this component type
+        component.lower()
+        machines_with_role = [machine.hostname for machine in self.config['machines'] if component in machine.components]
+        if len(machines_with_role) == 0:
+            raise Exception("Could not find component "  + component + " in list of machines")
+        else:
+             return random.choice(machines_with_role)
+        
     def read_config(self, filepath):
         config_hash = {}
         machines = []
@@ -220,8 +249,8 @@ class Eutester:
     
     def do_exit(self):       
         exit_report  = "******************************************************\n"
-        exit_report += "*" + "Failures:" + str(self.fail_count) + "\n"
-        exit_report += "*" + "Time to execute: " + str(self.get_exectuion_time()) +"\n"
+        exit_report += "*" + "    Failures:" + str(self.fail_count) + "\n"
+        exit_report += "*" + "    Time to execute: " + str(self.get_exectuion_time()) +"\n"
         exit_report += "******************************************************\n"
         print exit_report
         if self.fail_count > 0:
@@ -260,12 +289,22 @@ class Eutester:
     def clear_fail_count(self):
         self.fail_count = 0
     
+    def connect_euare(self):
+        self.euare = boto.connect_iam(aws_access_key_id=self.get_access_key(),
+                                    aws_secret_access_key=self.get_secret_key(),
+                                    is_secure=False,
+                                    host=self.get_component_ip("clc"),
+                                    port=8773,
+                                    path="/services/Euare")
+    
     def __str__(self):
         s  = "+++++++++++++++++++++++++++++++++++++++++++++++++++++\n"
+        s += "+" + "Eucateser Configuration" + "\n"
+        s += "+" + "+++++++++++++++++++++++++++++++++++++++++++++++\n"
         s += "+" + "Host:" + self.hostname + "\n"
         s += "+" + "Config File: " + self.config_file +"\n"
         s += "+" + "Fail Count: " +  str(self.fail_count) +"\n"
         s += "+" + "Eucalyptus Path: " +  str(self.eucapath) +"\n"
         s += "+" + "Credential Path: " +  str(self.credpath) +"\n"
-        s += "+++++++++++++++++++++++++++++++++++++++++++++++++++++"
+        s += "+++++++++++++++++++++++++++++++++++++++++++++++++++++\n"
         return s
