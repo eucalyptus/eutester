@@ -265,6 +265,11 @@ class Eutester:
         exit_report += "*" + "    Time to execute: " + str(self.get_exectuion_time()) +"\n"
         exit_report += "******************************************************\n"
         print exit_report
+        try:
+            subprocess.call(["rm", "-rf", self.credpath])
+        except Exception, e:
+            print "No need to delete creds"
+            
         if self.fail_count > 0:
             exit(1)
         else:
