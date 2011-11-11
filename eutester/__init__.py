@@ -153,7 +153,7 @@ class Eutester:
         for cmd in cmd_setup_cred_dir:         
             stdout = self.sys(cmd, verbose=0)
         sftp = self.ssh.open_sftp()
-        pwd = subprocess.check_output("pwd").strip()
+        pwd = os.getcwd()
         sftp.chdir(admin_cred_dir)
         os.mkdir(admin_cred_dir)
         sftp.get("creds.zip" , admin_cred_dir + "/creds.zip")
@@ -275,10 +275,14 @@ class Eutester:
         else:
             exit(0)
             
-    def sys(self, cmd, verbose=1):
+    def sys(self, cmd, verbose=1, timeout=-2):
         if self.ssh == None:
             raise Exception("Cannot run sys commands as ssh session has not been setup ")
             return
+        # default timeout is to use module-defined timeout
+        # -1 should be reserved for "no timeout" option
+        if timeout == -2:
+            timeout = self.timeout
         time.sleep(self.delay)
         signal.signal(signal.SIGALRM, self.timeout_handler ) 
         signal.alarm(self.timeout) # triger alarm in timeout seconds
