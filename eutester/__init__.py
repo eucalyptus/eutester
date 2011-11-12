@@ -312,10 +312,14 @@ class Eutester:
         else:
             exit(0)
             
-    def sys(self, cmd, verbose=1):
+    def sys(self, cmd, verbose=1, timeout=-2):
         if self.ssh == None:
             raise Exception("Cannot run sys commands as ssh session has not been setup ")
             return
+        # default timeout is to use module-defined timeout
+        # -1 should be reserved for "no timeout" option
+        if timeout == -2:
+            timeout = self.timeout
         time.sleep(self.delay)
         signal.signal(signal.SIGALRM, self.timeout_handler ) 
         signal.alarm(self.timeout) # triger alarm in timeout seconds
