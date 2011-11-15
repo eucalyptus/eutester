@@ -321,7 +321,7 @@ class Eutester:
             timeout = self.timeout
         time.sleep(self.delay)
         signal.signal(signal.SIGALRM, self.timeout_handler ) 
-        signal.alarm(self.timeout) # triger alarm in timeout seconds
+        signal.alarm(timeout) # triger alarm in timeout seconds
         cur_time = time.strftime("%I:%M:%S", time.gmtime())
         if verbose:
             if self.ssh == None:
