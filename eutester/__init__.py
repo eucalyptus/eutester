@@ -108,14 +108,15 @@ class Eutester:
             aws_access_key_id = self.get_access_key()
             aws_secret_access_key = self.get_secret_key()
             
-        if hostname != None:
+        if self.hostname != None:
             client = paramiko.SSHClient()
             client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             if keypath == None:
-                client.connect(self.get_component_ip("clc"), username="root", password=password)
+                client.connect(self.hostname, username="root", password=password)
             else:
-                client.connect(self.get_component_ip("clc"),  username="root", keyfile_name=keypath)
+                client.connect(self.hostname,  username="root", keyfile_name=keypath)
             self.ssh = client
+            self.sftp = self.ssh.open_sftp()
             
 #       self.ec2 = boto.connect_euca(host=self.hostname, aws_access_key_id=boto_access, aws_secret_access_key=boto_secret, debug=self.debug)
         self.ec2 = boto.connect_ec2(aws_access_key_id=aws_access_key_id,
@@ -153,7 +154,6 @@ class Eutester:
         for cmd in cmd_setup_cred_dir:         
             stdout = self.sys(cmd, verbose=0)
         sftp = self.ssh.open_sftp()
-        pwd = os.getcwd()
         sftp.chdir(admin_cred_dir)
         os.mkdir(admin_cred_dir)
         sftp.get("creds.zip" , admin_cred_dir + "/creds.zip")
@@ -203,6 +203,43 @@ class Eutester:
         else:
              print "Group " + group_name + " already exists"
              return group[0]
+    
+    def create_bucket(self,bucket_name):
+        """
+        Create a bucket.  If the bucket already exists and you have
+        access to it, no error will be returned by AWS.
+        Note that bucket names are global to S3
+        so you need to choose a unique name.
+        """
+        # First let's see if we already have a bucket of this name.
+        # The lookup method will return a Bucket object if the
+        # bucket exists and we have access to it or None.
+        bucket = self.walrus.lookup(bucket_name)
+        if bucket:
+            print 'Bucket (%s) already exists' % bucket_name
+        else:
+                # Let's try to create the bucket.  This will fail if
+                # the bucket has already been created by someone else.
+            try:
+                bucket = self.walrus.create_bucket(bucket_name)
+            except self.walrus.provider.storage_create_error, e:
+                print 'Bucket (%s) is owned by another user' % bucket_name
+        return bucket
+    
+    def upload_object_file(self, bucket_name, key_name, path_to_file):
+        """
+        Write the contents of a local file to walrus and also store custom
+        metadata with the object.
+        bucket_name   The name of the walrus Bucket.
+        key_name      The name of the object containing the data in walrus.
+        path_to_file  Fully qualified path to local file.
+        """
+        bucket = s3.lookup(bucket_name)
+        # Get a new, blank Key object from the bucket.  This Key object only
+        # exists locally until we actually store data in it.
+        key = bucket.new_key(key_name)
+        key.set_contents_from_filename(path_to_file)
+        return key
     
     def get_component_ip(self, component):
         #loop through machines looking for this component type
@@ -291,8 +328,10 @@ class Eutester:
             print "[root@" + self.hostname + "-" + cur_time +"]# " + cmd
         
         try:
-            if self.credpath != None:
-                cmd = ". " + self.credpath + "/eucarc && " + cmd
+            for item in self.sftp.listdir():
+                if re.match(self.credpath,item):
+                    cmd = ". " + self.credpath + "/eucarc && " + cmd
+                    break
             stdin, stdout, stderr = self.ssh.exec_command(cmd)   
         except Exception, e:
             self.fail("Command timeout after " + str(self.timeout) + " seconds\nException:" + str(e)) 
