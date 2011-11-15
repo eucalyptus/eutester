@@ -83,7 +83,7 @@ class Eutester:
         self.ssh = None
         self.hostname = hostname
         self.logger = eulogger.Eulogger(name='euca').log
-
+        
         #print config["machines"]
         if "REPO" in self.config["machines"][0].source:
             self.eucapath="/"
@@ -134,124 +134,7 @@ class Eutester:
                                       path="/services/Walrus")
         #print self       
         ### read the input file and return the config object/hash whatever it needs to be
-    def get_access_key(self):
-        with open( self.credpath + "/eucarc") as eucarc:
-            for line in eucarc.readlines():
-                if re.search("EC2_ACCESS_KEY",line):
-                    return line.split("=")[1].strip().strip("'")
-            raise Exception("Unable to find access key in eucarc")   
-    
-    def get_secret_key(self):
-        with open( self.credpath + "/eucarc") as eucarc:
-            for line in eucarc.readlines():
-                if re.search("EC2_SECRET_KEY", line):
-                    return line.split("=")[1].strip().strip("'")
-            raise Exception("Unable to find access key in eucarc")   
-    
-    def get_credentials(self, account, user):
-        admin_cred_dir = "eucarc-" + account + "-" + user
-        self.sys("rm -rf " + admin_cred_dir)
-        self.sys("mkdir " + admin_cred_dir)
-        cmd_download_creds = self.eucapath + "/usr/sbin/euca_conf --get-credentials " + admin_cred_dir + "/creds.zip " + "--cred-user "+ user +" --cred-account " + account 
-        cmd_setup_cred_dir = ["rm -rf " + admin_cred_dir,"mkdir " + admin_cred_dir ,  cmd_download_creds, "unzip " + admin_cred_dir + "/creds.zip " + "-d " + admin_cred_dir]
-        for cmd in cmd_setup_cred_dir:         
-            stdout = self.sys(cmd, verbose=1)
-        os.system("rm -rf " + admin_cred_dir)
-        os.mkdir(admin_cred_dir)
-        self.sftp.get(admin_cred_dir + "/creds.zip" , admin_cred_dir + "/creds.zip")
-        os.system("unzip -o " + admin_cred_dir + "/creds.zip -d " + admin_cred_dir )
-        return admin_cred_dir
-    
-    def found(self, command, regex):
-        result = self.sys(command)
-        for line in result:
-            found = re.search(regex,line)
-            if found:
-                return 1
-        return 0
-    
-    def modify_property(self, property, value):
-        command = self.eucapath + "/usr/sbin/euca-modify-property -p " + property + "=" + value
-        if self.found(command, property):
-            self.test_name("Properly modified property")
-        else:
-            self.fail("Could not modify " + property)
-            
-    def add_keypair(self,key_name="keypair-" + str(int(time.time())) ):
-        print "Looking up keypair " + key_name 
-        key = self.ec2.get_all_key_pairs(keynames=[key_name])    
-        if key == []:
-            print 'Creating keypair: %s' % key_name
-            # Create an SSH key to use when logging into instances.
-            key = self.ec2.create_key_pair(key_name)
-        
-            # AWS will store the public key but the private key is
-            # generated and returned and needs to be stored locally.
-            # The save method will also chmod the file to protect
-            # your private key.
-            key.save(self.key_dir)
-            return key
-        else:
-            print "Key " + key_name + " already exists"
-    
-    def add_group(self, group_name="group-" + str(int(time.time())) ):
-        print "Looking up group " + group_name
-        group = self.ec2.get_all_security_groups(groupnames=[group_name])        
-        if group == []:
-            print 'Creating Security Group: %s' % group_name
-            # Create a security group to control access to instance via SSH.
-            group = self.ec2.create_security_group(group_name, group_name)
-            return group
-        else:
-             print "Group " + group_name + " already exists"
-             return group[0]
-    
-    def create_bucket(self,bucket_name):
-        """
-        Create a bucket.  If the bucket already exists and you have
-        access to it, no error will be returned by AWS.
-        Note that bucket names are global to S3
-        so you need to choose a unique name.
-        """
-        # First let's see if we already have a bucket of this name.
-        # The lookup method will return a Bucket object if the
-        # bucket exists and we have access to it or None.
-        bucket = self.walrus.lookup(bucket_name)
-        if bucket:
-            print 'Bucket (%s) already exists' % bucket_name
-        else:
-                # Let's try to create the bucket.  This will fail if
-                # the bucket has already been created by someone else.
-            try:
-                bucket = self.walrus.create_bucket(bucket_name)
-            except self.walrus.provider.storage_create_error, e:
-                print 'Bucket (%s) is owned by another user' % bucket_name
-        return bucket
-    
-    def upload_object_file(self, bucket_name, key_name, path_to_file):
-        """
-        Write the contents of a local file to walrus and also store custom
-        metadata with the object.
-        bucket_name   The name of the walrus Bucket.
-        key_name      The name of the object containing the data in walrus.
-        path_to_file  Fully qualified path to local file.
-        """
-        bucket = s3.lookup(bucket_name)
-        # Get a new, blank Key object from the bucket.  This Key object only
-        # exists locally until we actually store data in it.
-        key = bucket.new_key(key_name)
-        key.set_contents_from_filename(path_to_file)
-        return key
-    
-    def get_component_ip(self, component):
-        #loop through machines looking for this component type
-        component.lower()
-        machines_with_role = [machine.hostname for machine in self.config['machines'] if component in machine.components]
-        if len(machines_with_role) == 0:
-            raise Exception("Could not find component "  + component + " in list of machines")
-        else:
-             return random.choice(machines_with_role)
-        
+
     def read_config(self, filepath):
         config_hash = {}
         machines = []
@@ -285,35 +168,73 @@ class Eutester:
                 config_hash["network"] = line.strip()
         config_hash["machines"] = machines 
         return config_hash
-    
-    def fail(self, message):
-        print "[TEST_REPORT] FAILED: " + message
-        self.fail_count += 1
-        if self.exit_on_fail == 1:
-            exit(1)
+
+    def get_component_ip(self, component):
+        #loop through machines looking for this component type
+        component.lower()
+        machines_with_role = [machine.hostname for machine in self.config['machines'] if component in machine.components]
+        if len(machines_with_role) == 0:
+            raise Exception("Could not find component "  + component + " in list of machines")
         else:
-            return 0   
-         
+             return random.choice(machines_with_role)
+
+    def swap_component_hostname(self, hostname):
+        if hostname != None:
+            if len(hostname) < 5:
+                component_hostname = self.get_component_ip(hostname)
+                hostname = component_hostname
+        return hostname
+       
+    def get_credentials(self, account, user):
+        admin_cred_dir = "eucarc-" + account + "-" + user
+        self.sys("rm -rf " + admin_cred_dir)
+        self.sys("mkdir " + admin_cred_dir)
+        cmd_download_creds = self.eucapath + "/usr/sbin/euca_conf --get-credentials " + admin_cred_dir + "/creds.zip " + "--cred-user "+ user +" --cred-account " + account 
+        cmd_setup_cred_dir = ["rm -rf " + admin_cred_dir,"mkdir " + admin_cred_dir ,  cmd_download_creds, "unzip " + admin_cred_dir + "/creds.zip " + "-d " + admin_cred_dir]
+        for cmd in cmd_setup_cred_dir:         
+            stdout = self.sys(cmd, verbose=1)
+        os.system("rm -rf " + admin_cred_dir)
+        os.mkdir(admin_cred_dir)
+        self.sftp.get(admin_cred_dir + "/creds.zip" , admin_cred_dir + "/creds.zip")
+        os.system("unzip -o " + admin_cred_dir + "/creds.zip -d " + admin_cred_dir )
+        return admin_cred_dir
+        
+    def get_access_key(self):
+        with open( self.credpath + "/eucarc") as eucarc:
+            for line in eucarc.readlines():
+                if re.search("EC2_ACCESS_KEY",line):
+                    return line.split("=")[1].strip().strip("'")
+            raise Exception("Unable to find access key in eucarc")   
+    
+    def get_secret_key(self):
+        with open( self.credpath + "/eucarc") as eucarc:
+            for line in eucarc.readlines():
+                if re.search("EC2_SECRET_KEY", line):
+                    return line.split("=")[1].strip().strip("'")
+            raise Exception("Unable to find access key in eucarc")   
+        
+    def connect_euare(self):
+        self.euare = boto.connect_iam(aws_access_key_id=self.get_access_key(),
+                                    aws_secret_access_key=self.get_secret_key(),
+                                    is_secure=False,
+                                    host=self.get_component_ip("clc"),
+                                    port=8773,
+                                    path="/services/Euare")
+        
+    def create_ssh(self, hostname, password, keypath=None, username="root"):
+        hostname = self.swap_component_hostname(hostname)
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())            
+        if keypath == None:
+            client.connect(hostname, username, password=password)
+        else:
+            client.connect(hostname,  username, keyfile_name=keypath)
+        return client    
+                               
     def timeout_handler(self, signum, frame):
         self.fail("Command timeout after " + str(self.timeout) + " seconds")
         raise Exception("Timeout Reached")
     
-    def do_exit(self):       
-        exit_report  = "******************************************************\n"
-        exit_report += "*" + "    Failures:" + str(self.fail_count) + "\n"
-        exit_report += "*" + "    Time to execute: " + str(self.get_exectuion_time()) +"\n"
-        exit_report += "******************************************************\n"
-        print exit_report
-        try:
-            subprocess.call(["rm", "-rf", self.credpath])
-        except Exception, e:
-            print "No need to delete creds"
-            
-        if self.fail_count > 0:
-            exit(1)
-        else:
-            exit(0)
-            
     def sys(self, cmd, verbose=1, timeout=-2):
         # default timeout is to use module-defined timeout
         # -1 should be reserved for "no timeout" option
@@ -353,41 +274,51 @@ class Eutester:
         if verbose:
             print "".join(output) 
         return output
+
+    def found(self, command, regex):
+        result = self.sys(command)
+        for line in result:
+            found = re.search(regex,line)
+            if found:
+                return 1
+        return 0 
     
     def test_name(self, message):
         print "[TEST_REPORT] " + message
+    
+    def fail(self, message):
+        print "[TEST_REPORT] FAILED: " + message
+        self.fail_count += 1
+        if self.exit_on_fail == 1:
+            exit(1)
+        else:
+            return 0 
     
     def get_exectuion_time(self):
         return time.time() - self.start_time
        
     def clear_fail_count(self):
         self.fail_count = 0
-    
-    def connect_euare(self):
-        self.euare = boto.connect_iam(aws_access_key_id=self.get_access_key(),
-                                    aws_secret_access_key=self.get_secret_key(),
-                                    is_secure=False,
-                                    host=self.get_component_ip("clc"),
-                                    port=8773,
-                                    path="/services/Euare")
-        
-    def create_ssh(self, hostname, password, keypath=None, username="root"):
-        hostname = self.swap_component_hostname(hostname)
-        client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())            
-        if keypath == None:
-            client.connect(hostname, username, password=password)
+
+    def do_exit(self):       
+        exit_report  = "******************************************************\n"
+        exit_report += "*" + "    Failures:" + str(self.fail_count) + "\n"
+        exit_report += "*" + "    Time to execute: " + str(self.get_exectuion_time()) +"\n"
+        exit_report += "******************************************************\n"
+        print exit_report
+        try:
+            subprocess.call(["rm", "-rf", self.credpath])
+        except Exception, e:
+            print "No need to delete creds"
+            
+        if self.fail_count > 0:
+            exit(1)
         else:
-            client.connect(hostname,  username, keyfile_name=keypath)
-        return client
-    
-    def swap_component_hostname(self, hostname):
-        if hostname != None:
-            if len(hostname) < 5:
-                component_hostname = self.get_component_ip(hostname)
-                hostname = component_hostname
-        return hostname
-    
+            exit(0)
+        
+    def sleep(self, seconds=1):
+        time.sleep(seconds)
+        
     def __str__(self):
         s  = "+++++++++++++++++++++++++++++++++++++++++++++++++++++\n"
         s += "+" + "Eucateser Configuration" + "\n"
@@ -399,3 +330,76 @@ class Eutester:
         s += "+" + "Credential Path: " +  str(self.credpath) +"\n"
         s += "+++++++++++++++++++++++++++++++++++++++++++++++++++++\n"
         return s
+       
+    def create_bucket(self,bucket_name):
+        """
+        Create a bucket.  If the bucket already exists and you have
+        access to it, no error will be returned by AWS.
+        Note that bucket names are global to S3
+        so you need to choose a unique name.
+        """
+        # First let's see if we already have a bucket of this name.
+        # The lookup method will return a Bucket object if the
+        # bucket exists and we have access to it or None.
+        bucket = self.walrus.lookup(bucket_name)
+        if bucket:
+            print 'Bucket (%s) already exists' % bucket_name
+        else:
+                # Let's try to create the bucket.  This will fail if
+                # the bucket has already been created by someone else.
+            try:
+                bucket = self.walrus.create_bucket(bucket_name)
+            except self.walrus.provider.storage_create_error, e:
+                print 'Bucket (%s) is owned by another user' % bucket_name
+        return bucket
+    
+    def upload_object_file(self, bucket_name, key_name, path_to_file):
+        """
+        Write the contents of a local file to walrus and also store custom
+        metadata with the object.
+        bucket_name   The name of the walrus Bucket.
+        key_name      The name of the object containing the data in walrus.
+        path_to_file  Fully qualified path to local file.
+        """
+        bucket = s3.lookup(bucket_name)
+        # Get a new, blank Key object from the bucket.  This Key object only
+        # exists locally until we actually store data in it.
+        key = bucket.new_key(key_name)
+        key.set_contents_from_filename(path_to_file)
+        return key
+    
+    def add_keypair(self,key_name="keypair-" + str(int(time.time())) ):
+        print "Looking up keypair " + key_name 
+        key = self.ec2.get_all_key_pairs(keynames=[key_name])    
+        if key == []:
+            print 'Creating keypair: %s' % key_name
+            # Create an SSH key to use when logging into instances.
+            key = self.ec2.create_key_pair(key_name)
+        
+            # AWS will store the public key but the private key is
+            # generated and returned and needs to be stored locally.
+            # The save method will also chmod the file to protect
+            # your private key.
+            key.save(self.key_dir)
+            return key
+        else:
+            print "Key " + key_name + " already exists"
+    
+    def add_group(self, group_name="group-" + str(int(time.time())) ):
+        print "Looking up group " + group_name
+        group = self.ec2.get_all_security_groups(groupnames=[group_name])        
+        if group == []:
+            print 'Creating Security Group: %s' % group_name
+            # Create a security group to control access to instance via SSH.
+            group = self.ec2.create_security_group(group_name, group_name)
+            return group
+        else:
+             print "Group " + group_name + " already exists"
+             return group[0]
+         
+    def modify_property(self, property, value):
+        command = self.eucapath + "/usr/sbin/euca-modify-property -p " + property + "=" + value
+        if self.found(command, property):
+            self.test_name("Properly modified property")
+        else:
+            self.fail("Could not modify " + property)
