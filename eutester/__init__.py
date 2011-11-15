@@ -103,7 +103,8 @@ class Eutester:
                     client.connect(self.get_component_ip("clc"), username="root", password=password)
                 else:
                     client.connect(self.get_component_ip("clc"),  username="root", keyfile_name=keypath)
-                self.ssh = client    
+                self.ssh = client
+                self.sftp = self.ssh.open_sftp()    
                 self.credpath = self.get_credentials("eucalyptus", "admin")            
             aws_access_key_id = self.get_access_key()
             aws_secret_access_key = self.get_secret_key()
@@ -149,15 +150,16 @@ class Eutester:
     
     def get_credentials(self, account, user):
         admin_cred_dir = "eucarc-" + account + "-" + user
+        self.sys("rm -rf " + admin_cred_dir)
+        self.sys("mkdir " + admin_cred_dir)
         cmd_download_creds = self.eucapath + "/usr/sbin/euca_conf --get-credentials " + admin_cred_dir + "/creds.zip " + "--cred-user "+ user +" --cred-account " + account 
         cmd_setup_cred_dir = ["rm -rf " + admin_cred_dir,"mkdir " + admin_cred_dir ,  cmd_download_creds, "unzip " + admin_cred_dir + "/creds.zip " + "-d " + admin_cred_dir]
         for cmd in cmd_setup_cred_dir:         
-            stdout = self.sys(cmd, verbose=0)
-        sftp = self.ssh.open_sftp()
-        sftp.chdir(admin_cred_dir)
+            stdout = self.sys(cmd, verbose=1)
+        os.system("rm -rf " + admin_cred_dir)
         os.mkdir(admin_cred_dir)
-        sftp.get("creds.zip" , admin_cred_dir + "/creds.zip")
-        os.system("unzip " + admin_cred_dir + "/creds.zip -d " + admin_cred_dir )
+        self.sftp.get(admin_cred_dir + "/creds.zip" , admin_cred_dir + "/creds.zip")
+        os.system("unzip -o " + admin_cred_dir + "/creds.zip -d " + admin_cred_dir )
         return admin_cred_dir
     
     def found(self, command, regex):
@@ -293,7 +295,7 @@ class Eutester:
             return 0   
          
     def timeout_handler(self, signum, frame):
-        self.fail("Command timeout after " + self.timeout + " seconds")
+        self.fail("Command timeout after " + str(self.timeout) + " seconds")
         raise Exception("Timeout Reached")
     
     def do_exit(self):       
@@ -313,9 +315,6 @@ class Eutester:
             exit(0)
             
     def sys(self, cmd, verbose=1, timeout=-2):
-        if self.ssh == None:
-            raise Exception("Cannot run sys commands as ssh session has not been setup ")
-            return
         # default timeout is to use module-defined timeout
         # -1 should be reserved for "no timeout" option
         if timeout == -2:
@@ -325,22 +324,34 @@ class Eutester:
         signal.alarm(self.timeout) # triger alarm in timeout seconds
         cur_time = time.strftime("%I:%M:%S", time.gmtime())
         if verbose:
-            print "[root@" + self.hostname + "-" + cur_time +"]# " + cmd
-        
+            if self.ssh == None:
+                self.hostname ="localhost"
+            print "[root@" + self.hostname + "-" + cur_time +"]# " + cmd       
         try:
-            for item in self.sftp.listdir():
-                if re.match(self.credpath,item):
-                    cmd = ". " + self.credpath + "/eucarc && " + cmd
-                    break
-            stdin, stdout, stderr = self.ssh.exec_command(cmd)   
+            
+            if self.ssh == None:
+                for item in subprocess.check_output(["ls"]):
+                    if re.match(self.credpath,item):
+                        cmd = ". " + self.credpath + "/eucarc && " + cmd
+                        break
+                output = subprocess.check_output([cmd])
+            else:
+                stdin_ls, stdout_ls, stderr_ls = self.ssh.exec_command("ls")
+                ls_result = stdout_ls.readlines()
+                if self.credpath != None:
+                    for item in ls_result:
+                        if re.match(self.credpath,item):
+                            cmd = ". " + self.credpath + "/eucarc && " + cmd
+                            break
+                stdin, stdout, stderr = self.ssh.exec_command(cmd)
+                output =  stderr.readlines() + stdout.readlines() 
         except Exception, e:
             self.fail("Command timeout after " + str(self.timeout) + " seconds\nException:" + str(e)) 
             print e
             return
-        signal.alarm(0)
-        output = stdout.readlines()
+        signal.alarm(0)       
         if verbose:
-            print "".join(stderr.readlines()) + "".join(output) 
+            print "".join(output) 
         return output
     
     def test_name(self, message):
