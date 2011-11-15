@@ -45,6 +45,7 @@ import time
 import signal
 from boto.ec2.regioninfo import RegionInfo
 from bm_machine import bm_machine
+import eulogger
 
 class Eutester:
     def __init__(self, config_file="cloud.conf", hostname=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, debug=0):
@@ -81,14 +82,13 @@ class Eutester:
         self.debug = debug
         self.ssh = None
         self.hostname = hostname
+        self.logger = eulogger.Eulogger(name='euca').log
+
         #print config["machines"]
         if "REPO" in self.config["machines"][0].source:
             self.eucapath="/"
         ## CHOOSE A RANDOM HOST OF THIS COMPONENT TYPE
-        if self.hostname != None:
-            if len(hostname) < 5:
-                component_hostname = self.get_component_ip(hostname)
-                self.hostname = component_hostname
+        self.hostname = self.swap_component_hostname(self.hostname)
         
         ## IF I WASNT PROVIDED KEY TRY TO GET THEM FROM THE EUCARC IN CREDPATH
         if (aws_access_key_id == None) or (aws_secret_access_key == None):
@@ -370,6 +370,23 @@ class Eutester:
                                     host=self.get_component_ip("clc"),
                                     port=8773,
                                     path="/services/Euare")
+        
+    def create_ssh(self, hostname, password, keypath=None, username="root"):
+        hostname = self.swap_component_hostname(hostname)
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())            
+        if keypath == None:
+            client.connect(hostname, username, password=password)
+        else:
+            client.connect(hostname,  username, keyfile_name=keypath)
+        return client
+    
+    def swap_component_hostname(self, hostname):
+        if hostname != None:
+            if len(hostname) < 5:
+                component_hostname = self.get_component_ip(hostname)
+                hostname = component_hostname
+        return hostname
     
     def __str__(self):
         s  = "+++++++++++++++++++++++++++++++++++++++++++++++++++++\n"
