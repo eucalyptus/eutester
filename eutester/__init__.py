@@ -346,7 +346,7 @@ class Eutester:
                 stdin, stdout, stderr = self.ssh.exec_command(cmd)
                 output =  stderr.readlines() + stdout.readlines() 
         except Exception, e:
-            self.fail("Command timeout after " + str(self.timeout) + " seconds\nException:" + str(e)) 
+            self.fail("Command timeout after " + str(timeout) + " seconds\nException:" + str(e)) 
             print e
             return
         signal.alarm(0)       
