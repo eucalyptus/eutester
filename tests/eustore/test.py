@@ -1,7 +1,8 @@
 import time
 from eutester import Eutester
 if __name__ == '__main__':
-    clc_session = Eutester( password="foobar", hostname="192.168.51.102" )
+    clc_session = Eutester( password="foobar", hostname="clc" )
+    
     imglist = clc_session.sys("export EUSTORE_URL=http://192.168.51.187/eustore/ && eustore-describe-images")
     if imglist[0].find("euca-centos5.3-x86_64")>-1 and imglist[0].find("CentOS 5.3 1.3GB root"):
         clc_session.test_name("found centos 5.3 64 bit image")
