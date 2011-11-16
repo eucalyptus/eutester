@@ -70,11 +70,11 @@ class Eucaops(Eutester):
              print "Group " + group_name + " already exists"
              return group[0]
     
-    def authorize_group(self,group_name="default", port="22", protocol="tcp"):
+    def authorize_group(self,group_name="default", port=22, protocol="tcp", cidr_ip="0.0.0.0/0"):
         group = self.add_group(group_name)
         try:
-            group.authorize(protocol, port, port)
-        except ec2.ResponseError, e:
+            self.ec2.authorize_security_group(group.name,ip_protocol=protocol, from_port=port, to_port=port, cidr_ip=cidr_ip)
+        except self.ec2.ResponseError, e:
             if e.code == 'InvalidPermission.Duplicate':
                 print 'Security Group: %s already authorized' % group_name
             else:
@@ -87,12 +87,12 @@ class Eucaops(Eutester):
             instance.update()
         print str(instance) + ' is now in ' + instance.state
     
-    def create_volume(self, azone, size=1, snapshot):
+    def create_volume(self, azone, size=1, snapshot=None):
         """
         Create a new EBS volume
         """
         # Determine the Availability Zone of the instance
-        volume = self.ec2.create_volume(volume_size, azone)
+        volume = self.ec2.create_volume(size, azone)
         # Wait for the volume to be created.
         print "Polling for volume to become available"
         while volume.status != 'available':
