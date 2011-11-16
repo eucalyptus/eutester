@@ -3,6 +3,8 @@ import time
 
 class Eucaops(Eutester):
     
+    def __init__(self, config_file="cloud.conf", hostname=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, debug=0):
+        super(Eucaops, self).__init__(config_file, hostname, password, keypath, credpath, aws_access_key_id, aws_secret_access_key, debug)   
            
     def create_bucket(self,bucket_name):
         """

@@ -47,7 +47,7 @@ from boto.ec2.regioninfo import RegionInfo
 from bm_machine import bm_machine
 import eulogger
 
-class Eutester:
+class Eutester(object):
     def __init__(self, config_file="cloud.conf", hostname=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, debug=0):
         """  
         EUCADIR => $eucadir, 
