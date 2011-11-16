@@ -1,7 +1,9 @@
 from eutester import Eutester
 import time
 
-class Eucaops(Eutester):       
+class Eucaops(Eutester):
+    
+           
     def create_bucket(self,bucket_name):
         """
         Create a bucket.  If the bucket already exists and you have
@@ -67,7 +69,38 @@ class Eucaops(Eutester):
         else:
              print "Group " + group_name + " already exists"
              return group[0]
-         
+    
+    def authorize_group(self,group_name="default", port="22", protocol="tcp"):
+        group = self.add_group(group_name)
+        try:
+            group.authorize(protocol, port, port)
+        except ec2.ResponseError, e:
+            if e.code == 'InvalidPermission.Duplicate':
+                print 'Security Group: %s already authorized' % group_name
+            else:
+                raise
+    
+    def wait_for_instance(self,instance):
+        while instance.state == 'pending':
+            print '.'
+            time.sleep(5)
+            instance.update()
+        print str(instance) + ' is now in ' + instance.state
+    
+    def create_volume(self, azone, size=1, snapshot):
+        """
+        Create a new EBS volume
+        """
+        # Determine the Availability Zone of the instance
+        volume = self.ec2.create_volume(volume_size, azone)
+        # Wait for the volume to be created.
+        print "Polling for volume to become available"
+        while volume.status != 'available':
+            print ".",
+            time.sleep(5)
+            volume.update()
+        print "done\nVolume in " + volume.status + " state"
+        
     def modify_property(self, property, value):
         command = self.eucapath + "/usr/sbin/euca-modify-property -p " + property + "=" + value
         if self.found(command, property):
