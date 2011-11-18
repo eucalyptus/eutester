@@ -176,7 +176,7 @@ class Eutester(object):
         if len(machines_with_role) == 0:
             raise Exception("Could not find component "  + component + " in list of machines")
         else:
-             return random.choice(machines_with_role)
+             return machines_with_role[0]
 
     def swap_component_hostname(self, hostname):
         if hostname != None:
