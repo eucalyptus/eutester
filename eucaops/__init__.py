@@ -1,7 +1,8 @@
 from eutester import Eutester
+from eucaops_api import Eucaops_api
 import time
 
-class Eucaops(Eutester):
+class Eucaops(Eutester,Eucaops_api):
     
     def __init__(self, config_file="cloud.conf", hostname=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, debug=0):
         super(Eucaops, self).__init__(config_file, hostname, password, keypath, credpath, aws_access_key_id, aws_secret_access_key, debug)   
@@ -109,3 +110,4 @@ class Eucaops(Eutester):
             self.test_name("Properly modified property")
         else:
             self.fail("Could not modify " + property)
+
