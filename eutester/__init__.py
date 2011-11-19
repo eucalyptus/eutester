@@ -236,6 +236,7 @@ class Eutester(object):
         raise Exception("Timeout Reached")
     
     def sys(self, cmd, verbose=1, timeout=-2):
+        cmd = str(cmd)
         # default timeout is to use module-defined timeout
         # -1 should be reserved for "no timeout" option
         if timeout == -2:
@@ -247,7 +248,7 @@ class Eutester(object):
         if verbose:
             if self.ssh == None:
                 self.hostname ="localhost"
-            print "[root@" + self.hostname + "-" + cur_time +"]# " + cmd       
+            print "[root@" + str(self.hostname) + "-" + str(cur_time) +"]# " + cmd
         try:
             
             if self.ssh == None:
