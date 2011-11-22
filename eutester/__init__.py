@@ -290,7 +290,7 @@ class Eutester(object):
         print "[TEST_REPORT] FAILED: " + message
         self.fail_count += 1
         if self.exit_on_fail == 1:
-            exit(1)
+            raise Exception("Test step failed")
         else:
             return 0 
     

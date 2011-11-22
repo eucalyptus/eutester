@@ -1,20 +1,18 @@
 class Eucaops_api(object):
-    def create_bucket(self):
+    def create_bucket(self,bucket_name):
         raise NotImplementedError("Function not yet implemented")
-    def upload_object_file(self):
+    def upload_object_file(self, bucket_name, key_name, path_to_file):
         raise NotImplementedError("Function not yet implemented")
-    def add_keypair(self):
+    def add_keypair(self,key_name=None ):
         raise NotImplementedError("Function not yet implemented")
-    def add_group(self):
+    def add_group(self, group_name=None ):
         raise NotImplementedError("Function not yet implemented")
-    def authorize_group(self):
+    def authorize_group(self,group_name="default", port=22, protocol="tcp", cidr_ip="0.0.0.0/0"):
         raise NotImplementedError("Function not yet implemented")
-    def wait_for_instance(self):
+    def wait_for_instance(self,instance):
         raise NotImplementedError("Function not yet implemented")
-    def create_volume(self):
+    def create_volume(self, azone, size=1, snapshot=None):
         raise NotImplementedError("Function not yet implemented")
-    def modify_property(self):
-        raise NotImplementedError("Function not yet implemented")    
     def delete_keypair(self):
         raise NotImplementedError("Function not yet implemented")
     def get_keypair(self):
@@ -35,7 +33,7 @@ class Eucaops_api(object):
         raise NotImplementedError("Function not yet implemented") 
     def delete_bucket(self):
         raise NotImplementedError("Function not yet implemented")
-    def run_instance(self):
+    def run_instance(self, image, keypair=None, group=None, type=None, zone=None):
         raise NotImplementedError("Function not yet implemented")
     def terminate_instance(self):
         raise NotImplementedError("Function not yet implemented") 
@@ -103,7 +101,7 @@ class Eucaops_api(object):
         raise NotImplementedError("Function not yet implemented") 
     def euare_parse_arn(self):
         raise NotImplementedError("Function not yet implemented") 
-    def modify_property(self):
+    def modify_property(self, property, value):
         raise NotImplementedError("Function not yet implemented") 
     def euare_modattr(self):
         raise NotImplementedError("Function not yet implemented") 

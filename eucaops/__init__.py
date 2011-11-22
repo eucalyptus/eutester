@@ -1,6 +1,7 @@
 from eutester import Eutester
 from eucaops_api import Eucaops_api
 import time
+import re
 
 class Eucaops(Eutester,Eucaops_api):
     
@@ -85,9 +86,10 @@ class Eucaops(Eutester,Eucaops_api):
     
     def wait_for_instance(self,instance):
         while instance.state == 'pending':
-            print '.'
+            print '.',
             time.sleep(5)
             instance.update()
+        print "Done waiting"
         print str(instance) + ' is now in ' + instance.state
     
     def create_volume(self, azone, size=1, snapshot=None):
@@ -103,6 +105,22 @@ class Eucaops(Eutester,Eucaops_api):
             time.sleep(5)
             volume.update()
         print "done\nVolume in " + volume.status + " state"
+    
+    def get_emi(self):
+        images = self.ec2.get_all_images()
+        for image in images:
+            if re.match("emi-", image.id):
+                return image
+        raise Exception("Unable to find an EMI")
+    
+    def run_instance(self, image, keypair=None, group=None, type=None, zone=None):
+        print "Attempting to run image " + str(image)
+        reservation = image.run()
+        instance = reservation.instances[0]
+        self.wait_for_instance(instance)
+        if instance.state != "running":
+            self.fail("Instance no longer in running state")
+        return instance
         
     def modify_property(self, property, value):
         command = self.eucapath + "/usr/sbin/euca-modify-property -p " + property + "=" + value
