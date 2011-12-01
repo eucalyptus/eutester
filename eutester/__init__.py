@@ -72,10 +72,9 @@ class Eutester(object):
         self.timeout = 30
         self.delay = 0
         self.exit_on_fail = 0
-        self.exit_on_fail = 0
         self.fail_count = 0
         self.start_time = time.time()
-        self.key_dir = "./keypairs"
+        self.key_dir = "./"
         ### Read input file
         self.config = self.read_config(config_file)
         self.eucapath = "/opt/eucalyptus"
@@ -283,6 +282,11 @@ class Eutester(object):
             if found:
                 return 1
         return 0 
+    
+    def grep(self, string,list):
+        expr = re.compile(string)
+        return filter(expr.search,list)
+
     
     def test_name(self, message):
         print "[TEST_REPORT] " + message
