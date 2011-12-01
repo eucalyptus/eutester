@@ -84,13 +84,26 @@ class Eucaops(Eutester,Eucaops_api):
             else:
                 raise
     
-    def wait_for_instance(self,instance):
-        while instance.state == 'pending':
+    def wait_for_instance(self,instance, state="running"):
+        poll_count = 60
+        while (instance.state != state) and (poll_count > 0):
             print '.',
+            poll_count = poll_count - 1
             time.sleep(5)
             instance.update()
         print "Done waiting"
         print str(instance) + ' is now in ' + instance.state
+
+    def wait_for_reservation(self,reservation, state="running"):
+        poll_count = 60
+        for instance in reservation.instances:
+            while (instance.state != state) and (poll_count > 0):
+                print '.',
+                poll_count = poll_count - 1
+                time.sleep(5)
+                instance.update()
+            print "Done waiting"
+            print str(instance) + ' is now in ' + instance.state
     
     def create_volume(self, azone, size=1, snapshot=None):
         """
@@ -113,15 +126,43 @@ class Eucaops(Eutester,Eucaops_api):
                 return image
         raise Exception("Unable to find an EMI")
     
-    def run_instance(self, image, keypair=None, group=None, type=None, zone=None):
+    def run_instance(self, image=None, keypair=None, group=None, type=None, zone=None, min=1, max=1):
+        if image == None:
+            images = self.ec2.get_all_images()
+            for emi in images:
+                if re.match("emi",emi.name):
+                    image = emi
         print "Attempting to run image " + str(image)
-        reservation = image.run()
-        instance = reservation.instances[0]
-        self.wait_for_instance(instance)
-        if instance.state != "running":
-            self.fail("Instance no longer in running state")
-        return instance
-        
+        reservation = image.run(key_name=keypair,security_groups=group,instance_type=type, placement=zone, min_count=min, max_count=max)
+        self.wait_for_reservation(reservation)
+        for instance in reservation.instances:
+            if instance.state != "running":
+                self.fail("Instance " + instance.id + " now in " + instance.state  + " state")
+            else:
+                print "Instance " + instance.id + " now in " + instance.state  + " state"
+        return reservation
+    
+    def get_available_vms(self):
+        ### Need to update this to work for a particular availability zone
+        az_verbose_out = self.sys("euca-describe-availability-zones verbose")
+        vmtypes = {"m1.small": 0,"c1.medium":0, "m1.large":0, "m1.xlarge":0,"c1.xlarge":0}
+        for type,avail in vmtypes.iteritems():
+            ### Parse out each type of VM then get the free ones
+            vmtypes[type] = self.grep( str(type) , az_verbose_out)[0].split()[3]
+        return vmtypes
+    
+    def terminate_instances(self, reservation=None):
+        if reservation==None:
+            reservations = self.ec2.get_all_instances()
+            for res in reservations:
+                for instance in res.instances:
+                    instance.terminate()
+                self.wait_for_reservation(res, state="terminated")
+        else:
+            for instance in res.instances:
+                    instance.terminate()
+            self.wait_for_reservation(res, state="terminated")
+            
     def modify_property(self, property, value):
         command = self.eucapath + "/usr/sbin/euca-modify-property -p " + property + "=" + value
         if self.found(command, property):
