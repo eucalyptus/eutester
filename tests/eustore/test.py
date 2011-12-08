@@ -49,7 +49,7 @@ if __name__ == '__main__':
             time.sleep(10)
             if i == 5:
                 clc_session.fail("eustore-install-image didn't properly install the image!")
-        
 
-    clc_session.run_instance(image=emilist[0])
+    res = clc_session.run_instance(image=emilist[0])
+	clc_session.terminate_instances(res)
     clc_session.do_exit()
