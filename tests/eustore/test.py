@@ -1,7 +1,7 @@
 import time
 from eucaops import Eucaops
 if __name__ == '__main__':
-    clc_session = Eucaops( password="foobar", hostname="clc" )
+    clc_session = Eucaops( config_file="../input/2b_tested.lst", password="foobar", hostname="clc" )
     
     imglist = clc_session.sys("export EUSTORE_URL=http://192.168.51.187/eustore/ && eustore-describe-images")
     if imglist[0].find("euca-centos5.3-x86_64")>-1 and imglist[0].find("CentOS 5.3 1.3GB root"):
@@ -38,7 +38,7 @@ if __name__ == '__main__':
     emi = installret[len(installret)-1]  #last line
     emi = emi[emi.find("emi-"):].strip()
     clc_session.test_name("installed image! " + emi)
-	emilist;
+    emilist = None;
     for i in [1, 2, 3, 4, 5]:
         emilist = clc_session.ec2.get_all_images(image_ids=[emi])
         if len(emilist):
@@ -51,5 +51,5 @@ if __name__ == '__main__':
                 clc_session.fail("eustore-install-image didn't properly install the image!")
 
     res = clc_session.run_instance(image=emilist[0])
-	clc_session.terminate_instances(res)
+    clc_session.terminate_instances(res)
     clc_session.do_exit()
