@@ -189,7 +189,7 @@ class Eutester(object):
         self.sys("rm -rf " + admin_cred_dir)
         self.sys("mkdir " + admin_cred_dir)
         cmd_download_creds = self.eucapath + "/usr/sbin/euca_conf --get-credentials " + admin_cred_dir + "/creds.zip " + "--cred-user "+ user +" --cred-account " + account 
-        cmd_setup_cred_dir = ["rm -rf " + admin_cred_dir,"mkdir " + admin_cred_dir ,  cmd_download_creds, "unzip " + admin_cred_dir + "/creds.zip " + "-d " + admin_cred_dir]
+        cmd_setup_cred_dir = ["rm -rf " + admin_cred_dir,"mkdir " + admin_cred_dir ,  cmd_download_creds, "unzip -o " + admin_cred_dir + "/creds.zip " + "-d " + admin_cred_dir]
         for cmd in cmd_setup_cred_dir:         
             stdout = self.sys(cmd, verbose=1)
         os.system("rm -rf " + admin_cred_dir)
