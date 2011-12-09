@@ -34,7 +34,7 @@ if __name__ == '__main__':
     else:
         clc_session.fail("Output of eustore-describe-images doesn't match expected")
 
-    installret = clc_session.sys(cmd="export EUSTORE_URL=http://192.168.51.187/eustore/ && eustore-install-image -i euca-centos5.3-x86_64 -b eutest -k xen", timeout=600)
+    installret = clc_session.sys(cmd="export EUSTORE_URL=http://192.168.51.187/eustore/ && eustore-install-image -i euca-ubuntu-9.04-x86_64 -b eutest -k xen -d /disk1/storage", timeout=600)
     emi = installret[len(installret)-1]  #last line
     emi = emi[emi.find("emi-"):].strip()
     clc_session.test_name("installed image! " + emi)
@@ -52,4 +52,5 @@ if __name__ == '__main__':
 
     res = clc_session.run_instance(image=emilist[0])
     clc_session.terminate_instances(res)
+    clc_session.sys(cmd="rm -rf /disk1/storage/*")
     clc_session.do_exit()
