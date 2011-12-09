@@ -154,17 +154,18 @@ class Eucaops(Eutester,Eucaops_api):
     def terminate_instances(self, reservation=None):
         ### If a reservation is not passed then kill all instances
         if reservation==None:
+#            reservations.stop_all()
             reservations = self.ec2.get_all_instances()
             for res in reservations:
                 for instance in res.instances:
                     print "Sending terminate for " + str(instance)
-                    instance.terminate()
+                    instance.stop()
                 self.wait_for_reservation(res, state="terminated")
         ### Otherwise just kill this reservation
         else:
             for instance in reservation.instances:
                     print "Sending terminate for " + str(instance)
-                    instance.terminate()
+                    instance.stop()
             self.wait_for_reservation(reservation, state="terminated")
             
     def modify_property(self, property, value):
