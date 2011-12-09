@@ -85,25 +85,22 @@ class Eucaops(Eutester,Eucaops_api):
                 raise
     
     def wait_for_instance(self,instance, state="running"):
-        poll_count = 60
+        poll_count = 36
+        print "Beginning poll loop for instance " + str(instance)
         while (instance.state != state) and (poll_count > 0):
             print '.',
             poll_count = poll_count - 1
             time.sleep(5)
             instance.update()
         print "Done waiting"
+        if poll_count == 0:
+                self.fail(str(instance) + " did not enter the proper state and was left in " + instance.state)
         print str(instance) + ' is now in ' + instance.state
 
     def wait_for_reservation(self,reservation, state="running"):
-        poll_count = 60
+        print "Beginning poll loop for the " + str(len(reservation.instances))   + " found in " + str(reservation)
         for instance in reservation.instances:
-            while (instance.state != state) and (poll_count > 0):
-                print '.',
-                poll_count = poll_count - 1
-                time.sleep(5)
-                instance.update()
-            print "Done waiting"
-            print str(instance) + ' is now in ' + instance.state
+            self.wait_for_instance(instance, state)
     
     def create_volume(self, azone, size=1, snapshot=None):
         """
@@ -142,26 +139,33 @@ class Eucaops(Eutester,Eucaops_api):
                 print "Instance " + instance.id + " now in " + instance.state  + " state"
         return reservation
     
-    def get_available_vms(self):
+    def get_available_vms(self, type=None):
         ### Need to update this to work for a particular availability zone
         az_verbose_out = self.sys("euca-describe-availability-zones verbose")
         vmtypes = {"m1.small": 0,"c1.medium":0, "m1.large":0, "m1.xlarge":0,"c1.xlarge":0}
         for type,avail in vmtypes.iteritems():
             ### Parse out each type of VM then get the free ones
-            vmtypes[type] = self.grep( str(type) , az_verbose_out)[0].split()[3]
-        return vmtypes
-    
+            vmtypes[type] = int(self.grep( str(type) , az_verbose_out)[0].split()[3])
+        if type==None:
+            return vmtypes
+        else:
+            return vmtypes[type]
+        
     def terminate_instances(self, reservation=None):
+        ### If a reservation is not passed then kill all instances
         if reservation==None:
             reservations = self.ec2.get_all_instances()
             for res in reservations:
                 for instance in res.instances:
+                    print "Sending terminate for " + str(instance)
                     instance.terminate()
                 self.wait_for_reservation(res, state="terminated")
+        ### Otherwise just kill this reservation
         else:
-            for instance in res.instances:
+            for instance in reservation.instances:
+                    print "Sending terminate for " + str(instance)
                     instance.terminate()
-            self.wait_for_reservation(res, state="terminated")
+            self.wait_for_reservation(reservation, state="terminated")
             
     def modify_property(self, property, value):
         command = self.eucapath + "/usr/sbin/euca-modify-property -p " + property + "=" + value
