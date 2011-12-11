@@ -143,13 +143,14 @@ class Eucaops(Eutester,Eucaops_api):
         ### Need to update this to work for a particular availability zone
         az_verbose_out = self.sys("euca-describe-availability-zones verbose")
         vmtypes = {"m1.small": 0,"c1.medium":0, "m1.large":0, "m1.xlarge":0,"c1.xlarge":0}
-        for type,avail in vmtypes.iteritems():
+        for type1,avail in vmtypes.iteritems():
             ### Parse out each type of VM then get the free ones
-            vmtypes[type] = int(self.grep( str(type) , az_verbose_out)[0].split()[3])
+            vmtypes[type1] = int(self.grep( str(type1) , az_verbose_out)[0].split()[3])
+            print type1 + ":" + str(vmtypes[type1])
         if type==None:
             return vmtypes
         else:
-            return vmtypes[type]
+            return int(vmtypes[type])
         
     def terminate_instances(self, reservation=None):
         ### If a reservation is not passed then kill all instances
