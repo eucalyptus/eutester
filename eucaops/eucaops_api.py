@@ -35,7 +35,7 @@ class Eucaops_api(object):
         raise NotImplementedError("Function not yet implemented")
     def run_instance(self, image, keypair=None, group=None, type=None, zone=None):
         raise NotImplementedError("Function not yet implemented")
-    def terminate_instance(self):
+    def terminate_instances(self):
         raise NotImplementedError("Function not yet implemented") 
     def reboot_instance(self):
         raise NotImplementedError("Function not yet implemented") 

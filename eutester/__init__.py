@@ -117,6 +117,8 @@ class Eutester(object):
                 client.connect(self.hostname,  username="root", keyfile_name=keypath)
             self.ssh = client
             self.sftp = self.ssh.open_sftp()
+        else:
+            self.hostname = self.swap_component_hostname("clc")
             
 #       self.ec2 = boto.connect_euca(host=self.hostname, aws_access_key_id=boto_access, aws_secret_access_key=boto_secret, debug=self.debug)
         self.ec2 = boto.connect_ec2(aws_access_key_id=aws_access_key_id,
