@@ -45,14 +45,15 @@ class Eucaops(Eutester,Eucaops_api):
         key.set_contents_from_filename(path_to_file)
         return key
     
-    def add_keypair(self,key_name="keypair-" + str(int(time.time())) ):
+    def add_keypair(self,key_name=None):
+        if key_name==None:
+            key_name = "keypair-" + str(int(time.time())) 
         print "Looking up keypair " + key_name 
         key = self.ec2.get_all_key_pairs(keynames=[key_name])    
         if key == []:
             print 'Creating keypair: %s' % key_name
             # Create an SSH key to use when logging into instances.
             key = self.ec2.create_key_pair(key_name)
-        
             # AWS will store the public key but the private key is
             # generated and returned and needs to be stored locally.
             # The save method will also chmod the file to protect
@@ -62,17 +63,41 @@ class Eucaops(Eutester,Eucaops_api):
         else:
             print "Key " + key_name + " already exists"
     
-    def add_group(self, group_name="group-" + str(int(time.time())) ):
-        print "Looking up group " + group_name
-        group = self.ec2.get_all_security_groups(groupnames=[group_name])        
-        if group == []:
+    def delete_keypair(self,keypair):
+        name = keypair.name
+        print "Sending delete for keypair: " + name
+        keypair.delete()
+        keypair = self.ec2.get_all_key_pairs(keynames=[name])
+        if len(keypair) > 0:
+            self.fail("Keypair found after attempt to delete it")
+        return
+    
+    def add_group(self, group_name=None ):
+        group_name = "group-" + str(int(time.time()))     
+        if self.check_group(group_name):
+            print "Group " + group_name + " already exists"
+            return group[0]
+        else:
             print 'Creating Security Group: %s' % group_name
             # Create a security group to control access to instance via SSH.
             group = self.ec2.create_security_group(group_name, group_name)
             return group
+    
+    def delete_group(self, group):
+        name = group.name
+        print "Sending delete for group: " + name
+        group.delete()
+        if self.check_group(name):
+            self.fail("Group found after attempt to delete it")
+        return
+    
+    def check_group(self, group_name):
+        print "Looking up group " + group_name
+        group = self.ec2.get_all_security_groups(groupnames=[group_name])
+        if group == []:
+             return False
         else:
-             print "Group " + group_name + " already exists"
-             return group[0]
+             return True
     
     def authorize_group(self,group_name="default", port=22, protocol="tcp", cidr_ip="0.0.0.0/0"):
         group = self.add_group(group_name)
@@ -86,7 +111,7 @@ class Eucaops(Eutester,Eucaops_api):
     
     def wait_for_instance(self,instance, state="running"):
         poll_count = 36
-        print "Beginning poll loop for instance " + str(instance)
+        print "Beginning poll loop for instance " + str(instance) + " to go to " + state
         while (instance.state != state) and (poll_count > 0):
             print '.',
             poll_count = poll_count - 1
@@ -146,7 +171,7 @@ class Eucaops(Eutester,Eucaops_api):
         for type1,avail in vmtypes.iteritems():
             ### Parse out each type of VM then get the free ones
             vmtypes[type1] = int(self.grep( str(type1) , az_verbose_out)[0].split()[3])
-            print type1 + ":" + str(vmtypes[type1])
+            #print type1 + ":" + str(vmtypes[type1])
         if type==None:
             return vmtypes
         else:
@@ -160,13 +185,13 @@ class Eucaops(Eutester,Eucaops_api):
             for res in reservations:
                 for instance in res.instances:
                     print "Sending terminate for " + str(instance)
-                    instance.stop()
+                    instance.terminate()
                 self.wait_for_reservation(res, state="terminated")
         ### Otherwise just kill this reservation
         else:
             for instance in reservation.instances:
                     print "Sending terminate for " + str(instance)
-                    instance.stop()
+                    instance.terminate()
             self.wait_for_reservation(reservation, state="terminated")
             
     def modify_property(self, property, value):
