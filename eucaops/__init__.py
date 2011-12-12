@@ -2,6 +2,7 @@ from eutester import Eutester
 from eucaops_api import Eucaops_api
 import time
 import re
+import sys
 
 class Eucaops(Eutester,Eucaops_api):
     
@@ -100,9 +101,9 @@ class Eucaops(Eutester,Eucaops_api):
              return True
     
     def authorize_group(self,group_name="default", port=22, protocol="tcp", cidr_ip="0.0.0.0/0"):
-        group = self.add_group(group_name)
         try:
-            self.ec2.authorize_security_group_deprecated(group.name,ip_protocol=protocol, from_port=port, to_port=port, cidr_ip=cidr_ip)
+            print "Attempting authorization of group"
+            self.ec2.authorize_security_group_deprecated(group_name,ip_protocol=protocol, from_port=port, to_port=port, cidr_ip=cidr_ip)
         except self.ec2.ResponseError, e:
             if e.code == 'InvalidPermission.Duplicate':
                 print 'Security Group: %s already authorized' % group_name
@@ -110,12 +111,12 @@ class Eucaops(Eutester,Eucaops_api):
                 raise
     
     def wait_for_instance(self,instance, state="running"):
-        poll_count = 36
+        poll_count = 18
         print "Beginning poll loop for instance " + str(instance) + " to go to " + state
         while (instance.state != state) and (poll_count > 0):
-            print '.',
+            sys.stdout.write(".")
             poll_count = poll_count - 1
-            time.sleep(5)
+            time.sleep(10)
             instance.update()
         print "Done waiting"
         if poll_count == 0:
@@ -136,7 +137,7 @@ class Eucaops(Eutester,Eucaops_api):
         # Wait for the volume to be created.
         print "Polling for volume to become available"
         while volume.status != 'available':
-            print ".",
+            sys.stdout.write(".")
             time.sleep(5)
             volume.update()
         print "done\nVolume in " + volume.status + " state"
@@ -176,7 +177,29 @@ class Eucaops(Eutester,Eucaops_api):
             return vmtypes
         else:
             return int(vmtypes[type])
-        
+    
+    def release_address(self, ip=None):       
+        if ip==None:
+            ## Clear out all addresses found
+            print "Releasing all used addresses"
+            address_output = self.sys("euca-describe-addresses")
+            addresses = self.grep("ADDRESS",address_output)
+            total_addresses = len(addresses)
+            for address in addresses:
+                if re.search("nobody", address) == None:
+                    self.sys("euca-release-address " + address.split()[1] )
+            address_output = self.sys("euca-describe-addresses")
+            free_addresses = self.grep("nobody", address_output)
+            if len(free_addresses) < total_addresses:
+                self.fail("Some addresses still in use after attempting to release")
+        else:
+            print "Releasing address " + ip
+            self.sys("euca-release-address " + ip )
+            address_output = self.sys("euca-describe-addresses")
+            free_addresses = self.grep( ip + ".*nobody", address_output)
+            if len(free_addresses) < 1:
+                self.fail("Address still in use after attempting to release")
+            
     def terminate_instances(self, reservation=None):
         ### If a reservation is not passed then kill all instances
         if reservation==None:

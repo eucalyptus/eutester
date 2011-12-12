@@ -82,6 +82,7 @@ class Eutester(object):
         self.ssh = None
         self.hostname = hostname
         self.logger = eulogger.Eulogger(name='euca').log
+        self.fail_log = []
         
         #print config["machines"]
         if "REPO" in self.config["machines"][0].source:
@@ -110,11 +111,12 @@ class Eutester(object):
             
         if self.hostname != None:
             client = paramiko.SSHClient()
+            timeout = 30
             client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             if keypath == None:
-                client.connect(self.hostname, username="root", password=password)
+                client.connect(self.hostname, username="root", password=password, timeout=timeout)
             else:
-                client.connect(self.hostname,  username="root", keyfile_name=keypath)
+                client.connect(self.hostname,  username="root", key_filename=keypath, timeout=timeout)
             self.ssh = client
             self.sftp = self.ssh.open_sftp()
         else:
@@ -282,8 +284,8 @@ class Eutester(object):
         for line in result:
             found = re.search(regex,line)
             if found:
-                return 1
-        return 0 
+                return True
+        return False 
     
     def grep(self, string,list):
         expr = re.compile(string)
@@ -295,11 +297,16 @@ class Eutester(object):
     
     def fail(self, message):
         print "[TEST_REPORT] FAILED: " + message
+        self.fail_log.append(message)
         self.fail_count += 1
         if self.exit_on_fail == 1:
             raise Exception("Test step failed")
         else:
             return 0 
+    
+    def clear_fail_log(self):
+        self.fail_log = []
+        return
     
     def get_exectuion_time(self):
         return time.time() - self.start_time
@@ -310,8 +317,10 @@ class Eutester(object):
     def do_exit(self):       
         exit_report  = "******************************************************\n"
         exit_report += "*" + "    Failures:" + str(self.fail_count) + "\n"
+        for message in self.fail_log:
+            exit_report += "*" + "            " + message + "\n"
         exit_report += "*" + "    Time to execute: " + str(self.get_exectuion_time()) +"\n"
-        exit_report += "******************************************************\n"
+        exit_report += "******************************************************\n"           
         print exit_report
         try:
             subprocess.call(["rm", "-rf", self.credpath])
