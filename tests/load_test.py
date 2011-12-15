@@ -62,7 +62,7 @@ if __name__ == '__main__':
             ### RUN INSTANCE AND WAIT FOR IT TO GO TO RUNNING
             print "Sending request for " + str(available) + " " + type + " VMs"
             reservation = tester.run_instance(image,keypair=keypair.name, min=available, max=available,type=type )
-            keypath = os.getcwd() + "/" + config_filename + config + ".pem" 
+            keypath = os.getcwd() + "/" + keypair.name + ".pem" 
             tester.sleep(20)
             ### SSH to instance
             for instance in reservation.instances:
