@@ -25,7 +25,7 @@ if __name__ == '__main__':
     parser.add_option("-i", "--image", dest="exit_on_fail", type="string",
                       help="Whether or not to stop the script after a failure")
     parser.add_option( "--prefix", dest="prefix", type="string",
-                      help="Prefix to tack on to keypairs")
+                      help="Prefix to tack on to keypairs", default="keypair")
     (options, args) = parser.parse_args()
     ### LOAD OPTIONS INTO LOCAL VARS
     runs = options.runs
