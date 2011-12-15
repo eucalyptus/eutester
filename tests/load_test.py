@@ -24,6 +24,8 @@ if __name__ == '__main__':
                       help="Whether or not to stop the script after a failure")
     parser.add_option("-i", "--image", dest="exit_on_fail", type="string",
                       help="Whether or not to stop the script after a failure")
+    parser.add_option( "--prefix", dest="prefix", type="string",
+                      help="Prefix to tack on to keypairs")
     (options, args) = parser.parse_args()
     ### LOAD OPTIONS INTO LOCAL VARS
     runs = options.runs
@@ -32,6 +34,7 @@ if __name__ == '__main__':
     type = options.type
     exit_on_fail = options.exit_on_fail
     number = options.number
+    prefix = options.prefix 
     
     poll_count = options.poll_count
     tester = Eucaops( hostname="clc",password="foobar", config_file=config)
@@ -54,7 +57,7 @@ if __name__ == '__main__':
             ### CREATE KEYPAIR AND GROUP
             group = tester.add_group()
             tester.authorize_group(group_name=group.name)
-            keypair = tester.add_keypair(config_filename + "-" + str(time.time()))
+            keypair = tester.add_keypair(prefix + "-" + str(time.time()))
             
             ### RUN INSTANCE AND WAIT FOR IT TO GO TO RUNNING
             print "Sending request for " + str(available) + " " + type + " VMs"
