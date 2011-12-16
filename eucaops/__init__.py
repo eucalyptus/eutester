@@ -115,11 +115,10 @@ class Eucaops(Eutester,Eucaops_api):
         poll_count = self.poll_count
         print "Beginning poll loop for instance " + str(instance) + " to go to " + state
         while (instance.state != state) and (poll_count > 0):
-            sys.stdout.write(".")
-            poll_count = poll_count - 1
+            poll_count -= 1
             time.sleep(10)
             instance.update()
-        print "Done waiting"
+        print "Done. Waited a total of " + str( self.poll_count - poll_count) + " seconds"
         if poll_count == 0:
                 self.fail(str(instance) + " did not enter the proper state and was left in " + instance.state)
         print str(instance) + ' is now in ' + instance.state
@@ -134,19 +133,20 @@ class Eucaops(Eutester,Eucaops_api):
         Create a new EBS volume
         """
         # Determine the Availability Zone of the instance
+        poll_count = self.poll_count
         volume = self.ec2.create_volume(size, azone)
         # Wait for the volume to be created.
         print "Polling for volume to become available"
-        while volume.status != 'available':
-            sys.stdout.write(".")
+        while volume.status != 'available' and (poll_count > 0):
+            poll_count -= 1
             time.sleep(5)
             volume.update()
-        print "done\nVolume in " + volume.status + " state"
+        print "Done. Waited a total of " + str(self.poll_count - poll_count) + " seconds\nVolume in " + volume.status + " state"
     
-    def get_emi(self):
+    def get_emi(self, emi="emi-"):
         images = self.ec2.get_all_images()
         for image in images:
-            if re.match("emi-", image.id):
+            if re.match(emi, image.id):
                 return image
         raise Exception("Unable to find an EMI")
     
@@ -224,4 +224,43 @@ class Eucaops(Eutester,Eucaops_api):
             self.test_name("Properly modified property")
         else:
             self.fail("Could not modify " + property)
+    
+    def get_master(self, component="clc"):
+        service = "eucalyptus"
+        if component == "sc":
+            service = "storage"
+        if component == "ws":
+            service = "walrus"
+        if component == "cc":
+            service = "cluster"
+        print "Looking for enabled " + component + " in current connection"
+        ### TRY with the open connection if it fails, then try to
+        machines = self.get_component_machines("clc")
+        old_ssh = self.ssh
+        first = ""
+        second = ""
+        
+        ### GO through both clcs and check which ip it thinks is enabled for this service type
+        for clc in machines:
+            print ":" + clc + ":" 
+            self.ssh = self.create_ssh(clc, "foobar")
+            service_url = self.sys( self.eucapath + "/usr/sbin/euca-describe-services | egrep -e 'SERVICE[[:space:]]"+ service + "' | grep ENABLED | awk '{print $7}'")
+            ### Parse out the IP from this url
+            if first == "":
+                first = service_url[0].split(":")[1].strip("/") 
+            else:
+                second =  service_url[0].split(":")[1].strip("/")
+        self.ssh = old_ssh
+        if first == second:
+            print "Found matching enabled " + component + " as " + first
+            return first
+        else:
+            self.fail("Found a mismatch in the first and second CLCs checked as to which was master")
+            self.fail("First thought: " + first + " Second Thought: " + second)
+            
+       
+        
+        
+        
+        
 

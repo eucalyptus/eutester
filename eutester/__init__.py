@@ -180,6 +180,15 @@ class Eutester(object):
             raise Exception("Could not find component "  + component + " in list of machines")
         else:
              return machines_with_role[0]
+         
+    def get_component_machines(self, component):
+        #loop through machines looking for this component type
+        component.lower()
+        machines_with_role = [machine.hostname for machine in self.config['machines'] if component in machine.components]
+        if len(machines_with_role) == 0:
+            raise Exception("Could not find component "  + component + " in list of machines")
+        else:
+             return machines_with_role
 
     def swap_component_hostname(self, hostname):
         if hostname != None:
@@ -229,10 +238,10 @@ class Eutester(object):
         client = paramiko.SSHClient()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())            
         if keypath == None:
-            client.connect(hostname, username, password=password)
+            client.connect(hostname, username=username, password=password)
         else:
-            client.connect(hostname,  username, keyfile_name=keypath)
-        return client    
+            client.connect(hostname,  username=username, keyfile_name=keypath)
+        return client
                                
     def timeout_handler(self, signum, frame):
         self.fail("Command timeout after " + str(self.timeout) + " seconds")
@@ -273,7 +282,7 @@ class Eutester(object):
         except Exception, e:
             self.fail("Command timeout after " + str(timeout) + " seconds\nException:" + str(e)) 
             print e
-            return
+            return []
         signal.alarm(0)       
         if verbose:
             print "".join(output) 
