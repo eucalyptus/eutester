@@ -75,7 +75,7 @@ if __name__ == '__main__':
             tester.delete_keypair(keypair)
             tester.release_address()
             local.sys("rm " + keypath)
-            tester.sys("rm " + keypath)
+            tester.sys("rm " +  keypair.name + ".pem")
             runs -= 1
             if tester.fail_count > 0: 
                 fail += 1
