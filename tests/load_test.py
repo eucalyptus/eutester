@@ -22,8 +22,8 @@ if __name__ == '__main__':
                       help="Number of 10s intervals to wait before giving up on an instance Default: 24", default=24)
     parser.add_option("-e", "--exit", action="store_true", dest="exit_on_fail",
                       help="Whether or not to stop the script after a failure")
-    parser.add_option("-i", "--image", dest="exit_on_fail", type="string",
-                      help="Whether or not to stop the script after a failure")
+    parser.add_option("-i", "--image", dest="image", type="string",
+                      help="Specific image to run", default="emi-")
     parser.add_option( "--prefix", dest="prefix", type="string",
                       help="Prefix to tack on to keypairs", default="keypair")
     (options, args) = parser.parse_args()
@@ -34,12 +34,13 @@ if __name__ == '__main__':
     type = options.type
     exit_on_fail = options.exit_on_fail
     number = options.number
-    prefix = options.prefix 
+    prefix = options.prefix
+    image = options.image
     
     poll_count = options.poll_count
     tester = Eucaops( hostname="clc",password="foobar", config_file=config)
     tester.poll_count = poll_count
-    image = tester.get_emi()
+    image = tester.get_emi(emi=image)
     config_filename = config.split("/")[-1]
     print "Config file name " + config_filename
     local = Eucaops ( credpath="eucarc-eucalyptus-admin", hostname="localhost", password="a1pine", config_file=config)
