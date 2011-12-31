@@ -48,7 +48,7 @@ from bm_machine import bm_machine
 import eulogger
 
 class Eutester(object):
-    def __init__(self, config_file="cloud.conf", hostname=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, debug=0):
+    def __init__(self, config_file="cloud.conf", hostname=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, account="eucalyptus",  user="admin", debug=0):
         """  
         EUCADIR => $eucadir, 
         VERIFY_LEVEL => $verify_level, 
@@ -105,7 +105,7 @@ class Eutester(object):
                     client.connect(self.get_component_ip("clc"),  username="root", keyfile_name=keypath)
                 self.ssh = client
                 self.sftp = self.ssh.open_sftp()    
-                self.credpath = self.get_credentials("eucalyptus", "admin")            
+                self.credpath = self.get_credentials(account,user)            
             aws_access_key_id = self.get_access_key()
             aws_secret_access_key = self.get_secret_key()
             
@@ -299,7 +299,9 @@ class Eutester(object):
     def grep(self, string,list):
         expr = re.compile(string)
         return filter(expr.search,list)
-
+    
+    def diff(self, list1, list2):
+        return [item for item in list1 if not item in list2]
     
     def test_name(self, message):
         print "[TEST_REPORT] " + message

@@ -6,9 +6,17 @@ import sys
 
 class Eucaops(Eutester,Eucaops_api):
     
-    def __init__(self, config_file="cloud.conf", hostname=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, debug=0):
-        super(Eucaops, self).__init__(config_file, hostname, password, keypath, credpath, aws_access_key_id, aws_secret_access_key, debug)
-        self.poll_count = 24   
+    def __init__(self, config_file="cloud.conf", hostname=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,account="eucalyptus",user="admin", debug=0):
+        super(Eucaops, self).__init__(config_file, hostname, password, keypath, credpath, aws_access_key_id, aws_secret_access_key,account, user, debug)
+        self.poll_count = 24
+        self.test_resources = {}
+        self.test_resources["snapshots"] = []
+        self.test_resources["instances"] = []
+        self.test_resources["keypairs"] = []
+        self.test_resources["groups"] = []
+        self.test_resources["addresses"] = []
+        self.test_resources["buckets"] = []
+        self.test_resources["keys"] = []
            
     def create_bucket(self,bucket_name):
         """
@@ -30,6 +38,8 @@ class Eucaops(Eutester,Eucaops_api):
                 bucket = self.walrus.create_bucket(bucket_name)
             except self.walrus.provider.storage_create_error, e:
                 print 'Bucket (%s) is owned by another user' % bucket_name
+                return None
+            self.my_buckets.append(bucket)
         return bucket
     
     def upload_object_file(self, bucket_name, key_name, path_to_file):
@@ -48,6 +58,10 @@ class Eucaops(Eutester,Eucaops_api):
         return key
     
     def add_keypair(self,key_name=None):
+        """
+        Add a keypair with name key_name unless it already exists
+        key_name      The name of the keypair to add and download.
+        """
         if key_name==None:
             key_name = "keypair-" + str(int(time.time())) 
         print "Looking up keypair " + key_name 
@@ -66,6 +80,10 @@ class Eucaops(Eutester,Eucaops_api):
             print "Key " + key_name + " already exists"
     
     def delete_keypair(self,keypair):
+        """
+        Delete the keypair object passed in and check that it no longer shows up
+        keypair      Keypair object to delete and check
+        """
         name = keypair.name
         print "Sending delete for keypair: " + name
         keypair.delete()
@@ -75,7 +93,12 @@ class Eucaops(Eutester,Eucaops_api):
         return
     
     def add_group(self, group_name=None ):
-        group_name = "group-" + str(int(time.time()))     
+        """
+        Add a security group to the system with name group_name, if it exists dont create it
+        group_name      Name of the security group to create
+        """
+        if group_name == None:
+            group_name = "group-" + str(int(time.time()))
         if self.check_group(group_name):
             print "Group " + group_name + " already exists"
             return group[0]
@@ -86,6 +109,10 @@ class Eucaops(Eutester,Eucaops_api):
             return group
     
     def delete_group(self, group):
+        """
+        Delete the group object passed in and check that it no longer shows up
+        group      Group object to delete and check
+        """
         name = group.name
         print "Sending delete for group: " + name
         group.delete()
@@ -94,6 +121,10 @@ class Eucaops(Eutester,Eucaops_api):
         return
     
     def check_group(self, group_name):
+        """
+        Check if a group with group_name exists in the system
+        group_name      Group name to check for existence
+        """
         print "Looking up group " + group_name
         group = self.ec2.get_all_security_groups(groupnames=[group_name])
         if group == []:
@@ -102,6 +133,13 @@ class Eucaops(Eutester,Eucaops_api):
              return True
     
     def authorize_group(self,group_name="default", port=22, protocol="tcp", cidr_ip="0.0.0.0/0"):
+        """
+        Authorize the group with group_name, 
+        group_name      Name of the group to authorize, default="default"
+        port            Port to open, default=22
+        protocol        Protocol to authorize, default=tcp
+        cidr_ip         CIDR subnet to authorize, default="0.0.0.0/0" everything
+        """
         try:
             print "Attempting authorization of group"
             self.ec2.authorize_security_group_deprecated(group_name,ip_protocol=protocol, from_port=port, to_port=port, cidr_ip=cidr_ip)
@@ -112,28 +150,42 @@ class Eucaops(Eutester,Eucaops_api):
                 raise
     
     def wait_for_instance(self,instance, state="running"):
+        """
+        Wait for the instance to enter the state
+        instance      Boto instance object to check the state on
+        state        state that we are looking for
+        """
         poll_count = self.poll_count
         print "Beginning poll loop for instance " + str(instance) + " to go to " + state
         while (instance.state != state) and (poll_count > 0):
             poll_count -= 1
             time.sleep(10)
             instance.update()
-        print "Done. Waited a total of " + str( self.poll_count - poll_count) + " seconds"
+        print "Done. Waited a total of " + str( (self.poll_count - poll_count) * 10 ) + " seconds"
         if poll_count == 0:
                 self.fail(str(instance) + " did not enter the proper state and was left in " + instance.state)
         print str(instance) + ' is now in ' + instance.state
 
     def wait_for_reservation(self,reservation, state="running"):
+        """
+        Wait for the an entire reservation to enter the state
+        reservation  Boto reservation object to check the state on
+        state        state that we are looking for
+        """
         print "Beginning poll loop for the " + str(len(reservation.instances))   + " found in " + str(reservation)
         for instance in reservation.instances:
             self.wait_for_instance(instance, state)
     
     def create_volume(self, azone, size=1, snapshot=None):
         """
-        Create a new EBS volume
+        Create a new EBS volume then wait for it to go to available state, size or snapshot is mandatory
+        azone        Availability zone to create the volume in
+        size         Size of the volume to be created
+        snapshot     Snapshot to create the volume from
         """
         # Determine the Availability Zone of the instance
         poll_count = self.poll_count
+        print "Sending create volume request"
         volume = self.ec2.create_volume(size, azone)
         # Wait for the volume to be created.
         print "Polling for volume to become available"
@@ -141,16 +193,70 @@ class Eucaops(Eutester,Eucaops_api):
             poll_count -= 1
             time.sleep(5)
             volume.update()
+        if poll_count == 0:
+            self.fail(str(volume) + " never went to available and stayed in " + volume.status)
+            print "Deleting volume that never became available"
+            volume.delete()
+            return None
         print "Done. Waited a total of " + str(self.poll_count - poll_count) + " seconds\nVolume in " + volume.status + " state"
+        return volume
     
+    def delete_volume(self, volume):
+        """
+        Delete the EBS volume then check that it no longer exists
+        volume        Volume object to delete
+        """
+        self.ec2.delete_volume(volume.id)
+        print "Sent delete for volume: " +  volume.id  
+        poll_count = 5
+        volume.update()
+        while ( volume.status != "deleted") and (poll_count > 0):
+            poll_count -= 1
+            volume.update()
+            print str(volume) + " in " + volume.status
+            self.sleep(10)
+        
+        #self.sys("euca-delete-volume " + volume.id)
+        if poll_count == 0:
+            self.fail(str(volume) + " left in " +  volume.status)
+            return volume
+    
+    def detach_volume(self, volume):
+        volume.detach()
+        print "Sent detach for volume: " + volume.id
+        poll_count = 5
+        while ( volume.status != "available") and (poll_count > 0):
+            poll_count -= 1
+            print str(volume) + " in " + volume.status
+            self.sleep(5)
+        volume.update() 
+        if poll_count == 0:
+            self.fail(str(volume) + " left in " +  volume.status)
+            return volume
+        
     def get_emi(self, emi="emi-"):
+        """
+        Get an emi with name emi, or just grab any emi in the system
+        emi        ID of the emi to return
+        """
         images = self.ec2.get_all_images()
         for image in images:
             if re.match(emi, image.id):
                 return image
         raise Exception("Unable to find an EMI")
+        return
     
     def run_instance(self, image=None, keypair=None, group=None, type=None, zone=None, min=1, max=1):
+        """
+        Run instance/s and wait for them to go to the running state
+        image      Image object to use, default is pick the first emi found in the system
+        keypair    Keypair name to use for the instances, defaults to none
+        group      Security group name to apply to this set of instnaces, defaults to none
+        type       VM type to use for these instances, defaults to m1.small
+        zone       Availability zone to run these instances
+        min        Minimum instnaces to launch, default 1
+        max        Maxiumum instances to launch, default 1
+        """
         if image == None:
             images = self.ec2.get_all_images()
             for emi in images:
@@ -167,6 +273,10 @@ class Eucaops(Eutester,Eucaops_api):
         return reservation
     
     def get_available_vms(self, type=None):
+        """
+        Get available VMs of a certain type or return a dictionary with all types and their available vms
+        type        VM type to get available vms 
+        """
         ### Need to update this to work for a particular availability zone
         az_verbose_out = self.sys("euca-describe-availability-zones verbose")
         vmtypes = {"m1.small": 0,"c1.medium":0, "m1.large":0, "m1.xlarge":0,"c1.xlarge":0}
@@ -179,7 +289,11 @@ class Eucaops(Eutester,Eucaops_api):
         else:
             return int(vmtypes[type])
     
-    def release_address(self, ip=None):       
+    def release_address(self, ip=None):
+        """
+        Release all addresses or a particular IP
+        ip        IP to release
+        """   
         if ip==None:
             ## Clear out all addresses found
             print "Releasing all used addresses"
@@ -192,16 +306,22 @@ class Eucaops(Eutester,Eucaops_api):
             address_output = self.sys("euca-describe-addresses")
             free_addresses = self.grep("nobody", address_output)
             if len(free_addresses) < total_addresses:
-                self.fail("Some addresses still in use after attempting to release")
+                print "Some addresses still in use after attempting to release"
+                #self.fail("Some addresses still in use after attempting to release")
         else:
             print "Releasing address " + ip
             self.sys("euca-release-address " + ip )
             address_output = self.sys("euca-describe-addresses")
             free_addresses = self.grep( ip + ".*nobody", address_output)
             if len(free_addresses) < 1:
-                self.fail("Address still in use after attempting to release")
+                print "Some addresses still in use after attempting to release"
+                #self.fail("Address still in use after attempting to release")
             
     def terminate_instances(self, reservation=None):
+        """
+        Terminate instances in the system
+        reservation        Reservation object to terminate all instances in, default is to terminate all instances
+        """
         ### If a reservation is not passed then kill all instances
         if reservation==None:
 #            reservations.stop_all()
@@ -219,6 +339,11 @@ class Eucaops(Eutester,Eucaops_api):
             self.wait_for_reservation(reservation, state="terminated")
             
     def modify_property(self, property, value):
+        """
+        Modify a eucalyptus property through the command line euca-modify-property tool
+        property        Property to modify
+        value           Value to set it too
+        """
         command = self.eucapath + "/usr/sbin/euca-modify-property -p " + property + "=" + value
         if self.found(command, property):
             self.test_name("Properly modified property")
@@ -226,6 +351,10 @@ class Eucaops(Eutester,Eucaops_api):
             self.fail("Could not modify " + property)
     
     def get_master(self, component="clc"):
+        """
+        Find the master of any type of component and return its IP, by default returns the master CLC
+        component        Component to find the master, possible values ["clc", "sc", "cc", "ws"]
+        """
         service = "eucalyptus"
         if component == "sc":
             service = "storage"
