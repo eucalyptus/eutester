@@ -246,7 +246,7 @@ class Eucaops(Eutester,Eucaops_api):
         raise Exception("Unable to find an EMI")
         return
     
-    def run_instance(self, image=None, keypair=None, group=None, type=None, zone=None, min=1, max=1):
+    def run_instance(self, image=None, keypair=None, group="default", type=None, zone=None, min=1, max=1):
         """
         Run instance/s and wait for them to go to the running state
         image      Image object to use, default is pick the first emi found in the system
@@ -261,7 +261,7 @@ class Eucaops(Eutester,Eucaops_api):
             images = self.ec2.get_all_images()
             for emi in images:
                 if re.match("emi",emi.name):
-                    image = emi
+                    image = emi         
         print "Attempting to run image " + str(image) + "in group " + group
         reservation = image.run(key_name=keypair,security_groups=[group],instance_type=type, placement=zone, min_count=min, max_count=max)
         self.wait_for_reservation(reservation)
