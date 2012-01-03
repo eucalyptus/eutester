@@ -262,8 +262,8 @@ class Eucaops(Eutester,Eucaops_api):
             for emi in images:
                 if re.match("emi",emi.name):
                     image = emi
-        print "Attempting to run image " + str(image)
-        reservation = image.run(key_name=keypair,security_groups=group,instance_type=type, placement=zone, min_count=min, max_count=max)
+        print "Attempting to run image " + str(image) + "in group " + group
+        reservation = image.run(key_name=keypair,security_groups=[group],instance_type=type, placement=zone, min_count=min, max_count=max)
         self.wait_for_reservation(reservation)
         for instance in reservation.instances:
             if instance.state != "running":
