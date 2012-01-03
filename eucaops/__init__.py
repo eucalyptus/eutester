@@ -185,20 +185,21 @@ class Eucaops(Eutester,Eucaops_api):
         """
         # Determine the Availability Zone of the instance
         poll_count = self.poll_count
+        poll_interval = 10
         print "Sending create volume request"
         volume = self.ec2.create_volume(size, azone)
         # Wait for the volume to be created.
         print "Polling for volume to become available"
         while volume.status != 'available' and (poll_count > 0):
             poll_count -= 1
-            time.sleep(5)
+            time.sleep(poll_interval)
             volume.update()
         if poll_count == 0:
             self.fail(str(volume) + " never went to available and stayed in " + volume.status)
             print "Deleting volume that never became available"
             volume.delete()
             return None
-        print "Done. Waited a total of " + str(self.poll_count - poll_count) + " seconds\nVolume in " + volume.status + " state"
+        print "Done. Waited a total of " + str( (self.poll_count - poll_count) * poll_interval) + " seconds\nVolume in " + volume.status + " state"
         return volume
     
     def delete_volume(self, volume):
@@ -215,8 +216,7 @@ class Eucaops(Eutester,Eucaops_api):
             volume.update()
             print str(volume) + " in " + volume.status
             self.sleep(10)
-        
-        #self.sys("euca-delete-volume " + volume.id)
+
         if poll_count == 0:
             self.fail(str(volume) + " left in " +  volume.status)
             return volume

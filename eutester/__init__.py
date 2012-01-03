@@ -47,6 +47,10 @@ from boto.ec2.regioninfo import RegionInfo
 from bm_machine import bm_machine
 import eulogger
 
+class TimeoutFunctionException(Exception): 
+    """Exception to raise on a timeout""" 
+    pass 
+
 class Eutester(object):
     def __init__(self, config_file="cloud.conf", hostname=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, account="eucalyptus",  user="admin", debug=0):
         """  
@@ -243,9 +247,8 @@ class Eutester(object):
             client.connect(hostname,  username=username, keyfile_name=keypath)
         return client
                                
-    def timeout_handler(self, signum, frame):
-        """Exception to raise on a timeout""" 
-        pass
+    def handle_timeout(self, signum, frame): 
+        raise TimeoutFunctionException()
     
     def sys(self, cmd, verbose=1, timeout=-2):
         cmd = str(cmd)
@@ -254,8 +257,8 @@ class Eutester(object):
         if timeout == -2:
             timeout = self.timeout
         time.sleep(self.delay)
-        signal.signal(signal.SIGALRM, self.timeout_handler ) 
-        signal.alarm(timeout) # triger alarm in timeout seconds
+        old = signal.signal(signal.SIGALRM, self.handle_timeout) 
+        signal.alarm(timeout) 
         cur_time = time.strftime("%I:%M:%S", time.gmtime())
         if verbose:
             if self.ssh == None:
@@ -268,22 +271,21 @@ class Eutester(object):
                     if re.match(self.credpath,item):
                         cmd = ". " + self.credpath + "/eucarc && " + cmd
                         break
-                output = subprocess.check_output([cmd])
+                output = subprocess.check_output([cmd]) 
             else:
                 stdin_ls, stdout_ls, stderr_ls = self.ssh.exec_command("ls")
                 ls_result = stdout_ls.readlines()
                 if self.credpath != None:
-                    for item in ls_result:
-                        if re.match(self.credpath,item):
+                    for item in ls_result: 
+                        if re.match(self.credpath,item): 
                             cmd = ". " + self.credpath + "/eucarc && " + cmd
                             break
                 stdin, stdout, stderr = self.ssh.exec_command(cmd)
                 output =  stderr.readlines() + stdout.readlines() 
-        except Exception, e:
+        finally: 
+            signal.signal(signal.SIGALRM, old)
             self.fail("Command timeout after " + str(timeout) + " seconds\nException:" + str(e)) 
-            print e
-            return []
-        signal.alarm(0)       
+        signal.alarm(0)      
         if verbose:
             print "".join(output) 
         return output
