@@ -244,8 +244,8 @@ class Eutester(object):
         return client
                                
     def timeout_handler(self, signum, frame):
-        self.fail("Command timeout after " + str(self.timeout) + " seconds")
-        raise Exception("Timeout Reached")
+        """Exception to raise on a timeout""" 
+        pass
     
     def sys(self, cmd, verbose=1, timeout=-2):
         cmd = str(cmd)
