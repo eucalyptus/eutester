@@ -221,6 +221,11 @@ class Eucaops(Eutester,Eucaops_api):
             self.fail(str(volume) + " left in " +  volume.status)
             return volume
     
+    def delete_all_volumes(self):
+        volumes = self.ec2.get_all_volumes()
+        for volume in volumes:
+            self.delete_volume(volume.id)
+    
     def detach_volume(self, volume):
         volume.detach()
         print "Sent detach for volume: " + volume.id
