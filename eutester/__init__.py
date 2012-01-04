@@ -256,6 +256,7 @@ class Eutester(object):
         # -1 should be reserved for "no timeout" option
         if timeout == -2:
             timeout = self.timeout
+        #print "Using timeout of " + str(timeout)
         time.sleep(self.delay)
         old = signal.signal(signal.SIGALRM, self.handle_timeout) 
         signal.alarm(timeout) 
@@ -282,8 +283,7 @@ class Eutester(object):
                             break
                 stdin, stdout, stderr = self.ssh.exec_command(cmd)
                 output =  stderr.readlines() + stdout.readlines() 
-        finally: 
-            signal.signal(signal.SIGALRM, old)
+        except Exception, e: 
             self.fail("Command timeout after " + str(timeout) + " seconds\nException:" + str(e)) 
         signal.alarm(0)      
         if verbose:
