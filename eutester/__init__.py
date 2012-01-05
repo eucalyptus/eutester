@@ -285,6 +285,7 @@ class Eutester(object):
                 output =  stderr.readlines() + stdout.readlines() 
         except Exception, e: 
             self.fail("Command timeout after " + str(timeout) + " seconds\nException:" + str(e)) 
+            return []
         signal.alarm(0)      
         if verbose:
             print "".join(output) 
