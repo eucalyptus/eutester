@@ -54,7 +54,7 @@ class TimeoutFunctionException(Exception):
     pass 
 
 class Eutester(object):
-    def __init__(self, config_file="cloud.conf", hostname=None, password="foobar", keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, account="eucalyptus",  user="admin", debug=0):
+    def __init__(self, config_file="cloud.conf", hostname=None, password="foobar", keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, account="eucalyptus",  user="admin", boto_debug=2):
         """  
         EUCADIR => $eucadir, 
         VERIFY_LEVEL => $verify_level, 
@@ -76,7 +76,7 @@ class Eutester(object):
         self.config = self.read_config(config_file)
         self.eucapath = "/opt/eucalyptus"
         self.current_ssh = "clc"
-        self.debug = debug
+        self.boto_debug = boto_debug
         self.ssh = None
         self.hostname = hostname
         self.password = password
@@ -146,13 +146,15 @@ class Eutester(object):
                                     is_secure=False,
                                     region=RegionInfo(name="eucalyptus", endpoint=self.get_component_ip("clc")),
                                     port=8773,
-                                    path="/services/Eucalyptus")
+                                    path="/services/Eucalyptus",
+                                    debug=self.boto_debug)
         self.walrus = boto.connect_s3(aws_access_key_id=aws_access_key_id,
                                       aws_secret_access_key=aws_secret_access_key,
                                       is_secure=False,
                                       host=self.get_component_ip("ws"),
                                       port=8773,
-                                      path="/services/Walrus")
+                                      path="/services/Walrus",
+                                      debug=self.boto_debug)
 
     def read_config(self, filepath):
         config_hash = {}
