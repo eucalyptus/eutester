@@ -269,7 +269,7 @@ class Eutester(object):
         ## START CC Log
         self.swap_ssh("cc00")
         self.cc_log_channel = self.ssh.invoke_shell()
-        self.cc_log_channel.send("tail -f "  + self.eucapath + "/var/log/eucalyptus/cc.log\n") 
+        self.cc_log_channel.send("tail -f "  + self.eucapath + "/var/log/eucalyptus/cloud-output.log\n") 
         ## START CLOUD Log       
         self.swap_ssh("clc")        
         self.cloud_log_channel = self.ssh.invoke_shell()
