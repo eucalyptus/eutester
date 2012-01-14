@@ -88,6 +88,7 @@ class Eutester(object):
         self.fail_count = 0
         self.start_time = time.time()
         self.key_dir = "./"
+        self.account_id = 0000000000001
         
         ### EUCALOGGER
         self.logger = eulogger.Eulogger(name='euca').log
@@ -229,18 +230,20 @@ class Eutester(object):
         return admin_cred_dir
         
     def get_access_key(self):
-        with open( self.credpath + "/eucarc") as eucarc:
-            for line in eucarc.readlines():
-                if re.search("EC2_ACCESS_KEY",line):
-                    return line.split("=")[1].strip().strip("'")
-            raise Exception("Unable to find access key in eucarc")   
+        return self.parse_eucarc("EC2_ACCESS_KEY")   
     
     def get_secret_key(self):
+       return self.parse_eucarc("EC2_SECRET_KEY")
+    
+    def get_account_id(self):
+        return self.parse_eucarc("EC2_ACCOUNT_NUMBER")
+        
+    def parse_eucarc(self, field):
         with open( self.credpath + "/eucarc") as eucarc:
             for line in eucarc.readlines():
-                if re.search("EC2_SECRET_KEY", line):
+                if re.search(field, line):
                     return line.split("=")[1].strip().strip("'")
-            raise Exception("Unable to find access key in eucarc")   
+            raise Exception("Unable to find account id in eucarc")
         
     def connect_euare(self):
         self.euare = boto.connect_iam(aws_access_key_id=self.get_access_key(),
@@ -281,26 +284,46 @@ class Eutester(object):
         self.swap_ssh(previous_ssh)
     
     def get_euca_logs(self, component="cloud"):
-        ### NEED TO SLEEP BECAUSE IT SEEMS THAT LOGS TRAIL BY ABOUT 1 MIN
-        self.sleep(90) 
-        if component == "cloud":
-            return self.cloud_log_channel.recv(5000000)
+        log = []
+        ## in case there is any delay in the logs propagating
+        sleep(10)
+        if component == "cloud": 
+            log = self.cloud_log_channel.recv(5000000)
         if component == "cc00":
-            return self.cc_log_channel.recv(5000000)
+            log = self.cc_log_channel.recv(5000000)
         if component == "nc00":
-            return self.nc_log_channel.recv(5000000)
+            log = self.nc_log_channel.recv(5000000)
+        return log
     
     def stop_euca_logs(self, component=None):
         if component == None:
             self.cloud_log_channel.close()
             self.cc_log_channel.close()
-            self.cc_log_channel.close()
+            self.nc_log_channel.close()
         if component == "cloud":
             self.cloud_log_channel.close()
         if component == "cc00":
-             self.cc_log_channel.close()
+            self.cc_log_channel.close()
         if component == "nc00":
-             self.nc_log_channel.close()
+            self.nc_log_channel.close()
+    
+    def grep_euca_log(self,component="cloud", regex="ERROR" ):
+        previous_ssh = self.current_ssh
+        if component == "cloud":
+            self.swap_ssh("clc")
+            log = self.sys("cat "  + self.eucapath + "/var/log/eucalyptus/cloud-output.log | grep " + regex)
+            self.swap_ssh(previous_ssh)
+            return log
+        if component == "cc00":
+            self.swap_ssh("cc00")
+            log = self.sys("cat "  + self.eucapath + "/var/log/eucalyptus/cc.log | grep " + regex)
+            self.swap_ssh(previous_ssh)
+            return log
+        if component == "nc00":
+            self.swap_ssh("nc00")
+            log = self.sys("cat "  + self.eucapath + "/var/log/eucalyptus/nc.log | grep " + regex)
+            self.swap_ssh(previous_ssh)
+            return log
         
     def test_report(self):
         full_report = []
@@ -332,6 +355,7 @@ class Eutester(object):
         signal.alarm(timeout) 
         cur_time = time.strftime("%I:%M:%S", time.gmtime())
         output = []
+        std_out_return = []
         if verbose:
             if self.ssh == None:
                 self.hostname ="localhost"
@@ -339,11 +363,11 @@ class Eutester(object):
         try:
             
             if self.ssh == None:
-                for item in subprocess.check_output(["ls"]):
+                for item in os.popen("ls").readlines():
                     if re.match(self.credpath,item):
                         cmd = ". " + self.credpath + "/eucarc && " + cmd
                         break
-                output = subprocess.check_output([cmd]) 
+                std_out_return = os.popen(cmd).readlines()
             else:
                 stdin_ls, stdout_ls, stderr_ls = self.ssh.exec_command("ls")
                 ls_result = stdout_ls.readlines()
@@ -353,14 +377,15 @@ class Eutester(object):
                             cmd = ". " + self.credpath + "/eucarc && " + cmd
                             break
                 stdin, stdout, stderr = self.ssh.exec_command(cmd)
-                output =  stderr.readlines() + stdout.readlines() 
+                std_out_return = stdout.readlines() 
+                output = std_out_return
         except Exception, e: 
             self.fail("Command timeout after " + str(timeout) + " seconds\nException:" + str(e)) 
             return []
         signal.alarm(0)      
         if verbose:
-            self.tee("".join(output))
-        return output
+            self.tee("".join(std_out_return))
+        return std_out_return
 
     def found(self, command, regex):
         result = self.sys(command)

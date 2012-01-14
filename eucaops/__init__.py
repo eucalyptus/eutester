@@ -30,14 +30,14 @@ class Eucaops(Eutester,Eucaops_api):
         # bucket exists and we have access to it or None.
         bucket = self.walrus.lookup(bucket_name)
         if bucket:
-            print 'Bucket (%s) already exists' % bucket_name
+            self.tee( 'Bucket (%s) already exists' % bucket_name )
         else:
                 # Let's try to create the bucket.  This will fail if
                 # the bucket has already been created by someone else.
             try:
                 bucket = self.walrus.create_bucket(bucket_name)
             except self.walrus.provider.storage_create_error, e:
-                print 'Bucket (%s) is owned by another user' % bucket_name
+                self.tee( 'Bucket (%s) is owned by another user' % bucket_name )
                 return None
             self.my_buckets.append(bucket)
         return bucket
@@ -64,10 +64,10 @@ class Eucaops(Eutester,Eucaops_api):
         """
         if key_name==None:
             key_name = "keypair-" + str(int(time.time())) 
-        print "Looking up keypair " + key_name 
+        self.tee(  "Looking up keypair " + key_name )
         key = self.ec2.get_all_key_pairs(keynames=[key_name])    
         if key == []:
-            print 'Creating keypair: %s' % key_name
+            self.tee( 'Creating keypair: %s' % key_name)
             # Create an SSH key to use when logging into instances.
             key = self.ec2.create_key_pair(key_name)
             # AWS will store the public key but the private key is
@@ -77,7 +77,7 @@ class Eucaops(Eutester,Eucaops_api):
             key.save(self.key_dir)
             return key
         else:
-            print "Key " + key_name + " already exists"
+            self.tee(  "Key " + key_name + " already exists")
     
     def delete_keypair(self,keypair):
         """
@@ -85,7 +85,7 @@ class Eucaops(Eutester,Eucaops_api):
         keypair      Keypair object to delete and check
         """
         name = keypair.name
-        print "Sending delete for keypair: " + name
+        self.tee(  "Sending delete for keypair: " + name)
         keypair.delete()
         keypair = self.ec2.get_all_key_pairs(keynames=[name])
         if len(keypair) > 0:
@@ -100,10 +100,10 @@ class Eucaops(Eutester,Eucaops_api):
         if group_name == None:
             group_name = "group-" + str(int(time.time()))
         if self.check_group(group_name):
-            print "Group " + group_name + " already exists"
+            self.tee(  "Group " + group_name + " already exists")
             return group[0]
         else:
-            print 'Creating Security Group: %s' % group_name
+            self.tee( 'Creating Security Group: %s' % group_name)
             # Create a security group to control access to instance via SSH.
             group = self.ec2.create_security_group(group_name, group_name)
             return group
@@ -114,7 +114,7 @@ class Eucaops(Eutester,Eucaops_api):
         group      Group object to delete and check
         """
         name = group.name
-        print "Sending delete for group: " + name
+        self.tee( "Sending delete for group: " + name )
         group.delete()
         if self.check_group(name):
             self.fail("Group found after attempt to delete it")
@@ -125,7 +125,7 @@ class Eucaops(Eutester,Eucaops_api):
         Check if a group with group_name exists in the system
         group_name      Group name to check for existence
         """
-        print "Looking up group " + group_name
+        self.tee( "Looking up group " + group_name )
         group = self.ec2.get_all_security_groups(groupnames=[group_name])
         if group == []:
              return False
@@ -141,11 +141,11 @@ class Eucaops(Eutester,Eucaops_api):
         cidr_ip         CIDR subnet to authorize, default="0.0.0.0/0" everything
         """
         try:
-            print "Attempting authorization of group"
+            self.tee( "Attempting authorization of group" )
             self.ec2.authorize_security_group_deprecated(group_name,ip_protocol=protocol, from_port=port, to_port=port, cidr_ip=cidr_ip)
         except self.ec2.ResponseError, e:
             if e.code == 'InvalidPermission.Duplicate':
-                print 'Security Group: %s already authorized' % group_name
+                self.tee( 'Security Group: %s already authorized' % group_name )
             else:
                 raise
     
@@ -156,15 +156,15 @@ class Eucaops(Eutester,Eucaops_api):
         state        state that we are looking for
         """
         poll_count = self.poll_count
-        print "Beginning poll loop for instance " + str(instance) + " to go to " + state
+        self.tee( "Beginning poll loop for instance " + str(instance) + " to go to " + state )
         while (instance.state != state) and (poll_count > 0):
             poll_count -= 1
             time.sleep(10)
             instance.update()
-        print "Done. Waited a total of " + str( (self.poll_count - poll_count) * 10 ) + " seconds"
+        self.tee( "Waited a total of " + str( (self.poll_count - poll_count) * 10 ) + " seconds" )
         if poll_count == 0:
                 self.fail(str(instance) + " did not enter the proper state and was left in " + instance.state)
-        print str(instance) + ' is now in ' + instance.state
+        self.tee( str(instance) + ' is now in ' + instance.state )
 
     def wait_for_reservation(self,reservation, state="running"):
         """
@@ -172,7 +172,7 @@ class Eucaops(Eutester,Eucaops_api):
         reservation  Boto reservation object to check the state on
         state        state that we are looking for
         """
-        print "Beginning poll loop for the " + str(len(reservation.instances))   + " found in " + str(reservation)
+        self.tee( "Beginning poll loop for the " + str(len(reservation.instances))   + " found in " + str(reservation) )
         for instance in reservation.instances:
             self.wait_for_instance(instance, state)
     
@@ -186,20 +186,20 @@ class Eucaops(Eutester,Eucaops_api):
         # Determine the Availability Zone of the instance
         poll_count = self.poll_count
         poll_interval = 10
-        print "Sending create volume request"
+        self.tee( "Sending create volume request" )
         volume = self.ec2.create_volume(size, azone)
         # Wait for the volume to be created.
-        print "Polling for volume to become available"
+        self.tee( "Polling for volume to become available")
         while volume.status != 'available' and (poll_count > 0):
             poll_count -= 1
             time.sleep(poll_interval)
             volume.update()
         if poll_count == 0:
             self.fail(str(volume) + " never went to available and stayed in " + volume.status)
-            print "Deleting volume that never became available"
+            self.tee( "Deleting volume that never became available")
             volume.delete()
             return None
-        print "Done. Waited a total of " + str( (self.poll_count - poll_count) * poll_interval) + " seconds\nVolume in " + volume.status + " state"
+        self.tee( "Done. Waited a total of " + str( (self.poll_count - poll_count) * poll_interval) + " seconds\nVolume in " + volume.status + " state" )
         return volume
     
     def delete_volume(self, volume):
@@ -208,13 +208,13 @@ class Eucaops(Eutester,Eucaops_api):
         volume        Volume object to delete
         """
         self.ec2.delete_volume(volume.id)
-        print "Sent delete for volume: " +  volume.id  
-        poll_count = 5
+        self.tee( "Sent delete for volume: " +  volume.id  )
+        poll_count = 10
         volume.update()
         while ( volume.status != "deleted") and (poll_count > 0):
             poll_count -= 1
             volume.update()
-            print str(volume) + " in " + volume.status
+            self.tee( str(volume) + " in " + volume.status )
             self.sleep(10)
 
         if poll_count == 0:
@@ -227,17 +227,46 @@ class Eucaops(Eutester,Eucaops_api):
             self.delete_volume(volume.id)
     
     def detach_volume(self, volume):
+        if volume == None:
+            self.fail("Volume does not exist")
+            return volume
         volume.detach()
-        print "Sent detach for volume: " + volume.id
-        poll_count = 5
-        while ( volume.status != "available") and (poll_count > 0):
+        volume.update()
+        self.tee( "Sent detach for volume: " + volume.id + " which is currently in state: " + volume.status)
+        poll_count = 10 
+        while ( volume.status == "in-use") and (poll_count > 0):
             poll_count -= 1
-            print str(volume) + " in " + volume.status
-            self.sleep(5)
-        volume.update() 
+            self.tee( str(volume) + " in " + volume.status)
+            self.sleep(10)
+            volume.update()
+        self.tee(str(volume) + " left in " +  volume.status)
         if poll_count == 0:
             self.fail(str(volume) + " left in " +  volume.status)
-            return volume
+        return volume
+    
+    def create_snapshot(self,volume):
+        snapshot = volume.create_snapshot()
+        self.tee( "Sent snapshot creation request for volume: " + volume.id)
+        poll_count = 5
+        while ( snapshot.status != "completed") and (poll_count > 0):
+            poll_count -= 1
+            self.tee( str(snapshot) + " in " + snapshot.status + " with " + str(snapshot.progress) + "% progress")
+            self.sleep(volume.size)
+            snapshot.update()
+        if poll_count == 0:
+            self.fail(str(snapshot) + " left in " +  snapshot.status + " with " + str(snapshot.progress) + "% progress")
+        return snapshot
+    
+    def delete_snapshot(self,snapshot):
+        snapshot.delete()
+        self.tee( "Sent snapshot delete request for snapshot: " + snapshot.id)
+        poll_count = 5
+        while ( len(self.ec2.get_all_snapshots(snapshot_ids=[snapshot.id])) > 0) and (poll_count > 0):
+            poll_count -= 1
+            self.sleep(10)
+        if poll_count == 0:
+            self.fail(str(snapshot) + " left in " +  snapshot.status + " with " + str(snapshot.progress) + "% progress")
+        return snapshot
         
     def get_emi(self, emi="emi-"):
         """
@@ -267,14 +296,14 @@ class Eucaops(Eutester,Eucaops_api):
             for emi in images:
                 if re.match("emi",emi.name):
                     image = emi         
-        print "Attempting to run image " + str(image) + "in group " + group
+        self.tee( "Attempting to run image " + str(image) + " in group " + group)
         reservation = image.run(key_name=keypair,security_groups=[group],instance_type=type, placement=zone, min_count=min, max_count=max)
         self.wait_for_reservation(reservation)
         for instance in reservation.instances:
             if instance.state != "running":
                 self.fail("Instance " + instance.id + " now in " + instance.state  + " state")
             else:
-                print "Instance " + instance.id + " now in " + instance.state  + " state"
+                self.tee( "Instance " + instance.id + " now in " + instance.state  + " state")
         return reservation
     
     def get_available_vms(self, type=None):
@@ -301,7 +330,7 @@ class Eucaops(Eutester,Eucaops_api):
         """   
         if ip==None:
             ## Clear out all addresses found
-            print "Releasing all used addresses"
+            self.tee( "Releasing all used addresses")
             address_output = self.sys("euca-describe-addresses")
             addresses = self.grep("ADDRESS",address_output)
             total_addresses = len(addresses)
@@ -311,15 +340,15 @@ class Eucaops(Eutester,Eucaops_api):
             address_output = self.sys("euca-describe-addresses")
             free_addresses = self.grep("nobody", address_output)
             if len(free_addresses) < total_addresses:
-                print "Some addresses still in use after attempting to release"
+                self.tee( "Some addresses still in use after attempting to release")
                 #self.fail("Some addresses still in use after attempting to release")
         else:
-            print "Releasing address " + ip
+            self.tee( "Releasing address " + ip )
             self.sys("euca-release-address " + ip )
             address_output = self.sys("euca-describe-addresses")
             free_addresses = self.grep( ip + ".*nobody", address_output)
             if len(free_addresses) < 1:
-                print "Some addresses still in use after attempting to release"
+                self.tee( "Some addresses still in use after attempting to release" )
                 #self.fail("Address still in use after attempting to release")
             
     def terminate_instances(self, reservation=None):
@@ -333,13 +362,13 @@ class Eucaops(Eutester,Eucaops_api):
             reservations = self.ec2.get_all_instances()
             for res in reservations:
                 for instance in res.instances:
-                    print "Sending terminate for " + str(instance)
+                    self.tee( "Sending terminate for " + str(instance) )
                     instance.terminate()
                 self.wait_for_reservation(res, state="terminated")
         ### Otherwise just kill this reservation
         else:
             for instance in reservation.instances:
-                    print "Sending terminate for " + str(instance)
+                    self.tee( "Sending terminate for " + str(instance) )
                     instance.terminate()
             self.wait_for_reservation(reservation, state="terminated")
             
@@ -367,24 +396,23 @@ class Eucaops(Eutester,Eucaops_api):
             service = "walrus"
         if component == "cc":
             service = "cluster"
-        print "Looking for enabled " + component + " in current connection"
+        self.tee( "Looking for enabled " + component + " in current connection")
         ### TRY with the open connection if it fails, then try to
         machines = self.get_component_machines("clc")
-        old_ssh = self.ssh
+        old_ssh = self.current_ssh
         first = ""
         second = ""
         
         ### GO through both clcs and check which ip it thinks is enabled for this service type
         for clc in machines:
-            print ":" + clc + ":" 
-            self.ssh = self.create_ssh(clc, "foobar")
+            self.swap_ssh(hostname=clc, password=self.password)
             service_url = self.sys( self.eucapath + "/usr/sbin/euca-describe-services | egrep -e 'SERVICE[[:space:]]"+ service + "' | grep ENABLED | awk '{print $7}'")
             ### Parse out the IP from this url
             if first == "":
                 first = service_url[0].split(":")[1].strip("/") 
             else:
                 second =  service_url[0].split(":")[1].strip("/")
-        self.ssh = old_ssh
+        self.swap_ssh(hostname=old_ssh)
         if first == second:
             print "Found matching enabled " + component + " as " + first
             return first
