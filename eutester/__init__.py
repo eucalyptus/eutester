@@ -44,6 +44,7 @@ import random
 import time
 import signal
 import copy 
+from threading import Thread
 
 from boto.ec2.regioninfo import RegionInfo
 from bm_machine import bm_machine
@@ -90,6 +91,13 @@ class Eutester(object):
         self.key_dir = "./"
         self.account_id = 0000000000001
         
+        ##### LOGGING 
+        self.cloud_log_buffer = ''
+        self.cc_log_buffer  = ''
+        self.nc_log_buffer = ''
+        self.cloud_log_process = None
+        self.cc_log_process = None
+        self.nc_log_process = None
         ### EUCALOGGER
         self.logger = eulogger.Eulogger(name='euca').log
         
@@ -269,32 +277,45 @@ class Eutester(object):
         """CURRENTLY ONLY WORKS ON CC00 AND CLC AND  the first NC00""" 
         self.tee( "Starting logging")
         previous_ssh = self.current_ssh
-        ## START CC Log
-        self.swap_ssh("cc00")
-        self.cc_log_channel = self.ssh.invoke_shell()
-        self.cc_log_channel.send("tail -f "  + self.eucapath + "/var/log/eucalyptus/cc.log\n") 
         ## START CLOUD Log       
         self.swap_ssh("clc")        
         self.cloud_log_channel = self.ssh.invoke_shell()
-        self.cloud_log_channel.send("tail -f "  + self.eucapath + "/var/log/eucalyptus/cloud-output.log\n")
+        self.cloud_log_channel.send("tail -f "  + self.eucapath + "/var/log/eucalyptus/cloud-output.log > cloud-test.log & \n")
+        self.cloud_log_channel.close()
+        ## START CC Log
+        self.swap_ssh("cc00")
+        self.cc_log_channel = self.ssh.invoke_shell()
+        self.cc_log_channel.send("tail -f "  + self.eucapath + "/var/log/eucalyptus/cc.log > cc-test.log &\n") 
+        self.cc_log_channel.close()
+        #self.cc_log_process = Thread(target=poll_euca_logs, args=(self, "cc00",))      
+        #self.cc_log_process.start()
         ## START NC LOG
-        self.swap_ssh("nc00")        
+        self.swap_ssh("nc00") 
         self.nc_log_channel = self.ssh.invoke_shell()
-        self.nc_log_channel.send("tail -f "  + self.eucapath + "/var/log/eucalyptus/nc.log\n")
+        self.nc_log_channel.send("tail -f "  + self.eucapath + "/var/log/eucalyptus/nc.log > nc-test.log &\n")
+        self.nc_log_channel.close()
+        #self.nc_log_process = Thread(target=poll_euca_logs, args=(self,"nc00",))   
+        #self.nc_log_process.start()
         self.swap_ssh(previous_ssh)
-    
+        
     def get_euca_logs(self, component="cloud"):
-        log = []
         ## in case there is any delay in the logs propagating
-        self.sleep(10)
-        if component == "cloud": 
-            log = self.cloud_log_channel.recv(5000000)
-        if component == "cc00":
-            log = self.cc_log_channel.recv(5000000)
-        if component == "nc00":
-            log = self.nc_log_channel.recv(5000000)
-        return log
-    
+        #if component == "cloud": 
+            print "Gathering log on CLC"
+            previous_ssh = self.current_ssh
+            ## START CLOUD Log       
+            self.swap_ssh("clc") 
+            cloud_log_buffer = "".join(self.sys("cat cloud-test.log"))
+        #if component == "cc00":
+            print "Gathering log on CC00"
+            self.swap_ssh("cc00")
+            cc_log_buffer = "".join(self.sys("cat cc-test.log"))
+        #if component == "nc00":
+            print "Gathering log on NC00"
+            self.swap_ssh("nc00") 
+            nc_log_buffer = "".join(self.sys("cat nc-test.log"))
+            self.swap_ssh(previous_ssh)
+                
     def stop_euca_logs(self, component=None):
         if component == None:
             self.cloud_log_channel.close()
@@ -327,12 +348,14 @@ class Eutester(object):
         
     def test_report(self):
         full_report = []
+        self.get_euca_logs()
+        self.stop_euca_logs()
         full_report.append("Test run started at " + str(self.start_time) + "\n\n\n")
         full_report.append("Failures " + str(self.fail_count) + "\n")
         full_report.append("Running Log: " + "\n".join(self.running_log) + "\n\n\n")
-        full_report.append("CLC Log:\n" + str(self.get_euca_logs(component="cloud")) + "\n\n\n")
-        full_report.append("CC00 Log:\n" + str(self.get_euca_logs(component="cc00")) + "\n\n\n")
-        full_report.append("NC00 Log:\n" + str(self.get_euca_logs(component="nc00")) + "\n\n\n")
+        full_report.append("CLC Log:\n" + self.cloud_log_buffer + "\n\n\n") 
+        full_report.append("CC00 Log:\n" + self.cc_log_buffer + "\n\n\n")
+        full_report.append("NC00 Log:\n" + self.nc_log_buffer + "\n\n\n")
         return full_report
         
     def swap_ssh(self, hostname, password=None, keypath=None):
