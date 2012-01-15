@@ -286,7 +286,7 @@ class Eutester(object):
     def get_euca_logs(self, component="cloud"):
         log = []
         ## in case there is any delay in the logs propagating
-        sleep(10)
+        self.sleep(10)
         if component == "cloud": 
             log = self.cloud_log_channel.recv(5000000)
         if component == "cc00":
