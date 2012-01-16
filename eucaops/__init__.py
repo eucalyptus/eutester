@@ -1,5 +1,6 @@
 from eutester import Eutester
 from eucaops_api import Eucaops_api
+from boto.ec2.blockdevicemapping import BlockDeviceMapping, BlockDeviceType
 import time
 import re
 import sys
@@ -50,7 +51,7 @@ class Eucaops(Eutester,Eucaops_api):
         key_name      The name of the object containing the data in walrus.
         path_to_file  Fully qualified path to local file.
         """
-        bucket = s3.lookup(bucket_name)
+        bucket = self.s3.lookup(bucket_name)
         # Get a new, blank Key object from the bucket.  This Key object only
         # exists locally until we actually store data in it.
         key = bucket.new_key(key_name)
@@ -101,7 +102,7 @@ class Eucaops(Eutester,Eucaops_api):
             group_name = "group-" + str(int(time.time()))
         if self.check_group(group_name):
             self.tee(  "Group " + group_name + " already exists")
-            return group[0]
+            return group_name
         else:
             self.tee( 'Creating Security Group: %s' % group_name)
             # Create a security group to control access to instance via SSH.
@@ -113,7 +114,7 @@ class Eucaops(Eutester,Eucaops_api):
         Delete the group object passed in and check that it no longer shows up
         group      Group object to delete and check
         """
-        name = group.name
+        name = group.namse
         self.tee( "Sending delete for group: " + name )
         group.delete()
         if self.check_group(name):
@@ -128,9 +129,9 @@ class Eucaops(Eutester,Eucaops_api):
         self.tee( "Looking up group " + group_name )
         group = self.ec2.get_all_security_groups(groupnames=[group_name])
         if group == []:
-             return False
+            return False
         else:
-             return True
+            return True
     
     def authorize_group(self,group_name="default", port=22, protocol="tcp", cidr_ip="0.0.0.0/0"):
         """
@@ -244,18 +245,51 @@ class Eucaops(Eutester,Eucaops_api):
             self.fail(str(volume) + " left in " +  volume.status)
         return volume
     
-    def create_snapshot(self,volume):
-        snapshot = volume.create_snapshot()
-        self.tee( "Sent snapshot creation request for volume: " + volume.id)
-        poll_count = 5
-        while ( snapshot.status != "completed") and (poll_count > 0):
-            poll_count -= 1
-            self.tee( str(snapshot) + " in " + snapshot.status + " with " + str(snapshot.progress) + "% progress")
-            self.sleep(volume.size)
+    def create_snapshot(self, volume_id, description="", waitOnProgress=0, poll_interval=10, timeout=0):
+        """
+        Create a new EBS snapshot from an existing volume then wait for it to go to the created state. By default will poll for poll_count.
+        If waitOnProgress is specified than will wait on "waitOnProgress" # of periods w/o progress before failing
+        An overall timeout can be given for both methods, by default the timeout is not used.    
+        volume_id        (mandatory string) Volume id of the volume to create snapshot from
+        description      (optional string) string used to describe the snapshot
+        waitOnProgress   (optional integer) # of poll intervals to wait while 0 progress is made before exiting, overrides "poll_count" when used
+        poll_interval    (optional integer) time to sleep between polling snapshot status
+        timeout          (optional integer) over all time to wait before exiting as failure
+        returns snapshot 
+        """
+        if (waitOnProgress > 0 ):
+            poll_count = waitOnProgress
+        else:
+            poll_count = self.poll_count
+        curr_progress = 0 
+        last_progress = 0
+        elapsed = 0
+        polls = 0
+        snap_start = time.time()
+        #self.tee("Sending create snapshot request for volume:"+volume_id)
+        snapshot = self.ec2.create_snapshot( volume_id )
+        self.tee("Waiting for snapshot (" + snapshot.id + ") creation to complete")
+        while ( (poll_count > 0) and ((timeout == 0) or (elapsed <= timeout)) ):
+            time.sleep(poll_interval)
+            polls += 1
             snapshot.update()
-        if poll_count == 0:
-            self.fail(str(snapshot) + " left in " +  snapshot.status + " with " + str(snapshot.progress) + "% progress")
-        return snapshot
+            curr_progress = int(snapshot.progress.replace('%',''))
+            #if progress was made, then reset timer 
+            if ((waitOnProgress > 0) and (curr_progress > last_progress)):
+                poll_count = waitOnProgress
+            else: 
+                poll_count -= 1
+            elapsed = int(time.time()-snap_start)
+            self.tee("Snapshot:"+snapshot.id+" Status:"+snapshot.status+" Progress:"+snapshot.progress+" Polls:"+str(polls)+" Time Elapsed:"+str(elapsed))    
+            if (snapshot.status == 'completed'):
+                self.tee("Snapshot created after " + str(elapsed) + " seconds. " + str(polls) + " X ("+str(poll_interval)+" second) polling invervals. Status:"+snapshot.status+", Progress:"+snapshot.progress)
+                return snapshot
+        #At least one of our timers has been exceeded, fail and exit 
+        self.fail(str(snapshot) + " failed after Polling("+str(polls)+") ,Waited("+str(elapsed)+" sec), last reported (status:" + snapshot.status+" progress:"+snapshot.progress+")")
+        self.tee("Deleting snapshot("+snapshot.id+"), never progressed to 'created' state")
+        snapshot.delete()
+        return None
+        
     
     def delete_snapshot(self,snapshot):
         snapshot.delete()
@@ -267,18 +301,130 @@ class Eucaops(Eutester,Eucaops_api):
         if poll_count == 0:
             self.fail(str(snapshot) + " left in " +  snapshot.status + " with " + str(snapshot.progress) + "% progress")
         return snapshot
+    
+    def register_snapshot( self, snap_id, rdn="/dev/sda1", description="bfebs", windows=False, bdmdev=None, name=None, ramdisk=None, kernel=None, dot=True ):
+        '''
+        Register an image snapshot
+        snap_id        (mandatory string) snapshot id
+        name           (mandatory string) name of image to be registered
+        description    (optional string) description of image to be registered
+        bdmdev         (optional string) block-device-mapping device for image
+        rdn            (optional string) root-device-name for image
+        dot            (optional boolean) Delete On Terminate boolean
+        windows        (optional boolean) Is windows image boolean
+        kernel         (optional string) kernal (note for windows this name should be "windows"
+        '''
         
-    def get_emi(self, emi="emi-"):
+        if (bdmdev is None):
+            bdmdev=rdn
+        if (name is None):
+            name="bfebs_"+snap_id
+        if ( windows is True ):
+            kernel="windows"     
+            
+        bdmap = BlockDeviceMapping()
+        block_dev_type = BlockDeviceType()
+        block_dev_type.snapshot_id = snap_id
+        block_dev_type.delete_on_termination = dot
+        bdmap[bdmdev] = block_dev_type
+            
+        self.tee("Register image with: snap_id:"+str(snap_id)+", rdn:"+str(rdn)+", desc:"+str(description)+", windows:"+str(windows)+", bdname:"+str(bdmdev)+", name:"+str(name)+", ramdisk:"+str(ramdisk)+", kernel:"+str(kernel))
+        image_id = self.ec2.register_image(name=name, description=description, kernel_id=kernel, ramdisk_id=ramdisk, block_device_map=bdmap, root_device_name=rdn)
+        return image_id
+        
+    def register_image( self, snap_id, rdn=None, description=None, image_location=None, windows=False, bdmdev=None, name=None, ramdisk=None, kernel=None ):
+        '''
+        Register an image snapshot
+        snap_id        (optional string) snapshot id
+        name           (optional string) name of image to be registered
+        description    (optional string) description of image to be registered
+        bdm            (optional block_device_mapping) block-device-mapping object for image
+        rdn            (optional string) root-device-name for image
+        kernel         (optional string) kernal (note for windows this name should be "windows"
+        image_location (optional string) path to s3 stored manifest 
+        '''
+
+        image_id = self.ec2.register_image(name=name, description=description, kernel_id=kernel, image_location=image_location, ramdisk_id=ramdisk, block_device_map=bdmdev, root_device_name=rdn)
+        return image_id
+    
+    def get_emi( self, emi="emi-", root_device_type=None, root_device_name=None, location=None, state=None, arch=None, owner_id=None):
         """
-        Get an emi with name emi, or just grab any emi in the system
-        emi        ID of the emi to return
+        Get an emi with name emi, or just grab any emi in the system. Additional 'optional' match criteria can be defined.
+        emi              (mandatory) Partial ID of the emi to return, defaults to the 'emi-" prefix to grab any
+        root_device_type (optional string)  
+        root_device_name (optional string)
+        root_device_type (optional string)
+        location         (optional string)
+        state            (optional string)
+        arch             (optional string)
+        owner_id         (optional string)
         """
+        
         images = self.ec2.get_all_images()
         for image in images:
-            if re.match(emi, image.id):
-                return image
+            
+            if not re.match(emi, image.id):      
+                continue  
+            if ((root_device_type is not None) and (image.root_device_type != root_device_type)):
+                continue            
+            if ((root_device_name is not None) and (image.root_device_name != root_device_name)):
+                continue       
+            if ((state is not None) and (image.state != state)):
+                continue            
+            if ((location is not None) and (not re.match( location, image.location))):
+                continue           
+            if ((arch is not None) and (image.architecture != arch)):
+                continue                
+            if ((owner_id is not None) and (image.owner_id != owner_id)):
+                continue
+            
+            return image
         raise Exception("Unable to find an EMI")
-        return
+        return None
+    
+    
+    
+    def get_volume(self, volume_id="vol-", status=None, attached_instance=None, attached_dev=None, snapid=None, zone=None, minsize=1, maxsize=None):
+        '''
+        Return first volume that matches the criteria. Criteria options to be matched:
+        volume_id         (optional string) string present within volume id
+        status            (optional string) example 'in-use'
+        attached_instance (optional string) instance id example 'i-1234abcd'
+        attached_dev      (optional string) example '/dev/sdf'
+        snapid            (optional string) snapshot volume was created from example 'snap-1234abcd'
+        zone              (optional string) zone of volume example 'PARTI00'
+        minsize           (optional integer) minimum size of volume to be matched
+        maxsize           (optional integer) maximum size of volume to be matched
+        '''
+        if (attached_instance is not None) or (attached_dev is not None):
+            status='in-use'
+    
+        volumes = self.ec2.get_all_volumes()
+        for volume in volumes:
+            if not re.match(volume_id, volume.id):
+                continue
+            if (snapid is not None) and (volume.snapshot_id != snapid):
+                continue
+            if (zone is not None) and (volume.zone != zone):
+                continue
+            if (status is not None):
+                if (volume.status != status):
+                    continue
+                else:
+                    if (attached_instance is not None) and ( volume.attach_data.instance_id != attached_instance):
+                        continue
+                    if (attached_dev is not None) and (volume.attach_data.device != attached_dev):
+                        continue
+            if not (volume.size >= minsize) and ((maxsize is None) or (volume.size <= maxsize)):
+                continue
+            return volume
+        raise Exception("Unable to find matching volume")
+        return None
+
+            
+            
+            
+            
     
     def run_instance(self, image=None, keypair=None, group="default", type=None, zone=None, min=1, max=1):
         """

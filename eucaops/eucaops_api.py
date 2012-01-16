@@ -29,6 +29,8 @@ class Eucaops_api(object):
         raise NotImplementedError("Function not yet implemented")
     def upload_euca_image(self):
         raise NotImplementedError("Function not yet implemented") 
+    def register_image( self, snap_id, rdn=None, description=None, image_location=None, windows=False, bdmdev=None, name=None, ramdisk=None, kernel=None ):
+        raise NotImplementedError("Function not yet implemented")
     def deregister_image(self):
         raise NotImplementedError("Function not yet implemented") 
     def delete_bucket(self):
@@ -38,16 +40,14 @@ class Eucaops_api(object):
     def terminate_instances(self):
         raise NotImplementedError("Function not yet implemented") 
     def reboot_instance(self):
-        raise NotImplementedError("Function not yet implemented") 
-    def create_volume(self):
-        raise NotImplementedError("Function not yet implemented") 
+        raise NotImplementedError("Function not yet implemented")  
     def delete_volume(self):
         raise NotImplementedError("Function not yet implemented") 
     def attach_volume(self):
         raise NotImplementedError("Function not yet implemented") 
     def detach_volume(self):
         raise NotImplementedError("Function not yet implemented") 
-    def create_snapshot(self):
+    def create_snapshot(self, volume_id, description="", waitOnProgress=0, poll_interval=10, timeout=0):
         raise NotImplementedError("Function not yet implemented") 
     def delete_snapshot(self):
         raise NotImplementedError("Function not yet implemented") 
@@ -105,3 +105,9 @@ class Eucaops_api(object):
         raise NotImplementedError("Function not yet implemented") 
     def euare_modattr(self):
         raise NotImplementedError("Function not yet implemented") 
+    def register_snapshot( self, snap_id, rdn="/dev/sda1", description="bfebs", windows=False, bdmdev=None, name=None, ramdisk=None, kernel=None, dot=True ):
+        raise NotImplementedError("Function not yet implemented") 
+    def get_volume(self, volume_id="vol-", status=None, attached_instance=None, attached_dev=None, snapid=None, zone=None, minsize=1, maxsize=None):
+        raise NotImplementedError("Function not yet implemented")
+    
+        
