@@ -114,7 +114,7 @@ class Eucaops(Eutester,Eucaops_api):
         Delete the group object passed in and check that it no longer shows up
         group      Group object to delete and check
         """
-        name = group.namse
+        name = group.name
         self.tee( "Sending delete for group: " + name )
         group.delete()
         if self.check_group(name):
@@ -351,13 +351,12 @@ class Eucaops(Eutester,Eucaops_api):
         """
         Get an emi with name emi, or just grab any emi in the system. Additional 'optional' match criteria can be defined.
         emi              (mandatory) Partial ID of the emi to return, defaults to the 'emi-" prefix to grab any
-        root_device_type (optional string)  
-        root_device_name (optional string)
-        root_device_type (optional string)
-        location         (optional string)
-        state            (optional string)
-        arch             (optional string)
-        owner_id         (optional string)
+        root_device_type (optional string)  example: 'instance-store' or 'ebs'
+        root_device_name (optional string)  example: '/dev/sdb' 
+        location         (optional string)  partial on location match example: 'centos'
+        state            (optional string)  example: 'available'
+        arch             (optional string)  example: 'x86_64'
+        owner_id         (optional string) owners numeric id
         """
         
         images = self.ec2.get_all_images()
@@ -388,7 +387,7 @@ class Eucaops(Eutester,Eucaops_api):
         '''
         Return first volume that matches the criteria. Criteria options to be matched:
         volume_id         (optional string) string present within volume id
-        status            (optional string) example 'in-use'
+        status            (optional string) examples: 'in-use', 'creating', 'available'
         attached_instance (optional string) instance id example 'i-1234abcd'
         attached_dev      (optional string) example '/dev/sdf'
         snapid            (optional string) snapshot volume was created from example 'snap-1234abcd'
