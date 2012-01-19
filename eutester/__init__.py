@@ -281,7 +281,6 @@ class Eutester(object):
         self.swap_ssh("clc")        
         self.cloud_log_channel = self.ssh.invoke_shell()
         self.cloud_log_channel.send("tail -f "  + self.eucapath + "/var/log/eucalyptus/cloud-output.log > cloud-test.log & \n")
-        self.cloud_log_channel.close()
         ## START CC Log
         self.swap_ssh("cc00")
         self.cc_log_channel = self.ssh.invoke_shell()
@@ -305,29 +304,17 @@ class Eutester(object):
             previous_ssh = self.current_ssh
             ## START CLOUD Log       
             self.swap_ssh("clc") 
-            cloud_log_buffer = "".join(self.sys("cat cloud-test.log"))
+            self.cloud_log_buffer = "\n".join(self.sys("tail -200 "  + self.eucapath + "/var/log/eucalyptus/cloud-output.log",verbose=0))
         #if component == "cc00":
             print "Gathering log on CC00"
             self.swap_ssh("cc00")
-            cc_log_buffer = "".join(self.sys("cat cc-test.log"))
+            self.cc_log_buffer = "\n".join(self.sys("tail -200 "  + self.eucapath + "/var/log/eucalyptus/cc.log",verbose=0))
         #if component == "nc00":
             print "Gathering log on NC00"
             self.swap_ssh("nc00") 
-            nc_log_buffer = "".join(self.sys("cat nc-test.log"))
+            self.nc_log_buffer = "\n".join(self.sys("tail -200 "  + self.eucapath + "/var/log/eucalyptus/nc.log",verbose=0))
             self.swap_ssh(previous_ssh)
                 
-    def stop_euca_logs(self, component=None):
-        if component == None:
-            self.cloud_log_channel.close()
-            self.cc_log_channel.close()
-            self.nc_log_channel.close()
-        if component == "cloud":
-            self.cloud_log_channel.close()
-        if component == "cc00":
-            self.cc_log_channel.close()
-        if component == "nc00":
-            self.nc_log_channel.close()
-    
     def grep_euca_log(self,component="cloud", regex="ERROR" ):
         previous_ssh = self.current_ssh
         if component == "cloud":
@@ -349,13 +336,15 @@ class Eutester(object):
     def test_report(self):
         full_report = []
         self.get_euca_logs()
-        self.stop_euca_logs()
         full_report.append("Test run started at " + str(self.start_time) + "\n\n\n")
         full_report.append("Failures " + str(self.fail_count) + "\n")
         full_report.append("Running Log: " + "\n".join(self.running_log) + "\n\n\n")
         full_report.append("CLC Log:\n" + self.cloud_log_buffer + "\n\n\n") 
         full_report.append("CC00 Log:\n" + self.cc_log_buffer + "\n\n\n")
         full_report.append("NC00 Log:\n" + self.nc_log_buffer + "\n\n\n")
+        self.cloud_log_buffer = ''
+        self.cc_log_buffer = ''
+        self.nc_log_buffer = ''
         return full_report
         
     def swap_ssh(self, hostname, password=None, keypath=None):
