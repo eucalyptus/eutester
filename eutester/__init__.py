@@ -115,7 +115,9 @@ class Eutester(object):
         if "REPO" in self.config["machines"][0].source:
             self.eucapath="/"
         ## CHOOSE A RANDOM HOST OF THIS COMPONENT TYPE
-        self.hostname = self.swap_component_hostname(self.hostname)
+        
+        if self.config_file != None:
+            self.hostname = self.swap_component_hostname(self.hostname)
         
         ## IF I WASNT PROVIDED KEY TRY TO GET THEM FROM THE EUCARC IN CREDPATH
         if (aws_access_key_id == None) or (aws_secret_access_key == None):
