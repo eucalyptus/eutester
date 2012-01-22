@@ -4,6 +4,8 @@ from optparse import OptionParser
 import random
 import os
 import time
+import smtplib
+import string
 
 if __name__ == '__main__':
     ### Parse args
@@ -22,129 +24,224 @@ if __name__ == '__main__':
                       help="Number of 10s intervals to wait before giving up on an instance Default: 24", default=24)
     parser.add_option("-e", "--exit", action="store_true", dest="exit_on_fail",
                       help="Whether or not to stop the script after a failure")
+    parser.add_option("--device",type="string", dest="device_prefix",
+                      help="Device prefix expected to be found in running instance in /dev",  default="sd")
     parser.add_option("-i", "--image", dest="image", type="string",
                       help="Specific image to run", default="emi-")
     parser.add_option( "--prefix", dest="prefix", type="string",
-                      help="Prefix to tack on to keypairs", default="keypair")
+                      help="Prefix to tack on to keypairs", default="load-test")
     parser.add_option( "--ebs", action="store_true", dest="ebs",
                       help="Run ebs attach/write/detach")
     parser.add_option("-z", "--zone", type="string", dest="zone",
                       help="AZ to run script against", default="PARTI00")
     parser.add_option("-u", "--user", type="string", dest="user",
-                      help="AZ to run script against", default="admin")
+                      help="User to run script as", default="admin")
     parser.add_option("-a", "--account", type="string", dest="account",
-                      help="AZ to run script against", default="eucalyptus")
+                      help="Account to run script as", default="eucalyptus")
+    parser.add_option("--credpath", type="string", dest="credpath",
+                      help="AZ to run script against", default=None)
     
     (options, args) = parser.parse_args()
     ### LOAD OPTIONS INTO LOCAL VARS
-    runs = options.runs
-    max = options.max
-    config = options.config
-    type = options.type
-    exit_on_fail = options.exit_on_fail
-    number = options.number
-    prefix = options.prefix
-    image = options.image
-    ebs = options.ebs
-    zone = options.zone
-    user = options.user
-    account = options.account
-    
-    poll_count = options.poll_count
-    tester = Eucaops( hostname="clc",password="foobar", user=user, account=account,config_file=config)
-    tester.poll_count = poll_count
-    image = tester.get_emi(emi=image)
-    config_filename = config.split("/")[-1]
+
+    got_creds = False
+    while got_creds == False:      
+        try:
+            tester = Eucaops( credpath=options.credpath, hostname="clc", password="foobar",  config_file=options.config, boto_debug=0)
+        except Exception,e:
+            print str(e) 
+            time.sleep(30)
+            continue
+        got_creds = True
+    tester.poll_count = options.poll_count
+    image = tester.get_emi(emi=options.image)
+    config_filename = options.config.split("/")[-1]
     print "Config file name " + config_filename
-    print "Running script as " + user + "@" + account
-    local = Eucaops ( credpath="eucarc-" + account + "-" + user, hostname="localhost", password="a1pine", config_file=config)
+    pwd =  os.getcwd()
+    local = Eucaops ( config_file=options.config, credpath=options.credpath)
     current_reservation = None
     try:    
         fail = 0
         success = 0
-        while runs > 0:
-            if type == "random":
-                type = random.choice(["m1.small","c1.medium","m1.large","m1.xlarge","c1.xlarge"])
-            if max == True:                
-                available = tester.get_available_vms(type)
-            else:
-                available = number
+        keypath = None
+        keypair = None
+        while options.runs > 0:
+            try:
+                ## identify type of instance to run
+                if options.type == "random":
+                    options.type = random.choice(["m1.small","c1.medium","m1.large","m1.xlarge","c1.xlarge"])
                 
-            ### CREATE KEYPAIR AND GROUP
-            group = tester.add_group(group_name=prefix + "-" + str(time.time()))
-            tester.authorize_group(group_name=group.name )
-            keypair = tester.add_keypair(prefix + "-" + str(time.time()))
-            
-            ### RUN INSTANCE AND WAIT FOR IT TO GO TO RUNNING
-            print "Sending request for " + str(available) + " " + type + " VMs"
-            reservation = tester.run_instance(image,keypair=keypair.name, min=available, max=available,type=type )
-            current_reservation = reservation
-            keypath = os.getcwd() + "/" + keypair.name + ".pem" 
-            tester.sleep(20)
-            ### SSH to instance
-            volumes = []
-            for instance in reservation.instances:        
-                local.sys("scp " + keypath + " root@" + local.get_component_ip("clc") + ": ")
-                ssh_prefix = "ssh -i " + keypair.name + ".pem root@" + instance.ip_address + " "
-                before_attach = tester.sys(ssh_prefix + "ls -1 /dev/")
-                if tester.found(ssh_prefix + "mount", "/dev/sda2.*/mnt") == False:
-                   tester.fail("Did not find ephemeral mounted in /dev/sda2")
+                ## identify number of instances to run
+                if options.max == True:                
+                    available = local.get_available_vms(options.type)
                 else:
-                    if ebs == True:
+                    available = options.number
+                
+                ### Create group
+                try:
+                    group = tester.add_group(group_name=options.prefix + "-" + str(time.time()))
+                except Exception,e :
+                    print str(e)
+                    continue
+                ### Defaults to authorizing SSH, then run it again for authorizing icmp
+                try:   
+                    tester.authorize_group(group_name=group.name )
+                    tester.authorize_group(group_name=group.name, port=-1, protocol="icmp" )
+                except Exception,e :
+                    print str(e)
+                    group.delete()
+                    continue
+                ### Create keypair
+                try:
+                    keypair = tester.add_keypair(options.prefix + "-" + str(time.time()))
+                except Exception,e :
+                    print str(e)
+                    continue
+                              
+                ### RUN INSTANCE AND WAIT FOR IT TO GO TO RUNNING
+                tester.tee( "Sending request for " + str(available) + " " + options.type + " VMs")
+                
+                try:
+                    reservation = tester.run_instance(image,keypair=keypair.name, group=group.name ,min=available, max=available,type=options.type )
+                    current_reservation = reservation
+                except Exception, e:
+                    tester.fail("Failed launching instance")
+                                  
+                keypath = pwd + "/" + keypair.name + ".pem" 
+                
+                ### Some hypervisors will require a few seconds after "running" state for instance to boot
+                tester.sleep(15)
+                
+                ### Log into each instance
+                volumes = []
+                for instance in reservation.instances:
+                    if instance.state != "running":
+                        continue
+                    ### Ping the instance
+                    local.sys("ping " + instance.ip_address + " -c 1")
+                    
+                    ###Create an ssh session to the instance using a eutester object
+                    instance_ssh = Eucaops( hostname=instance.ip_address,  keypath=keypath, credpath=options.credpath, config_file=options.config)
+                    
+                    ### Ensure we know what device are on the instance before the attachment of a volume
+                    before_attach = instance_ssh.sys("ls -1 /dev/ | grep " + options.device_prefix)
+                    
+                    ### Check that the ephemeral is available to the VM
+                    if options.device_prefix + "a2\n" in before_attach:
+                        print "Found ephemeral device"
+                    else:
+                        instance.terminate()
+                        tester.fail("Did not find ephemeral mounted from /dev/" + options.device_prefix + "a2"+ " to /mnt on " + str(instance))
+                        tester.tee("\n".join(tester.grep_euca_log(component="nc00",regex=instance.id)) + "\n".join(tester.grep_euca_log(regex=instance.id)) )
+                        options.runs -= 1
+                        continue 
+                    
+                    ### If the --ebs flag was passed to the script, attach a volume and verify it can be used
+                    if options.ebs == True:
+                        ## Create the volume
                         try:
-                            volume = tester.create_volume(zone, size=10)     
+                            volume = tester.create_volume(options.zone, size=1 )     
                         except Exception, e:
                             tester.fail("Something went wrong when creating the volume")
-                            print e
-                            continue
-                        try:
-                            volume.attach(instance.id, "/dev/sdj")
-                        except Exception, e:
-                            tester.fail("Something went wrong when attaching the volume to " + str(instance) )
-                            volume.delete()
-                            print e
+                            tester.tee( "Volume error\n".join(tester.grep_euca_log(regex=volume.id)) )
+                            options.runs -= 1
                             continue
                         
-                        print "Sleeping and waiting for volume to attach fully to instances"
-                        tester.sleep(10)
-                        after_attach = tester.sys(ssh_prefix +  "ls -1 /dev/")
-                        new_devices = tester.diff(after_attach, before_attach)
-                        attached_block_dev =  new_devices[0].strip()
-                        if new_devices == []:
-                            tester.fail("Volume attached but not found on " + str(instance) )
+                        ### Attach the volume (need to write a routine to validate the attachment)
+                        try:
+                            tester.tee("Attaching " + str(volume) + " as /dev/sdj")
+                            volume.attach(instance.id, "/dev/sdj")
+                        except Exception, e:
                             volume.delete()
+                            tester.fail("Something went wrong when attaching " +  str(volume) +  " to " + str(instance) )
+                            tester.tee( "Volume error\n".join(tester.grep_euca_log(regex=volume.id)) )
+                            options.runs -= 1
                             continue
+                        
+                        tester.tee( "Sleeping and waiting for volume to attach fully to instances")
+                        tester.sleep(20)
+                        
+                        ### Check what devices are found after the attachment
+                        after_attach = instance_ssh.sys("ls -1 /dev/ | grep " + options.device_prefix)
+                        
+                        ### Use the eutester diff functionality to find the newly attached device
+                        new_devices = tester.diff(after_attach, before_attach)
+                        if new_devices == []:
+                            tester.fail( str(volume) + " attached but not found on " + str(instance) )
+                            tester.tee("Volume error\n".join(tester.grep_euca_log(regex=volume.id)) )
+                            options.runs -= 1
+                            continue
+                        attached_block_dev =  new_devices[0].strip()
+                        
+                        ### Add volume to list of volumes for cleanup
                         volumes.append(volume)
-                        print "Found new device attached to instance " + str(instance) + ": " + attached_block_dev
-                        tester.sys(ssh_prefix +  "mkfs.ext3 -F /dev/" + attached_block_dev )
-                        tester.sys(ssh_prefix +  "mkdir /mnt/device" )
-                        tester.sys(ssh_prefix +  "mount /dev/" +  attached_block_dev  + " /mnt/device")
-                        if tester.found(ssh_prefix +  "df", attached_block_dev + ".*/mnt/device") == False:
-                            tester.fail("Could not find block device in output of df")
-            ### TEARDOWN INSTANCES, VOLUMES GROUP, KEYPAIR, AND ADDRESSES
-            tester.terminate_instances(reservation)
-            for vol in volumes:
-                tester.delete_volume(vol)
-            tester.delete_group(group)
-            tester.delete_keypair(keypair)
-            tester.release_address()
-            local.sys("rm " +  keypair.name + ".pem")
-            tester.sys("rm " +  keypair.name + ".pem")
-            runs -= 1
-            if tester.fail_count > 0: 
-                fail += 1
-                if exit_on_fail:
-                    tester.fail_count= fail
-                    tester.do_exit()
-            else:
-                success += 1
-            tester.fail_count = 0
-            print "\n*************************************************************"
-            print "* Ran " + str( fail + success ) + " times"
-            print "* Success: " + str(success) + " Failures: " + str(fail)
-            print "*************************************************************\n"
-        tester.fail_count= fail        
-        tester.do_exit()
+                        
+                        ### Make a file system on the volume and mount it 
+                        tester.tee( "Found new device attached to instance " + str(instance) + ": " + attached_block_dev )
+                        instance_ssh.sys("mkfs.ext3 -F /dev/" + attached_block_dev )
+                        instance_ssh.sys("mkdir /mnt/device" )
+                        instance_ssh.sys("mount /dev/" +  attached_block_dev  + " /mnt/device")
+                        
+                        ### Make sure the volume shows as mounted
+                        if instance_ssh.found("df", attached_block_dev + ".*/mnt/device") == False:
+                            tester.fail("Could not find " +  attached_block_dev +" in output of df")
+                            tester.tee("Volume error\n".join(tester.grep_euca_log(regex=volume.id)) )
+                        
+                        ### Unmount the volume
+                        if instance_ssh.sys("umount /mnt/device") != []:
+                            tester.fail("Failure unmounting volume")
+                            
+                ### TEARDOWN INSTANCES, VOLUMES GROUP, KEYPAIR, AND ADDRESSES 
+                for vol in volumes:
+                    try:
+                        tester.detach_volume(vol)
+                    except Exception, e:
+                        print str(e)
+                        tester.fail("Something went wrong when attaching " +  str(volume) +  " to " + str(instance) )
+                        tester.tee( "Volume log:"+  "\n".join(tester.grep_euca_log(regex=volume.id)) )
+                        options.runs -= 1
+                        continue
+                    
+                    try:
+                        tester.delete_volume(vol)
+                    except Exception, e:
+                        tester.fail("Something went wrong when attaching " +  str(volume) +  " to " + str(instance) )
+                        #tester.tee( "\n".join(tester.test_report()) + "\nException:\n" + str(e) + "\n".join(tester.grep_euca_log(regex=volume.id))   )
+                        tester.tee( "Volume log:"+  "\n".join(tester.grep_euca_log(regex=volume.id)) )
+                        options.runs -= 1
+                        continue   
+                                    
+                tester.terminate_instances(reservation)
+                tester.delete_group(group)
+                tester.delete_keypair(keypair)
+                
+                local.sys("rm " +  keypath  )
+
+                options.runs -= 1
+                if tester.fail_count > 0: 
+                    fail += 1
+                    tester.fail_log = []
+                    if options.exit_on_fail:
+                        tester.fail_count= fail
+                        tester.do_exit()
+                else:
+                    success += 1
+                tester.fail_count = 0     
+                tester.running_log = []
+                tester.tee( "*************************************************************")
+                tester.tee( "* Ran " + str( fail + success ) + " times")
+                tester.tee( "* Success: " + str(success) + " Failures: " + str(fail))
+                tester.tee( "*************************************************************")            
+            ### Catches any unexpected exceptions 
+            except Exception,e:
+                msg = '\nPassed: ' +  str(success) + "\nFailed: " + str(fail) + "\nUncaught Exceptions was:\n"+ str(e) + "\n" 
+                tester.tee(msg)
+                if keypath != None:
+                    local.sys("rm " +  keypath  )
+                if keypair != None:
+                    tester.sys("rm " +  keypair.name + ".pem")
+                tester.sleep(30)
+    ### If the script catches a Ctrl+c kill it immediately for debugging purposes           
     except KeyboardInterrupt:
-        tester.terminate_instances(current_reservation)
-        tester.do_exit()
+        exit(1)
+    
