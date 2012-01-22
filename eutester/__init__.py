@@ -129,7 +129,7 @@ class Eutester(object):
                 if keypath == None:
                     client.connect(self.get_component_ip("clc"), username="root", password=password)
                 else:
-                    client.connect(self.get_component_ip("clc"),  username="root", keyfile_name=keypath)
+                    client.connect(self.get_component_ip("clc"),  username="root", key_filename=keypath)
                 self.ssh = client
                 self.sftp = self.ssh.open_sftp()    
                 self.credpath = self.get_credentials(account,user)            
