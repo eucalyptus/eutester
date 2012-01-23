@@ -1,60 +1,71 @@
 eutester version 0.0.1
 ======================
 
-eutester is an attempt to leverage existing test code to make test writing faster and standardized.
+eutester is an attempt to leverage existing test code to make test writing faster and standardized.  
+
+Example test cases written with this library can be found in the testcases/unstable directory of the source tree
 
 Design
 ------
 
-Eutester is designed to allow a user to quickly generate automated tests for testing a Eucalyptus cloud. There is a configuration file
-associated with the library that describes a few things about the clouds configuration including the bare metal machine configuration and IPs.
+Eutester is designed to allow a user to quickly generate automated tests for testing a Eucalyptus or Amazon cloud. In the case of testing a private cloud a configuration file can be used to create cases that require root access to the machines.
+The config file describes a few things about the clouds configuration including the bare metal machine configuration and IPs.
 
-The configuration file has the following structure:
+The `eucaops` class can be imported in order to use pre-defined routines which validate common operations on the cloud:
 
-clc.mydomain.com    CENTOS  5.7 64  REPO    [CC00 CLC SC00 WS]
+    from eucaops import Eucaops
 
-nc1.mydomain.com    VMWARE  ESX-4.0 64  REPO    [NC00]
+Constructor
+------
 
-nc2.mydomain.com    VMWARE  ESXI-4.1    64  REPO    [NC00]
+The basic constructor can be used for a few different connections:
+
+1. Instance - Only SSH connection
+    Purpose - connect to instances in the cloud  
+    Required arguments: private key path and hostname
+
+        instance = Eutester( hostname=instance.ip_address, keypath="my_key.pem")
+        instance.sys("mount") # check mount points on instance and return the output as a list
+        
+2. Private cloud with root access - CLC SSH, Cloud, and Walrus connections
+    Purpose - connect to and manipulate Eucalyptus components using boto and command line. Recommended to use Eucaops.  
+    Required arguments: root password, config file with topology information  
+    Optional arguments: credential path so that new credentials are not created
+
+        private_cloud = Eucaops( password="my_root_pass",  config_file="cloud.conf", credpath="~/.euca")
+        
+3. Public cloud - local SSH, EC2 and S3 connections
+    Purpose - can be used to wrap euca2ools commands installed locally on the tester machine or with Eucaops  
+    Required arguments: root password, config file with topology information
+
+        
+        local = Eucaops(credpath="~/.eucarc")   
+        local.sys("euca-describe-availability-zones") ### use local credentials to determine viable availability-zones 
+        local.run_instance(image) ## run an m1.small instance using image
+            
+ 
+Config file
+----------
+
+The configuration file for (2) private cloud mode has the following structure:
+
+    clc.mydomain.com CENTOS 5.7 64 REPO [CC00 CLC SC00 WS]    
+    nc1.mydomain.com VMWARE ESX-4.0 64 REPO [NC00]
+
+
 
 Columns
--------
+------ 
+    IP or hostname of machine  
+    Distro installed on machine  
+    Distro version on machine  
+    Distro base architecture  
+    List of components installed on this machine encapsulated in brackets []
 
-1. IP or hostname of machine
-2. Distro installed on machine
-3. Distro version on machine
-4. Distro base architecture
-5. List of components installed on this machine encapsulated in brackets []
+These components can be:
 
-    These components can be: 
-
-    * CLC - Cloud Controller
-    * WS - Walrus
-    * SC00 - Storage controller for cluster 00
-    * CC00 - Cluster controller for cluster 00
-    * NC00 - A node controller in cluster 00
-
-The basic constructor will:
-
-1. Connect to the machine denoted as CLC in the cloud.conf
-2. Pull down credentials from the CLC if the credpath has not been provided
-3. Setup boto connections to both ec2 and walrus on the cloud
-4. Leave the SSH connection to the CLC up for further use
-
-SAMPLE FIRST SCRIPT
--------------------
-
-    from eutester import Eutester
-    if __name__ == '__main__':
-        clc_session = Eutester( credpath="eucarc-eucalyptus-admin", password="foobar")
-        ### ACCESS THE CONNECTION TO EC2
-        print clc_session.ec2.get_all_images()
-        ### ACCESS THE CONNECTION TO WALRUS
-        print clc_session.walrus.get_all_buckets()
-        ### ACCESS THE SSH SESSION TO THE CLC
-        print clc_session.sys("free")
-        clc_session.do_exit()
-
-
-
-
+    CLC - Cloud Controller   
+    WS - Walrus   
+    SC00 - Storage controller for cluster 00   
+    CC00 - Cluster controller for cluster 00    
+    NC00 - A node controller in cluster 00   
