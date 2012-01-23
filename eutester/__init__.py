@@ -151,21 +151,22 @@ class Eutester(object):
         else:
             self.hostname = self.swap_component_hostname("clc")
             
-#       self.ec2 = boto.connect_euca(host=self.hostname, aws_access_key_id=boto_access, aws_secret_access_key=boto_secret, debug=self.debug)
-        self.ec2 = boto.connect_ec2(aws_access_key_id=aws_access_key_id,
-                                    aws_secret_access_key=aws_secret_access_key,
-                                    is_secure=False,
-                                    region=RegionInfo(name="eucalyptus", endpoint=self.get_component_ip("clc")),
-                                    port=8773,
-                                    path="/services/Eucalyptus",
-                                    debug=self.boto_debug)
-        self.walrus = boto.connect_s3(aws_access_key_id=aws_access_key_id,
-                                      aws_secret_access_key=aws_secret_access_key,
-                                      is_secure=False,
-                                      host=self.get_component_ip("ws"),
-                                      port=8773,
-                                      path="/services/Walrus",
-                                      debug=self.boto_debug)
+        ### If you have credentials for the boto connections, create them
+        if (aws_access_key_id != None) and (aws_secret_access_key != None):
+           self.ec2 = boto.connect_ec2(aws_access_key_id=aws_access_key_id,
+                                        aws_secret_access_key=aws_secret_access_key,
+                                        is_secure=False,
+                                        region=RegionInfo(name="eucalyptus", endpoint=self.get_clc_ip()),
+                                        port=8773,
+                                        path="/services/Eucalyptus",
+                                        debug=self.boto_debug)
+           self.walrus = boto.connect_s3(aws_access_key_id=aws_access_key_id,
+                                          aws_secret_access_key=aws_secret_access_key,
+                                          is_secure=False,
+                                          host=self.get_clc_ip(),
+                                          port=8773,
+                                          path="/services/Walrus",
+                                          debug=self.boto_debug)
 
     def read_config(self, filepath):
         config_hash = {}
@@ -254,6 +255,14 @@ class Eutester(object):
                 if re.search(field, line):
                     return line.split("=")[1].strip().strip("'")
             raise Exception("Unable to find account id in eucarc")
+    
+    def get_walrus_ip(self):
+        walrus_url = self.parse_eucarc("S3_URL")
+        return walrus_url.split("/")[2].split(":")[0]
+    
+    def get_clc_ip(self):
+        ec2_url = self.parse_eucarc("EC2_URL")
+        return ec2_url.split("/")[2].split(":")[0]        
         
     def connect_euare(self):
         self.euare = boto.connect_iam(aws_access_key_id=self.get_access_key(),
