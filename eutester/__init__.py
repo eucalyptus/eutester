@@ -55,7 +55,7 @@ class TimeoutFunctionException(Exception):
     pass 
 
 class Eutester(object):
-    def __init__(self, config_file="cloud.conf", hostname=None, password="foobar", keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, account="eucalyptus",  user="admin", boto_debug=2):
+    def __init__(self, config_file="cloud.conf", hostname="clc", password="foobar", keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, account="eucalyptus",  user="admin", boto_debug=2):
         """  
         EUCADIR => $eucadir, 
         VERIFY_LEVEL => $verify_level, 
@@ -74,7 +74,6 @@ class Eutester(object):
         
         ### Default values for configuration
         self.config_file = config_file 
-        self.config = self.read_config(config_file)
         self.eucapath = "/opt/eucalyptus"
         self.current_ssh = "clc"
         self.boto_debug = boto_debug
@@ -111,46 +110,42 @@ class Eutester(object):
         self.nc_log_channel= None
        
         
-        #print config["machines"]
-        if "REPO" in self.config["machines"][0].source:
-            self.eucapath="/"
         ## CHOOSE A RANDOM HOST OF THIS COMPONENT TYPE
         
+        ### If I have a config file
+        ### PRIVATE CLOUD
         if self.config_file != None:
+            ## read in the config file
+            self.config = self.read_config(config_file)
+            
+            ### Set the eucapath
+            if "REPO" in self.config["machines"][0].source:
+                self.eucapath="/"
+            ### swap in the hostname of the component 
             self.hostname = self.swap_component_hostname(self.hostname)
         
         ## IF I WASNT PROVIDED KEY TRY TO GET THEM FROM THE EUCARC IN CREDPATH
-        if (aws_access_key_id == None) or (aws_secret_access_key == None):
-            ## IF I WASNT GIVEN A CREDPATH GET THE CREDS AND DOWNLOAD THEM
-            if (self.credpath == None):
-                if self.password == None and self.keypath == None:
-                    raise Exception("No root password or keypath given in absence of credpath or access and secret keys")
-                    exit(1)
-                client = paramiko.SSHClient()
-                client.set_missing_host_key_policy(paramiko.AutoAddPolicy())            
-                if keypath == None:
-                    client.connect(self.get_component_ip("clc"), username="root", password=password)
-                else:
-                    client.connect(self.get_component_ip("clc"),  username="root", key_filename=keypath)
-                self.ssh = client
-                self.sftp = self.ssh.open_sftp()    
-                self.credpath = self.get_credentials(account,user)            
-            aws_access_key_id = self.get_access_key()
-            aws_secret_access_key = self.get_secret_key()
-            
-        if self.hostname != None:
+        ### PRIVATE CLOUD
+        if (self.password != None) or (self.keypath != None):
             client = paramiko.SSHClient()
-            timeout = 30
-            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())            
             if keypath == None:
-                client.connect(self.hostname, username="root", password=password, timeout=timeout)
+                client.connect(self.hostname, username="root", password=password, timeout= self.timeout)
             else:
-                client.connect(self.hostname,  username="root", key_filename=keypath, timeout=timeout)
+                client.connect(self.hostname,  username="root", key_filename=keypath, timeout= self.timeout)
             self.ssh = client
             self.sftp = self.ssh.open_sftp()
-        else:
-            self.hostname = self.swap_component_hostname("clc")
-            
+        
+        ### If i have an ssh session and its to the clc
+        ### Private cloud with root access
+        if (self.credpath == None) and (self.ssh != None) and (self.password != None):
+                self.credpath = self.get_credentials(account,user) 
+        
+        ### If i have a credpath
+        if (self.credpath != None):         
+            aws_access_key_id = self.get_access_key()
+            aws_secret_access_key = self.get_secret_key()
+                 
         ### If you have credentials for the boto connections, create them
         if (aws_access_key_id != None) and (aws_secret_access_key != None):
            self.ec2 = boto.connect_ec2(aws_access_key_id=aws_access_key_id,

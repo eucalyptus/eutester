@@ -158,12 +158,14 @@ class Eucaops(Eutester,Eucaops_api):
         """
         poll_count = self.poll_count
         self.tee( "Beginning poll loop for instance " + str(instance) + " to go to " + state )
-        while (instance.state != state) and (poll_count > 0):
+        instance_original_state = instance.state
+        ### If the instance changes state or goes to the desired state before my poll count is complete
+        while ((instance.state != state)  or instance.state != instance_original_state) and (poll_count > 0):
             poll_count -= 1
             time.sleep(10)
             instance.update()
         self.tee( "Waited a total of " + str( (self.poll_count - poll_count) * 10 ) + " seconds" )
-        if poll_count == 0:
+        if instance.state != state:
                 self.fail(str(instance) + " did not enter the proper state and was left in " + instance.state)
         self.tee( str(instance) + ' is now in ' + instance.state )
 
