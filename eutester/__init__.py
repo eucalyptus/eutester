@@ -55,7 +55,7 @@ class TimeoutFunctionException(Exception):
     pass 
 
 class Eutester(object):
-    def __init__(self, config_file="cloud.conf", hostname="clc", password="foobar", keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, account="eucalyptus",  user="admin", boto_debug=2):
+    def __init__(self, config_file=None, hostname=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, account="eucalyptus",  user="admin", boto_debug=2):
         """  
         EUCADIR => $eucadir, 
         VERIFY_LEVEL => $verify_level, 

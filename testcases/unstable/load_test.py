@@ -16,8 +16,6 @@ if __name__ == '__main__':
                       help="Whether or not to launch the maximum number of instances")
     parser.add_argument("-n", "--number", dest="number", type=int,
                       help="Number of instances of type to launch", default=1)
-    parser.add_argument("-c", "--config",  dest="config",
-                      help="Config file to use. Default: ../input/2b_tested.lst", default="../input/2b_tested.lst")
     parser.add_argument("-t", "--type",  dest="type",
                       help="Type of instance to launch Default: random", default="random")
     parser.add_argument("-p", "--poll-count", type=int, dest="poll_count",
@@ -49,7 +47,7 @@ if __name__ == '__main__':
     got_creds = False
     while got_creds == False:      
         try:
-            tester = Eucaops( credpath=options.credpath, config_file=options.config, boto_debug=0)
+            tester = Eucaops( credpath=options.credpath, boto_debug=0)
         except Exception,e:
             print str(e) 
             time.sleep(30)
@@ -58,10 +56,8 @@ if __name__ == '__main__':
     
     tester.poll_count = options.poll_count
     image = tester.get_emi(emi=options.image)
-    config_filename = options.config.split("/")[-1]
-    print "Config file name " + config_filename
     pwd =  os.getcwd()
-    local = Eucaops ( config_file=options.config, credpath=options.credpath)
+    local = Eucaops ( credpath=options.credpath)
     current_reservation = None
     try:    
         fail = 0
@@ -117,15 +113,27 @@ if __name__ == '__main__':
             ### Log into each instance
             volumes = []
             for instance in reservation.instances:
+                ## Update instance info
+                instance.update()
                 
                 if instance.state != "running":
+                    tester.fail("Instance did not go to running state")
+                    options.runs -= 1
+                    continue
+                
+                if instance.public_dns_name == instance.private_ip_address:
+                    tester.fail("Did not get a private IP")
+                    options.runs -= 1
                     continue
                 
                 ### Ping the instance
-                local.sys("ping " + instance.public_dns_name + " -c 1")
+                if local.found("ping " + instance.public_dns_name + " -c 1", "0 received") == True:
+                    tester.fail("Instance was not pingable after going to running")
+                    options.runs -= 1
+                    continue
 
                 ###Create an ssh session to the instance using a eutester object
-                instance_ssh = Eucaops( hostname=instance.public_dns_name,  keypath=keypath, credpath=options.credpath, config_file=options.config)
+                instance_ssh = Eucaops( hostname=instance.public_dns_name,  keypath=keypath)
                 
                 ### Ensure we know what device are on the instance before the attachment of a volume
                 before_attach = instance_ssh.sys("ls -1 /dev/ | grep " + options.device_prefix)
