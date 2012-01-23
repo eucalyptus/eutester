@@ -1,14 +1,19 @@
 eutester version 0.0.1
 ======================
 
-eutester is an attempt to leverage existing test code to make test writing faster and standardized.
+eutester is an attempt to leverage existing test code to make test writing faster and standardized.  
+
+Example test cases written with this library can be found in the testcases/unstable directory of the source tree
 
 Design
 ------
 
-Eutester is designed to allow a user to quickly generate automated tests for testing a Eucalyptus cloud. There is a configuration file
-associated with the library that describes a few things about the clouds configuration including the bare metal machine configuration and IPs.
+Eutester is designed to allow a user to quickly generate automated tests for testing a Eucalyptus or Amazon cloud. In the case of testing a private cloud a configuration file can be used to create cases that require root access to the machines.
+The config file describes a few things about the clouds configuration including the bare metal machine configuration and IPs.
 
+The `eucaops` class can be imported in order to use pre-defined routines which validate common operations on the cloud:
+
+    from eucaops import Eucaops
 
 Constructor
 ------
