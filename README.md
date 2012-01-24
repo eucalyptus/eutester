@@ -5,7 +5,7 @@ eutester is an attempt to leverage existing test code to make test writing faste
 
 Main Classes
 ------
-eutester contains the framework pieces like parsing config/creds, setting up connections and providing test primatives
+eutester contains the framework pieces like parsing config/creds, setting up connections and providing test primatives  
 eucaops uses the framework provided by eutester to provide validated higher order operations on those cloud connections
 
 Example test cases written with this library can be found in the testcases/unstable directory of the source tree
