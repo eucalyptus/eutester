@@ -93,21 +93,28 @@ class Eucaops(Eutester,Eucaops_api):
             self.fail("Keypair found after attempt to delete it")
         return
     
-    def add_group(self, group_name=None ):
+    def add_group(self, group_name=None, fail_if_exists=False ):
         """
         Add a security group to the system with name group_name, if it exists dont create it
         group_name      Name of the security group to create
+        fail_if_exists  IF set, will fail if group already exists, otherwise will return the existing group
+        returns boto group object upon success or None for failure
         """
+        group=None
         if group_name == None:
             group_name = "group-" + str(int(time.time()))
         if self.check_group(group_name):
-            self.tee(  "Group " + group_name + " already exists")
+            if ( fail_if_exists == True ):
+                self.fail(  "Group " + group_name + " already exists")
+            else:
+                self.tee(  "Group " + group_name + " already exists")
+                group = self.ec2.get_all_security_groups(group_name)[0]
             return group_name
         else:
             self.tee( 'Creating Security Group: %s' % group_name)
             # Create a security group to control access to instance via SSH.
             group = self.ec2.create_security_group(group_name, group_name)
-            return group
+        return group
     
     def delete_group(self, group):
         """
@@ -133,7 +140,7 @@ class Eucaops(Eutester,Eucaops_api):
         else:
             return True
     
-    def authorize_group(self,group_name="default", port=22, protocol="tcp", cidr_ip="0.0.0.0/0"):
+    def authorize_group_by_name(self,group_name="default", port=22, protocol="tcp", cidr_ip="0.0.0.0/0"):
         """
         Authorize the group with group_name, 
         group_name      Name of the group to authorize, default="default"
@@ -141,6 +148,24 @@ class Eucaops(Eutester,Eucaops_api):
         protocol        Protocol to authorize, default=tcp
         cidr_ip         CIDR subnet to authorize, default="0.0.0.0/0" everything
         """
+        try:
+            self.tee( "Attempting authorization of group" )
+            self.ec2.authorize_security_group_deprecated(group_name,ip_protocol=protocol, from_port=port, to_port=port, cidr_ip=cidr_ip)
+        except self.ec2.ResponseError, e:
+            if e.code == 'InvalidPermission.Duplicate':
+                self.tee( 'Security Group: %s already authorized' % group_name )
+            else:
+                raise
+            
+    def authorize_group(self,group, port=22, protocol="tcp", cidr_ip="0.0.0.0/0"):
+        """
+        Authorize the group with group_name, 
+        group_name      Name of the group to authorize, default="default"
+        port            Port to open, default=22
+        protocol        Protocol to authorize, default=tcp
+        cidr_ip         CIDR subnet to authorize, default="0.0.0.0/0" everything
+        """
+        group_name = group.name
         try:
             self.tee( "Attempting authorization of group" )
             self.ec2.authorize_security_group_deprecated(group_name,ip_protocol=protocol, from_port=port, to_port=port, cidr_ip=cidr_ip)
@@ -160,14 +185,18 @@ class Eucaops(Eutester,Eucaops_api):
         self.tee( "Beginning poll loop for instance " + str(instance) + " to go to " + state )
         instance.update()
         instance_original_state = instance.state
+        start = time.time()
+        elapsed = 0
         ### If the instance changes state or goes to the desired state before my poll count is complete
         while poll_count > 0:
             poll_count -= 1
             time.sleep(10)
             instance.update()
+            elapsed = (time.time()- start)
             if (instance.state != instance_original_state):
                 break
-        self.tee( "Waited a total of " + str( (self.poll_count - poll_count) * 10 ) + " seconds" )
+        self.tee("Instance("+instance.id+") State("+instance.state+") Poll("+str(self.poll_count-poll_count)+") time elapsed (" +str(elapsed).split('.')[0]+")")
+        #self.tee( "Waited a total o" + str( (self.poll_count - poll_count) * 10 ) + " seconds" )
         if instance.state != state:
                 self.fail(str(instance) + " did not enter the proper state and was left in " + instance.state)
         self.tee( str(instance) + ' is now in ' + instance.state )
@@ -324,7 +353,7 @@ class Eucaops(Eutester,Eucaops_api):
             bdmdev=rdn
         if (name is None):
             name="bfebs_"+snap_id
-        if ( windows is True ):
+        if ( windows is True ) and ( kernel is not None):
             kernel="windows"     
             
         bdmap = BlockDeviceMapping()
@@ -352,7 +381,7 @@ class Eucaops(Eutester,Eucaops_api):
         image_id = self.ec2.register_image(name=name, description=description, kernel_id=kernel, image_location=image_location, ramdisk_id=ramdisk, block_device_map=bdmdev, root_device_name=rdn)
         return image_id
     
-    def get_emi( self, emi="emi-", root_device_type=None, root_device_name=None, location=None, state=None, arch=None, owner_id=None):
+    def get_emi( self, emi="emi-", root_device_type=None, root_device_name=None, location=None, state="available", arch=None, owner_id=None):
         """
         Get an emi with name emi, or just grab any emi in the system. Additional 'optional' match criteria can be defined.
         emi              (mandatory) Partial ID of the emi to return, defaults to the 'emi-" prefix to grab any
