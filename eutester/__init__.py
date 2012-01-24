@@ -276,7 +276,7 @@ class Eutester(object):
                 password= self.password
             client.connect(hostname, username=username, password=password)
         else:
-            client.connect(hostname,  username=username, keyfile_name=keypath)
+            client.connect(hostname,  username=username, key_filename=keypath)
         return client
     
     def start_euca_logs(self):
