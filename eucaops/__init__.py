@@ -109,7 +109,7 @@ class Eucaops(Eutester,Eucaops_api):
             else:
                 self.tee(  "Group " + group_name + " already exists")
                 group = self.ec2.get_all_security_groups(group_name)[0]
-            return group_name
+            return group
         else:
             self.tee( 'Creating Security Group: %s' % group_name)
             # Create a security group to control access to instance via SSH.
