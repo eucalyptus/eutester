@@ -64,7 +64,8 @@ Columns
     IP or hostname of machine  
     Distro installed on machine  
     Distro version on machine  
-    Distro base architecture  
+    Distro base architecture
+    System built from packages (REPO) or source (BZR), packages assumes path to eucalyptus is /, bzr assumes path to eucalyptus is /opt/eucalyptus
     List of components installed on this machine encapsulated in brackets []
 
 These components can be:
