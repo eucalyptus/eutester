@@ -3,6 +3,11 @@ eutester version 0.0.1
 
 eutester is an attempt to leverage existing test code to make test writing faster and standardized.  
 
+Main Classes
+------
+eutester contains the framework pieces like parsing config/creds, setting up connections and providing test primatives
+eucaops uses the framework provided by eutester to provide validated higher order operations on those cloud connections
+
 Example test cases written with this library can be found in the testcases/unstable directory of the source tree
 
 Design
