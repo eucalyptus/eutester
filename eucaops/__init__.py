@@ -165,7 +165,7 @@ class Eucaops(Eutester,Eucaops_api):
             poll_count -= 1
             time.sleep(10)
             instance.update()
-            if (instance.state == state) or (instance.state != instance_original_state):
+            if (instance.state != instance_original_state):
                 break
         self.tee( "Waited a total of " + str( (self.poll_count - poll_count) * 10 ) + " seconds" )
         if instance.state != state:
