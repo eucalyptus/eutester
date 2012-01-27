@@ -188,7 +188,7 @@ class Eucaops(Eutester,Eucaops_api):
         start = time.time()
         elapsed = 0
         ### If the instance changes state or goes to the desired state before my poll count is complete
-        while poll_count > 0:
+        while( poll_count > 0) and (instance.state != state):
             poll_count -= 1
             time.sleep(10)
             instance.update()
@@ -454,11 +454,7 @@ class Eucaops(Eutester,Eucaops_api):
         raise Exception("Unable to find matching volume")
         return None
 
-            
-            
-            
-            
-    
+
     def run_instance(self, image=None, keypair=None, group="default", type=None, zone=None, min=1, max=1):
         """
         Run instance/s and wait for them to go to the running state
