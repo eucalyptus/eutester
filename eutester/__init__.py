@@ -161,6 +161,7 @@ class Eutester(object):
                                           host=self.get_walrus_ip(),
                                           port=8773,
                                           path="/services/Walrus",
+                                          calling_format=OrdinaryCallingFormat(),
                                           debug=self.boto_debug)
 
     def read_config(self, filepath):
