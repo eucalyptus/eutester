@@ -47,6 +47,8 @@ import copy
 from threading import Thread
 
 from boto.ec2.regioninfo import RegionInfo
+from boto.s3.connection import OrdinaryCallingFormat
+
 from bm_machine import bm_machine
 import eulogger
 
