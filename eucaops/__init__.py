@@ -50,7 +50,7 @@ class Eucaops(Eutester,Eucaops_api):
         key_name      The name of the object containing the data in walrus.
         path_to_file  Fully qualified path to local file.
         """
-        bucket = self.s3.lookup(bucket_name)
+        bucket = self.walrus.lookup(bucket_name)
         # Get a new, blank Key object from the bucket.  This Key object only
         # exists locally until we actually store data in it.
         key = bucket.new_key(key_name)
