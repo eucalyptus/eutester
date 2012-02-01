@@ -40,7 +40,6 @@ class Eucaops(Eutester,Eucaops_api):
             except self.walrus.provider.storage_create_error, e:
                 self.tee( 'Bucket (%s) is owned by another user' % bucket_name )
                 return None
-            self.my_buckets.append(bucket)
         return bucket
     
     def upload_object_file(self, bucket_name, key_name, path_to_file):
