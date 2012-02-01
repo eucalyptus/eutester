@@ -158,7 +158,7 @@ class Eutester(object):
            self.walrus = boto.connect_s3(aws_access_key_id=aws_access_key_id,
                                           aws_secret_access_key=aws_secret_access_key,
                                           is_secure=False,
-                                          host=self.get_clc_ip(),
+                                          host=self.get_walrus_ip(),
                                           port=8773,
                                           path="/services/Walrus",
                                           debug=self.boto_debug)
