@@ -487,23 +487,24 @@ class Eucaops(Eutester,Eucaops_api):
         """
         
         zones = self.ec2.get_all_zones('verbose')
-        zone_index = 0 
+         
         
         if type == None:
             type = "m1.small"
         
         ### Look for the right place to start parsing the zones
+        zone_index = 0
         if zone != None: 
-            for current_zone in zones:
-                if re.match(current_zone, zone.name):
+            while zone_index < len(zones):
+                current_zone = zones[zone_index]
+                if re.search( zone, current_zone.name):
                     break
-                zone_index += 1
-                
-        ### If i reached the end then none of the zones matched
-        if zone_index == len(zones):
-            self.fail("Was not able to find AZ: " + zone)
-            raise Exception("Unable to find Availability Zone")
+                zone_index += 7
+            if zone_index > (len(zones) - 1)   :
+                self.fail("Was not able to find AZ: " + zone)
+                raise Exception("Unable to find Availability Zone")    
         
+        ### Inline switch statement
         type_index = {
                       'm1.small': 2,
                       'c1.medium': 3,
