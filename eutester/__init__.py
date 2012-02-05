@@ -153,6 +153,7 @@ class Eutester(object):
            self.ec2 = boto.connect_ec2(aws_access_key_id=aws_access_key_id,
                                         aws_secret_access_key=aws_secret_access_key,
                                         is_secure=False,
+                                        api_version = '2009-11-30',
                                         region=RegionInfo(name="eucalyptus", endpoint=self.get_clc_ip()),
                                         port=8773,
                                         path="/services/Eucalyptus",

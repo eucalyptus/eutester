@@ -480,22 +480,40 @@ class Eucaops(Eutester,Eucaops_api):
                 self.tee( "Instance " + instance.id + " now in " + instance.state  + " state")
         return reservation
     
-    def get_available_vms(self, type=None):
+    def get_available_vms(self, type=None, zone=None):
         """
         Get available VMs of a certain type or return a dictionary with all types and their available vms
         type        VM type to get available vms 
         """
-        ### Need to update this to work for a particular availability zone
-        az_verbose_out = self.sys("euca-describe-availability-zones verbose")
-        vmtypes = {"m1.small": 0,"c1.medium":0, "m1.large":0, "m1.xlarge":0,"c1.xlarge":0}
-        for type1,avail in vmtypes.iteritems():
-            ### Parse out each type of VM then get the free ones
-            vmtypes[type1] = int(self.grep( str(type1) , az_verbose_out)[0].split()[3])
-            #print type1 + ":" + str(vmtypes[type1])
-        if type==None:
-            return vmtypes
-        else:
-            return int(vmtypes[type])
+        
+        zones = self.ec2.get_all_zones('verbose')
+        zone_index = 0 
+        
+        if type == None:
+            type = "m1.small"
+        
+        ### Look for the right place to start parsing the zones
+        if zone != None: 
+            for current_zone in zones:
+                if re.match(current_zone, zone.name):
+                    break
+                zone_index += 1
+                
+        ### If i reached the end then none of the zones matched
+        if zone_index == len(zones):
+            self.fail("Was not able to find AZ: " + zone)
+            raise Exception("Unable to find Availability Zone")
+        
+        type_index = {
+                      'm1.small': 2,
+                      'c1.medium': 3,
+                      'm1.large': 4,
+                      'm1.xlarge': 5,
+                      'c1.xlarge': 6,
+                      }[type]
+        
+        type_state = zones[ zone_index + type_index ].state.split()
+        return int(type_state[0])
     
     def release_address(self, ip=None):
         """
