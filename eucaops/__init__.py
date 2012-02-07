@@ -4,6 +4,7 @@ from boto.ec2.blockdevicemapping import BlockDeviceMapping, BlockDeviceType
 import time
 import re
 import sys
+import boto
 
 class Eucaops(Eutester,Eucaops_api):
     
@@ -29,7 +30,7 @@ class Eucaops(Eutester,Eucaops_api):
         # First let's see if we already have a bucket of this name.
         # The lookup method will return a Bucket object if the
         # bucket exists and we have access to it or None.
-        bucket = self.walrus.lookup(bucket_name)
+        bucket = self.get_bucket_by_name(bucket_name)
         if bucket:
             self.tee( 'Bucket (%s) already exists' % bucket_name )
         else:
@@ -40,22 +41,84 @@ class Eucaops(Eutester,Eucaops_api):
             except self.walrus.provider.storage_create_error, e:
                 self.tee( 'Bucket (%s) is owned by another user' % bucket_name )
                 return None
+            if not self.get_bucket_by_name(bucket.name):
+                self.fail("Bucket could not be found after creation")
+                return None 
         return bucket
+    
+    def delete_bucket(self, bucket):
+        """
+        Delete a bucket.
+        bucket_name  The name of the Walrus Bucket
+        """
+        # First let's see if we already have a bucket of this name.
+        # The lookup method will return a Bucket object if the
+        # bucket exists and we have access to it or None.
+        bucket_name = bucket.name
+        try:
+            bucket.delete()
+        except self.walrus.provider.storage_create_error, e:
+                self.tee( 'Bucket (%s) is owned by another user' % bucket_name )
+                return None
+            
+        ### Check if the bucket still exists
+        if self.get_bucket_by_name(bucket_name):
+            self.fail("Bucket still exists after delete operation")
+        
+    
+    def get_bucket_by_name(self, bucket_name):
+        """
+        Lookup a bucket by name, if it does not exist return false
+        """
+        bucket = self.walrus.lookup(bucket_name)
+        if bucket:
+            return bucket
+        else:
+            return False
     
     def upload_object_file(self, bucket_name, key_name, path_to_file):
         """
-        Write the contents of a local file to walrus and also store custom
-        metadata with the object.
+        Write the contents of a local file to walrus
         bucket_name   The name of the walrus Bucket.
         key_name      The name of the object containing the data in walrus.
         path_to_file  Fully qualified path to local file.
         """
-        bucket = self.walrus.lookup(bucket_name)
+        bucket = self.get_bucket_by_name(bucket_name)
+        if bucket == None:
+            self.fail("Could not find bucket {} to upload file".format(bucket_name))
+            return
         # Get a new, blank Key object from the bucket.  This Key object only
         # exists locally until we actually store data in it.
         key = bucket.new_key(key_name)
+        if key == None:
+            self.fail( "Unable to create key {}".format( key_name ) )
         key.set_contents_from_filename(path_to_file)
         return key
+    
+    def get_objects_by_prefix(self, bucket_name, prefix):
+        """
+        Get keys in the specified bucket that match the prefix if no prefix is passed all objects are returned
+        as a result set.
+        If only 1 key matches it will be returned as a Key object. 
+        """
+        bucket = self.get_bucket_by_name(bucket_name)
+        keys = bucket.get_all_keys(prefix=prefix)
+        if len(keys) <= 1:
+            self.fail("Unable to find any keys with prefix {} in {}".format(prefix, bucket) )
+        if len(keys) == 2:
+            return keys[0]
+        return keys
+        
+    def delete_object(self, object):
+        bucket = object.bucket
+        name = object.name
+        object.delete()
+        try:
+            self.walrus.get_bucket(bucket).get_key(name)
+            self.fail("Walrus bucket still exists after delete")
+        except Excetption, e:
+            return
+        
     
     def add_keypair(self,key_name=None):
         """
