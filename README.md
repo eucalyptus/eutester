@@ -37,7 +37,7 @@ The basic constructor can be used for a few different connections:
     Required arguments: root password, config file with topology information  
     Optional arguments: credential path so that new credentials are not created
 
-        private_cloud = Eucaops( password="my_root_pass",  config_file="cloud.conf", credpath="~/.euca")
+        private_cloud = Eucaops( password="my_root_pass",  config_file="cloud.conf")
         local.sys("euca-describe-availability-zones") ### use local credentials to determine viable availability-zones
         
         
