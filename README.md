@@ -37,16 +37,17 @@ The basic constructor can be used for a few different connections:
     Required arguments: root password, config file with topology information  
     Optional arguments: credential path so that new credentials are not created
 
-        local = Eucaops(credpath="~/.eucarc")    
-        local.run_instance(image) ## run an m1.small instance using image
+        private_cloud = Eucaops( password="my_root_pass",  config_file="cloud.conf", credpath="~/.euca")
+        local.sys("euca-describe-availability-zones") ### use local credentials to determine viable availability-zones
         
         
 3. Public cloud - local SSH, EC2 and S3 connections  
     Purpose - can be used to wrap euca2ools commands installed locally on the tester machine or with Eucaops  
     Required arguments: root password, config file with topology information
 
-        private_cloud = Eucaops( password="my_root_pass",  config_file="cloud.conf", credpath="~/.euca")
-        local.sys("euca-describe-availability-zones") ### use local credentials to determine viable availability-zones
+        public_cloud = Eucaops(credpath="~/.eucarc")    
+        local.run_instance(image) ## run an m1.small instance using image
+        
             
  
 Config file
