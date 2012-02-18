@@ -66,7 +66,7 @@ class Eulogger(object):
         self.clear = clear
         self.name = name
         
-        self.formatter1 = logging.Formatter('%(asctime)s::%(filename)s:%(funcName)s():%(lineno)d: %(message)s')
+        self.formatter1 = logging.Formatter('[%(asctime)s] [%(name)s] [%(levelname)s]: %(message)s')
         self.formatter2 = logging.Formatter('%(levelname)s:%(filename)s:%(funcName)s():%(lineno)d: %(message)s')
         self.formatter3 = logging.Formatter('%(message)s')
         self.formatter4 = logging.Formatter(self.name+':%(funcName)s():%(lineno)d: %(message)s')
@@ -76,7 +76,7 @@ class Eulogger(object):
 
         #now add the locations will log to by adding handlers to our logger...
         self.outhdlr = logging.StreamHandler(sys.stdout)
-        self.outhdlr.setFormatter(self.formatter4)
+        self.outhdlr.setFormatter(self.formatter1)
         self.log.addHandler(self.outhdlr)
         
         if (self.logfile != ""):

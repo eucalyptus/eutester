@@ -57,7 +57,7 @@ class TimeoutFunctionException(Exception):
     pass 
 
 class Eutester(object):
-    def __init__(self, config_file=None, hostname=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, account="eucalyptus",  user="admin", boto_debug=2):
+    def __init__(self, config_file=None, hostname=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, account="eucalyptus",  user="admin", boto_debug=0):
         """  
         EUCADIR => $eucadir, 
         VERIFY_LEVEL => $verify_level, 
@@ -99,50 +99,51 @@ class Eutester(object):
         self.cloud_log_process = None
         self.cc_log_process = None
         self.nc_log_process = None
-        ### EUCALOGGER
-        self.logger = eulogger.Eulogger(name='euca').log
-        
+        ### EULOGGER
+        self.logger = eulogger.Eulogger(name='eutester')
         ### LOGS to keep for printing later
         self.fail_log = []
-        self.running_log = []
+        self.running_log = self.logger.log
         
         ### SSH Channels for tailing log files
         self.cloud_log_channel = None
         self.cc_log_channel= None
         self.nc_log_channel= None
-       
-        
-        ## CHOOSE A RANDOM HOST OF THIS COMPONENT TYPE
         
         ### If I have a config file
         ### PRIVATE CLOUD
+        
         if self.config_file != None:
             ## read in the config file
+            self.tee("Reading config file: " + config_file)
             self.config = self.read_config(config_file)
             
             ### Set the eucapath
             if "REPO" in self.config["machines"][0].source:
                 self.eucapath="/"
             ### swap in the hostname of the component 
-            self.hostname = self.swap_component_hostname(self.hostname)
-        
+            self.hostname = self.swap_component_hostname(self.current_ssh)
+            self.tee("Hostname for SSH connection: " + self.hostname)
         ## IF I WASNT PROVIDED KEY TRY TO GET THEM FROM THE EUCARC IN CREDPATH
         ### PRIVATE CLOUD
         if (self.password != None) or (self.keypath != None):
             client = paramiko.SSHClient()
-            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())            
-            if keypath == None:
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            self.tee("Issuing SSH connection root@{}".format( self.hostname))            
+            if keypath == None:   
                 client.connect(self.hostname, username="root", password=password, timeout= self.timeout)
             else:
                 client.connect(self.hostname,  username="root", key_filename=keypath, timeout= self.timeout)
             self.ssh = client
             self.sftp = self.ssh.open_sftp()
+            
         
         ### If i have an ssh session and its to the clc
         ### Private cloud with root access
         if (self.credpath == None) and (self.ssh != None) and (self.password != None):
                 self.credpath = self.get_credentials(account,user) 
         
+
         ### If i have a credpath
         if (self.credpath != None):         
             aws_access_key_id = self.get_access_key()
@@ -290,21 +291,15 @@ class Eutester(object):
         ## START CLOUD Log       
         self.swap_ssh("clc")        
         self.cloud_log_channel = self.ssh.invoke_shell()
-        self.cloud_log_channel.send("tail -f "  + self.eucapath + "/var/log/eucalyptus/cloud-output.log > cloud-test.log & \n")
+        self.cloud_log_channel.send("tail -f "  + self.eucapath + "/var/log/eucalyptus/cloud-output.log \n")
         ## START CC Log
         self.swap_ssh("cc00")
         self.cc_log_channel = self.ssh.invoke_shell()
-        self.cc_log_channel.send("tail -f "  + self.eucapath + "/var/log/eucalyptus/cc.log > cc-test.log &\n") 
-        self.cc_log_channel.close()
-        #self.cc_log_process = Thread(target=poll_euca_logs, args=(self, "cc00",))      
-        #self.cc_log_process.start()
+        self.cc_log_channel.send("tail -f "  + self.eucapath + "/var/log/eucalyptus/cc.log \n") 
         ## START NC LOG
         self.swap_ssh("nc00") 
         self.nc_log_channel = self.ssh.invoke_shell()
-        self.nc_log_channel.send("tail -f "  + self.eucapath + "/var/log/eucalyptus/nc.log > nc-test.log &\n")
-        self.nc_log_channel.close()
-        #self.nc_log_process = Thread(target=poll_euca_logs, args=(self,"nc00",))   
-        #self.nc_log_process.start()
+        self.nc_log_channel.send("tail -f "  + self.eucapath + "/var/log/eucalyptus/nc.log \n")
         self.swap_ssh(previous_ssh)
         
     def get_euca_logs(self, component="cloud"):
@@ -314,15 +309,15 @@ class Eutester(object):
             previous_ssh = self.current_ssh
             ## START CLOUD Log       
             self.swap_ssh("clc") 
-            self.cloud_log_buffer = "\n".join(self.sys("tail -200 "  + self.eucapath + "/var/log/eucalyptus/cloud-output.log",verbose=0))
+            self.cloud_log_buffer = self.cloud_log_channel.recv(10000000)#"\n".join(self.sys("tail -200 "  + self.eucapath + "/var/log/eucalyptus/cloud-output.log",verbose=0))
         #if component == "cc00":
             print "Gathering log on CC00"
             self.swap_ssh("cc00")
-            self.cc_log_buffer = "\n".join(self.sys("tail -200 "  + self.eucapath + "/var/log/eucalyptus/cc.log",verbose=0))
+            self.cc_log_buffer = self.cc_log_channel.recv(10000000)#"\n".join(self.sys("tail -200 "  + self.eucapath + "/var/log/eucalyptus/cc.log",verbose=0))
         #if component == "nc00":
             print "Gathering log on NC00"
             self.swap_ssh("nc00") 
-            self.nc_log_buffer = "\n".join(self.sys("tail -200 "  + self.eucapath + "/var/log/eucalyptus/nc.log",verbose=0))
+            self.nc_log_buffer =  self.nc_log_channel.recv(10000000)#"\n".join(self.sys("tail -200 "  + self.eucapath + "/var/log/eucalyptus/nc.log",verbose=0))
             self.swap_ssh(previous_ssh)
                 
     def grep_euca_log(self,component="cloud", regex="ERROR" ):
@@ -359,6 +354,7 @@ class Eutester(object):
         
     def swap_ssh(self, hostname, password=None, keypath=None):
         self.ssh = self.create_ssh(hostname, password=password, keypath=keypath, username="root")
+        self.sftp = self.ssh.open_sftp()
         self.current_ssh = hostname
         return self.ssh               
                                
@@ -371,7 +367,6 @@ class Eutester(object):
         # -1 should be reserved for "no timeout" option
         if timeout == -2:
             timeout = self.timeout
-        #print "Using timeout of " + str(timeout)
         time.sleep(self.delay)
         old = signal.signal(signal.SIGALRM, self.handle_timeout) 
         signal.alarm(timeout) 
@@ -388,7 +383,6 @@ class Eutester(object):
                 for item in os.popen("ls").readlines():
                     if re.match(self.credpath,item):
                         cmd = ". " + self.credpath + "/eucarc && " + cmd
-                        break
                 std_out_return = os.popen(cmd).readlines()
             else:
                 stdin_ls, stdout_ls, stderr_ls = self.ssh.exec_command("ls")
@@ -422,19 +416,17 @@ class Eutester(object):
         return filter(expr.search,list)
     
     def tee(self, message):
-        print message
-        self.running_log.append(message)
+        self.logger.log.debug(message)
         
-    
     def diff(self, list1, list2):
-        return [item for item in list1 if not item in list2]
+        return list(set(lst1)-set(lst2))
     
     def test_name(self, message):
         self.tee("[TEST_REPORT] " + message)
     
     def fail(self, message):
-        self.tee( "[TEST_REPORT] FAILED: " + message)
-        self.fail_log.append(message)
+        #self.tee( "[TEST_REPORT] FAILED: " + message)
+        self.logger.log.critical(message)
         self.fail_count += 1
         if self.exit_on_fail == 1:
             raise Exception("Test step failed")

@@ -8,7 +8,7 @@ import boto
 
 class Eucaops(Eutester,Eucaops_api):
     
-    def __init__(self, config_file=None, hostname=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,account="eucalyptus",user="admin", boto_debug=2):
+    def __init__(self, config_file=None, hostname=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,account="eucalyptus",user="admin", boto_debug=0):
         super(Eucaops, self).__init__(config_file, hostname, password, keypath, credpath, aws_access_key_id, aws_secret_access_key,account, user, boto_debug)
         self.poll_count = 24
         self.test_resources = {}
@@ -291,12 +291,13 @@ class Eucaops(Eutester,Eucaops_api):
             poll_count -= 1
             time.sleep(poll_interval)
             volume.update()
+            self.tee( "{} in {} state".format(volume, volume.status))   
         if poll_count == 0:
             self.fail(str(volume) + " never went to available and stayed in " + volume.status)
             self.tee( "Deleting volume that never became available")
             volume.delete()
             return None
-        self.tee( "Done. Waited a total of " + str( (self.poll_count - poll_count) * poll_interval) + " seconds\nVolume in " + volume.status + " state" )
+        self.tee( "Done. Waited a total of " + str( (self.poll_count - poll_count) * poll_interval) + " seconds" )
         return volume
     
     def delete_volume(self, volume):
@@ -549,12 +550,9 @@ class Eucaops(Eutester,Eucaops_api):
         type        VM type to get available vms 
         """
         
-        zones = self.ec2.get_all_zones('verbose')
-         
-        
+        zones = self.ec2.get_all_zones('verbose') 
         if type == None:
             type = "m1.small"
-        
         ### Look for the right place to start parsing the zones
         zone_index = 0
         if zone != None: 
@@ -566,7 +564,9 @@ class Eucaops(Eutester,Eucaops_api):
             if zone_index > (len(zones) - 1)   :
                 self.fail("Was not able to find AZ: " + zone)
                 raise Exception("Unable to find Availability Zone")    
-        
+        else:
+            zone = zones[0].name
+            
         ### Inline switch statement
         type_index = {
                       'm1.small': 2,
@@ -574,9 +574,9 @@ class Eucaops(Eutester,Eucaops_api):
                       'm1.large': 4,
                       'm1.xlarge': 5,
                       'c1.xlarge': 6,
-                      }[type]
-        
+                      }[type] 
         type_state = zones[ zone_index + type_index ].state.split()
+        self.tee("Finding available VMs: Partition={} Type={} Number={}".format(zone, type, int(type_state[0])))
         return int(type_state[0])
     
     def release_address(self, ip=None):
@@ -652,29 +652,22 @@ class Eucaops(Eutester,Eucaops_api):
             service = "walrus"
         if component == "cc":
             service = "cluster"
-        self.tee( "Looking for enabled " + component + " in current connection")
-        ### TRY with the open connection if it fails, then try to
-        machines = self.get_component_machines("clc")
-        old_ssh = self.current_ssh
-        first = ""
-        second = ""
-        
+        self.tee( "Looking for enabled " + component )        
         ### GO through both clcs and check which ip it thinks is enabled for this service type
-        for clc in machines:
-            self.swap_ssh(hostname=clc, password=self.password)
-            service_url = self.sys( self.eucapath + "/usr/sbin/euca-describe-services | egrep -e 'SERVICE[[:space:]]"+ service + "' | grep ENABLED | awk '{print $7}'")
-            ### Parse out the IP from this url
-            if first == "":
-                first = service_url[0].split(":")[1].strip("/") 
-            else:
-                second =  service_url[0].split(":")[1].strip("/")
-        self.swap_ssh(hostname=old_ssh)
-        if first == second:
-            print "Found matching enabled " + component + " as " + first
-            return first
-        else:
-            self.fail("Found a mismatch in the first and second CLCs checked as to which was master")
-            self.fail("First thought: " + first + " Second Thought: " + second)
+        services = self.sys( self.eucapath + "/usr/sbin/euca-describe-services")
+        master = ""
+        try:
+            line = self.grep("SERVICE\s+" + service + ".*ENABLED", services)[0]
+            service_url = line.split()[6]
+            master = service_url.split(":")[1].strip("/")
+            self.swap_ssh(master)
+            return master
+        except Exception, e:
+            self.fail("Unable to find redundant components")
+            self.fail(str(e))
+            raise
+        
+        
             
        
         
