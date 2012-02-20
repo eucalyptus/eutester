@@ -100,7 +100,7 @@ class Eutester(object):
         self.cc_log_process = None
         self.nc_log_process = None
         ### EULOGGER
-        self.logger = eulogger.Eulogger(name='eutester')
+        self.logger = eulogger.Eulogger(name= "eutester")
         ### LOGS to keep for printing later
         self.fail_log = []
         self.running_log = self.logger.log
@@ -112,24 +112,23 @@ class Eutester(object):
         
         ### If I have a config file
         ### PRIVATE CLOUD
-        
         if self.config_file != None:
             ## read in the config file
             self.tee("Reading config file: " + config_file)
             self.config = self.read_config(config_file)
-            
             ### Set the eucapath
             if "REPO" in self.config["machines"][0].source:
                 self.eucapath="/"
             ### swap in the hostname of the component 
             self.hostname = self.swap_component_hostname(self.current_ssh)
             self.tee("Hostname for SSH connection: " + self.hostname)
+
         ## IF I WASNT PROVIDED KEY TRY TO GET THEM FROM THE EUCARC IN CREDPATH
         ### PRIVATE CLOUD
         if (self.password != None) or (self.keypath != None):
             client = paramiko.SSHClient()
             client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            self.tee("Issuing SSH connection root@{}".format( self.hostname))            
+            self.tee("Issuing SSH connection root@" +  self.hostname )            
             if keypath == None:   
                 client.connect(self.hostname, username="root", password=password, timeout= self.timeout)
             else:
