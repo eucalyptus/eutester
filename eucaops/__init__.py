@@ -548,6 +548,9 @@ class Eucaops(Eutester,Eucaops_api):
                     image = emi         
         self.debug( "Attempting to run image " + str(image) + " in group " + group)
         reservation = image.run(key_name=keypair,security_groups=[group],instance_type=type, placement=zone, min_count=min, max_count=max)
+        if ((len(reservation.instances) < min) or (len(reservation.instances) > max)):
+            self.fail("Reservation:"+str(res.id)+" returned "+str(len(reservation.instances))+" instances, not within min("+str(min)+") and max("+str(max)+" ")
+            
         self.wait_for_reservation(reservation)
         for instance in reservation.instances:
             if instance.state != "running":
