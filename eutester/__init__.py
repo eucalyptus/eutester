@@ -93,6 +93,8 @@ class Eutester(object):
         self.start_time = time.time()
         self.key_dir = "./"
         self.account_id = 0000000000001
+        self.hypervisor = None
+        
         
         ##### Euca Logs 
         self.cloud_log_buffer = ''
@@ -115,7 +117,7 @@ class Eutester(object):
         self.cloud_log_channel = None
         self.cc_log_channel= None
         self.nc_log_channel= None
-        
+
         ### If I have a config file
         ### PRIVATE CLOUD
         if self.config_file != None:
@@ -128,6 +130,7 @@ class Eutester(object):
             ### swap in the hostname of the component 
             self.hostname = self.swap_component_hostname(self.current_ssh)
             self.debug("Hostname for SSH connection: " + self.hostname)
+            self.hypervisor = self.get_hypervisor()
             
         ## IF I WASNT PROVIDED KEY TRY TO GET THEM FROM THE EUCARC IN CREDPATH
         ### PRIVATE CLOUD
@@ -141,7 +144,6 @@ class Eutester(object):
                 client.connect(self.hostname,  username="root", key_filename=keypath, timeout= self.timeout)
             self.ssh = client
             self.sftp = self.ssh.open_sftp()
-            
         
         ### If i have an ssh session and its to the clc
         ### Private cloud with root access
@@ -212,10 +214,23 @@ class Eutester(object):
                 machines.append(machine)
                # print machine
             if line.find("NETWORK"):
-                config_hash["network"] = line.strip()
+                config_hash["network"] = line.strip() 
         config_hash["machines"] = machines 
         return config_hash
-
+    
+    def get_hypervisor(self):
+        ncs = self.get_component_machines("nc00")
+        if re.search("vmware", ncs[0].distro, re.IGNORECASE):
+            return "vmware"
+        elif re.search("rhel", ncs[0].distro, re.IGNORECASE) or re.search("centos", ncs[0].distro, re.IGNORECASE):
+            if re.search("6\.", ncs[0].distro_ver, re.IGNORECASE):
+                return "kvm"
+            if re.search("5\.", ncs[0].distro_ver, re.IGNORECASE):
+                return "xen"
+        elif re.search("ubuntu", ncs[0].distro, re.IGNORECASE):
+            return "kvm" 
+        
+            
     def get_component_ip(self, component):
         #loop through machines looking for this component type
         component.lower()
@@ -228,7 +243,7 @@ class Eutester(object):
     def get_component_machines(self, component):
         #loop through machines looking for this component type
         component.lower()
-        machines_with_role = [machine.hostname for machine in self.config['machines'] if component in machine.components]
+        machines_with_role = [machine for machine in self.config['machines'] if component in machine.components]
         if len(machines_with_role) == 0:
             raise Exception("Could not find component "  + component + " in list of machines")
         else:
@@ -476,7 +491,7 @@ class Eutester(object):
     
     def fail(self, message):
         #self.debug( "[TEST_REPORT] FAILED: " + message)
-        self.critical(message)
+        self.critical("[TEST_REPORT] FAILED: " + message)
         self.fail_log.append(message)
         self.fail_count += 1
         if self.exit_on_fail == 1:
