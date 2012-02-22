@@ -38,7 +38,9 @@ __version__ = '0.0.1'
 import re
 import os
 import subprocess
+import threading
 import paramiko
+import select
 import boto
 import random
 import time
@@ -96,9 +98,12 @@ class Eutester(object):
         self.cloud_log_buffer = ''
         self.cc_log_buffer  = ''
         self.nc_log_buffer = ''
+        self.sc_log_buffer = ''
+        self.walrus_log_buffer = ''
         self.cloud_log_process = None
         self.cc_log_process = None
         self.nc_log_process = None
+        self.logging_thread = False
         ### EULOGGER
         self.logger = eulogger.Eulogger(name= "eutester")
         self.debug = self.logger.log.debug
@@ -169,7 +174,17 @@ class Eutester(object):
                                           path="/services/Walrus",
                                           calling_format=OrdinaryCallingFormat(),
                                           debug=self.boto_debug)
-
+           self.euare = boto.connect_iam(aws_access_key_id=aws_access_key_id,
+                                          aws_secret_access_key=aws_secret_access_key,
+                                          is_secure=False,
+                                          host=self.get_clc_ip(),
+                                          port=8773,
+                                          path="/services/Euare",
+                                          debug=self.boto_debug)
+    
+    def __del__(self):
+        self.logging_thread = False
+    
     def read_config(self, filepath):
         config_hash = {}
         machines = []
@@ -286,41 +301,71 @@ class Eutester(object):
             client.connect(hostname,  username=username, key_filename=keypath)
         return client
     
+    def poll_euca_logs(self):
+        self.debug( "Starting logging")
+        ## START CLOUD Log
+        cloud_ssh =  self.create_ssh("clc", password=self.password)          
+        self.cloud_log_channel = cloud_ssh.invoke_shell()
+        self.cloud_log_channel.send("tail -f "  + self.eucapath + "/var/log/eucalyptus/cloud-output.log \n")
+        ### START WALRUS Log    
+        walrus_ssh =  self.create_ssh("ws", password=self.password)
+        self.walrus_log_channel = walrus_ssh.invoke_shell()
+        self.walrus_log_channel.send("tail -f "  + self.eucapath + "/var/log/eucalyptus/cloud-output.log \n")
+        ## START CC Log
+        cluster_ssh =  self.create_ssh("cc00", password=self.password)
+        self.cc_log_channel = cluster_ssh.invoke_shell()
+        self.cc_log_channel.send("tail -f "  + self.eucapath + "/var/log/eucalyptus/cc.log \n")
+        ## START SC Log
+        storage_ssh =  self.create_ssh("sc00", password=self.password)
+        self.sc_log_channel = storage_ssh.invoke_shell()
+        self.sc_log_channel.send("tail -f "  + self.eucapath + "/var/log/eucalyptus/cc.log \n")
+        ## START NC LOG
+        nc_ssh =  self.create_ssh("nc00", password=self.password)
+        self.nc_log_channel = nc_ssh.invoke_shell()
+        self.nc_log_channel.send("tail -f "  + self.eucapath + "/var/log/eucalyptus/nc.log \n")
+        self.logging_thread = True
+        while self.logging_thread:
+            ### CLOUD LOG
+            rl, wl, xl = select.select([self.cloud_log_channel],[],[],0.0)
+            if len(rl) > 0:
+                self.cloud_log_buffer += self.cloud_log_channel.recv(1024)
+            ### CC LOG
+            rl, wl, xl = select.select([self.cc_log_channel],[],[],0.0)
+            if len(rl) > 0:
+                self.cc_log_buffer += self.cc_log_channel.recv(1024)
+            ### SC LOG
+            rl, wl, xl = select.select([self.sc_log_channel],[],[],0.0)
+            if len(rl) > 0:
+                self.sc_log_buffer += self.sc_log_channel.recv(1024)
+            ### WALRUS LOG
+            rl, wl, xl = select.select([self.walrus_log_channel],[],[],0.0)
+            if len(rl) > 0:
+                self.walrus_log_buffer += self.walrus_log_channel.recv(1024)
+            ### NC LOG
+            rl, wl, xl = select.select([self.nc_log_channel],[],[],0.0)
+            if len(rl) > 0:
+                self.nc_log_buffer += self.nc_log_channel.recv(1024)
+            self.sleep(1)
+            
     def start_euca_logs(self):
         """CURRENTLY ONLY WORKS ON CC00 AND CLC AND  the first NC00""" 
-        self.debug( "Starting logging")
-        previous_ssh = self.current_ssh
-        ## START CLOUD Log       
-        self.swap_ssh("clc")        
-        self.cloud_log_channel = self.ssh.invoke_shell()
-        self.cloud_log_channel.send("tail -f "  + self.eucapath + "/var/log/eucalyptus/cloud-output.log \n")
-        ## START CC Log
-        self.swap_ssh("cc00")
-        self.cc_log_channel = self.ssh.invoke_shell()
-        self.cc_log_channel.send("tail -f "  + self.eucapath + "/var/log/eucalyptus/cc.log \n") 
-        ## START NC LOG
-        self.swap_ssh("nc00") 
-        self.nc_log_channel = self.ssh.invoke_shell()
-        self.nc_log_channel.send("tail -f "  + self.eucapath + "/var/log/eucalyptus/nc.log \n")
-        self.swap_ssh(previous_ssh)
+        threading.Thread(target=self.poll_euca_logs, args=()).start()
+        
+    def stop_euca_logs(self):
+        self.logging_thread = False
         
     def get_euca_logs(self, component="cloud"):
-        ## in case there is any delay in the logs propagating
-        #if component == "cloud": 
-            self.debug( "Gathering log on CLC")
-            previous_ssh = self.current_ssh
-            ## START CLOUD Log       
-            self.swap_ssh("clc") 
-            self.cloud_log_buffer = self.cloud_log_channel.recv(10000000)#"\n".join(self.sys("tail -200 "  + self.eucapath + "/var/log/eucalyptus/cloud-output.log",verbose=0))
-        #if component == "cc00":
+            self.debug( "Gathering log on CLC")  
+            self.cloud_log_buffer = self.cloud_log_channel.recv(10000000)
+            self.debug( "Gathering log on Walrus")     
+            self.walrus_log_buffer = self.walrus_log_channel.recv(10000000)
             self.debug( "Gathering log on CC00")
-            self.swap_ssh("cc00")
-            self.cc_log_buffer = self.cc_log_channel.recv(10000000)#"\n".join(self.sys("tail -200 "  + self.eucapath + "/var/log/eucalyptus/cc.log",verbose=0))
-        #if component == "nc00":
+            self.cc_log_buffer = self.cc_log_channel.recv(10000000)
+            self.debug( "Gathering log on SC00")     
+            self.sc_log_buffer = self.sc_log_channel.recv(10000000)
             self.debug( "Gathering log on NC00")
-            self.swap_ssh("nc00") 
-            self.nc_log_buffer =  self.nc_log_channel.recv(10000000)#"\n".join(self.sys("tail -200 "  + self.eucapath + "/var/log/eucalyptus/nc.log",verbose=0))
-            self.swap_ssh(previous_ssh)
+            self.nc_log_buffer =  self.nc_log_channel.recv(10000000)
+            
                 
     def grep_euca_log(self,component="cloud", regex="ERROR" ):
         previous_ssh = self.current_ssh
@@ -416,11 +461,6 @@ class Eutester(object):
     def grep(self, string,list):
         expr = re.compile(string)
         return filter(expr.search,list)
-    
-    #def tee(self, message):
-    #   self.logger.log.debug(message)
-    
-    #tee = self.logger.log.debug
         
     def diff(self, list1, list2):
         return list(set(list1)-set(list2))
@@ -455,12 +495,7 @@ class Eutester(object):
             exit_report += "*" + "            " + message + "\n"
         exit_report += "*" + "    Time to execute: " + str(self.get_exectuion_time()) +"\n"
         exit_report += "******************************************************\n"           
-        self.debug( exit_report)
-        #try:
-        #    subprocess.call(["rm", "-rf", self.credpath])
-        #except Exception, e:
-        #    print "No need to delete creds"
-            
+        self.debug( exit_report)    
         if self.fail_count > 0:
             exit(1)
         else:
@@ -480,3 +515,4 @@ class Eutester(object):
         s += "+" + "Credential Path: " +  str(self.credpath) +"\n"
         s += "+++++++++++++++++++++++++++++++++++++++++++++++++++++\n"
         return s
+
