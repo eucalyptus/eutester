@@ -94,17 +94,15 @@ class Eutester(object):
         self.key_dir = "./"
         self.account_id = 0000000000001
         
-        ##### LOGGING 
+        ##### Euca Logs 
         self.cloud_log_buffer = ''
         self.cc_log_buffer  = ''
         self.nc_log_buffer = ''
         self.sc_log_buffer = ''
         self.walrus_log_buffer = ''
-        self.cloud_log_process = None
-        self.cc_log_process = None
-        self.nc_log_process = None
         self.logging_thread = False
-        ### EULOGGER
+        
+        ### Eutester logs
         self.logger = eulogger.Eulogger(name= "eutester")
         self.debug = self.logger.log.debug
         self.critical = self.logger.log.critical
@@ -318,12 +316,14 @@ class Eutester(object):
         ## START SC Log
         storage_ssh =  self.create_ssh("sc00", password=self.password)
         self.sc_log_channel = storage_ssh.invoke_shell()
-        self.sc_log_channel.send("tail -f "  + self.eucapath + "/var/log/eucalyptus/cc.log \n")
+        self.sc_log_channel.send("tail -f "  + self.eucapath + "/var/log/eucalyptus/cloud-output.log \n")
         ## START NC LOG
         nc_ssh =  self.create_ssh("nc00", password=self.password)
         self.nc_log_channel = nc_ssh.invoke_shell()
         self.nc_log_channel.send("tail -f "  + self.eucapath + "/var/log/eucalyptus/nc.log \n")
         self.logging_thread = True
+        
+        ### Begin polling channel for any new data
         while self.logging_thread:
             ### CLOUD LOG
             rl, wl, xl = select.select([self.cloud_log_channel],[],[],0.0)
@@ -348,23 +348,30 @@ class Eutester(object):
             self.sleep(1)
             
     def start_euca_logs(self):
-        """CURRENTLY ONLY WORKS ON CC00 AND CLC AND  the first NC00""" 
+        '''Start thread to poll logs''' 
         threading.Thread(target=self.poll_euca_logs, args=()).start()
         
     def stop_euca_logs(self):
+        '''Terminate thread that is polling logs''' 
         self.logging_thread = False
         
-    def get_euca_logs(self, component="cloud"):
-            self.debug( "Gathering log on CLC")  
-            self.cloud_log_buffer = self.cloud_log_channel.recv(10000000)
-            self.debug( "Gathering log on Walrus")     
-            self.walrus_log_buffer = self.walrus_log_channel.recv(10000000)
-            self.debug( "Gathering log on CC00")
-            self.cc_log_buffer = self.cc_log_channel.recv(10000000)
-            self.debug( "Gathering log on SC00")     
-            self.sc_log_buffer = self.sc_log_channel.recv(10000000)
-            self.debug( "Gathering log on NC00")
-            self.nc_log_buffer =  self.nc_log_channel.recv(10000000)
+    def save_euca_logs(self):
+        '''Save log buffers to a file''' 
+        FILE = open("clc.log","w")
+        FILE.writelines(self.cloud_log_buffer)
+        FILE.close()
+        FILE = open("walrus.log","w")
+        FILE.writelines(self.walrus_log_buffer)
+        FILE.close()
+        FILE = open("cc.log","w")
+        FILE.writelines(self.cc_log_buffer)
+        FILE.close()
+        FILE = open("sc.log","w")
+        FILE.writelines(self.sc_log_buffer)
+        FILE.close()
+        FILE = open("nc.log","w")
+        FILE.writelines(self.nc_log_buffer)
+        FILE.close()
             
                 
     def grep_euca_log(self,component="cloud", regex="ERROR" ):
@@ -390,7 +397,6 @@ class Eutester(object):
         self.get_euca_logs()
         full_report.append("Test run started at " + str(self.start_time) + "\n\n\n")
         full_report.append("Failures " + str(self.fail_count) + "\n")
-        full_report.append("Running Log: " + "\n".join(self.running_log) + "\n\n\n")
         full_report.append("CLC Log:\n" + self.cloud_log_buffer + "\n\n\n") 
         full_report.append("CC00 Log:\n" + self.cc_log_buffer + "\n\n\n")
         full_report.append("NC00 Log:\n" + self.nc_log_buffer + "\n\n\n")
