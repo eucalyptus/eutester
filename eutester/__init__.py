@@ -193,7 +193,7 @@ class Eutester(object):
             f = open(filepath, 'r')
         except IOError as (errno, strerror):
             self.debug( "ERROR: Could not find config file " + self.config_file)
-            exit(1)
+            raise
             
         for line in f:
             ### LOOK for the line that is defining a machine description
