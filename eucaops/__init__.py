@@ -161,7 +161,8 @@ class Eucaops(Eutester,Eucaops_api):
         keypair = self.ec2.get_all_key_pairs(keynames=[name])
         if len(keypair) > 0:
             self.fail("Keypair found after attempt to delete it")
-        return
+            return False
+        return True
     
     def add_group(self, group_name=None, fail_if_exists=False ):
         """
@@ -197,7 +198,8 @@ class Eucaops(Eutester,Eucaops_api):
         group.delete()
         if self.check_group(name):
             self.fail("Group found after attempt to delete it")
-        return
+            return False
+        return True
     
     def check_group(self, group_name):
         """
@@ -270,7 +272,9 @@ class Eucaops(Eutester,Eucaops_api):
         #self.debug( "Waited a total o" + str( (self.poll_count - poll_count) * 10 ) + " seconds" )
         if instance.state != state:
                 self.fail(str(instance) + " did not enter the proper state and was left in " + instance.state)
+                return False
         self.debug( str(instance) + ' is now in ' + instance.state )
+        return True
 
     def wait_for_reservation(self,reservation, state="running"):
         """
@@ -279,8 +283,11 @@ class Eucaops(Eutester,Eucaops_api):
         state        state that we are looking for
         """
         self.debug( "Beginning poll loop for the " + str(len(reservation.instances))   + " found in " + str(reservation) )
+        aggregate_result = True
         for instance in reservation.instances:
-            self.wait_for_instance(instance, state)
+            if self.wait_for_instance(instance, state) == False:
+                aggregate_result = False
+        return aggregate_result
     
     def create_volume(self, azone, size=1, snapshot=None):
         """
@@ -490,8 +497,61 @@ class Eucaops(Eutester,Eucaops_api):
         raise Exception("Unable to find an EMI")
         return None
     
+    def allocate_address(self):
+        try:
+            self.debug("Allocating an address")
+            address = self.ec2.allocate_address()
+        except Exception, e:
+            self.critical("Unable to allocate address")
+            return False
+        self.debug("Allocated " + str(address))
+        return address
     
+    def associate_address(self,instance, address):
+        try:
+            self.debug("Attemtping to associate " + str(address) + " from " + str(instance))
+            address.associate(instance.id)
+        except Exception as (errno, strerror):
+            self.critical("Unable to associate address\n" + str(e))
+            self.critical( "Exception({0}): {1}".format(errno, strerror))
+            return False
+        self.debug("Associated IP successfully")
+        return address
     
+    def disassociate_address_from_instance(self, instance):
+        address = self.ec2.get_all_addresses(addresses=[instance.public_dns_name])[0]
+        try:
+            address.disassociate()
+        except Exception, e:
+            self.critical("Unable to disassociate address\n" + str(e))
+            return False
+        self.sleep(20)
+        address = self.ec2.get_all_addresses(addresses=[instance.public_dns_name])
+        if address.instance_id is instance.public_dns_name:
+            self.critical("Address still associated with instance")
+            return False
+        return True
+        
+    
+    def ping(self, address):
+        '''Ping an IP and retry a few times'''
+        poll_count = 10 
+        found = False
+        self.debug("Attempting to ping " + address)
+        while (poll_count > 0):
+            poll_count -= 1
+            if self.found("ping -c 1 " + address, "1 received"):
+                self.debug("Was able to ping address")
+                break
+            self.debug("Ping unsuccessful retrying in 2 seconds")
+            self.sleep(2)
+            
+        if poll_count == 0:
+            self.critical("Was unable to ping address " + address + " after " + str(poll_count * 2) + " seconds")
+            return False
+        else:
+            return True
+            
     def get_volume(self, volume_id="vol-", status=None, attached_instance=None, attached_dev=None, snapid=None, zone=None, minsize=1, maxsize=None):
         '''
         Return first volume that matches the criteria. Criteria options to be matched:
@@ -629,20 +689,23 @@ class Eucaops(Eutester,Eucaops_api):
         reservation        Reservation object to terminate all instances in, default is to terminate all instances
         """
         ### If a reservation is not passed then kill all instances
+        aggregate_result = True
         if reservation==None:
-#            reservations.stop_all()
             reservations = self.ec2.get_all_instances()
             for res in reservations:
                 for instance in res.instances:
                     self.debug( "Sending terminate for " + str(instance) )
                     instance.terminate()
-                self.wait_for_reservation(res, state="terminated")
+                if self.wait_for_reservation(res, state="terminated") is False:
+                    aggregate_result = False
         ### Otherwise just kill this reservation
         else:
             for instance in reservation.instances:
                     self.debug( "Sending terminate for " + str(instance) )
                     instance.terminate()
-            self.wait_for_reservation(reservation, state="terminated")
+            if self.wait_for_reservation(reservation, state="terminated") is False:
+                aggregate_result = False
+        return aggregate_result
             
     def modify_property(self, property, value):
         """

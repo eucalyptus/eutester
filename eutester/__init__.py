@@ -315,7 +315,7 @@ class Eutester(object):
         return client
     
     def poll_euca_logs(self):
-        self.debug( "Starting logging")
+        self.debug( "Starting to poll Eucalyptus Logs")
         ## START CLOUD Log
         cloud_ssh =  self.create_ssh("clc", password=self.password)          
         self.cloud_log_channel = cloud_ssh.invoke_shell()
@@ -448,10 +448,7 @@ class Eutester(object):
         try:
             
             if self.ssh == None:
-                for item in os.popen("ls").readlines():
-                    if re.match(self.credpath,item):
-                        cmd = ". " + self.credpath + "/eucarc && " + cmd
-                std_out_return = os.popen(cmd).readlines()
+                std_out_return = self.local(cmd)
             else:
                 stdin_ls, stdout_ls, stderr_ls = self.ssh.exec_command("ls")
                 ls_result = stdout_ls.readlines()
@@ -471,8 +468,18 @@ class Eutester(object):
             self.debug("".join(std_out_return))
         return std_out_return
 
-    def found(self, command, regex):
-        result = self.sys(command)
+    def local(self, cmd):
+        for item in os.popen("ls").readlines():
+            if re.match(self.credpath,item):
+                cmd = ". " + self.credpath + "/eucarc && " + cmd
+        std_out_return = os.popen(cmd).readlines()
+        return std_out_return
+    
+    def found(self, command, regex, local=False):
+        if local:
+            result = self.local(cmd)
+        else:
+            result = self.sys(command)
         for line in result:
             found = re.search(regex,line)
             if found:
