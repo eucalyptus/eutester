@@ -681,7 +681,10 @@ class Eucaops(Eutester,Eucaops_api):
             free_addresses = self.grep( ip + ".*nobody", address_output)
             if len(free_addresses) < 1:
                 self.debug( "Some addresses still in use after attempting to release" )
+                return False
                 #self.fail("Address still in use after attempting to release")
+            else:
+                return True
             
     def terminate_instances(self, reservation=None):
         """
