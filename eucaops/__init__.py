@@ -334,17 +334,34 @@ class Eucaops(Eutester,Eucaops_api):
 
         if poll_count == 0:
             self.fail(str(volume) + " left in " +  volume.status)
-            return volume
+            return False
+        return True
     
     def delete_all_volumes(self):
         volumes = self.ec2.get_all_volumes()
         for volume in volumes:
             self.delete_volume(volume.id)
     
+    def attach_volume(self, instance, volume, device_path):
+        volume.attach(instance.id,device_path )
+        self.sleep(20)
+        poll_count = 10
+        volume.update()
+        while ( volume.status != "in-use") and (poll_count > 0):
+            poll_count -= 1
+            volume.update()
+            self.debug( str(volume) + " in " + volume.status )
+            self.sleep(10)
+
+        if poll_count == 0:
+            self.fail(str(volume) + " left in " +  volume.status)
+            return False
+        return True
+    
     def detach_volume(self, volume):
         if volume == None:
             self.fail("Volume does not exist")
-            return volume
+            return False
         volume.detach()
         volume.update()
         self.debug( "Sent detach for volume: " + volume.id + " which is currently in state: " + volume.status)
@@ -357,7 +374,7 @@ class Eucaops(Eutester,Eucaops_api):
         self.debug(str(volume) + " left in " +  volume.status)
         if poll_count == 0:
             self.fail(str(volume) + " left in " +  volume.status)
-        return volume
+        return True
     
     def create_snapshot(self, volume_id, description="", waitOnProgress=0, poll_interval=10, timeout=0):
         """
@@ -551,7 +568,10 @@ class Eucaops(Eutester,Eucaops_api):
             return False
         else:
             return True
-            
+    
+    def check_device(self, device_path):
+        return self.found("ls -1 " + device_path, device_path)
+        
     def get_volume(self, volume_id="vol-", status=None, attached_instance=None, attached_dev=None, snapid=None, zone=None, minsize=1, maxsize=None):
         '''
         Return first volume that matches the criteria. Criteria options to be matched:
@@ -709,6 +729,9 @@ class Eucaops(Eutester,Eucaops_api):
             if self.wait_for_reservation(reservation, state="terminated") is False:
                 aggregate_result = False
         return aggregate_result
+           
+    def get_metadata(self, element_path):
+        return self.sys("curl http://169.254.169.254/latest/meta-data/" + element_path)
             
     def modify_property(self, property, value):
         """
