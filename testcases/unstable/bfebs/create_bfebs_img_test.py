@@ -98,12 +98,12 @@ if __name__ == '__main__':
         name = "bfebs_"+(url.split('/').pop())
         
     pmsg("url:"+str(url)+"\nimg:"+str(img)+"\nuser:"+str(user)+"\naccount:"+str(account)+"\nzone:"+str(zone)+"\ntype:"+str(itype)+"\ngroup:"+str(group_name)+
-             "\nprefix:" + str(prefix)+"\nwindows:"+str(windows)+"\nname:"+str(name)+"\ndot:"+str(dot)+"\nmd5sum:"+str(md5sum))
+             "\nprefix:" + str(prefix)+"\nwindows:"+str(windows)+"\nname:"+str(name)+"\ndot:"+str(dot)+"\nmd5sum:"+str(md5sum)+"\nconfig:"+str(config))
     
     #Define the bytes per gig
     gig = 1073741824
     #Define timeout based on gig, for transfer disk writing,etc.
-    time_per_gig = 180
+    time_per_gig = 300
     #Number of ping attempts used to test instance state, before giving up on a running instance 
     ping_retry=100
     #The Eucalyptus cloud  tester object 
@@ -142,7 +142,8 @@ if __name__ == '__main__':
         conn.request("HEAD", path)  
         res=conn.getresponse()
         fbytes=int(res.getheader('content-length'))
-        rfsize= ((fbytes/gig) or 1)
+        pmsg("content-length:"+str(fbytes))
+        rfsize= ( ((fbytes/gig)+1) or 1)
         pmsg("Remote file size: "+ str(rfsize) + "g")
         conn.close() 
     except Exception, e:
@@ -158,7 +159,7 @@ if __name__ == '__main__':
         
             #Launch an instance from the emi we've retrieved, instance is returned in the running state
             tester.poll_count = 96 
-            reservation=tester.run_instance(image, keypair=keypair.name, group=group_name,zone=zone)
+            reservation=tester.run_instance(image, keypair=keypair.name, group=group_name,zone=zone, )
             if (reservation is not None):
                 instance = reservation.instances[0]
                 pmsg("Launched instance:"+instance.id)
@@ -169,19 +170,25 @@ if __name__ == '__main__':
             #Attempt to ping the instance before logging into it...
             retry=0
             while (retry <= ping_retry):
+                time.sleep(2)
                 retry += 1
-                out=tester.sys('if `ping '+instance.ip_address + ' -w 5 -c 1 > /dev/null`; then echo -n true; else echo -n false; fi')[0]
-                out = str(out)
-                pmsg("Attempts("+str(retry)+" of "+str(ping_retry)+") ping result:"+out)
-                if ( re.match( out, 'true')):
-                    pmsg("\npinged instance:"+instance.id+" at "+instance.ip_address+" after "+str(retry)+" attempts\n\n")
-                    break
+                instance.update()
+                if (instance.ip_address == "0.0.0.0"):
+                  pmsg("instance ip is 0.0.0.0")
+                else:
+                  out=tester.sys('if `ping '+instance.ip_address + ' -w 5 -c 1 > /dev/null`; then echo -n true; else echo -n false; fi')[0]
+                  out = str(out)
+                  pmsg("Attempts("+str(retry)+" of "+str(ping_retry)+") ping result:"+out)
+                  if ( re.match( out, 'true')):
+                      pmsg("\npinged instance:"+instance.id+" at "+instance.ip_address+" after "+str(retry)+" attempts\n\n")
+                      break
             if (retry == ping_retry):
                 raise Exception("Could not ping instance after"+str(retry)+"attempts")
             
             #give the instance a few more seconds before trying to ssh
             pmsg("\n\nAttempting to connect to instance\n\n")
-            time.sleep(5)
+            time.sleep(10)
+      
             inst_conn=Eucaops(hostname=instance.ip_address, keypath=keypath, user="root")
             
             #Get the contents of /dev before the attachment to compare to post attachment
@@ -209,13 +216,20 @@ if __name__ == '__main__':
             
         
         pmsg("Sleeping and waiting for volume to attach fully to instance")
-        tester.sleep(10)
-        after_attach = inst_conn.sys("ls -1 /dev/")
+        tester.sleep(20)
+        for x in range(0,10):
+          after_attach = inst_conn.sys("ls -1 /dev/")
         
-        #The attached device should be the difference in our /dev snapshots
-        new_devices = tester.diff(after_attach, before_attach)
+          #The attached device should be the difference in our /dev snapshots
+          new_devices = tester.diff(after_attach, before_attach)
+          if new_devices == []:
+              pmsg(" Attempt "+str(x)+" Volume attached but not found on guest" + str(instance) )
+          else:
+              break
+          time.sleep(5)
+         
         if new_devices == []:
-            raise Exception("Volume attached but not found on guest" + str(instance) )
+            raise Exception("Fail, Volume attached but not found on guest" + str(instance) )
         attached_block_dev =  "/dev/"+new_devices[0].strip()
         pmsg("Attached to guest dev:"+attached_block_dev+"\nSplat our remote image into volume")
         
@@ -230,8 +244,11 @@ if __name__ == '__main__':
             
         #Download the remote image, write it directly to our volume
         cmd="curl "+url+" > "+attached_block_dev+" && echo 'GOOD' && sync"
-        result=inst_conn.sys(cmd ,  timeout=timeout)[0]
-        result = result.split(' ')[0]
+        try:
+          result=inst_conn.sys(cmd,  timeout=timeout)[0]
+          result = result.split(' ')[0]
+        except Exception, e:
+            raise Exception("failed to curl image into block dev: "+str(e))
         #Make sure the curl command did not return error
         if (re.match('GOOD',result)):
             pmsg("Our write to volume returned GOOD")
