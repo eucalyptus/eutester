@@ -106,7 +106,7 @@ if __name__ == '__main__':
     time_per_gig = 300
     #Number of ping attempts used to test instance state, before giving up on a running instance 
     ping_retry=100
-    #The Eucalyptus cloud  tester object 
+    #The eutester cloud tester object 
     tester = Eucaops( hostname="clc",password="foobar", user=user, account=account,config_file=config)
     
     #sets tester to throw exception upon failure

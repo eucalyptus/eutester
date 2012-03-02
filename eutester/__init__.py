@@ -38,7 +38,9 @@ __version__ = '0.0.1'
 import re
 import os
 import subprocess
+import threading
 import paramiko
+import select
 import boto
 import random
 import time
@@ -47,6 +49,8 @@ import copy
 from threading import Thread
 
 from boto.ec2.regioninfo import RegionInfo
+from boto.s3.connection import OrdinaryCallingFormat
+
 from bm_machine import bm_machine
 import eulogger
 
@@ -55,7 +59,7 @@ class TimeoutFunctionException(Exception):
     pass 
 
 class Eutester(object):
-    def __init__(self, config_file=None, hostname=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, account="eucalyptus",  user="admin", boto_debug=2):
+    def __init__(self, config_file=None, hostname=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, account="eucalyptus",  user="admin", boto_debug=0):
         """  
         EUCADIR => $eucadir, 
         VERIFY_LEVEL => $verify_level, 
@@ -89,47 +93,52 @@ class Eutester(object):
         self.start_time = time.time()
         self.key_dir = "./"
         self.account_id = 0000000000001
+        self.hypervisor = None
         
-        ##### LOGGING 
+        
+        ##### Euca Logs 
         self.cloud_log_buffer = ''
         self.cc_log_buffer  = ''
         self.nc_log_buffer = ''
-        self.cloud_log_process = None
-        self.cc_log_process = None
-        self.nc_log_process = None
-        ### EUCALOGGER
-        self.logger = eulogger.Eulogger(name='euca').log
+        self.sc_log_buffer = ''
+        self.walrus_log_buffer = ''
+        self.logging_thread = False
         
+        ### Eutester logs
+        self.logger = eulogger.Eulogger(name= "eutester")
+        self.debug = self.logger.log.debug
+        self.critical = self.logger.log.critical
+        self.info = self.logger.log.info
         ### LOGS to keep for printing later
         self.fail_log = []
-        self.running_log = []
+        self.running_log = self.logger.log
         
         ### SSH Channels for tailing log files
         self.cloud_log_channel = None
         self.cc_log_channel= None
         self.nc_log_channel= None
-       
-        
-        ## CHOOSE A RANDOM HOST OF THIS COMPONENT TYPE
-        
+
         ### If I have a config file
         ### PRIVATE CLOUD
         if self.config_file != None:
             ## read in the config file
+            self.debug("Reading config file: " + config_file)
             self.config = self.read_config(config_file)
-            
             ### Set the eucapath
             if "REPO" in self.config["machines"][0].source:
                 self.eucapath="/"
             ### swap in the hostname of the component 
-            self.hostname = self.swap_component_hostname(self.hostname)
-        
+            self.hostname = self.swap_component_hostname(self.current_ssh)
+            self.debug("Hostname for SSH connection: " + self.hostname)
+            self.hypervisor = self.get_hypervisor()
+            
         ## IF I WASNT PROVIDED KEY TRY TO GET THEM FROM THE EUCARC IN CREDPATH
         ### PRIVATE CLOUD
         if (self.password != None) or (self.keypath != None):
             client = paramiko.SSHClient()
-            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())            
-            if keypath == None:
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            self.debug("Issuing SSH connection root@" +  self.hostname )            
+            if keypath == None:   
                 client.connect(self.hostname, username="root", password=password, timeout= self.timeout)
             else:
                 client.connect(self.hostname,  username="root", key_filename=keypath, timeout= self.timeout)
@@ -141,6 +150,7 @@ class Eutester(object):
         if (self.credpath == None) and (self.ssh != None) and (self.password != None):
                 self.credpath = self.get_credentials(account,user) 
         
+
         ### If i have a credpath
         if (self.credpath != None):         
             aws_access_key_id = self.get_access_key()
@@ -151,6 +161,7 @@ class Eutester(object):
            self.ec2 = boto.connect_ec2(aws_access_key_id=aws_access_key_id,
                                         aws_secret_access_key=aws_secret_access_key,
                                         is_secure=False,
+                                        api_version = '2009-11-30',
                                         region=RegionInfo(name="eucalyptus", endpoint=self.get_clc_ip()),
                                         port=8773,
                                         path="/services/Eucalyptus",
@@ -158,11 +169,22 @@ class Eutester(object):
            self.walrus = boto.connect_s3(aws_access_key_id=aws_access_key_id,
                                           aws_secret_access_key=aws_secret_access_key,
                                           is_secure=False,
-                                          host=self.get_clc_ip(),
+                                          host=self.get_walrus_ip(),
                                           port=8773,
                                           path="/services/Walrus",
+                                          calling_format=OrdinaryCallingFormat(),
                                           debug=self.boto_debug)
-
+           self.euare = boto.connect_iam(aws_access_key_id=aws_access_key_id,
+                                          aws_secret_access_key=aws_secret_access_key,
+                                          is_secure=False,
+                                          host=self.get_clc_ip(),
+                                          port=8773,
+                                          path="/services/Euare",
+                                          debug=self.boto_debug)
+    
+    def __del__(self):
+        self.logging_thread = False
+    
     def read_config(self, filepath):
         config_hash = {}
         machines = []
@@ -170,8 +192,8 @@ class Eutester(object):
         try:
             f = open(filepath, 'r')
         except IOError as (errno, strerror):
-            self.tee( "ERROR: Could not find config file " + self.config_file)
-            exit(1)
+            self.debug( "ERROR: Could not find config file " + self.config_file)
+            raise
             
         for line in f:
             ### LOOK for the line that is defining a machine description
@@ -192,10 +214,23 @@ class Eutester(object):
                 machines.append(machine)
                # print machine
             if line.find("NETWORK"):
-                config_hash["network"] = line.strip()
+                config_hash["network"] = line.strip() 
         config_hash["machines"] = machines 
         return config_hash
-
+    
+    def get_hypervisor(self):
+        ncs = self.get_component_machines("nc00")
+        if re.search("vmware", ncs[0].distro, re.IGNORECASE):
+            return "vmware"
+        elif re.search("rhel", ncs[0].distro, re.IGNORECASE) or re.search("centos", ncs[0].distro, re.IGNORECASE):
+            if re.search("6\.", ncs[0].distro_ver, re.IGNORECASE):
+                return "kvm"
+            if re.search("5\.", ncs[0].distro_ver, re.IGNORECASE):
+                return "xen"
+        elif re.search("ubuntu", ncs[0].distro, re.IGNORECASE):
+            return "kvm" 
+        
+            
     def get_component_ip(self, component):
         #loop through machines looking for this component type
         component.lower()
@@ -208,7 +243,7 @@ class Eutester(object):
     def get_component_machines(self, component):
         #loop through machines looking for this component type
         component.lower()
-        machines_with_role = [machine.hostname for machine in self.config['machines'] if component in machine.components]
+        machines_with_role = [machine for machine in self.config['machines'] if component in machine.components]
         if len(machines_with_role) == 0:
             raise Exception("Could not find component "  + component + " in list of machines")
         else:
@@ -279,47 +314,80 @@ class Eutester(object):
             client.connect(hostname,  username=username, key_filename=keypath)
         return client
     
-    def start_euca_logs(self):
-        """CURRENTLY ONLY WORKS ON CC00 AND CLC AND  the first NC00""" 
-        self.tee( "Starting logging")
-        previous_ssh = self.current_ssh
-        ## START CLOUD Log       
-        self.swap_ssh("clc")        
-        self.cloud_log_channel = self.ssh.invoke_shell()
-        self.cloud_log_channel.send("tail -f "  + self.eucapath + "/var/log/eucalyptus/cloud-output.log > cloud-test.log & \n")
+    def poll_euca_logs(self):
+        self.debug( "Starting to poll Eucalyptus Logs")
+        ## START CLOUD Log
+        cloud_ssh =  self.create_ssh("clc", password=self.password)          
+        self.cloud_log_channel = cloud_ssh.invoke_shell()
+        self.cloud_log_channel.send("tail -f "  + self.eucapath + "/var/log/eucalyptus/cloud-output.log \n")
+        ### START WALRUS Log    
+        walrus_ssh =  self.create_ssh("ws", password=self.password)
+        self.walrus_log_channel = walrus_ssh.invoke_shell()
+        self.walrus_log_channel.send("tail -f "  + self.eucapath + "/var/log/eucalyptus/cloud-output.log \n")
         ## START CC Log
-        self.swap_ssh("cc00")
-        self.cc_log_channel = self.ssh.invoke_shell()
-        self.cc_log_channel.send("tail -f "  + self.eucapath + "/var/log/eucalyptus/cc.log > cc-test.log &\n") 
-        self.cc_log_channel.close()
-        #self.cc_log_process = Thread(target=poll_euca_logs, args=(self, "cc00",))      
-        #self.cc_log_process.start()
+        cluster_ssh =  self.create_ssh("cc00", password=self.password)
+        self.cc_log_channel = cluster_ssh.invoke_shell()
+        self.cc_log_channel.send("tail -f "  + self.eucapath + "/var/log/eucalyptus/cc.log \n")
+        ## START SC Log
+        storage_ssh =  self.create_ssh("sc00", password=self.password)
+        self.sc_log_channel = storage_ssh.invoke_shell()
+        self.sc_log_channel.send("tail -f "  + self.eucapath + "/var/log/eucalyptus/cloud-output.log \n")
         ## START NC LOG
-        self.swap_ssh("nc00") 
-        self.nc_log_channel = self.ssh.invoke_shell()
-        self.nc_log_channel.send("tail -f "  + self.eucapath + "/var/log/eucalyptus/nc.log > nc-test.log &\n")
-        self.nc_log_channel.close()
-        #self.nc_log_process = Thread(target=poll_euca_logs, args=(self,"nc00",))   
-        #self.nc_log_process.start()
-        self.swap_ssh(previous_ssh)
+        nc_ssh =  self.create_ssh("nc00", password=self.password)
+        self.nc_log_channel = nc_ssh.invoke_shell()
+        self.nc_log_channel.send("tail -f "  + self.eucapath + "/var/log/eucalyptus/nc.log \n")
+        self.logging_thread = True
         
-    def get_euca_logs(self, component="cloud"):
-        ## in case there is any delay in the logs propagating
-        #if component == "cloud": 
-            print "Gathering log on CLC"
-            previous_ssh = self.current_ssh
-            ## START CLOUD Log       
-            self.swap_ssh("clc") 
-            self.cloud_log_buffer = "\n".join(self.sys("tail -200 "  + self.eucapath + "/var/log/eucalyptus/cloud-output.log",verbose=0))
-        #if component == "cc00":
-            print "Gathering log on CC00"
-            self.swap_ssh("cc00")
-            self.cc_log_buffer = "\n".join(self.sys("tail -200 "  + self.eucapath + "/var/log/eucalyptus/cc.log",verbose=0))
-        #if component == "nc00":
-            print "Gathering log on NC00"
-            self.swap_ssh("nc00") 
-            self.nc_log_buffer = "\n".join(self.sys("tail -200 "  + self.eucapath + "/var/log/eucalyptus/nc.log",verbose=0))
-            self.swap_ssh(previous_ssh)
+        ### Begin polling channel for any new data
+        while self.logging_thread:
+            ### CLOUD LOG
+            rl, wl, xl = select.select([self.cloud_log_channel],[],[],0.0)
+            if len(rl) > 0:
+                self.cloud_log_buffer += self.cloud_log_channel.recv(1024)
+            ### CC LOG
+            rl, wl, xl = select.select([self.cc_log_channel],[],[],0.0)
+            if len(rl) > 0:
+                self.cc_log_buffer += self.cc_log_channel.recv(1024)
+            ### SC LOG
+            rl, wl, xl = select.select([self.sc_log_channel],[],[],0.0)
+            if len(rl) > 0:
+                self.sc_log_buffer += self.sc_log_channel.recv(1024)
+            ### WALRUS LOG
+            rl, wl, xl = select.select([self.walrus_log_channel],[],[],0.0)
+            if len(rl) > 0:
+                self.walrus_log_buffer += self.walrus_log_channel.recv(1024)
+            ### NC LOG
+            rl, wl, xl = select.select([self.nc_log_channel],[],[],0.0)
+            if len(rl) > 0:
+                self.nc_log_buffer += self.nc_log_channel.recv(1024)
+            self.sleep(1)
+            
+    def start_euca_logs(self):
+        '''Start thread to poll logs''' 
+        threading.Thread(target=self.poll_euca_logs, args=()).start()
+        
+    def stop_euca_logs(self):
+        '''Terminate thread that is polling logs''' 
+        self.logging_thread = False
+        
+    def save_euca_logs(self):
+        '''Save log buffers to a file''' 
+        FILE = open("clc.log","w")
+        FILE.writelines(self.cloud_log_buffer)
+        FILE.close()
+        FILE = open("walrus.log","w")
+        FILE.writelines(self.walrus_log_buffer)
+        FILE.close()
+        FILE = open("cc.log","w")
+        FILE.writelines(self.cc_log_buffer)
+        FILE.close()
+        FILE = open("sc.log","w")
+        FILE.writelines(self.sc_log_buffer)
+        FILE.close()
+        FILE = open("nc.log","w")
+        FILE.writelines(self.nc_log_buffer)
+        FILE.close()
+            
                 
     def grep_euca_log(self,component="cloud", regex="ERROR" ):
         previous_ssh = self.current_ssh
@@ -344,7 +412,6 @@ class Eutester(object):
         self.get_euca_logs()
         full_report.append("Test run started at " + str(self.start_time) + "\n\n\n")
         full_report.append("Failures " + str(self.fail_count) + "\n")
-        full_report.append("Running Log: " + "\n".join(self.running_log) + "\n\n\n")
         full_report.append("CLC Log:\n" + self.cloud_log_buffer + "\n\n\n") 
         full_report.append("CC00 Log:\n" + self.cc_log_buffer + "\n\n\n")
         full_report.append("NC00 Log:\n" + self.nc_log_buffer + "\n\n\n")
@@ -355,6 +422,7 @@ class Eutester(object):
         
     def swap_ssh(self, hostname, password=None, keypath=None):
         self.ssh = self.create_ssh(hostname, password=password, keypath=keypath, username="root")
+        self.sftp = self.ssh.open_sftp()
         self.current_ssh = hostname
         return self.ssh               
                                
@@ -367,7 +435,6 @@ class Eutester(object):
         # -1 should be reserved for "no timeout" option
         if timeout == -2:
             timeout = self.timeout
-        #print "Using timeout of " + str(timeout)
         time.sleep(self.delay)
         old = signal.signal(signal.SIGALRM, self.handle_timeout) 
         signal.alarm(timeout) 
@@ -377,15 +444,11 @@ class Eutester(object):
         if verbose:
             if self.ssh == None:
                 self.hostname ="localhost"
-            self.tee( "[root@" + str(self.hostname) + "-" + str(cur_time) +"]# " + cmd)
+            self.debug( "[root@" + str(self.hostname) + "]# " + cmd)
         try:
             
             if self.ssh == None:
-                for item in os.popen("ls").readlines():
-                    if re.match(self.credpath,item):
-                        cmd = ". " + self.credpath + "/eucarc && " + cmd
-                        break
-                std_out_return = os.popen(cmd).readlines()
+                std_out_return = self.local(cmd)
             else:
                 stdin_ls, stdout_ls, stderr_ls = self.ssh.exec_command("ls")
                 ls_result = stdout_ls.readlines()
@@ -402,11 +465,21 @@ class Eutester(object):
             return []
         signal.alarm(0)      
         if verbose:
-            self.tee("".join(std_out_return))
+            self.debug("".join(std_out_return))
         return std_out_return
 
-    def found(self, command, regex):
-        result = self.sys(command)
+    def local(self, cmd):
+        for item in os.popen("ls").readlines():
+            if re.match(self.credpath,item):
+                cmd = ". " + self.credpath + "/eucarc && " + cmd
+        std_out_return = os.popen(cmd).readlines()
+        return std_out_return
+    
+    def found(self, command, regex, local=False):
+        if local:
+            result = self.local(cmd)
+        else:
+            result = self.sys(command)
         for line in result:
             found = re.search(regex,line)
             if found:
@@ -416,20 +489,16 @@ class Eutester(object):
     def grep(self, string,list):
         expr = re.compile(string)
         return filter(expr.search,list)
-    
-    def tee(self, message):
-        print message
-        self.running_log.append(message)
         
-    
     def diff(self, list1, list2):
-        return [item for item in list1 if not item in list2]
+        return list(set(list1)-set(list2))
     
     def test_name(self, message):
-        self.tee("[TEST_REPORT] " + message)
+        self.debug("[TEST_REPORT] " + message)
     
     def fail(self, message):
-        self.tee( "[TEST_REPORT] FAILED: " + message)
+        #self.debug( "[TEST_REPORT] FAILED: " + message)
+        self.critical("[TEST_REPORT] FAILED: " + message)
         self.fail_log.append(message)
         self.fail_count += 1
         if self.exit_on_fail == 1:
@@ -454,12 +523,7 @@ class Eutester(object):
             exit_report += "*" + "            " + message + "\n"
         exit_report += "*" + "    Time to execute: " + str(self.get_exectuion_time()) +"\n"
         exit_report += "******************************************************\n"           
-        self.tee( exit_report)
-        #try:
-        #    subprocess.call(["rm", "-rf", self.credpath])
-        #except Exception, e:
-        #    print "No need to delete creds"
-            
+        self.debug( exit_report)    
         if self.fail_count > 0:
             exit(1)
         else:
@@ -479,3 +543,4 @@ class Eutester(object):
         s += "+" + "Credential Path: " +  str(self.credpath) +"\n"
         s += "+++++++++++++++++++++++++++++++++++++++++++++++++++++\n"
         return s
+
