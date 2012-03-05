@@ -307,7 +307,10 @@ class Eucaops(Eutester):
             poll_count -= 1
             time.sleep(poll_interval)
             volume.update()
-            self.debug( str(volume) + " in " + volume.status +" state")   
+            self.debug( str(volume) + " in " + volume.status +" state") 
+            if volume.status == 'failed':
+                self.fail(str(volume) + " went to: " + volume.status)
+                return None  
         if poll_count == 0:
             self.fail(str(volume) + " never went to available and stayed in " + volume.status)
             self.debug( "Deleting volume that never became available")
