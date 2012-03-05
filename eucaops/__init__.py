@@ -122,7 +122,7 @@ class Eucaops(Eutester):
         try:
             self.walrus.get_bucket(bucket).get_key(name)
             self.fail("Walrus bucket still exists after delete")
-        except Excetption, e:
+        except Exception, e:
             return
         
     
@@ -307,7 +307,10 @@ class Eucaops(Eutester):
             poll_count -= 1
             time.sleep(poll_interval)
             volume.update()
-            self.debug( str(volume) + " in " + volume.status +" state")   
+            self.debug( str(volume) + " in " + volume.status +" state") 
+            if volume.status == 'failed':
+                self.fail(str(volume) + " went to: " + volume.status)
+                return None  
         if poll_count == 0:
             self.fail(str(volume) + " never went to available and stayed in " + volume.status)
             self.debug( "Deleting volume that never became available")
@@ -552,7 +555,7 @@ class Eucaops(Eutester):
             self.debug("Attemtping to associate " + str(address) + " from " + str(instance))
             address.associate(instance.id)
         except Exception as (errno, strerror):
-            self.critical("Unable to associate address\n" + str(e))
+            self.critical("Unable to associate address\n")
             self.critical( "Exception({0}): {1}".format(errno, strerror))
             return False
         self.debug("Associated IP successfully")
@@ -659,7 +662,7 @@ class Eucaops(Eutester):
         self.debug( "Attempting to run image " + str(image) + " in group " + group)
         reservation = image.run(key_name=keypair,security_groups=[group],instance_type=type, placement=zone, min_count=min, max_count=max)
         if ((len(reservation.instances) < min) or (len(reservation.instances) > max)):
-            self.fail("Reservation:"+str(res.id)+" returned "+str(len(reservation.instances))+" instances, not within min("+str(min)+") and max("+str(max)+" ")
+            self.fail("Reservation:"+str(reservation.id)+" returned "+str(len(reservation.instances))+" instances, not within min("+str(min)+") and max("+str(max)+" ")
             
         self.wait_for_reservation(reservation)
         for instance in reservation.instances:
