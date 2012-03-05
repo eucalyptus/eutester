@@ -1,6 +1,4 @@
 from eutester import Eutester
-from eucaops_api import Eucaops_api
-from boto.ec2.blockdevicemapping import BlockDeviceMapping, BlockDeviceType
 import time
 import re
 import sys
@@ -9,8 +7,9 @@ import boto
 from boto.ec2.image import Image
 from boto.ec2.instance import Reservation
 from boto.ec2.volume import Volume
+from boto.ec2.blockdevicemapping import BlockDeviceMapping, BlockDeviceType
 
-class Eucaops(Eutester,Eucaops_api):
+class Eucaops(Eutester):
     
     def __init__(self, config_file=None, hostname=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,account="eucalyptus",user="admin", boto_debug=0):
         super(Eucaops, self).__init__(config_file, hostname, password, keypath, credpath, aws_access_key_id, aws_secret_access_key,account, user, boto_debug)
@@ -224,6 +223,7 @@ class Eucaops(Eutester,Eucaops_api):
         try:
             self.debug( "Attempting authorization of group" )
             self.ec2.authorize_security_group_deprecated(group_name,ip_protocol=protocol, from_port=port, to_port=port, cidr_ip=cidr_ip)
+            return True
         except self.ec2.ResponseError, e:
             if e.code == 'InvalidPermission.Duplicate':
                 self.debug( 'Security Group: %s already authorized' % group_name )
@@ -338,11 +338,20 @@ class Eucaops(Eutester,Eucaops_api):
         return True
     
     def delete_all_volumes(self):
+        """
+        Deletes all volumes on the cloud
+        """
         volumes = self.ec2.get_all_volumes()
         for volume in volumes:
             self.delete_volume(volume.id)
     
     def attach_volume(self, instance, volume, device_path):
+        """
+        Attach a volume to an instance
+        instance    instance object to attach volume to
+        volume      volume object to attach
+        device_path device name to request on guest
+        """
         volume.attach(instance.id,device_path )
         self.sleep(20)
         poll_count = 10
@@ -359,6 +368,10 @@ class Eucaops(Eutester,Eucaops_api):
         return True
     
     def detach_volume(self, volume):
+        """
+        Detach a volume
+        volume   volume to detach
+        """
         if volume == None:
             self.fail("Volume does not exist")
             return False
@@ -424,6 +437,7 @@ class Eucaops(Eutester,Eucaops_api):
         
     
     def delete_snapshot(self,snapshot):
+        """Delete the snapshot object"""
         snapshot.delete()
         self.debug( "Sent snapshot delete request for snapshot: " + snapshot.id)
         poll_count = 5
@@ -434,7 +448,11 @@ class Eucaops(Eutester,Eucaops_api):
             self.fail(str(snapshot) + " left in " +  snapshot.status + " with " + str(snapshot.progress) + "% progress")
         return snapshot
     
-    def register_snapshot( self, snap_id, rdn="/dev/sda1", description="bfebs", windows=False, bdmdev=None, name=None, ramdisk=None, kernel=None, dot=True ):
+    def register_snapshot(self, snapshot, rdn="/dev/sda1", description="bfebs", windows=False, bdmdev=None, name=None, ramdisk=None, kernel=None, dot=True):
+        '''Convience function for passing a snapshot instead of its id'''
+        return self.register_snapshot_by_id( snapshot.id, rdn, description, windows, bdmdev, name, ramdisk, kernel, dot )
+        
+    def register_snapshot_by_id( self, snap_id, rdn="/dev/sda1", description="bfebs", windows=False, bdmdev=None, name=None, ramdisk=None, kernel=None, dot=True ):
         '''
         Register an image snapshot
         snap_id        (mandatory string) snapshot id
@@ -450,7 +468,7 @@ class Eucaops(Eutester,Eucaops_api):
         if (bdmdev is None):
             bdmdev=rdn
         if (name is None):
-            name="bfebs_"+snap_id
+            name="bfebs_"+ snap_id
         if ( windows is True ) and ( kernel is not None):
             kernel="windows"     
             
@@ -462,6 +480,7 @@ class Eucaops(Eutester,Eucaops_api):
             
         self.debug("Register image with: snap_id:"+str(snap_id)+", rdn:"+str(rdn)+", desc:"+str(description)+", windows:"+str(windows)+", bdname:"+str(bdmdev)+", name:"+str(name)+", ramdisk:"+str(ramdisk)+", kernel:"+str(kernel))
         image_id = self.ec2.register_image(name=name, description=description, kernel_id=kernel, ramdisk_id=ramdisk, block_device_map=bdmap, root_device_name=rdn)
+        self.debug("Image now registered as " + image_id)
         return image_id
         
     def register_image( self, snap_id, rdn=None, description=None, image_location=None, windows=False, bdmdev=None, name=None, ramdisk=None, kernel=None ):
@@ -515,6 +534,9 @@ class Eucaops(Eutester,Eucaops_api):
         return None
     
     def allocate_address(self):
+        """
+        Allocate an address for the current user
+        """
         try:
             self.debug("Allocating an address")
             address = self.ec2.allocate_address()
@@ -525,6 +547,7 @@ class Eucaops(Eutester,Eucaops_api):
         return address
     
     def associate_address(self,instance, address):
+        """ Associate an address with an instance"""
         try:
             self.debug("Attemtping to associate " + str(address) + " from " + str(instance))
             address.associate(instance.id)
@@ -536,6 +559,8 @@ class Eucaops(Eutester,Eucaops_api):
         return address
     
     def disassociate_address_from_instance(self, instance):
+        """Disassociate address from instance and ensure that it no longer holds the IP
+        instance     An instance that has an IP allocated"""
         address = self.ec2.get_all_addresses(addresses=[instance.public_dns_name])[0]
         try:
             address.disassociate()
@@ -544,32 +569,37 @@ class Eucaops(Eutester,Eucaops_api):
             return False
         self.sleep(20)
         address = self.ec2.get_all_addresses(addresses=[instance.public_dns_name])
-        if address.instance_id is instance.public_dns_name:
+        if address.instance_id is instance.id:
             self.critical("Address still associated with instance")
             return False
         return True
         
     
-    def ping(self, address):
-        '''Ping an IP and retry a few times'''
-        poll_count = 10 
+    def ping(self, address, poll_count = 10):
+        '''
+        Ping an IP and poll_count times (Default = 10)
+        address      Hostname to ping
+        poll_count   The amount of times to try to ping the hostname iwth 2 second gaps in between
+        ''' 
         found = False
+        if re.search("0.0.0.0", address): 
+            self.critical("Address is all 0s and will not be able to ping it") 
+            return False
         self.debug("Attempting to ping " + address)
         while (poll_count > 0):
-            poll_count -= 1
+            poll_count -= 1 
             if self.found("ping -c 1 " + address, "1 received"):
                 self.debug("Was able to ping address")
-                break
+                return True
+            if poll_count == 0:
+                self.critical("Was unable to ping address")
+                return False
             self.debug("Ping unsuccessful retrying in 2 seconds")
             self.sleep(2)
             
-        if poll_count == 0:
-            self.critical("Was unable to ping address " + address + " after " + str(poll_count * 2) + " seconds")
-            return False
-        else:
-            return True
     
     def check_device(self, device_path):
+        """Used with instance connections. Checks if a device at a certain path exists"""
         return self.found("ls -1 " + device_path, device_path)
         
     def get_volume(self, volume_id="vol-", status=None, attached_instance=None, attached_dev=None, snapid=None, zone=None, minsize=1, maxsize=None):
@@ -675,36 +705,27 @@ class Eucaops(Eutester,Eucaops_api):
         self.debug("Finding available VMs: Partition=" + zone +" Type= " + type + " Number=" +  str(int(type_state[0])) )
         return int(type_state[0])
     
+
     def release_address(self, ip=None):
         """
         Release all addresses or a particular IP
         ip        IP to release
         """   
-        if ip==None:
-            ## Clear out all addresses found
-            self.debug( "Releasing all used addresses")
-            address_output = self.sys("euca-describe-addresses")
-            addresses = self.grep("ADDRESS",address_output)
-            total_addresses = len(addresses)
-            for address in addresses:
-                if re.search("nobody", address) == None:
-                    self.sys("euca-release-address " + address.split()[1] )
-            address_output = self.sys("euca-describe-addresses")
-            free_addresses = self.grep("nobody", address_output)
-            if len(free_addresses) < total_addresses:
-                self.debug( "Some addresses still in use after attempting to release")
-                #self.fail("Some addresses still in use after attempting to release")
-        else:
-            self.debug( "Releasing address " + ip )
-            self.sys("euca-release-address " + ip )
-            address_output = self.sys("euca-describe-addresses")
-            free_addresses = self.grep( ip + ".*nobody", address_output)
-            if len(free_addresses) < 1:
-                self.debug( "Some addresses still in use after attempting to release" )
-                return False
-                #self.fail("Address still in use after attempting to release")
-            else:
-                return True
+        ## Clear out all addresses found
+        self.debug( "Releasing all unassociated and allocated addresses")
+        addresses = self.ec2.get_all_addresses()
+        for address in addresses:
+            ## IF i am searching for a particular IP and this is not it skip it
+            #if (ip is not None) and (address.public_ip is not ip):
+            #    continue
+            if address.allocation_id != None:
+                try:
+                    self.debug("Releasing address: " + str(address))
+                    address.release()
+                except Exception, e:
+                    self.critical("Failed to release the address: " + str(address) + ": " +  str(e))
+                    return False
+        return True
             
     def terminate_instances(self, reservation=None):
         """
@@ -731,6 +752,7 @@ class Eucaops(Eutester,Eucaops_api):
         return aggregate_result
            
     def get_metadata(self, element_path):
+        """Return the lines of metadata from the element path provided"""
         return self.sys("curl http://169.254.169.254/latest/meta-data/" + element_path)
             
     def modify_property(self, property, value):
