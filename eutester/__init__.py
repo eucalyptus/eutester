@@ -399,7 +399,9 @@ class Eutester(object):
             
     def start_euca_logs(self):
         '''Start thread to poll logs''' 
-        self.logging_thread_pool.append(threading.Thread(target=self.poll_euca_logs, args=()).start())
+        thread = threading.Thread(target=self.poll_euca_logs, args=())
+        thread.daemon = True
+        self.logging_thread_pool.append(thread.start())
         
     def stop_euca_logs(self):
         '''Terminate thread that is polling logs''' 
