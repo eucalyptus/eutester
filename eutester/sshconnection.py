@@ -68,7 +68,7 @@ class SshConnection():
             print ( "hostname:"+self.host+"\nuser:"+self.username+"\npassword:"+self.password)
             
         if (self.keypath is not None) or ((self.username is not None) and (self.password is not None)):
-            self.connection = self.ssh_connect(self.host, username=self.username, password=self.password, keypath=self.keypath, timeout=self.timeout)
+            self.connection = self.get_ssh_connection(self.host, username=self.username, password=self.password, keypath=self.keypath, timeout=self.timeout)
         else:
             raise Exception("Need either a keypath or username+password to create ssh connection")
     
@@ -92,18 +92,32 @@ class SshConnection():
         '''
         chan.close()
         elapsed = time.time()-start
-        raise CommandTimeoutException("ssh timer has fired after "+str(elapsed).split('.')[0]+" seconds")    
+        raise CommandTimeoutException("SSH Command timer has fired after scheduled "+str(elapsed).split('.')[0]+" seconds")   
     
-    def cmd(self, cmd, verbose=None, timeout=120):
+     
+    def sys(self, cmd, verbose=None, timeout=120):
+        '''
+        Issue a command cmd and return output in list format
+        cmd - mandatory - string representing the command to be run  against the remote ssh session
+        verbose - optional - will default to global setting, can be set per cmd() as well here
+        timeout - optional - integer used to timeout the overall cmd() operation in case of remote blockingd
+        '''
+        return self.cmd(cmd, verbose=verbose, timeout=timeout, listformat=True)
+    
+    
+    def cmd(self, cmd, verbose=None, timeout=120, listformat=False):
         """ 
         Runs a command 'cmd' within an ssh connection. 
         Upon success returns a list of lines from the output of the command.
         cmd - mandatory - string representing the command to be run  against the remote ssh session
         verbose - optional - will default to global setting, can be set per cmd() as well here
         timeout - optional - integer used to timeout the overall cmd() operation in case of remote blocking
+        listformat - optional - boolean, if set returns output as list of lines, else a single buffer/string
         """
+            
         if verbose is None:
             verbose = self.verbose
+            
         cmd = str(cmd)
         t = None #used for timer 
         start = time.time()
@@ -118,7 +132,12 @@ class SshConnection():
             t = Timer(timeout, self.ssh_sys_timeout,[chan, start] )
             t.start()
             chan.exec_command(cmd)
-            output = f.readlines()
+            if ( listformat is True):
+                #return output as list of lines
+                output = f.readlines()
+            else:
+                #return output as single string buffer
+                output = f.read()
             self.debug("done with exec")
         except CommandTimeoutException, cte: 
             elapsed = str(time.time()-start).split('.')[0]
@@ -135,7 +154,7 @@ class SshConnection():
         
         
     
-    def ssh_connect(self, hostname, username="root", password=None, keypath=None, timeout= 60, retry=1):
+    def get_ssh_connection(self, hostname, username="root", password=None, keypath=None, timeout= 60, retry=1):
         '''
         Create a paramiko ssh session to hostname. Will attempt to authenticate first with a keypath if provided, 
         if the sshkey file path is not provided.  username and password will be used to authenticate. 
@@ -179,12 +198,14 @@ class SshConnection():
     def close(self):     
         self.connection.close()
         
+        
+        
 class CommandTimeoutException(Exception):
     def __init__(self, value):
         self.value = value
     def __str__ (self):
         return repr(self.value)
-    pass
+    
     
     
     
