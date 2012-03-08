@@ -84,11 +84,15 @@ class SshConnection():
             else:
                 self.debugmethod(msg)
     
-    def ssh_sys_timeout(self):
+    def ssh_sys_timeout(self,chan,start):
         '''
         callback to be scheduled during ssh cmds which have timed out. 
+        chan - paramiko channel to be closed 
+        start - time.time() used to calc elapsed time when this fired for debug
         '''
-        raise Exception("ssh timer has fired")    
+        chan.close()
+        elapsed = time.time()-start
+        raise CommandTimeoutException("ssh timer has fired after "+str(elapsed).split('.')[0]+" seconds")    
     
     def cmd(self, cmd, verbose=None, timeout=120):
         """ 
@@ -101,9 +105,7 @@ class SshConnection():
         if verbose is None:
             verbose = self.verbose
         cmd = str(cmd)
-        #schedule an event to timeout this session after timeout seconds 
-        t = Timer(timeout, self.ssh_sys_timeout)
-        t.start()
+        t = None #used for timer 
         start = time.time()
         output = []
         if verbose:
@@ -113,17 +115,21 @@ class SshConnection():
             chan = tran.open_session()
             chan.get_pty()
             f = chan.makefile()
+            t = Timer(timeout, self.ssh_sys_timeout,[chan, start] )
+            t.start()
             chan.exec_command(cmd)
             output = f.readlines()
             self.debug("done with exec")
-        except CommandTimeoutException, e: 
-            self.fail("Command timeout after " + str(timeout) + " seconds\nException") 
-            raise e
+        except CommandTimeoutException, cte: 
+            elapsed = str(time.time()-start).split('.')[0]
+            self.debug("Command ("+cmd+") timed out after " + str(elapsed) + " seconds\nException")     
+            raise cte
         finally:
-            t.cancel()      
+            if (t is not None):
+                t.cancel()          
         if verbose:
-            elapsed = str(time.time()-start)
-            self.debug("stdout after elapsed:"+elapsed+", cmd:"+cmd+":".join(output))
+            elapsed = str(time.time()-start).split('.')[0]
+            self.debug("stdout after "+elapsed+" seconds, cmd=("+cmd+":".join(output)+"):")
        
         return output
         
@@ -178,6 +184,7 @@ class CommandTimeoutException(Exception):
         self.value = value
     def __str__ (self):
         return repr(self.value)
+    pass
     
     
     
