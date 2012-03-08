@@ -51,41 +51,25 @@ class EucaProperties():
                 print (str(msg))
             else:
                 self.debugmethod(msg)
-                
-    def get_property(self, tester, prop):
-        '''
-        Returns a tuple containing the current property value from a eucaops/eutester object, plus the property string. 
-        tester - mandatory - the eucaops/eutester object to fetch the property from
-        prop - mandatory - string representing the property to fetch. 
-        '''
-        return self.get_property_at_tester(prop, eucaops=tester)
-        
-    def get_property_at_tester(self, prop, eucaops=None):
+             
+            
+    def get_property(self, prop):
         '''
         Returns a tuple containing the current property value plus the property string. 
         prop - mandatory - string representing the property to fetch. 
         ecuaops -optional - the eucaops/eutester object to fetch the property from
         '''
-        print "Getting property:"+prop
-        if eucaops is None:
-            eucaops = self.tester
+        self.debug("Getting property:"+prop)
+        eucaops = self.tester
         prop_string = eucaops.sys('euca-describe-properties | grep ' + prop)
         if (prop_string != []):
             value = str(prop_string[0]).split()[2]
         else:
-            raise Exception("describe properties returned null for "+prop)
+            raise EuPropertiesException("describe properties returned null for "+prop)
         return value,prop
     
-    def set_property(self, tester, prop, value):
-        '''
-        Sets the property 'prop' at eucaops/eutester object 'tester' to 'value'
-        tester - mandatory - the eucaops/eutester object to set the property at
-        prop - mandatory - string representing the property to set
-        value - mandatory - string representing the value to set the property to
-        '''
-        return self.set_property_at_tester(prop, value, eucaops=tester)
-        
-    def set_property_at_tester(self,  prop, value, eucaops=None):
+    
+    def set_property(self,  prop, value):
         '''
         Sets the property 'prop' at eucaops/eutester object 'tester' to 'value'    
         Returns new value  
@@ -94,43 +78,46 @@ class EucaProperties():
         eucaops - optional - the eucaops/eutester object to set the property at
         '''
         value = str(value)
-        if eucaops is None:
-            eucaops = self.tester
+        eucaops = self.tester
         self.debug('Setting property('+prop+') to value:'+str(value))
-        ret_string = str(eucaops.sys('euca-modify-property -p '+prop+'='+str(value))[0])
-        ret_value= ret_string.split()[2]
+        ret_string = eucaops.sys('euca-modify-property -p '+prop+'='+str(value))
+        if ( ret_string != [] ):
+            ret_value= str(ret_string[0]).split()[2]
+        else:
+            raise EuPropertiesException("set_property output from modify was None")
+        
         if (ret_value != value):
-            raise Exception("set property("+prop+") to value("+str(value)+") failed.Ret Value ("+str(ret_value)+")\nRet String\n"+ret_string)
+            raise EuPropertiesException("set property("+prop+") to value("+str(value)+") failed.Ret Value ("+str(ret_value)+")\nRet String\n"+ret_string)
+        
         return ret_value
         
-    def reset_property_to_default(self, prop, eucaops=None):
+    def reset_property_to_default(self, prop):
         '''
         Sets a property 'prop' at eucaops/eutester object 'eucaops' to it's default value
         Returns new value
         prop - mandatory - string representing the property to set
         ucaops - optional - the eucaops/eutester object to set the property at
         '''
-        if eucaops is None:
-            eucaops = self.tester
+    
+        eucaops = self.tester
         ret_string = str(eucaops.sys('euca-modify-property -r '+prop)[0])
         ret_value= ret_string.split()[2]
         self.debug('Reset property('+prop+') to default value('+str(ret_value)+')')
         return ret_value
         
-    def get_property_default_value(self, prop, ireadthewarning=False, eucaops=None):
+    def get_property_default_value(self, prop, ireadthewarning=False):
         '''
-        Note: This method is intrusive! It will briefly reset the property
+        Note: This hack method is intrusive! It will briefly reset the property
         This is a temporary method to get a properties default method
         prop - mandatory - string, eucalyptus property
         ireadthewarning - mandatory - boolean, to warn user this method is intrusive 
         '''
         if (ireadthewarning is False):
-            raise Exception("ireadthewarning is set to false in get_property_default_value")
-        if eucaops is None:
-            eucaops = self.tester
-        original = self.get_property(prop, eucaops)
-        default = self.reset_property_to_default(prop, eucaops)
-        self.set_property(prop, original, eucaops)
+            raise EuPropertiesException("ireadthewarning is set to false in get_property_default_value")
+    
+        original = self.get_property(prop)[0]
+        default = self.reset_property_to_default(prop)
+        self.set_property(prop, original)
         return default
     
         
@@ -138,152 +125,165 @@ class EucaProperties():
         
     '''
     ########################################################################
-    STORAGE RELATED PROPERTIES
+    STORAGE RELATED PROPERTY METHODS...
     ########################################################################
     '''
           
     #PARTI00.storage.maxvolumesizeingb
-    def get_max_volume_size_in_gb(self, tester=None, zone='PARTI00'):
-        value = self.get_property(tester, zone+'.storage.maxvolumesizeingb')
+    def get_storage_maxvolumesizeingb(self,  zone='PARTI00'):
+        value = self.get_property(  zone+'.storage.maxvolumesizeingb')
         return value
     
-    def set_max_volume_size_in_gb(self, value, tester=None, zone='PARTI00'):
-        self.set_property(tester, zone+'.storage.maxvolumesizeingb', value)
+    def set_storage_maxvolumesizeingb(self, value, zone='PARTI00'):
+        return self.set_property(  zone+'.storage.maxvolumesizeingb', value)
     
     #PARTI00.storage.maxtotalvolumesizeingb 
-    def get_max_total_volume_size_in_gb(self, tester=None,  zone='PARTI00'): 
-        value = self.get_property(tester, zone+'.storage.maxtotalvolumesizeingb')
+    def get_storage_maxtotalvolumesizeingb(self,   zone='PARTI00'): 
+        value = self.get_property(  zone+'.storage.maxtotalvolumesizeingb')
         return value
     
-    def set_max_total_volume_size_in_gb(self, value, tester=None, zone='PARTI00'):
-        self.set_property(tester, zone+'.storage.maxtotalvolumesizeingb', value)
-        
+    def set_storage_maxtotalvolumesizeingb(self, value,  zone='PARTI00'):
+        value = self.set_property(  zone+'.storage.maxtotalvolumesizeingb', value)
+        return value
+    
     #PARTI00.storage.zerofillvolumes 
-    def get_zerofillvolumes(self, tester=None,  zone='PARTI00'): 
-        value = self.get_property(tester, zone+'.storage.zerofillvolumes')
+    def get_storage_zerofillvolumes(self,   zone='PARTI00'): 
+        value = self.get_property(  zone+'.storage.zerofillvolumes')
         return value
     
-    def set_zerofillvolumes(self, value, tester=None, zone='PARTI00'):
-        self.set_property(tester, zone+'.storage.zerofillvolumes', value)
+    def set_storage_zerofillvolumes(self, value,  zone='PARTI00'):
+        return self.set_property(  zone+'.storage.zerofillvolumes', value)
         
     #PARTI00.storage.volumesdir 
-    def get_volumesdir(self, tester=None,  zone='PARTI00'): 
-        value = self.get_property(tester, zone+'.storage.volumesdir')
+    def get_storage_volumesdir(self,   zone='PARTI00'): 
+        value = self.get_property(  zone+'.storage.volumesdir')
         return value
     
-    def set_volumesdir(self, value, tester=None, zone='PARTI00'):
-        self.set_property(tester, zone+'.storage.volumesdir', value)
+    def set_storage_volumesdir(self, value,  zone='PARTI00'):
+        return self.set_property(  zone+'.storage.volumesdir', value)
         
     #PARTI00.storage.tid
-    def get_storage_tid(self, tester=None,  zone='PARTI00'): 
-        value = self.get_property(tester, zone+'.storage.tid')
+    def get_storage_tid(self,   zone='PARTI00'): 
+        value = self.get_property(  zone+'.storage.tid')
         return value
     
-    def set_storage_tid(self, value, tester=None, zone='PARTI00'):
-        self.set_property(tester, zone+'.storage.tid', value)
+    def set_storage_tid(self, value,  zone='PARTI00'):
+        return self.set_property(  zone+'.storage.tid', value)
     
     #PARTI00.storage.storeprefix
-    def get_storage_storeprefix(self, tester=None,  zone='PARTI00'): 
-        value = self.get_property(tester, zone+'.storage.storeprefix')
+    def get_storage_storeprefix(self,   zone='PARTI00'): 
+        value = self.get_property(  zone+'.storage.storeprefix')
         return value
     
-    def set_storage_storeprefix(self, value, tester=None, zone='PARTI00'):
-        self.set_property(tester, zone+'.storage.storeprefix', value)
+    def set_storage_storeprefix(self, value,  zone='PARTI00'):
+        return self.set_property(  zone+'.storage.storeprefix', value)
     
     #PARTI00.storage.storageinterface
-    def get_storageinterface(self, tester=None,  zone='PARTI00'): 
-        value = self.get_property(tester, zone+'.storage.storageinterface')
+    def get_storageinterface(self,   zone='PARTI00'): 
+        value = self.get_property(  zone+'.storage.storageinterface')
         return value
     
-    def set_storageinterface(self, value, tester=None, zone='PARTI00'):
-        self.set_property(tester, zone+'.storage.storageinterface', value)
+    def set_storageinterface(self, value,  zone='PARTI00'):
+        return self.set_property(  zone+'.storage.storageinterface', value)
     
     #PARTI00.storage.snappercent
-    def get_storage_snappercent(self, tester=None,  zone='PARTI00'): 
-        value = self.get_property(tester, zone+'.storage.snappercent')
+    def get_storage_snappercent(self,   zone='PARTI00'): 
+        value = self.get_property(  zone+'.storage.snappercent')
         return value
     
-    def set_storage_snappercent(self, value, tester=None, zone='PARTI00'):
-        self.set_property(tester, zone+'.storage.snappercent', value)
+    def set_storage_snappercent(self, value,  zone='PARTI00'):
+        return self.set_property(  zone+'.storage.snappercent', value)
         
     #PARTI00.storage.shouldtransfersnapshots
-    def get_storage_shouldtransfersnapshots(self, tester=None,  zone='PARTI00'): 
-        value = self.get_property(tester, zone+'.storage.shouldtransfersnapshots')
+    def get_storage_shouldtransfersnapshots(self,   zone='PARTI00'): 
+        value = self.get_property(  zone+'.storage.shouldtransfersnapshots')
         return value
     
-    def set_storage_shouldtransfersnapshots(self, value, tester=None, zone='PARTI00'):
-        self.set_property(tester, zone+'.storage.shouldtransfersnapshots', value)
+    def set_storage_shouldtransfersnapshots(self, value,  zone='PARTI00'):
+        return self.set_property(  zone+'.storage.shouldtransfersnapshots', value)
         
     #PARTI00.storage.sanuser
-    def get_storage_sanuser(self, tester=None,  zone='PARTI00'): 
-        value = self.get_property(tester, zone+'.storage.sanuser')
+    def get_storage_sanuser(self,   zone='PARTI00'): 
+        value = self.get_property(  zone+'.storage.sanuser')
         return value
     
-    def set_storage_sanuser(self, value, tester=None, zone='PARTI00'):
-        self.set_property(tester, zone+'.storage.sanuser', value)
+    def set_storage_sanuser(self, value,  zone='PARTI00'):
+        return self.set_property(  zone+'.storage.sanuser', value)
     
     #PARTI00.storage.sanpassword
-    def get_storage_sanpassword(self, tester=None,  zone='PARTI00'): 
-        value = self.get_property(tester, zone+'.storage.sanpassword')
+    def get_storage_sanpassword(self,   zone='PARTI00'): 
+        value = self.get_property(  zone+'.storage.sanpassword')
         return value
     
-    def set_storage_sanpassword(self, value, tester=None, zone='PARTI00'):
-        self.set_property(tester, zone+'.storage.sanpassword', value)
+    def set_storage_sanpassword(self, value,  zone='PARTI00'):
+        return self.set_property(  zone+'.storage.sanpassword', value)
         
     #PARTI00.storage.sanhost
-    def get_storage_sanhost(self, tester=None,  zone='PARTI00'): 
-        value = self.get_property(tester, zone+'.storage.sanhost')
+    def get_storage_sanhost(self,   zone='PARTI00'): 
+        value = self.get_property(  zone+'.storage.sanhost')
         return value
     
-    def set_storage_sanhost(self, value, tester=None, zone='PARTI00'):
-        self.set_property(tester, zone+'.storage.sanhost', value)
+    def set_storage_sanhost(self, value,  zone='PARTI00'):
+        return self.set_property(  zone+'.storage.sanhost', value)
         
     #PARTI00.storage.minornumber
-    def get_storage_minornumber(self, tester=None,  zone='PARTI00'): 
-        value = self.get_property(tester, zone+'.storage.minornumber')
+    def get_storage_minornumber(self,   zone='PARTI00'): 
+        value = self.get_property(  zone+'.storage.minornumber')
         return value
     
-    def set_storage_minornumber(self, value, tester=None, zone='PARTI00'):
-        self.set_property(tester, zone+'.storage.minornumber', value)
+    def set_storage_minornumber(self, value,  zone='PARTI00'):
+        return self.set_property(  zone+'.storage.minornumber', value)
     
     #PARTI00.storage.majornumber 
-    def get_storage_majornumber (self, tester=None,  zone='PARTI00'): 
-        value = self.get_property(tester, zone+'.storage.majornumber ')
+    def get_storage_majornumber (self,   zone='PARTI00'): 
+        value = self.get_property(  zone+'.storage.majornumber ')
         return value
     
-    def set_storage_majornumber (self, value, tester=None, zone='PARTI00'):
-        self.set_property(tester, zone+'.storage.majornumber', value)
+    def set_storage_majornumber (self, value,  zone='PARTI00'):
+        return self.set_property(  zone+'.storage.majornumber', value)
         
     #PARTI00.storage.dasdevice 
-    def get_storage_dasdevice (self, tester=None,  zone='PARTI00'): 
-        value = self.get_property(tester, zone+'.storage.dasdevice')
+    def get_storage_dasdevice (self,   zone='PARTI00'): 
+        value = self.get_property(  zone+'.storage.dasdevice')
         return value
     
-    def set_storage_dasdevice (self, value, tester=None, zone='PARTI00'):
-        self.set_property(tester, zone+'.storage.dasdevice ', value)
+    def set_storage_dasdevice (self, value,  zone='PARTI00'):
+        return self.set_property(  zone+'.storage.dasdevice ', value)
         
     #PARTI00.storage.aggregate
-    def get_storage_aggregate (self, tester=None,  zone='PARTI00'): 
-        value = self.get_property(tester, zone+'.storage.aggregate')
+    def get_storage_aggregate (self,   zone='PARTI00'): 
+        value = self.get_property(  zone+'.storage.aggregate')
         return value
     
-    def set_storage_aggregate (self, value, tester=None, zone='PARTI00'):
-        self.set_property(tester, zone+'.storage.aggregate', value)  
+    def set_storage_aggregate (self, value,  zone='PARTI00'):
+        return self.set_property(  zone+'.storage.aggregate', value)  
     
         
         
         
     '''
     ########################################################################
-    Walrus related properties
+    WALRUS RELATED PROPERTY METHODS...
     ########################################################################
     '''
     #walrus.storagemaxtotalsnapshotsizeingb 
-    def get_max_total_snap_size_in_gb(self, tester=None):
-        value = self.get_property(tester, 'walrus.storagemaxtotalsnapshotsizeingb')
+    def get_walrus_storagemaxtotalsnapshotsizeingb(self, tester=None):
+        value = self.get_property(  'walrus.storagemaxtotalsnapshotsizeingb')
         return value
-    def set_max_total_snap_size_in_gb(self, value, tester=None):
-        self.set_property(tester, 'walrus.storagemaxtotalsnapshotsizeingb', value)
+    def set_walrus_storagemaxtotalsnapshotsizeingb(self, value, tester=None):
+        return self.set_property(  'walrus.storagemaxtotalsnapshotsizeingb', value)
     
+    
+    
+    
+    
+    
+    
+    
+class EuPropertiesException(Exception):
+    def __init__(self, value):
+        self.value = value
+    def __str__ (self):
+        return repr(self.value)
     
     
