@@ -81,6 +81,10 @@ class EuInstance(Instance):
         return newins
     
     def debug(self,msg):
+        '''
+        Used to print debug, defaults to print() but over ridden by self.debugmethod if not None
+        msg - mandatory -string, message to be printed
+        '''
         if ( self.verbose is True ):
             if ( self.debugmethod is None):
                 print(msg)
@@ -88,26 +92,44 @@ class EuInstance(Instance):
                 self.debugmethod(msg)
                 
     def sys(self, cmd, verbose=None, timeout=120):
-            if (self.ssh is not None):
-                return self.ssh.cmd(cmd, verbose=verbose, timeout=timeout)
+        '''
+        Issues a command against the ssh connection to this instance
+        Returns a list of the lines from stdout+stderr as a result of the command
+        cmd - mandatory - string, the command to be executed 
+        verbose - optional - boolean flag to enable debug
+        timeout - optional - command timeout in seconds 
+        '''
+        if (self.ssh is not None):
+            return self.ssh.sys(cmd, verbose=verbose, timeout=timeout)
             
     def get_dev_dir(self, match="sd\|xd" ):
         return self.sys("ls -1 /dev/ | grep '"+str(match)+"'" )
     
     def assertFilePresent(self,filepath):
+        '''
+        Method to check for the presence of a file at 'filepath' on the instance
+        filepath - mandatory - string, the filepath to verify
+        '''
         if self.sys("stat "+filepath+" &> /dev/null && echo 'good'")[0] != 'good':
             raise Exception("File:"+filepath+" not found on instance:"+self.id)
         self.debug('File '+filepath+' is present on '+self.id)
     
     def write_random_data_to_vol_get_md5(self, volume, voldev, srcdev='/dev/sda', timepergig=60):
-            timeout = volume.size * timepergig
-            self.assertFilePresent(voldev)
-            self.assertFilePresent(srcdev)
-            self.sys("dd if="+srcdev+" of="+voldev+" && sync")
-            md5 = self.sys("md5sum "+voldev, timeout=timeout)[0]
-            md5 = md5.split(' ')[0]
-            self.debug("Filled Volume:"+volume.id+" dev:"+voldev+" md5:"+md5)
-            return md5
+        '''
+        Attempts to copy some amount of data into an attached volume, and return the md5sum of that volume
+        volume - mandatory - boto volume object of the attached volume 
+        voldev - mandatory - string, the device name on the instance where the volume is attached
+        srcdev - optional - string, the file to copy into the volume
+        timepergig - optional - the time in seconds per gig, used to estimate an adequate timeout period
+        '''
+        timeout = volume.size * timepergig
+        self.assertFilePresent(voldev)
+        self.assertFilePresent(srcdev)
+        self.sys("dd if="+srcdev+" of="+voldev+" && sync")
+        md5 = self.sys("md5sum "+voldev, timeout=timeout)[0]
+        md5 = md5.split(' ')[0]
+        self.debug("Filled Volume:"+volume.id+" dev:"+voldev+" md5:"+md5)
+        return md5
         
     
     
