@@ -171,7 +171,7 @@ class Eucaops(Eutester):
     
     def get_all_current_local_keys(self,path=None, exten=".pem"):
         '''
-        Convenience function to provide a list of call keys in the local dir at 'path'
+        Convenience function to provide a list of all keys in the local dir at 'path'
         that exist on the server. To help avoid additional keys in test dev. 
         '''
         keylist = []
@@ -553,7 +553,7 @@ class Eucaops(Eutester):
         images = self.ec2.get_all_images()
         for image in images:
             
-            if not re.match(emi, image.id):      
+            if not re.search(emi, image.id):      
                 continue  
             if ((root_device_type is not None) and (image.root_device_type != root_device_type)):
                 continue            
@@ -561,7 +561,7 @@ class Eucaops(Eutester):
                 continue       
             if ((state is not None) and (image.state != state)):
                 continue            
-            if ((location is not None) and (not re.match( location, image.location))):
+            if ((location is not None) and (not re.search( location, image.location))):
                 continue           
             if ((arch is not None) and (image.architecture != arch)):
                 continue                
@@ -734,9 +734,9 @@ class Eucaops(Eutester):
         ilist = []
         reservations = self.ec2.get_all_instances()
         for res in reservations:
-            if ( reservation is None ) or (re.match(reservation, res.id)):
+            if ( reservation is None ) or (re.search(reservation, res.id)):
                 for i in res.instances:
-                    if (idstring is not None) and (not re.match(idstring, i.id)) :
+                    if (idstring is not None) and (not re.search(idstring, i.id)) :
                         continue
                     if (state is not None) and (i.state != state):
                         continue
@@ -759,6 +759,26 @@ class Eucaops(Eutester):
                     ilist.append(i)
         return ilist
     
+    
+    def get_all_my_connectable_instances(self,path=None):
+        '''
+        convenience method returns a list of all running instances, for the current creduser
+        for which there are local keys at 'path'
+        '''
+        try:
+            instance = None    
+            keys = self.get_all_current_local_keys(path=path)
+            if keys != []:
+                for keypair in keys:
+                    self.debug('looking for instances using keypair:'+keypair.name)
+                    instances = self.get_instances(state='running',key=keypair.name)
+                    if instances != []:
+                        instance = instances[0]
+                        self.debug('Found usable instance:'+instance.id+'using key:'+keypair.name)
+                        break
+        except Exception, e:
+            self.debug("Failed to find a pre-existing isntance we can connect to:"+str(e))
+            pass
     
     
     def get_all_attributes(self, obj):   
