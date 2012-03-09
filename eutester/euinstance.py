@@ -91,7 +91,7 @@ class EuInstance(Instance):
             else:
                 self.debugmethod(msg)
                 
-    def sys(self, cmd, verbose=None, timeout=120):
+    def sys(self, cmd, verbose=False, timeout=120):
         '''
         Issues a command against the ssh connection to this instance
         Returns a list of the lines from stdout+stderr as a result of the command
@@ -99,9 +99,13 @@ class EuInstance(Instance):
         verbose - optional - boolean flag to enable debug
         timeout - optional - command timeout in seconds 
         '''
+        output = []
         if (self.ssh is not None):
-            return self.ssh.sys(cmd, verbose=verbose, timeout=timeout)
-            
+            output = self.ssh.sys(cmd, verbose=verbose, timeout=timeout)
+            return output
+        else:
+            raise Exception("Euinstance ssh connection is None")
+        
     def get_dev_dir(self, match="sd\|xd" ):
         return self.sys("ls -1 /dev/ | grep '"+str(match)+"'" )
     

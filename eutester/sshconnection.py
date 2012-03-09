@@ -148,8 +148,11 @@ class SshConnection():
                 t.cancel()          
         if verbose:
             elapsed = str(time.time()-start).split('.')[0]
-            self.debug("stdout after "+elapsed+" seconds, cmd=("+cmd+":".join(output)+"):")
-       
+            if (listformat is True):
+                self.debug("stdout after "+elapsed+" seconds, cmd=("+cmd+"):\n"+"".join(output))
+            else:
+                self.debug("stdout after "+elapsed+" seconds, cmd=("+cmd+"):\n"+output)
+                
         return output
         
         
