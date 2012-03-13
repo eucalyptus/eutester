@@ -456,6 +456,9 @@ class Eucaops(Eutester):
             time.sleep(poll_interval)
             polls += 1
             snapshot.update()
+            if ( snapshot.status == 'failed'):
+                self.fail(str(snapshot) + " failed after Polling("+str(polls)+") ,Waited("+str(elapsed)+" sec), last reported (status:" + snapshot.status+" progress:"+snapshot.progress+")")
+                return None
             curr_progress = int(snapshot.progress.replace('%',''))
             #if progress was made, then reset timer 
             if ((waitOnProgress > 0) and (curr_progress > last_progress)):
