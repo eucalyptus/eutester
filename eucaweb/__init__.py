@@ -933,7 +933,14 @@ class Eucaweb(unittest.TestCase):
         
         
     def userFirstTimeLogin(self,email,oldpass,newpass,newpass2="",expect=""):
-        #assumes the firttime login pop up is present, attempts to fill out the forms
+        '''
+        Assumes the firttime login pop up is present, attempts to fill out the forms
+        email - address to enter into form for this user
+        oldpass - the expected current password for this user
+        newpass - the newpassword for this user
+        newpass2 - the text to be entered in the 'verify password' box, default is = newpass
+        expect - any text to be expected on the page at the end of the execution 
+        '''
         if (newpass2 == ""):
             newpass2 = newpass
         driver = self.driver
@@ -1317,7 +1324,7 @@ class Eucaweb(unittest.TestCase):
             time.sleep(stayOpenAfterError)
         self.driver.quit()
         self.driver.stop_client()
-        self.logger.outhdlr.close()
+        #self.logger.outhdlr.close()
             
     def sig_handler(self,sig):
         self.log.critical( 'caught signal:' + sig )

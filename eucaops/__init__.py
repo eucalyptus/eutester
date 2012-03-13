@@ -2,6 +2,7 @@ from eutester import Eutester
 import time
 import re
 import sys
+import os
 import pprint
 import boto
 from boto.ec2.image import Image
@@ -150,7 +151,42 @@ class Eucaops(Eutester):
             return key
         else:
             self.debug(  "Key " + key_name + " already exists")
+            
+            
+            
+    def verify_local_keypath(self,keyname, path=None, exten=".pem"):
+        '''
+        Convenience function to verify if a given ssh key 'keyname' exists on the local server at 'path'
+        Returns the keypath if the key is found.
+        Example:
+        instance= self.get_instances(state='running')[0]
+        keypath = self.get_local_keypath(instance.key_name)
+        '''
+        if (path is None):
+            path = os.getcwd()
+        keypath = path + "/" + keyname + exten
+        try:
+            mode = os.stat(keypath).st_mode
+        except:
+            raise Exception("key:"+keyname+"not found at the provided path:"+str(path))
+        return keypath
     
+    def get_all_current_local_keys(self,path=None, exten=".pem"):
+        '''
+        Convenience function to provide a list of all keys in the local dir at 'path'
+        that exist on the server. To help avoid additional keys in test dev. 
+        '''
+        keylist = []
+        keys = self.ec2.get_all_key_pairs()
+        for k in keys:
+            try:
+                self.verify_local_keypath(k.name, path, exten)
+                self.debug('Found key:'+k.name)
+                keylist.append(k)
+            except: pass
+        return keylist
+            
+        
     def delete_keypair(self,keypair):
         """
         Delete the keypair object passed in and check that it no longer shows up
@@ -415,6 +451,9 @@ class Eucaops(Eutester):
             time.sleep(poll_interval)
             polls += 1
             snapshot.update()
+            if ( snapshot.status == 'failed'):
+                self.fail(str(snapshot) + " failed after Polling("+str(polls)+") ,Waited("+str(elapsed)+" sec), last reported (status:" + snapshot.status+" progress:"+snapshot.progress+")")
+                return None
             curr_progress = int(snapshot.progress.replace('%',''))
             #if progress was made, then reset timer 
             if ((waitOnProgress > 0) and (curr_progress > last_progress)):
@@ -512,7 +551,7 @@ class Eucaops(Eutester):
         images = self.ec2.get_all_images()
         for image in images:
             
-            if not re.match(emi, image.id):      
+            if not re.search(emi, image.id):      
                 continue  
             if ((root_device_type is not None) and (image.root_device_type != root_device_type)):
                 continue            
@@ -520,7 +559,7 @@ class Eucaops(Eutester):
                 continue       
             if ((state is not None) and (image.state != state)):
                 continue            
-            if ((location is not None) and (not re.match( location, image.location))):
+            if ((location is not None) and (not re.search( location, image.location))):
                 continue           
             if ((arch is not None) and (image.architecture != arch)):
                 continue                
@@ -672,6 +711,91 @@ class Eucaops(Eutester):
         self.test_resources["reservations"].append(reservation)
         
         return reservation
+    
+    
+    def get_instances(self, 
+                      state=None, 
+                      idstring=None, 
+                      reservation=None, 
+                      rootdevtype=None, 
+                      zone=None,
+                      key=None,
+                      pubip=None,
+                      privip=None,
+                      ramdisk=None,
+                      kernel=None,
+                      image_id=None
+                      ):
+        """
+        Returns a list of boto instance objects filtered by the provided search criteria
+        Options: 
+        state, idstring , reservation , rootdevtype , zone ,key ,
+        pubip ,privip ,ramdisk ,kernel , image_id
+        
+        example: instance = self.get_instances(state='running')[0]
+        """
+        ilist = []
+        reservations = self.ec2.get_all_instances()
+        for res in reservations:
+            if ( reservation is None ) or (re.search(reservation, res.id)):
+                for i in res.instances:
+                    if (idstring is not None) and (not re.search(idstring, i.id)) :
+                        continue
+                    if (state is not None) and (i.state != state):
+                        continue
+                    if (rootdevtype is not None) and (i.root_device_type != rootdevtype):
+                        continue
+                    if (zone is not None) and (i.placement != zone ):
+                        continue
+                    if (key is not None) and (i.key_name != key):
+                        continue
+                    if (pubip is not None) and (i.ip_address != pubip):
+                        continue
+                    if (privip is not None) and (i.private_ip_address != privip):
+                        continue
+                    if (ramdisk is not None) and (i.ramdisk != ramdisk):
+                        continue
+                    if (kernel is not None) and (i.kernel != kernel):
+                        continue
+                    if (image_id is not None) and (i.image_id != image_id):
+                        continue
+                    ilist.append(i)
+        return ilist
+    
+    
+    def get_all_my_connectable_instances(self,path=None):
+        '''
+        convenience method returns a list of all running instances, for the current creduser
+        for which there are local keys at 'path'
+        '''
+        try:
+            instance = None    
+            keys = self.get_all_current_local_keys(path=path)
+            if keys != []:
+                for keypair in keys:
+                    self.debug('looking for instances using keypair:'+keypair.name)
+                    instances = self.get_instances(state='running',key=keypair.name)
+                    if instances != []:
+                        instance = instances[0]
+                        self.debug('Found usable instance:'+instance.id+'using key:'+keypair.name)
+                        break
+        except Exception, e:
+            self.debug("Failed to find a pre-existing isntance we can connect to:"+str(e))
+            pass
+    
+    
+    def get_all_attributes(self, obj):   
+        '''
+        Get a formatted list of all the key pair values pertaining to the object 'obj'
+        '''   
+        buf=""
+        list = sorted(obj.__dict__)
+        for item in list:
+            buf += str(item)+" = "+str(obj.__dict__[item])+"\n"
+        return buf
+            
+                
+    
     
     def get_available_vms(self, type=None, zone=None):
         """
@@ -855,6 +979,8 @@ class Eucaops(Eutester):
         if verbose:
             self.info("Current resources in the system:\n" + pprint.pformat(current_artifacts))
         return current_artifacts
+    
+
         
             
        
