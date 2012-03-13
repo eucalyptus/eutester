@@ -95,7 +95,6 @@ class Eutester(object):
         self.account_id = 0000000000001
         self.hypervisor = None
         
-        
         ##### Euca Logs 
         self.cloud_log_buffer = ''
         self.cc_log_buffer  = ''
@@ -118,7 +117,7 @@ class Eutester(object):
         self.cloud_log_channel = None
         self.cc_log_channel= None
         self.nc_log_channel= None
-
+        
         ### If I have a config file
         ### PRIVATE CLOUD
         if self.config_file != None:
@@ -239,10 +238,13 @@ class Eutester(object):
                 machine = bm_machine(machine_dict["hostname"], machine_dict["distro"], machine_dict["distro_ver"], machine_dict["arch"], machine_dict["source"], machine_dict["components"])
                 machines.append(machine)
                # print machine
-            if line.find("NETWORK"):
-                config_hash["network"] = line.strip() 
+            if re.search("network",line, re.IGNORECASE):
+                config_hash["network"] = line.split()[1].lower()
         config_hash["machines"] = machines 
         return config_hash
+    
+    def get_network_mode(self):
+        return self.config['network']
     
     def get_hypervisor(self):
         """ Requires that a config file was passed.
@@ -407,21 +409,21 @@ class Eutester(object):
         '''Terminate thread that is polling logs''' 
         self.logging_thread = False
         
-    def save_euca_logs(self):
+    def save_euca_logs(self,prefix="eutester-"):
         '''Save log buffers to a file''' 
-        FILE = open("clc.log","w")
+        FILE = open( prefix + "clc.log","w")
         FILE.writelines(self.cloud_log_buffer)
         FILE.close()
-        FILE = open("walrus.log","w")
+        FILE = open( prefix + "walrus.log","w")
         FILE.writelines(self.walrus_log_buffer)
         FILE.close()
-        FILE = open("cc.log","w")
+        FILE = open( prefix + "cc.log","w")
         FILE.writelines(self.cc_log_buffer)
         FILE.close()
-        FILE = open("sc.log","w")
+        FILE = open( prefix + "sc.log","w")
         FILE.writelines(self.sc_log_buffer)
         FILE.close()
-        FILE = open("nc.log","w")
+        FILE = open( prefix + "nc.log","w")
         FILE.writelines(self.nc_log_buffer)
         FILE.close()        
                                
