@@ -70,7 +70,7 @@ class Eulogger(object):
         self.formatter2 = logging.Formatter('[%(asctime)s] [EUTESTER] [%(levelname)s] [%(filename)s:%(funcName)s():%(lineno)d]: %(message)s')
         self.formatter3 = logging.Formatter(self.name+':%(funcName)s():%(lineno)d: %(message)s')
         self.formatter4 = logging.Formatter('%(message)s')
-        
+        self.usename = logging.Formatter('[%(asctime)s] [%(name)s] [%(levelname)s]: %(message)s')
 
         self.log = logging.getLogger(self.name)
         self.log.setLevel(self.log_level)

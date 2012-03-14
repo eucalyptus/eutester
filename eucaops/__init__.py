@@ -586,7 +586,7 @@ class Eucaops(Eutester):
         return address
     
     def associate_address(self,instance, address):
-        """ Associate an address with an instance"""
+        """ Associate an address object with an instance"""
         try:
             self.debug("Attemtping to associate " + str(address) + " from " + str(instance))
             address.associate(instance.id)
@@ -712,12 +712,13 @@ class Eucaops(Eutester):
                 self.debug(str(instance) + " got Public IP: " + instance.ip_address  + " Private IP: " + instance.private_ip_address)
         self.test_resources["reservations"].append(reservation)
         keypath = os.curdir + "/" + keypair + ".pem"
+        self.sleep(10)
         return self.convert_reservation_to_euinstance(reservation, keypath)
     
     def convert_reservation_to_euinstance(self, reservation, keypath=None):
         euinstance_list = []
         for instance in reservation.instances:
-            euinstance_list.append( EuInstance.make_euinstance_from_instance( instance, keypath=keypath, verbose=False, debugmethod=self.debug ))
+            euinstance_list.append( EuInstance.make_euinstance_from_instance( instance, keypath=keypath ))
         reservation.instances = euinstance_list
         return reservation
     
@@ -890,16 +891,16 @@ class Eucaops(Eutester):
         for instance in reservation.instances:
             self.debug( "Sending stop for " + str(instance) )
             instance.stop()
-            if self.wait_for_reservation(reservation, state="stopped") is False:
-                return False
+        if self.wait_for_reservation(reservation, state="stopped") is False:
+            return False
         return True
     
     def start_instances(self,reservation):
         for instance in reservation.instances:
             self.debug( "Sending start for " + str(instance) )
             instance.start()
-            if self.wait_for_reservation(reservation, state="running") is False:
-                return False
+        if self.wait_for_reservation(reservation, state="running") is False:
+            return False
         return True
             
     def modify_property(self, property, value):

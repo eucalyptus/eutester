@@ -62,11 +62,11 @@ class SshConnection():
         
         
         if (self.keypair is not None):
-            self.keypath = os.getcwd() + "/" + self.keypair.name + ".pem" 
+            self.keypath = os.getcwd() + "/" + self.keypair.name + ".pem"
         if (self.keypath is not None):
-            print ( "hostname:"+self.host+"\nkeypath:"+self.keypath)
+            self.debug( "SSH connection has hostname:"+self.host+" and keypath: "+self.keypath)
         else:
-            print ( "hostname:"+self.host+"\nuser:"+self.username+"\npassword:"+self.password)
+            self.debug( "SSH connection has hostname:"+self.host+" user:"+self.username+" password:"+self.password)
             
         if (self.keypath is not None) or ((self.username is not None) and (self.password is not None)):
             self.connection = self.get_ssh_connection(self.host, username=self.username, password=self.password, keypath=self.keypath, timeout=self.timeout)
@@ -84,7 +84,7 @@ class SshConnection():
                 print (str(msg))
             else:
                 self.debugmethod(msg)
-    
+
     def ssh_sys_timeout(self,chan,start):
         '''
         callback to be scheduled during ssh cmds which have timed out. 
@@ -139,7 +139,6 @@ class SshConnection():
             else:
                 #return output as single string buffer
                 output = f.read()
-            self.debug("done with exec")
         except CommandTimeoutException, cte: 
             elapsed = str(time.time()-start).split('.')[0]
             self.debug("Command ("+cmd+") timed out after " + str(elapsed) + " seconds\nException")     
@@ -150,9 +149,9 @@ class SshConnection():
         if verbose:
             elapsed = str(time.time()-start).split('.')[0]
             if (listformat is True):
-                self.debug("stdout after "+elapsed+" seconds, cmd=("+cmd+"):\n"+"".join(output))
+                self.debug("".join(output))
             else:
-                self.debug("stdout after "+elapsed+" seconds, cmd=("+cmd+"):\n"+output)
+                self.debug(output)
                 
         return output
         
@@ -173,7 +172,7 @@ class SshConnection():
         if ((password is None) and (keypath is None)):
             raise Exception("ssh_connect: both password and keypath were set to None")
         
-        self.debug("ssh_connect args:\nhostname:"+hostname+"\nusername:"+username+"\npassword:"+str(password)+"\nkeypath:"+str(keypath)+"\ntimeout:"+str(timeout)+"\nretry:"+str(retry))
+        #self.debug("ssh_connect args:\nhostname:"+hostname+"\nusername:"+username+"\npassword:"+str(password)+"\nkeypath:"+str(keypath)+"\ntimeout:"+str(timeout)+"\nretry:"+str(retry))
 
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
