@@ -10,6 +10,8 @@ from boto.ec2.instance import Reservation
 from boto.ec2.volume import Volume
 from boto.ec2.blockdevicemapping import BlockDeviceMapping, BlockDeviceType
 
+from eutester.euinstance import EuInstance
+
 class Eucaops(Eutester):
     
     def __init__(self, config_file=None, hostname=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,account="eucalyptus",user="admin", boto_debug=0):
@@ -709,9 +711,15 @@ class Eucaops(Eutester):
             else:
                 self.debug(str(instance) + " got Public IP: " + instance.ip_address  + " Private IP: " + instance.private_ip_address)
         self.test_resources["reservations"].append(reservation)
-        
-        return reservation
+        keypath = os.curdir + "/" + keypair + ".pem"
+        return self.convert_reservation_to_euinstance(reservation, keypath)
     
+    def convert_reservation_to_euinstance(self, reservation, keypath=None):
+        euinstance_list = []
+        for instance in reservation.instances:
+            euinstance_list.append( EuInstance.make_euinstance_from_instance( instance, keypath=keypath, verbose=False, debugmethod=self.debug ))
+        reservation.instances = euinstance_list
+        return reservation
     
     def get_instances(self, 
                       state=None, 
@@ -893,13 +901,6 @@ class Eucaops(Eutester):
             if self.wait_for_reservation(reservation, state="running") is False:
                 return False
         return True
-           
-    def get_metadata(self, element_path):
-        """Return the lines of metadata from the element path provided"""
-        #if re.search("managed", self.get_network_mode()):
-        return self.sys("curl http://169.254.169.254/latest/meta-data/" + element_path)
-        #else:
-        #    return self.sys("curl http://" + self.get_clc_ip()  + ":8773/latest/meta-data/" + element_path)
             
     def modify_property(self, property, value):
         """

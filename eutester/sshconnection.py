@@ -63,6 +63,7 @@ class SshConnection():
         
         if (self.keypair is not None):
             self.keypath = os.getcwd() + "/" + self.keypair.name + ".pem" 
+        if (self.keypath is not None):
             print ( "hostname:"+self.host+"\nkeypath:"+self.keypath)
         else:
             print ( "hostname:"+self.host+"\nuser:"+self.username+"\npassword:"+self.password)

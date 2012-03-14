@@ -18,7 +18,7 @@ from boto.ec2.instance import Instance
 import sshconnection
 import os
 import time
-
+import re
 
 class EuInstance(Instance):
     keypair = None
@@ -105,6 +105,15 @@ class EuInstance(Instance):
             return output
         else:
             raise Exception("Euinstance ssh connection is None")
+    
+    def found(self, command, regex):
+        """ Returns a Boolean of whether the result of the command contains the regex"""
+        result = self.sys(command)
+        for line in result:
+            found = re.search(regex,line)
+            if found:
+                return True
+        return False 
         
     def get_dev_dir(self, match="sd\|xd" ):
         return self.sys("ls -1 /dev/ | grep '"+str(match)+"'" )
@@ -117,6 +126,14 @@ class EuInstance(Instance):
         if self.sys("stat "+filepath+" &> /dev/null && echo 'good'")[0] != 'good':
             raise Exception("File:"+filepath+" not found on instance:"+self.id)
         self.debug('File '+filepath+' is present on '+self.id)
+    
+    def get_metadata(self, element_path):
+        """Return the lines of metadata from the element path provided"""
+        ### TODO= for some reason this logic wasnt working when used inside a unittest testcase
+        #if re.search("managed", self.get_network_mode()):
+        return self.sys("curl http://169.254.169.254/latest/meta-data/" + element_path)
+        #else:
+        #    return self.sys("curl http://" + self.get_clc_ip()  + ":8773/latest/meta-data/" + element_path)
     
     def write_random_data_to_vol_get_md5(self, volume, voldev, srcdev='/dev/sda', timepergig=60):
         '''
