@@ -14,8 +14,8 @@ from eutester.euinstance import EuInstance
 
 class Eucaops(Eutester):
     
-    def __init__(self, config_file=None, hostname=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,account="eucalyptus",user="admin", boto_debug=0):
-        super(Eucaops, self).__init__(config_file, hostname, password, keypath, credpath, aws_access_key_id, aws_secret_access_key,account, user, boto_debug)
+    def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,account="eucalyptus",user="admin", boto_debug=0):
+        super(Eucaops, self).__init__(config_file,password, keypath, credpath, aws_access_key_id, aws_secret_access_key,account, user, boto_debug)
         self.poll_count = 24
         if self.hypervisor is "vmware":
             self.poll_count = 48
@@ -296,6 +296,7 @@ class Eucaops(Eutester):
         ### If the instance changes state or goes to the desired state before my poll count is complete
         while( poll_count > 0) and (instance.state != state):
             poll_count -= 1
+            self.debug( "Instance("+instance.id+") State("+instance.state+"), sleeping 10s")
             time.sleep(10)
             instance.update()
             elapsed = (time.time()- start)
@@ -338,6 +339,7 @@ class Eucaops(Eutester):
         self.debug( "Polling for volume to become available")
         while volume.status != 'available' and (poll_count > 0):
             poll_count -= 1
+            self.debug("Volume ("+volume.id+") State("+volume.status+") sleeping " + str(poll_interval) + "s")
             time.sleep(poll_interval)
             volume.update()
             self.debug( str(volume) + " in " + volume.status +" state") 
@@ -365,7 +367,7 @@ class Eucaops(Eutester):
         while ( volume.status != "deleted") and (poll_count > 0):
             poll_count -= 1
             volume.update()
-            self.debug( str(volume) + " in " + volume.status )
+            self.debug( str(volume) + " in " + volume.status + " sleeping 10s")
             self.sleep(10)
 
         if poll_count == 0:
@@ -395,7 +397,7 @@ class Eucaops(Eutester):
         while not re.search("attached",volume.attach_data.status) and (poll_count > 0) :
             poll_count -= 1
             volume.update()
-            self.debug( str(volume) + " in " + volume.attach_data.status )
+            self.debug( str(volume) + " in " + volume.attach_data.status + " sleeping 10s")
             self.sleep(10)
 
         if poll_count == 0:
@@ -417,7 +419,7 @@ class Eucaops(Eutester):
         poll_count = 10 
         while ( volume.status == "in-use") and (poll_count > 0):
             poll_count -= 1
-            self.debug( str(volume) + " in " + volume.status)
+            self.debug( str(volume) + " in " + volume.status + " sleeping 10s")
             self.sleep(10)
             volume.update()
         self.debug(str(volume) + " left in " +  volume.status)
@@ -606,7 +608,7 @@ class Eucaops(Eutester):
         except Exception, e:
             self.critical("Unable to disassociate address\n" + str(e))
             return False
-        self.sleep(20)
+        self.sleep(15)
         address = self.ec2.get_all_addresses(addresses=[instance.public_dns_name])
         if address.instance_id is instance.id:
             self.critical("Address still associated with instance")
@@ -695,7 +697,7 @@ class Eucaops(Eutester):
             for emi in images:
                 if re.match("emi",emi.name):
                     image = emi         
-        self.debug( "Attempting to run image " + str(image) + " in group " + group)
+        self.debug( "Attempting to run "+ str(image.root_device_type)  +" image " + str(image) + " in group " + group)
         reservation = image.run(key_name=keypair,security_groups=[group],instance_type=type, placement=zone, min_count=min, max_count=max)
         if ((len(reservation.instances) < min) or (len(reservation.instances) > max)):
             self.fail("Reservation:"+str(reservation.id)+" returned "+str(len(reservation.instances))+" instances, not within min("+str(min)+") and max("+str(max)+" ")
@@ -712,13 +714,17 @@ class Eucaops(Eutester):
                 self.debug(str(instance) + " got Public IP: " + instance.ip_address  + " Private IP: " + instance.private_ip_address)
         self.test_resources["reservations"].append(reservation)
         keypath = os.curdir + "/" + keypair + ".pem"
-        self.sleep(10)
+        self.sleep(15)
         return self.convert_reservation_to_euinstance(reservation, keypath)
     
     def convert_reservation_to_euinstance(self, reservation, keypath=None):
         euinstance_list = []
         for instance in reservation.instances:
-            euinstance_list.append( EuInstance.make_euinstance_from_instance( instance, keypath=keypath ))
+            try:
+                euinstance_list.append( EuInstance.make_euinstance_from_instance( instance, keypath=keypath ))
+            except Exception, e:
+                self.critical("Unable to create Euinstance from " + str(instance))
+                euinstance_list.append(instance)
         reservation.instances = euinstance_list
         return reservation
     

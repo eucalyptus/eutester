@@ -51,7 +51,7 @@ from threading import Thread
 from boto.ec2.regioninfo import RegionInfo
 from boto.s3.connection import OrdinaryCallingFormat
 
-from bm_machine import bm_machine
+from machine import machine
 import eulogger
 
 class TimeoutFunctionException(Exception): 
@@ -59,7 +59,7 @@ class TimeoutFunctionException(Exception):
     pass 
 
 class Eutester(object):
-    def __init__(self, config_file=None, hostname=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, account="eucalyptus",  user="admin", boto_debug=0):
+    def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, account="eucalyptus",  user="admin", boto_debug=0):
         """  
         EUCADIR => $eucadir, 
         VERIFY_LEVEL => $verify_level, 
@@ -82,7 +82,6 @@ class Eutester(object):
         self.current_ssh = "clc"
         self.boto_debug = boto_debug
         self.ssh = None
-        self.hostname = hostname
         self.password = password
         self.keypath = keypath
         self.credpath = credpath
@@ -104,7 +103,7 @@ class Eutester(object):
         self.logging_thread = False
         
         ### Eutester logs
-        self.logger = eulogger.Eulogger(name= "eutester")
+        self.logger = eulogger.Eulogger(identifier="localhost")
         self.debug = self.logger.log.debug
         self.critical = self.logger.log.critical
         self.info = self.logger.log.info
@@ -127,23 +126,24 @@ class Eutester(object):
             ### Set the eucapath
             if "REPO" in self.config["machines"][0].source:
                 self.eucapath="/"
-            ### swap in the hostname of the component 
-            self.hostname = self.swap_component_hostname(self.current_ssh)
-            self.debug("Hostname for SSH connection: " + self.hostname)
+            ### swap in the hostname of the component
+            self.clc = self.get_component_machines("clc")[0]
+            self.ssh = self.clc.ssh
+            self.sftp = self.clc.sftp
             self.hypervisor = self.get_hypervisor()
             
         ## IF I WASNT PROVIDED KEY TRY TO GET THEM FROM THE EUCARC IN CREDPATH
         ### PRIVATE CLOUD
-        if (self.password != None) or (self.keypath != None):
-            client = paramiko.SSHClient()
-            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            self.debug("Issuing SSH connection root@" +  self.hostname )            
-            if keypath == None:   
-                client.connect(self.hostname, username="root", password=password, timeout= self.timeout)
-            else:
-                client.connect(self.hostname,  username="root", key_filename=keypath, timeout= self.timeout)
-            self.ssh = client
-            self.sftp = self.ssh.open_sftp()
+#        if (self.password != None) or (self.keypath != None):
+#            client = paramiko.SSHClient()
+#            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+#            self.debug("Issuing SSH connection root@" +  self.hostname )            
+#            if keypath == None:   
+#                client.connect(self.hostname, username="root", password=password, timeout= self.timeout)
+#            else:
+#                client.connect(self.hostname,  username="root", key_filename=keypath, timeout= self.timeout)
+#            self.ssh = client
+#            self.sftp = self.ssh.open_sftp()
         
         ### If i have an ssh session and its to the clc
         ### Private cloud with root access
@@ -235,9 +235,16 @@ class Eutester(object):
                 machine_dict["source"] = machine_details[4]
                 machine_dict["components"] = map(str.lower, machine_details[5].strip('[]').split())
                 ### ADD the machine to the array of machine
-                machine = bm_machine(machine_dict["hostname"], machine_dict["distro"], machine_dict["distro_ver"], machine_dict["arch"], machine_dict["source"], machine_dict["components"])
-                machines.append(machine)
-               # print machine
+                cloud_machine = machine(   machine_dict["hostname"], 
+                                        machine_dict["distro"], 
+                                        machine_dict["distro_ver"], 
+                                        machine_dict["arch"], 
+                                        machine_dict["source"], 
+                                        machine_dict["components"],
+                                        self.password,
+                                        self.keypath
+                                        )
+                machines.append(cloud_machine)
             if re.search("network",line, re.IGNORECASE):
                 config_hash["network"] = line.split()[1].lower()
         config_hash["machines"] = machines 
@@ -430,49 +437,13 @@ class Eutester(object):
     def handle_timeout(self, signum, frame): 
         raise TimeoutFunctionException()
     
-    def sys(self, cmd, verbose=1, timeout=-2):
+    def sys(self, cmd, verbose=True):
         """ By default will run a command on the CLC machine, the connection used can be changed by passing a different hostname into the constructor
             For example:
             instance = Eutester( hostname=instance.ip_address, keypath="my_key.pem")
             instance.sys("mount") # check mount points on instance and return the output as a list
         """
-        cmd = str(cmd)
-        # default timeout is to use module-defined timeout
-        # -1 should be reserved for "no timeout" option
-        if timeout == -2:
-            timeout = self.timeout
-        time.sleep(self.delay)
-        old = signal.signal(signal.SIGALRM, self.handle_timeout) 
-        signal.alarm(timeout) 
-        cur_time = time.strftime("%I:%M:%S", time.gmtime())
-        output = []
-        std_out_return = []
-        if verbose:
-            if self.ssh == None:
-                self.hostname ="localhost"
-            self.debug( "[root@" + str(self.hostname) + "]# " + cmd)
-        try:
-            
-            if self.ssh == None:
-                std_out_return = self.local(cmd)
-            else:
-                stdin_ls, stdout_ls, stderr_ls = self.ssh.exec_command("ls")
-                ls_result = stdout_ls.readlines()
-                if self.credpath != None:
-                    for item in ls_result: 
-                        if re.match(self.credpath,item): 
-                            cmd = ". " + self.credpath + "/eucarc && " + cmd
-                            break
-                stdin, stdout, stderr = self.ssh.exec_command(cmd)
-                std_out_return = stdout.readlines() 
-                output = std_out_return
-        except Exception, e: 
-            self.fail("Command timeout after " + str(timeout) + " seconds\nException:" + str(e)) 
-            return []
-        signal.alarm(0)      
-        if verbose:
-            self.debug("".join(std_out_return))
-        return std_out_return
+        return self.clc.sys(cmd, verbose=verbose)
 
     def local(self, cmd):
         """ Run a command locally on the tester"""
@@ -504,7 +475,6 @@ class Eutester(object):
         return list(set(list1)-set(list2))
     
     def fail(self, message):
-        #self.debug( "[TEST_REPORT] FAILED: " + message)
         self.critical("[TEST_REPORT] FAILED: " + message)
         self.fail_log.append(message)
         self.fail_count += 1
@@ -545,7 +515,6 @@ class Eutester(object):
         s  = "+++++++++++++++++++++++++++++++++++++++++++++++++++++\n"
         s += "+" + "Eucateser Configuration" + "\n"
         s += "+" + "+++++++++++++++++++++++++++++++++++++++++++++++\n"
-        s += "+" + "Host:" + self.hostname + "\n"
         s += "+" + "Config File: " + self.config_file +"\n"
         s += "+" + "Fail Count: " +  str(self.fail_count) +"\n"
         s += "+" + "Eucalyptus Path: " +  str(self.eucapath) +"\n"

@@ -149,7 +149,8 @@ class SshConnection():
         if verbose:
             elapsed = str(time.time()-start).split('.')[0]
             if (listformat is True):
-                self.debug("".join(output))
+                for line in output:
+                    self.debug(line)
             else:
                 self.debug(output)
                 
@@ -180,12 +181,12 @@ class SshConnection():
         while ( retry >= 0  ):
             retry -= 1 
             try:
-                self.debug("Attempting SSH connection: "+username+"@"+hostname )            
+                #self.debug("Attempting SSH connection: "+username+"@"+hostname )            
                 if keypath is None:   
-                    self.debug("Using username:"+username+" and password:"+password)
+                    #self.debug("Using username:"+username+" and password:"+password)
                     ssh.connect(hostname, username="root", password=password, timeout= timeout)
                 else:
-                    self.debug("Using Keypath:"+keypath)
+                    #self.debug("Using Keypath:"+keypath)
                     ssh.connect(hostname,  username="root", key_filename=keypath, timeout= timeout)
                 break
             except paramiko.ssh_exception.SSHException, se:
@@ -195,7 +196,7 @@ class SshConnection():
                     pass
                 else:
                     raise se
-        self.debug("Returning ssh connection to: "+ hostname)
+        #self.debug("Returning ssh connection to: "+ hostname)
         return ssh
     
     def close(self):     

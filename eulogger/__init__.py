@@ -45,12 +45,13 @@
 import os
 import sys
 import logging
+import time
 
 
 class Eulogger(object):
     
     def __init__ (self,
-                  name="eulogger",
+                  identifier="eulogger",
                   log_level= "debug", 
                   fdebug ='%(message)s',
                   ferr = '%(funcName)s():%(lineno)d: %(message)',
@@ -64,24 +65,25 @@ class Eulogger(object):
         self.ferr = ferr
         self.fdebug = fdebug
         self.clear = clear
-        self.name = name
+        self.name = identifier + str(time.time())
         
-        self.formatter1 = logging.Formatter('[%(asctime)s] [EUTESTER] [%(levelname)s]: %(message)s')
-        self.formatter2 = logging.Formatter('[%(asctime)s] [EUTESTER] [%(levelname)s] [%(filename)s:%(funcName)s():%(lineno)d]: %(message)s')
-        self.formatter3 = logging.Formatter(self.name+':%(funcName)s():%(lineno)d: %(message)s')
+        self.default_format = logging.Formatter('[%(asctime)s] [' + identifier + '] [%(levelname)s]: %(message)s')
+        self.formatter2 = logging.Formatter('[%(asctime)s] [' + identifier + '] [%(levelname)s] [%(filename)s:%(funcName)s():%(lineno)d]: %(message)s')
+        self.formatter3 = logging.Formatter( identifier +':%(funcName)s():%(lineno)d: %(message)s')
         self.formatter4 = logging.Formatter('%(message)s')
-        self.usename = logging.Formatter('[%(asctime)s] [%(name)s] [%(levelname)s]: %(message)s')
 
         self.log = logging.getLogger(self.name)
         self.log.setLevel(self.log_level)
-        
-        if self.log.handlers != []:
-            return 
+        self.outhdlr = logging.StreamHandler(sys.stdout)
+        self.outhdlr.setFormatter(self.default_format)
+        for handler in self.log.handlers:
+           if handler is self.outhdlr:
+               return
+            
         
         #now add the locations will log to by adding handlers to our logger...
-        self.outhdlr = logging.StreamHandler(sys.stdout)
-        self.outhdlr.setFormatter(self.formatter1)
-        self.log.addHandler(self.outhdlr)
+        
+        self.log.addHandler(self.outhdlr) 
         
         if (self.logfile != ""):
             #to log to a file as well add another handler to the logger...
@@ -90,5 +92,4 @@ class Eulogger(object):
             filehdlr = logging.FileHandler(self.logfile)
             filehdlr.setFormatter(str(self.ferr))
             self.log.addHandler(filehdlr)
-
 

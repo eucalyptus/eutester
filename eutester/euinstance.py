@@ -66,13 +66,15 @@ class EuInstance(Instance):
         
         newins.debugmethod = debugmethod
         if newins.debugmethod is None:
-            logger = eulogger.Eulogger(name= str(instance.id) + "-" + str(instance.ip_address))
-            logger.outhdlr.setFormatter(logger.usename)
+            logger = eulogger.Eulogger(identifier= str(instance.id) + "-" + str(instance.ip_address))
             newins.debugmethod= logger.log.debug
             
         newins.attached_vols=[] 
         newins.timeout = timeout
         newins.verbose = verbose
+        newins.username = username
+        newins.password = password
+        newins.retry = retry
         if ((keypath is not None) or ((username is not None)and(password is not None))):
             newins.ssh = sshconnection.SshConnection(
                                                     instance.ip_address, 
@@ -92,14 +94,14 @@ class EuInstance(Instance):
     def update_ssh(self):
         self.update()
         self.ssh = sshconnection.SshConnection(
-                                                    instance.ip_address, 
-                                                    keypair=keypair, 
-                                                    keypath=keypath,          
-                                                    password=password, 
-                                                    username=username, 
-                                                    timeout=timeout, 
-                                                    retry=retry,
-                                                    debugmethod=newins.debugmethod,
+                                                    self.ip_address, 
+                                                    keypair=self.keypair, 
+                                                    keypath=self.keypath,          
+                                                    password=self.password, 
+                                                    username=self.username, 
+                                                    timeout=self.timeout, 
+                                                    retry=self.retry,
+                                                    debugmethod=self.debugmethod,
                                                     verbose=True)
     def debug(self,msg):
         '''
