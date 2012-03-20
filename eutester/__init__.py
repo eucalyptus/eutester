@@ -53,6 +53,8 @@ from boto.s3.connection import OrdinaryCallingFormat
 
 from machine import machine
 import eulogger
+from euservice import EuserviceManager
+
 
 class TimeoutFunctionException(Exception): 
     """Exception to raise on a timeout""" 
@@ -131,6 +133,7 @@ class Eutester(object):
             self.ssh = self.clc.ssh
             self.sftp = self.clc.sftp
             self.hypervisor = self.get_hypervisor()
+            self.service_manager = EuserviceManager(self)
             
         ## IF I WASNT PROVIDED KEY TRY TO GET THEM FROM THE EUCARC IN CREDPATH
         ### PRIVATE CLOUD
@@ -281,6 +284,14 @@ class Eutester(object):
             raise Exception("Could not find component "  + component + " in list of machines")
         else:
              return machines_with_role[0]
+    
+    def get_machine_by_ip(self, hostname):
+         machines = [machine for machine in self.config['machines'] if re.search(hostname, machine.hostname)]
+         if len(machines) == 0:
+            self.fail("Could not find machine at "  + hostname + " in list of machines")
+            return None
+         else:
+             return machines[0]
          
     def get_component_machines(self, component):
         #loop through machines looking for this component type

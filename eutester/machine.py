@@ -19,6 +19,7 @@
 
 import eulogger
 import sshconnection
+import re
 
 class machine:
     def __init__(self, hostname, distro, distro_ver, arch, source, components, password=None, keypath=None, username="root", timeout=120,retry=2,debugmethod=None):

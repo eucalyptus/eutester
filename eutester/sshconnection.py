@@ -149,8 +149,7 @@ class SshConnection():
         if verbose:
             elapsed = str(time.time()-start).split('.')[0]
             if (listformat is True):
-                for line in output:
-                    self.debug(line)
+                self.debug("".join(output))
             else:
                 self.debug(output)
                 

@@ -12,6 +12,7 @@ from boto.ec2.blockdevicemapping import BlockDeviceMapping, BlockDeviceType
 
 from eutester.euinstance import EuInstance
 
+
 class Eucaops(Eutester):
     
     def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,account="eucalyptus",user="admin", boto_debug=0):
@@ -921,7 +922,7 @@ class Eucaops(Eutester):
         else:
             self.fail("Could not modify " + property)
     
-    def get_master(self, component="clc"):
+    def get_master(self, component="clc", partition=""):
         """
         Find the master of any type of component and return its IP, by default returns the master CLC
         component        Component to find the master, possible values ["clc", "sc", "cc", "ws"]
@@ -935,13 +936,17 @@ class Eucaops(Eutester):
             service = "cluster"
         self.debug( "Looking for enabled " + component )        
         ### GO through both clcs and check which ip it thinks is enabled for this service type
-        services = self.sys( self.eucapath + "/usr/sbin/euca-describe-services")
+        services = self.clc.sys(". " + self.credpath + "/eucarc && " + self.eucapath + "/usr/sbin/euca-describe-services")
         master = ""
         try:
-            line = self.grep("SERVICE\s+" + service + ".*ENABLED", services)[0]
+            service_lookup = self.grep("SERVICE\s+" + service + ".*" + str(partition) + ".*ENABLED", services)
+            if len(service_lookup) < 1:
+                raise LookupError("Looking for master " + str(component) + " in partition " + str(partition) + " failed")
+            else:
+                line = service_lookup[0]
             service_url = line.split()[6]
             master = service_url.split(":")[1].strip("/")
-            self.swap_ssh(master)
+            #self.swap_ssh(master)
             return master
         except Exception, e:
             self.fail("Unable to find redundant components")
