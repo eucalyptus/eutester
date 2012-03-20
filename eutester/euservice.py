@@ -125,9 +125,9 @@ class EuserviceManager(object):
         self.eucaprefix = ". " + self.tester.credpath + "/eucarc && " + self.tester.eucapath
         if self.tester.clc is None:
             raise AttributeError("Tester object does not have CLC machine to use for SSH")
-        self.update_services()
+        self.update()
     
-    def get_services(self, name=""):
+    def get(self, name=""):
         describe_services = self.tester.clc.sys(self.eucaprefix + "/usr/sbin/euca-describe-services --system-internal " + str(name)  + " | grep SERVICE")
         if len(describe_services) < 1:
             if name is "":
@@ -138,7 +138,7 @@ class EuserviceManager(object):
             services.append(Euservice(service_line, self.tester))
         return services
     
-    def reset_known_services(self):
+    def reset(self):
         self.walruses= []
         self.clcs = []
         self.arbitrators = []
@@ -148,10 +148,10 @@ class EuserviceManager(object):
             self.partitions[k].scs = []
             self.partitions[k].vbs = []
         
-    def update_services(self, name=""):
+    def update(self, name=""):
         ### Get all services
-        self.reset_known_services()
-        services = self.get_services(name)
+        self.reset()
+        services = self.get(name)
         for current_euservice in services:
             ### If this is system wide component add it to the base level array
             if re.search("eucalyptus", current_euservice.type) :
@@ -226,12 +226,31 @@ class EuserviceManager(object):
         while (poll_count > 0) and (re.search(state,euservice.state)):
             poll_count -= 1
             self.tester.sleep(interval)
-            self.update_services()
+            self.update()
             
         if poll_count is 0:
             self.tester.fail("Service: " + euservice.name + " did not enter "  + state + " state")
             raise Exception("Did not reach proper state")
-            
+    
+    def get_enabled_clc(self):
+        clc = self.get_enabled(self.clcs)
+        if clc is None:
+            raise Exception("Neither CLC is enabled")
+        else:
+            return clc
+    
+    def get_enabled(self, list_of_services):
+        for service in self.walruses:
+            if service.isEnabled():
+                return service
+        return None
+    
+    def get_enabled_walrus(self):
+        walrus = self.get_enabled(self.walruses)
+        if walrus is None:
+            raise Exception("Neither Walrus is enabled")
+        else:
+            return walrus
 
     
     

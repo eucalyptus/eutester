@@ -84,6 +84,7 @@ class Eutester(object):
         self.current_ssh = "clc"
         self.boto_debug = boto_debug
         self.ssh = None
+        self.sftp = None
         self.password = password
         self.keypath = keypath
         self.credpath = credpath
@@ -119,6 +120,9 @@ class Eutester(object):
         self.cc_log_channel= None
         self.nc_log_channel= None
         
+        ###
+        
+        
         ### If I have a config file
         ### PRIVATE CLOUD
         if self.config_file != None:
@@ -128,37 +132,34 @@ class Eutester(object):
             ### Set the eucapath
             if "REPO" in self.config["machines"][0].source:
                 self.eucapath="/"
-            ### swap in the hostname of the component
-            self.clc = self.get_component_machines("clc")[0]
-            self.ssh = self.clc.ssh
-            self.sftp = self.clc.sftp
             self.hypervisor = self.get_hypervisor()
-            self.service_manager = EuserviceManager(self)
+            ### No credpath but does have password and an ssh connection to the CLC
+            ### Private cloud with root access 
+            ### Need to get credentials for the user if there arent any passed in
+            ### Need to create service manager for user if we have an ssh connection and password
+            if (self.password != None):
+                if self.credpath is None:
+                    ### TRY TO GET CREDS ON FIRST CLC if it fails try on second listed clc, if that fails weve hit a terminal condition
+                    try:
+                        self.clc = self.get_component_machines("clc")[0]
+                        self.sftp = self.clc.ssh.connection.open_sftp()
+                        self.credpath = self.get_credentials(account,user)
+                    finally:
+                        self.clc = self.get_component_machines("clc")[1]
+                        self.sftp = self.clc.ssh.connection.open_sftp()
+                        self.credpath = self.get_credentials(account,user)
+                self.service_manager = EuserviceManager(self)
+                self.clc = self.service_manager.get_enabled_clc().machine
+                
+                
+                
             
-        ## IF I WASNT PROVIDED KEY TRY TO GET THEM FROM THE EUCARC IN CREDPATH
-        ### PRIVATE CLOUD
-#        if (self.password != None) or (self.keypath != None):
-#            client = paramiko.SSHClient()
-#            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-#            self.debug("Issuing SSH connection root@" +  self.hostname )            
-#            if keypath == None:   
-#                client.connect(self.hostname, username="root", password=password, timeout= self.timeout)
-#            else:
-#                client.connect(self.hostname,  username="root", key_filename=keypath, timeout= self.timeout)
-#            self.ssh = client
-#            self.sftp = self.ssh.open_sftp()
-        
-        ### If i have an ssh session and its to the clc
-        ### Private cloud with root access
-        if (self.credpath == None) and (self.ssh != None) and (self.password != None):
-                self.credpath = self.get_credentials(account,user) 
-        
 
-        ### If i have a credpath
+        ### Pull the access and secret keys from the eucarc
         if (self.credpath != None):         
             aws_access_key_id = self.get_access_key()
             aws_secret_access_key = self.get_secret_key()
-                 
+                    
         ### If you have credentials for the boto connections, create them
         if (aws_access_key_id != None) and (aws_secret_access_key != None):
            self.ec2 = boto.connect_ec2(aws_access_key_id=aws_access_key_id,
