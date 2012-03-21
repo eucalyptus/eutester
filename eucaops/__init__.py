@@ -336,7 +336,7 @@ class Eucaops(Eutester):
         poll_count = self.poll_count
         poll_interval = 10
         self.debug( "Sending create volume request" )
-        volume = self.ec2.create_volume(size, azone)
+        volume = self.ec2.create_volume(size, azone, snapshot)
         # Wait for the volume to be created.
         self.debug( "Polling for volume to become available")
         while volume.status != 'available' and (poll_count > 0):
