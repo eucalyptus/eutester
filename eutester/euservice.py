@@ -52,6 +52,7 @@ class Euservice:
         self.host = self.uri.split(":")[1].split("/")[2]
         self.running = True
         if tester is not None:
+            self.tester = tester
             self.machine = tester.get_machine_by_ip(self.host)
         
     def isEnabled(self):
@@ -61,11 +62,23 @@ class Euservice:
             return False
         
     def isDisabled(self):
-        if re.search('DISABLED',self.state):
+        if re.search('DISABLED',self.state) or re.search('NOTREADY',self.state):
             return True
         else:
             return False
+    
+    def disable(self):
+        self.tester.service_manager.disable(self)
         
+    def enable(self):
+        self.tester.service_manager.enable(self)
+    
+    def stop(self):
+        self.tester.service_manager.stop(self)
+    
+    def start(self):
+        self.tester.service_manager.start(self)
+    
         
 class Partition:
     name = ""
@@ -73,16 +86,18 @@ class Partition:
     scs = []
     vbs = []
     
-    def __init__(self, name ):
+    def __init__(self, name, service_manager ):
         self.name = name
     
     def get_enabled(self, list):
+        service_manager.update()
         for service in list:
             if service.isEnabled():
                 return service
         return None
     
     def get_disabled(self, list):
+        service_manager.update()
         for service in list:
             if not service.isEnabled():
                 return service
@@ -126,13 +141,24 @@ class EuserviceManager(object):
         if self.tester.clc is None:
             raise AttributeError("Tester object does not have CLC machine to use for SSH")
         self.update()
+        for clc in self.clcs: 
+            clc.machine.sftp.put( self.tester.credpath + "/creds.zip" , self.tester.credpath + "/creds.zip")
+            clc.machine.sys("unzip -o " +  self.tester.credpath  + "/creds.zip -d " + self.tester.credpath )
     
     def get(self, name=""):
-        describe_services = self.tester.clc.sys(self.eucaprefix + "/usr/sbin/euca-describe-services --system-internal " + str(name)  + " | grep SERVICE")
-        if len(describe_services) < 1:
-            if name is "":
-                name = "all"
-            raise IndexError("Did not receive proper response from describe services when looking for " + str(name))
+        try:
+            describe_services = self.tester.clc.sys(self.eucaprefix + "/usr/sbin/euca-describe-services --system-internal " + str(name)  + " | grep SERVICE", timeout=15)
+            if len(describe_services) < 1:
+                if name is "":
+                    name = "all"
+                raise IndexError("Did not receive proper response from describe services when looking for " + str(name))
+        except Exception, e:
+            self.tester.swap_clc()
+            describe_services = self.tester.clc.sys(self.eucaprefix + "/usr/sbin/euca-describe-services --system-internal " + str(name)  + " | grep SERVICE", timeout=15)
+            if len(describe_services) < 1:
+                if name is "":
+                    name = "all"
+                raise IndexError("Did not receive proper response from describe services when looking for " + str(name))
         services = []
         for service_line in describe_services:
             services.append(Euservice(service_line, self.tester))
@@ -175,7 +201,7 @@ class EuserviceManager(object):
                 if current_euservice.partition in self.partitions:
                     my_partition = self.partitions[current_euservice.partition]
                 else:
-                    my_partition = Partition(current_euservice.partition)
+                    my_partition = Partition(current_euservice.partition, self)
                     append = True
                 if re.search("cluster", current_euservice.type):
                     my_partition.ccs.append(current_euservice)
@@ -239,11 +265,12 @@ class EuserviceManager(object):
         else:
             return clc
     
-    def get_enabled(self, list_of_services):
-        for service in self.walruses:
-            if service.isEnabled():
-                return service
-        return None
+    def get_disabled_clc(self):
+        clc = self.get_disabled(self.clcs)
+        if clc is None:
+            raise Exception("Neither CLC is enabled")
+        else:
+            return clc
     
     def get_enabled_walrus(self):
         walrus = self.get_enabled(self.walruses)
@@ -251,6 +278,29 @@ class EuserviceManager(object):
             raise Exception("Neither Walrus is enabled")
         else:
             return walrus
+    
+    def get_disabled_walrus(self):
+        walrus = self.get_enabled(self.walruses)
+        if walrus is None:
+            raise Exception("Neither Walrus is enabled")
+        else:
+            return walrus
+    
+    def get_enabled(self, list_of_services):
+        self.update()
+        for service in list_of_services:
+            if service.isEnabled():
+                return service
+        return None
+    
+    def get_disabled(self, list_of_services):
+        self.update()
+        for service in list_of_services:
+            if service.isDisabled():
+                return service
+        return None
+    
+    
 
     
     

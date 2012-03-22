@@ -120,9 +120,8 @@ class Eutester(object):
         self.cc_log_channel= None
         self.nc_log_channel= None
         
-        ###
-        
-        
+        self.clc_index = 0
+
         ### If I have a config file
         ### PRIVATE CLOUD
         if self.config_file != None:
@@ -132,28 +131,24 @@ class Eutester(object):
             ### Set the eucapath
             if "REPO" in self.config["machines"][0].source:
                 self.eucapath="/"
-            self.hypervisor = self.get_hypervisor()
+            #self.hypervisor = self.get_hypervisor()
             ### No credpath but does have password and an ssh connection to the CLC
             ### Private cloud with root access 
             ### Need to get credentials for the user if there arent any passed in
             ### Need to create service manager for user if we have an ssh connection and password
             if (self.password != None):
+                self.clc = self.get_component_machines("clc")[self.clc_index]
                 if self.credpath is None:
                     ### TRY TO GET CREDS ON FIRST CLC if it fails try on second listed clc, if that fails weve hit a terminal condition
                     try:
-                        self.clc = self.get_component_machines("clc")[0]
                         self.sftp = self.clc.ssh.connection.open_sftp()
                         self.credpath = self.get_credentials(account,user)
-                    finally:
-                        self.clc = self.get_component_machines("clc")[1]
+                    except Exception, e:
+                        self.swap_clc()
                         self.sftp = self.clc.ssh.connection.open_sftp()
                         self.credpath = self.get_credentials(account,user)
                 self.service_manager = EuserviceManager(self)
                 self.clc = self.service_manager.get_enabled_clc().machine
-                
-                
-                
-            
 
         ### Pull the access and secret keys from the eucarc
         if (self.credpath != None):         
@@ -188,6 +183,14 @@ class Eutester(object):
     
     def __del__(self):
         self.logging_thread = False
+        
+    def swap_clc(self):
+        if self.clc_index is 0:
+            self.clc = self.get_component_machines("clc")[1]
+            self.clc_index = 1
+        else:
+            self.clc = self.get_component_machines("clc")[0]
+            self.clc_index = 0
     
     def read_config(self, filepath):
         """ Parses the config file at filepath returns a dictionary with the config

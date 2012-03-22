@@ -62,6 +62,17 @@ class machine:
         if ( self.verbose is True ):
                 self.debugmethod(msg)
 
+    def reboot(self, force=True):
+        if force:
+            try:
+                self.sys("reboot -f", timeout=10)
+            except Exception, e:
+                pass
+        else:
+            try:
+                self.sys("reboot", timeout=10)
+            except Exception, e:
+                pass
                 
     def sys(self, cmd, verbose=True, timeout=120):
         '''
