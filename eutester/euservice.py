@@ -173,6 +173,13 @@ class EuserviceManager(object):
             self.partitions[k].ccs = []
             self.partitions[k].scs = []
             self.partitions[k].vbs = []
+    
+    def conclusive_master_clc(self):
+        self.reset()
+    
+    def sync_credentials(self):
+        self.reset()
+        
         
     def update(self, name=""):
         ### Get all services

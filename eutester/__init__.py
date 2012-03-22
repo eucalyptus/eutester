@@ -319,14 +319,24 @@ class Eutester(object):
            Defaults to admin@eucalyptus 
         """
         admin_cred_dir = "eucarc-" + account + "-" + user
+        
+        ### SETUP directory remotely
         self.sys("rm -rf " + admin_cred_dir)
         self.sys("mkdir " + admin_cred_dir)
+        
+        ### Download credentials from Active CLC
         cmd_download_creds = self.eucapath + "/usr/sbin/euca_conf --get-credentials " + admin_cred_dir + "/creds.zip " + "--cred-user "+ user +" --cred-account " + account 
-        cmd_setup_cred_dir = ["rm -rf " + admin_cred_dir,"mkdir " + admin_cred_dir ,  cmd_download_creds, "unzip -o " + admin_cred_dir + "/creds.zip " + "-d " + admin_cred_dir]
-        for cmd in cmd_setup_cred_dir:         
-            stdout = self.sys(cmd, verbose=1)
+
+        if self.found( cmd_download_creds, ""):
+            raise IOError("Error downloading credentials")
+        if self.found( "unzip -o " + admin_cred_dir + "/creds.zip " + "-d " + admin_cred_dir, "cannot find zipfile directory"):
+            raise IOError("Empty ZIP file returned by CLC")
+        
+        ### SETUP directory locally
         os.system("rm -rf " + admin_cred_dir)
         os.mkdir(admin_cred_dir)
+        
+        ### DOWNLOAD creds from clc
         self.sftp.get(admin_cred_dir + "/creds.zip" , admin_cred_dir + "/creds.zip")
         os.system("unzip -o " + admin_cred_dir + "/creds.zip -d " + admin_cred_dir )
         return admin_cred_dir
@@ -471,7 +481,7 @@ class Eutester(object):
     def found(self, command, regex, local=False):
         """ Returns a Boolean of whether the result of the command contains the regex"""
         if local:
-            result = self.local(cmd)
+            result = self.local(command)
         else:
             result = self.sys(command)
         for line in result:
