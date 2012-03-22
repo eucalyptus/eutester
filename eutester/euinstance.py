@@ -19,6 +19,7 @@ import sshconnection
 import os
 import time
 import re
+import eulogger
 
 class EuInstance(Instance):
     keypair = None
@@ -29,7 +30,7 @@ class EuInstance(Instance):
     debugmethod = None
     timeout =  60
     retry = 1
-
+    logger = None
    
     @classmethod
     def make_euinstance_from_instance(cls, 
@@ -62,6 +63,18 @@ class EuInstance(Instance):
             keypath = os.getcwd() + "/" + keypair.name + ".pem" 
         newins.keypair = keypair
         newins.keypath = keypath
+        
+        newins.debugmethod = debugmethod
+        if newins.debugmethod is None:
+            logger = eulogger.Eulogger(identifier= str(instance.id) + "-" + str(instance.ip_address))
+            newins.debugmethod= logger.log.debug
+            
+        newins.attached_vols=[] 
+        newins.timeout = timeout
+        newins.verbose = verbose
+        newins.username = username
+        newins.password = password
+        newins.retry = retry
         if ((keypath is not None) or ((username is not None)and(password is not None))):
             newins.ssh = sshconnection.SshConnection(
                                                     instance.ip_address, 
@@ -71,27 +84,35 @@ class EuInstance(Instance):
                                                     username=username, 
                                                     timeout=timeout, 
                                                     retry=retry,
-                                                    debugmethod=debugmethod,
-                                                    verbose=verbose)
+                                                    debugmethod=newins.debugmethod,
+                                                    verbose=True)
     
         
-        newins.attached_vols=[] 
-        newins.debugmethod = debugmethod
-        newins.timeout = timeout
+
         return newins
     
+    def update_ssh(self):
+        self.update()
+        self.ssh = sshconnection.SshConnection(
+                                                    self.ip_address, 
+                                                    keypair=self.keypair, 
+                                                    keypath=self.keypath,          
+                                                    password=self.password, 
+                                                    username=self.username, 
+                                                    timeout=self.timeout, 
+                                                    retry=self.retry,
+                                                    debugmethod=self.debugmethod,
+                                                    verbose=True)
     def debug(self,msg):
         '''
         Used to print debug, defaults to print() but over ridden by self.debugmethod if not None
         msg - mandatory -string, message to be printed
         '''
         if ( self.verbose is True ):
-            if ( self.debugmethod is None):
-                print(msg)
-            else:
                 self.debugmethod(msg)
+
                 
-    def sys(self, cmd, verbose=False, timeout=120):
+    def sys(self, cmd, verbose=True, timeout=120):
         '''
         Issues a command against the ssh connection to this instance
         Returns a list of the lines from stdout+stderr as a result of the command
@@ -115,7 +136,7 @@ class EuInstance(Instance):
                 return True
         return False 
         
-    def get_dev_dir(self, match="sd\|xd" ):
+    def get_dev_dir(self, match="sd\|vd\|xd" ):
         return self.sys("ls -1 /dev/ | grep '"+str(match)+"'" )
     
     def assertFilePresent(self,filepath):
@@ -123,9 +144,11 @@ class EuInstance(Instance):
         Method to check for the presence of a file at 'filepath' on the instance
         filepath - mandatory - string, the filepath to verify
         '''
-        if self.sys("stat "+filepath+" &> /dev/null && echo 'good'")[0] != 'good':
+        if not self.found("stat "+filepath+" &> /dev/null && echo 'good'", 'good'):
             raise Exception("File:"+filepath+" not found on instance:"+self.id)
+            return False
         self.debug('File '+filepath+' is present on '+self.id)
+        return True
     
     def get_metadata(self, element_path):
         """Return the lines of metadata from the element path provided"""
