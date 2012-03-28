@@ -155,8 +155,9 @@ class SshConnection():
                 
         return output
         
+    def refresh_connection(self):
+        self.connection = self.get_ssh_connection(self.host, self.username,self.password , self.keypath, self.timeout, self.retry)
         
-    
     def get_ssh_connection(self, hostname, username="root", password=None, keypath=None, timeout= 60, retry=1):
         '''
         Create a paramiko ssh session to hostname. Will attempt to authenticate first with a keypath if provided, 
