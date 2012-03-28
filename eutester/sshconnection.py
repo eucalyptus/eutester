@@ -138,7 +138,8 @@ class SshConnection():
             else:
                 #return output as single string buffer
                 output = f.read()
-            self.debug("done with exec")
+            if verbose:
+                self.debug("done with exec")
         except CommandTimeoutException, cte: 
             elapsed = str(time.time()-start).split('.')[0]
             self.debug("Command ("+cmd+") timed out after " + str(elapsed) + " seconds\nException")     
@@ -185,7 +186,8 @@ class SshConnection():
                     self.debug("Using username:"+username+" and password:"+password)
                     ssh.connect(hostname, username="root", password=password, timeout= timeout)
                 else:
-                    self.debug("Using Keypath:"+keypath)
+                    if self.verbose:
+                        self.debug("Using Keypath:"+keypath)
                     ssh.connect(hostname,  username="root", key_filename=keypath, timeout= timeout)
                 break
             except paramiko.ssh_exception.SSHException, se:

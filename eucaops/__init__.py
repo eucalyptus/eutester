@@ -384,7 +384,7 @@ class Eucaops(Eutester):
         for volume in volumes:
             self.delete_volume(volume.id)
     
-    def attach_volume(self, instance, volume, device_path):
+    def attach_volume(self, instance, volume, device_path, wait=20):
         """
         Attach a volume to an instance
         instance    instance object to attach volume to
@@ -392,7 +392,7 @@ class Eucaops(Eutester):
         device_path device name to request on guest
         """
         volume.attach(instance.id,device_path )
-        self.sleep(20)
+        self.sleep(wait)
         poll_count = 10
         volume.update()
         while ( volume.status != "in-use") and (poll_count > 0):
@@ -769,15 +769,16 @@ class Eucaops(Eutester):
         for which there are local keys at 'path'
         '''
         try:
-            instance = None    
+            instances = []  
             keys = self.get_all_current_local_keys(path=path)
             if keys != []:
                 for keypair in keys:
                     self.debug('looking for instances using keypair:'+keypair.name)
                     instances = self.get_instances(state='running',key=keypair.name)
                     if instances != []:
-                        instance = instances[0]
-                        self.debug('Found usable instance:'+instance.id+'using key:'+keypair.name)
+                        return instances
+                        #instance = instances[0]
+                        #self.debug('Found usable instance:'+instance.id+'using key:'+keypair.name)
                         break
         except Exception, e:
             self.debug("Failed to find a pre-existing isntance we can connect to:"+str(e))
