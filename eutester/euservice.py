@@ -49,11 +49,11 @@ class Euservice:
         self.state = values[4]
         self.uri = values[6]
         self.fullname = values[7]
-        self.host = self.uri.split(":")[1].split("/")[2]
+        self.hostname = self.uri.split(":")[1].split("/")[2]
         self.running = True
         if tester is not None:
             self.tester = tester
-            self.machine = tester.get_machine_by_ip(self.host)
+            self.machine = tester.get_machine_by_ip(self.hostname)
         
     def isEnabled(self):
         if re.search('ENABLED',self.state) :
@@ -62,7 +62,7 @@ class Euservice:
             return False
         
     def isDisabled(self):
-        if re.search('DISABLED',self.state) or re.search('NOTREADY',self.state):
+        if not re.search('ENABLED', self.state):
             return True
         else:
             return False
@@ -88,16 +88,17 @@ class Partition:
     
     def __init__(self, name, service_manager ):
         self.name = name
-    
+        self.service_manager = service_manager
+        
     def get_enabled(self, list):
-        service_manager.update()
+        self.service_manager.update()
         for service in list:
             if service.isEnabled():
                 return service
         return None
     
     def get_disabled(self, list):
-        service_manager.update()
+        self.service_manager.update()
         for service in list:
             if not service.isEnabled():
                 return service
@@ -140,25 +141,30 @@ class EuserviceManager(object):
         self.eucaprefix = ". " + self.tester.credpath + "/eucarc && " + self.tester.eucapath
         if self.tester.clc is None:
             raise AttributeError("Tester object does not have CLC machine to use for SSH")
+        
         self.update()
-        for clc in self.clcs: 
-            clc.machine.sftp.put( self.tester.credpath + "/creds.zip" , self.tester.credpath + "/creds.zip")
-            clc.machine.sys("unzip -o " +  self.tester.credpath  + "/creds.zip -d " + self.tester.credpath )
+
     
-    def get(self, name=""):
+    def get(self, type=None, partition=None, attempt_both=True):
+        if type is not None:
+            type = " -T " + str(type) 
+        else:
+            type = ""
+        #### This is a hack around the fact that the -P filter is not working need to fix this once that functionality is fixed
+        if partition is not None:
+            partition = " | grep " + str(partition) 
+        else:
+            partition = ""
         try:
-            describe_services = self.tester.clc.sys(self.eucaprefix + "/usr/sbin/euca-describe-services --system-internal " + str(name)  + " | grep SERVICE", timeout=15)
+            describe_services = self.tester.clc.sys(self.eucaprefix + "/usr/sbin/euca-describe-services --system-internal " + str(type)  +  "| grep SERVICE" + str(partition), timeout=15)
             if len(describe_services) < 1:
-                if name is "":
-                    name = "all"
-                raise IndexError("Did not receive proper response from describe services when looking for " + str(name))
+                raise IndexError("Did not receive proper response from describe services when looking for " + str(type))
         except Exception, e:
-            self.tester.swap_clc()
-            describe_services = self.tester.clc.sys(self.eucaprefix + "/usr/sbin/euca-describe-services --system-internal " + str(name)  + " | grep SERVICE", timeout=15)
-            if len(describe_services) < 1:
-                if name is "":
-                    name = "all"
-                raise IndexError("Did not receive proper response from describe services when looking for " + str(name))
+            if attempt_both:
+                self.tester.swap_clc()
+                describe_services = self.tester.clc.sys(self.eucaprefix + "/usr/sbin/euca-describe-services --system-internal " + str(type)  + " | grep SERVICE "  + str(partition)  , timeout=15)
+            if len(describe_services) < 1:                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
+                    raise IndexError("Did not receive proper response from describe services when looking for " + str(type))
         services = []
         for service_line in describe_services:
             services.append(Euservice(service_line, self.tester))
@@ -174,14 +180,67 @@ class EuserviceManager(object):
             self.partitions[k].scs = []
             self.partitions[k].vbs = []
     
-    def conclusive_master_clc(self):
+    def get_all_services(self):
+        all_services = []
+        self.update()
+        if len(self.clcs) > 0:
+            all_services.append(self.clcs)
+        if len(self.walruses) > 0:
+            all_services.append(self.walruses)
+        for partition in self.partitions.keys():
+
+            ccs = self.partitions[partition].ccs
+            if len(ccs) > 0:
+                all_services.append(ccs)
+                
+            scs = self.partitions[partition].scs
+            if len(scs) > 0:
+                all_services.append(scs)
+            
+            vbs = self.partitions[partition].vbs
+            if len(vbs) > 0:
+                all_services.append(vbs)
+                
+        return all_services
+            
+    def start_all(self):
+        all_services = self.get_all_services() 
+        for service in all_services:
+            try:
+                service.start()
+            except Exception, e:
+                self.tester.debug("Caught an exception when trying to turn up a service. Probably was already running")
+                
+    def get_conclusive_enabled_clc(self):
         self.reset()
-    
+        try:
+            first_clc = self.get("eucalyptus")
+        except:
+            first_clc = None
+            
+        self.tester.swap_clc()
+        
+        try:
+            second_clc = self.get("eucalyptus")
+        except:
+            second_clc = None
+        
+        ### Only one responded properly
+        if second_clc is None:
+            return first_clc 
+        if first_clc is None:
+            return second_clc
+        
+        ### Inconsistency among 2 CLCs
+        if second_clc.host is first_clc.host:
+                return first_clc
+        else:
+            raise Exception("Could not find a CLC to connect to")
+        
     def sync_credentials(self):
         self.reset()
         
-        
-    def update(self, name=""):
+    def update(self, name=None):
         ### Get all services
         self.reset()
         services = self.get(name)
@@ -253,17 +312,25 @@ class EuserviceManager(object):
     def disable(self,euservice):
         self.modify_service(euservice, "DISABLED")
         
-    def wait_for_service(self, euservice, state = "ENABLED"):
+    def wait_for_service(self, euservice, state = "ENABLED", attempt_both = True):
         poll_count = 36
         interval = 10
-        while (poll_count > 0) and (re.search(state,euservice.state)):
+        
+        while (poll_count > 0):
+            try:
+                matching_services = self.get(euservice.type, euservice.partition, attempt_both)
+            except Exception, e:
+                self.tester.debug("Caught an exception when trying to get services. Retrying in 10s")
+            for service in matching_services:
+                if re.search(state, service.state):
+                    break
             poll_count -= 1
             self.tester.sleep(interval)
-            self.update()
-            
+                
         if poll_count is 0:
             self.tester.fail("Service: " + euservice.name + " did not enter "  + state + " state")
-            raise Exception("Did not reach proper state")
+            raise Exception("Service: " + euservice.name + " did not enter "  + state + " state")
+        
     
     def get_enabled_clc(self):
         clc = self.get_enabled(self.clcs)
@@ -275,7 +342,7 @@ class EuserviceManager(object):
     def get_disabled_clc(self):
         clc = self.get_disabled(self.clcs)
         if clc is None:
-            raise Exception("Neither CLC is enabled")
+            raise Exception("Neither CLC is disabled")
         else:
             return clc
     
@@ -289,7 +356,7 @@ class EuserviceManager(object):
     def get_disabled_walrus(self):
         walrus = self.get_enabled(self.walruses)
         if walrus is None:
-            raise Exception("Neither Walrus is enabled")
+            raise Exception("Neither Walrus is disabled")
         else:
             return walrus
     

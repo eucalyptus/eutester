@@ -289,7 +289,7 @@ class Eucaops(Eutester):
         """
         if poll_count is None:
             poll_count = self.poll_count
-        self.debug( "Beginning poll loop for instance " + str(instance) + " to go to " + state )
+        self.debug( "Beginning poll loop for instance " + str(instance) + " to go to " + str(state) )
         instance.update()
         instance_original_state = instance.state
         start = time.time()
@@ -324,7 +324,7 @@ class Eucaops(Eutester):
                 aggregate_result = False
         return aggregate_result
     
-    def create_volume(self, azone, size=1, snapshot=None):
+    def create_volume(self, azone, size=1, snapshot=None): 
         """
         Create a new EBS volume then wait for it to go to available state, size or snapshot is mandatory
         azone        Availability zone to create the volume in
@@ -335,7 +335,7 @@ class Eucaops(Eutester):
         poll_count = self.poll_count
         poll_interval = 10
         self.debug( "Sending create volume request" )
-        volume = self.ec2.create_volume(size, azone)
+        volume = self.ec2.create_volume(size, azone, snapshot)
         # Wait for the volume to be created.
         self.debug( "Polling for volume to become available")
         while volume.status != 'available' and (poll_count > 0):
@@ -449,7 +449,7 @@ class Eucaops(Eutester):
         elapsed = 0
         polls = 0
         snap_start = time.time()
-        #self.debug("Sending create snapshot request for volume:"+volume_id)
+
         snapshot = self.ec2.create_snapshot( volume_id )
         self.debug("Waiting for snapshot (" + snapshot.id + ") creation to complete")
         while ( (poll_count > 0) and ((timeout == 0) or (elapsed <= timeout)) ):

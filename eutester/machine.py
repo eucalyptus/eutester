@@ -61,6 +61,9 @@ class machine:
         '''
         if ( self.verbose is True ):
                 self.debugmethod(msg)
+                
+    def refresh_connection(self):
+        self.ssh.refresh_connection()
 
     def reboot(self, force=True):
         if force:
@@ -73,7 +76,10 @@ class machine:
                 self.sys("reboot", timeout=10)
             except Exception, e:
                 pass
-                
+    
+    def interrupt_network(self, time = 240, interface = "eth0"):
+        self.sys("ifdown " + interface + "; sleep " + time + ";ifup " + interface + " &")
+    
     def sys(self, cmd, verbose=True, timeout=120):
         '''
         Issues a command against the ssh connection to this instance
