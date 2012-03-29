@@ -23,9 +23,8 @@ import sshconnection
 import os
 import re
 import time
-
-    
-    
+import re
+import eulogger
 
 
 class EuInstance(Instance):
@@ -45,16 +44,17 @@ class EuInstance(Instance):
     ssh = None
     tester = None
 
+
    
     @classmethod
     def make_euinstance_from_instance(cls, 
                                       instance, 
                                       tester,
+                                      debugmethod = None, 
                                       keypair=None, 
                                       keypath=None, 
                                       password=None, 
-                                      username="root", 
-                                      debugmethod = None, 
+                                      username="root",  
                                       verbose=True, 
                                       timeout=60,
                                       retry=2
@@ -84,15 +84,12 @@ class EuInstance(Instance):
             keypath = os.getcwd() + "/" + keypair.name + ".pem" 
         newins.keypair = keypair
         newins.keypath = keypath
-        newins.username = username
         newins.password = password
-        newins.attached_vols=[] 
-        newins.timeout = timeout
+        newins.username = username
         newins.verbose = verbose
         newins.attached_vols=[] 
         newins.timeout = timeout
-        newins.verbose = verbose
-        
+        newins.retry = retry    
         newins.connect_to_instance(timeout=timeout)
         return newins
     
@@ -144,12 +141,10 @@ class EuInstance(Instance):
         msg - mandatory -string, message to be printed
         '''
         if ( self.verbose is True ):
-            if ( self.debugmethod is None):
-                print(msg)
-            else:
                 self.debugmethod(msg)
+
                 
-    def sys(self, cmd, verbose=False, timeout=120):
+    def sys(self, cmd, verbose=True, timeout=120):
         '''
         Issues a command against the ssh connection to this instance
         Returns a list of the lines from stdout+stderr as a result of the command
@@ -163,8 +158,17 @@ class EuInstance(Instance):
             return output
         else:
             raise Exception("Euinstance ssh connection is None")
+    
+    def found(self, command, regex):
+        """ Returns a Boolean of whether the result of the command contains the regex"""
+        result = self.sys(command)
+        for line in result:
+            found = re.search(regex,line)
+            if found:
+                return True
+        return False 
         
-    def get_dev_dir(self, match="sd\|xd" ):
+    def get_dev_dir(self, match="sd\|vd\|xd" ):
         return self.sys("ls -1 /dev/ | grep '"+str(match)+"'" )
     
     def assertFilePresent(self,filepath):
@@ -172,8 +176,9 @@ class EuInstance(Instance):
         Method to check for the presence of a file at 'filepath' on the instance
         filepath - mandatory - string, the filepath to verify
         '''
-        if self.sys("stat "+filepath+" &> /dev/null && echo 'good'")[0] != 'good':
+        if not self.found("stat "+filepath+" &> /dev/null && echo 'good'", 'good'):
             raise Exception("File:"+filepath+" not found on instance:"+self.id)
+            return False
         self.debug('File '+filepath+' is present on '+self.id)
         
     
@@ -195,14 +200,14 @@ class EuInstance(Instance):
         
         self.debug("Attempting to attach volume:"+str(euvolume.id)+" to instance:" +str(self.id)+" to dev:"+ str(dev))
         dev_list_before = self.get_dev_dir()
-        self.debug("list before\n"+"".join(dev_list_before))
+        #self.debug("list before\n"+"".join(dev_list_before))
         dev_list_after = []
         attached_dev = None
         start= time.time()
         elapsed = 0
         if dev is None:
             dev = self.get_free_scsi_dev()
-        if (self.tester.attach_volume(self, euvolume, dev,wait=10)):     
+        if (self.tester.attach_volume(self, euvolume, dev,pause=10)):     
             while (elapsed < timeout):
                 self.debug("Checking for volume attachment on guest, elapsed time("+str(elapsed)+")")
                 dev_list_after = self.get_dev_dir()
@@ -247,6 +252,16 @@ class EuInstance(Instance):
                 else:
                     raise Exception("Volume("+str(vol.id)+") failed to detach from device("+str(dev)+") on ("+str(self.id)+")")
         raise Exception("Detach Volume("+str(euvolume.id)+") not found on ("+str(self.id)+")")
+        return True
+    
+    def get_metadata(self, element_path):
+        """Return the lines of metadata from the element path provided"""
+        ### TODO= for some reason this logic wasnt working when used inside a unittest testcase
+        #if re.search("managed", self.get_network_mode()):
+        return self.sys("curl http://169.254.169.254/latest/meta-data/" + element_path)
+        #else:
+        #    return self.sys("curl http://" + self.get_clc_ip()  + ":8773/latest/meta-data/" + element_path)
+
     
     
     def get_guestdevs_inuse_by_vols(self):
@@ -324,7 +339,7 @@ class EuInstance(Instance):
                 raise Exception("Missing volumes post reboot:"+str(msg)+"\n")
         self.debug(self.id+" reboot_instance_and_verify Success")
         
-    def get_unsynced_volumes(self,euvol_list=None):
+    def get_unsynced_volumes(self,euvol_list=None, timepervol=30):
         '''
         Returns list of volumes which are no longer attached, and/or the attached device has changed, or is not found.
         If all euvols are shown as attached to this instance, and the last known local dev is present then the list will
@@ -347,14 +362,20 @@ class EuInstance(Instance):
                 self.debug("Checking volume:"+str(vol.id))
                 if (vol.attach_data.instance_id == self.id):
                     match = 0 
-                    for dev in dev_list:
-                        dev = dev.strip()
-                        if re.match(dev,vol.guestdev.strip()):
-                            self.debug("Found local/volume match dev:"+str(dev))
+                    elapsed = 0 
+                    start = time.time()
+                    while (match == 0):
+                        try:
+                            self.assertFilePresent('/dev/'+vol.guestdev.strip())
+                            self.debug("Found local/volume match dev:"+vol.guestdev.strip())
                             match = 1
-                    if match == 0:
-                        bad_list.append(vol)
-                        self.debug("volume.guestdev:"+str(vol.guestdev)+",device not found on guest?")
+                        except: 
+                            if (elapsed < timepervol):
+                                time.sleep(5)
+                            else:
+                                bad_list.append(vol)
+                                self.debug("volume.guestdev:"+str(vol.guestdev)+",device not found on guest? Elapsed:"+str(elapsed))
+                        elapsed = int(time.time() - start)
                 else:
                     self.debug("Error, Volume.attach_data.instance_id:("+str(vol.attach_data.instance_id)+") != ("+str(self.id)+")")
                     bad_list.append(vol)
@@ -373,6 +394,7 @@ class EuInstance(Instance):
         the local attached_vols list. To confirm local state with the cloud state, the options 'reattach', or 'detach' can be used. 
         This should be used when first creating a euinstance from an instance to insure the euinstance volume state is in sync with the cloud. 
         '''
+        self.attached_vols = []
         cloudlist = []
         cloudlist=self.tester.ec2.get_all_volumes()
         for vol in cloudlist:
@@ -381,13 +403,21 @@ class EuInstance(Instance):
                 dev = vol.attach_data.device
                 try:
                     self.assertFilePresent(dev)
+                    if not detach:
+                        evol = EuVolume.make_euvol_from_vol(vol)
+                        evol.guestdev = dev
+                        evol.clouddev = dev
+                        self.attached_vols.append(evol)
+                    else:
+                        self.tester.detach_volume(vol)
                 except Exception,e:
                     if reattach or detach:
                         self.tester.detach_volume(vol)
                     if reattach:
                         dev = self.get_free_scsi_dev()
                         self.attach_volume(self, self, vol,dev )
-                        
+                
+                
         
         
     def stop_instance_and_verify(self, timeout=120, state='stopped', failstate='terminated'):

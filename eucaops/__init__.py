@@ -10,11 +10,16 @@ from boto.ec2.instance import Reservation
 from boto.ec2.volume import Volume
 from boto.ec2.blockdevicemapping import BlockDeviceMapping, BlockDeviceType
 
+from eutester.euinstance import EuInstance
+
+
 class Eucaops(Eutester):
     
-    def __init__(self, config_file=None, hostname=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,account="eucalyptus",user="admin", boto_debug=0):
-        super(Eucaops, self).__init__(config_file, hostname, password, keypath, credpath, aws_access_key_id, aws_secret_access_key,account, user, boto_debug)
+    def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,account="eucalyptus",user="admin", boto_debug=0):
+        super(Eucaops, self).__init__(config_file,password, keypath, credpath, aws_access_key_id, aws_secret_access_key,account, user, boto_debug)
         self.poll_count = 24
+        if self.hypervisor is "vmware":
+            self.poll_count = 48
         self.test_resources = {}
         self.test_resources["keys"] = []
         self.test_resources["buckets"] = []
@@ -257,7 +262,7 @@ class Eucaops(Eutester):
         cidr_ip         CIDR subnet to authorize, default="0.0.0.0/0" everything
         """
         try:
-            self.debug( "Attempting authorization of group" )
+            self.debug( "Attempting authorization of " + group_name + " on port " + str(port) + " " + protocol )
             self.ec2.authorize_security_group_deprecated(group_name,ip_protocol=protocol, from_port=port, to_port=port, cidr_ip=cidr_ip)
             return True
         except self.ec2.ResponseError, e:
@@ -274,24 +279,17 @@ class Eucaops(Eutester):
         protocol        Protocol to authorize, default=tcp
         cidr_ip         CIDR subnet to authorize, default="0.0.0.0/0" everything
         """
-        group_name = group.name
-        try:
-            self.debug( "Attempting authorization of group" )
-            self.ec2.authorize_security_group_deprecated(group_name,ip_protocol=protocol, from_port=port, to_port=port, cidr_ip=cidr_ip)
-        except self.ec2.ResponseError, e:
-            if e.code == 'InvalidPermission.Duplicate':
-                self.debug( 'Security Group: %s already authorized' % group_name )
-            else:
-                raise
+        return self.authorize_group_by_name(group.name, port, protocol, cidr_ip) 
     
-    def wait_for_instance(self,instance, state="running"):
+    def wait_for_instance(self,instance, state="running", poll_count = None):
         """
         Wait for the instance to enter the state
         instance      Boto instance object to check the state on
         state        state that we are looking for
         """
-        poll_count = self.poll_count
-        self.debug( "Beginning poll loop for instance " + str(instance) + " to go to " + state )
+        if poll_count is None:
+            poll_count = self.poll_count
+        self.debug( "Beginning poll loop for instance " + str(instance) + " to go to " + str(state) )
         instance.update()
         instance_original_state = instance.state
         start = time.time()
@@ -299,6 +297,7 @@ class Eucaops(Eutester):
         ### If the instance changes state or goes to the desired state before my poll count is complete
         while( poll_count > 0) and (instance.state != state):
             poll_count -= 1
+            self.debug( "Instance("+instance.id+") State("+instance.state+"), sleeping 10s")
             time.sleep(10)
             instance.update()
             elapsed = (time.time()- start)
@@ -325,7 +324,7 @@ class Eucaops(Eutester):
                 aggregate_result = False
         return aggregate_result
     
-    def create_volume(self, azone, size=1, snapshot=None):
+    def create_volume(self, azone, size=1, snapshot=None): 
         """
         Create a new EBS volume then wait for it to go to available state, size or snapshot is mandatory
         azone        Availability zone to create the volume in
@@ -341,6 +340,7 @@ class Eucaops(Eutester):
         self.debug( "Polling for volume to become available")
         while volume.status != 'available' and (poll_count > 0):
             poll_count -= 1
+            self.debug("Volume ("+volume.id+") State("+volume.status+") sleeping " + str(poll_interval) + "s")
             time.sleep(poll_interval)
             volume.update()
             self.debug( str(volume) + " in " + volume.status +" state") 
@@ -368,7 +368,7 @@ class Eucaops(Eutester):
         while ( volume.status != "deleted") and (poll_count > 0):
             poll_count -= 1
             volume.update()
-            self.debug( str(volume) + " in " + volume.status )
+            self.debug( str(volume) + " in " + volume.status + " sleeping 10s")
             self.sleep(10)
 
         if poll_count == 0:
@@ -384,29 +384,31 @@ class Eucaops(Eutester):
         for volume in volumes:
             self.delete_volume(volume.id)
     
-    def attach_volume(self, instance, volume, device_path, wait=20):
+    def attach_volume(self, instance, volume, device_path, pause=10, timeout=60):
         """
         Attach a volume to an instance
         instance    instance object to attach volume to
         volume      volume object to attach
         device_path device name to request on guest
         """
+        self.debug("Sending attach for " + str(volume) + " to be attached to " + str(instance) + " at device node " + device_path)
         volume.attach(instance.id,device_path )
-        self.sleep(wait)
-        poll_count = 10
+        start = time.time()
+        elapsed = 0  
         volume.update()
-        while ( volume.status != "in-use") and (poll_count > 0):
-            poll_count -= 1
+        while (elapsed < timeout):
             volume.update()
-            self.debug( str(volume) + " in " + volume.status )
-            self.sleep(10)
+            if re.search("attached",volume.attach_data.status):
+                return True
+            self.debug( str(volume) + " state:" + volume.attach_data.status + " pause:"+str(pause)+" elapsed:"+str(elapsed))
+            self.sleep(pause)
+            elapsed = int(time.time()-start)
 
-        if poll_count == 0:
-            self.fail(str(volume) + " left in " +  volume.status)
-            return False
-        return True
+        self.fail(str(volume) + " left in " +  volume.attach_data.status)
+        return False
+      
     
-    def detach_volume(self, volume):
+    def detach_volume(self, volume, pause = 10, timeout=60):
         """
         Detach a volume
         volume   volume to detach
@@ -415,18 +417,19 @@ class Eucaops(Eutester):
             self.fail("Volume does not exist")
             return False
         volume.detach()
-        volume.update()
         self.debug( "Sent detach for volume: " + volume.id + " which is currently in state: " + volume.status)
-        poll_count = 10 
-        while ( volume.status == "in-use") and (poll_count > 0):
-            poll_count -= 1
-            self.debug( str(volume) + " in " + volume.status)
-            self.sleep(10)
+        start = time.time()
+        elapsed = 0  
+        while (elapsed < timeout):
             volume.update()
-        self.debug(str(volume) + " left in " +  volume.status)
-        if poll_count == 0:
-            self.fail(str(volume) + " left in " +  volume.status)
-        return True
+            if ( volume.status != "in-use"):
+                self.debug(str(volume) + " left in " +  volume.status)
+                return True
+            self.debug( str(volume) + " state:" + volume.status + " pause:"+str(pause)+" elapsed:"+str(elapsed))
+            self.sleep(pause)
+            elapsed = int(time.time() - start)
+        self.fail(str(volume) + " left in " +  volume.status)
+        return False
     
     def create_snapshot(self, volume_id, description="", waitOnProgress=0, poll_interval=10, timeout=0):
         """
@@ -449,7 +452,7 @@ class Eucaops(Eutester):
         elapsed = 0
         polls = 0
         snap_start = time.time()
-        #self.debug("Sending create snapshot request for volume:"+volume_id)
+
         snapshot = self.ec2.create_snapshot( volume_id )
         self.debug("Waiting for snapshot (" + snapshot.id + ") creation to complete")
         while ( (poll_count > 0) and ((timeout == 0) or (elapsed <= timeout)) ):
@@ -589,7 +592,7 @@ class Eucaops(Eutester):
         return address
     
     def associate_address(self,instance, address):
-        """ Associate an address with an instance"""
+        """ Associate an address object with an instance"""
         try:
             self.debug("Attemtping to associate " + str(address) + " from " + str(instance))
             address.associate(instance.id)
@@ -609,7 +612,7 @@ class Eucaops(Eutester):
         except Exception, e:
             self.critical("Unable to disassociate address\n" + str(e))
             return False
-        self.sleep(20)
+        self.sleep(15)
         address = self.ec2.get_all_addresses(addresses=[instance.public_dns_name])
         if address.instance_id is instance.id:
             self.critical("Address still associated with instance")
@@ -682,7 +685,7 @@ class Eucaops(Eutester):
         return None
 
 
-    def run_instance(self, image=None, keypair=None, group="default", type=None, zone=None, min=1, max=1):
+    def run_instance(self, image=None, keypair=None, group="default", type=None, zone=None, min=1, max=1, private_addressing=False):
         """
         Run instance/s and wait for them to go to the running state
         image      Image object to use, default is pick the first emi found in the system
@@ -698,7 +701,7 @@ class Eucaops(Eutester):
             for emi in images:
                 if re.match("emi",emi.name):
                     image = emi         
-        self.debug( "Attempting to run image " + str(image) + " in group " + group)
+        self.debug( "Attempting to run "+ str(image.root_device_type)  +" image " + str(image) + " in group " + group)
         reservation = image.run(key_name=keypair,security_groups=[group],instance_type=type, placement=zone, min_count=min, max_count=max)
         if ((len(reservation.instances) < min) or (len(reservation.instances) > max)):
             self.fail("Reservation:"+str(reservation.id)+" returned "+str(len(reservation.instances))+" instances, not within min("+str(min)+") and max("+str(max)+" ")
@@ -706,12 +709,28 @@ class Eucaops(Eutester):
         self.wait_for_reservation(reservation)
         for instance in reservation.instances:
             if instance.state != "running":
-                self.fail("Instance " + instance.id + " now in " + instance.state  + " state")
+                self.critcal("Instance " + instance.id + " now in " + instance.state  + " state")
             else:
                 self.debug( "Instance " + instance.id + " now in " + instance.state  + " state")
+            if (instance.ip_address is instance.private_ip_address) and ( private_addressing is False ):
+                self.critcal("Instance " + instance.id + " has he same public and private IPs of " + instance.ip_address)
+            else:
+                self.debug(str(instance) + " got Public IP: " + instance.ip_address  + " Private IP: " + instance.private_ip_address)
         self.test_resources["reservations"].append(reservation)
-        return reservation
+        keypath = os.curdir + "/" + keypair + ".pem"
+        self.sleep(15)
+        return self.convert_reservation_to_euinstance(reservation, keypath)
     
+    def convert_reservation_to_euinstance(self, reservation, keypath=None):
+        euinstance_list = []
+        for instance in reservation.instances:
+            try:
+                euinstance_list.append( EuInstance.make_euinstance_from_instance( instance, keypath=keypath ))
+            except Exception, e:
+                self.critical("Unable to create Euinstance from " + str(instance))
+                euinstance_list.append(instance)
+        reservation.instances = euinstance_list
+        return reservation
     
     def get_instances(self, 
                       state=None, 
@@ -878,10 +897,22 @@ class Eucaops(Eutester):
             if self.wait_for_reservation(reservation, state="terminated") is False:
                 aggregate_result = False
         return aggregate_result
-           
-    def get_metadata(self, element_path):
-        """Return the lines of metadata from the element path provided"""
-        return self.sys("curl http://169.254.169.254/latest/meta-data/" + element_path)
+    
+    def stop_instances(self,reservation):
+        for instance in reservation.instances:
+            self.debug( "Sending stop for " + str(instance) )
+            instance.stop()
+        if self.wait_for_reservation(reservation, state="stopped") is False:
+            return False
+        return True
+    
+    def start_instances(self,reservation):
+        for instance in reservation.instances:
+            self.debug( "Sending start for " + str(instance) )
+            instance.start()
+        if self.wait_for_reservation(reservation, state="running") is False:
+            return False
+        return True
             
     def modify_property(self, property, value):
         """
@@ -895,7 +926,7 @@ class Eucaops(Eutester):
         else:
             self.fail("Could not modify " + property)
     
-    def get_master(self, component="clc"):
+    def get_master(self, component="clc", partition=""):
         """
         Find the master of any type of component and return its IP, by default returns the master CLC
         component        Component to find the master, possible values ["clc", "sc", "cc", "ws"]
@@ -909,13 +940,17 @@ class Eucaops(Eutester):
             service = "cluster"
         self.debug( "Looking for enabled " + component )        
         ### GO through both clcs and check which ip it thinks is enabled for this service type
-        services = self.sys( self.eucapath + "/usr/sbin/euca-describe-services")
+        services = self.clc.sys(". " + self.credpath + "/eucarc && " + self.eucapath + "/usr/sbin/euca-describe-services")
         master = ""
         try:
-            line = self.grep("SERVICE\s+" + service + ".*ENABLED", services)[0]
+            service_lookup = self.grep("SERVICE\s+" + service + ".*" + str(partition) + ".*ENABLED", services)
+            if len(service_lookup) < 1:
+                raise LookupError("Looking for master " + str(component) + " in partition " + str(partition) + " failed")
+            else:
+                line = service_lookup[0]
             service_url = line.split()[6]
             master = service_url.split(":")[1].strip("/")
-            self.swap_ssh(master)
+            #self.swap_ssh(master)
             return master
         except Exception, e:
             self.fail("Unable to find redundant components")

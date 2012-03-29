@@ -51,29 +51,20 @@ from threading import Thread
 from boto.ec2.regioninfo import RegionInfo
 from boto.s3.connection import OrdinaryCallingFormat
 
-from bm_machine import bm_machine
+from machine import machine
 import eulogger
+from euservice import EuserviceManager
+
 
 class TimeoutFunctionException(Exception): 
     """Exception to raise on a timeout""" 
     pass 
 
 class Eutester(object):
-    def __init__(self, config_file=None, hostname=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, account="eucalyptus",  user="admin", boto_debug=0):
+    def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, account="eucalyptus",  user="admin", boto_debug=0):
         """  
-        EUCADIR => $eucadir, 
-        VERIFY_LEVEL => $verify_level, 
-        TOOLKIT => $toolkit, 
-        DELAY => $delay, 
-        FAIL_COUNT => $fail_count, 
-        INPUT_FILE => $input_file, 
-        PASSWORD => $password }
-        , credpath=None, timeout=30, exit_on_fail=0
-        EucaTester takes 2 arguments to their constructor
-        1. Configuration file to use
-        2. Eucalyptus component to connect to [CLC NC00 SC WS CC00] or a hostname
-        3. Password to connect to the host
-        4. 
+        This is the constructor for a eutester object, it takes care of setting up the connections that will be required for a test to run. 
+        
         """
         
         ### Default values for configuration
@@ -82,7 +73,7 @@ class Eutester(object):
         self.current_ssh = "clc"
         self.boto_debug = boto_debug
         self.ssh = None
-        self.hostname = hostname
+        self.sftp = None
         self.password = password
         self.keypath = keypath
         self.credpath = credpath
@@ -95,7 +86,6 @@ class Eutester(object):
         self.account_id = 0000000000001
         self.hypervisor = None
         
-        
         ##### Euca Logs 
         self.cloud_log_buffer = ''
         self.cc_log_buffer  = ''
@@ -105,86 +95,109 @@ class Eutester(object):
         self.logging_thread = False
         
         ### Eutester logs
-        self.logger = eulogger.Eulogger(name= "eutester")
-        self.debug = self.logger.log.debug
-        self.critical = self.logger.log.critical
-        self.info = self.logger.log.info
-        self.logging_thread_pool = []
-        ### LOGS to keep for printing later
-        self.fail_log = []
-        self.running_log = self.logger.log
-        
-        ### SSH Channels for tailing log files
-        self.cloud_log_channel = None
-        self.cc_log_channel= None
-        self.nc_log_channel= None
-
-        ### If I have a config file
-        ### PRIVATE CLOUD
-        if self.config_file != None:
-            ## read in the config file
-            self.debug("Reading config file: " + config_file)
-            self.config = self.read_config(config_file)
-            ### Set the eucapath
-            if "REPO" in self.config["machines"][0].source:
-                self.eucapath="/"
-            ### swap in the hostname of the component 
-            self.hostname = self.swap_component_hostname(self.current_ssh)
-            self.debug("Hostname for SSH connection: " + self.hostname)
-            self.hypervisor = self.get_hypervisor()
+        try:
+            self.logger = eulogger.Eulogger(identifier="localhost")
             
-        ## IF I WASNT PROVIDED KEY TRY TO GET THEM FROM THE EUCARC IN CREDPATH
-        ### PRIVATE CLOUD
-        if (self.password != None) or (self.keypath != None):
-            client = paramiko.SSHClient()
-            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            self.debug("Issuing SSH connection root@" +  self.hostname )            
-            if keypath == None:   
-                client.connect(self.hostname, username="root", password=password, timeout= self.timeout)
-            else:
-                client.connect(self.hostname,  username="root", key_filename=keypath, timeout= self.timeout)
-            self.ssh = client
-            self.sftp = self.ssh.open_sftp()
-        
-        ### If i have an ssh session and its to the clc
-        ### Private cloud with root access
-        if (self.credpath == None) and (self.ssh != None) and (self.password != None):
-                self.credpath = self.get_credentials(account,user) 
-        
-
-        ### If i have a credpath
-        if (self.credpath != None):         
-            aws_access_key_id = self.get_access_key()
-            aws_secret_access_key = self.get_secret_key()
-                 
-        ### If you have credentials for the boto connections, create them
-        if (aws_access_key_id != None) and (aws_secret_access_key != None):
-           self.ec2 = boto.connect_ec2(aws_access_key_id=aws_access_key_id,
-                                        aws_secret_access_key=aws_secret_access_key,
-                                        is_secure=False,
-                                        api_version = '2009-11-30',
-                                        region=RegionInfo(name="eucalyptus", endpoint=self.get_clc_ip()),
-                                        port=8773,
-                                        path="/services/Eucalyptus",
-                                        debug=self.boto_debug)
-           self.walrus = boto.connect_s3(aws_access_key_id=aws_access_key_id,
-                                          aws_secret_access_key=aws_secret_access_key,
-                                          is_secure=False,
-                                          host=self.get_walrus_ip(),
-                                          port=8773,
-                                          path="/services/Walrus",
-                                          calling_format=OrdinaryCallingFormat(),
-                                          debug=self.boto_debug)
-           self.euare = boto.connect_iam(aws_access_key_id=aws_access_key_id,
-                                          aws_secret_access_key=aws_secret_access_key,
-                                          is_secure=False,
-                                          host=self.get_clc_ip(),
-                                          port=8773,
-                                          path="/services/Euare",
-                                          debug=self.boto_debug)
+                
+            self.debug = self.logger.log.debug
+            self.critical = self.logger.log.critical
+            self.info = self.logger.log.info
+            self.logging_thread_pool = []
+            ### LOGS to keep for printing later
+            self.fail_log = []
+            self.running_log = self.logger.log
+            
+            ### SSH Channels for tailing log files
+            self.cloud_log_channel = None
+            self.cc_log_channel= None
+            self.nc_log_channel= None
+            
+            self.clc_index = 0
     
+            ### If I have a config file
+            ### PRIVATE CLOUD
+            if self.config_file != None:
+                ## read in the config file
+                self.debug("Reading config file: " + config_file)
+                self.config = self.read_config(config_file)
+
+                ### Set the eucapath
+                try:
+                    if "REPO" in self.config["machines"][0].source:
+                        self.eucapath="/"
+                except:
+                        raise Exception("Could not get REPO info from input file")
+                #self.hypervisor = self.get_hypervisor()
+                ### No credpath but does have password and an ssh connection to the CLC
+                ### Private cloud with root access 
+                ### Need to get credentials for the user if there arent any passed in
+                ### Need to create service manager for user if we have an ssh connection and password
+                if (self.password != None):
+                    clc_array = self.get_component_machines("clc")
+                    self.clc = clc_array[0]
+
+                    if self.credpath is None:
+                        ### TRY TO GET CREDS ON FIRST CLC if it fails try on second listed clc, if that fails weve hit a terminal condition
+                        try:
+                            self.debug("Attempting to get credentials and setup sftp")
+                            self.sftp = self.clc.ssh.connection.open_sftp()
+                            self.credpath = self.get_credentials(account,user)
+                        except Exception, e:
+                            ### If i only have one clc this is a critical failure, else try on the other clc
+                            if len(clc_array) < 2:
+                                raise Exception("Could not get credentials from first CLC and no other to try")
+                            self.swap_clc()
+                            self.sftp = self.clc.ssh.connection.open_sftp()
+                            self.credpath = self.get_credentials(account,user)
+                            
+                    self.service_manager = EuserviceManager(self)
+                    self.clc = self.service_manager.get_enabled_clc().machine
+                    
+        except Exception, e:
+            raise e
+        try:
+            ### Pull the access and secret keys from the eucarc
+            if (self.credpath != None):         
+                aws_access_key_id = self.get_access_key()
+                aws_secret_access_key = self.get_secret_key()
+                        
+            ### If you have credentials for the boto connections, create them
+            if (aws_access_key_id != None) and (aws_secret_access_key != None):
+               self.ec2 = boto.connect_ec2(aws_access_key_id=aws_access_key_id,
+                                            aws_secret_access_key=aws_secret_access_key,
+                                            is_secure=False,
+                                            api_version = '2009-11-30',
+                                            region=RegionInfo(name="eucalyptus", endpoint=self.get_clc_ip()),
+                                            port=8773,
+                                            path="/services/Eucalyptus",
+                                            debug=self.boto_debug)
+               self.walrus = boto.connect_s3(aws_access_key_id=aws_access_key_id,
+                                              aws_secret_access_key=aws_secret_access_key,
+                                              is_secure=False,
+                                              host=self.get_walrus_ip(),
+                                              port=8773,
+                                              path="/services/Walrus",
+                                              calling_format=OrdinaryCallingFormat(),
+                                              debug=self.boto_debug)
+               self.euare = boto.connect_iam(aws_access_key_id=aws_access_key_id,
+                                              aws_secret_access_key=aws_secret_access_key,
+                                              is_secure=False,
+                                              host=self.get_clc_ip(),
+                                              port=8773,
+                                              path="/services/Euare",
+                                              debug=self.boto_debug)
+        except Exception, e:
+            raise e
     def __del__(self):
         self.logging_thread = False
+    
+    def swap_clc(self):
+        all_clcs = self.get_component_machines("clc")
+        if self.clc is all_clcs[0]:
+            self.clc = all_clcs[1]
+        elif self.clc is all_clcs[1]:
+            self.clc = all_clcs[0]
+
     
     def read_config(self, filepath):
         """ Parses the config file at filepath returns a dictionary with the config
@@ -226,7 +239,6 @@ class Eutester(object):
             line = line.strip()
             re_machine_line = re.compile(".*\[.*]")
             if re_machine_line.match(line):
-                #print "Matched Machine :" + line
                 machine_details = line.split(None, 5)
                 machine_dict = {}
                 machine_dict["hostname"] = machine_details[0]
@@ -236,13 +248,30 @@ class Eutester(object):
                 machine_dict["source"] = machine_details[4]
                 machine_dict["components"] = map(str.lower, machine_details[5].strip('[]').split())
                 ### ADD the machine to the array of machine
-                machine = bm_machine(machine_dict["hostname"], machine_dict["distro"], machine_dict["distro_ver"], machine_dict["arch"], machine_dict["source"], machine_dict["components"])
-                machines.append(machine)
-               # print machine
-            if line.find("NETWORK"):
-                config_hash["network"] = line.strip() 
+                cloud_machine = machine(   machine_dict["hostname"], 
+                                        machine_dict["distro"], 
+                                        machine_dict["distro_ver"], 
+                                        machine_dict["arch"], 
+                                        machine_dict["source"], 
+                                        machine_dict["components"],
+                                        self.password,
+                                        self.keypath
+                                        )
+                machines.append(cloud_machine)
+                
+            ### LOOK for network mode in config file if not found then set it unknown
+            try:
+                if re.search("^network",line, re.IGNORECASE):
+                    config_hash["network"] = line.split()[1].lower()
+            except:
+                self.debug("Could not find network type setting to unknown")
+                config_hash["network"] = "unknown"
+                
         config_hash["machines"] = machines 
         return config_hash
+    
+    def get_network_mode(self):
+        return self.config['network']
     
     def get_hypervisor(self):
         """ Requires that a config file was passed.
@@ -272,12 +301,20 @@ class Eutester(object):
             raise Exception("Could not find component "  + component + " in list of machines")
         else:
              return machines_with_role[0]
+    
+    def get_machine_by_ip(self, hostname):
+         machines = [machine for machine in self.config['machines'] if re.search(hostname, machine.hostname)]
+         if len(machines) == 0:
+            self.fail("Could not find machine at "  + hostname + " in list of machines")
+            return None
+         else:
+             return machines[0]
          
     def get_component_machines(self, component):
         #loop through machines looking for this component type
         """ Parse the machine list and a list of bm_machine objects that match the component passed in"""
         component.lower()
-        machines_with_role = [machine for machine in self.config['machines'] if component in machine.components]
+        machines_with_role = [machine for machine in self.config['machines'] if re.search(component, " ".join(machine.components))]
         if len(machines_with_role) == 0:
             raise Exception("Could not find component "  + component + " in list of machines")
         else:
@@ -295,25 +332,71 @@ class Eutester(object):
            Defaults to admin@eucalyptus 
         """
         admin_cred_dir = "eucarc-" + account + "-" + user
-        self.sys("rm -rf " + admin_cred_dir)
-        self.sys("mkdir " + admin_cred_dir)
+        
+        ### SETUP directory remotely
+        self.setup_remote_creds_dir(admin_cred_dir)
+        
+        clcs = self.get_component_machines("clc")
+        
+        if len(clcs) < 1:
+            raise Exception("Could not find CLC when trying to get credentials")
+        
+        ### IF I wasnt passed in credentials, download and sync them
+        if self.credpath is None:
+            ### Create credential from Active CLC
+            self.create_credentials(admin_cred_dir, account, user)
+        
+            ### SETUP directory locally
+            self.setup_local_creds_dir(admin_cred_dir)
+        
+            ### DOWNLOAD creds from clc
+            self.download_creds_from_clc(admin_cred_dir)
+            ### IF there are 2 clcs make sure to sync credentials across them
+            if len(clcs) > 1:
+                self.swap_clc()
+                self.send_creds_to_machine(admin_cred_dir, self.clc)
+        ### Otherwise sync the keys that were given locally to both CLCs
+        else:
+            for clc in clcs:
+                self.send_creds_to_machine(self.credpath, clc)
+        return admin_cred_dir
+    
+    def create_credentials(self, admin_cred_dir, account, user):
         cmd_download_creds = self.eucapath + "/usr/sbin/euca_conf --get-credentials " + admin_cred_dir + "/creds.zip " + "--cred-user "+ user +" --cred-account " + account 
-        cmd_setup_cred_dir = ["rm -rf " + admin_cred_dir,"mkdir " + admin_cred_dir ,  cmd_download_creds, "unzip -o " + admin_cred_dir + "/creds.zip " + "-d " + admin_cred_dir]
-        for cmd in cmd_setup_cred_dir:         
-            stdout = self.sys(cmd, verbose=1)
-        os.system("rm -rf " + admin_cred_dir)
-        os.mkdir(admin_cred_dir)
+        if self.found( cmd_download_creds, "The MySQL server is not responding"):
+            raise IOError("Error downloading credentials, looks like CLC was not running")
+        if self.found( "unzip -o " + admin_cred_dir + "/creds.zip " + "-d " + admin_cred_dir, "cannot find zipfile directory"):
+            raise IOError("Empty ZIP file returned by CLC")
+        
+    
+    def download_creds_from_clc(self, admin_cred_dir):
+        self.debug("Downloading credentials from " + self.clc.hostname)
         self.sftp.get(admin_cred_dir + "/creds.zip" , admin_cred_dir + "/creds.zip")
         os.system("unzip -o " + admin_cred_dir + "/creds.zip -d " + admin_cred_dir )
-        return admin_cred_dir
+    
+    def send_creds_to_machine(self, admin_cred_dir, machine):
+        self.debug("Sending credentials to " + machine.hostname)
+        machine.sftp.put(admin_cred_dir + "/creds.zip" , admin_cred_dir + "/creds.zip")
+        machine.sys("unzip -o " + admin_cred_dir + "/creds.zip -d " + admin_cred_dir )
+        self.swap_clc()
+        machine.sys("sed -i 's/" + self.clc.hostname + "/" + machine.hostname  +"/g' " + admin_cred_dir + "/eucarc")  
+        self.swap_clc()
+        
+    def setup_local_creds_dir(self, admin_cred_dir):
+        os.system("rm -rf " + admin_cred_dir)
+        os.mkdir(admin_cred_dir)
+    
+    def setup_remote_creds_dir(self, admin_cred_dir):
+        self.sys("rm -rf " + admin_cred_dir)
+        self.sys("mkdir " + admin_cred_dir)
         
     def get_access_key(self):
         """Parse the eucarc for the EC2_ACCESS_KEY"""
         return self.parse_eucarc("EC2_ACCESS_KEY")   
     
     def get_secret_key(self):
-       """Parse the eucarc for the EC2_SECRET_KEY"""
-       return self.parse_eucarc("EC2_SECRET_KEY")
+        """Parse the eucarc for the EC2_SECRET_KEY"""
+        return self.parse_eucarc("EC2_SECRET_KEY")
     
     def get_account_id(self):
         """Parse the eucarc for the EC2_ACCOUNT_NUMBER"""
@@ -407,70 +490,34 @@ class Eutester(object):
         '''Terminate thread that is polling logs''' 
         self.logging_thread = False
         
-    def save_euca_logs(self):
+    def save_euca_logs(self,prefix="eutester-"):
         '''Save log buffers to a file''' 
-        FILE = open("clc.log","w")
+        FILE = open( prefix + "clc.log","w")
         FILE.writelines(self.cloud_log_buffer)
         FILE.close()
-        FILE = open("walrus.log","w")
+        FILE = open( prefix + "walrus.log","w")
         FILE.writelines(self.walrus_log_buffer)
         FILE.close()
-        FILE = open("cc.log","w")
+        FILE = open( prefix + "cc.log","w")
         FILE.writelines(self.cc_log_buffer)
         FILE.close()
-        FILE = open("sc.log","w")
+        FILE = open( prefix + "sc.log","w")
         FILE.writelines(self.sc_log_buffer)
         FILE.close()
-        FILE = open("nc.log","w")
+        FILE = open( prefix + "nc.log","w")
         FILE.writelines(self.nc_log_buffer)
         FILE.close()        
                                
     def handle_timeout(self, signum, frame): 
         raise TimeoutFunctionException()
     
-    def sys(self, cmd, verbose=1, timeout=-2):
+    def sys(self, cmd, verbose=True):
         """ By default will run a command on the CLC machine, the connection used can be changed by passing a different hostname into the constructor
             For example:
             instance = Eutester( hostname=instance.ip_address, keypath="my_key.pem")
             instance.sys("mount") # check mount points on instance and return the output as a list
         """
-        cmd = str(cmd)
-        # default timeout is to use module-defined timeout
-        # -1 should be reserved for "no timeout" option
-        if timeout == -2:
-            timeout = self.timeout
-        time.sleep(self.delay)
-        old = signal.signal(signal.SIGALRM, self.handle_timeout) 
-        signal.alarm(timeout) 
-        cur_time = time.strftime("%I:%M:%S", time.gmtime())
-        output = []
-        std_out_return = []
-        if verbose:
-            if self.ssh == None:
-                self.hostname ="localhost"
-            self.debug( "[root@" + str(self.hostname) + "]# " + cmd)
-        try:
-            
-            if self.ssh == None:
-                std_out_return = self.local(cmd)
-            else:
-                stdin_ls, stdout_ls, stderr_ls = self.ssh.exec_command("ls")
-                ls_result = stdout_ls.readlines()
-                if self.credpath != None:
-                    for item in ls_result: 
-                        if re.match(self.credpath,item): 
-                            cmd = ". " + self.credpath + "/eucarc && " + cmd
-                            break
-                stdin, stdout, stderr = self.ssh.exec_command(cmd)
-                std_out_return = stdout.readlines() 
-                output = std_out_return
-        except Exception, e: 
-            self.fail("Command timeout after " + str(timeout) + " seconds\nException:" + str(e)) 
-            return []
-        signal.alarm(0)      
-        if verbose:
-            self.debug("".join(std_out_return))
-        return std_out_return
+        return self.clc.sys(cmd, verbose=verbose)
 
     def local(self, cmd):
         """ Run a command locally on the tester"""
@@ -483,7 +530,7 @@ class Eutester(object):
     def found(self, command, regex, local=False):
         """ Returns a Boolean of whether the result of the command contains the regex"""
         if local:
-            result = self.local(cmd)
+            result = self.local(command)
         else:
             result = self.sys(command)
         for line in result:
@@ -502,7 +549,6 @@ class Eutester(object):
         return list(set(list1)-set(list2))
     
     def fail(self, message):
-        #self.debug( "[TEST_REPORT] FAILED: " + message)
         self.critical("[TEST_REPORT] FAILED: " + message)
         self.fail_log.append(message)
         self.fail_count += 1
@@ -543,7 +589,6 @@ class Eutester(object):
         s  = "+++++++++++++++++++++++++++++++++++++++++++++++++++++\n"
         s += "+" + "Eucateser Configuration" + "\n"
         s += "+" + "+++++++++++++++++++++++++++++++++++++++++++++++\n"
-        s += "+" + "Host:" + self.hostname + "\n"
         s += "+" + "Config File: " + self.config_file +"\n"
         s += "+" + "Fail Count: " +  str(self.fail_count) +"\n"
         s += "+" + "Eucalyptus Path: " +  str(self.eucapath) +"\n"
