@@ -163,6 +163,9 @@ class Eutester(object):
                         
             ### If you have credentials for the boto connections, create them
             if (aws_access_key_id != None) and (aws_secret_access_key != None):
+               if not boto.config.has_section('Boto'):
+                   boto.config.add_section('Boto')
+                   boto.config.set('Boto', 'num_retries', '2') 
                self.ec2 = boto.connect_ec2(aws_access_key_id=aws_access_key_id,
                                             aws_secret_access_key=aws_secret_access_key,
                                             is_secure=False,

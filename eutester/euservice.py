@@ -321,9 +321,13 @@ class EuserviceManager(object):
                 matching_services = self.get(euservice.type, euservice.partition, attempt_both)
             except Exception, e:
                 self.tester.debug("Caught an exception when trying to get services. Retrying in 10s")
+            found = False
             for service in matching_services:
                 if re.search(state, service.state):
+                    found = True
                     break
+            if found:
+                break
             poll_count -= 1
             self.tester.sleep(interval)
                 

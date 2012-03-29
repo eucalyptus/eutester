@@ -68,18 +68,18 @@ class machine:
     def reboot(self, force=True):
         if force:
             try:
-                self.sys("reboot -f", timeout=10)
+                self.sys("reboot -f", timeout=3)
             except Exception, e:
                 pass
         else:
             try:
-                self.sys("reboot", timeout=10)
+                self.sys("reboot", timeout=3)
             except Exception, e:
                 pass
     
-    def interrupt_network(self, time = 240, interface = "eth0"):
-        self.sys("ifdown " + interface + "; sleep " + time + ";ifup " + interface + " &")
-    
+    def interrupt_network(self, time = 120, interface = "eth0"):
+        self.sys("ifdown " + interface + " && sleep " + str(time) + " && ifup eth0",  timeout=3)
+        
     def sys(self, cmd, verbose=True, timeout=120):
         '''
         Issues a command against the ssh connection to this instance

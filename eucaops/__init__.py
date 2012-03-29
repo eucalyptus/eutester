@@ -725,10 +725,11 @@ class Eucaops(Eutester):
         euinstance_list = []
         for instance in reservation.instances:
             try:
-                euinstance_list.append( EuInstance.make_euinstance_from_instance( instance, keypath=keypath ))
+                euinstance_list.append( EuInstance.make_euinstance_from_instance( instance, self, keypath=keypath ))
             except Exception, e:
                 self.critical("Unable to create Euinstance from " + str(instance))
                 euinstance_list.append(instance)
+                
         reservation.instances = euinstance_list
         return reservation
     
