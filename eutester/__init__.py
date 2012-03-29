@@ -552,7 +552,7 @@ class Eutester(object):
         return list(set(list1)-set(list2))
     
     def fail(self, message):
-        self.critical("[TEST_REPORT] FAILED: " + message)
+        self.critical(message)
         self.fail_log.append(message)
         self.fail_count += 1
         if self.exit_on_fail == 1:
