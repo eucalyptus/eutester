@@ -95,66 +95,71 @@ class Eutester(object):
         self.logging_thread = False
         
         ### Eutester logs
-        try:
-            self.logger = eulogger.Eulogger(identifier="localhost")
+        #try:
+        self.logger = eulogger.Eulogger(identifier="localhost")
+        
             
-                
-            self.debug = self.logger.log.debug
-            self.critical = self.logger.log.critical
-            self.info = self.logger.log.info
-            self.logging_thread_pool = []
-            ### LOGS to keep for printing later
-            self.fail_log = []
-            self.running_log = self.logger.log
-            
-            ### SSH Channels for tailing log files
-            self.cloud_log_channel = None
-            self.cc_log_channel= None
-            self.nc_log_channel= None
-            
-            self.clc_index = 0
-    
-            ### If I have a config file
-            ### PRIVATE CLOUD
-            if self.config_file != None:
-                ## read in the config file
-                self.debug("Reading config file: " + config_file)
-                self.config = self.read_config(config_file)
+        self.debug = self.logger.log.debug
+        self.critical = self.logger.log.critical
+        self.info = self.logger.log.info
+        self.logging_thread_pool = []
+        ### LOGS to keep for printing later
+        self.fail_log = []
+        self.running_log = self.logger.log
+        
+        ### SSH Channels for tailing log files
+        self.cloud_log_channel = None
+        self.cc_log_channel= None
+        self.nc_log_channel= None
+        
+        self.clc_index = 0
 
-                ### Set the eucapath
-                try:
-                    if "REPO" in self.config["machines"][0].source:
-                        self.eucapath="/"
-                except:
-                        raise Exception("Could not get REPO info from input file")
-                #self.hypervisor = self.get_hypervisor()
-                ### No credpath but does have password and an ssh connection to the CLC
-                ### Private cloud with root access 
-                ### Need to get credentials for the user if there arent any passed in
-                ### Need to create service manager for user if we have an ssh connection and password
-                if (self.password != None):
-                    clc_array = self.get_component_machines("clc")
-                    self.clc = clc_array[0]
+        ### If I have a config file
+        ### PRIVATE CLOUD
+        if self.config_file != None:
+            ## read in the config file
+            self.debug("Reading config file: " + config_file)
+            self.config = self.read_config(config_file)
 
-                    if self.credpath is None:
-                        ### TRY TO GET CREDS ON FIRST CLC if it fails try on second listed clc, if that fails weve hit a terminal condition
+            ### Set the eucapath
+            try:
+                if "REPO" in self.config["machines"][0].source:
+                    self.eucapath="/"
+            except:
+                    raise Exception("Could not get REPO info from input file")
+            #self.hypervisor = self.get_hypervisor()
+            ### No credpath but does have password and an ssh connection to the CLC
+            ### Private cloud with root access 
+            ### Need to get credentials for the user if there arent any passed in
+            ### Need to create service manager for user if we have an ssh connection and password
+            if (self.password != None):
+                clc_array = self.get_component_machines("clc")
+                self.clc = clc_array[0]
+
+                if self.credpath is None:
+                    ### TRY TO GET CREDS ON FIRST CLC if it fails try on second listed clc, if that fails weve hit a terminal condition
+                    try:
+                        self.debug("Attempting to get credentials and setup sftp")
+                        self.sftp = self.clc.ssh.connection.open_sftp()
+                        self.credpath = self.get_credentials(account,user)
+                        self.debug("Successfully downloaded and synced credentials")
+                    except Exception, e:
+                        self.debug("Caught an exception when getting credentials from first CLC: " + str(e))
+                        ### If i only have one clc this is a critical failure, else try on the other clc
+                        if len(clc_array) < 2:
+                            raise Exception("Could not get credentials from first CLC and no other to try")
+                        self.swap_clc()
+                        self.sftp = self.clc.ssh.connection.open_sftp()
                         try:
-                            self.debug("Attempting to get credentials and setup sftp")
-                            self.sftp = self.clc.ssh.connection.open_sftp()
                             self.credpath = self.get_credentials(account,user)
                         except Exception, e:
-                            ### If i only have one clc this is a critical failure, else try on the other clc
-                            if len(clc_array) < 2:
-                                raise Exception("Could not get credentials from first CLC and no other to try")
-                            self.swap_clc()
-                            self.sftp = self.clc.ssh.connection.open_sftp()
-                            self.credpath = self.get_credentials(account,user)
-                            
-                    self.service_manager = EuserviceManager(self)
-                    self.clc = self.service_manager.get_enabled_clc().machine
-                    
-        except Exception, e:
-            raise e
+                            raise Exception("Could not get credentials from second CLC and no other to try")
+                        
+                self.service_manager = EuserviceManager(self)
+                self.clc = self.service_manager.get_enabled_clc().machine
+                
+        #except Exception, e:
+        #    raise e
         try:
             ### Pull the access and secret keys from the eucarc
             if (self.credpath != None):         
@@ -197,8 +202,10 @@ class Eutester(object):
     def swap_clc(self):
         all_clcs = self.get_component_machines("clc")
         if self.clc is all_clcs[0]:
+            self.debug("Swapping CLC from " + all_clcs[0].hostname + " to " + all_clcs[1].hostname)
             self.clc = all_clcs[1]
         elif self.clc is all_clcs[1]:
+            self.debug("Swapping CLC from " + all_clcs[1].hostname + " to " + all_clcs[0].hostname)
             self.clc = all_clcs[0]
 
     
@@ -334,6 +341,7 @@ class Eutester(object):
         """Login to the CLC and download credentials programatically for the user and account passed in
            Defaults to admin@eucalyptus 
         """
+        self.debug("Starting the process of getting credentials")
         admin_cred_dir = "eucarc-" + account + "-" + user
         
         ### SETUP directory remotely
@@ -379,7 +387,12 @@ class Eutester(object):
     
     def send_creds_to_machine(self, admin_cred_dir, machine):
         self.debug("Sending credentials to " + machine.hostname)
-        machine.sftp.put(admin_cred_dir + "/creds.zip" , admin_cred_dir + "/creds.zip")
+        machine.sys("rm -rf " + admin_cred_dir)
+        machine.sys("mkdir " + admin_cred_dir)
+        try:
+            machine.sftp.put( admin_cred_dir + "/creds.zip" , admin_cred_dir + "/creds.zip")
+        except Exception, e:
+            raise Exception("Was unable to send credentials due to: " + str(e))
         machine.sys("unzip -o " + admin_cred_dir + "/creds.zip -d " + admin_cred_dir )
         self.swap_clc()
         machine.sys("sed -i 's/" + self.clc.hostname + "/" + machine.hostname  +"/g' " + admin_cred_dir + "/eucarc")  
