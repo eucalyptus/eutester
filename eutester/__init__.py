@@ -364,7 +364,6 @@ class Eutester(object):
             self.download_creds_from_clc(admin_cred_dir)
             ### IF there are 2 clcs make sure to sync credentials across them
             if len(clcs) > 1:
-                self.swap_clc()
                 self.send_creds_to_machine(admin_cred_dir, self.clc)
         ### Otherwise sync the keys that were given locally to both CLCs
         else:
@@ -394,9 +393,8 @@ class Eutester(object):
         except Exception, e:
             raise Exception("Was unable to send credentials due to: " + str(e))
         machine.sys("unzip -o " + admin_cred_dir + "/creds.zip -d " + admin_cred_dir )
-        self.swap_clc()
         machine.sys("sed -i 's/" + self.clc.hostname + "/" + machine.hostname  +"/g' " + admin_cred_dir + "/eucarc")  
-        self.swap_clc()
+
         
     def setup_local_creds_dir(self, admin_cred_dir):
         os.system("rm -rf " + admin_cred_dir)
