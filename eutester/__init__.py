@@ -74,6 +74,7 @@ class Eutester(object):
         self.boto_debug = boto_debug
         self.ssh = None
         self.sftp = None
+        self.clc = None
         self.password = password
         self.keypath = keypath
         self.credpath = credpath
@@ -574,6 +575,8 @@ class Eutester(object):
     
     def found(self, command, regex, local=False):
         """ Returns a Boolean of whether the result of the command contains the regex"""
+        if self.clc is None:
+            local = True 
         if local:
             result = self.local(command)
         else:
