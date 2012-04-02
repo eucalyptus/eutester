@@ -17,9 +17,9 @@ class Eucaops(Eutester):
     
     def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,account="eucalyptus",user="admin", boto_debug=0):
         super(Eucaops, self).__init__(config_file,password, keypath, credpath, aws_access_key_id, aws_secret_access_key,account, user, boto_debug)
-        self.poll_count = 24
+        self.poll_count = 48
         if self.hypervisor is "vmware":
-            self.poll_count = 48
+            self.poll_count = 96
         self.test_resources = {}
         self.test_resources["keys"] = []
         self.test_resources["buckets"] = []
@@ -47,8 +47,8 @@ class Eucaops(Eutester):
                 # Let's try to create the bucket.  This will fail if
                 # the bucket has already been created by someone else.
             try:
-                bucket = self.walrus.create_bucket(bucket_name)
-            except self.walrus.provider.storage_create_error, e:
+                bucket = self.s3.create_bucket(bucket_name)
+            except self.s3.provider.storage_create_error, e:
                 self.debug( 'Bucket (%s) is owned by another user' % bucket_name )
                 return None
             if not self.get_bucket_by_name(bucket.name):
@@ -68,7 +68,7 @@ class Eucaops(Eutester):
         bucket_name = bucket.name
         try:
             bucket.delete()
-        except self.walrus.provider.storage_create_error, e:
+        except self.s3.provider.storage_create_error, e:
                 self.debug( 'Bucket (%s) is owned by another user' % bucket_name )
                 return None
             
@@ -81,7 +81,7 @@ class Eucaops(Eutester):
         """
         Lookup a bucket by name, if it does not exist return false
         """
-        bucket = self.walrus.lookup(bucket_name)
+        bucket = self.s3.lookup(bucket_name)
         if bucket:
             return bucket
         else:
@@ -126,7 +126,7 @@ class Eucaops(Eutester):
         name = object.name
         object.delete()
         try:
-            self.walrus.get_bucket(bucket).get_key(name)
+            self.s3.get_bucket(bucket).get_key(name)
             self.fail("Walrus bucket still exists after delete")
         except Exception, e:
             return
@@ -685,7 +685,7 @@ class Eucaops(Eutester):
         return None
 
 
-    def run_instance(self, image=None, keypair=None, group="default", type=None, zone=None, min=1, max=1, private_addressing=False):
+    def run_instance(self, image=None, keypair=None, group="default", type=None, zone=None, min=1, max=1, user_data=None,private_addressing=False):
         """
         Run instance/s and wait for them to go to the running state
         image      Image object to use, default is pick the first emi found in the system
@@ -702,18 +702,18 @@ class Eucaops(Eutester):
                 if re.match("emi",emi.name):
                     image = emi         
         self.debug( "Attempting to run "+ str(image.root_device_type)  +" image " + str(image) + " in group " + group)
-        reservation = image.run(key_name=keypair,security_groups=[group],instance_type=type, placement=zone, min_count=min, max_count=max)
+        reservation = image.run(key_name=keypair,security_groups=[group],instance_type=type, placement=zone, min_count=min, max_count=max, user_data=user_data)
         if ((len(reservation.instances) < min) or (len(reservation.instances) > max)):
             self.fail("Reservation:"+str(reservation.id)+" returned "+str(len(reservation.instances))+" instances, not within min("+str(min)+") and max("+str(max)+" ")
             
         self.wait_for_reservation(reservation)
         for instance in reservation.instances:
             if instance.state != "running":
-                self.critcal("Instance " + instance.id + " now in " + instance.state  + " state")
+                self.critical("Instance " + instance.id + " now in " + instance.state  + " state")
             else:
                 self.debug( "Instance " + instance.id + " now in " + instance.state  + " state")
             if (instance.ip_address is instance.private_ip_address) and ( private_addressing is False ):
-                self.critcal("Instance " + instance.id + " has he same public and private IPs of " + instance.ip_address)
+                self.critical("Instance " + instance.id + " has he same public and private IPs of " + instance.ip_address)
             else:
                 self.debug(str(instance) + " got Public IP: " + instance.ip_address  + " Private IP: " + instance.private_ip_address)
         self.test_resources["reservations"].append(reservation)
@@ -725,10 +725,11 @@ class Eucaops(Eutester):
         euinstance_list = []
         for instance in reservation.instances:
             try:
-                euinstance_list.append( EuInstance.make_euinstance_from_instance( instance, keypath=keypath ))
+                euinstance_list.append( EuInstance.make_euinstance_from_instance( instance, self, keypath=keypath ))
             except Exception, e:
                 self.critical("Unable to create Euinstance from " + str(instance))
                 euinstance_list.append(instance)
+                
         reservation.instances = euinstance_list
         return reservation
     

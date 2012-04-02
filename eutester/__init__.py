@@ -74,6 +74,7 @@ class Eutester(object):
         self.boto_debug = boto_debug
         self.ssh = None
         self.sftp = None
+        self.clc = None
         self.password = password
         self.keypath = keypath
         self.credpath = credpath
@@ -95,110 +96,147 @@ class Eutester(object):
         self.logging_thread = False
         
         ### Eutester logs
-        try:
-            self.logger = eulogger.Eulogger(identifier="localhost")
+        #try:
+        self.logger = eulogger.Eulogger(identifier="localhost")
+        
             
-                
-            self.debug = self.logger.log.debug
-            self.critical = self.logger.log.critical
-            self.info = self.logger.log.info
-            self.logging_thread_pool = []
-            ### LOGS to keep for printing later
-            self.fail_log = []
-            self.running_log = self.logger.log
-            
-            ### SSH Channels for tailing log files
-            self.cloud_log_channel = None
-            self.cc_log_channel= None
-            self.nc_log_channel= None
-            
-            self.clc_index = 0
-    
-            ### If I have a config file
-            ### PRIVATE CLOUD
-            if self.config_file != None:
-                ## read in the config file
-                self.debug("Reading config file: " + config_file)
-                self.config = self.read_config(config_file)
+        self.debug = self.logger.log.debug
+        self.critical = self.logger.log.critical
+        self.info = self.logger.log.info
+        self.logging_thread_pool = []
+        ### LOGS to keep for printing later
+        self.fail_log = []
+        self.running_log = self.logger.log
+        
+        ### SSH Channels for tailing log files
+        self.cloud_log_channel = None
+        self.cc_log_channel= None
+        self.nc_log_channel= None
+        
+        self.clc_index = 0
 
-                ### Set the eucapath
-                try:
-                    if "REPO" in self.config["machines"][0].source:
-                        self.eucapath="/"
-                except:
-                        raise Exception("Could not get REPO info from input file")
-                #self.hypervisor = self.get_hypervisor()
-                ### No credpath but does have password and an ssh connection to the CLC
-                ### Private cloud with root access 
-                ### Need to get credentials for the user if there arent any passed in
-                ### Need to create service manager for user if we have an ssh connection and password
-                if (self.password != None):
-                    clc_array = self.get_component_machines("clc")
-                    self.clc = clc_array[0]
+        ### If I have a config file
+        ### PRIVATE CLOUD
+        if self.config_file != None:
+            ## read in the config file
+            self.debug("Reading config file: " + config_file)
+            self.config = self.read_config(config_file)
 
-                    if self.credpath is None:
-                        ### TRY TO GET CREDS ON FIRST CLC if it fails try on second listed clc, if that fails weve hit a terminal condition
+            ### Set the eucapath
+            try:
+                if "REPO" in self.config["machines"][0].source:
+                    self.eucapath="/"
+            except:
+                    raise Exception("Could not get REPO info from input file")
+            #self.hypervisor = self.get_hypervisor()
+            ### No credpath but does have password and an ssh connection to the CLC
+            ### Private cloud with root access 
+            ### Need to get credentials for the user if there arent any passed in
+            ### Need to create service manager for user if we have an ssh connection and password
+            if (self.password != None):
+                clc_array = self.get_component_machines("clc")
+                self.clc = clc_array[0]
+                walrus_array = self.get_component_machines("ws")
+                self.walrus = walrus_array[0]
+
+                if self.credpath is None:
+                    ### TRY TO GET CREDS ON FIRST CLC if it fails try on second listed clc, if that fails weve hit a terminal condition
+                    try:
+                        self.debug("Attempting to get credentials and setup sftp")
+                        self.sftp = self.clc.ssh.connection.open_sftp()
+                        self.credpath = self.get_credentials(account,user)
+                        self.debug("Successfully downloaded and synced credentials")
+                    except Exception, e:
+                        self.debug("Caught an exception when getting credentials from first CLC: " + str(e))
+                        ### If i only have one clc this is a critical failure, else try on the other clc
+                        if len(clc_array) < 2:
+                            raise Exception("Could not get credentials from first CLC and no other to try")
+                        self.swap_clc()
+                        self.sftp = self.clc.ssh.connection.open_sftp()
                         try:
-                            self.debug("Attempting to get credentials and setup sftp")
-                            self.sftp = self.clc.ssh.connection.open_sftp()
                             self.credpath = self.get_credentials(account,user)
                         except Exception, e:
-                            ### If i only have one clc this is a critical failure, else try on the other clc
-                            if len(clc_array) < 2:
-                                raise Exception("Could not get credentials from first CLC and no other to try")
-                            self.swap_clc()
-                            self.sftp = self.clc.ssh.connection.open_sftp()
-                            self.credpath = self.get_credentials(account,user)
-                            
-                    self.service_manager = EuserviceManager(self)
-                    self.clc = self.service_manager.get_enabled_clc().machine
-                    
-        except Exception, e:
-            raise e
+                            raise Exception("Could not get credentials from second CLC and no other to try")
+                        
+                self.service_manager = EuserviceManager(self)
+                self.clc = self.service_manager.get_enabled_clc().machine
+                self.walrus = self.service_manager.get_enabled_walrus().machine 
+                
+        #except Exception, e:
+        #    raise e
         try:
             ### Pull the access and secret keys from the eucarc
             if (self.credpath != None):         
-                aws_access_key_id = self.get_access_key()
-                aws_secret_access_key = self.get_secret_key()
+                self.aws_access_key_id = self.get_access_key()
+                self.aws_secret_access_key = self.get_secret_key()
                         
             ### If you have credentials for the boto connections, create them
-            if (aws_access_key_id != None) and (aws_secret_access_key != None):
-               self.ec2 = boto.connect_ec2(aws_access_key_id=aws_access_key_id,
+            if (self.aws_access_key_id != None) and (self.aws_secret_access_key != None):
+               if not boto.config.has_section('Boto'):
+                   boto.config.add_section('Boto')
+                   boto.config.set('Boto', 'num_retries', '2') 
+               self.setup_boto_connections()
+               
+        except Exception, e:
+            raise e
+        
+    def __del__(self):
+        self.logging_thread = False
+    
+    
+    def setup_boto_connections(self, aws_access_key_id=None, aws_secret_access_key=None, clc_ip=None, walrus_ip=None):
+        if aws_access_key_id is None:
+            aws_access_key_id = self.aws_access_key_id
+        if aws_secret_access_key is None:
+            aws_secret_access_key = self.aws_secret_access_key
+            
+        if clc_ip is None:
+            clc_ip = self.get_clc_ip()
+        if walrus_ip is None:
+            walrus_ip = self.get_walrus_ip()
+            
+        self.ec2 = boto.connect_ec2(aws_access_key_id=aws_access_key_id,
                                             aws_secret_access_key=aws_secret_access_key,
                                             is_secure=False,
                                             api_version = '2009-11-30',
-                                            region=RegionInfo(name="eucalyptus", endpoint=self.get_clc_ip()),
+                                            region=RegionInfo(name="eucalyptus", endpoint=clc_ip),
                                             port=8773,
                                             path="/services/Eucalyptus",
                                             debug=self.boto_debug)
-               self.walrus = boto.connect_s3(aws_access_key_id=aws_access_key_id,
+        self.s3 = boto.connect_s3(aws_access_key_id=aws_access_key_id,
                                               aws_secret_access_key=aws_secret_access_key,
                                               is_secure=False,
-                                              host=self.get_walrus_ip(),
+                                              host=walrus_ip,
                                               port=8773,
                                               path="/services/Walrus",
                                               calling_format=OrdinaryCallingFormat(),
                                               debug=self.boto_debug)
-               self.euare = boto.connect_iam(aws_access_key_id=aws_access_key_id,
+        self.euare = boto.connect_iam(aws_access_key_id=aws_access_key_id,
                                               aws_secret_access_key=aws_secret_access_key,
                                               is_secure=False,
-                                              host=self.get_clc_ip(),
+                                              host=clc_ip,
                                               port=8773,
                                               path="/services/Euare",
                                               debug=self.boto_debug)
-        except Exception, e:
-            raise e
-    def __del__(self):
-        self.logging_thread = False
     
     def swap_clc(self):
         all_clcs = self.get_component_machines("clc")
         if self.clc is all_clcs[0]:
+            self.debug("Swapping CLC from " + all_clcs[0].hostname + " to " + all_clcs[1].hostname)
             self.clc = all_clcs[1]
         elif self.clc is all_clcs[1]:
+            self.debug("Swapping CLC from " + all_clcs[1].hostname + " to " + all_clcs[0].hostname)
             self.clc = all_clcs[0]
 
-    
+    def swap_walrus(self):
+        all_walruses = self.get_component_machines("ws")
+        if self.walrus is all_walruses[0]: 
+            self.debug("Swapping Walrus from " + all_walruses[0].hostname + " to " + all_walruses[1].hostname)
+            self.walrus = all_walruses[1]
+        elif self.walrus is all_walruses[1]:
+            self.debug("Swapping Walrus from " + all_walruses[1].hostname + " to " + all_walruses[0].hostname)
+            self.walrus = all_walruses[0]
+            
     def read_config(self, filepath):
         """ Parses the config file at filepath returns a dictionary with the config
             Config file
@@ -331,6 +369,7 @@ class Eutester(object):
         """Login to the CLC and download credentials programatically for the user and account passed in
            Defaults to admin@eucalyptus 
         """
+        self.debug("Starting the process of getting credentials")
         admin_cred_dir = "eucarc-" + account + "-" + user
         
         ### SETUP directory remotely
@@ -354,7 +393,10 @@ class Eutester(object):
             ### IF there are 2 clcs make sure to sync credentials across them
             if len(clcs) > 1:
                 self.swap_clc()
-                self.send_creds_to_machine(admin_cred_dir, self.clc)
+                other_clc = self.clc
+                self.swap_clc()
+                self.send_creds_to_machine(admin_cred_dir, other_clc) 
+                
         ### Otherwise sync the keys that were given locally to both CLCs
         else:
             for clc in clcs:
@@ -376,11 +418,15 @@ class Eutester(object):
     
     def send_creds_to_machine(self, admin_cred_dir, machine):
         self.debug("Sending credentials to " + machine.hostname)
-        machine.sftp.put(admin_cred_dir + "/creds.zip" , admin_cred_dir + "/creds.zip")
+        machine.sys("rm -rf " + admin_cred_dir)
+        machine.sys("mkdir " + admin_cred_dir)
+        try:
+            machine.sftp.put( admin_cred_dir + "/creds.zip" , admin_cred_dir + "/creds.zip")
+        except Exception, e:
+            raise Exception("Was unable to send credentials due to: " + str(e))
         machine.sys("unzip -o " + admin_cred_dir + "/creds.zip -d " + admin_cred_dir )
-        self.swap_clc()
         machine.sys("sed -i 's/" + self.clc.hostname + "/" + machine.hostname  +"/g' " + admin_cred_dir + "/eucarc")  
-        self.swap_clc()
+
         
     def setup_local_creds_dir(self, admin_cred_dir):
         os.system("rm -rf " + admin_cred_dir)
@@ -529,6 +575,8 @@ class Eutester(object):
     
     def found(self, command, regex, local=False):
         """ Returns a Boolean of whether the result of the command contains the regex"""
+        if self.clc is None:
+            local = True 
         if local:
             result = self.local(command)
         else:
@@ -549,7 +597,7 @@ class Eutester(object):
         return list(set(list1)-set(list2))
     
     def fail(self, message):
-        self.critical("[TEST_REPORT] FAILED: " + message)
+        self.critical(message)
         self.fail_log.append(message)
         self.fail_count += 1
         if self.exit_on_fail == 1:

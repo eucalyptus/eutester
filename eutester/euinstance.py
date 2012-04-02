@@ -90,7 +90,7 @@ class EuInstance(Instance):
         newins.attached_vols=[] 
         newins.timeout = timeout
         newins.retry = retry    
-        newins.connect_to_instance(timeout=timeout)
+        newins.connect_to_instance(timeout=timeout) 
         return newins
     
     def reset_ssh_connection(self):
@@ -98,7 +98,7 @@ class EuInstance(Instance):
             if self.ssh is not None:
                 self.ssh.close()
             self.ssh = sshconnection.SshConnection(
-                                                    self.ip_address, 
+                                                    self.public_dns_name, 
                                                     keypair=self.keypair, 
                                                     keypath=self.keypath,          
                                                     password=self.password, 
