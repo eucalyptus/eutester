@@ -47,8 +47,8 @@ class Eucaops(Eutester):
                 # Let's try to create the bucket.  This will fail if
                 # the bucket has already been created by someone else.
             try:
-                bucket = self.walrus.create_bucket(bucket_name)
-            except self.walrus.provider.storage_create_error, e:
+                bucket = self.s3.create_bucket(bucket_name)
+            except self.s3.provider.storage_create_error, e:
                 self.debug( 'Bucket (%s) is owned by another user' % bucket_name )
                 return None
             if not self.get_bucket_by_name(bucket.name):
@@ -68,7 +68,7 @@ class Eucaops(Eutester):
         bucket_name = bucket.name
         try:
             bucket.delete()
-        except self.walrus.provider.storage_create_error, e:
+        except self.s3.provider.storage_create_error, e:
                 self.debug( 'Bucket (%s) is owned by another user' % bucket_name )
                 return None
             
@@ -81,7 +81,7 @@ class Eucaops(Eutester):
         """
         Lookup a bucket by name, if it does not exist return false
         """
-        bucket = self.walrus.lookup(bucket_name)
+        bucket = self.s3.lookup(bucket_name)
         if bucket:
             return bucket
         else:
@@ -126,7 +126,7 @@ class Eucaops(Eutester):
         name = object.name
         object.delete()
         try:
-            self.walrus.get_bucket(bucket).get_key(name)
+            self.s3.get_bucket(bucket).get_key(name)
             self.fail("Walrus bucket still exists after delete")
         except Exception, e:
             return
@@ -709,11 +709,11 @@ class Eucaops(Eutester):
         self.wait_for_reservation(reservation)
         for instance in reservation.instances:
             if instance.state != "running":
-                self.critcal("Instance " + instance.id + " now in " + instance.state  + " state")
+                self.critical("Instance " + instance.id + " now in " + instance.state  + " state")
             else:
                 self.debug( "Instance " + instance.id + " now in " + instance.state  + " state")
             if (instance.ip_address is instance.private_ip_address) and ( private_addressing is False ):
-                self.critcal("Instance " + instance.id + " has he same public and private IPs of " + instance.ip_address)
+                self.critical("Instance " + instance.id + " has he same public and private IPs of " + instance.ip_address)
             else:
                 self.debug(str(instance) + " got Public IP: " + instance.ip_address  + " Private IP: " + instance.private_ip_address)
         self.test_resources["reservations"].append(reservation)

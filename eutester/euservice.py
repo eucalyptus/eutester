@@ -313,15 +313,15 @@ class EuserviceManager(object):
         self.modify_service(euservice, "DISABLED")
         
     def wait_for_service(self, euservice, state = "ENABLED", attempt_both = True):
-        poll_count = 36
-        interval = 10
+        poll_count = 10
+        interval = 60
         
         while (poll_count > 0):
             matching_services = []
             try:
                 matching_services = self.get(euservice.type, euservice.partition, attempt_both)
             except Exception, e:
-                self.tester.debug("Caught an exception when trying to get services. Retrying in 10s")
+                self.tester.debug("Caught an exception when trying to get services. Retrying in " + str(interval) + "s")
 
             for service in matching_services:
                 if re.search(state, service.state):

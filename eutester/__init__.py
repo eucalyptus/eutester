@@ -135,6 +135,8 @@ class Eutester(object):
             if (self.password != None):
                 clc_array = self.get_component_machines("clc")
                 self.clc = clc_array[0]
+                walrus_array = self.get_component_machines("ws")
+                self.walrus = walrus_array[0]
 
                 if self.credpath is None:
                     ### TRY TO GET CREDS ON FIRST CLC if it fails try on second listed clc, if that fails weve hit a terminal condition
@@ -157,47 +159,64 @@ class Eutester(object):
                         
                 self.service_manager = EuserviceManager(self)
                 self.clc = self.service_manager.get_enabled_clc().machine
+                self.walrus = self.service_manager.get_enabled_walrus().machine 
                 
         #except Exception, e:
         #    raise e
         try:
             ### Pull the access and secret keys from the eucarc
             if (self.credpath != None):         
-                aws_access_key_id = self.get_access_key()
-                aws_secret_access_key = self.get_secret_key()
+                self.aws_access_key_id = self.get_access_key()
+                self.aws_secret_access_key = self.get_secret_key()
                         
             ### If you have credentials for the boto connections, create them
-            if (aws_access_key_id != None) and (aws_secret_access_key != None):
+            if (self.aws_access_key_id != None) and (self.aws_secret_access_key != None):
                if not boto.config.has_section('Boto'):
                    boto.config.add_section('Boto')
                    boto.config.set('Boto', 'num_retries', '2') 
-               self.ec2 = boto.connect_ec2(aws_access_key_id=aws_access_key_id,
+               self.setup_boto_connections()
+               
+        except Exception, e:
+            raise e
+        
+    def __del__(self):
+        self.logging_thread = False
+    
+    
+    def setup_boto_connections(self, aws_access_key_id=None, aws_secret_access_key=None, clc_ip=None, walrus_ip=None):
+        if aws_access_key_id is None:
+            aws_access_key_id = self.aws_access_key_id
+        if aws_secret_access_key is None:
+            aws_secret_access_key = self.aws_secret_access_key
+            
+        if clc_ip is None:
+            clc_ip = self.get_clc_ip()
+        if walrus_ip is None:
+            walrus_ip = self.get_walrus_ip()
+            
+        self.ec2 = boto.connect_ec2(aws_access_key_id=aws_access_key_id,
                                             aws_secret_access_key=aws_secret_access_key,
                                             is_secure=False,
                                             api_version = '2009-11-30',
-                                            region=RegionInfo(name="eucalyptus", endpoint=self.get_clc_ip()),
+                                            region=RegionInfo(name="eucalyptus", endpoint=clc_ip),
                                             port=8773,
                                             path="/services/Eucalyptus",
                                             debug=self.boto_debug)
-               self.walrus = boto.connect_s3(aws_access_key_id=aws_access_key_id,
+        self.s3 = boto.connect_s3(aws_access_key_id=aws_access_key_id,
                                               aws_secret_access_key=aws_secret_access_key,
                                               is_secure=False,
-                                              host=self.get_walrus_ip(),
+                                              host=walrus_ip,
                                               port=8773,
                                               path="/services/Walrus",
                                               calling_format=OrdinaryCallingFormat(),
                                               debug=self.boto_debug)
-               self.euare = boto.connect_iam(aws_access_key_id=aws_access_key_id,
+        self.euare = boto.connect_iam(aws_access_key_id=aws_access_key_id,
                                               aws_secret_access_key=aws_secret_access_key,
                                               is_secure=False,
-                                              host=self.get_clc_ip(),
+                                              host=clc_ip,
                                               port=8773,
                                               path="/services/Euare",
                                               debug=self.boto_debug)
-        except Exception, e:
-            raise e
-    def __del__(self):
-        self.logging_thread = False
     
     def swap_clc(self):
         all_clcs = self.get_component_machines("clc")
@@ -208,7 +227,15 @@ class Eutester(object):
             self.debug("Swapping CLC from " + all_clcs[1].hostname + " to " + all_clcs[0].hostname)
             self.clc = all_clcs[0]
 
-    
+    def swap_walrus(self):
+        all_walruses = self.get_component_machines("ws")
+        if self.walrus is all_walruses[0]: 
+            self.debug("Swapping Walrus from " + all_walruses[0].hostname + " to " + all_walruses[1].hostname)
+            self.walrus = all_walruses[1]
+        elif self.walrus is all_walruses[1]:
+            self.debug("Swapping Walrus from " + all_walruses[1].hostname + " to " + all_walruses[0].hostname)
+            self.walrus = all_walruses[0]
+            
     def read_config(self, filepath):
         """ Parses the config file at filepath returns a dictionary with the config
             Config file
@@ -364,7 +391,11 @@ class Eutester(object):
             self.download_creds_from_clc(admin_cred_dir)
             ### IF there are 2 clcs make sure to sync credentials across them
             if len(clcs) > 1:
-                self.send_creds_to_machine(admin_cred_dir, self.clc)
+                self.swap_clc()
+                other_clc = self.clc
+                self.swap_clc()
+                self.send_creds_to_machine(admin_cred_dir, other_clc) 
+                
         ### Otherwise sync the keys that were given locally to both CLCs
         else:
             for clc in clcs:
