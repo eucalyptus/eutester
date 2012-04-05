@@ -62,11 +62,11 @@ class SshConnection():
         
         
         if (self.keypair is not None):
-            self.keypath = os.getcwd() + "/" + self.keypair.name + ".pem"
+            self.keypath = os.getcwd() + "/" + self.keypair.name + ".pem" 
         if (self.keypath is not None):
-            self.debug( "SSH connection has hostname:"+self.host+" and keypath: "+self.keypath)
+            self.debug( "SSH connection has hostname:"+ str(self.host) +" user:"+ str(self.username) +" and keypath: "+ str(self.keypath) )
         else:
-            self.debug( "SSH connection has hostname:"+self.host+" user:"+self.username+" password:"+self.password)
+            self.debug( "SSH connection has hostname:"+ str(self.host)+" user:"+ str(self.username) +" password:"+ str(self.password))
             
         if (self.keypath is not None) or ((self.username is not None) and (self.password is not None)):
             self.connection = self.get_ssh_connection(self.host, username=self.username, password=self.password, keypath=self.keypath, timeout=self.timeout)
@@ -124,7 +124,7 @@ class SshConnection():
         start = time.time()
         output = []
         if verbose:
-            self.debug( "[root@" + str(self.host) + "]# " + cmd)
+            self.debug( "[" + self.username +"@" + str(self.host) + "]# " + cmd)
         try:
             tran = self.connection.get_transport()
             chan = tran.open_session()
@@ -186,11 +186,11 @@ class SshConnection():
                 #self.debug("Attempting SSH connection: "+username+"@"+hostname )            
                 if keypath is None:   
                     #self.debug("Using username:"+username+" and password:"+password)
-                    ssh.connect(hostname, username="root", password=password, timeout= timeout)
+                    ssh.connect(hostname, username=username, password=password, timeout= timeout)
                 else:
                     if self.verbose:
                         self.debug("Using Keypath:"+keypath)
-                    ssh.connect(hostname,  username="root", key_filename=keypath, timeout= timeout)
+                    ssh.connect(hostname,  username=username, key_filename=keypath, timeout= timeout)
                 break
             except paramiko.ssh_exception.SSHException, se:
                 if retry < 0: 
