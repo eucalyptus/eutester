@@ -3,6 +3,10 @@ eutester version 0.0.1
 
 [Intro to Eutester](http://testingclouds.wordpress.com/2012/03/04/test1/)
 
+[Getting Setup](http://testingclouds.wordpress.com/2012/03/29/eutester-basics-part-ii-setting-up-a-development-environment/)
+
+[Writing Your First Testcase](http://testingclouds.wordpress.com/2012/04/02/eutester-basics-part-iii-creating-your-first-testcase/)
+
 eutester is an attempt to leverage existing test code to make test writing faster and standardized.  
 
 Main Classes
