@@ -1,8 +1,11 @@
 #!/usr/bin/python
 #
-# Author:      Vic and Graziano
-# Description: Eutester test case to reproduce bug 737335
-#    (https://bugs.launchpad.net/eucalyptus/+bug/737335)
+# Author:       Vic and Graziano
+# Description:  Eutester test case to reproduce bug 737335
+#               Creates an instance of an image, and removes all permissions from the instance.
+#               If there are still permissions after the command to remove all of them has executed, 
+#               the test fails; otherwise, tries to run the image.
+#    (https://bugs.launchpad.net/eucalyptus/+bug/737335)            
 #
 
 from eutester import Eutester
