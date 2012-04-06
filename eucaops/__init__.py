@@ -9,15 +9,16 @@ from boto.ec2.image import Image
 from boto.ec2.instance import Reservation
 from boto.ec2.volume import Volume
 from boto.ec2.blockdevicemapping import BlockDeviceMapping, BlockDeviceType
-
+from boto.exception import EC2ResponseError
 from eutester.euinstance import EuInstance
 
 
 class Eucaops(Eutester):
     
-    def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,account="eucalyptus",user="admin", boto_debug=0):
-        super(Eucaops, self).__init__(config_file,password, keypath, credpath, aws_access_key_id, aws_secret_access_key,account, user, boto_debug)
+    def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,account="eucalyptus",user="admin", username="root",region=None, boto_debug=0):
+        super(Eucaops, self).__init__(config_file,password, keypath, credpath, aws_access_key_id, aws_secret_access_key,account, user,region, boto_debug)
         self.poll_count = 48
+        self.username = username
         if self.hypervisor is "vmware":
             self.poll_count = 96
         self.test_resources = {}
@@ -140,7 +141,12 @@ class Eucaops(Eutester):
         if key_name==None:
             key_name = "keypair-" + str(int(time.time())) 
         self.debug(  "Looking up keypair " + key_name )
-        key = self.ec2.get_all_key_pairs(keynames=[key_name])    
+        key = []
+        try:
+            key = self.ec2.get_all_key_pairs(keynames=[key_name])    
+        except EC2ResponseError:
+            pass
+        
         if key == []:
             self.debug( 'Creating keypair: %s' % key_name)
             # Create an SSH key to use when logging into instances.
@@ -198,7 +204,11 @@ class Eucaops(Eutester):
         name = keypair.name
         self.debug(  "Sending delete for keypair: " + name)
         keypair.delete()
-        keypair = self.ec2.get_all_key_pairs(keynames=[name])
+        try:
+            keypair = self.ec2.get_all_key_pairs(keynames=[name])
+        except EC2ResponseError:
+            keypair = []
+            
         if len(keypair) > 0:
             self.fail("Keypair found after attempt to delete it")
             return False
@@ -247,11 +257,15 @@ class Eucaops(Eutester):
         group_name      Group name to check for existence
         """
         self.debug( "Looking up group " + group_name )
-        group = self.ec2.get_all_security_groups(groupnames=[group_name])
+        try:
+            group = self.ec2.get_all_security_groups(groupnames=[group_name])
+        except EC2ResponseError:
+            return False
+        
         if group == []:
             return False
         else:
-            return True
+            return True    
     
     def authorize_group_by_name(self,group_name="default", port=22, protocol="tcp", cidr_ip="0.0.0.0/0"):
         """
@@ -544,7 +558,7 @@ class Eucaops(Eutester):
         self.test_resources["images"].append(image_id)
         return image_id
     
-    def get_emi(self, emi="emi-", root_device_type=None, root_device_name=None, location=None, state="available", arch=None, owner_id=None):
+    def get_emi(self, emi=None, root_device_type=None, root_device_name=None, location=None, state="available", arch=None, owner_id=None):
         """
         Get an emi with name emi, or just grab any emi in the system. Additional 'optional' match criteria can be defined.
         emi              (mandatory) Partial ID of the emi to return, defaults to the 'emi-" prefix to grab any
@@ -555,8 +569,9 @@ class Eucaops(Eutester):
         arch             (optional string)  example: 'x86_64'
         owner_id         (optional string) owners numeric id
         """
-        
-        images = self.ec2.get_all_images()
+        self.debug("Looking for image: " + emi )
+            
+        images = self.ec2.get_all_images([emi])
         for image in images:
             
             if not re.search(emi, image.id):      
@@ -725,7 +740,7 @@ class Eucaops(Eutester):
         euinstance_list = []
         for instance in reservation.instances:
             try:
-                euinstance_list.append( EuInstance.make_euinstance_from_instance( instance, self, keypath=keypath ))
+                euinstance_list.append( EuInstance.make_euinstance_from_instance( instance, self, keypath=keypath,username = self.username ))
             except Exception, e:
                 self.critical("Unable to create Euinstance from " + str(instance))
                 euinstance_list.append(instance)

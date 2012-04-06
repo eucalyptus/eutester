@@ -32,16 +32,18 @@ class machine:
         if debugmethod is None:
             logger = eulogger.Eulogger(identifier= str(hostname) + ":" + str(components))
             self.debugmethod = logger.log.debug
-        self.ssh = sshconnection.SshConnection(     hostname, 
-                                                    keypath=keypath,          
-                                                    password=password, 
-                                                    username=username, 
-                                                    timeout=timeout, 
-                                                    retry=retry,
-                                                    debugmethod=self.debugmethod,
-                                                    verbose=True)
+        ### We dont want to login to ESX boxes
+        if not re.search("vmware", self.distro, re.IGNORECASE):
+            self.ssh = sshconnection.SshConnection(     hostname, 
+                                                        keypath=keypath,          
+                                                        password=password, 
+                                                        username=username, 
+                                                        timeout=timeout, 
+                                                        retry=retry,
+                                                        debugmethod=self.debugmethod,
+                                                        verbose=True)
     
-        self.sftp = self.ssh.connection.open_sftp()
+            self.sftp = self.ssh.connection.open_sftp()
     
     def update_ssh(self):
         self.update()
