@@ -31,6 +31,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 # author: clarkmatthew
+# modified by: Trevor Hodde
 
 '''
     Example:
@@ -47,19 +48,27 @@ import sys
 import logging
 import time
 
-
+#This class basically sets up a debugger for testing purposes. It allows the user to set up a new logger object and pass different debug arguments to create "breakpoints" in the code.
 class Eulogger(object):
     
-    def __init__ (self,
-                  identifier="eulogger",
-                  log_level= "debug", 
-                  fdebug ='%(message)s',
-                  ferr = '%(funcName)s():%(lineno)d: %(message)',
-                  logfile = "",
-                  clear = False 
-                  ):
-                 
-    # setup the logging This should eventually be done in it's own method probably...
+    #constructor for the Eulogger
+    def __init__(self,identifier="eulogger",log_level="debug",fdebug='%(message)s',ferr='%(funcName)s():%(lineno)d: %(message)',logfile = "",clear = False):
+    	setupLogging(identifier, log_level, fdebug, ferr, logfile, clear)
+           
+        #now add the locations will log to by adding handlers to our logger...
+        self.log.addHandler(self.outhdlr) 
+        
+        if (self.logfile != ""):
+            #to log to a file as well add another handler to the logger...
+            if (self.clear):
+                os.remove(self.logfile)
+            filehdlr = logging.FileHandler(self.logfile)
+            filehdlr.setFormatter(str(self.ferr))
+            self.log.addHandler(filehdlr)
+
+
+    #This function sets up all of the logger properties
+    def setupLogging(identifier, log_level, fdebug, ferr, logfile, clear): 
         self.log_level = logging.__dict__.get(log_level.upper(),logging.DEBUG)
         self.logfile = os.path.join(logfile)
         self.ferr = ferr
@@ -79,17 +88,4 @@ class Eulogger(object):
         for handler in self.log.handlers:
            if handler is self.outhdlr:
                return
-            
-        
-        #now add the locations will log to by adding handlers to our logger...
-        
-        self.log.addHandler(self.outhdlr) 
-        
-        if (self.logfile != ""):
-            #to log to a file as well add another handler to the logger...
-            if (self.clear):
-                os.remove(self.logfile)
-            filehdlr = logging.FileHandler(self.logfile)
-            filehdlr.setFormatter(str(self.ferr))
-            self.log.addHandler(filehdlr)
-
+ 
