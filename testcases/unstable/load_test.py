@@ -1,4 +1,11 @@
 #!/usr/bin/python
+#
+# Description:  Creates instance(s) according to the number passed in via args. 
+#               SSH into each instance, and attaches a volume to each. Creates
+#               a file system on the volume. Unmounts the volume and terminates the
+#               instance once done. Displays Success/Fail count for all instances
+#               after all instances have been terminated. 
+#
 
 from eucaops import Eucaops
 import argparse
