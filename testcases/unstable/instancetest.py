@@ -1,4 +1,10 @@
 #! ../share/python_lib/vic-dev-27/bin/python
+#
+# Description: Runs a series of tests on an eutester instance. The tests include stopping logging, checking IP's, 
+#              running the smallest and largest instances available, checking metadata, and rebooting an instance
+#              to make sure that connectivity is maintained and volumes stay attached. 
+#
+
 import unittest
 import time
 from eucaops import Eucaops

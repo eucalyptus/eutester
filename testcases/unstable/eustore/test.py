@@ -1,3 +1,8 @@
+#
+# Description:  Looks for a set of six images, if found attempts to install the images on the clc. 
+#               If image is not found error is displayed.
+#
+
 import time
 from eucaops import Eucaops
 if __name__ == '__main__':
