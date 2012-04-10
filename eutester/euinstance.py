@@ -261,15 +261,16 @@ class EuInstance(Instance):
         raise Exception("Detach Volume("+str(euvolume.id)+") not found on ("+str(self.id)+")")
         return True
     
-    def get_metadata(self, element_path):
+    def get_metadata(self, element_path): 
         """Return the lines of metadata from the element path provided"""
-        ### TODO= for some reason this logic wasnt working when used inside a unittest testcase
-        #if re.search("managed", self.get_network_mode()):
+        if self.tester.config:
+            isManaged = re.search("managed", self.tester.get_network_mode())
+            if not isManaged:
+                return self.sys("curl http://" + self.tester.get_clc_ip()  + ":8773/latest/meta-data/" + element_path)
+            
         return self.sys("curl http://169.254.169.254/latest/meta-data/" + element_path)
-        #else:
-        #    return self.sys("curl http://" + self.get_clc_ip()  + ":8773/latest/meta-data/" + element_path)
-
-    
+        
+        
     
     def get_guestdevs_inuse_by_vols(self):
         retlist = []

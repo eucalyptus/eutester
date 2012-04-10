@@ -60,8 +60,15 @@ class TimeoutFunctionException(Exception):
     """Exception to raise on a timeout""" 
     pass 
 
+EC2RegionData = {
+    'us-east-1' : 'ec2.us-east-1.amazonaws.com',
+    'us-west-1' : 'ec2.us-west-1.amazonaws.com',
+    'eu-west-1' : 'ec2.eu-west-1.amazonaws.com',
+    'ap-northeast-1' : 'ec2.ap-northeast-1.amazonaws.com',
+    'ap-southeast-1' : 'ec2.ap-southeast-1.amazonaws.com'}
+
 class Eutester(object):
-    def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, account="eucalyptus",  user="admin", boto_debug=0):
+    def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,  account="eucalyptus", user="admin", region=None, boto_debug=0):
         """  
         This is the constructor for a eutester object, it takes care of setting up the connections that will be required for a test to run. 
         
@@ -86,6 +93,7 @@ class Eutester(object):
         self.key_dir = "./"
         self.account_id = 0000000000001
         self.hypervisor = None
+        self.region = RegionInfo()
         
         ##### Euca Logs 
         self.cloud_log_buffer = ''
@@ -96,8 +104,7 @@ class Eutester(object):
         self.logging_thread = False
         
         ### Eutester logs
-        #try:
-        self.logger = eulogger.Eulogger(identifier="localhost")
+        self.logger = eulogger.Eulogger(identifier="EUTESTER")
         
             
         self.debug = self.logger.log.debug
@@ -162,63 +169,84 @@ class Eutester(object):
                 self.clc = self.service_manager.get_enabled_clc().machine
                 self.walrus = self.service_manager.get_enabled_walrus().machine 
                 
-        #except Exception, e:
-        #    raise e
-        try:
             ### Pull the access and secret keys from the eucarc
-            if (self.credpath != None):         
-                self.aws_access_key_id = self.get_access_key()
-                self.aws_secret_access_key = self.get_secret_key()
+        if (self.credpath != None):
+            self.debug("Extracting keys from " + self.credpath)         
+            self.aws_access_key_id = self.get_access_key()
+            self.aws_secret_access_key = self.get_secret_key()
                         
             ### If you have credentials for the boto connections, create them
-            if (self.aws_access_key_id != None) and (self.aws_secret_access_key != None):
-               if not boto.config.has_section('Boto'):
-                   boto.config.add_section('Boto')
-                   boto.config.set('Boto', 'num_retries', '2') 
-               self.setup_boto_connections()
-               
-        except Exception, e:
-            raise e
+        if (self.aws_access_key_id != None) and (self.aws_secret_access_key != None):
+            if not boto.config.has_section('Boto'):
+                boto.config.add_section('Boto')
+                boto.config.set('Boto', 'num_retries', '2') 
+            self.setup_boto_connections(region=region)
         
     def __del__(self):
         self.logging_thread = False
     
     
-    def setup_boto_connections(self, aws_access_key_id=None, aws_secret_access_key=None, clc_ip=None, walrus_ip=None):
+    def setup_boto_connections(self, region=None, aws_access_key_id=None, aws_secret_access_key=None, clc_ip=None, walrus_ip=None, is_secure=False):
+        
         if aws_access_key_id is None:
             aws_access_key_id = self.aws_access_key_id
         if aws_secret_access_key is None:
-            aws_secret_access_key = self.aws_secret_access_key
+            aws_secret_access_key = self.aws_secret_access_key     
+        port = 443
+        service_path = "/"
+        APIVersion = '2009-11-30'
+        if region is not None:
+            self.debug("Check region: " + region)        
+            try:
+                self.region.endpoint = EC2RegionData[region]
+            except KeyError:
+                raise Exception( 'Unknown region: %s' % region)
+        
+        if not self.region.endpoint:
+            #self.get_connection_details()
+            self.region.name = 'eucalyptus'
+            self.region.endpoint = self.get_clc_ip()       
+            port = 8773
+            service_path="/services/Eucalyptus"
             
-        if clc_ip is None:
-            clc_ip = self.get_clc_ip()
         if walrus_ip is None:
             walrus_ip = self.get_walrus_ip()
+        
+        try:    
+            self.ec2 = boto.connect_ec2(aws_access_key_id=aws_access_key_id,
+                                    aws_secret_access_key=aws_secret_access_key,
+                                    is_secure=is_secure,
+                                    debug=self.boto_debug,
+                                    region=self.region,
+                                    port=port,
+                                    path=service_path,
+                                    api_version=APIVersion)
+        except Exception, e:
+            self.critical("Was unable to create ec2 connection because of exception: " + str(e))
+
+        try:
+            self.s3 = boto.connect_s3(aws_access_key_id=aws_access_key_id,
+                                                  aws_secret_access_key=aws_secret_access_key,
+                                                  is_secure=False,
+                                                  host=walrus_ip,
+                                                  port=8773,
+                                                  path="/services/Walrus",
+                                                  calling_format=OrdinaryCallingFormat(),
+                                                  debug=self.boto_debug)
+        except Exception, e:
+            self.critical("Was unable to create S3 connection because of exception: " + str(e))
+        
+        try:    
+            self.euare = boto.connect_iam(aws_access_key_id=aws_access_key_id,
+                                                  aws_secret_access_key=aws_secret_access_key,
+                                                  is_secure=False,
+                                                  host=clc_ip,
+                                                  port=8773, 
+                                                  path="/services/Euare",
+                                                  debug=self.boto_debug)
+        except Exception, e:
+            self.critical("Was unable to create IAM connection because of exception: " + str(e))
             
-        self.ec2 = boto.connect_ec2(aws_access_key_id=aws_access_key_id,
-                                            aws_secret_access_key=aws_secret_access_key,
-                                            is_secure=False,
-                                            api_version = '2009-11-30',
-                                            region=RegionInfo(name="eucalyptus", endpoint=clc_ip),
-                                            port=8773,
-                                            path="/services/Eucalyptus",
-                                            debug=self.boto_debug)
-        self.s3 = boto.connect_s3(aws_access_key_id=aws_access_key_id,
-                                              aws_secret_access_key=aws_secret_access_key,
-                                              is_secure=False,
-                                              host=walrus_ip,
-                                              port=8773,
-                                              path="/services/Walrus",
-                                              calling_format=OrdinaryCallingFormat(),
-                                              debug=self.boto_debug)
-        self.euare = boto.connect_iam(aws_access_key_id=aws_access_key_id,
-                                              aws_secret_access_key=aws_secret_access_key,
-                                              is_secure=False,
-                                              host=clc_ip,
-                                              port=8773,
-                                              path="/services/Euare",
-                                              debug=self.boto_debug)
-    
     def swap_clc(self):
         all_clcs = self.get_component_machines("clc")
         if self.clc is all_clcs[0]:
@@ -237,7 +265,7 @@ class Eutester(object):
             self.debug("Swapping Walrus from " + all_walruses[1].hostname + " to " + all_walruses[0].hostname)
             self.walrus = all_walruses[0]
             
-    def read_config(self, filepath):
+    def read_config(self, filepath, username="root"):
         """ Parses the config file at filepath returns a dictionary with the config
             Config file
             ----------
@@ -293,7 +321,8 @@ class Eutester(object):
                                         machine_dict["source"], 
                                         machine_dict["components"],
                                         self.password,
-                                        self.keypath
+                                        self.keypath,
+                                        username
                                         )
                 machines.append(cloud_machine)
                 
@@ -449,11 +478,11 @@ class Eutester(object):
         return self.parse_eucarc("EC2_ACCOUNT_NUMBER")
         
     def parse_eucarc(self, field):
-        with open( self.credpath + "/eucarc") as eucarc:
+        with open( self.credpath + "/eucarc") as eucarc: 
             for line in eucarc.readlines():
                 if re.search(field, line):
                     return line.split("=")[1].strip().strip("'")
-            raise Exception("Unable to find account id in eucarc")
+            raise Exception("Unable to find " +  field + " id in eucarc")
     
     def get_walrus_ip(self):
         """Parse the eucarc for the S3_URL"""

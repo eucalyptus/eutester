@@ -1,4 +1,14 @@
 #! ../share/python_lib/devel/bin/python
+#
+# Description:  Creates an image instance based on the image argument passed in. Then 
+#               attempts to download a remote image and store it on an attached volume.
+#               A snapshot is then created from the splatted volume that the remote image
+#               was written to. Lastly the emi of the snapshot is registered. Upon completion,
+#               the volume is deleted and the instance is terminated. 
+#
+#               bfebs = Amazon Elastic Block Store (http://aws.amazon.com/ebs/)
+#
+
 from eucaops import Eucaops
 from optparse import OptionParser
 import os, re
