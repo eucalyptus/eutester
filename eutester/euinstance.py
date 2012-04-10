@@ -256,7 +256,7 @@ class EuInstance(Instance):
     
     def get_metadata(self, element_path): 
         """Return the lines of metadata from the element path provided"""
-        if self.config:
+        if self.tester.config:
             isManaged = re.search("managed", self.tester.get_network_mode())
             if not isManaged:
                 return self.sys("curl http://" + self.tester.get_clc_ip()  + ":8773/latest/meta-data/" + element_path)
