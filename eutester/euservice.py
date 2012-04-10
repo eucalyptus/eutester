@@ -85,6 +85,9 @@ class Partition:
     ccs = []
     scs = []
     vbs = []
+    ncs = []
+    volumes = []
+    instances = []
     
     def __init__(self, name, service_manager ):
         self.name = name

@@ -297,10 +297,10 @@ class Eucaops(Eutester):
         ### If the instance changes state or goes to the desired state before my poll count is complete
         while( poll_count > 0) and (instance.state != state):
             poll_count -= 1
-            self.debug( "Instance("+instance.id+") State("+instance.state+"), sleeping 10s")
+            self.debug( "Instance("+instance.id+") State("+instance.state+"), elapsed:"+str(elapsed))
             time.sleep(10)
             instance.update()
-            elapsed = (time.time()- start)
+            elapsed = int(time.time()- start)
             if (instance.state != instance_original_state):
                 break
         self.debug("Instance("+instance.id+") State("+instance.state+") Poll("+str(self.poll_count-poll_count)+") time elapsed (" +str(elapsed).split('.')[0]+")")
@@ -434,7 +434,7 @@ class Eucaops(Eutester):
     def create_snapshot(self, volume_id, description="", waitOnProgress=0, poll_interval=10, timeout=0):
         """
         Create a new EBS snapshot from an existing volume then wait for it to go to the created state. By default will poll for poll_count.
-        If waitOnProgress is specified than will wait on "waitOnProgress" # of periods w/o progress before failing
+        If waitOnProgress is specified than will wait on "waitOnProgress" # of poll_interval periods w/o progress before failing
         An overall timeout can be given for both methods, by default the timeout is not used.    
         volume_id        (mandatory string) Volume id of the volume to create snapshot from
         description      (optional string) string used to describe the snapshot
@@ -700,8 +700,10 @@ class Eucaops(Eutester):
             images = self.ec2.get_all_images()
             for emi in images:
                 if re.match("emi",emi.name):
-                    image = emi         
-        self.debug( "Attempting to run "+ str(image.root_device_type)  +" image " + str(image) + " in group " + group)
+                    image = emi      
+        if image is None:
+            raise Exception("emi is None. run_instance could not auto find an emi?")   
+        self.debug( "Attempting to run "+ str(image.root_device_type)  +" image " + str(image) + " in group " + str(group))
         reservation = image.run(key_name=keypair,security_groups=[group],instance_type=type, placement=zone, min_count=min, max_count=max, user_data=user_data)
         if ((len(reservation.instances) < min) or (len(reservation.instances) > max)):
             self.fail("Reservation:"+str(reservation.id)+" returned "+str(len(reservation.instances))+" instances, not within min("+str(min)+") and max("+str(max)+" ")

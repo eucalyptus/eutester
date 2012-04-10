@@ -25,7 +25,7 @@ import re
 import time
 import re
 import eulogger
-
+import inspect, gc
 
 class EuInstance(Instance):
     keypair = None
@@ -122,6 +122,7 @@ class EuInstance(Instance):
             while (elapsed < timeout):
                 try:
                     self.reset_ssh_connection()
+                    self.sys("")
                 except Exception, se:
                     self.debug('Caught exception attempting to reconnect ssh'+ str(se))
                     elapsed = int(time.time()-start)
@@ -135,13 +136,14 @@ class EuInstance(Instance):
         else:
             self.debug("keypath or username/password need to be populated for ssh connection") 
     
-    def debug(self,msg):
+    def debug(self,msg,traceback=1,method=None,frame=False):
         '''
         Used to print debug, defaults to print() but over ridden by self.debugmethod if not None
         msg - mandatory -string, message to be printed
         '''
         if ( self.verbose is True ):
-                self.debugmethod(msg)
+            self.debugmethod(msg)
+            
 
                 
     def sys(self, cmd, verbose=True, timeout=120):
@@ -176,16 +178,16 @@ class EuInstance(Instance):
         Method to check for the presence of a file at 'filepath' on the instance
         filepath - mandatory - string, the filepath to verify
         '''
-        if not self.found("stat "+filepath+" &> /dev/null && echo 'good'", 'good'):
+        filepath = str(filepath).strip()
+        if self.found("ls "+filepath+" &> /dev/null && echo 'good'", 'good') == False:
             raise Exception("File:"+filepath+" not found on instance:"+self.id)
-            return False
         self.debug('File '+filepath+' is present on '+self.id)
         
     
-    def attach_volume(self, volume, tester, dev=None, timeout=60):
+    def attach_volume(self, volume,  dev=None, timeout=60):
         if not isinstance(volume, EuVolume):
             euvolume = EuVolume.make_euvol_from_vol(volume)
-        return self.attach_euvolume(euvolume, tester=tester, dev=dev, timeout=timeout)
+        return self.attach_euvolume(euvolume,  dev=dev, timeout=timeout)
     
         
     def attach_euvolume(self, euvolume, dev=None, timeout=60):
@@ -211,10 +213,13 @@ class EuInstance(Instance):
             while (elapsed < timeout):
                 self.debug("Checking for volume attachment on guest, elapsed time("+str(elapsed)+")")
                 dev_list_after = self.get_dev_dir()
+                self.debug("dev_list_after:"+"".join(dev_list_after))
                 diff =list( set(dev_list_after) - set(dev_list_before) )
                 if len(diff) > 0:
-                    attached_dev = diff[0]
-                    euvolume.guestdev = attached_dev
+                    devlist = str(diff[0]).split('/')
+                    attached_dev = '/dev/'+devlist[len(devlist)-1]
+                    euvolume.guestdev = attached_dev.strip()
+                    self.debug("Volume:"+str(euvolume.id)+" guest device:"+str(euvolume.guestdev))
                     euvolume.clouddev = dev
                     self.attached_vols.append(euvolume)
                     self.debug(euvolume.id+" Requested dev:"+str(euvolume.clouddev)+", attached to guest device:"+str(euvolume.guestdev))
@@ -242,9 +247,11 @@ class EuInstance(Instance):
                 dev = vol.guestdev
                 if (self.tester.detach_volume(euvolume)):
                     while (elapsed < timeout):
-                        if (self.sys('ls -1'+dev, timeout=timeout) == []):
+                        try:
+                            self.assertFilePresent(dev)
+                        except:
                             self.attached_vols.remove(vol)
-                            return
+                            return True
                         else:
                             time.sleep(5) 
                         elapsed = time.time()-start
@@ -301,21 +308,33 @@ class EuInstance(Instance):
             raise Exception("Could not find a free scsi dev on instance:"+self.id )
         
     
-    def write_random_data_to_vol_get_md5(self, euvolume, voldev, srcdev='/dev/sda', timepergig=60):
+    def vol_write_random_data_get_md5(self, euvolume, srcdev=None, timepergig=60):
         '''
         Attempts to copy some amount of data into an attached volume, and return the md5sum of that volume
         volume - mandatory - boto volume object of the attached volume 
-        voldev - mandatory - string, the device name on the instance where the volume is attached
         srcdev - optional - string, the file to copy into the volume
         timepergig - optional - the time in seconds per gig, used to estimate an adequate timeout period
         '''
-        timeout = euvolume.size * timepergig
+        if srcdev is None:
+            srcdev = str(self.sys('ls -1 /dev/sd*')[0]).strip()
+        voldev = euvolume.guestdev.strip()
         self.assertFilePresent(voldev)
         self.assertFilePresent(srcdev)
-        self.sys("dd if="+srcdev+" of="+voldev+" && sync")
-        md5 = self.sys("md5sum "+voldev, timeout=timeout)[0]
-        md5 = md5.split(' ')[0]
+        self.sys("dd if="+srcdev+" of="+voldev+"; sync")
+        md5 = self.md5_attached_euvolume(euvolume, timepergig=timepergig)
         self.debug("Filled Volume:"+euvolume.id+" dev:"+voldev+" md5:"+md5)
+        return md5
+    
+    def md5_attached_euvolume(self, euvolume, timepergig=60):
+        try:
+            voldev = euvolume.guestdev
+            timeout = euvolume.size * timepergig
+            self.assertFilePresent(voldev)
+            md5 = str(self.sys("md5sum "+voldev, timeout=timeout)[0]).split(' ')[0].strip()
+            self.debug("Got MD5 for Volume:"+euvolume.id+" dev:"+voldev+" md5:"+md5)
+            euvolume.md5=md5
+        except Exception, e:
+            raise Exception("Failed to md5 attached volume: " +str(e))
         return md5
         
     def reboot_instance_and_verify(self,waitconnect=30, timeout=300, connect=True, checkvolstatus=False):
@@ -364,9 +383,9 @@ class EuInstance(Instance):
                     match = 0 
                     elapsed = 0 
                     start = time.time()
-                    while (match == 0):
+                    while (match == 0) and (elapsed < timepervol):
                         try:
-                            self.assertFilePresent('/dev/'+vol.guestdev.strip())
+                            self.assertFilePresent(vol.guestdev.strip())
                             self.debug("Found local/volume match dev:"+vol.guestdev.strip())
                             match = 1
                         except: 
