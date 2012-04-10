@@ -1,5 +1,3 @@
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
 # Software License Agreement (BSD License)
 #
 # Copyright (c) 2009-2011, Eucalyptus Systems, Inc.
@@ -53,8 +51,8 @@ class Eulogger(object):
     
     #constructor for the Eulogger
     def __init__(self,identifier="eulogger",log_level="debug",fdebug='%(message)s',ferr='%(funcName)s():%(lineno)d: %(message)',logfile = "",clear = False):
-    	setupLogging(identifier, log_level, fdebug, ferr, logfile, clear)
-           
+        
+        self.setupLogging(identifier, log_level, fdebug, ferr, logfile, clear)
         #now add the locations will log to by adding handlers to our logger...
         self.log.addHandler(self.outhdlr) 
         
@@ -68,7 +66,7 @@ class Eulogger(object):
 
 
     #This function sets up all of the logger properties
-    def setupLogging(identifier, log_level, fdebug, ferr, logfile, clear): 
+    def setupLogging(self, identifier, log_level, fdebug, ferr, logfile, clear): 
         self.log_level = logging.__dict__.get(log_level.upper(),logging.DEBUG)
         self.logfile = os.path.join(logfile)
         self.ferr = ferr
@@ -86,6 +84,6 @@ class Eulogger(object):
         self.outhdlr = logging.StreamHandler(sys.stdout)
         self.outhdlr.setFormatter(self.default_format)
         for handler in self.log.handlers:
-           if handler is self.outhdlr:
-               return
+            if handler is self.outhdlr:
+                return
  
