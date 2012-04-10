@@ -569,9 +569,11 @@ class Eucaops(Eutester):
         arch             (optional string)  example: 'x86_64'
         owner_id         (optional string) owners numeric id
         """
-        self.debug("Looking for image: " + emi )
+        if emi is None:
+            emi = "mi-"
+        self.debug("Looking for image prefix: " + str(emi) )
             
-        images = self.ec2.get_all_images([emi])
+        images = self.ec2.get_all_images()
         for image in images:
             
             if not re.search(emi, image.id):      
