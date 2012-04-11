@@ -45,17 +45,9 @@ class machine:
     
             self.sftp = self.ssh.connection.open_sftp()
     
-    def update_ssh(self):
-        self.update()
-        self.ssh = sshconnection.SshConnection(     instance.ip_address, 
-                                                    keypair=keypair, 
-                                                    keypath=keypath,          
-                                                    password=password, 
-                                                    username=username, 
-                                                    timeout=timeout, 
-                                                    retry=retry,
-                                                    debugmethod=self.debugmethod,
-                                                    verbose=True)
+    def refresh_ssh(self):
+        self.ssh.refresh_connection()
+        
     def debug(self,msg):
         '''
         Used to print debug, defaults to print() but over ridden by self.debugmethod if not None
