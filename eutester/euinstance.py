@@ -309,7 +309,7 @@ class EuInstance(Instance):
             raise Exception("Could not find a free scsi dev on instance:"+self.id )
         
     
-    def vol_write_random_data_get_md5(self, euvolume, srcdev=None, timepergig=60):
+    def vol_write_random_data_get_md5(self, euvolume, srcdev=None, length=1000, timepergig=90):
         '''
         Attempts to copy some amount of data into an attached volume, and return the md5sum of that volume
         volume - mandatory - boto volume object of the attached volume 
@@ -321,17 +321,23 @@ class EuInstance(Instance):
         voldev = euvolume.guestdev.strip()
         self.assertFilePresent(voldev)
         self.assertFilePresent(srcdev)
-        self.sys("dd if="+srcdev+" of="+voldev+"; sync")
-        md5 = self.md5_attached_euvolume(euvolume, timepergig=timepergig)
+        if length == 0:
+            self.sys("dd if="+srcdev+" of="+voldev+"; sync")
+        else:
+            self.sys("head -"+str(length)+" "+srcdev+" > "+voldev+"; sync")
+        md5 = self.md5_attached_euvolume(euvolume, timepergig=timepergig,length=length)
         self.debug("Filled Volume:"+euvolume.id+" dev:"+voldev+" md5:"+md5)
         return md5
     
-    def md5_attached_euvolume(self, euvolume, timepergig=60):
+    def md5_attached_euvolume(self, euvolume, timepergig=90,length=1000):
         try:
             voldev = euvolume.guestdev
             timeout = euvolume.size * timepergig
             self.assertFilePresent(voldev)
-            md5 = str(self.sys("md5sum "+voldev, timeout=timeout)[0]).split(' ')[0].strip()
+            if length == 0:
+                md5 = str(self.sys("md5sum "+voldev, timeout=timeout)[0]).split(' ')[0].strip()
+            else:
+                md5 = str(self.sys("head -"+str(length)+" "+voldev+" | md5sum", timeout=timeout)[0]).split(' ')[0].strip()
             self.debug("Got MD5 for Volume:"+euvolume.id+" dev:"+voldev+" md5:"+md5)
             euvolume.md5=md5
         except Exception, e:

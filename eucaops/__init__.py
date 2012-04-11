@@ -802,23 +802,26 @@ class Eucaops(Eutester):
         return ilist
     
     
-    def get_all_my_connectable_instances(self,path=None):
+    def get_connectable_euinstances(self,path=None,connect=True):
         '''
         convenience method returns a list of all running instances, for the current creduser
         for which there are local keys at 'path'
         '''
         try:
             instances = []  
+            euinstances = []
             keys = self.get_all_current_local_keys(path=path)
             if keys != []:
                 for keypair in keys:
                     self.debug('looking for instances using keypair:'+keypair.name)
                     instances = self.get_instances(state='running',key=keypair.name)
                     if instances != []:
-                        return instances
-                        #instance = instances[0]
-                        #self.debug('Found usable instance:'+instance.id+'using key:'+keypair.name)
-                        break
+                        for instance in instances:
+                            if not connect:
+                                keypair=None
+                            euinstances.append(EuInstance.make_euinstance_from_instance( instance, self, keypair=keypair))
+                      
+            return euinstances
         except Exception, e:
             self.debug("Failed to find a pre-existing isntance we can connect to:"+str(e))
             pass
