@@ -412,13 +412,13 @@ class Eucaops(Eutester):
         volume.update()
         while (elapsed < timeout):
             volume.update()
-            if re.search("attached",volume.attach_data.status):
+            if re.search("attached",volume.status):
                 return True
-            self.debug( str(volume) + " state:" + volume.attach_data.status + " pause:"+str(pause)+" elapsed:"+str(elapsed))
+            self.debug( str(volume) + " state:" + volume.status + " pause:"+str(pause)+" elapsed:"+str(elapsed))
             self.sleep(pause)
             elapsed = int(time.time()-start)
 
-        self.fail(str(volume) + " left in " +  volume.attach_data.status)
+        self.fail(str(volume) + " left in " +  volume.status)
         return False
       
     
