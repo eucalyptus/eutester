@@ -1,3 +1,7 @@
+#
+# Description:  Eucaops header file with all function definitions
+#
+
 class Eucaops_api(object):
     def create_bucket(self,bucket_name):
         raise NotImplementedError("Function not yet implemented")
