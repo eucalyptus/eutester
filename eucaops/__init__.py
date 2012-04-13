@@ -1,3 +1,8 @@
+#
+# Description:  Provides predefined routines that can validate operations 
+#               against the cloud (Cloud Controller and Walrus).          
+#
+
 from eutester import Eutester
 import time
 import re
