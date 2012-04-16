@@ -8,8 +8,11 @@ from selenium.webdriver.common.by import By
 from selenium.common.exceptions import NoSuchElementException
 
 
-
+# The Euwebgroup class allows users to create groups to put users in
+# for testing purposes. These objects will be passed indentification
+# information.
 class Euwebgroup(object):
+    # Constructor for the Euwebgroup
     def __init__ (self,
                   g_id="", #
                   name="", 
@@ -20,7 +23,8 @@ class Euwebgroup(object):
                   name_xpath=None,
                   status_xpath=None
                   ):
-        
+        # Creates a group object with the specified criteria for
+	# id, name, status, path, and row_path.
         self.id = g_id
         if (id_xpath):
             self.id_xpath = id_xpath
@@ -41,9 +45,8 @@ class Euwebgroup(object):
             self.path="/"+self.name
             
     
-   
-       
-            
+     
+    # Displays basic information about the group to the user         
     def printSelf(self):
         print "+++++++++++++++++GROUP++++++++++++++++++"
         print "Name:" + self.name
