@@ -3,6 +3,12 @@ Created on Apr 13, 2012
 
 @author: clarkmatthew
 
+example:
+from eustoretests import Eustoretests
+et = Eustoretests(config_file="2b_tested.lst", password="foobar")
+list = et.get_uninstalled_summary()
+et.install_all_images(list=list)
+
      eustore-install-image -h 
           -h, --help            show this help message and exit
           -i IMAGE_NAME, --image_name=IMAGE_NAME
@@ -293,7 +299,7 @@ class Eustoretests():
         print "Executing cmd:"+str(cmd)
         try:     
             out = self.tester.sys(cmd, timeout=timeout)
-            if re.search("SUCCESS",out[len(out)]):
+            if re.search("SUCCESS",out[len(out)-1]):
                 for line in out:
                     if re.search("Error", line):
                         raise Exception("Found Error from cmd:"+str(cmd))
@@ -349,7 +355,7 @@ class Eustoretests():
     
             
         
-    def get_install_summary(self):
+    def get_uninstalled_summary(self):
         '''
         Attempts to get a diff of images in our list vs what the system is reporting. 
         This relies upon the bucket location having the image id text in it. 
