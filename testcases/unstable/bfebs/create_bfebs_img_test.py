@@ -14,7 +14,7 @@ from optparse import OptionParser
 import os, re
 import time
 import httplib
-
+from eutester import euinstance
 
 def pmsg(msg):
     print "\n---------------PROGRESS MESSAGE----------\n"
@@ -100,6 +100,7 @@ if __name__ == '__main__':
     clean = options.clean
     instance = None
     volume = None
+    keypair=None
     
     
 
@@ -125,56 +126,79 @@ if __name__ == '__main__':
     else:
         tester.exit_on_fail = 0 
    
-    
-    ### Create security group if it does not exist. Add ssh authorization to it. 
     try:
-        group = tester.add_group(group_name)
-        tester.authorize_group_by_name(group.name)
-        tester.authorize_group_by_name(group.name,protocol="icmp",port=-1)
-    except Exception, e:    
-        raise Exception("Error when setting up group:"+str(group_name)+", Error:"+str(e))
-        
-        
-    #Create a keypair to use for this test
-    try:
-        keypair = tester.add_keypair(prefix + "-" + str(time.time()))
-    except Exception, e:
-        raise Exception("Error when adding keypair. Error:"+str(e))
-
-
-    #Get the remote file size from the http header of the url given
-    try:        
-        url = url.replace('http://','')
-        host = url.split('/')[0]
-        path = url.replace(host,'')
-        pmsg("get_remote_file, host("+host+") path("+path+")")
-        conn=httplib.HTTPConnection(host)
-        conn.request("HEAD", path)  
-        res=conn.getresponse()
-        fbytes=int(res.getheader('content-length'))
-        pmsg("content-length:"+str(fbytes))
-        rfsize= ( ((fbytes/gig)+1) or 1)
-        pmsg("Remote file size: "+ str(rfsize) + "g")
-        conn.close() 
-    except Exception, e:
-        pmsg("Failed to get remote file size...")
-        raise e
-    
-    try:
-        pmsg("Attempting to launch initial instance now...")
+        ### Create security group if it does not exist. Add ssh authorization to it. 
         try:
-            #Grab an emi based on our given criteria
-            image=tester.get_emi(emi=img, root_device_type=itype)
-            pmsg("Got emi to use:"+image.id)
+            group = tester.add_group(group_name)
+            tester.authorize_group_by_name(group.name)
+            tester.authorize_group_by_name(group.name,protocol="icmp",port=-1)
+        except Exception, e:    
+            raise Exception("Error when setting up group:"+str(group_name)+", Error:"+str(e))
+            
         
-            #Launch an instance from the emi we've retrieved, instance is returned in the running state
-            tester.poll_count = 96 
-            reservation=tester.run_instance(image, keypair=keypair.name, group=group_name,zone=zone, )
-            if (reservation is not None):
-                instance = reservation.instances[0]
-                pmsg("Launched instance:"+instance.id)
-            else:
-                raise Exception("Failed to run an instance using emi:"+image.id)
+        
+        #Get the remote file size from the http header of the url given
+        try:        
+            url = url.replace('http://','')
+            host = url.split('/')[0]
+            path = url.replace(host,'')
+            pmsg("get_remote_file, host("+host+") path("+path+")")
+            conn=httplib.HTTPConnection(host)
+            conn.request("HEAD", path)  
+            res=conn.getresponse()
+            fbytes=int(res.getheader('content-length'))
+            pmsg("content-length:"+str(fbytes))
+            rfsize= ( ((fbytes/gig)+1) or 1)
+            pmsg("Remote file size: "+ str(rfsize) + "g")
+            conn.close() 
+        except Exception, e:
+            pmsg("Failed to get remote file size...")
+            raise e
+        try:
+            instance = None    
+            keys = tester.get_all_current_local_keys()
+            
+            if keys != []:
+                pmsg("Looks like we had some local keys looking through them now...")
+                for keypair in keys:
+                    pmsg('looking for instances using keypair:'+keypair.name)
+                    instances = tester.get_instances(state='running',key=keypair.name)
+                    if instances != []:
+                        instance = instances[0]
+                        pmsg('Found usable instance:'+instance.id+'using key:'+keypair.name)
+                        break
+        except Exception, e:
+            pmsg("Failed to find a pre-existing isntance we can connect to:"+str(e))
+            pass
+        
+                
+        if instance is None:   
+            #Create a new keypair to use for this test if we didn't find one
+            if keypair is None:
+                try:
+                    keypair = tester.add_keypair(prefix + "-" + str(time.time()))
+                except Exception, e:
+                    raise Exception("Error when adding keypair. Error:"+str(e))
+            
+            pmsg("Attempting to launch initial instance now...")
+            try:
+                #Grab an emi based on our given criteria
+                image=tester.get_emi(emi=img, root_device_type=itype)
+                pmsg("Got emi to use:"+image.id)
+            
+                #Launch an instance from the emi we've retrieved, instance is returned in the running state
+                tester.poll_count = 96 
+                reservation=tester.run_instance(image, keypair=keypair.name, group=group_name,zone=zone, )
+                if (reservation is not None):
+                    instance = reservation.instances[0]
+                    pmsg("Launched instance:"+instance.id)
+                else:
+                    raise Exception("Failed to run an instance using emi:"+image.id)
+            except Exception, e:
+                pmsg("Doh, error while trying to run instance using emi:"+image.id)
+                raise e
+            
+        try:
             keypath = os.getcwd() + "/" + keypair.name + ".pem" 
             
             #Attempt to ping the instance before logging into it...
@@ -184,36 +208,27 @@ if __name__ == '__main__':
                 retry += 1
                 instance.update()
                 if (instance.ip_address == "0.0.0.0"):
-                  pmsg("instance ip is 0.0.0.0")
+                    pmsg("instance ip is 0.0.0.0")
                 else:
-                  out=tester.sys('if `ping '+instance.ip_address + ' -w 5 -c 1 > /dev/null`; then echo -n true; else echo -n false; fi')[0]
-                  out = str(out)
-                  pmsg("Attempts("+str(retry)+" of "+str(ping_retry)+") ping result:"+out)
-                  if ( re.match( out, 'true')):
-                      pmsg("\npinged instance:"+instance.id+" at "+instance.ip_address+" after "+str(retry)+" attempts\n\n")
-                      break
+                    out=tester.sys('if `ping '+instance.ip_address + ' -w 5 -c 1 > /dev/null`; then echo -n true; else echo -n false; fi')[0]
+                    out = str(out)
+                    pmsg("Attempts("+str(retry)+" of "+str(ping_retry)+") ping result:"+out)
+                    if ( re.match( out, 'true')):
+                        pmsg("\npinged instance:"+instance.id+" at "+instance.ip_address+" after "+str(retry)+" attempts\n\n")
+                        break
             if (retry == ping_retry):
                 raise Exception("Could not ping instance after"+str(retry)+"attempts")
             
             #give the instance a few more seconds before trying to ssh
             pmsg("\n\nAttempting to connect to instance\n\n")
             time.sleep(10)
-      
-            inst_conn=Eucaops(hostname=instance.ip_address, keypath=keypath, user="root")
-            
-            #Get the contents of /dev before the attachment to compare to post attachment
-            for x in range(0,10):
-                try:
-                    #If the network is not ready yet the connection here may fail, so try a few time before failing
-                    before_attach = inst_conn.sys("ls -1 /dev/")
-                except: pass
-                if before_attach != []:
-                        break
-                pmsg("Attempt#"+str(x)+"to ssh into instance")
-                time.sleep(1)
+            inst_conn = euinstance.EuInstance.make_euinstance_from_instance(instance, tester, keypair=keypair,debugmethod=pmsg)
+            pmsg("created euinstance object")
+            before_attach = inst_conn.get_dev_dir()
+                
         except Exception, ie:
             raise Exception("Failed to retrieve contents of /dev dir from instance, Error:"+str(ie))
-        
+    
         pmsg("Got snapshot of /dev, now creating a volume of "+str(rfsize)+" to attach to our instance...")
         volume=tester.create_volume(zone, rfsize)
         dev = "/dev/sdf"
@@ -228,15 +243,16 @@ if __name__ == '__main__':
         pmsg("Sleeping and waiting for volume to attach fully to instance")
         tester.sleep(20)
         for x in range(0,10):
-          after_attach = inst_conn.sys("ls -1 /dev/")
-        
-          #The attached device should be the difference in our /dev snapshots
-          new_devices = tester.diff(after_attach, before_attach)
-          if new_devices == []:
-              pmsg(" Attempt "+str(x)+" Volume attached but not found on guest" + str(instance) )
-          else:
-              break
-          time.sleep(5)
+            #after_attach = inst_conn.sys('ls -1 /dev/| grep "sd\|vd"')
+            after_attach = inst_conn.get_dev_dir()
+            #The attached device should be the difference in our /dev snapshots
+            new_devices = tester.diff(after_attach, before_attach)
+            if new_devices == []:
+                pmsg(" Attempt "+str(x)+" Volume attached but not found on guest" + str(instance) )
+                pmsg("after attach:"+"".join(after_attach))
+            else:
+                break
+            time.sleep(5)
          
         if new_devices == []:
             raise Exception("Fail, Volume attached but not found on guest" + str(instance) )
@@ -255,8 +271,12 @@ if __name__ == '__main__':
         #Download the remote image, write it directly to our volume
         cmd="curl "+url+" > "+attached_block_dev+" && echo 'GOOD' && sync"
         try:
-          result=inst_conn.sys(cmd,  timeout=timeout)[0]
-          result = result.split(' ')[0]
+            pmsg("Issuing cmd:"+cmd+" , timeout:"+str(timeout))
+            output=inst_conn.sys(cmd,  timeout=timeout)
+            pmsg("Curl output:"+"".join(output))
+            result = output[len(output)-1]
+            result = result.split(' ')[0]
+            pmsg("curl cmd's parsed result:"+result)
         except Exception, e:
             raise Exception("failed to curl image into block dev: "+str(e))
         #Make sure the curl command did not return error
@@ -278,7 +298,7 @@ if __name__ == '__main__':
         tester.detach_volume(volume)
         
         pmsg("Creating snapshot from our splatted volume...")
-        snapshot = tester.create_snapshot(volume.id, waitOnProgress=10, timeout=timeout)
+        snapshot = tester.create_snapshot(volume.id, waitOnProgress=15, timeout=timeout)
         
         pmsg("Snapshot complete, register it as an emi with name:"+name+"...")
         bfebs_emi = tester.register_snapshot(snapshot.id, windows=windows, name=name, dot=dot)

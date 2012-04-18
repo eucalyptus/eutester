@@ -85,6 +85,9 @@ class Partition:
     ccs = []
     scs = []
     vbs = []
+    ncs = []
+    volumes = []
+    instances = []
     
     def __init__(self, name, service_manager ):
         self.name = name
@@ -290,7 +293,7 @@ class EuserviceManager(object):
         if re.search("true",modify_response[0]):
             return True
         else:
-            raise AssertionError("Response to modify service was not true: " + str(response))
+            raise AssertionError("Response to modify service was not true: " + str(modify_response))
     
     def modify_process(self, euservice, command): 
         service_name = "eucalyptus-cloud"

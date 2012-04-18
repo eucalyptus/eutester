@@ -21,4 +21,5 @@ class EuVolume(Volume):
     def make_euvol_from_vol(cls,volume):
         newvol = EuVolume(volume.connection)
         newvol.__dict__ = volume.__dict__
+        newvol.md5 = ""
         return newvol
