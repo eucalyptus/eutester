@@ -13,8 +13,8 @@ from selenium.common.exceptions import NoSuchElementException
 # objects for testing purposes. These objects can be passed
 # information for identification. 
 class Euwebaccount(object):
-   # Constructor for Euwebaccount 
-   def __init__ (self,
+    # Constructor for Euwebaccount 
+    def __init__ (self,
                   a_id="", #
                   name="", 
                   status="",
