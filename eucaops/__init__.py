@@ -731,6 +731,10 @@ class Eucaops(Eutester):
                 self.critical("Instance " + instance.id + " now in " + instance.state  + " state")
             else:
                 self.debug( "Instance " + instance.id + " now in " + instance.state  + " state")
+	   
+	    #
+	    # check to see if public and private DNS names and IP addresses are the same
+	    #
             if (instance.ip_address is instance.private_ip_address) and (instance.public_dns_name is instance.private_dns_name) and ( private_addressing is False ):
 		self.debug(str(instance) + " got Public IP: " + str(instance.ip_address)  + " Private IP: " + str(instance.private_ip_address) + " Public DNS Name: " + str(instance.public_dns_name) + " Private DNS Name: " + str(instance.private_dns_name))
                 self.critical("Instance " + instance.id + " has he same public and private IPs of " + str(instance.ip_address))
