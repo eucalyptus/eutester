@@ -1,0 +1,17 @@
+Metadata-Version: 1.1
+Name: eutester
+Version: 0.0.1
+Summary: Test Framework for AWS compatible clouds
+Home-page: http://open.eucalyptus.com
+Author: Victor Iglesias
+Author-email: vic.iglesias@eucalyptus.com
+License: BSD (Simplified)
+Description: Test Framework for AWS compatible clouds
+Platform: Posix; MacOS X; Windows
+Classifier: Development Status :: Alpha
+Classifier: Intended Audience :: Users
+Classifier: License :: OSI Approved :: Simplified BSD License
+Classifier: Operating System :: OS Independent
+Classifier: Topic :: Internet
+Requires: paramiko
+Requires: boto (>=2.1)
