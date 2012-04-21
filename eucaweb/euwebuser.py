@@ -12,9 +12,12 @@ import random,string, time
 ##########################################################################################            
 ##########################################################################################
 
+# The Euwebuser class allows users to create a personal account for 
+# testing purposes. These objects will pass information used for 
+# identification.
 class Euwebuser(object):
     
-    
+    # Constructor for the Euwebuser    
     def __init__ (self, 
                   account="", 
                   user="", 
@@ -31,6 +34,8 @@ class Euwebuser(object):
             print "Init euwebuser...."
             print("creating user...")
             #If the ID is not provided use the username, if the user is not provided create a random one
+	    # Creates a user object with the specified criteria for
+	    # account, user, passwd, credpath, email, prefix, and path.
             self.account = account
             self.user = user
             self.passwd = passwd
@@ -87,7 +92,7 @@ class Euwebuser(object):
                     self.email = self.user+'@'+self.account
                 
             
-                             
+    # Displays basic information about the user                     
     def printUser(self):
         print("+++++++++++++PRINT USER+++++++++++++++++++++")
         print("id:"+self.id)
