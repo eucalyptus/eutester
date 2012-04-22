@@ -1,5 +1,7 @@
 '''
 Simple wrapper for tests
+
+modified by Marcos Knight
 '''
 
 
@@ -15,7 +17,8 @@ class Webtestcase(unittest.TestCase):
     # Constructor for Webtestcase class
     def __init__(self, testMethod, name = "", dieOnError=True, logname="", *args):
 
-	# Checks if the test method is identified. Then creates a 		# testcase object with the specified criteria for
+	# Checks if the test method is identified. Then creates a 		
+	# testcase object with the specified criteria for
 	# testMethod, name, and dieOnError
         if (testMethod is None):
             raise Exception("Test Method must be defined")
