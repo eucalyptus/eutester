@@ -5,11 +5,18 @@ Simple wrapper for tests
 
 import sys, unittest
 
+# The Webtestcase class allows the user to run a basic test that
+# displays info about the state of utilities. Results of the test
+# will be shown as passed or failed.
 class Webtestcase(unittest.TestCase):
     '''
     Simple test outline and utilities
     '''
+    # Constructor for Webtestcase class
     def __init__(self, testMethod, name = "", dieOnError=True, logname="", *args):
+
+	# Checks if the test method is identified. Then creates a 		# testcase object with the specified criteria for
+	# testMethod, name, and dieOnError
         if (testMethod is None):
             raise Exception("Test Method must be defined")
         else:
@@ -33,7 +40,7 @@ class Webtestcase(unittest.TestCase):
             
             
         
-        
+    # Runs test and displays "passed" test passes or "failed" if test 	  # fails
     def runTest(self):
         try:
             print "TEST: "+self.name+ "STARTING..."
@@ -54,7 +61,7 @@ class Webtestcase(unittest.TestCase):
             
         
     
-        
+    # Methods for displaying test results     
     def printClosing(self):
         print "\n"
         print ''' 
