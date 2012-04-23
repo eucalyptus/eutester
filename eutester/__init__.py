@@ -460,7 +460,7 @@ class Eutester(object):
     def setup_local_creds_dir(self, admin_cred_dir):
         os.system("rm -rf " + admin_cred_dir)
         os.mkdir(admin_cred_dir)
-    
+      
     def setup_remote_creds_dir(self, admin_cred_dir):
         self.sys("rm -rf " + admin_cred_dir)
         self.sys("mkdir " + admin_cred_dir)
@@ -643,6 +643,7 @@ class Eutester(object):
         return time.time() - self.start_time
        
     def clear_fail_count(self):
+        ''' The counter for keeping track of all the errors '''
         self.fail_count = 0
 
     def do_exit(self):
@@ -663,6 +664,10 @@ class Eutester(object):
         time.sleep(seconds)
         
     def __str__(self):
+        '''
+        Prints informations about configuration of Eucateser as configuration file, 
+        how many errors, the path of the Eucalyptus, and the path of the user credentials
+        '''
         s  = "+++++++++++++++++++++++++++++++++++++++++++++++++++++\n"
         s += "+" + "Eucateser Configuration" + "\n"
         s += "+" + "+++++++++++++++++++++++++++++++++++++++++++++++\n"
