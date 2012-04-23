@@ -420,17 +420,12 @@ class Eutester(object):
             ### DOWNLOAD creds from clc
             self.download_creds_from_clc(admin_cred_dir)
             ### IF there are 2 clcs make sure to sync credentials across them
-            if len(clcs) > 1:
-                self.swap_clc()
-                other_clc = self.clc
-                self.swap_clc()
-                self.send_creds_to_machine(admin_cred_dir, other_clc) 
                 
-        ### Otherwise sync the keys that were given locally to both CLCs
-        else:
-            for clc in clcs:
-                self.send_creds_to_machine(self.credpath, clc)
-        return admin_cred_dir
+        ### sync the keys that were given to all CLCs
+        for clc in clcs:
+            self.send_creds_to_machine(self.credpath, clc)
+        
+	return admin_cred_dir
     
     def create_credentials(self, admin_cred_dir, account, user):
         cmd_download_creds = self.eucapath + "/usr/sbin/euca_conf --get-credentials " + admin_cred_dir + "/creds.zip " + "--cred-user "+ user +" --cred-account " + account 
