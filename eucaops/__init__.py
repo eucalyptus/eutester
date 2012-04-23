@@ -702,7 +702,7 @@ class Eucaops(Eutester):
         return None
 
 
-    def run_instance(self, image=None, keypair=None, group="default", type=None, zone=None, min=1, max=1, user_data=None,private_addressing=False, is_reachable=True):
+    def run_instance(self, image=None, keypair=None, group="default", type=None, zone=None, min=1, max=1, user_data=None,private_addressing=False):
         """
         Run instance/s and wait for them to go to the running state
         image      Image object to use, default is pick the first emi found in the system
@@ -731,18 +731,20 @@ class Eucaops(Eutester):
                 self.critical("Instance " + instance.id + " now in " + instance.state  + " state")
             else:
                 self.debug( "Instance " + instance.id + " now in " + instance.state  + " state")
-            if (instance.ip_address is instance.private_ip_address) and ( private_addressing is False ):
-                self.critical("Instance " + instance.id + " has he same public and private IPs of " + instance.ip_address)
+	   
+	    #
+	    # check to see if public and private DNS names and IP addresses are the same
+	    #
+            if (instance.ip_address is instance.private_ip_address) and (instance.public_dns_name is instance.private_dns_name) and ( private_addressing is False ):
+		self.debug(str(instance) + " got Public IP: " + str(instance.ip_address)  + " Private IP: " + str(instance.private_ip_address) + " Public DNS Name: " + str(instance.public_dns_name) + " Private DNS Name: " + str(instance.private_dns_name))
+                self.critical("Instance " + instance.id + " has he same public and private IPs of " + str(instance.ip_address))
             else:
-                self.debug(str(instance) + " got Public IP: " + instance.ip_address  + " Private IP: " + instance.private_ip_address)
+		self.debug(str(instance) + " got Public IP: " + str(instance.ip_address)  + " Private IP: " + str(instance.private_ip_address) + " Public DNS Name: " + str(instance.public_dns_name) + " Private DNS Name: " + str(instance.private_dns_name))
         self.test_resources["reservations"].append(reservation)
         keypath = os.curdir + "/" + keypair + ".pem"
         self.sleep(15)
-        if is_reachable: 
-            return self.convert_reservation_to_euinstance(reservation, keypath)
-        else:
-            return reservation
-        
+        return self.convert_reservation_to_euinstance(reservation, keypath)
+    
     def convert_reservation_to_euinstance(self, reservation, keypath=None):
         euinstance_list = []
         for instance in reservation.instances:
