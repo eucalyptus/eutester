@@ -702,7 +702,7 @@ class Eucaops(Eutester):
         return None
 
 
-    def run_instance(self, image=None, keypair=None, group="default", type=None, zone=None, min=1, max=1, user_data=None,private_addressing=False):
+    def run_instance(self, image=None, keypair=None, group="default", type=None, zone=None, min=1, max=1, user_data=None,private_addressing=False, is_reachable=True):
         """
         Run instance/s and wait for them to go to the running state
         image      Image object to use, default is pick the first emi found in the system
@@ -741,10 +741,14 @@ class Eucaops(Eutester):
             else:
 		self.debug(str(instance) + " got Public IP: " + str(instance.ip_address)  + " Private IP: " + str(instance.private_ip_address) + " Public DNS Name: " + str(instance.public_dns_name) + " Private DNS Name: " + str(instance.private_dns_name))
         self.test_resources["reservations"].append(reservation)
-        keypath = os.curdir + "/" + keypair + ".pem"
-        self.sleep(15)
-        return self.convert_reservation_to_euinstance(reservation, keypath)
-    
+
+	if(is_reachable):
+        	keypath = os.curdir + "/" + str(keypair) + ".pem"
+        	self.sleep(15)
+        	return self.convert_reservation_to_euinstance(reservation, keypath)
+    	else:
+		return reservation
+
     def convert_reservation_to_euinstance(self, reservation, keypath=None):
         euinstance_list = []
         for instance in reservation.instances:
