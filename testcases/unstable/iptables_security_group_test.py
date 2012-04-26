@@ -146,12 +146,18 @@ class Instances(unittest.TestCase):
         self.assertNotEqual(len(self.post_iptables), 0, "post_Iptables_Snapshot failed.")
 
         ### Evaluate pre and post iptables outputs to see if there is a difference.
-        self.iptables_diff = self.tester.diff(self.pre_iptables, self.post_iptables)
-        if (len(self.iptables_diff) > 0):
+        if (len(self.pre_iptables) != len(self.post_iptables)):
+            print "\n======================================\n" 
             print "Diffences between iptables snapshots: " 
-            for diff in self.iptables_diff:
-                print diff
-
+            print "PRE-IPTABLES SNAPSHOT LENGTH: " + str(len(self.pre_iptables))
+            print "POST-IPTABLES SNAPSHOT LENGTH: " + str(len(self.post_iptables))
+            print "\n======================================\n" 
+        else:
+            print "\n======================================\n" 
+            print "No difference between iptables."
+            print "PRE-IPTABLES SNAPSHOT LENGTH: " + str(len(self.pre_iptables))
+            print "POST-IPTABLES SNAPSHOT LENGTH: " + str(len(self.post_iptables))
+            print "\n======================================\n" 
 
 def get_options():
     ### Parse args
