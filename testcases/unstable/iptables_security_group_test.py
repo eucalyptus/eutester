@@ -1,4 +1,4 @@
-#!/Users/hspencer/Desktop/eutester-dev/bin/python
+#!/usr/bin/env python
 #
 # Description:  This case was developed to test the integrity of iptables upon
 #               deletion of security groups. Based up the arguments passed, the test 
