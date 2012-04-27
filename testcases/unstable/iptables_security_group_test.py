@@ -18,6 +18,7 @@ import time
 import string
 import re
 import sys
+import pprint
 
 class Instances(unittest.TestCase):
     def setUp(self):
@@ -147,10 +148,17 @@ class Instances(unittest.TestCase):
 
         ### Evaluate pre and post iptables outputs to see if there is a difference.
         if (len(self.pre_iptables) != len(self.post_iptables)):
+            ## Get different lines and print them
+
+            iptables_diff = set(self.post_iptables) - set(self.pre_iptables)
+            pp = pprint.PrettyPrinter(indent=4)
+
             print "\n======================================\n" 
             print "Diffences between iptables snapshots: " 
             print "PRE-IPTABLES SNAPSHOT LENGTH: " + str(len(self.pre_iptables))
             print "POST-IPTABLES SNAPSHOT LENGTH: " + str(len(self.post_iptables))
+            print "\n---------------------------------------\n"
+            pp.pprint(list(iptables_diff))
             print "\n======================================\n" 
         else:
             print "\n======================================\n" 
