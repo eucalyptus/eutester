@@ -20,7 +20,7 @@ import re
 import sys
 import pprint
 
-class Instances(unittest.TestCase):
+class ClusterBasics(unittest.TestCase):
     def setUp(self):
         self.options = options
 
@@ -209,7 +209,7 @@ if __name__ == '__main__':
     options = get_options()
     tests = ['iptables_Cruft']
     for test in tests:
-        result = unittest.TextTestRunner(verbosity=2).run(Instances(test)) 
+        result = unittest.TextTestRunner(verbosity=2).run(ClusterBasics(test)) 
         if result.wasSuccessful():
             pass
         else:
