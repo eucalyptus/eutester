@@ -423,7 +423,7 @@ class Eutester(object):
                 
         ### sync the keys that were given to all CLCs
         for clc in clcs:
-            self.send_creds_to_machine(self.credpath, clc)
+            self.send_creds_to_machine(admin_cred_dir, clc)
         
 	return admin_cred_dir
     

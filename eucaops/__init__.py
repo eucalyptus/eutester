@@ -56,6 +56,7 @@ class Eucaops(Eutester):
                 self.fail("Bucket could not be found after creation")
                 return None
         self.test_resources["buckets"].append(bucket)
+        self.debug("Created bucket: " + bucket_name)
         return bucket
     
     def delete_bucket(self, bucket):
@@ -88,7 +89,7 @@ class Eucaops(Eutester):
         else:
             return False
     
-    def upload_object_file(self, bucket_name, key_name, path_to_file):
+    def upload_object(self, bucket_name, key_name, path_to_file=None, contents=None):
         """
         Write the contents of a local file to walrus
         bucket_name   The name of the walrus Bucket.
@@ -104,7 +105,13 @@ class Eucaops(Eutester):
         key = bucket.new_key(key_name)
         if key == None:
             self.fail( "Unable to create key " + key_name  )
-        key.set_contents_from_filename(path_to_file)
+        if path_to_file is None:
+            if contents is None:
+                contents = os.urandom(1024)
+            key.set_contents_from_string(contents)
+        else:
+            key.set_contents_from_filename(path_to_file)
+        self.debug("Uploaded key: " + str(key_name) + " to bucket:" + str(bucket_name))    
         self.test_resources["keys"].append(key)
         return key
     
@@ -958,43 +965,14 @@ class Eucaops(Eutester):
         else:
             self.fail("Could not modify " + property)
     
-    def get_master(self, component="clc", partition=""):
-        """
-        Find the master of any type of component and return its IP, by default returns the master CLC
-        component        Component to find the master, possible values ["clc", "sc", "cc", "ws"]
-        """
-        service = "eucalyptus"
-        if component == "sc":
-            service = "storage"
-        if component == "ws":
-            service = "walrus"
-        if component == "cc":
-            service = "cluster"
-        self.debug( "Looking for enabled " + component )        
-        ### GO through both clcs and check which ip it thinks is enabled for this service type
-        services = self.clc.sys(". " + self.credpath + "/eucarc && " + self.eucapath + "/usr/sbin/euca-describe-services")
-        master = ""
-        try:
-            service_lookup = self.grep("SERVICE\s+" + service + ".*" + str(partition) + ".*ENABLED", services)
-            if len(service_lookup) < 1:
-                raise LookupError("Looking for master " + str(component) + " in partition " + str(partition) + " failed")
-            else:
-                line = service_lookup[0]
-            service_url = line.split()[6]
-            master = service_url.split(":")[1].strip("/")
-            #self.swap_ssh(master)
-            return master
-        except Exception, e:
-            self.fail("Unable to find redundant components")
-            self.fail(str(e))
-            raise
-    
+   
     def cleanup_artifacts(self):
         self.debug("Starting cleanup of artifacts")
         for key,array in self.test_resources.iteritems():
             for item in array:
                 try:
                     ### SWITCH statement for particulars of removing a certain type of resources
+                    self.debug("Deleting " + str(item))
                     if isinstance(item, Image):
                         item.deregister()
                     elif isinstance(item, Reservation):
@@ -1015,7 +993,7 @@ class Eucaops(Eutester):
            Included resources are: addresses, images, instances, key_pairs, security_groups, snapshots, volumes, zones
         
         '''
-        current_artifacts = {}
+        current_artifacts = dict()
         current_artifacts["addresses"] = self.ec2.get_all_addresses()
         current_artifacts["images"] = self.ec2.get_all_images()
         current_artifacts["instances"] = self.ec2.get_all_instances()
