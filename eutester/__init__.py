@@ -240,7 +240,7 @@ class Eutester(object):
             self.euare = boto.connect_iam(aws_access_key_id=aws_access_key_id,
                                                   aws_secret_access_key=aws_secret_access_key,
                                                   is_secure=False,
-                                                  host=clc_ip,
+                                                  host=self.get_clc_ip(),
                                                   port=8773, 
                                                   path="/services/Euare",
                                                   debug=self.boto_debug)
