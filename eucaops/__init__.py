@@ -712,6 +712,7 @@ class Eucaops(Eutester):
         zone       Availability zone to run these instances
         min        Minimum instnaces to launch, default 1
         max        Maxiumum instances to launch, default 1
+        private_addressing  Runs an instance with only private IP address
         """
         if image == None:
             images = self.ec2.get_all_images()
@@ -720,8 +721,14 @@ class Eucaops(Eutester):
                     image = emi      
         if image is None:
             raise Exception("emi is None. run_instance could not auto find an emi?")   
+
+        if private_addressing is True:
+            addressing_type = "private"
+        else:
+            addressing_type = None
+            
         self.debug( "Attempting to run "+ str(image.root_device_type)  +" image " + str(image) + " in group " + str(group))
-        reservation = image.run(key_name=keypair,security_groups=[group],instance_type=type, placement=zone, min_count=min, max_count=max, user_data=user_data)
+        reservation = image.run(key_name=keypair,security_groups=[group],instance_type=type, placement=zone, min_count=min, max_count=max, user_data=user_data, addressing_type=addressing_type)
         if ((len(reservation.instances) < min) or (len(reservation.instances) > max)):
             self.fail("Reservation:"+str(reservation.id)+" returned "+str(len(reservation.instances))+" instances, not within min("+str(min)+") and max("+str(max)+" ")
             
