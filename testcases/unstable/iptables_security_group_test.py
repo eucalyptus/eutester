@@ -1,4 +1,4 @@
-#!/Users/hspencer/Desktop/eutester-dev/bin/python
+#!/usr/bin/env python -tt
 #
 # Description:  This case was developed to test the integrity of iptables upon
 #               deletion of security groups. Based up the arguments passed, the test 
@@ -24,19 +24,19 @@ class ClusterBasics(unittest.TestCase):
     def setUp(self):
            
         if options.config_file:
-           self.tester = Eucaops(config_file=options.config_file, password=options.clc_password)
+            self.tester = Eucaops(config_file=options.config_file, password=options.clc_password)
         else:
-	   print "\tNeed to pass --config_file option. Try --help for more information\n"	
-	   exit(1)
+            print "\tNeed to pass --config_file option. Try --help for more information\n"	
+            exit(1)
        
         ## If specific image wants to be tested, use that; if not, use any instance-store backed image.
-	if options.image:
+        if options.image:
             self.image = self.tester.get_emi(emi=options.image)
         else:
             self.image = self.tester.get_emi(root_device_type="instance-store")
 		
         self.keypair = self.tester.add_keypair(options.prefix + "-" + str(time.time())) 
-	self.keypath = os.curdir + "/" + self.keypair.name + ".pem"
+        self.keypath = os.curdir + "/" + self.keypair.name + ".pem"
 	
         ### Identify type of instance to run
         if options.type == "random":
@@ -92,28 +92,28 @@ class ClusterBasics(unittest.TestCase):
         self.assertTrue(pre_stderr, "pre_Iptables_Snapshot failed.")
             
         ### Create security group for number of security groups we want to test.
-	self.security_groups = []
-	self.reservations = []
-	while self.available > 0:
-            ### Create unique security group and authorize SSH and PING
-            sec_group = self.tester.add_group(group_name=options.prefix + "-" + str(time.time()))
-            self.assertNotEqual(len(sec_group.name), 0, "Could not create group.")
-            self.assertTrue(self.tester.authorize_group_by_name(group_name=sec_group.name),
-                    "Could not authorize group for SSH")
-            self.assertTrue(self.tester.authorize_group_by_name(group_name=sec_group.name, port=-1, protocol="icmp" ),
-                    "Could not authorize group for PING")
-            self.security_groups.append(sec_group)
+    self.security_groups = []
+    self.reservations = []
+    while self.available > 0:
+        ### Create unique security group and authorize SSH and PING
+        sec_group = self.tester.add_group(group_name=options.prefix + "-" + str(time.time()))
+        self.assertNotEqual(len(sec_group.name), 0, "Could not create group.")
+        self.assertTrue(self.tester.authorize_group_by_name(group_name=sec_group.name),
+                "Could not authorize group for SSH")
+        self.assertTrue(self.tester.authorize_group_by_name(group_name=sec_group.name, port=-1, protocol="icmp" ),
+                "Could not authorize group for PING")
+        self.security_groups.append(sec_group)
           
-            ### Launch instance for the unique security group 
-            try:
-               reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=sec_group.name ,type=options.type)  
-            except Exception, e:
-               self.fail("Caught an exception when running the instance: " + str(e))
+        ### Launch instance for the unique security group 
+        try:
+           reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=sec_group.name ,type=options.type)  
+        except Exception, e:
+           self.fail("Caught an exception when running the instance: " + str(e))
 
-            self.reservations.append(reservation)
+        self.reservations.append(reservation)
 
-            ### Decrement count of security groups and instances left to create
-	    self.available -= 1 
+        ### Decrement count of security groups and instances left to create
+        self.available -= 1 
 
 
         ### Loop through and terminate instances                
