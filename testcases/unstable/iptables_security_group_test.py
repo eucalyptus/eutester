@@ -96,8 +96,6 @@ class ClusterBasics(unittest.TestCase):
 	self.reservations = []
 	while self.available > 0:
             ### Create unique security group and authorize SSH and PING
-            reservation = None
-            sec_group = None
             sec_group = self.tester.add_group(group_name=options.prefix + "-" + str(time.time()))
             self.assertNotEqual(len(sec_group.name), 0, "Could not create group.")
             self.assertTrue(self.tester.authorize_group_by_name(group_name=sec_group.name),
