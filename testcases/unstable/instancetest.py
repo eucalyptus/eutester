@@ -279,8 +279,7 @@ if __name__ == "__main__":
     ### Other wise launch the whole suite
         tests = ["BasicInstanceChecks","ElasticIps","PrivateIPAddressing","MaxSmallInstances","LargestInstance","MetaData","Reboot", "Churn"]
     for test in tests:
-        obj = InstanceBasics(test)
-        result = unittest.TextTestRunner(verbosity=2).run(obj)
+        result = unittest.TextTestRunner(verbosity=2).run(InstanceBasics(test))
         if result.wasSuccessful():
             pass
         else:
