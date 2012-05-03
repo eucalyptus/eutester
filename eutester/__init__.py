@@ -333,7 +333,7 @@ class Eutester(object):
             except:
                 self.debug("Could not find network type setting to unknown")
                 config_hash["network"] = "unknown"
-                
+        f.close()   
         config_hash["machines"] = machines 
         return config_hash
     
