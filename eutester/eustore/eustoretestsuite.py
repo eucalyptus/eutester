@@ -749,7 +749,7 @@ class Eustoretestsuite():
                     pass
                 inst.attach_volume(vol)
         except Exception, ae:
-            raise Exception("("+str(image.name)+") Failed to attach volume to:"+str(inst.id)+"err:"+str(e))
+            raise Exception("("+str(image.name)+") Failed to attach volume to:"+str(inst.id)+"err:"+str(ae))
         image.results[EustoreTests.volume_test] = TestStatus.success
         
         
