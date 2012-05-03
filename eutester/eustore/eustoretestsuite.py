@@ -7,42 +7,60 @@ Created on Apr 13, 2012
 currently the test wrappers assume eucarc in the users home dir 
 
 example:
-from eustoretests import Eustoretests
-et = Eustoretests(config_file="2b_tested.lst", password="foobar")
-list = et.get_uninstalled_summary()
-et.install_all_images(list=list)
+    from eustoretests import Eustoretestsuite
+    #create the eustore test suite...
+    et = Eustoretestsuite(config_file="2b_tested.lst", password="foobar")
+    
+    #get a list of available eustore images which are not installed on the local system...
+    list = et.get_uninstalled_summary()
+    
+    #attempt to install images from the list we just created
+    #this is redundant as this will skip images found to already be installed by default
+    et.install_all_images(list=list)
+    
+    #Attempt to run an instance and perform test suite against a list of images,
+    #by default will attempt to run against all images in et.list
+    et.test_image_list()
+    
+    #The results are redirected to logs created per image, but can be dumped to stdout using...
+    #et.print_image_list_results()
+    #This will print results and info for all images in et.list
+    #...or print for 1 image by something like the following...
+    image = et.get_eustore_image_by_string('3235725435')
+    image.printdata()
+    
+    #this should produce something like the following...
+    ------------------3235725435_CentOS_5_x86_64----------------------
+    kerneltype = Single
+    ver = CentOS
+    name = 3235725435_CentOS_5_x86_64
+    eki = eki-EB153854
+    remotestring = 3235725435 centos      x86_64  2012.1.14      CentOS 5 1.3GB root, Single Kernel20120114150503      28fc-4826   centos-based           images@lists.eucalyptus.com
+    id2 = 20120114150503
+    rev = 5
+    id3 = 28fc-4826
+    email = images@lists.eucalyptus.com
+    emi = emi-2B3435D5
+    eri = eri-CC9432DB
+    user = root,
+    type = centos-based
+    date = 2012.1.14
+    arch = x86_64
+    id = 3235725435
+    distro = centos
+    TEST:running_test         RESULT:SUCCESS
+    TEST:terminate_test       RESULT:SUCCESS
+    TEST:reboot_test          RESULT:SUCCESS
+    TEST:user_test            RESULT:SUCCESS
+    TEST:volume_test          RESULT:SUCCESS
+    TEST:install_test         RESULT:SUCCESS
+    TEST:root_test            RESULT:SUCCESS
+    TEST:metadata_test        RESULT:SUCCESS
+    
+    
 
-     eustore-install-image -h 
-          -h, --help            show this help message and exit
-          -i IMAGE_NAME, --image_name=IMAGE_NAME
-                                name of image to install
-          -t TARBALL, --tarball=TARBALL
-                                name local image tarball to install from
-          -s DESCRIPTION, --description=DESCRIPTION
-                                description of image, mostly used with -t option
-          -a ARCHITECTURE, --architecture=ARCHITECTURE
-                                i386 or x86_64, mostly used with -t option
-          -p PREFIX, --prefix=PREFIX
-                                prefix to use when naming the image, mostly used with
-                                -t option
-          -b BUCKET, --bucket=BUCKET
-                                specify the bucket to store the images in
-          -k KERNEL_TYPE, --kernel_type=KERNEL_TYPE
-                                specify the type you're using [xen|kvm]
-          -d DIR, --dir=DIR     specify a temporary directory for large files
-          --kernel=KERNEL       Override bundled kernel with one already installed
-          --ramdisk=RAMDISK     Override bundled ramdisk with one already installed
-          
-          Standard Options:
-            -D, --debug         Turn on all debugging output
-            --debugger          Enable interactive debugger on error
-            -U URL, --url=URL   Override service URL with value provided
-            --region=REGION     Name of the region to connect to
-            -I ACCESS_KEY_ID, --access-key-id=ACCESS_KEY_ID
-                                Override access key value
-            -S SECRET_KEY, --secret-key=SECRET_KEY
-                                Override secret key value
-            --version           Display version string
+
+
       
 '''
 
@@ -111,6 +129,9 @@ class EustoreTests():
     terminate_test = "terminate_test"
 
 class EustoreImage():
+    '''
+    simple class to hold data and state related to eustore images
+    '''
     
     def __init__(self, 
                 id = "",
@@ -222,6 +243,9 @@ class Eustoretestsuite():
             
             
     def get_a_key(self):    
+        '''
+        helper function to get a key to use for the instance related testing
+        '''
         keypair = None
         keys = self.tester.get_all_current_local_keys()
         if keys != []:
@@ -234,6 +258,9 @@ class Eustoretestsuite():
         return keypair
             
     def get_a_group(self, group_name="eustoregroup"):
+        '''
+        helper function to fetch a group to use for the instance related testing
+        '''
         try:
             group = self.tester.add_group(group_name)
             self.tester.authorize_group_by_name(group.name)
@@ -317,6 +344,9 @@ class Eustoretestsuite():
             
             
     def get_registered_emi(self, eustore_image,  emi="emi-"):
+        '''
+        Attempts to return a list of emis using this eustore image
+        '''
         images = self.get_system_images(emi, location=eustore_image.id)    
         if images == []:
             return None
@@ -324,9 +354,15 @@ class Eustoretestsuite():
             return images
     
     def get_registered_eki(self, eustore_image):
+        '''
+        Attempts to get a list of ekis using this eustore image
+        '''
         return self.get_registered_emi(eustore_image, emi="eki-")
     
     def get_registered_eri(self, eustore_image):
+        '''
+        Attempts to get a list of eris using this eustore iamge
+        '''
         return self.get_registered_emi(eustore_image, emi="eri-")
     
         
@@ -351,6 +387,10 @@ class Eustoretestsuite():
                       eucarc=False,
                       xof=False,
                       timepergig=1000):
+        '''
+        Attempts to install and verify an image using the eustore-install command. Creates the command with all the available arguments, and then verifies that
+        the appropriate images were installed and registered correctly. 
+        '''
   
 
         image = eustore_image
@@ -483,17 +523,25 @@ class Eustoretestsuite():
     
             
     def get_standard_opts(self,url=None,region=None,access_key=None,secret_key=None):    
-            ret = ""
-            if region is not None:
-                ret = ret+"--region="+str(region)+" "  
-            if access_key is not None:
-                ret = ret+"-I "+str(access_key)+" "
-            if secret_key is not None:   
-                ret = ret+"-S "+str(secret_key)+" "
-            return ret
+        '''
+        Helper method to create the standard options string(s) used when executing a command without sourcing
+        eucarc
+        '''
+        ret = ""
+        if region is not None:
+            ret = ret+"--region="+str(region)+" "  
+        if access_key is not None:
+            ret = ret+"-I "+str(access_key)+" "
+        if secret_key is not None:   
+            ret = ret+"-S "+str(secret_key)+" "
+        return ret
         
     
     def get_eustore_image_by_string(self, searchstring, list=None):
+        '''
+        Attempts to return a list of eustore images by matching the given string to any string in the eustore describe images output
+        This output is stored in the eustoreimage.remotestring. 
+        '''
 
         retlist = []
         if list is None:
@@ -536,6 +584,10 @@ class Eustoretestsuite():
                 pass
     
     def get_eustore_image_by_id(self, emi_id=None, eri_id=None, eki_id=None):
+        '''
+        Returns a list of eustore images which match the provided emi,eri,eki ids of the installed images
+        '''
+        
         
         for image in self.list:
             if (emi_id is not None) and (not re.search(emi_id, image.emi)):      
@@ -576,13 +628,20 @@ class Eustoretestsuite():
         return retlist
     
     def print_image_list(self,list=None, verbose=False):
+        '''
+        Traverses a list of images and displays the image information and current test results status.
+        '''
         if list is None:
             list = self.list
             for image in list:
                 self.debug("IMAGE: "+str(image.name)+" Install Status: "+str(image.results[EustoreTests.install_test]))
                 if verbose:
                     image.printdata()
+                    
     def test_image_list(self, image_list=None,  zone=None):
+        '''
+        Attempts to traverse a list of images and run the image test suite against them
+        '''
         if image_list is None:
             image_list = self.list
         if zone is None:
@@ -680,6 +739,9 @@ class Eustoretestsuite():
             return failcode
             
     def clean_up_running_instances_for_image(self,image, timeout=300):
+        '''
+        Additional cleanup mechanism to help remove instances from failed terminate tests
+        '''
         self.debug("clean_up_running_instance_for_image: "+str(image.name))
         failstr=''
         emis = self.get_registered_emi(image)
@@ -703,6 +765,13 @@ class Eustoretestsuite():
                 
             
     def run_image(self,image, vmtype=None, zone='PARTI00'):
+        '''
+        Attempts to verify that an instance from the provided image can be ran, by
+        default an ssh session will be created to this sesssion. If the instance does not progress
+        to running state within a given timeout, or if the ssh connection can not be established, the 
+        test will fail. 
+        '''
+        
         if vmtype is None:
             if image.size <= 2:
                 vmtype = 'c1.medium'
@@ -726,6 +795,10 @@ class Eustoretestsuite():
         
             
     def instance_metadata_test(self,inst):
+        '''
+        This test attempts to verify the basic functionality of Metadata
+        on this instance
+        '''
         self.debug("#######STARTING instance_metadata_test##########")
         image = self.get_eustore_image_by_id(emi_id=inst.image_id)
         image.results[EustoreTests.metadata_test] = TestStatus.failed
@@ -735,6 +808,10 @@ class Eustoretestsuite():
         
     
     def instance_attach_vol_test(self,inst, volcount=1):
+        '''
+        This test attempt to verify attachment of volume(s) to an instance
+        '''
+        
         self.debug("###########STARTING instance_attach_vol_test##########")
         image = self.get_eustore_image_by_id(emi_id=inst.image_id)
         image.results[EustoreTests.volume_test] = TestStatus.failed
@@ -754,6 +831,11 @@ class Eustoretestsuite():
         
         
     def instance_reboot_test(self,inst, checkvolstatus=True):
+        '''
+        This attempt to reboot an instance, if volumes were present before the reboot, this test
+        will attempt to verify that those volumes are intact as well as verify data integrity with md5
+        '''
+        
         self.debug("############STARTING instance_reboot_test#############")
         image = self.get_eustore_image_by_id(emi_id=inst.image_id)
         image.results[EustoreTests.reboot_test] = TestStatus.failed
@@ -766,6 +848,10 @@ class Eustoretestsuite():
         
         
     def instance_users_test(self, inst, userlist=[]):
+        '''
+        This attempts to verify that no nomral (non-system) users are present on 
+        the instance/image.
+        '''
         self.debug("############STARTING instance_users_test#################")
         image = self.get_eustore_image_by_id(emi_id=inst.image_id)
         image.results[EustoreTests.user_test] = TestStatus.failed
@@ -775,6 +861,10 @@ class Eustoretestsuite():
         image.results[EustoreTests.user_test] = TestStatus.success
         
     def instance_root_test(self, inst, password = None):
+        '''
+        Attempts to verify whether the root user on the instance has a password or not. 
+        A password can be specififed if it is expected, by default it expects no password
+        '''
         self.debug("############STARTING isntance_root_test################")
         image = self.get_eustore_image_by_id(emi_id=inst.image_id)
         if inst.get_user_password('root') != password:
@@ -783,6 +873,9 @@ class Eustoretestsuite():
         image.results[EustoreTests.root_test] = TestStatus.success
         
     def instance_terminate_test(self,res):
+        '''
+        Attempts to confirm that an image terminates within a certain timeout
+        '''
         self.debug("#######STARTING instance_terminate_test##########")
         try:
             inst = res.instances[0]
