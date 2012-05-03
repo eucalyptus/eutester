@@ -412,8 +412,9 @@ class Eucaops(Eutester):
         volume.update()
         while (elapsed < timeout):
             volume.update()
-            if re.search("attached",volume.status):
-                return True
+            if (volume.attach_data is not None) and (volume.attach_data.status is not None) :
+                if re.search("attached",volume.attach_data.status):
+                    return True
             self.debug( str(volume) + " state:" + volume.status + " pause:"+str(pause)+" elapsed:"+str(elapsed))
             self.sleep(pause)
             elapsed = int(time.time()-start)
@@ -827,17 +828,18 @@ class Eucaops(Eutester):
             pass
     
     
-    def get_all_attributes(self, obj):   
+    def get_all_attributes(self, obj, buf="", verbose=True):   
         '''
         Get a formatted list of all the key pair values pertaining to the object 'obj'
         '''   
         buf=""
         list = sorted(obj.__dict__)
         for item in list:
+            if verbose:
+                print str(item)+" = "+str(obj.__dict__[item])
             buf += str(item)+" = "+str(obj.__dict__[item])+"\n"
         return buf
-            
-                
+              
     
     
     def get_available_vms(self, type=None, zone=None):
