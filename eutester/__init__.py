@@ -240,7 +240,7 @@ class Eutester(object):
             self.euare = boto.connect_iam(aws_access_key_id=aws_access_key_id,
                                                   aws_secret_access_key=aws_secret_access_key,
                                                   is_secure=False,
-                                                  host=clc_ip,
+                                                  host=self.get_clc_ip(),
                                                   port=8773, 
                                                   path="/services/Euare",
                                                   debug=self.boto_debug)
@@ -420,17 +420,12 @@ class Eutester(object):
             ### DOWNLOAD creds from clc
             self.download_creds_from_clc(admin_cred_dir)
             ### IF there are 2 clcs make sure to sync credentials across them
-            if len(clcs) > 1:
-                self.swap_clc()
-                other_clc = self.clc
-                self.swap_clc()
-                self.send_creds_to_machine(admin_cred_dir, other_clc) 
                 
-        ### Otherwise sync the keys that were given locally to both CLCs
-        else:
-            for clc in clcs:
-                self.send_creds_to_machine(self.credpath, clc)
-        return admin_cred_dir
+        ### sync the keys that were given to all CLCs
+        for clc in clcs:
+            self.send_creds_to_machine(admin_cred_dir, clc)
+        
+	return admin_cred_dir
     
     def create_credentials(self, admin_cred_dir, account, user):
         cmd_download_creds = self.eucapath + "/usr/sbin/euca_conf --get-credentials " + admin_cred_dir + "/creds.zip " + "--cred-user "+ user +" --cred-account " + account 
@@ -460,7 +455,7 @@ class Eutester(object):
     def setup_local_creds_dir(self, admin_cred_dir):
         os.system("rm -rf " + admin_cred_dir)
         os.mkdir(admin_cred_dir)
-    
+      
     def setup_remote_creds_dir(self, admin_cred_dir):
         self.sys("rm -rf " + admin_cred_dir)
         self.sys("mkdir " + admin_cred_dir)
@@ -643,6 +638,7 @@ class Eutester(object):
         return time.time() - self.start_time
        
     def clear_fail_count(self):
+        ''' The counter for keeping track of all the errors '''
         self.fail_count = 0
 
     def do_exit(self):
@@ -663,6 +659,10 @@ class Eutester(object):
         time.sleep(seconds)
         
     def __str__(self):
+        '''
+        Prints informations about configuration of Eucateser as configuration file, 
+        how many errors, the path of the Eucalyptus, and the path of the user credentials
+        '''
         s  = "+++++++++++++++++++++++++++++++++++++++++++++++++++++\n"
         s += "+" + "Eucateser Configuration" + "\n"
         s += "+" + "+++++++++++++++++++++++++++++++++++++++++++++++\n"
