@@ -26,6 +26,7 @@ class InstanceBasics(unittest.TestCase):
         self.keypath = os.curdir + "/" + self.keypair.name + ".pem"
         self.image = self.tester.get_emi(root_device_type="instance-store")
         self.reservation = None
+        self.private_addressing = False
 
     
     def tearDown(self):
@@ -204,6 +205,31 @@ class InstanceBasics(unittest.TestCase):
             thread.join()
         
         self.assertEquals(fail_count, 0, "Failure detected in one of the " + str(count)  + " Basic Instance tests")
+
+    def PrivateIPAddressing(self):
+        """Basic test to run an instance with Private only IP
+           and later allocate/associate/diassociate/release 
+           an Elastic IP. In the process check after diassociate
+           the instance has only got private IP or new Public IP
+           gets associated to it"""
+        self.private_addressing = True
+        self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name, private_addressing=self.private_addressing)
+        self.tester.sleep(10)
+        for instance in self.reservation.instances:
+            address = self.tester.allocate_address()
+            self.assertTrue(address,'Unable to allocate address')
+            self.assertTrue(self.tester.associate_address(instance, address))
+            self.tester.sleep(30)
+            instance.update()
+            self.assertTrue( self.tester.ping(instance.public_dns_name), "Could not ping instance with new IP")
+            address.disassociate()
+            self.tester.sleep(30)
+            instance.update()
+            self.assertTrue( self.tester.ping(instance.public_dns_name), "Could not ping instance with new IP")
+            address.release()
+            if (instance.public_dns_name != instance.private_dns_name):
+                self.tester.critical("Instance received a new public IP: " + instance.public_dns_name)
+        return self.reservation
     
     def ReuseAddresses(self):
         """ Run instances in series and ensure they get the same address"""
@@ -236,7 +262,7 @@ class InstanceBasics(unittest.TestCase):
   
         
     def suite():
-        tests = ["BasicInstanceChecks","ElasticIps","MaxSmallInstances","LargestInstance","MetaData","Reboot", "Churn"]
+        tests = ["BasicInstanceChecks","ElasticIps","PrivateIPAddressing","MaxSmallInstances","LargestInstance","MetaData","Reboot", "Churn"]
         for test in tests:
             result = unittest.TextTestRunner(verbosity=2).run(InstanceBasics(test))
             if result.wasSuccessful():
@@ -251,9 +277,10 @@ if __name__ == "__main__":
         tests = sys.argv[1:]
     else:
     ### Other wise launch the whole suite
-        tests = ["BasicInstanceChecks","ElasticIps","MaxSmallInstances","LargestInstance","MetaData","Reboot", "Churn"]
+        tests = ["BasicInstanceChecks","ElasticIps","PrivateIPAddressing","MaxSmallInstances","LargestInstance","MetaData","Reboot", "Churn"]
     for test in tests:
-        result = unittest.TextTestRunner(verbosity=2).run(InstanceBasics(test))
+        obj = InstanceBasics(test)
+        result = unittest.TextTestRunner(verbosity=2).run(obj)
         if result.wasSuccessful():
             pass
         else:
