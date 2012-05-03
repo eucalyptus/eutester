@@ -145,13 +145,13 @@ class ClusterBasics(unittest.TestCase):
             iptables_diff = set(self.post_iptables) - set(self.pre_iptables)
             pp = pprint.PrettyPrinter(indent=4)
 
-            print "\n======================================\n" 
-            print "Diffences between iptables snapshots: " 
-            print "PRE-IPTABLES SNAPSHOT LENGTH: ", len(self.pre_iptables)
-            print "POST-IPTABLES SNAPSHOT LENGTH: ", len(self.post_iptables)
-            print "\n---------------------------------------\n"
+            self.tester.critical("\n======================================\n") 
+            self.tester.critical("Diffences between iptables snapshots: ") 
+            self.tester.critical("PRE-IPTABLES SNAPSHOT LENGTH: %i", len(self.pre_iptables))
+            self.tester.critical("POST-IPTABLES SNAPSHOT LENGTH: %i", len(self.post_iptables))
+            self.tester.critical("\n---------------------------------------\n")
             pp.pprint(list(iptables_diff))
-            print "\n======================================\n" 
+            self.tester.critical("\n======================================\n") 
 
 
 def get_options():
