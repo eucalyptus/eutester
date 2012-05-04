@@ -61,6 +61,7 @@ class Eucaops(Eutester):
                 self.fail("Bucket could not be found after creation")
                 return None
         self.test_resources["buckets"].append(bucket)
+        self.debug("Created bucket: " + bucket_name)
         return bucket
     
     def delete_bucket(self, bucket):
@@ -93,7 +94,7 @@ class Eucaops(Eutester):
         else:
             return False
     
-    def upload_object_file(self, bucket_name, key_name, path_to_file):
+    def upload_object(self, bucket_name, key_name, path_to_file=None, contents=None):
         """
         Write the contents of a local file to walrus
         bucket_name   The name of the walrus Bucket.
@@ -109,7 +110,13 @@ class Eucaops(Eutester):
         key = bucket.new_key(key_name)
         if key == None:
             self.fail( "Unable to create key " + key_name  )
-        key.set_contents_from_filename(path_to_file)
+        if path_to_file is None:
+            if contents is None:
+                contents = os.urandom(1024)
+            key.set_contents_from_string(contents)
+        else:
+            key.set_contents_from_filename(path_to_file)
+        self.debug("Uploaded key: " + str(key_name) + " to bucket:" + str(bucket_name))    
         self.test_resources["keys"].append(key)
         return key
     
@@ -417,8 +424,9 @@ class Eucaops(Eutester):
         volume.update()
         while (elapsed < timeout):
             volume.update()
-            if re.search("attached",volume.status):
-                return True
+            if (volume.attach_data is not None) and (volume.attach_data.status is not None) :
+                if re.search("attached",volume.attach_data.status):
+                    return True
             self.debug( str(volume) + " state:" + volume.status + " pause:"+str(pause)+" elapsed:"+str(elapsed))
             self.sleep(pause)
             elapsed = int(time.time()-start)
@@ -717,6 +725,7 @@ class Eucaops(Eutester):
         zone       Availability zone to run these instances
         min        Minimum instnaces to launch, default 1
         max        Maxiumum instances to launch, default 1
+        private_addressing  Runs an instance with only private IP address
         """
         if image == None:
             images = self.ec2.get_all_images()
@@ -725,8 +734,14 @@ class Eucaops(Eutester):
                     image = emi      
         if image is None:
             raise Exception("emi is None. run_instance could not auto find an emi?")   
+
+        if private_addressing is True:
+            addressing_type = "private"
+        else:
+            addressing_type = None
+            
         self.debug( "Attempting to run "+ str(image.root_device_type)  +" image " + str(image) + " in group " + str(group))
-        reservation = image.run(key_name=keypair,security_groups=[group],instance_type=type, placement=zone, min_count=min, max_count=max, user_data=user_data)
+        reservation = image.run(key_name=keypair,security_groups=[group],instance_type=type, placement=zone, min_count=min, max_count=max, user_data=user_data, addressing_type=addressing_type)
         if ((len(reservation.instances) < min) or (len(reservation.instances) > max)):
             self.fail("Reservation:"+str(reservation.id)+" returned "+str(len(reservation.instances))+" instances, not within min("+str(min)+") and max("+str(max)+" ")
             
@@ -841,17 +856,18 @@ class Eucaops(Eutester):
             pass
     
     
-    def get_all_attributes(self, obj):   
+    def get_all_attributes(self, obj, buf="", verbose=True):   
         '''
         Get a formatted list of all the key pair values pertaining to the object 'obj'
         '''   
         buf=""
         list = sorted(obj.__dict__)
         for item in list:
+            if verbose:
+                print str(item)+" = "+str(obj.__dict__[item])
             buf += str(item)+" = "+str(obj.__dict__[item])+"\n"
         return buf
-            
-                
+              
     
     
     def get_available_vms(self, type=None, zone=None):
@@ -963,43 +979,14 @@ class Eucaops(Eutester):
         else:
             self.fail("Could not modify " + property)
     
-    def get_master(self, component="clc", partition=""):
-        """
-        Find the master of any type of component and return its IP, by default returns the master CLC
-        component        Component to find the master, possible values ["clc", "sc", "cc", "ws"]
-        """
-        service = "eucalyptus"
-        if component == "sc":
-            service = "storage"
-        if component == "ws":
-            service = "walrus"
-        if component == "cc":
-            service = "cluster"
-        self.debug( "Looking for enabled " + component )        
-        ### GO through both clcs and check which ip it thinks is enabled for this service type
-        services = self.clc.sys(". " + self.credpath + "/eucarc && " + self.eucapath + "/usr/sbin/euca-describe-services")
-        master = ""
-        try:
-            service_lookup = self.grep("SERVICE\s+" + service + ".*" + str(partition) + ".*ENABLED", services)
-            if len(service_lookup) < 1:
-                raise LookupError("Looking for master " + str(component) + " in partition " + str(partition) + " failed")
-            else:
-                line = service_lookup[0]
-            service_url = line.split()[6]
-            master = service_url.split(":")[1].strip("/")
-            #self.swap_ssh(master)
-            return master
-        except Exception, e:
-            self.fail("Unable to find redundant components")
-            self.fail(str(e))
-            raise
-    
+   
     def cleanup_artifacts(self):
         self.debug("Starting cleanup of artifacts")
         for key,array in self.test_resources.iteritems():
             for item in array:
                 try:
                     ### SWITCH statement for particulars of removing a certain type of resources
+                    self.debug("Deleting " + str(item))
                     if isinstance(item, Image):
                         item.deregister()
                     elif isinstance(item, Reservation):
@@ -1020,7 +1007,7 @@ class Eucaops(Eutester):
            Included resources are: addresses, images, instances, key_pairs, security_groups, snapshots, volumes, zones
         
         '''
-        current_artifacts = {}
+        current_artifacts = dict()
         current_artifacts["addresses"] = self.ec2.get_all_addresses()
         current_artifacts["images"] = self.ec2.get_all_images()
         current_artifacts["instances"] = self.ec2.get_all_instances()

@@ -85,7 +85,7 @@ class SshConnection():
             else:
                 self.debugmethod(msg)
 
-    def ssh_sys_timeout(self,chan,start):
+    def ssh_sys_timeout(self,chan,start,cmd):
         '''
         callback to be scheduled during ssh cmds which have timed out. 
         chan - paramiko channel to be closed 
@@ -93,7 +93,7 @@ class SshConnection():
         '''
         chan.close()
         elapsed = time.time()-start
-        raise CommandTimeoutException("SSH Command timer has fired after scheduled "+str(elapsed).split('.')[0]+" seconds")   
+        raise CommandTimeoutException("SSH Command timer fired after "+str(int(elapsed))+" seconds. Cmd:'"+str(cmd)+"'")   
     
      
     def sys(self, cmd, verbose=None, timeout=120):
@@ -130,7 +130,7 @@ class SshConnection():
             chan = tran.open_session()
             chan.get_pty()
             f = chan.makefile()
-            t = Timer(timeout, self.ssh_sys_timeout,[chan, start] )
+            t = Timer(timeout, self.ssh_sys_timeout,[chan, start,cmd] )
             t.start()
             chan.exec_command(cmd)
             if ( listformat is True):

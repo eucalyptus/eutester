@@ -1,4 +1,4 @@
-#! ../share/python_lib/devel/bin/python
+
 #
 # Description:  Creates an image instance based on the image argument passed in. Then 
 #               attempts to download a remote image and store it on an attached volume.
@@ -70,6 +70,9 @@ if __name__ == '__main__':
     
     parser.add_option("--no-clean", dest="clean", action="store_false",
                       help="Sets clean to false, will not clean up instances/volumes at script exit", default=True)
+    
+    parser.add_option("-p", dest="password", type="string",
+                      help="Password", default=None) 
 
     (options, args) = parser.parse_args()
      
@@ -98,6 +101,7 @@ if __name__ == '__main__':
     md5sum = options.md5sum
     eof = options.eof
     clean = options.clean
+    password = options.password
     instance = None
     volume = None
     keypair=None
@@ -118,7 +122,7 @@ if __name__ == '__main__':
     #Number of ping attempts used to test instance state, before giving up on a running instance 
     ping_retry=100
     #The eutester cloud tester object 
-    tester = Eucaops( hostname="clc",password="foobar", user=user, account=account,config_file=config)
+    tester = Eucaops( password=password, config_file=config)
     
     #sets tester to throw exception upon failure
     if (options.eof):
@@ -301,7 +305,7 @@ if __name__ == '__main__':
         snapshot = tester.create_snapshot(volume.id, waitOnProgress=15, timeout=timeout)
         
         pmsg("Snapshot complete, register it as an emi with name:"+name+"...")
-        bfebs_emi = tester.register_snapshot(snapshot.id, windows=windows, name=name, dot=dot)
+        bfebs_emi = tester.register_snapshot(snapshot, windows=windows, name=name, dot=dot)
         pmsg("Done. Image registered as:"+str(bfebs_emi))
     
     except Exception, e:
