@@ -124,7 +124,8 @@ class EustoreTests():
     metadata_test = "metadata_test"
     user_test = "user_test"
     root_test = "root_test"
-    volume_test = "volume_test"
+    attach_volume_test = "attach_volume_test"
+    detach_volume_test = "detach_volume_test"
     reboot_test = "reboot_test"
     terminate_test = "terminate_test"
 
@@ -187,7 +188,7 @@ class EustoreImage():
                 EustoreTests.metadata_test: TestStatus.not_run,
                 EustoreTests.user_test : TestStatus.not_run,
                 EustoreTests.root_test : TestStatus.not_run,
-                EustoreTests.volume_test :TestStatus.not_run,
+                EustoreTests.attach_volume_test :TestStatus.not_run,
                 EustoreTests.reboot_test : TestStatus.not_run,
                 EustoreTests.terminate_test :  TestStatus.not_run
                }
@@ -658,7 +659,7 @@ class Eustoretestsuite():
             
                 
                 
-    def run_image_test_suite(self,image, vmtype=None, zone='PARTI00', xof=False):  
+    def run_image_test_suite(self,image, vmtype=None, zone='PARTI00', xof=False,volcount=2):  
         '''
         Runs a set of tests against an image, starts by running an euinstance of an image. If the image continues
         to running the remaining tests are ran against the image. Logging/results/debugging messages should be printed to the
@@ -703,7 +704,7 @@ class Eustoretestsuite():
                 pass
             
             try:    
-                self.instance_attach_vol_test(inst,volcount=2)
+                self.instance_attach_vol_test(inst,volcount=volcount)
                 self.debug("SUCCESS - ATTACH VOLUMES TEST - ("+str(image.name)+")")
             except Exception, e:
                 self.debug("!!!!!! FAILED - ATTACH VOLUME TEST - ("+str(image.name)+") error:"+str(e))
@@ -718,6 +719,14 @@ class Eustoretestsuite():
                 failcode = 1 
                 pass
             
+            try:
+                self.instace_detach_volumes_test(inst, count=volcount)
+                self.debug("SUCCESS - DETACH VOLUMES TEST - ("+str(image.name)+")")
+            except Exception, e:
+                self.debug("!!!!!! FAILED - DETACH VOLUMES TEST - ("+str(image.name)+") error:"+str(e))
+                failcode = 1 
+                pass
+                
             try:
                 self.instance_terminate_test(res)
                 self.debug("SUCCESS - TERMINATE TEST - ("+str(image.name)+")")
@@ -814,7 +823,7 @@ class Eustoretestsuite():
         
         self.debug("###########STARTING instance_attach_vol_test##########")
         image = self.get_eustore_image_by_id(emi_id=inst.image_id)
-        image.results[EustoreTests.volume_test] = TestStatus.failed
+        image.results[EustoreTests.attach_volume_test] = TestStatus.failed
         zone = inst.placement
         try:
             for i in xrange(0,volcount):
@@ -827,9 +836,30 @@ class Eustoretestsuite():
                 inst.attach_volume(vol)
         except Exception, ae:
             raise Exception("("+str(image.name)+") Failed to attach volume to:"+str(inst.id)+"err:"+str(ae))
-        image.results[EustoreTests.volume_test] = TestStatus.success
+        image.results[EustoreTests.attach_volume_test] = TestStatus.success
         
+    
+    def instace_detach_volumes_test(self, inst, count=0, timeout=60):
+        '''
+        Attempts to verify volumes detach correctly from an instance
+        '''
+        self.debug("#############STARTING instance_detach_volume_test#############")
+        if count == 0:
+            count = len(inst.attached_vols)
+        image = self.get_eustore_image_by_id(emi_id=inst.image_id)
+        image.results[EustoreTests.detach_volume_test] = TestStatus.failed
+        try:
+            detached = 0
+            for evol in inst.attached_vols:
+                inst.detach_euvolume(evol, timeout=timeout)
+                detached += 1
+                if detached >= count:
+                    break
+        except Exception, e:
+            raise Exception("("+str(image.name)+") Failed to detattach volumes:"+str(inst.id)+"err:"+str(e))
+        image.results[EustoreTests.detach_volume_test] = TestStatus.success
         
+    
     def instance_reboot_test(self,inst, checkvolstatus=True):
         '''
         This attempt to reboot an instance, if volumes were present before the reboot, this test
@@ -871,6 +901,9 @@ class Eustoretestsuite():
             image.results[EustoreTests.root_test] = TestStatus.failed
             raise Exception("("+str(image.name)+")root user has bad password!")
         image.results[EustoreTests.root_test] = TestStatus.success
+        
+        
+ 
         
     def instance_terminate_test(self,res):
         '''
