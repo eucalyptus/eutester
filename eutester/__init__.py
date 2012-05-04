@@ -333,7 +333,7 @@ class Eutester(object):
             except:
                 self.debug("Could not find network type setting to unknown")
                 config_hash["network"] = "unknown"
-                
+        f.close()   
         config_hash["machines"] = machines 
         return config_hash
     
@@ -581,13 +581,13 @@ class Eutester(object):
     def handle_timeout(self, signum, frame): 
         raise TimeoutFunctionException()
     
-    def sys(self, cmd, verbose=True):
+    def sys(self, cmd, verbose=True, timeout=120):
         """ By default will run a command on the CLC machine, the connection used can be changed by passing a different hostname into the constructor
             For example:
             instance = Eutester( hostname=instance.ip_address, keypath="my_key.pem")
             instance.sys("mount") # check mount points on instance and return the output as a list
         """
-        return self.clc.sys(cmd, verbose=verbose)
+        return self.clc.sys(cmd, verbose=verbose, timeout=timeout)
 
     def local(self, cmd):
         """ Run a command locally on the tester"""
@@ -597,14 +597,14 @@ class Eutester(object):
         std_out_return = os.popen(cmd).readlines()
         return std_out_return
     
-    def found(self, command, regex, local=False):
+    def found(self, command, regex, local=False, timeout=120):
         """ Returns a Boolean of whether the result of the command contains the regex"""
         if self.clc is None:
             local = True 
         if local:
             result = self.local(command)
         else:
-            result = self.sys(command)
+            result = self.sys(command, timeout=timeout)
         for line in result:
             found = re.search(regex,line)
             if found:
