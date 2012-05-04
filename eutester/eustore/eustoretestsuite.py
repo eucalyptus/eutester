@@ -344,7 +344,7 @@ class Eustoretestsuite():
             
             
             
-    def get_registered_emi(self, eustore_image,  emi="emi-"):
+    def get_registered_emis(self, eustore_image,  emi="emi-"):
         '''
         Attempts to return a list of emis using this eustore image
         '''
@@ -354,17 +354,17 @@ class Eustoretestsuite():
         else:
             return images
     
-    def get_registered_eki(self, eustore_image):
+    def get_registered_ekis(self, eustore_image):
         '''
         Attempts to get a list of ekis using this eustore image
         '''
-        return self.get_registered_emi(eustore_image, emi="eki-")
+        return self.get_registered_emis(eustore_image, emi="eki-")
     
-    def get_registered_eri(self, eustore_image):
+    def get_registered_eris(self, eustore_image):
         '''
         Attempts to get a list of eris using this eustore iamge
         '''
-        return self.get_registered_emi(eustore_image, emi="eri-")
+        return self.get_registered_emis(eustore_image, emi="eri-")
     
         
    
@@ -400,7 +400,7 @@ class Eustoretestsuite():
         start = time.time()
         
         #Check to see if image has already been installed
-        if (not force) and  (self.get_registered_emi(eustore_image) is not None):
+        if (not force) and  (self.get_registered_emis(eustore_image) is not None):
             eustore_image.results[EustoreTests.install_test] = TestStatus.success
             raise Exception('Image:"'+str(image.name)+'" is already installed')
        
@@ -466,7 +466,7 @@ class Eustoretestsuite():
             
             
             #Now verify the appropriate images were actually installed on the system
-            emi = self.get_registered_emi(eustore_image)[0]
+            emi = self.get_registered_emis(eustore_image)[0]
             if (emi is None):
                 self.debug('Image:"'+str(image.name)+'" is not found on system after install')
                 raise Exception('Image:"'+str(image.name)+'" is not found on system after install')
@@ -481,22 +481,22 @@ class Eustoretestsuite():
                     self.debug("Kernel specified does not match specified EKI. EMI:"+str(emi.id)+" Image:"+str(image.name))
                     raise Exception("Kernel specified does not match specified EKI. EMI:"+str(emi.id)+" Image:"+str(image.name)) 
             else:
-                eki = self.get_registered_eki(eustore_image)
+                eki = self.get_registered_ekis(eustore_image)[0]
                 if eki is None:
                     self.debug('EKI for Image:"'+str(image.name)+'" is not found on system after install')
                     raise Exception('EKI for Image:"'+str(image.name)+'" is not found on system after install')
                 else:
-                    if (eki.id != eki_id):
+                    if (eki.id != eki_id)[0]:
                         self.debug("Kernel specified does not match associated EKI. EMI:"+str(emi.id)+" Image:"+str(image.name))
                         raise Exception("Kernel specified does not match associated EKI. EMI:"+str(emi.id)+" Image:"+str(image.name))
-                    
+            self.debug( "Image:"+str(image.name)+" installed kernel:"+str(eki_id))
             #Verify the appropriate ERI was installed and associated with this EMI        
             if (ramdisk is not None):
                 if (ramdisk != eri_id):
                     self.debug("Ramdisk specified does not match associated ERI. EMI:"+str(emi.id)+" Image:"+str(image.name))
                     raise Exception("Ramdisk specified does not match associated ERI. EMI:"+str(emi.id)+" Image:"+str(image.name))
             else:
-                eri = self.get_registered_eri(eustore_image)
+                eri = self.get_registered_eris(eustore_image)[0]
                 if eri is None:
                     self.debug('ERI for Image:"'+str(image.name)+'" is not found on system after install')
                     raise Exception('ERI for Image:"'+str(image.name)+'" is not found on system after install')
@@ -613,7 +613,7 @@ class Eustoretestsuite():
         retlist = []
         for image in self.list:
             self.debug("Checking to see if image:"+str(image.name)+" is installed")
-            emis = self.get_registered_emi(image)
+            emis = self.get_registered_emis(image)
             if emis is None:
                 self.debug("Image: "+str(image.name)+" not found on system")
                 retlist.append(image)
@@ -753,7 +753,7 @@ class Eustoretestsuite():
         '''
         self.debug("clean_up_running_instance_for_image: "+str(image.name))
         failstr=''
-        emis = self.get_registered_emi(image)
+        emis = self.get_registered_emis(image)
         if emis != []:
             emi = emis[0]
             for instance in self.tester.get_instances(image_id=emi.id):
@@ -791,7 +791,7 @@ class Eustoretestsuite():
         self.debug("#####STARTING run_image test########")
         image.results[EustoreTests.running_test] = TestStatus.failed
         try:
-            emi = self.get_registered_emi(image)[0]
+            emi = self.get_registered_emis(image)[0]
         except Exception, e:
             raise Exception("Could not get registered EMI for image:"+str(image.name)+" err:"+str(e))
         
