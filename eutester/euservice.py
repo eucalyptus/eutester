@@ -159,7 +159,7 @@ class EuserviceManager(object):
         else:
             partition = ""
         try:
-            describe_services = self.tester.clc.sys(self.eucaprefix + "/usr/sbin/euca-describe-services --system-internal " + str(type)  +  "| grep SERVICE" + str(partition), timeout=15)
+            describe_services = self.tester.clc.sys(self.eucaprefix + "/usr/sbin/euca-describe-services " + str(type)  +  "| grep SERVICE" + str(partition), timeout=15)
             if len(describe_services) < 1:
                 raise IndexError("Did not receive proper response from describe services when looking for " + str(type))
         except Exception, e:

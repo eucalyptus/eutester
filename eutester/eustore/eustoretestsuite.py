@@ -124,7 +124,8 @@ class EustoreTests():
     metadata_test = "metadata_test"
     user_test = "user_test"
     root_test = "root_test"
-    volume_test = "volume_test"
+    attach_volume_test = "attach_volume_test"
+    detach_volume_test = "detach_volume_test"
     reboot_test = "reboot_test"
     terminate_test = "terminate_test"
 
@@ -187,7 +188,7 @@ class EustoreImage():
                 EustoreTests.metadata_test: TestStatus.not_run,
                 EustoreTests.user_test : TestStatus.not_run,
                 EustoreTests.root_test : TestStatus.not_run,
-                EustoreTests.volume_test :TestStatus.not_run,
+                EustoreTests.attach_volume_test :TestStatus.not_run,
                 EustoreTests.reboot_test : TestStatus.not_run,
                 EustoreTests.terminate_test :  TestStatus.not_run
                }
@@ -343,7 +344,7 @@ class Eustoretestsuite():
             
             
             
-    def get_registered_emi(self, eustore_image,  emi="emi-"):
+    def get_registered_emis(self, eustore_image,  emi="emi-"):
         '''
         Attempts to return a list of emis using this eustore image
         '''
@@ -353,17 +354,17 @@ class Eustoretestsuite():
         else:
             return images
     
-    def get_registered_eki(self, eustore_image):
+    def get_registered_ekis(self, eustore_image):
         '''
         Attempts to get a list of ekis using this eustore image
         '''
-        return self.get_registered_emi(eustore_image, emi="eki-")
+        return self.get_registered_emis(eustore_image, emi="eki-")
     
-    def get_registered_eri(self, eustore_image):
+    def get_registered_eris(self, eustore_image):
         '''
         Attempts to get a list of eris using this eustore iamge
         '''
-        return self.get_registered_emi(eustore_image, emi="eri-")
+        return self.get_registered_emis(eustore_image, emi="eri-")
     
         
    
@@ -399,7 +400,7 @@ class Eustoretestsuite():
         start = time.time()
         
         #Check to see if image has already been installed
-        if (not force) and  (self.get_registered_emi(eustore_image) is not None):
+        if (not force) and  (self.get_registered_emis(eustore_image) is not None):
             eustore_image.results[EustoreTests.install_test] = TestStatus.success
             raise Exception('Image:"'+str(image.name)+'" is already installed')
        
@@ -465,7 +466,7 @@ class Eustoretestsuite():
             
             
             #Now verify the appropriate images were actually installed on the system
-            emi = self.get_registered_emi(eustore_image)[0]
+            emi = self.get_registered_emis(eustore_image)[0]
             if (emi is None):
                 self.debug('Image:"'+str(image.name)+'" is not found on system after install')
                 raise Exception('Image:"'+str(image.name)+'" is not found on system after install')
@@ -480,22 +481,22 @@ class Eustoretestsuite():
                     self.debug("Kernel specified does not match specified EKI. EMI:"+str(emi.id)+" Image:"+str(image.name))
                     raise Exception("Kernel specified does not match specified EKI. EMI:"+str(emi.id)+" Image:"+str(image.name)) 
             else:
-                eki = self.get_registered_eki(eustore_image)
+                eki = self.get_registered_ekis(eustore_image)[0]
                 if eki is None:
                     self.debug('EKI for Image:"'+str(image.name)+'" is not found on system after install')
                     raise Exception('EKI for Image:"'+str(image.name)+'" is not found on system after install')
                 else:
-                    if (eki.id != eki_id):
+                    if (eki.id != eki_id)[0]:
                         self.debug("Kernel specified does not match associated EKI. EMI:"+str(emi.id)+" Image:"+str(image.name))
                         raise Exception("Kernel specified does not match associated EKI. EMI:"+str(emi.id)+" Image:"+str(image.name))
-                    
+            self.debug( "Image:"+str(image.name)+" installed kernel:"+str(eki_id))
             #Verify the appropriate ERI was installed and associated with this EMI        
             if (ramdisk is not None):
                 if (ramdisk != eri_id):
                     self.debug("Ramdisk specified does not match associated ERI. EMI:"+str(emi.id)+" Image:"+str(image.name))
                     raise Exception("Ramdisk specified does not match associated ERI. EMI:"+str(emi.id)+" Image:"+str(image.name))
             else:
-                eri = self.get_registered_eri(eustore_image)
+                eri = self.get_registered_eris(eustore_image)[0]
                 if eri is None:
                     self.debug('ERI for Image:"'+str(image.name)+'" is not found on system after install')
                     raise Exception('ERI for Image:"'+str(image.name)+'" is not found on system after install')
@@ -612,7 +613,7 @@ class Eustoretestsuite():
         retlist = []
         for image in self.list:
             self.debug("Checking to see if image:"+str(image.name)+" is installed")
-            emis = self.get_registered_emi(image)
+            emis = self.get_registered_emis(image)
             if emis is None:
                 self.debug("Image: "+str(image.name)+" not found on system")
                 retlist.append(image)
@@ -658,7 +659,7 @@ class Eustoretestsuite():
             
                 
                 
-    def run_image_test_suite(self,image, vmtype=None, zone='PARTI00', xof=False):  
+    def run_image_test_suite(self,image, vmtype=None, zone='PARTI00', xof=False,volcount=2):  
         '''
         Runs a set of tests against an image, starts by running an euinstance of an image. If the image continues
         to running the remaining tests are ran against the image. Logging/results/debugging messages should be printed to the
@@ -703,7 +704,7 @@ class Eustoretestsuite():
                 pass
             
             try:    
-                self.instance_attach_vol_test(inst,volcount=2)
+                self.instance_attach_vol_test(inst,volcount=volcount)
                 self.debug("SUCCESS - ATTACH VOLUMES TEST - ("+str(image.name)+")")
             except Exception, e:
                 self.debug("!!!!!! FAILED - ATTACH VOLUME TEST - ("+str(image.name)+") error:"+str(e))
@@ -718,6 +719,14 @@ class Eustoretestsuite():
                 failcode = 1 
                 pass
             
+            try:
+                self.instace_detach_volumes_test(inst, count=volcount)
+                self.debug("SUCCESS - DETACH VOLUMES TEST - ("+str(image.name)+")")
+            except Exception, e:
+                self.debug("!!!!!! FAILED - DETACH VOLUMES TEST - ("+str(image.name)+") error:"+str(e))
+                failcode = 1 
+                pass
+                
             try:
                 self.instance_terminate_test(res)
                 self.debug("SUCCESS - TERMINATE TEST - ("+str(image.name)+")")
@@ -744,7 +753,7 @@ class Eustoretestsuite():
         '''
         self.debug("clean_up_running_instance_for_image: "+str(image.name))
         failstr=''
-        emis = self.get_registered_emi(image)
+        emis = self.get_registered_emis(image)
         if emis != []:
             emi = emis[0]
             for instance in self.tester.get_instances(image_id=emi.id):
@@ -782,7 +791,7 @@ class Eustoretestsuite():
         self.debug("#####STARTING run_image test########")
         image.results[EustoreTests.running_test] = TestStatus.failed
         try:
-            emi = self.get_registered_emi(image)[0]
+            emi = self.get_registered_emis(image)[0]
         except Exception, e:
             raise Exception("Could not get registered EMI for image:"+str(image.name)+" err:"+str(e))
         
@@ -814,7 +823,7 @@ class Eustoretestsuite():
         
         self.debug("###########STARTING instance_attach_vol_test##########")
         image = self.get_eustore_image_by_id(emi_id=inst.image_id)
-        image.results[EustoreTests.volume_test] = TestStatus.failed
+        image.results[EustoreTests.attach_volume_test] = TestStatus.failed
         zone = inst.placement
         try:
             for i in xrange(0,volcount):
@@ -827,9 +836,30 @@ class Eustoretestsuite():
                 inst.attach_volume(vol)
         except Exception, ae:
             raise Exception("("+str(image.name)+") Failed to attach volume to:"+str(inst.id)+"err:"+str(ae))
-        image.results[EustoreTests.volume_test] = TestStatus.success
+        image.results[EustoreTests.attach_volume_test] = TestStatus.success
         
+    
+    def instace_detach_volumes_test(self, inst, count=0, timeout=60):
+        '''
+        Attempts to verify volumes detach correctly from an instance
+        '''
+        self.debug("#############STARTING instance_detach_volume_test#############")
+        if count == 0:
+            count = len(inst.attached_vols)
+        image = self.get_eustore_image_by_id(emi_id=inst.image_id)
+        image.results[EustoreTests.detach_volume_test] = TestStatus.failed
+        try:
+            detached = 0
+            for evol in inst.attached_vols:
+                inst.detach_euvolume(evol, timeout=timeout)
+                detached += 1
+                if detached >= count:
+                    break
+        except Exception, e:
+            raise Exception("("+str(image.name)+") Failed to detattach volumes:"+str(inst.id)+"err:"+str(e))
+        image.results[EustoreTests.detach_volume_test] = TestStatus.success
         
+    
     def instance_reboot_test(self,inst, checkvolstatus=True):
         '''
         This attempt to reboot an instance, if volumes were present before the reboot, this test
@@ -871,6 +901,9 @@ class Eustoretestsuite():
             image.results[EustoreTests.root_test] = TestStatus.failed
             raise Exception("("+str(image.name)+")root user has bad password!")
         image.results[EustoreTests.root_test] = TestStatus.success
+        
+        
+ 
         
     def instance_terminate_test(self,res):
         '''
