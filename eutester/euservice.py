@@ -167,9 +167,11 @@ class EuserviceManager(object):
                 raise Exception("Unable to get service information from the only clc: " + self.tester.clc.hostname )
             if attempt_both:
                 self.tester.swap_clc()
-                describe_services = self.tester.clc.sys(self.eucaprefix + "/usr/sbin/euca-describe-services --system-internal " + str(type)  + " | grep SERVICE "  + str(partition)  , timeout=15)
+                describe_services = self.tester.clc.sys(self.eucaprefix + "/usr/sbin/euca-describe-services " + str(type)  + " | grep SERVICE "  + str(partition)  , timeout=15)
                 if len(describe_services) < 1:                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
                     raise IndexError("Did not receive proper response from describe services when looking for " + str(type))
+            raise e
+        
         services = []
         for service_line in describe_services:
             services.append(Euservice(service_line, self.tester))
@@ -189,22 +191,22 @@ class EuserviceManager(object):
         all_services = []
         self.update()
         if len(self.clcs) > 0:
-            all_services.append(self.clcs)
+            all_services = all_services + self.clcs
         if len(self.walruses) > 0:
-            all_services.append(self.walruses)
+            all_services = all_services + self.walruses
         for partition in self.partitions.keys():
 
             ccs = self.partitions[partition].ccs
             if len(ccs) > 0:
-                all_services.append(ccs)
+                all_services = all_services + ccs
                 
             scs = self.partitions[partition].scs
             if len(scs) > 0:
-                all_services.append(scs)
+                all_services = all_services + scs
             
             vbs = self.partitions[partition].vbs
             if len(vbs) > 0:
-                all_services.append(vbs)
+                all_services = all_services + vbs
                 
         return all_services
             
@@ -328,7 +330,7 @@ class EuserviceManager(object):
                     if re.search(state, service.state):
                         return service 
             except Exception, e:
-                self.tester.debug("Caught an exception when trying to get services. Retrying in " + str(interval) + "s")
+                self.tester.debug("Caught " + str(e) + " when trying to get services. Retrying in " + str(interval) + "s")
             poll_count -= 1
             self.tester.sleep(interval)
                 
@@ -336,6 +338,10 @@ class EuserviceManager(object):
             self.tester.fail("Service: " + euservice.name + " did not enter "  + state + " state")
             raise Exception("Service: " + euservice.name + " did not enter "  + state + " state")
         
+    def all_services_operational(self):
+        all_services = self.get_all_services()
+        for service in all_services:
+            self.wait_for_service(service,"ENABLED")
     
     def get_enabled_clc(self):
         clc = self.get_enabled(self.clcs)
