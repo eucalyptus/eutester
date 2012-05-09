@@ -541,7 +541,7 @@ class EuInstance(Instance):
                 out = self.sys("cat /etc/shadow | grep '^"+str(username)+"'")
                 if out != []:
                     password = str(out[0]).split(":")[1]
-                    if re.match("^!+$", password ):
+                    if password == "" or re.match("^!+$", password ):
                         password = None         
         return password
                     
