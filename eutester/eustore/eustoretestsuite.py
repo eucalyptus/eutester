@@ -128,6 +128,7 @@ class EustoreTests():
     detach_volume_test = "detach_volume_test"
     reboot_test = "reboot_test"
     terminate_test = "terminate_test"
+    ssh_test = "ssh_test"
 
 class EustoreImage():
     '''
@@ -184,6 +185,7 @@ class EustoreImage():
         #self.debug = self.logger.debug
         self.results = { 
                 EustoreTests.install_test : TestStatus.not_run,
+                EustoreTests.ssh_test : TestStatus.not_run,
                 EustoreTests.running_test : TestStatus.not_run,
                 EustoreTests.metadata_test: TestStatus.not_run,
                 EustoreTests.user_test : TestStatus.not_run,
@@ -214,6 +216,14 @@ class EustoreImage():
             printmethod = self.debug
         for test in self.results:
             printmethod( str("TEST:"+str(test)).ljust(25)+str(" RESULT:"+self.results[test]).ljust(0))
+            
+    def clearresults(self, exclude = [EustoreTests.install_test] ):
+        for test in self.results:
+            for ex in exclude:
+                if test == ex:
+                    continue
+            self.results[test]=TestStatus.not_run
+            
         
 
 class Eustoretestsuite():
@@ -634,12 +644,12 @@ class Eustoretestsuite():
         '''
         if list is None:
             list = self.list
-            for image in list:
-                self.debug("IMAGE: "+str(image.name)+" Install Status: "+str(image.results[EustoreTests.install_test]))
-                if verbose:
-                    image.printdata()
+        for image in list:
+            self.debug("IMAGE: "+str(image.name)+" Install Status: "+str(image.results[EustoreTests.install_test]))
+            if verbose:
+                image.printdata()
                     
-    def test_image_list(self, image_list=None,  zone=None):
+    def test_image_list(self, image_list=None, vmtype= None, zone=None, userlist=[], rootpass=None, xof=False,volcount=2):
         '''
         Attempts to traverse a list of images and run the image test suite against them
         '''
@@ -649,7 +659,7 @@ class Eustoretestsuite():
             zone = self.zone    
         for image in image_list:
             try:
-                self.run_image_test_suite(image, zone=zone)
+                self.run_image_test_suite(image, vmtype=None, zone=zone, userlist=[], rootpass=None, xof=False,volcount=2)
                 time.sleep(10)
             except Exception, e:
                 self.debug("Caught Exception while running image test for:"+str(image.name)+", err:"+str(e))
@@ -659,7 +669,7 @@ class Eustoretestsuite():
             
                 
                 
-    def run_image_test_suite(self,image, vmtype=None, zone='PARTI00', xof=False,volcount=2):  
+    def run_image_test_suite(self,image, vmtype=None, zone='PARTI00', userlist=[], rootpass=None, xof=False,volcount=2):  
         '''
         Runs a set of tests against an image, starts by running an euinstance of an image. If the image continues
         to running the remaining tests are ran against the image. Logging/results/debugging messages should be printed to the
@@ -667,6 +677,7 @@ class Eustoretestsuite():
         
         '''
         self.cur_image = image #set logger for this image    
+        image.clearresults()
         failcode = 0 
         try:
             #first try to run the image, exit if this fails as there's no point in running the remaining tests
@@ -677,7 +688,17 @@ class Eustoretestsuite():
                 image.results[EustoreTests.running_test] = TestStatus.failed
                 self.debug("("+str(image.name)+") error:"+str(re))
                 raise re
-          
+                return
+            
+            try:
+                self.instance_ssh_test(inst)
+                self.debug("SUCCESS - SSH TEST - ("+str(image.name)+")")
+            except Exception, e:
+                self.debug("!!!!!! FAILED - SSH TEST - ("+str(image.name)+") error:"+str(e))
+                failcode = 1 
+                raise e
+                return
+            
             #Perform tests on the running instance, continue on failure for these tests
             try:
                 self.instance_metadata_test(inst)
@@ -746,6 +767,7 @@ class Eustoretestsuite():
             image.printdata(printmethod=self.debug)
             self.cur_image = None
             return failcode
+        
             
     def clean_up_running_instances_for_image(self,image, timeout=300):
         '''
@@ -801,6 +823,24 @@ class Eustoretestsuite():
             raise Exception("Reservation was empty, failed to run: "+str(image.name))      
         image.results[EustoreTests.running_test] = TestStatus.success
         return res
+        
+        
+    def instance_ssh_test(self,inst):
+        '''
+        This test attempts to issue a remote command via the euinstance ssh session and
+        verify the  output
+        '''
+        self.debug("################STARTING instance_ssh_test #####################")
+        image = self.get_eustore_image_by_id(emi_id=inst.image_id)
+        image.results[EustoreTests.ssh_test] = TestStatus.failed
+        try:
+            if inst.found("echo 'good'", "^good"):
+                image.results[EustoreTests.ssh_test] = TestStatus.success
+            else:
+                raise Exception("Expected text not returned from remote ssh command")
+        except Exception, e:
+            raise Exception("("+str(image.name)+") Failed ssh command test:"+str(inst.id)+"err:"+str(e))
+            
         
             
     def instance_metadata_test(self,inst):
@@ -897,9 +937,10 @@ class Eustoretestsuite():
         '''
         self.debug("############STARTING isntance_root_test################")
         image = self.get_eustore_image_by_id(emi_id=inst.image_id)
-        if inst.get_user_password('root') != password:
+        ipassword = inst.get_user_password('root') 
+        if ipassword != password:
             image.results[EustoreTests.root_test] = TestStatus.failed
-            raise Exception("("+str(image.name)+")root user has bad password!")
+            raise Exception("("+str(image.name)+")root user has bad password! found:"+str(ipassword)+"!="+str(password))
         image.results[EustoreTests.root_test] = TestStatus.success
         
         
@@ -953,6 +994,9 @@ class Eustoretestsuite():
                 if image.results[t] == result:
                     retlist.append(image)
             return retlist
+        
+    
+    
         
                             
                 
