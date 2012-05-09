@@ -205,7 +205,7 @@ class Eutester(object):
         if not self.region.endpoint:
             #self.get_connection_details()
             self.region.name = 'eucalyptus'
-            self.region.endpoint = self.get_clc_ip()       
+            self.region.endpoint = self.get_ec2_ip()       
             port = 8773
             service_path="/services/Eucalyptus"
             
@@ -240,7 +240,7 @@ class Eutester(object):
             self.euare = boto.connect_iam(aws_access_key_id=aws_access_key_id,
                                                   aws_secret_access_key=aws_secret_access_key,
                                                   is_secure=False,
-                                                  host=self.get_clc_ip(),
+                                                  host=self.get_ec2_ip(),
                                                   port=8773, 
                                                   path="/services/Euare",
                                                   debug=self.boto_debug)
@@ -484,7 +484,7 @@ class Eutester(object):
         walrus_url = self.parse_eucarc("S3_URL")
         return walrus_url.split("/")[2].split(":")[0]
     
-    def get_clc_ip(self):
+    def get_ec2_ip(self):
         """Parse the eucarc for the EC2_URL"""
         ec2_url = self.parse_eucarc("EC2_URL")
         return ec2_url.split("/")[2].split(":")[0]        
