@@ -400,21 +400,28 @@ class Eutester(object):
            Defaults to admin@eucalyptus 
         """
         self.debug("Starting the process of getting credentials")
-        admin_cred_dir = "eucarc-" + account + "-" + user
         
-        ### SETUP directory remotely
-        self.setup_remote_creds_dir(admin_cred_dir)
-        
+        ### GET the CLCs from the config file
         clcs = self.get_component_machines("clc")
-        
         if len(clcs) < 1:
-            raise Exception("Could not find CLC when trying to get credentials")
+            raise Exception("Could not find a CLC in the config file when trying to get credentials")
         
+        admin_cred_dir = "eucarc-" + clcs[0].hostname + "-" + account + "-" + user 
+        cred_file_name = "creds.zip"
+        full_cred_path = admin_cred_dir + "/" + cred_file_name
+        
+        ### Check if this directory exists already
+        if os.path.exists(full_cred_path):
+            self.credpath = admin_cred_dir        
+    
         ### IF I wasnt passed in credentials, download and sync them
         if self.credpath is None:
+            ### SETUP directory remotely
+            self.setup_remote_creds_dir(admin_cred_dir)
+            
             ### Create credential from Active CLC
             self.create_credentials(admin_cred_dir, account, user)
-        
+            
             ### SETUP directory locally
             self.setup_local_creds_dir(admin_cred_dir)
         
@@ -423,6 +430,7 @@ class Eutester(object):
             ### IF there are 2 clcs make sure to sync credentials across them
                 
         ### sync the keys that were given to all CLCs
+        
         for clc in clcs:
             self.send_creds_to_machine(admin_cred_dir, clc)
         
