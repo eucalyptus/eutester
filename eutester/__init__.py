@@ -451,8 +451,8 @@ class Eutester(object):
     
     def send_creds_to_machine(self, admin_cred_dir, machine):
         self.debug("Sending credentials to " + machine.hostname)
-        machine.sys("rm -rf " + admin_cred_dir)
-        machine.sys("mkdir " + admin_cred_dir)
+        if not machine.found("ls " + admin_cred_dir, admin_cred_dir):
+            machine.sys("mkdir " + admin_cred_dir)
         try:
             machine.sftp.put( admin_cred_dir + "/creds.zip" , admin_cred_dir + "/creds.zip")
         except Exception, e:
