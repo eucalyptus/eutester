@@ -54,6 +54,7 @@ from boto.s3.connection import OrdinaryCallingFormat
 from machine import machine
 import eulogger
 from euservice import EuserviceManager
+from euconfig import EuConfig
 
 
 class TimeoutFunctionException(Exception): 
@@ -295,7 +296,9 @@ class Eutester(object):
         machines = []
         f = None
         try:
-            f = open(filepath, 'r')
+            #f = open(filepath, 'r')
+            self.testconf = EuConfig(filepath)
+            f = self.testconf.legacybuf.splitlines()
         except IOError as (errno, strerror):
             self.debug( "ERROR: Could not find config file " + self.config_file)
             raise
@@ -333,7 +336,7 @@ class Eutester(object):
             except:
                 self.debug("Could not find network type setting to unknown")
                 config_hash["network"] = "unknown"
-        f.close()   
+        #f.close()   
         config_hash["machines"] = machines 
         return config_hash
     
