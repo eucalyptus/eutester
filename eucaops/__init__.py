@@ -710,7 +710,7 @@ class Eucaops(Eutester):
         return None
 
 
-    def run_instance(self, image=None, keypair=None, group="default", type=None, zone=None, min=1, max=1, user_data=None,private_addressing=False, user=None, password=None, is_reachable=True):
+    def run_instance(self, image=None, keypair=None, group="default", type=None, zone=None, min=1, max=1, user_data=None,private_addressing=False, username="root", password=None, is_reachable=True):
         """
         Run instance/s and wait for them to go to the running state
         image      Image object to use, default is pick the first emi found in the system
@@ -760,22 +760,26 @@ class Eucaops(Eutester):
         if(is_reachable) and ((keypair is not None) or (user is not None and password is not None)):
             #keypath = os.curdir + "/" + str(keypair) + ".pem"
             self.sleep(15)
-            return self.convert_reservation_to_euinstance(reservation, user=user, password=password, keypair=keypair)
+            return self.convert_reservation_to_euinstance(reservation, username=username, password=password, keyname=keypair)
         else:
             return reservation
 
-    def convert_reservation_to_euinstance(self, reservation, user=None, password=None, keypair=None):
+    def convert_reservation_to_euinstance(self, reservation, username="root", password=None, keyname=None):
         euinstance_list = []
         for instance in reservation.instances:
+            keypair = self.get_keypair(keyname)
             try:
-                euinstance_list.append( EuInstance.make_euinstance_from_instance( instance, self, keypair=keypair, username = user, password=password ))
+                euinstance_list.append( EuInstance.make_euinstance_from_instance( instance, self, keypair=keypair, username = username, password=password ))
             except Exception, e:
                 self.critical("Unable to create Euinstance from " + str(instance))
                 euinstance_list.append(instance)
                 
         reservation.instances = euinstance_list
         return reservation
-    
+   
+    def get_keypair(self, name):
+	return self.ec2.get_all_key_pairs([name])[0]
+ 
     def get_instances(self, 
                       state=None, 
                       idstring=None, 

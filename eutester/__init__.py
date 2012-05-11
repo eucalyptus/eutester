@@ -253,6 +253,7 @@ class Eutester(object):
         if self.clc is all_clcs[0]:
             self.debug("Swapping CLC from " + all_clcs[0].hostname + " to " + all_clcs[1].hostname)
             self.clc = all_clcs[1]
+            
         elif self.clc is all_clcs[1]:
             self.debug("Swapping CLC from " + all_clcs[1].hostname + " to " + all_clcs[0].hostname)
             self.clc = all_clcs[0]
@@ -370,15 +371,15 @@ class Eutester(object):
         if len(machines_with_role) == 0:
             raise Exception("Could not find component "  + component + " in list of machines")
         else:
-             return machines_with_role[0]
+            return machines_with_role[0]
     
     def get_machine_by_ip(self, hostname):
-         machines = [machine for machine in self.config['machines'] if re.search(hostname, machine.hostname)]
-         if len(machines) == 0:
+        machines = [machine for machine in self.config['machines'] if re.search(hostname, machine.hostname)]
+        if len(machines) == 0:
             self.fail("Could not find machine at "  + hostname + " in list of machines")
             return None
-         else:
-             return machines[0]
+        else:
+            return machines[0]
          
     def get_component_machines(self, component):
         #loop through machines looking for this component type
@@ -388,7 +389,7 @@ class Eutester(object):
         if len(machines_with_role) == 0:
             raise Exception("Could not find component "  + component + " in list of machines")
         else:
-             return machines_with_role
+            return machines_with_role
 
     def swap_component_hostname(self, hostname):
         if hostname != None:
@@ -428,7 +429,7 @@ class Eutester(object):
         for clc in clcs:
             self.send_creds_to_machine(admin_cred_dir, clc)
         
-	return admin_cred_dir
+        return admin_cred_dir
     
     def create_credentials(self, admin_cred_dir, account, user):
         cmd_download_creds = self.eucapath + "/usr/sbin/euca_conf --get-credentials " + admin_cred_dir + "/creds.zip " + "--cred-user "+ user +" --cred-account " + account 
@@ -659,6 +660,7 @@ class Eutester(object):
         
     def sleep(self, seconds=1):
         """Convinience function for time.sleep()"""
+        self.debug("Sleeping for " + str(seconds) + " seconds")
         time.sleep(seconds)
         
     def __str__(self):
