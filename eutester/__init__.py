@@ -209,7 +209,8 @@ class Eutester(object):
             self.region.endpoint = self.get_ec2_ip()       
             port = 8773
             service_path="/services/Eucalyptus"
-            
+         
+        #self getting walrus ip
         if walrus_ip is None:
             walrus_ip = self.get_walrus_ip()
         
@@ -222,6 +223,8 @@ class Eutester(object):
                                     port=port,
                                     path=service_path,
                                     api_version=APIVersion)
+        
+        #if could get walrus ip, unable to connect error exception output for ec2 
         except Exception, e:
             self.critical("Was unable to create ec2 connection because of exception: " + str(e))
 
@@ -247,7 +250,8 @@ class Eutester(object):
                                                   debug=self.boto_debug)
         except Exception, e:
             self.critical("Was unable to create IAM connection because of exception: " + str(e))
-            
+    
+    #defined self swap for clc
     def swap_clc(self):
         all_clcs = self.get_component_machines("clc")
         if self.clc is all_clcs[0]:
@@ -258,6 +262,7 @@ class Eutester(object):
             self.debug("Swapping CLC from " + all_clcs[1].hostname + " to " + all_clcs[0].hostname)
             self.clc = all_clcs[0]
 
+    #defind self swap for walrus
     def swap_walrus(self):
         all_walruses = self.get_component_machines("ws")
         if self.walrus is all_walruses[0]: 
