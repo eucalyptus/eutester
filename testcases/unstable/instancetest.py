@@ -1,4 +1,4 @@
-#! ../share/python_lib/vic-dev/bin/python
+#!/usr/bin/python
 import unittest
 import time
 from eucaops import Eucaops
