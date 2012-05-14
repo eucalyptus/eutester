@@ -71,7 +71,7 @@ class InstanceBasics(unittest.TestCase):
             self.assertTrue( self.tester.wait_for_reservation(self.reservation) ,'Instance did not go to running')
             self.assertNotEqual( instance.public_dns_name, instance.private_ip_address, 'Public and private IP are the same')
             self.assertTrue( self.tester.ping(instance.public_dns_name), 'Could not ping instance')
-            self.assertTrue( instance.found("ls -1 " + self.ephemeral,  self.ephemeral),  'Did not find ephemeral storage at ' + self.ephemeral)
+            self.assertFalse( instance.found("ls -1 " + self.ephemeral,  "No such file or directory"),  'Did not find ephemeral storage at ' + self.ephemeral)
         return self.reservation
     
     def ElasticIps(self):
