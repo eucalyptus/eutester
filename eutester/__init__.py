@@ -452,14 +452,16 @@ class Eutester(object):
     
     def send_creds_to_machine(self, admin_cred_dir, machine):
         self.debug("Sending credentials to " + machine.hostname)
-        if len(machine.sftp.listdir(admin_cred_dir + "/creds.zip")) == 0:
+        try:
+            machine.sftp.listdir(admin_cred_dir + "/creds.zip")
+            self.debug("Machine " + machine.hostname + " already has credentials in place")
+        except IOError, e:
             machine.sys("mkdir " + admin_cred_dir)
             self.local("ls " + admin_cred_dir)
             machine.sftp.put( admin_cred_dir + "/creds.zip" , admin_cred_dir + "/creds.zip")
             machine.sys("unzip -o " + admin_cred_dir + "/creds.zip -d " + admin_cred_dir )
             machine.sys("sed -i 's/" + self.clc.hostname + "/" + machine.hostname  +"/g' " + admin_cred_dir + "/eucarc")
-        else:
-            self.debug("Machine " + machine.hostname + " already has credentials in place")
+            
 
         
     def setup_local_creds_dir(self, admin_cred_dir):
