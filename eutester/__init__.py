@@ -133,7 +133,7 @@ class Eutester(object):
             try:
                 if "REPO" in self.config["machines"][0].source:
                     self.eucapath="/"
-            except:
+            except Exception, e:
                 raise Exception("Could not get REPO info from input file\n" + str(e))
             #self.hypervisor = self.get_hypervisor()
             ### No credpath but does have password and an ssh connection to the CLC
