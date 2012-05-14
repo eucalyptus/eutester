@@ -5,8 +5,8 @@
 #               creates at least 3 security groups and launches an instance for each one.
 #               Once each instance has been launched, a snapshot of iptables is taken.
 #               Then each instance is terminated, followed by each security group being terminated.
-#		Another snapshot of iptables is done.  There is a comparison of iptables. 
-#		The results are logged. 
+#		        Another snapshot of iptables is done.  There is a comparison of iptables. 
+#		        The results are logged. 
 #
 
 from eucaops import Eucaops
@@ -156,11 +156,11 @@ class ClusterBasics(unittest.TestCase):
 
 def get_options():
     ### Parse args
-    parser = argparse.ArgumentParser(prog="iptables_security_group_test.py", 
-        version="Test Case [iptables_security_group_test.py] Version 0.1.1",
+    parser = argparse.ArgumentParser(prog="clusterbasics.py", 
+        version="Test Case [clusterbasics.py] Version 0.1.1",
         description="Run an iterative test of operations on a cloud to test integrity of iptables \
             state upon deletion of security groups.  For more information, please refer to \
-            https://github.com/hspencer77/eutester/wiki/iptables_security_group_test")
+            https://github.com/hspencer77/eutester/wiki/clusterbasics")
     parser.add_argument("-n", "--number", dest="number", type=int,
         help="Number of security groups to create", default=3)
     parser.add_argument("-i", "--image", dest="image", 
