@@ -165,7 +165,7 @@ class Eutester(object):
                         except Exception, e:
                             raise Exception("Could not get credentials from second CLC and no other to try\n" + str(e))
                         
-                self.service_manager = EuserviceManager(self)
+                self.service_manager = EuserviceManager(self, verbose = False)
                 self.clc = self.service_manager.get_enabled_clc().machine
                 self.walrus = self.service_manager.get_enabled_walrus().machine 
                 
@@ -452,21 +452,19 @@ class Eutester(object):
     
     def send_creds_to_machine(self, admin_cred_dir, machine):
         self.debug("Sending credentials to " + machine.hostname)
-        machine.sys("mkdir " + admin_cred_dir)
-        try:
+        if len(machine.sftp.listdir(admin_cred_dir + "/creds.zip")) == 0:
+            machine.sys("mkdir " + admin_cred_dir)
             machine.sftp.put( admin_cred_dir + "/creds.zip" , admin_cred_dir + "/creds.zip")
-        except Exception, e:
-            raise Exception("Was unable to send credentials due to: " + str(e))
-        machine.sys("unzip -o " + admin_cred_dir + "/creds.zip -d " + admin_cred_dir )
-        machine.sys("sed -i 's/" + self.clc.hostname + "/" + machine.hostname  +"/g' " + admin_cred_dir + "/eucarc")  
+            machine.sys("unzip -o " + admin_cred_dir + "/creds.zip -d " + admin_cred_dir )
+            machine.sys("sed -i 's/" + self.clc.hostname + "/" + machine.hostname  +"/g' " + admin_cred_dir + "/eucarc")
+        else:
+            self.debug("Machine " + machine.hostname + " already has credentials in place")
 
         
     def setup_local_creds_dir(self, admin_cred_dir):
-        os.system("rm -rf " + admin_cred_dir)
         os.mkdir(admin_cred_dir)
       
     def setup_remote_creds_dir(self, admin_cred_dir):
-        self.sys("rm -rf " + admin_cred_dir)
         self.sys("mkdir " + admin_cred_dir)
         
     def get_access_key(self):
