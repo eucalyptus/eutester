@@ -160,10 +160,10 @@ class Eutester(object):
                             raise Exception("Could not get credentials from first CLC and no other to try")
                         self.swap_clc()
                         self.sftp = self.clc.ssh.connection.open_sftp()
-                        try:
-                            self.credpath = self.get_credentials(account,user)
-                        except Exception, e:
-                            raise Exception("Could not get credentials from second CLC and no other to try\n" + str(e))
+                        #try:
+                        self.credpath = self.get_credentials(account,user)
+                        #except Exception, e:
+                        #    raise Exception("Could not get credentials from second CLC and no other to try\n" + str(e))
                         
                 self.service_manager = EuserviceManager(self, verbose = False)
                 self.clc = self.service_manager.get_enabled_clc().machine
