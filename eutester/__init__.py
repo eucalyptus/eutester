@@ -411,9 +411,9 @@ class Eutester(object):
         full_cred_path = admin_cred_dir + "/" + cred_file_name
         
         ### Check if this directory exists already
-        if os.path.exists(admin_cred_dir):
+        if os.path.exists(full_cred_path):
             self.debug("No need to redownload credentials as they already exist for this system")
-            self.credpath = admin_cred_dir        
+            self.credpath = admin_cred_dir      
     
         ### IF I wasnt passed in credentials, download and sync them
         if self.credpath is None:
