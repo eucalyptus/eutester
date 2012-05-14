@@ -2,7 +2,7 @@
 import unittest
 import time
 from eucaops import Eucaops
-from eutester import XMLTestRunner
+from eutester import xmlrunner
 import os
 import re
 import random
@@ -284,7 +284,7 @@ class InstanceBasics(unittest.TestCase):
     def suite():
         tests = ["BasicInstanceChecks","ElasticIps","PrivateIPAddressing","MaxSmallInstances","LargestInstance","MetaData","Reboot", "Churn"]
         for test in tests:
-            result = XMLTestRunner(verbosity=2).run(InstanceBasics(test))
+            result = xmlrunner.XMLTestRunner(verbosity=2).run(InstanceBasics(test))
             if result.wasSuccessful():
                pass
             else:
