@@ -419,8 +419,9 @@ class Eucaops(Eutester):
         volume.update()
         while (elapsed < timeout):
             volume.update()
-            if re.search("attached",volume.status):
-                return True
+            if (volume.attach_data is not None) and (volume.attach_data.status is not None) :
+                if re.search("attached",volume.attach_data.status):
+                    return True
             self.debug( str(volume) + " state:" + volume.status + " pause:"+str(pause)+" elapsed:"+str(elapsed))
             self.sleep(pause)
             elapsed = int(time.time()-start)
@@ -709,7 +710,7 @@ class Eucaops(Eutester):
         return None
 
 
-    def run_instance(self, image=None, keypair=None, group="default", type=None, zone=None, min=1, max=1, user_data=None,private_addressing=False, is_reachable=True):
+    def run_instance(self, image=None, keypair=None, group="default", type=None, zone=None, min=1, max=1, user_data=None,private_addressing=False, username="root", password=None, is_reachable=True):
         """
         Run instance/s and wait for them to go to the running state
         image      Image object to use, default is pick the first emi found in the system
@@ -719,6 +720,7 @@ class Eucaops(Eutester):
         zone       Availability zone to run these instances
         min        Minimum instnaces to launch, default 1
         max        Maxiumum instances to launch, default 1
+        private_addressing  Runs an instance with only private IP address
         """
         if image == None:
             images = self.ec2.get_all_images()
@@ -727,8 +729,14 @@ class Eucaops(Eutester):
                     image = emi      
         if image is None:
             raise Exception("emi is None. run_instance could not auto find an emi?")   
+
+        if private_addressing is True:
+            addressing_type = "private"
+        else:
+            addressing_type = None
+            
         self.debug( "Attempting to run "+ str(image.root_device_type)  +" image " + str(image) + " in group " + str(group))
-        reservation = image.run(key_name=keypair,security_groups=[group],instance_type=type, placement=zone, min_count=min, max_count=max, user_data=user_data)
+        reservation = image.run(key_name=keypair,security_groups=[group],instance_type=type, placement=zone, min_count=min, max_count=max, user_data=user_data, addressing_type=addressing_type)
         if ((len(reservation.instances) < min) or (len(reservation.instances) > max)):
             self.fail("Reservation:"+str(reservation.id)+" returned "+str(len(reservation.instances))+" instances, not within min("+str(min)+") and max("+str(max)+" ")
             
@@ -738,36 +746,40 @@ class Eucaops(Eutester):
                 self.critical("Instance " + instance.id + " now in " + instance.state  + " state")
             else:
                 self.debug( "Instance " + instance.id + " now in " + instance.state  + " state")
-	   
-	    #
-	    # check to see if public and private DNS names and IP addresses are the same
-	    #
-            if (instance.ip_address is instance.private_ip_address) and (instance.public_dns_name is instance.private_dns_name) and ( private_addressing is False ):
-		self.debug(str(instance) + " got Public IP: " + str(instance.ip_address)  + " Private IP: " + str(instance.private_ip_address) + " Public DNS Name: " + str(instance.public_dns_name) + " Private DNS Name: " + str(instance.private_dns_name))
-                self.critical("Instance " + instance.id + " has he same public and private IPs of " + str(instance.ip_address))
-            else:
-		self.debug(str(instance) + " got Public IP: " + str(instance.ip_address)  + " Private IP: " + str(instance.private_ip_address) + " Public DNS Name: " + str(instance.public_dns_name) + " Private DNS Name: " + str(instance.private_dns_name))
-        self.test_resources["reservations"].append(reservation)
+        #
+        # check to see if public and private DNS names and IP addresses are the same
+        #
+        if (instance.ip_address is instance.private_ip_address) and (instance.public_dns_name is instance.private_dns_name) and ( private_addressing is False ):
+            self.debug(str(instance) + " got Public IP: " + str(instance.ip_address)  + " Private IP: " + str(instance.private_ip_address) + " Public DNS Name: " + str(instance.public_dns_name) + " Private DNS Name: " + str(instance.private_dns_name))
+            self.critical("Instance " + instance.id + " has he same public and private IPs of " + str(instance.ip_address))
+        else:
+            self.debug(str(instance) + " got Public IP: " + str(instance.ip_address)  + " Private IP: " + str(instance.private_ip_address) + " Public DNS Name: " + str(instance.public_dns_name) + " Private DNS Name: " + str(instance.private_dns_name))
+            self.test_resources["reservations"].append(reservation)
+    
+        #if we can establish an SSH session convert the instances to the test class euinstance for access to instance specific test methods
+        if(is_reachable) and ((keypair is not None) or (user is not None and password is not None)):
+            #keypath = os.curdir + "/" + str(keypair) + ".pem"
+            self.sleep(15)
+            return self.convert_reservation_to_euinstance(reservation, username=username, password=password, keyname=keypair)
+        else:
+            return reservation
 
-	if(is_reachable):
-        	keypath = os.curdir + "/" + str(keypair) + ".pem"
-        	self.sleep(15)
-        	return self.convert_reservation_to_euinstance(reservation, keypath)
-    	else:
-		return reservation
-
-    def convert_reservation_to_euinstance(self, reservation, keypath=None):
+    def convert_reservation_to_euinstance(self, reservation, username="root", password=None, keyname=None):
         euinstance_list = []
         for instance in reservation.instances:
+            keypair = self.get_keypair(keyname)
             try:
-                euinstance_list.append( EuInstance.make_euinstance_from_instance( instance, self, keypath=keypath,username = self.username ))
+                euinstance_list.append( EuInstance.make_euinstance_from_instance( instance, self, keypair=keypair, username = username, password=password ))
             except Exception, e:
                 self.critical("Unable to create Euinstance from " + str(instance))
                 euinstance_list.append(instance)
                 
         reservation.instances = euinstance_list
         return reservation
-    
+   
+    def get_keypair(self, name):
+	return self.ec2.get_all_key_pairs([name])[0]
+ 
     def get_instances(self, 
                       state=None, 
                       idstring=None, 
@@ -843,17 +855,18 @@ class Eucaops(Eutester):
             pass
     
     
-    def get_all_attributes(self, obj):   
+    def get_all_attributes(self, obj, buf="", verbose=True):   
         '''
         Get a formatted list of all the key pair values pertaining to the object 'obj'
         '''   
         buf=""
         list = sorted(obj.__dict__)
         for item in list:
+            if verbose:
+                print str(item)+" = "+str(obj.__dict__[item])
             buf += str(item)+" = "+str(obj.__dict__[item])+"\n"
         return buf
-            
-                
+              
     
     
     def get_available_vms(self, type=None, zone=None):

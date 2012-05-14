@@ -25,7 +25,8 @@ import re
 import time
 import re
 import eulogger
-import inspect, gc
+
+
 
 class EuInstance(Instance):
     keypair = None
@@ -209,7 +210,7 @@ class EuInstance(Instance):
         elapsed = 0
         if dev is None:
             dev = self.get_free_scsi_dev()
-        if (self.tester.attach_volume(self, euvolume, dev,pause=10)):     
+        if (self.tester.attach_volume(self, euvolume, dev, pause=10)):     
             while (elapsed < timeout):
                 self.debug("Checking for volume attachment on guest, elapsed time("+str(elapsed)+")")
                 dev_list_after = self.get_dev_dir()
@@ -301,7 +302,7 @@ class EuInstance(Instance):
                     continue
             if inuse is False:
                 self.debug("Instance:"+str(self.id)+" returning available scsi dev:"+str(dev))
-                return dev
+                return str(dev)
             else:
                 d = chr(ord('e') + x) #increment the letter we append to the device string prefix
                 dev = None
@@ -317,7 +318,7 @@ class EuInstance(Instance):
         timepergig - optional - the time in seconds per gig, used to estimate an adequate timeout period
         '''
         if srcdev is None:
-            srcdev = str(self.sys('ls -1 /dev/sd*')[0]).strip()
+            srcdev = "/dev/"+str(self.sys("ls -1 /dev | grep 'da$'")[0]).strip()
         voldev = euvolume.guestdev.strip()
         self.assertFilePresent(voldev)
         self.assertFilePresent(srcdev)
@@ -494,7 +495,7 @@ class EuInstance(Instance):
               
             elapsed = int(time.time()- start)
         if self.state != state:
-            raise Exception(self.id+" not in stopped state after elapsed:"+str(elapsed))
+            raise Exception(self.id+" not in "+str(state)+" state after elapsed:"+str(elapsed))
         else:
             self.debug(self.id+" went to state:"+str(state))
             if connect:
@@ -507,4 +508,72 @@ class EuInstance(Instance):
                     raise Exception("Missing volumes post reboot:"+str(msg)+"\n")
         self.debug(self.id+" start_instance_and_verify Success")
     
+    
+    def get_users(self):
+        '''
+        Attempts to return a list of normal linux users local to this instance.
+        Returns a list of all non-root users found within the uid_min/max range who are not marked nologin
+        '''
+        users =[]
+        try:
+            uid_min = str(self.sys("grep ^UID_MIN /etc/login.defs | awk '{print $2}'")[0]).strip()
+            uid_max = str(self.sys("grep ^UID_MAX /etc/login.defs | awk '{print $2}'")[0]).strip()
+            try:
+                users = str(self.sys("cat /etc/passwd | grep -v nologin | awk -F: '{ if ( $3 >= "+str(uid_min)+" && $3 <= "+str(uid_max)+" ) print $0}' ")[0]).split(":")[0]
+            except IndexError, ie:
+                self.debug("No users found, passing exception:"+str(ie))
+                pass
+            return users
+        except Exception, e:
+            self.debug("Failed to get local users. Err:"+str(e))
+            
+    def get_user_password(self,username):
+        '''
+        Attempts to verify whether or not a user 'username' has a password set or not. 
+        returns true if a password is detected, else false
+        
+        '''
+        password = None
+        out = self.sys("cat /etc/passwd | grep '^"+str(username)+"'")
+        if out != []:
+            print "pwd out:"+str(out[0])
+            if (str(out[0]).split(":")[1] == "x"):
+                out = self.sys("cat /etc/shadow | grep '^"+str(username)+"'")
+                if out != []:
+                    password = str(out[0]).split(":")[1]
+                    if password == "" or re.match("^!+$", password ):
+                        password = None         
+        return password
+                    
+                    
+                    
+                
+    def get_user_group_info(self,username, index=3):
+        '''
+        Attempts to return a list of groups for a specific user
+        index is set at the grouplist by default [3], but can be adjust to include the username, password, and group id as well in the list. 
+        where the parsed string should be in format 'name:password:groupid1:groupid2:groupid3...' 
+        '''
+        groups =[]
+        out = []
+        try:
+            out = self.sys("cat /etc/group | grep '^"+str(username)+"'")
+            if out != []:
+                groups = str( out[0]).strip().split(":")
+                #return list starting at group index
+                groups = groups[index:len(groups)]
+            return groups
+        except Exception, e:
+            self.debug("No group found for user:"+str(username)+", err:"+str(e))
+    
+    
+    
+    
+    
+        
+        
+        
+        
+            
+            
                 

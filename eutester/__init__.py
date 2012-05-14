@@ -54,6 +54,7 @@ from boto.s3.connection import OrdinaryCallingFormat
 from machine import machine
 import eulogger
 from euservice import EuserviceManager
+from euconfig import EuConfig
 
 
 class TimeoutFunctionException(Exception): 
@@ -205,7 +206,7 @@ class Eutester(object):
         if not self.region.endpoint:
             #self.get_connection_details()
             self.region.name = 'eucalyptus'
-            self.region.endpoint = self.get_clc_ip()       
+            self.region.endpoint = self.get_ec2_ip()       
             port = 8773
             service_path="/services/Eucalyptus"
             
@@ -240,7 +241,7 @@ class Eutester(object):
             self.euare = boto.connect_iam(aws_access_key_id=aws_access_key_id,
                                                   aws_secret_access_key=aws_secret_access_key,
                                                   is_secure=False,
-                                                  host=self.get_clc_ip(),
+                                                  host=self.get_ec2_ip(),
                                                   port=8773, 
                                                   path="/services/Euare",
                                                   debug=self.boto_debug)
@@ -252,6 +253,7 @@ class Eutester(object):
         if self.clc is all_clcs[0]:
             self.debug("Swapping CLC from " + all_clcs[0].hostname + " to " + all_clcs[1].hostname)
             self.clc = all_clcs[1]
+            
         elif self.clc is all_clcs[1]:
             self.debug("Swapping CLC from " + all_clcs[1].hostname + " to " + all_clcs[0].hostname)
             self.clc = all_clcs[0]
@@ -295,7 +297,9 @@ class Eutester(object):
         machines = []
         f = None
         try:
-            f = open(filepath, 'r')
+            #f = open(filepath, 'r')
+            self.testconf = EuConfig(filepath)
+            f = self.testconf.legacybuf.splitlines()
         except IOError as (errno, strerror):
             self.debug( "ERROR: Could not find config file " + self.config_file)
             raise
@@ -333,7 +337,7 @@ class Eutester(object):
             except:
                 self.debug("Could not find network type setting to unknown")
                 config_hash["network"] = "unknown"
-                
+        #f.close()   
         config_hash["machines"] = machines 
         return config_hash
     
@@ -367,15 +371,15 @@ class Eutester(object):
         if len(machines_with_role) == 0:
             raise Exception("Could not find component "  + component + " in list of machines")
         else:
-             return machines_with_role[0]
+            return machines_with_role[0]
     
     def get_machine_by_ip(self, hostname):
-         machines = [machine for machine in self.config['machines'] if re.search(hostname, machine.hostname)]
-         if len(machines) == 0:
+        machines = [machine for machine in self.config['machines'] if re.search(hostname, machine.hostname)]
+        if len(machines) == 0:
             self.fail("Could not find machine at "  + hostname + " in list of machines")
             return None
-         else:
-             return machines[0]
+        else:
+            return machines[0]
          
     def get_component_machines(self, component):
         #loop through machines looking for this component type
@@ -385,7 +389,7 @@ class Eutester(object):
         if len(machines_with_role) == 0:
             raise Exception("Could not find component "  + component + " in list of machines")
         else:
-             return machines_with_role
+            return machines_with_role
 
     def swap_component_hostname(self, hostname):
         if hostname != None:
@@ -425,7 +429,7 @@ class Eutester(object):
         for clc in clcs:
             self.send_creds_to_machine(admin_cred_dir, clc)
         
-	return admin_cred_dir
+        return admin_cred_dir
     
     def create_credentials(self, admin_cred_dir, account, user):
         cmd_download_creds = self.eucapath + "/usr/sbin/euca_conf --get-credentials " + admin_cred_dir + "/creds.zip " + "--cred-user "+ user +" --cred-account " + account 
@@ -484,7 +488,7 @@ class Eutester(object):
         walrus_url = self.parse_eucarc("S3_URL")
         return walrus_url.split("/")[2].split(":")[0]
     
-    def get_clc_ip(self):
+    def get_ec2_ip(self):
         """Parse the eucarc for the EC2_URL"""
         ec2_url = self.parse_eucarc("EC2_URL")
         return ec2_url.split("/")[2].split(":")[0]        
@@ -581,13 +585,13 @@ class Eutester(object):
     def handle_timeout(self, signum, frame): 
         raise TimeoutFunctionException()
     
-    def sys(self, cmd, verbose=True):
+    def sys(self, cmd, verbose=True, timeout=120):
         """ By default will run a command on the CLC machine, the connection used can be changed by passing a different hostname into the constructor
             For example:
             instance = Eutester( hostname=instance.ip_address, keypath="my_key.pem")
             instance.sys("mount") # check mount points on instance and return the output as a list
         """
-        return self.clc.sys(cmd, verbose=verbose)
+        return self.clc.sys(cmd, verbose=verbose, timeout=timeout)
 
     def local(self, cmd):
         """ Run a command locally on the tester"""
@@ -597,14 +601,14 @@ class Eutester(object):
         std_out_return = os.popen(cmd).readlines()
         return std_out_return
     
-    def found(self, command, regex, local=False):
+    def found(self, command, regex, local=False, timeout=120):
         """ Returns a Boolean of whether the result of the command contains the regex"""
         if self.clc is None:
             local = True 
         if local:
             result = self.local(command)
         else:
-            result = self.sys(command)
+            result = self.sys(command, timeout=timeout)
         for line in result:
             found = re.search(regex,line)
             if found:
@@ -656,6 +660,7 @@ class Eutester(object):
         
     def sleep(self, seconds=1):
         """Convinience function for time.sleep()"""
+        self.debug("Sleeping for " + str(seconds) + " seconds")
         time.sleep(seconds)
         
     def __str__(self):
