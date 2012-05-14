@@ -674,20 +674,30 @@ class EC2ops(Eutester):
         #
         # check to see if public and private DNS names and IP addresses are the same
         #
-        if (instance.ip_address is instance.private_ip_address) and (instance.public_dns_name is instance.private_dns_name) and ( private_addressing is False ):
-            self.debug(str(instance) + " got Public IP: " + str(instance.ip_address)  + " Private IP: " + str(instance.private_ip_address) + " Public DNS Name: " + str(instance.public_dns_name) + " Private DNS Name: " + str(instance.private_dns_name))
-            self.critical("Instance " + instance.id + " has he same public and private IPs of " + str(instance.ip_address))
-        else:
-            self.debug(str(instance) + " got Public IP: " + str(instance.ip_address)  + " Private IP: " + str(instance.private_ip_address) + " Public DNS Name: " + str(instance.public_dns_name) + " Private DNS Name: " + str(instance.private_dns_name))
-            self.test_resources["reservations"].append(reservation)
-    
+            if (instance.ip_address is instance.private_ip_address) and (instance.public_dns_name is instance.private_dns_name) and ( private_addressing is False ):
+                self.debug(str(instance) + " got Public IP: " + str(instance.ip_address)  + " Private IP: " + str(instance.private_ip_address) + " Public DNS Name: " + str(instance.public_dns_name) + " Private DNS Name: " + str(instance.private_dns_name))
+                self.critical("Instance " + instance.id + " has he same public and private IPs of " + str(instance.ip_address))
+            else:
+                self.debug(str(instance) + " got Public IP: " + str(instance.ip_address)  + " Private IP: " + str(instance.private_ip_address) + " Public DNS Name: " + str(instance.public_dns_name) + " Private DNS Name: " + str(instance.private_dns_name))
+                self.test_resources["reservations"].append(reservation)
+            self.wait_for_valid_ip(instance)
         #if we can establish an SSH session convert the instances to the test class euinstance for access to instance specific test methods
         if(is_reachable) and ((keypair is not None) or (user is not None and password is not None)):
-            #keypath = os.curdir + "/" + str(keypair) + ".pem"
-            self.sleep(15)
             return self.convert_reservation_to_euinstance(reservation, username=username, password=password, keyname=keypair)
         else:
             return reservation
+
+    def wait_for_valid_ip(self, instance, timeout = 60):
+        start = time.time()
+        elapsed = 0
+        zeros = re.compile("0.0.0.0")
+        while elapsed <= timeout:
+            if zeros.search(instance.public_dns_name):
+                self.sleep(1)
+            else:
+                break
+                
+            
 
     def convert_reservation_to_euinstance(self, reservation, username="root", password=None, keyname=None):
         euinstance_list = []
