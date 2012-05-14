@@ -165,7 +165,7 @@ class Eutester(object):
                         #except Exception, e:
                         #    raise Exception("Could not get credentials from second CLC and no other to try\n" + str(e))
                         
-                self.service_manager = EuserviceManager(self, verbose = False)
+                self.service_manager = EuserviceManager(self)
                 self.clc = self.service_manager.get_enabled_clc().machine
                 self.walrus = self.service_manager.get_enabled_walrus().machine 
                 
