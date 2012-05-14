@@ -160,10 +160,10 @@ class Eutester(object):
                             raise Exception("Could not get credentials from first CLC and no other to try")
                         self.swap_clc()
                         self.sftp = self.clc.ssh.connection.open_sftp()
-                        try:
-                            self.credpath = self.get_credentials(account,user)
-                        except Exception, e:
-                            raise Exception("Could not get credentials from second CLC and no other to try\n" + str(e))
+                        #try:
+                        self.credpath = self.get_credentials(account,user)
+                        #except Exception, e:
+                        #    raise Exception("Could not get credentials from second CLC and no other to try\n" + str(e))
                         
                 self.service_manager = EuserviceManager(self, verbose = False)
                 self.clc = self.service_manager.get_enabled_clc().machine
@@ -454,6 +454,7 @@ class Eutester(object):
         self.debug("Sending credentials to " + machine.hostname)
         if len(machine.sftp.listdir(admin_cred_dir + "/creds.zip")) == 0:
             machine.sys("mkdir " + admin_cred_dir)
+            self.local("ls " + admin_cred_dir)
             machine.sftp.put( admin_cred_dir + "/creds.zip" , admin_cred_dir + "/creds.zip")
             machine.sys("unzip -o " + admin_cred_dir + "/creds.zip -d " + admin_cred_dir )
             machine.sys("sed -i 's/" + self.clc.hostname + "/" + machine.hostname  +"/g' " + admin_cred_dir + "/eucarc")
