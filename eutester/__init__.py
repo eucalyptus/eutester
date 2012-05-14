@@ -457,7 +457,6 @@ class Eutester(object):
             self.debug("Machine " + machine.hostname + " already has credentials in place")
         except IOError, e:
             machine.sys("mkdir " + admin_cred_dir)
-            self.local("ls " + admin_cred_dir)
             machine.sftp.put( admin_cred_dir + "/creds.zip" , admin_cred_dir + "/creds.zip")
             machine.sys("unzip -o " + admin_cred_dir + "/creds.zip -d " + admin_cred_dir )
             machine.sys("sed -i 's/" + self.clc.hostname + "/" + machine.hostname  +"/g' " + admin_cred_dir + "/eucarc")
