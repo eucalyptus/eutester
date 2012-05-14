@@ -1,6 +1,20 @@
 #!/usr/bin/env python -tt
 #
-# Description:  This case was developed to test the integrity of iptables upon
+#
+# Description:  This script encompasses test cases/modules concerning cluster specific actions and
+#               features for Eucalyptus.  The test cases/modules that are executed can be 
+#               found in the script under the "tests" list.
+#
+#
+##########################
+#                        #
+#       Test Cases       #
+#                        #
+##########################
+#
+# [iptables_Cruft]
+#
+#               This case was developed to test the integrity of iptables upon
 #               deletion of security groups. Based up the arguments passed, the test 
 #               creates at least 3 security groups and launches an instance for each one.
 #               Once each instance has been launched, a snapshot of iptables is taken.
@@ -158,8 +172,8 @@ def get_options():
     ### Parse args
     parser = argparse.ArgumentParser(prog="clusterbasics.py", 
         version="Test Case [clusterbasics.py] Version 0.1.1",
-        description="Run an iterative test of operations on a cloud to test integrity of iptables \
-            state upon deletion of security groups.  For more information, please refer to \
+        description="Run an iterative test of operations on a cloud to test Eucalyptus Cluster \
+            functionality.  For more information, please refer to \
             https://github.com/hspencer77/eutester/wiki/clusterbasics")
     parser.add_argument("-n", "--number", dest="number", type=int,
         help="Number of security groups to create", default=3)
@@ -168,7 +182,7 @@ def get_options():
     parser.add_argument("-t", "--type",  dest="type",
         help="Type of instance to launch Default: random", default="random")
     parser.add_argument( "--prefix", dest="prefix", 
-        help="Prefix to tack on to keypairs", default="iptables-secgrp-test")
+        help="Prefix to tack on to keypairs", default="cluster-test")
     parser.add_argument("-z", "--zone",  dest="zone",
         help="AZ to run script against", default="PARTI00")
     parser.add_argument("-U", "--username",  dest="username",
