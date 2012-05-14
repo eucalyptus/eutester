@@ -134,7 +134,7 @@ class Eutester(object):
                 if "REPO" in self.config["machines"][0].source:
                     self.eucapath="/"
             except:
-                    raise Exception("Could not get REPO info from input file")
+                raise Exception("Could not get REPO info from input file\n" + str(e))
             #self.hypervisor = self.get_hypervisor()
             ### No credpath but does have password and an ssh connection to the CLC
             ### Private cloud with root access 
@@ -163,7 +163,7 @@ class Eutester(object):
                         try:
                             self.credpath = self.get_credentials(account,user)
                         except Exception, e:
-                            raise Exception("Could not get credentials from second CLC and no other to try")
+                            raise Exception("Could not get credentials from second CLC and no other to try\n" + str(e))
                         
                 self.service_manager = EuserviceManager(self)
                 self.clc = self.service_manager.get_enabled_clc().machine
@@ -177,9 +177,8 @@ class Eutester(object):
                         
             ### If you have credentials for the boto connections, create them
         if (self.aws_access_key_id != None) and (self.aws_secret_access_key != None):
-            if not boto.config.has_section('Boto'):
-                boto.config.add_section('Boto')
-                boto.config.set('Boto', 'num_retries', '2') 
+            boto.config.add_section('Boto')
+            boto.config.set('Boto', 'num_retries', '2') 
             self.setup_boto_connections(region=region)
         
     def __del__(self):
@@ -195,8 +194,9 @@ class Eutester(object):
         port = 443
         service_path = "/"
         APIVersion = '2009-11-30'
+
         if region is not None:
-            self.debug("Check region: " + region)        
+            self.debug("Check region: " + str(region))        
             try:
                 self.region.endpoint = EC2RegionData[region]
             except KeyError:
@@ -452,8 +452,7 @@ class Eutester(object):
     
     def send_creds_to_machine(self, admin_cred_dir, machine):
         self.debug("Sending credentials to " + machine.hostname)
-        if not machine.found("ls " + admin_cred_dir, admin_cred_dir):
-            machine.sys("mkdir " + admin_cred_dir)
+        machine.sys("mkdir " + admin_cred_dir)
         try:
             machine.sftp.put( admin_cred_dir + "/creds.zip" , admin_cred_dir + "/creds.zip")
         except Exception, e:
