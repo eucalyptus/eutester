@@ -28,7 +28,7 @@ class InstanceBasics(unittest.TestCase):
         self.image = self.tester.get_emi(root_device_type="instance-store")
         self.reservation = None
         self.private_addressing = False
-        zones = self.tester.get_all_zones()
+        zones = self.tester.ec2.get_all_zones()
         self.zone = random.choice(zones).name
 
     
