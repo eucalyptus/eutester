@@ -25,8 +25,6 @@ class InstanceBasics(unittest.TestCase):
 
     
     def tearDown(self):
-        if self.reservation:
-            self.assertTrue(self.tester.terminate_instances(self.reservation), "Unable to terminate instance(s)")
         self.reservation = None
         self.group = None
         self.keypair = None
@@ -37,9 +35,9 @@ class InstanceBasics(unittest.TestCase):
         """
         Create and delete keypairs in series
         """
-        for i in xrange(10):
-            self.tester.add_keypair()
-        
+        for i in xrange(100):
+            keypair = self.tester.add_keypair()
+            self.tester.delete_keypair(keypair)
         
     def suite():
         tests = ["GenerateKeypairs"]
