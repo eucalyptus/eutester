@@ -6,8 +6,9 @@ from eutester import xmlrunner
 import os
 import re
 import random
+import argparse
 
-class InstanceBasics(unittest.TestCase):
+class LoadGenerator(unittest.TestCase):
     def setUp(self):
         # Setup basic eutester object
         self.tester = Eucaops( config_file="../input/2b_tested.lst", password="foobar")
@@ -35,7 +36,7 @@ class InstanceBasics(unittest.TestCase):
         """
         Create and delete keypairs in series
         """
-        for i in xrange(100):
+        for i in xrange(10):
             key_name = "key-generator-" + str(i)
             keypair = self.tester.add_keypair()
             self.tester.delete_keypair(keypair)
@@ -43,7 +44,7 @@ class InstanceBasics(unittest.TestCase):
     def suite():
         tests = ["GenerateKeypairs"]
         for test in tests:
-            result = unittest.TextTestRunner(verbosity=2).run(InstanceBasics(test))
+            result = unittest.TextTestRunner(verbosity=2).run(LoadGenerator(test))
             if result.wasSuccessful():
                pass
             else:
@@ -52,13 +53,20 @@ class InstanceBasics(unittest.TestCase):
 if __name__ == "__main__":
     import sys
     ## If given command line arguments, use them as test names to launch
-    if (len(sys.argv) > 1):
-        tests = sys.argv[1:]
+    parser = argparse.ArgumentParser(description='Parse test suite arguments.')
+    parser.add_argument('--xml', action="store_true", default=False)
+    parser.add_argument('--tests', nargs="?", default=None)
+    args = parser.parse_args()
+    if args.tests is not None:
+        tests = args.tests[1:]
     else:
     ### Other wise launch the whole suite
-        tests = ["BasicInstanceChecks","ElasticIps","PrivateIPAddressing","MaxSmallInstances","LargestInstance","MetaData","Reboot", "Churn"]
+        tests = ["GenerateKeypairs"]
     for test in tests:
-        result = unittest.TextTestRunner(verbosity=2).run(InstanceBasics(test))
+        if args.xml:
+            result = xmlrunner.XMLTestRunner().run(LoadGenerator(test))
+        else:
+            result = unittest.TextTestRunner(verbosity=2).run(LoadGenerator(test))
         if result.wasSuccessful():
             pass
         else:
