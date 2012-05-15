@@ -6,6 +6,7 @@ from eutester import xmlrunner
 import os
 import re
 import random
+import argparse
 
 class InstanceBasics(unittest.TestCase):
     def setUp(self):
@@ -279,27 +280,18 @@ class InstanceBasics(unittest.TestCase):
             self.tester.debug("Failed test: " + name)
             queue.put(1)
             return True
-  
-        
-    def suite():
-        tests = ["BasicInstanceChecks","ElasticIps","PrivateIPAddressing","MaxSmallInstances","LargestInstance","MetaData","Reboot", "Churn"]
-        for test in tests:
-            result = unittest.TextTestRunner(verbosity=2).run(InstanceBasics(test))
-            if result.wasSuccessful():
-               pass
-            else:
-               exit(1)
     
 if __name__ == "__main__":
-    import sys
     ## If given command line arguments, use them as test names to launch
-    if (len(sys.argv) > 1):
-        tests = sys.argv[1:]
-    else:
-    ### Other wise launch the whole suite
-        tests = ["BasicInstanceChecks","ElasticIps","PrivateIPAddressing","MaxSmallInstances","LargestInstance","MetaData","Reboot", "Churn"]
-    for test in tests:
-        result = unittest.TextTestRunner(verbosity=2).run(InstanceBasics(test))
+    parser = argparse.ArgumentParser(description='Parse test suite arguments.')
+    parser.add_argument('--xml', action="store_true", default=False)
+    parser.add_argument('--tests', nargs='+', default= ["BasicInstanceChecks","ElasticIps","PrivateIPAddressing","MaxSmallInstances","LargestInstance","MetaData","Reboot", "Churn"])
+    args = parser.parse_args()
+    for test in args.tests:
+        if args.xml:
+            result = xmlrunner.XMLTestRunner().run(InstanceBasics(test))
+        else:
+            result = unittest.TextTestRunner(verbosity=2).run(InstanceBasics(test))
         if result.wasSuccessful():
             pass
         else:
