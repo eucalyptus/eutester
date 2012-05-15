@@ -50,7 +50,7 @@ if __name__ == "__main__":
     for test in args.tests:
         if args.xml:
             file = open("test-" + test + "result.xml", "w")
-            result = xmlrunner.XMLTestRunner(file).run(InstanceBasics(test))
+            result = xmlrunner.XMLTestRunner(file).run(LoadGenerator(test))
         else:
             result = unittest.TextTestRunner(verbosity=2).run(LoadGenerator(test))
         if result.wasSuccessful():
