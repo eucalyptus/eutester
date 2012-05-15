@@ -177,8 +177,9 @@ class Eutester(object):
                         
             ### If you have credentials for the boto connections, create them
         if (self.aws_access_key_id != None) and (self.aws_secret_access_key != None):
-            boto.config.add_section('Boto')
-            boto.config.set('Boto', 'num_retries', '2') 
+            if not boto.config.has_section('Boto'):
+                boto.config.add_section('Boto')
+                boto.config.set('Boto', 'num_retries', '2')  
             self.setup_boto_connections(region=region)
         
     def __del__(self):
