@@ -134,8 +134,8 @@ class Eutester(object):
             try:
                 if "REPO" in self.config["machines"][0].source:
                     self.eucapath="/"
-            except:
-                    raise Exception("Could not get REPO info from input file")
+            except Exception, e:
+                raise Exception("Could not get REPO info from input file\n" + str(e))
             #self.hypervisor = self.get_hypervisor()
             ### No credpath but does have password and an ssh connection to the CLC
             ### Private cloud with root access 
@@ -161,10 +161,10 @@ class Eutester(object):
                             raise Exception("Could not get credentials from first CLC and no other to try")
                         self.swap_clc()
                         self.sftp = self.clc.ssh.connection.open_sftp()
-                        try:
-                            self.credpath = self.get_credentials(account,user)
-                        except Exception, e:
-                            raise Exception("Could not get credentials from second CLC and no other to try")
+                        #try:
+                        self.credpath = self.get_credentials(account,user)
+                        #except Exception, e:
+                        #    raise Exception("Could not get credentials from second CLC and no other to try\n" + str(e))
                         
                 self.service_manager = EuserviceManager(self)
                 self.clc = self.service_manager.get_enabled_clc().machine
@@ -180,7 +180,7 @@ class Eutester(object):
         if (self.aws_access_key_id != None) and (self.aws_secret_access_key != None):
             if not boto.config.has_section('Boto'):
                 boto.config.add_section('Boto')
-                boto.config.set('Boto', 'num_retries', '2') 
+                boto.config.set('Boto', 'num_retries', '2')  
             self.setup_boto_connections(region=region)
         
     def __del__(self):
@@ -196,8 +196,9 @@ class Eutester(object):
         port = 443
         service_path = "/"
         APIVersion = '2009-11-30'
+
         if region is not None:
-            self.debug("Check region: " + region)        
+            self.debug("Check region: " + str(region))        
             try:
                 self.region.endpoint = EC2RegionData[region]
             except KeyError:
@@ -403,21 +404,29 @@ class Eutester(object):
            Defaults to admin@eucalyptus 
         """
         self.debug("Starting the process of getting credentials")
-        admin_cred_dir = "eucarc-" + account + "-" + user
         
-        ### SETUP directory remotely
-        self.setup_remote_creds_dir(admin_cred_dir)
-        
+        ### GET the CLCs from the config file
         clcs = self.get_component_machines("clc")
-        
         if len(clcs) < 1:
-            raise Exception("Could not find CLC when trying to get credentials")
+            raise Exception("Could not find a CLC in the config file when trying to get credentials")
         
+        admin_cred_dir = "eucarc-" + clcs[0].hostname + "-" + account + "-" + user 
+        cred_file_name = "creds.zip"
+        full_cred_path = admin_cred_dir + "/" + cred_file_name
+        
+        ### Check if this directory exists already
+#        if os.path.exists(full_cred_path):
+#            self.debug("No need to redownload credentials as they already exist for this system")
+#            self.credpath = admin_cred_dir      
+    
         ### IF I wasnt passed in credentials, download and sync them
         if self.credpath is None:
+            ### SETUP directory remotely
+            self.setup_remote_creds_dir(admin_cred_dir)
+            
             ### Create credential from Active CLC
             self.create_credentials(admin_cred_dir, account, user)
-        
+            
             ### SETUP directory locally
             self.setup_local_creds_dir(admin_cred_dir)
         
@@ -426,6 +435,7 @@ class Eutester(object):
             ### IF there are 2 clcs make sure to sync credentials across them
                 
         ### sync the keys that were given to all CLCs
+        
         for clc in clcs:
             self.send_creds_to_machine(admin_cred_dir, clc)
         
@@ -446,22 +456,22 @@ class Eutester(object):
     
     def send_creds_to_machine(self, admin_cred_dir, machine):
         self.debug("Sending credentials to " + machine.hostname)
-        machine.sys("rm -rf " + admin_cred_dir)
-        machine.sys("mkdir " + admin_cred_dir)
         try:
+            machine.sftp.listdir(admin_cred_dir + "/creds.zip")
+            self.debug("Machine " + machine.hostname + " already has credentials in place")
+        except IOError, e:
+            machine.sys("mkdir " + admin_cred_dir)
             machine.sftp.put( admin_cred_dir + "/creds.zip" , admin_cred_dir + "/creds.zip")
-        except Exception, e:
-            raise Exception("Was unable to send credentials due to: " + str(e))
-        machine.sys("unzip -o " + admin_cred_dir + "/creds.zip -d " + admin_cred_dir )
-        machine.sys("sed -i 's/" + self.clc.hostname + "/" + machine.hostname  +"/g' " + admin_cred_dir + "/eucarc")  
+            machine.sys("unzip -o " + admin_cred_dir + "/creds.zip -d " + admin_cred_dir )
+            machine.sys("sed -i 's/" + self.clc.hostname + "/" + machine.hostname  +"/g' " + admin_cred_dir + "/eucarc")
+            
 
         
     def setup_local_creds_dir(self, admin_cred_dir):
-        os.system("rm -rf " + admin_cred_dir)
-        os.mkdir(admin_cred_dir)
+        if not os.path.exists(admin_cred_dir):
+            os.mkdir(admin_cred_dir)
       
     def setup_remote_creds_dir(self, admin_cred_dir):
-        self.sys("rm -rf " + admin_cred_dir)
         self.sys("mkdir " + admin_cred_dir)
         
     def get_access_key(self):

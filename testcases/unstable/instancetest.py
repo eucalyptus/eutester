@@ -1,9 +1,12 @@
-#! ../share/python_lib/vic-dev/bin/python
+#!/usr/bin/python
 import unittest
 import time
 from eucaops import Eucaops
+from eutester import xmlrunner
 import os
 import re
+import random
+import argparse
 
 class InstanceBasics(unittest.TestCase):
     def setUp(self):
@@ -27,6 +30,8 @@ class InstanceBasics(unittest.TestCase):
         self.image = self.tester.get_emi(root_device_type="instance-store")
         self.reservation = None
         self.private_addressing = False
+        zones = self.tester.ec2.get_all_zones()
+        self.zone = random.choice(zones).name
 
     
     def tearDown(self):
@@ -62,23 +67,27 @@ class InstanceBasics(unittest.TestCase):
             instance.assertFilePresent(self.volume_device)
             return True
     
-    def BasicInstanceChecks(self):
+    def BasicInstanceChecks(self, zone = None):
         """Instance checks including reachability and ephemeral storage"""
+        if zone is None:
+            zone = self.zone
         if self.reservation is None:
-            self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name)
+            self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name, zone=zone)
             self.tester.sleep(10)
         for instance in self.reservation.instances:
             self.assertTrue( self.tester.wait_for_reservation(self.reservation) ,'Instance did not go to running')
             self.assertNotEqual( instance.public_dns_name, instance.private_ip_address, 'Public and private IP are the same')
             self.assertTrue( self.tester.ping(instance.public_dns_name), 'Could not ping instance')
-            self.assertTrue( instance.found("ls -1 " + self.ephemeral,  self.ephemeral),  'Did not find ephemeral storage at ' + self.ephemeral)
+            self.assertFalse( instance.found("ls -1 " + self.ephemeral,  "No such file or directory"),  'Did not find ephemeral storage at ' + self.ephemeral)
         return self.reservation
     
-    def ElasticIps(self):
+    def ElasticIps(self, zone = None):
         """ Basic test for elastic IPs
             Allocate an IP, associate it with an instance, ping the instance
             Disassociate the IP, ping the instance
             Release the address"""
+        if zone is None:
+            zone = self.zone
         self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name)
         self.tester.sleep(10)
         for instance in self.reservation.instances:
@@ -95,16 +104,20 @@ class InstanceBasics(unittest.TestCase):
             address.release()
         return self.reservation
     
-    def MaxSmallInstances(self, available_small=None):
+    def MaxSmallInstances(self, available_small=None,zone = None):
         """Run the maximum m1.smalls available"""
         if available_small is None:
             available_small = self.tester.get_available_vms()
-        self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name,min=available_small, max=available_small)
+        if zone is None:
+            zone = self.zone
+        self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name,min=available_small, max=available_small, zone=zone)
         self.assertTrue( self.tester.wait_for_reservation(self.reservation) ,'Not all instances  went to running')
         return self.reservation
     
-    def LargestInstance(self): 
+    def LargestInstance(self, zone = None): 
         """Run 1 of the largest instance c1.xlarge"""
+        if zone is None:
+            zone = self.zone
         self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name,type="c1.xlarge")
         self.assertTrue( self.tester.wait_for_reservation(self.reservation) ,'Not all instances  went to running')
         return self.reservation
@@ -113,6 +126,8 @@ class InstanceBasics(unittest.TestCase):
         """Check metadata for consistency"""
         # Missing nodes
         # ['block-device-mapping/',  'ami-manifest-path' , 'hostname',  'placement/']
+        if zone is None:
+            zone = self.zone
         self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name, zone=zone)
         for instance in self.reservation.instances:
             ## Need to verify  the public key (could just be checking for a string of a certain length)
@@ -137,6 +152,8 @@ class InstanceBasics(unittest.TestCase):
            
     def Reboot(self, zone=None):
         """Reboot instance ensure IP connectivity and volumes stay attached"""
+        if zone is None:
+            zone = self.zone
         self.reservation = self.tester.run_instance(self.image, keypair=self.keypair.name, group=self.group.name, zone=zone)
         self.tester.sleep(10)
         for instance in self.reservation.instances:
@@ -206,14 +223,16 @@ class InstanceBasics(unittest.TestCase):
         
         self.assertEquals(fail_count, 0, "Failure detected in one of the " + str(count)  + " Basic Instance tests")
 
-    def PrivateIPAddressing(self):
+    def PrivateIPAddressing(self, zone = None):
         """Basic test to run an instance with Private only IP
            and later allocate/associate/diassociate/release 
            an Elastic IP. In the process check after diassociate
            the instance has only got private IP or new Public IP
            gets associated to it"""
         self.private_addressing = True
-        self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name, private_addressing=self.private_addressing)
+        if zone is None:
+            zone = self.zone
+        self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name, private_addressing=self.private_addressing, zone=zone)
         self.tester.sleep(10)
         for instance in self.reservation.instances:
             address = self.tester.allocate_address()
@@ -231,12 +250,14 @@ class InstanceBasics(unittest.TestCase):
                 self.tester.critical("Instance received a new public IP: " + instance.public_dns_name)
         return self.reservation
     
-    def ReuseAddresses(self):
+    def ReuseAddresses(self, zone = None):
         """ Run instances in series and ensure they get the same address"""
         prev_address = None
+        if zone is None:
+            zone = self.zone
         ### Run the test 5 times in a row
         for i in xrange(5):
-            self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name)
+            self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name, zone=zone)
             for instance in self.reservation.instances:
                 if prev_address is not None:
                     self.assertTrue(re.search(str(prev_address) ,str(instance.public_dns_name)), str(prev_address) +" Address did not get reused but rather  " + str(instance.public_dns_name))
@@ -259,27 +280,19 @@ class InstanceBasics(unittest.TestCase):
             self.tester.debug("Failed test: " + name)
             queue.put(1)
             return True
-  
-        
-    def suite():
-        tests = ["BasicInstanceChecks","ElasticIps","PrivateIPAddressing","MaxSmallInstances","LargestInstance","MetaData","Reboot", "Churn"]
-        for test in tests:
-            result = unittest.TextTestRunner(verbosity=2).run(InstanceBasics(test))
-            if result.wasSuccessful():
-               pass
-            else:
-               exit(1)
     
 if __name__ == "__main__":
-    import sys
     ## If given command line arguments, use them as test names to launch
-    if (len(sys.argv) > 1):
-        tests = sys.argv[1:]
-    else:
-    ### Other wise launch the whole suite
-        tests = ["BasicInstanceChecks","ElasticIps","PrivateIPAddressing","MaxSmallInstances","LargestInstance","MetaData","Reboot", "Churn"]
-    for test in tests:
-        result = unittest.TextTestRunner(verbosity=2).run(InstanceBasics(test))
+    parser = argparse.ArgumentParser(description='Parse test suite arguments.')
+    parser.add_argument('--xml', action="store_true", default=False)
+    parser.add_argument('--tests', nargs='+', default= ["BasicInstanceChecks","ElasticIps","PrivateIPAddressing","MaxSmallInstances","LargestInstance","MetaData","Reboot", "Churn"])
+    args = parser.parse_args()
+    for test in args.tests:
+        if args.xml:
+            file = open("test-" + test + "result.xml", "w")
+            result = xmlrunner.XMLTestRunner(file).run(InstanceBasics(test))
+        else:
+            result = unittest.TextTestRunner(verbosity=2).run(InstanceBasics(test))
         if result.wasSuccessful():
             pass
         else:
