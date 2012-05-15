@@ -695,7 +695,6 @@ class EC2ops(Eutester):
                 self.sleep(1)
                 elapsed = elapsed + 1
             else:
-                break
                 return True
         raise Exception("Timed out waiting for a valid IP (ie anything other than 0.0.0.0.)")
                 
