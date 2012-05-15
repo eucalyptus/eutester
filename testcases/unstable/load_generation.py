@@ -41,28 +41,13 @@ class LoadGenerator(unittest.TestCase):
             keypair = self.tester.add_keypair()
             self.tester.delete_keypair(keypair)
         
-    def suite():
-        tests = ["GenerateKeypairs"]
-        for test in tests:
-            result = unittest.TextTestRunner(verbosity=2).run(LoadGenerator(test))
-            if result.wasSuccessful():
-               pass
-            else:
-               exit(1)
-    
 if __name__ == "__main__":
-    import sys
     ## If given command line arguments, use them as test names to launch
     parser = argparse.ArgumentParser(description='Parse test suite arguments.')
     parser.add_argument('--xml', action="store_true", default=False)
-    parser.add_argument('--tests', nargs="?", default=None)
+    parser.add_argument('--tests', nargs='+', default= ["GenerateKeypairs"])
     args = parser.parse_args()
-    if args.tests is not None:
-        tests = args.tests[1:]
-    else:
-    ### Other wise launch the whole suite
-        tests = ["GenerateKeypairs"]
-    for test in tests:
+    for test in args.tests:
         if args.xml:
             result = xmlrunner.XMLTestRunner().run(LoadGenerator(test))
         else:
