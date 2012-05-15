@@ -253,7 +253,7 @@ class EC2ops(Eutester):
         #self.debug( "Waited a total o" + str( (self.poll_count - poll_count) * 10 ) + " seconds" )
         if instance.state != state:
             self.fail(str(instance) + " did not enter the proper state and was left in " + instance.state)
-            raise Exception( str(instance) + "did not enter proper state")
+            raise Exception( str(instance) + " did not enter proper state")
         self.debug( str(instance) + ' is now in ' + instance.state )
         return True
 
