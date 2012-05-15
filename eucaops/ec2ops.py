@@ -688,12 +688,12 @@ class EC2ops(Eutester):
             return reservation
 
     def wait_for_valid_ip(self, instance, timeout = 60):
-        start = time.time()
         elapsed = 0
         zeros = re.compile("0.0.0.0")
         while elapsed <= timeout:
             if zeros.search(instance.public_dns_name):
                 self.sleep(1)
+                elapsed = elapsed + 1
             else:
                 break
                 
