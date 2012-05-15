@@ -36,6 +36,7 @@ class InstanceBasics(unittest.TestCase):
         Create and delete keypairs in series
         """
         for i in xrange(100):
+            key_name = "key-generator-" + str(i)
             keypair = self.tester.add_keypair()
             self.tester.delete_keypair(keypair)
         
