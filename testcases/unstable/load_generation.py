@@ -49,7 +49,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     for test in args.tests:
         if args.xml:
-            result = xmlrunner.XMLTestRunner().run(LoadGenerator(test))
+            file = open("test-" + test + "result.xml", "w")
+            result = xmlrunner.XMLTestRunner(file).run(InstanceBasics(test))
         else:
             result = unittest.TextTestRunner(verbosity=2).run(LoadGenerator(test))
         if result.wasSuccessful():
