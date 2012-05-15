@@ -44,7 +44,7 @@ class InstanceBasics(unittest.TestCase):
     def suite():
         tests = ["GenerateKeypairs"]
         for test in tests:
-            result = xmlrunner.XMLTestRunner(verbosity=2).run(InstanceBasics(test))
+            result = unittest.TextTestRunner(verbosity=2).run(InstanceBasics(test))
             if result.wasSuccessful():
                pass
             else:
@@ -59,7 +59,7 @@ if __name__ == "__main__":
     ### Other wise launch the whole suite
         tests = ["BasicInstanceChecks","ElasticIps","PrivateIPAddressing","MaxSmallInstances","LargestInstance","MetaData","Reboot", "Churn"]
     for test in tests:
-        result = xmlrunner.XMLTestRunner(verbosity=2).run(InstanceBasics(test))
+        result = unittest.TextTestRunner(verbosity=2).run(InstanceBasics(test))
         if result.wasSuccessful():
             pass
         else:
