@@ -165,10 +165,15 @@ class EuserviceManager(object):
                     raise IndexError("Did not receive proper response from describe services when looking for " + str(type))
             raise e
         
+        self.populate_nodes()
+        
         services = []
         for service_line in describe_services:
             services.append(Euservice(service_line, self.tester))
         return services
+    
+    def populate_nodes(self):
+        pass
     
     def reset(self):
         self.walruses= []
