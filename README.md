@@ -29,16 +29,9 @@ The `eucaops` class can be imported in order to use pre-defined routines which v
 Constructor
 ------
 
-The basic constructor can be used for a few different connections:
+The basic constructor can be used for 2 different connections:
 
-1. Instance - Only SSH connection  
-    Purpose - connect to instances in the cloud  
-    Required arguments: private key path and hostname
-
-        instance = Eutester( hostname=instance.ip_address, keypath="my_key.pem")
-        instance.sys("mount") # check mount points on instance and return the output as a list
-        
-2. Private cloud with root access - CLC SSH, Cloud, and Walrus connections  
+1. Private cloud with root access - CLC SSH, Cloud, and Walrus connections  
     Purpose - connect to and manipulate Eucalyptus components using boto and command line. Recommended to use Eucaops.  
     Required arguments: root password, config file with topology information  
     Optional arguments: credential path so that new credentials are not created
@@ -47,7 +40,7 @@ The basic constructor can be used for a few different connections:
         private_cloud.sys("euca-describe-availability-zones") ### use local credentials to determine viable availability-zones
         
         
-3. Public cloud - local SSH, EC2 and S3 connections  
+2. Public cloud - local SSH, EC2 and S3 connections  
     Purpose - can be used to wrap euca2ools commands installed locally on the tester machine or with Eucaops  
     Required arguments: root password, config file with topology information
 
