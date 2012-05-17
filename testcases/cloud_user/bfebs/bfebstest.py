@@ -7,11 +7,9 @@ from eucaops import Eucaops
 
 class BFEBSBasics(InstanceBasics):
 
-    def RegisterImage(self):
+    def RegisterImage(self, bfebs_img_url = "<image-url>"):
         '''Register a BFEBS snapshot'''
         self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name)
-        self.tester.sleep(10)
-        bfebs_img_url = "http://192.168.7.65/bfebs-image/ag-bfebs-centos-5-i386.img"
         for instance in self.reservation.instances:
             self.assertTrue(self.create_attach_volume(instance, 2)) 
             instance.sys("curl " + bfebs_img_url + " > " + self.volume_device, timeout=800)
