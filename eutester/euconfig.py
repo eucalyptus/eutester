@@ -62,7 +62,7 @@ class EuConfig():
         self.configbuf = self.get_config_buf()
         
         #create our configParser object using the config buffer
-        self.config = ConfigParser.RawConfigParser(allow_no_value=True)
+        self.config = ConfigParser.RawConfigParser()
         self.config.readfp(io.BytesIO(self.configbuf))
         
         
