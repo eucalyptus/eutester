@@ -42,55 +42,63 @@ class HAtests(InstanceBasics):
         
     def failoverService(self, service_aquisition_callback, testcase_callback, zone=None):
         ### Process Take down
-        primary_service = service_aquisition_callback() 
-        primary_service.stop()
+        primary_service = service_aquisition_callback()
+        secondary_service = self.tester.service_manager.wait_for_service(primary_service, state="DISABLED")
+        self.tester.debug("Primary Service: " + primary_service.machine.hostname + " Secondary Service: " + secondary_service.machine.hostname)
+        primary_service.stop()    
         
         if "clc" in primary_service.machine.components:
-            self.tester.debug("Switching ec2 connection to host: " +  self.tester.clc.hostname)
-            self.tester.ec2.host = self.servman.get_enabled_clc().machine.hostname
+            self.tester.debug("Switching ec2 connection to host: " +  secondary_service.machine.hostname)
+            self.tester.clc = secondary_service.machine
+            self.tester.ec2.host = secondary_service.machine.hostname
         
         if "ws" in primary_service.machine.components:
-            self.tester.debug("Switching walrus connection to host: " +  self.tester.walrus.hostname)
-            self.tester.s3.DefaultHost = self.servman.get_enabled_walrus().machine.hostname
+            self.tester.debug("Switching walrus connection to host: " +  secondary_service.machine.hostname)
+            self.tester.walrus = secondary_service.machine
+            self.tester.s3.DefaultHost = secondary_service.machine.hostname
             
-        self.tester.setup_boto_connections()
+        self.tester.sleep(30)
             
-        self.servman.wait_for_service(primary_service)     
-        after_failover = service_aquisition_callback()
-        self.tester.ec2.host = after_failover.hostname    
-        if primary_service.hostname is after_failover.hostname:
-            self.fail("The enabled CLC was the same before and after the failover")
-                  
         self.run_testcase(testcase_callback, zone)
+        self.tester.terminate_instances(self.reservation)
+        after_failover = self.tester.service_manager.wait_for_service(primary_service, state="ENABLED")
+          
+        if primary_service.hostname is after_failover.hostname:
+            self.fail("The enabled CLC was the same before and after the failover")     
+        
         primary_service.start()
+        
         try:
             self.servman.wait_for_service(primary_service, state ="DISABLED")
         except Exception, e:
             self.fail("The secondary service never went to disabled")
+        
     
     
     def failoverReboot(self, service_aquisition_callback, testcase_callback, zone=None):
-        
         ### Reboot the current enabled component
-        primary_service = service_aquisition_callback() 
+        primary_service = service_aquisition_callback()
+        secondary_service = self.tester.service_manager.wait_for_service(primary_service, state="DISABLED")
+        self.tester.debug("Primary Service: " + primary_service.machine.hostname + " Secondary Service: " + secondary_service.machine.hostname)
+        
         primary_service.machine.reboot()    
         
-        ### Change to other CLC
-        
         if "clc" in primary_service.machine.components:
-            self.tester.debug("Switching ec2 connection to host: " +  self.tester.clc.hostname)
-            self.tester.ec2.host = self.servman.get_enabled_clc().machine.hostname
+            self.tester.debug("Switching ec2 connection to host: " +  secondary_service.machine.hostname)
+            self.tester.clc = secondary_service.machine
+            self.tester.ec2.host = secondary_service.machine.hostname
         
         if "ws" in primary_service.machine.components:
-            self.tester.debug("Switching walrus connection to host: " +  self.tester.walrus.hostname)
-            self.tester.s3.DefaultHost = self.servman.get_enabled_walrus().machine.hostname
+            self.tester.debug("Switching walrus connection to host: " +  secondary_service.machine.hostname)
+            self.tester.walrus = secondary_service.machine
+            self.tester.s3.DefaultHost = secondary_service.machine.hostname
             
-        self.tester.setup_boto_connections()
-        
+        self.tester.sleep(30)
+            
         self.run_testcase(testcase_callback, zone)
-         
-        after_failover = service_aquisition_callback() 
-                     
+        self.tester.terminate_instances(self.reservation)
+        after_failover =  self.tester.service_manager.wait_for_service(primary_service, state="ENABLED")
+               
         if primary_service.hostname is after_failover.hostname:
             self.fail("The enabled CLC was the same before and after the failover")     
              
@@ -102,28 +110,26 @@ class HAtests(InstanceBasics):
     def failoverNetwork(self, service_aquisition_callback, testcase_callback, zone=None):
         
         ### Reboot the current enabled component
-        primary_service = service_aquisition_callback() 
-        primary_service.machine.interrupt_network()
+        primary_service = service_aquisition_callback()
+        secondary_service = self.tester.service_manager.wait_for_service(primary_service, state="DISABLED")
+        self.tester.debug("Primary Service: " + primary_service.machine.hostname + " Secondary Service: " + secondary_service.machine.hostname)
+        primary_service.machine.interrupt_network(360)    
         
         if "clc" in primary_service.machine.components:
-            self.tester.debug("Switching ec2 connection to host: " +  self.tester.clc.hostname)
-            self.tester.ec2.host = self.servman.get_enabled_clc().machine.hostname
+            self.tester.debug("Switching ec2 connection to host: " +  secondary_service.machine.hostname)
+            self.tester.clc = secondary_service.machine
+            self.tester.ec2.host = secondary_service.machine.hostname
         
         if "ws" in primary_service.machine.components:
-            self.tester.debug("Switching walrus connection to host: " +  self.tester.walrus.hostname)
-            self.tester.s3.DefaultHost = self.servman.get_enabled_walrus().machine.hostname
+            self.tester.debug("Switching walrus connection to host: " +  secondary_service.machine.hostname)
+            self.tester.walrus = secondary_service.machine
+            self.tester.s3.DefaultHost = secondary_service.machine.hostname
             
-        self.tester.setup_boto_connections()
-        
-        ### Change to other CLC
-        self.tester.swap_clc()
-        self.tester.ec2.host = self.tester.clc.hostname
-        
+        self.tester.sleep(30)
+            
         self.run_testcase(testcase_callback, zone)
-        try:
-            after_failover = self.servman.wait_for_service(primary_service)
-        except Exception, e:
-            self.fail("The primary service never went to ENABLED")
+        self.tester.terminate_instances(self.reservation)
+        after_failover =  self.tester.service_manager.wait_for_service(primary_service, state="ENABLED")
                      
         if primary_service.hostname is after_failover.hostname:
             self.fail("The enabled CLC was the same before and after the failover")     
@@ -134,18 +140,29 @@ class HAtests(InstanceBasics):
             self.fail("The secondary service never went to disabled")
     
     def failoverCLC(self):
-        self.failoverService(self.servman.get_enabled_clc, self.MetaData)
-        self.failoverReboot(self.servman.get_enabled_clc, self.MetaData)
-        self.failoverNetwork(self.servman.get_enabled_clc, self.MetaData)
+        self.failoverService(self.servman.get_enabled_clc, super(HAtests, self).MetaData)
+        self.servman.all_services_operational()
+        self.failoverReboot(self.servman.get_enabled_clc, super(HAtests, self).MetaData)
+        self.servman.all_services_operational()
+        self.failoverNetwork(self.servman.get_enabled_clc, super(HAtests, self).MetaData)
+        self.servman.all_services_operational()
     
     def failoverWalrus(self):
-        self.failoverService(self.servman.get_enabled_walrus, self.MetaData)
+        self.failoverService(self.servman.get_enabled_walrus, super(HAtests, self).MetaData)
+        self.servman.all_services_operational()
+        self.failoverReboot(self.servman.get_enabled_walrus, super(HAtests, self).MetaData)
+        self.servman.all_services_operational()
+        self.failoverNetwork(self.servman.get_enabled_walrus, super(HAtests, self).MetaData)
+        self.servman.all_services_operational()
     
     def failoverCC(self):
         zone = self.servman.partitions.keys()[0]
-        self.failoverService(self.servman.partitions[zone].get_enabled_cc, self.MetaData,zone)
-        self.failoverReboot(self.servman.partitions[zone].get_enabled_cc, self.MetaData,zone)
-        self.failoverNetwork(self.servman.partitions[zone].get_enabled_cc, self.MetaData,zone)
+        self.failoverService(self.servman.partitions[zone].get_enabled_cc, super(HAtests, self).MetaData,zone)
+        self.servman.all_services_operational()
+        self.failoverReboot(self.servman.partitions[zone].get_enabled_cc, super(HAtests, self).MetaData,zone)
+        self.servman.all_services_operational()
+        self.failoverNetwork(self.servman.partitions[zone].get_enabled_cc, super(HAtests, self).MetaData,zone)
+        self.servman.all_services_operational()
     
     def failoverSC(self):    
         zone = self.servman.partitions.keys()[0]
