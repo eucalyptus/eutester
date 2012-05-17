@@ -173,7 +173,7 @@ class EuserviceManager(object):
                     raise IndexError("Did not receive proper response from describe services when looking for " + str(type))
             raise e
         
-        self.populate_nodes()
+        #self.populate_nodes()
         
         services = []
         for service_line in describe_services:
@@ -181,8 +181,8 @@ class EuserviceManager(object):
         return services
     
     def populate_nodes(self):
-        clc = self.tester.get_enabled_clc()
-        nodes_list = clc.sys("euca_conf --list-nodes")
+        clc = self.get_enabled_clc()
+        nodes_list = clc.machine.sys("euca_conf --list-nodes")
         for node_string in node_lists:
             split_string = node_string.split()
             node = Eunode(split_string[1], split_string[2])
