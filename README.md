@@ -52,7 +52,7 @@ The basic constructor can be used for 2 different connections:
 Config file
 ----------
 
-The configuration file for (2) private cloud mode has the following structure:
+The configuration file for private cloud mode (option 1 above) has the following structure:
 
     clc.mydomain.com CENTOS 5.7 64 REPO [CC00 CLC SC00 WS]    
     nc1.mydomain.com VMWARE ESX-4.0 64 REPO [NC00]
