@@ -42,7 +42,7 @@ The basic constructor can be used for 2 different connections:
         
 2. Public cloud - local SSH, EC2 and S3 connections  
     Purpose - can be used to wrap euca2ools commands installed locally on the tester machine or with Eucaops  
-    Required arguments: root password, config file with topology information
+    Required arguments: credential path
 
         public_cloud = Eucaops(credpath="~/.eucarc")    
         public_cloud.run_instance(image) ## run an m1.small instance using image
