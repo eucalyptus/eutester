@@ -12,7 +12,7 @@ class InstanceBasics(unittest.TestCase):
     def setUp(self):
         # Setup basic eutester object
         self.tester = Eucaops( config_file="../input/2b_tested.lst", password="foobar")
-        self.tester.poll_count = 40
+        self.tester.poll_count = 80
         
         ### Determine whether virtio drivers are being used
         self.device_prefix = "sd"
@@ -35,7 +35,7 @@ class InstanceBasics(unittest.TestCase):
 
     
     def tearDown(self):
-        if self.reservation:
+        if self.reservation is not None:
             self.assertTrue(self.tester.terminate_instances(self.reservation), "Unable to terminate instance(s)")
         self.tester.delete_group(self.group)
         self.tester.delete_keypair(self.keypair)
