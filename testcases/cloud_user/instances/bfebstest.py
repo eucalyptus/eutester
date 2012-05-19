@@ -4,6 +4,7 @@ import sys
 import argparse
 from instancetest import InstanceBasics
 from eucaops import Eucaops
+from eutester import xmlrunner
 
 class BFEBSBasics(InstanceBasics):
 
