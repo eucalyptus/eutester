@@ -291,9 +291,11 @@ if __name__ == "__main__":
         if args.xml:
             file = open("test-" + test + "result.xml", "w")
             result = xmlrunner.XMLTestRunner(file).run(InstanceBasics(test))
+            file.close()
         else:
             result = unittest.TextTestRunner(verbosity=2).run(InstanceBasics(test))
         if result.wasSuccessful():
             pass
         else:
             exit(1)
+            
