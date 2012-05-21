@@ -299,7 +299,7 @@ class EuInstance(Instance):
         if self.tester.config:
             isManaged = re.search("managed", self.tester.get_network_mode())
             if not isManaged:
-                return self.sys("curl http://" + self.tester.get_clc_ip()  + ":8773/latest/meta-data/" + element_path)
+                return self.sys("curl http://" + self.tester.get_ec2_ip()  + ":8773/latest/meta-data/" + element_path)
             
         return self.sys("curl http://169.254.169.254/latest/meta-data/" + element_path)
         
