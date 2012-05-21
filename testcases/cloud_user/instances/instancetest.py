@@ -289,7 +289,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
     for test in args.tests:
         if args.xml:
-            os.mkdir("results")
+            try:
+                os.mkdir("results")
+            except OSError:
+                pass
             file = open("results/test-" + test + "result.xml", "w")
             result = xmlrunner.XMLTestRunner(file).run(InstanceBasics(test))
             file.close()
