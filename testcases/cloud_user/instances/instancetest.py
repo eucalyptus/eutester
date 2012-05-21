@@ -11,7 +11,12 @@ import argparse
 class InstanceBasics(unittest.TestCase):
     def setUp(self):
         # Setup basic eutester object
-        self.tester = Eucaops( config_file="../input/2b_tested.lst", password="foobar")
+        eucarc_regex = re.compile("eucarc-")
+        eucarc_dirs = [path for path in os.listdir(".") if eucarc_regex.search(path)]
+        eucarc_path = None
+        if len(eucarc_dirs) > 0:
+            eucarc_path = eucarc_dirs[0]
+        self.tester = Eucaops( config_file="../input/2b_tested.lst", password="foobar", credpath=eucarc_path)
         self.tester.poll_count = 80
         
         ### Determine whether virtio drivers are being used
