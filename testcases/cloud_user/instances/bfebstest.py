@@ -1,5 +1,6 @@
 import unittest
 import re
+import os
 import sys
 import argparse
 from instancetest import InstanceBasics
