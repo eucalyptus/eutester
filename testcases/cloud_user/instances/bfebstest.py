@@ -98,7 +98,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     for test in args.tests:
         if args.xml:
-            file = open("test-" + test + "result.xml", "w")
+            os.mkdir("results")
+            file = open("results/test-" + test + "result.xml", "w")
             result = xmlrunner.XMLTestRunner(file).run(BFEBSBasics(test))
             file.close()
         else:
