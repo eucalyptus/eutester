@@ -32,7 +32,9 @@
 
 import eulogger
 import sshconnection
+from threading import Thread
 import re
+import os
 
 class machine:
     def __init__(self, hostname, distro, distro_ver, arch, source, components, password=None, keypath=None, username="root", timeout=120,retry=2,debugmethod=None):
@@ -42,6 +44,9 @@ class machine:
         self.arch = arch
         self.source = source
         self.components = components
+        self.log_threads = {}
+        self.log_buffers = {}
+        self.log_active = {}
         if debugmethod is None:
             logger = eulogger.Eulogger(identifier= str(hostname) + ":" + str(components))
             self.debugmethod = logger.log.debug
@@ -109,7 +114,44 @@ class machine:
             found = re.search(regex,line)
             if found:
                 return True
-        return False                                                
+        return False   
+    
+    def poll_log(self, log_file="/var/log/messages"):
+        self.debug( "Starting to poll " + log_file )     
+        self.log_channel = self.ssh.invoke_shell()
+        self.log_channel.send("tail -f " + log_file + " \n")
+        ### Begin polling channel for any new data
+        while self.log_active[log_file]:
+            ### CLOUD LOG
+            rl, wl, xl = select.select([self.log_channel],[],[],0.0)
+            if len(rl) > 0:
+                self.log_buffers[log_file] += self.log_channel.recv(1024)
+            self.sleep(1)                                             
+    
+    def start_log(self, log_file="/var/log/messages"):
+        '''Start thread to poll logs''' 
+        thread = threading.Thread(target=self.poll_log, args=(log_file))
+        thread.daemon = True
+        self.log_threads[log_file]= thread.start()
+        self.log_active[log_file] = True
+        
+    def stop_log(self, log_file="/var/log/messages"):
+        '''Terminate thread that is polling logs''' 
+        self.log_active[log_file] = False
+        
+    def save_log(self, log_file, path="logs"):
+        '''Save log buffer for log_file to the path to a file'''
+        if not os.path.exists(path):
+            os.mkdir(path)
+        FILE = open( path + '/' + log_file,"w")
+        FILE.writelines(self.log_buffers[log_file])
+        FILE.close()
+        
+    def save_all_logs(self, path="logs"):
+        '''Save log buffers to a file'''
+        for log_file in self.log_buffers.keys():
+            self.save_all_logs(log_file,path)
+        
     
     def __str__(self):
         s  = "+++++++++++++++++++++++++++++++++++++++++++++++++++++\n"
