@@ -65,6 +65,8 @@ class EuInstance(Instance):
     keypath = None
     username = None
     password = None
+    rootfs_device = "sda"
+    block_device_prefix = "sd"
     attached_vols = []
     scsidevs = []
     ops = None
@@ -123,7 +125,10 @@ class EuInstance(Instance):
         newins.attached_vols=[] 
         newins.timeout = timeout
         newins.retry = retry    
-        newins.connect_to_instance(timeout=timeout) 
+        newins.connect_to_instance(timeout=timeout)
+        newins.set_block_device_prefix()
+        newins.set_rootfs_device()
+        
         return newins
     
     def reset_ssh_connection(self):
@@ -299,11 +304,17 @@ class EuInstance(Instance):
         if self.tester.config:
             isManaged = re.search("managed", self.tester.get_network_mode())
             if not isManaged:
-                return self.sys("curl http://" + self.tester.get_clc_ip()  + ":8773/latest/meta-data/" + element_path)
+                return self.sys("curl http://" + self.tester.get_ec2_ip()  + ":8773/latest/meta-data/" + element_path)
             
         return self.sys("curl http://169.254.169.254/latest/meta-data/" + element_path)
         
-        
+    def set_block_device_prefix(self):
+        if self.found("lsmod | awk '{print $1}' | grep virtio_blk", "virtio_blk"):
+            self.block_device_prefix = "vd"
+    
+    def set_rootfs_device(self):
+        if self.found("lsmod | awk '{print $1}' | grep virtio_pci", "virtio_pci"):
+            self.rootfs_device = "vda"
     
     def get_guestdevs_inuse_by_vols(self):
         retlist = []
@@ -576,9 +587,7 @@ class EuInstance(Instance):
                     if password == "" or re.match("^!+$", password ):
                         password = None         
         return password
-                    
-                    
-                    
+                                    
                 
     def get_user_group_info(self,username, index=3):
         '''
