@@ -14,12 +14,6 @@ class InstanceBasics(unittest.TestCase):
         self.tester = Eucaops( config_file="../input/2b_tested.lst", password="foobar")
         self.tester.poll_count = 40
         
-        ### Determine whether virtio drivers are being used
-        self.device_prefix = "sd"
-        if self.tester.get_hypervisor() == "kvm":
-            self.device_prefix = "vd"
-        self.ephemeral = "/dev/" + self.device_prefix + "a2"
-        
         ### Add and authorize a group for the instance
         self.group = self.tester.add_group(group_name="group-" + str(time.time()))
         self.tester.authorize_group_by_name(group_name=self.group.name )
@@ -48,11 +42,7 @@ class InstanceBasics(unittest.TestCase):
         
     def create_attach_volume(self, instance, size):
             self.volume = self.tester.create_volume(instance.placement, size)
-            device_path = "/dev/" + self.device_prefix  +"j"
-            #try:
-            #    instance_ssh = Eucaops( hostname=instance.public_dns_name,  keypath= self.keypath)
-            #except Exception, e:
-            #    self.assertTrue(False, "Failure in connecting to instance" + str(e))
+            device_path = "/dev/" + instance.block_device_prefix  +"j"
             before_attach = instance.get_dev_dir()
             try:
                 self.assertTrue(self.tester.attach_volume(instance, self.volume, device_path), "Failure attaching volume")
@@ -78,7 +68,7 @@ class InstanceBasics(unittest.TestCase):
             self.assertTrue( self.tester.wait_for_reservation(self.reservation) ,'Instance did not go to running')
             self.assertNotEqual( instance.public_dns_name, instance.private_ip_address, 'Public and private IP are the same')
             self.assertTrue( self.tester.ping(instance.public_dns_name), 'Could not ping instance')
-            self.assertFalse( instance.found("ls -1 " + self.ephemeral,  "No such file or directory"),  'Did not find ephemeral storage at ' + self.ephemeral)
+            self.assertFalse( instance.found("ls -1 " + instance.rootfs_device + "2",  "No such file or directory"),  'Did not find ephemeral storage at ' + self.ephemeral)
         return self.reservation
     
     def ElasticIps(self, zone = None):
