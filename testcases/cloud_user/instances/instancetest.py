@@ -11,24 +11,13 @@ import argparse
 class InstanceBasics(unittest.TestCase):
     def setUp(self):
         # Setup basic eutester object
-<<<<<<< HEAD
-        self.tester = Eucaops( config_file="/Users/hspencer/Desktop/eutester-dev/creds/euca3/config_file", password="22dark10man")
-        self.tester.poll_count = 40
-        
-        ### Determine whether virtio drivers are being used
-        self.device_prefix = "sd"
-        if self.tester.get_hypervisor() == "kvm":
-            self.device_prefix = "vd"
-        self.ephemeral = "/dev/" + self.device_prefix + "a2"
-=======
         eucarc_regex = re.compile("eucarc-")
         eucarc_dirs = [path for path in os.listdir(".") if eucarc_regex.search(path)]
         eucarc_path = None
         if len(eucarc_dirs) > 0:
             eucarc_path = eucarc_dirs[0]
-        self.tester = Eucaops( config_file="../input/2b_tested.lst", password="foobar", credpath=eucarc_path)
+        self.tester = Eucaops( config_file="/Users/hspencer/Desktop/eutester-dev/creds/euca3/config_file", password="22dark10man", credpath=eucarc_path)
         self.tester.poll_count = 80
->>>>>>> upstream/master
         
         ### Add and authorize a group for the instance
         self.group = self.tester.add_group(group_name="group-" + str(time.time()))
@@ -37,7 +26,7 @@ class InstanceBasics(unittest.TestCase):
         ### Generate a keypair for the instance
         self.keypair = self.tester.add_keypair( "keypair-" + str(time.time()))
         self.keypath = os.curdir + "/" + self.keypair.name + ".pem"
-        self.image = self.tester.get_emi(root_device_type="instance-store")
+        self.image = self.tester.get_emi(emi="emi-1DD835A4")
         self.reservation = None
         self.private_addressing = False
         zones = self.tester.ec2.get_all_zones()
@@ -78,7 +67,7 @@ class InstanceBasics(unittest.TestCase):
         if zone is None:
             zone = self.zone
         if self.reservation is None:
-            self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name, zone=zone)
+            self.reservation = self.tester.run_instance(self.image, keypair=self.keypair.name, group=self.group.name, zone=zone)
             self.tester.sleep(10)
         for instance in self.reservation.instances:
             self.assertTrue( self.tester.wait_for_reservation(self.reservation) ,'Instance did not go to running')
@@ -309,7 +298,3 @@ if __name__ == "__main__":
             pass
         else:
             exit(1)
-<<<<<<< HEAD
-=======
-            
->>>>>>> upstream/master
