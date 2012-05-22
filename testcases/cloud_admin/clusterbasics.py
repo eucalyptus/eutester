@@ -1,4 +1,4 @@
-#!/usr/bin/env python -tt
+#!/usr/bin/env python
 #
 #
 # Description:  This script encompasses test cases/modules concerning cluster specific actions and
@@ -71,9 +71,16 @@ class ClusterBasics(unittest.TestCase):
         
         if options.print_debug:
             self.tester.start_euca_logs()
+        
+        self.security_groups = []
+        self.reservations = []
 
     def tearDown(self):
         ### Clean up after running test case
+        for reservation in self.reservations:
+            self.tester.terminate_instances(reservation)
+        for security_group in security_groups:
+            self.tester.delete_group(security_group.name)
         self.tester.delete_keypair(self.keypair)
         os.remove(self.keypath)
         self.keypath = None
@@ -106,8 +113,7 @@ class ClusterBasics(unittest.TestCase):
         self.assertTrue(pre_stderr, "pre_Iptables_Snapshot failed.")
             
         ### Create security group for number of security groups we want to test.
-        self.security_groups = []
-        self.reservations = []
+        
         while self.available > 0:
             ### Create unique security group and authorize SSH and PING
             sec_group = self.tester.add_group(group_name=options.prefix + "-" + str(time.time()))
@@ -165,9 +171,35 @@ class ClusterBasics(unittest.TestCase):
             self.tester.critical("POST-IPTABLES SNAPSHOT LENGTH: %i", len(self.post_iptables))
             self.tester.critical("\n---------------------------------------\n")
             pp.pprint(list(iptables_diff))
-            self.tester.critical("\n======================================\n") 
-
-
+            self.tester.critical("\n======================================\n")
+    
+    def ConnectivityTest(self):
+        '''
+        Test that:
+            2 instances in the same security group
+                - Instances can ping each other on their private addresses
+                - Can ping each other on their public IPs
+            2 instances in different groups
+                - Cannot ping each other on their private addresses
+                - Can ping each other on their public IPs
+        '''
+        sec_group_a = self.tester.add_group()
+        sec_group_b = self.tester.add_group()
+        group_a = self.tester.run_instance(self.image,keypair=self.keypair.name, group=sec_group_a.name, number= 2)
+        group_b = self.tester.run_instance(self.image,keypair=self.keypair.name, group=sec_group_b.name)
+        instance_1a = groupa.instances[0]
+        instance_2a = groupa.instances[1]
+        instance_1b = groupb.instances[0]
+        self.assertTrue(instance_1a.found("ping -c 1 " + instance_2a.public_dns_name, "1 packets received"))
+        self.assertTrue(instance_1a.found("ping -c 1 " + instance_2a.private_dns_name, "1 packets received"))
+        self.assertTrue(instance_2a.found("ping -c 1 " + instance_1a.public_dns_name, "1 packets received"))
+        self.assertTrue(instance_2a.found("ping -c 1 " + instance_1a.private_dns_name, "1 packets received"))
+        self.assertFalse(instance_1b.found("ping -c 1 " + instance_1a.private_dns_name, "1 packets received"))
+        self.assertFalse(instance_1b.found("ping -c 1 " + instance_2a.private_dns_name, "1 packets received"))
+        self.assertTrue(instance_1b.found("ping -c 1 " + instance_1a.public_dns_name, "1 packets received"))
+        self.assertTrue(instance_1b.found("ping -c 1 " + instance_2a.public_dns_name, "1 packets received"))
+        
+        
 def get_options():
     ### Parse args
     parser = argparse.ArgumentParser(prog="clusterbasics.py", 
@@ -202,11 +234,18 @@ def get_options():
     sys.argv[1:] = options.unittest_args
     return options
 
-if __name__ == '__main__':
-    options = get_options()
-    tests = ['iptables_Cruft']
-    for test in tests:
-        result = unittest.TextTestRunner(verbosity=2).run(ClusterBasics(test)) 
+if __name__ == "__main__":
+    ## If given command line arguments, use them as test names to launch
+    parser = argparse.ArgumentParser(description='Parse test suite arguments.')
+    parser.add_argument('--xml', action="store_true", default=False)
+    parser.add_argument('--tests', nargs='+', default= ['iptables_Cruft'])
+    args = parser.parse_args()
+    for test in args.tests:
+        if args.xml:
+            file = open("test-" + test + "result.xml", "w")
+            result = xmlrunner.XMLTestRunner(file).run(LoadGenerator(test))
+        else:
+            result = unittest.TextTestRunner(verbosity=2).run(LoadGenerator(test))
         if result.wasSuccessful():
             pass
         else:

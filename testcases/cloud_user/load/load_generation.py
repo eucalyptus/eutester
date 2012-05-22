@@ -32,14 +32,23 @@ class LoadGenerator(unittest.TestCase):
         self.tester = None
         self.ephemeral = None
     
-    def GenerateKeypairs(self):
+    def GenerateKeypairs(self, count=10):
         """
         Create and delete keypairs in series
         """
-        for i in xrange(10):
+        for i in xrange(count):
             key_name = "key-generator-" + str(i)
             keypair = self.tester.add_keypair()
             self.tester.delete_keypair(keypair)
+     
+    def GenerateVolumes(self, count=10):
+        """
+        Create and delete volumes in series
+        """
+        for i in xrange(count):
+            volume = self.tester.create_volume(self.zone)
+            self.tester.delete_volume(volume)
+
         
 if __name__ == "__main__":
     ## If given command line arguments, use them as test names to launch

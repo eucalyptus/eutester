@@ -180,7 +180,7 @@ class Eutester(object):
         if (self.aws_access_key_id != None) and (self.aws_secret_access_key != None):
             if not boto.config.has_section('Boto'):
                 boto.config.add_section('Boto')
-                boto.config.set('Boto', 'num_retries', '2')  
+            boto.config.set('Boto', 'num_retries', '2')  
             self.setup_boto_connections(region=region)
         
     def __del__(self):
@@ -344,25 +344,6 @@ class Eutester(object):
     
     def get_network_mode(self):
         return self.config['network']
-    
-    def get_hypervisor(self):
-        """ Requires that a config file was passed.
-            Returns the supported hypervisor that should be used absed on the config file passed into the system
-            For RHEL 6 and UBUNTU: kvm
-            For CentOS 5: xen
-            For VMware: vmware
-        """
-        ncs = self.get_component_machines("nc00")
-        if re.search("vmware", ncs[0].distro, re.IGNORECASE):
-            return "vmware"
-        elif re.search("rhel", ncs[0].distro, re.IGNORECASE) or re.search("centos", ncs[0].distro, re.IGNORECASE):
-            if re.search("6\.", ncs[0].distro_ver, re.IGNORECASE):
-                return "kvm"
-            if re.search("5\.", ncs[0].distro_ver, re.IGNORECASE):
-                return "xen"
-        elif re.search("ubuntu", ncs[0].distro, re.IGNORECASE):
-            return "kvm" 
-        
             
     def get_component_ip(self, component):
         """ Parse the machine list and a bm_machine object for a machine that matches the component passed in"""

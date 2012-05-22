@@ -11,14 +11,13 @@ import argparse
 class InstanceBasics(unittest.TestCase):
     def setUp(self):
         # Setup basic eutester object
-        self.tester = Eucaops( config_file="../input/2b_tested.lst", password="foobar")
-        self.tester.poll_count = 40
-        
-        ### Determine whether virtio drivers are being used
-        self.device_prefix = "sd"
-        if self.tester.get_hypervisor() == "kvm":
-            self.device_prefix = "vd"
-        self.ephemeral = "/dev/" + self.device_prefix + "a2"
+        eucarc_regex = re.compile("eucarc-")
+        eucarc_dirs = [path for path in os.listdir(".") if eucarc_regex.search(path)]
+        eucarc_path = None
+        if len(eucarc_dirs) > 0:
+            eucarc_path = eucarc_dirs[0]
+        self.tester = Eucaops( config_file="../input/2b_tested.lst", password="foobar", credpath=eucarc_path)
+        self.tester.poll_count = 80
         
         ### Add and authorize a group for the instance
         self.group = self.tester.add_group(group_name="group-" + str(time.time()))
@@ -35,7 +34,7 @@ class InstanceBasics(unittest.TestCase):
 
     
     def tearDown(self):
-        if self.reservation:
+        if self.reservation is not None:
             self.assertTrue(self.tester.terminate_instances(self.reservation), "Unable to terminate instance(s)")
         self.tester.delete_group(self.group)
         self.tester.delete_keypair(self.keypair)
@@ -48,11 +47,7 @@ class InstanceBasics(unittest.TestCase):
         
     def create_attach_volume(self, instance, size):
             self.volume = self.tester.create_volume(instance.placement, size)
-            device_path = "/dev/" + self.device_prefix  +"j"
-            #try:
-            #    instance_ssh = Eucaops( hostname=instance.public_dns_name,  keypath= self.keypath)
-            #except Exception, e:
-            #    self.assertTrue(False, "Failure in connecting to instance" + str(e))
+            device_path = "/dev/" + instance.block_device_prefix  +"j"
             before_attach = instance.get_dev_dir()
             try:
                 self.assertTrue(self.tester.attach_volume(instance, self.volume, device_path), "Failure attaching volume")
@@ -78,7 +73,7 @@ class InstanceBasics(unittest.TestCase):
             self.assertTrue( self.tester.wait_for_reservation(self.reservation) ,'Instance did not go to running')
             self.assertNotEqual( instance.public_dns_name, instance.private_ip_address, 'Public and private IP are the same')
             self.assertTrue( self.tester.ping(instance.public_dns_name), 'Could not ping instance')
-            self.assertFalse( instance.found("ls -1 " + self.ephemeral,  "No such file or directory"),  'Did not find ephemeral storage at ' + self.ephemeral)
+            self.assertFalse( instance.found("ls -1 /dev/" + instance.rootfs_device + "2",  "No such file or directory"),  'Did not find ephemeral storage at ' + instance.rootfs_device + "2")
         return self.reservation
     
     def ElasticIps(self, zone = None):
@@ -145,7 +140,7 @@ class InstanceBasics(unittest.TestCase):
             self.assertTrue(re.search(instance.get_metadata("public-hostname")[0], instance.public_dns_name), 'Incorrect public host name in metadata')
             self.assertTrue(re.search(instance.get_metadata("ramdisk-id")[0], instance.ramdisk ), 'Incorrect ramdisk in metadata') #instance-type
             self.assertTrue(re.search(instance.get_metadata("instance-type")[0], instance.instance_type ), 'Incorrect instance type in metadata')
-            BAD_META_DATA_KEYS = ['foobar','vic']
+            BAD_META_DATA_KEYS = ['foobar']
             for key in BAD_META_DATA_KEYS:
                 self.assertTrue(re.search("Not Found", "".join(instance.get_metadata(key))), 'No fail message on invalid meta-data node')
         return self.reservation
@@ -289,11 +284,17 @@ if __name__ == "__main__":
     args = parser.parse_args()
     for test in args.tests:
         if args.xml:
-            file = open("test-" + test + "result.xml", "w")
+            try:
+                os.mkdir("results")
+            except OSError:
+                pass
+            file = open("results/test-" + test + "result.xml", "w")
             result = xmlrunner.XMLTestRunner(file).run(InstanceBasics(test))
+            file.close()
         else:
             result = unittest.TextTestRunner(verbosity=2).run(InstanceBasics(test))
         if result.wasSuccessful():
             pass
         else:
             exit(1)
+            

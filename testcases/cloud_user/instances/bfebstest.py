@@ -1,17 +1,17 @@
 import unittest
 import re
+import os
 import sys
 import argparse
 from instancetest import InstanceBasics
 from eucaops import Eucaops
+from eutester import xmlrunner
 
 class BFEBSBasics(InstanceBasics):
 
-    def RegisterImage(self):
+    def RegisterImage(self, bfebs_img_url = "<image-url>"):
         '''Register a BFEBS snapshot'''
         self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name)
-        self.tester.sleep(10)
-        bfebs_img_url = "http://192.168.7.65/bfebs-image/ag-bfebs-centos-5-i386.img"
         for instance in self.reservation.instances:
             self.assertTrue(self.create_attach_volume(instance, 2)) 
             instance.sys("curl " + bfebs_img_url + " > " + self.volume_device, timeout=800)
@@ -90,24 +90,27 @@ class BFEBSBasics(InstanceBasics):
         else:
             self.tester.debug("Failed test: " + testcase)
             queue.put(1)
-
+            
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Basic BFEBS Cases')
-    parser.add_argument('--debug', dest='debug', action='store_true', default=False,
-                        help='Capture and save euca logs')
-    #'--bar', nargs='*'
-    parser.add_argument('--cases', dest='cases', nargs='*', default= [],
-                        help='Names of tests to run')
+    ## If given command line arguments, use them as test names to launch
+    parser = argparse.ArgumentParser(description='Parse test suite arguments.')
+    parser.add_argument('--xml', action="store_true", default=False)
+    parser.add_argument('--tests', nargs='+', default= ["RegisterImage","LaunchImage", "StopStart","MultipleBFEBSInstances","ChurnBFEBS"])
     args = parser.parse_args()
-    if args.cases is []:
-        tests = ["RegisterImage","LaunchImage", "StopStart","MultipleBFEBSInstances","ChurnBFEBS"]
-    else:
-        ### Not ready: test3_StopStart
-        tests = args.cases 
-    for test in tests:
-        result = unittest.TextTestRunner(verbosity=2).run(BFEBSBasics(test))
+    for test in args.tests:
+        if args.xml:
+            try:
+                os.mkdir("results")
+            except OSError:
+                pass
+            file = open("results/test-" + test + "result.xml", "w")
+            result = xmlrunner.XMLTestRunner(file).run(BFEBSBasics(test))
+            file.close()
+        else:
+            result = unittest.TextTestRunner(verbosity=2).run(BFEBSBasics(test))
         if result.wasSuccessful():
             pass
         else:
             exit(1)
+            
         

@@ -31,9 +31,17 @@
 # Author: vic.iglesias@eucalyptus.com
 
 import re
-    
-class Euservice:
 
+class Eunode:
+    def __init__(self, hostname, partition,tester = None):
+        self.hostname = hostname
+        self.partition = partition
+        if tester is not None:
+            self.tester = tester
+            self.machine = self.tester.get_component_ip(hostname)
+            self.hypervisor = self.machine.sys("cat " + self.tester.eucapath + "/etc/eucalyptus/eucalyptus.conf | grep hypervisor").split("=").strip('"')
+
+class Euservice:
     def __init__(self, service_string, tester = None):
         values = service_string.split()
         self.type = values[1]
@@ -165,10 +173,22 @@ class EuserviceManager(object):
                     raise IndexError("Did not receive proper response from describe services when looking for " + str(type))
             raise e
         
+        #self.populate_nodes()
+        
         services = []
         for service_line in describe_services:
             services.append(Euservice(service_line, self.tester))
         return services
+    
+    def populate_nodes(self):
+        clc = self.get_enabled_clc()
+        nodes_list = clc.machine.sys("euca_conf --list-nodes")
+        for node_string in node_lists:
+            split_string = node_string.split()
+            node = Eunode(split_string[1], split_string[2])
+            for part in self.partitions:
+                if node.patition is part.name:
+                    part.ncs.append(node)
     
     def reset(self):
         self.walruses= []
@@ -267,6 +287,7 @@ class EuserviceManager(object):
                 if current_euservice.partition in self.partitions:
                     my_partition = self.partitions[current_euservice.partition]
                 else:
+                    ### First time accessing this partition
                     my_partition = Partition(current_euservice.partition, self)
                     append = True
                 if re.search("cluster", current_euservice.type):
