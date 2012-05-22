@@ -11,8 +11,13 @@ import argparse
 class InstanceBasics(unittest.TestCase):
     def setUp(self):
         # Setup basic eutester object
-        self.tester = Eucaops( config_file="../input/2b_tested.lst", password="foobar")
-        self.tester.poll_count = 40
+        eucarc_regex = re.compile("eucarc-")
+        eucarc_dirs = [path for path in os.listdir(".") if eucarc_regex.search(path)]
+        eucarc_path = None
+        if len(eucarc_dirs) > 0:
+            eucarc_path = eucarc_dirs[0]
+        self.tester = Eucaops( config_file="../input/2b_tested.lst", password="foobar", credpath=eucarc_path)
+        self.tester.poll_count = 80
         
         ### Add and authorize a group for the instance
         self.group = self.tester.add_group(group_name="group-" + str(time.time()))
@@ -29,7 +34,7 @@ class InstanceBasics(unittest.TestCase):
 
     
     def tearDown(self):
-        if self.reservation:
+        if self.reservation is not None:
             self.assertTrue(self.tester.terminate_instances(self.reservation), "Unable to terminate instance(s)")
         self.tester.delete_group(self.group)
         self.tester.delete_keypair(self.keypair)
@@ -279,11 +284,17 @@ if __name__ == "__main__":
     args = parser.parse_args()
     for test in args.tests:
         if args.xml:
-            file = open("test-" + test + "result.xml", "w")
+            try:
+                os.mkdir("results")
+            except OSError:
+                pass
+            file = open("results/test-" + test + "result.xml", "w")
             result = xmlrunner.XMLTestRunner(file).run(InstanceBasics(test))
+            file.close()
         else:
             result = unittest.TextTestRunner(verbosity=2).run(InstanceBasics(test))
         if result.wasSuccessful():
             pass
         else:
             exit(1)
+            
