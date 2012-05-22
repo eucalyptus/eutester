@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/Users/hspencer/Desktop/eutester-dev/bin/python -tt
 import unittest
 import time
 from eucaops import Eucaops
@@ -11,7 +11,7 @@ import argparse
 class InstanceBasics(unittest.TestCase):
     def setUp(self):
         # Setup basic eutester object
-        self.tester = Eucaops( config_file="../input/2b_tested.lst", password="foobar")
+        self.tester = Eucaops( config_file="/Users/hspencer/Desktop/eutester-dev/creds/euca3/config_file", password="22dark10man")
         self.tester.poll_count = 40
         
         ### Determine whether virtio drivers are being used
@@ -143,6 +143,7 @@ class InstanceBasics(unittest.TestCase):
             self.assertTrue(re.search(instance.get_metadata("reservation-id")[0], self.reservation.id), 'Incorrect reservation in metadata')
             self.assertTrue(re.search(instance.get_metadata("kernel-id")[0], instance.kernel),  'Incorrect kernel id in metadata')
             self.assertTrue(re.search(instance.get_metadata("public-hostname")[0], instance.public_dns_name), 'Incorrect public host name in metadata')
+            self.assertTrue(re.search(instance.get_metadata("local-hostname")[0], instance.private_dns_name), 'Incorrect private host name in metadata')
             self.assertTrue(re.search(instance.get_metadata("ramdisk-id")[0], instance.ramdisk ), 'Incorrect ramdisk in metadata') #instance-type
             self.assertTrue(re.search(instance.get_metadata("instance-type")[0], instance.instance_type ), 'Incorrect instance type in metadata')
             BAD_META_DATA_KEYS = ['foobar']
