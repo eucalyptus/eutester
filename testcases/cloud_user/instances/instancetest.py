@@ -1,4 +1,4 @@
-#!/usr/bin/env python -tt
+#!/usr/bin/env python 
 import unittest
 import time
 from eucaops import Eucaops
@@ -16,7 +16,7 @@ class InstanceBasics(unittest.TestCase):
         eucarc_path = None
         if len(eucarc_dirs) > 0:
             eucarc_path = eucarc_dirs[0]
-        self.tester = Eucaops( config_file="<config-file>", password="<password>", credpath=eucarc_path)
+        self.tester = Eucaops( config_file="../input/2b_tested.lst", password="foobar", credpath=eucarc_path)
         self.tester.poll_count = 80
         
         ### Add and authorize a group for the instance
@@ -26,7 +26,7 @@ class InstanceBasics(unittest.TestCase):
         ### Generate a keypair for the instance
         self.keypair = self.tester.add_keypair( "keypair-" + str(time.time()))
         self.keypath = os.curdir + "/" + self.keypair.name + ".pem"
-        self.image = self.tester.get_emi(emi="<emi>")
+        self.image = self.tester.get_emi(root_device_type="instance-store")
         self.reservation = None
         self.private_addressing = False
         zones = self.tester.ec2.get_all_zones()
