@@ -664,8 +664,15 @@ class EC2ops(Eutester):
         reservation = image.run(key_name=keypair,security_groups=[group],instance_type=type, placement=zone, min_count=min, max_count=max, user_data=user_data, addressing_type=addressing_type)
         if ((len(reservation.instances) < min) or (len(reservation.instances) > max)):
             self.fail("Reservation:"+str(reservation.id)+" returned "+str(len(reservation.instances))+" instances, not within min("+str(min)+") and max("+str(max)+" ")
-            
-        self.wait_for_reservation(reservation)
+        
+        try:
+            self.wait_for_reservation(reservation)
+        except Exception, e:
+            self.critical("An instance did not enter proper state in " + str(reservation) )
+            self.critical("Terminatng instances in " + str(reservation))
+            self.terminate_instances(reservation)
+            raise Exception("Instances in " + str(reservation) + " did not enter proper state")
+        
         for instance in reservation.instances:
             if instance.state != "running":
                 self.critical("Instance " + instance.id + " now in " + instance.state  + " state")
