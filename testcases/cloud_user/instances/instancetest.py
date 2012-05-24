@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python 
 import unittest
 import time
 from eucaops import Eucaops
@@ -67,7 +67,7 @@ class InstanceBasics(unittest.TestCase):
         if zone is None:
             zone = self.zone
         if self.reservation is None:
-            self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name, zone=zone)
+            self.reservation = self.tester.run_instance(self.image, keypair=self.keypair.name, group=self.group.name, zone=zone)
             self.tester.sleep(10)
         for instance in self.reservation.instances:
             self.assertTrue( self.tester.wait_for_reservation(self.reservation) ,'Instance did not go to running')
@@ -120,26 +120,29 @@ class InstanceBasics(unittest.TestCase):
     def MetaData(self, zone=None):
         """Check metadata for consistency"""
         # Missing nodes
-        # ['block-device-mapping/',  'ami-manifest-path' , 'hostname',  'placement/']
+        # ['block-device-mapping/',  'ami-manifest-path']
         if zone is None:
             zone = self.zone
         self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name, zone=zone)
         for instance in self.reservation.instances:
             ## Need to verify  the public key (could just be checking for a string of a certain length)
-            #self.assertTrue(re.search(instance_ssh.get_metadata("public-keys/0/")[0], self.keypair.name), 'Incorrect public key in metadata')
-            self.assertTrue(re.search(instance.get_metadata("security-groups")[0], self.group.name), 'Incorrect security group in metadata') 
+            self.assertTrue(re.match(instance.get_metadata("public-keys/0/openssh-key")[0].split('eucalyptus.')[-1], self.keypair.name), 'Incorrect public key in metadata')
+            self.assertTrue(re.match(instance.get_metadata("security-groups")[0], self.group.name), 'Incorrect security group in metadata') 
             # Need to validate block device mapping
             #self.assertTrue(re.search(instance_ssh.get_metadata("block-device-mapping/")[0], "")) 
-            self.assertTrue(re.search(instance.get_metadata("instance-id")[0], instance.id), 'Incorrect instance id in metadata')  
-            self.assertTrue(re.search(instance.get_metadata("local-ipv4")[0] , instance.private_ip_address), 'Incorrect private ip in metadata')
-            self.assertTrue(re.search(instance.get_metadata("public-ipv4")[0] , instance.ip_address), 'Incorrect public ip in metadata')          
-            self.assertTrue(re.search(instance.get_metadata("ami-id")[0], instance.image_id), 'Incorrect ami id in metadata')
-            self.assertTrue(re.search(instance.get_metadata("ami-launch-index")[0], instance.ami_launch_index), 'Incorrect launch index in metadata')
-            self.assertTrue(re.search(instance.get_metadata("reservation-id")[0], self.reservation.id), 'Incorrect reservation in metadata')
-            self.assertTrue(re.search(instance.get_metadata("kernel-id")[0], instance.kernel),  'Incorrect kernel id in metadata')
-            self.assertTrue(re.search(instance.get_metadata("public-hostname")[0], instance.public_dns_name), 'Incorrect public host name in metadata')
-            self.assertTrue(re.search(instance.get_metadata("ramdisk-id")[0], instance.ramdisk ), 'Incorrect ramdisk in metadata') #instance-type
-            self.assertTrue(re.search(instance.get_metadata("instance-type")[0], instance.instance_type ), 'Incorrect instance type in metadata')
+            self.assertTrue(re.match(instance.get_metadata("instance-id")[0], instance.id), 'Incorrect instance id in metadata')  
+            self.assertTrue(re.match(instance.get_metadata("local-ipv4")[0] , instance.private_ip_address), 'Incorrect private ip in metadata')
+            self.assertTrue(re.match(instance.get_metadata("public-ipv4")[0] , instance.ip_address), 'Incorrect public ip in metadata')          
+            self.assertTrue(re.match(instance.get_metadata("ami-id")[0], instance.image_id), 'Incorrect ami id in metadata')
+            self.assertTrue(re.match(instance.get_metadata("ami-launch-index")[0], instance.ami_launch_index), 'Incorrect launch index in metadata')
+            self.assertTrue(re.match(instance.get_metadata("reservation-id")[0], self.reservation.id), 'Incorrect reservation in metadata')
+            self.assertTrue(re.match(instance.get_metadata("placement/availability-zone")[0], instance.placement), 'Incorrect availability-zone in metadata')
+            self.assertTrue(re.match(instance.get_metadata("kernel-id")[0], instance.kernel),  'Incorrect kernel id in metadata')
+            self.assertTrue(re.match(instance.get_metadata("public-hostname")[0], instance.public_dns_name), 'Incorrect public host name in metadata')
+            self.assertTrue(re.match(instance.get_metadata("local-hostname")[0], instance.private_dns_name), 'Incorrect private host name in metadata')
+            self.assertTrue(re.match(instance.get_metadata("hostname")[0], instance.dns_name), 'Incorrect host name in metadata')
+            self.assertTrue(re.match(instance.get_metadata("ramdisk-id")[0], instance.ramdisk ), 'Incorrect ramdisk in metadata') #instance-type
+            self.assertTrue(re.match(instance.get_metadata("instance-type")[0], instance.instance_type ), 'Incorrect instance type in metadata')
             BAD_META_DATA_KEYS = ['foobar']
             for key in BAD_META_DATA_KEYS:
                 self.assertTrue(re.search("Not Found", "".join(instance.get_metadata(key))), 'No fail message on invalid meta-data node')
@@ -297,4 +300,3 @@ if __name__ == "__main__":
             pass
         else:
             exit(1)
-            
