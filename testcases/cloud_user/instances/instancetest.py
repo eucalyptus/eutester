@@ -17,7 +17,7 @@ class InstanceBasics(unittest.TestCase):
         if len(eucarc_dirs) > 0:
             eucarc_path = eucarc_dirs[0]
         self.tester = Eucaops( config_file="../input/2b_tested.lst", password="foobar", credpath=eucarc_path)
-        self.tester.poll_count = 80
+        self.tester.poll_count = 120
         
         ### Add and authorize a group for the instance
         self.group = self.tester.add_group(group_name="group-" + str(time.time()))
