@@ -678,7 +678,7 @@ class EC2ops(Eutester):
                 self.critical("Instance " + instance.id + " now in " + instance.state  + " state")
             else:
                 self.debug( "Instance " + instance.id + " now in " + instance.state  + " state")
-        #
+        #    
         # check to see if public and private DNS names and IP addresses are the same
         #
             if (instance.ip_address is instance.private_ip_address) and (instance.public_dns_name is instance.private_dns_name) and ( private_addressing is False ):
@@ -700,6 +700,7 @@ class EC2ops(Eutester):
         while elapsed <= timeout:
             if zeros.search(instance.public_dns_name):
                 self.sleep(1)
+                instance.update()
                 elapsed = elapsed + 1
             else:
                 return True
