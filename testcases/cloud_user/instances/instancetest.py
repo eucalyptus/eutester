@@ -8,15 +8,12 @@ import re
 import random
 import argparse
 
+credpath = None
+
 class InstanceBasics(unittest.TestCase):
     def setUp(self):
         # Setup basic eutester object
-        eucarc_regex = re.compile("eucarc-")
-        eucarc_dirs = [path for path in os.listdir(".") if eucarc_regex.search(path)]
-        eucarc_path = None
-        if len(eucarc_dirs) > 0:
-            eucarc_path = eucarc_dirs[0]
-        self.tester = Eucaops( config_file="../input/2b_tested.lst", password="foobar", credpath=eucarc_path)
+        self.tester = Eucaops( credpath=credpath)
         self.tester.poll_count = 120
         
         ### Add and authorize a group for the instance
@@ -279,9 +276,11 @@ class InstanceBasics(unittest.TestCase):
 if __name__ == "__main__":
     ## If given command line arguments, use them as test names to launch
     parser = argparse.ArgumentParser(description='Parse test suite arguments.')
+    parser.add_argument('--credpath', default=".eucarc")
     parser.add_argument('--xml', action="store_true", default=False)
     parser.add_argument('--tests', nargs='+', default= ["BasicInstanceChecks","ElasticIps","PrivateIPAddressing","MaxSmallInstances","LargestInstance","MetaData","Reboot", "Churn"])
     args = parser.parse_args()
+    credpath = args.credpath
     for test in args.tests:
         if args.xml:
             try:
