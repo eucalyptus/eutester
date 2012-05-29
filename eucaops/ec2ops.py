@@ -688,6 +688,10 @@ class EC2ops(Eutester):
                 self.debug(str(instance) + " got Public IP: " + str(instance.ip_address)  + " Private IP: " + str(instance.private_ip_address) + " Public DNS Name: " + str(instance.public_dns_name) + " Private DNS Name: " + str(instance.private_dns_name))
                 self.test_resources["reservations"].append(reservation)
             self.wait_for_valid_ip(instance)
+            if is_reachable:
+                self.ping(instance.public_dns_name, 60)
+                
+            
         #if we can establish an SSH session convert the instances to the test class euinstance for access to instance specific test methods
         if(is_reachable) and ((keypair is not None) or (user is not None and password is not None)):
             return self.convert_reservation_to_euinstance(reservation, username=username, password=password, keyname=keypair)
