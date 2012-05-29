@@ -91,7 +91,7 @@ class EuInstance(Instance):
                                       password=None, 
                                       username="root",  
                                       verbose=True, 
-                                      timeout=60,
+                                      timeout=120,
                                       retry=2
                                       ):
         '''
@@ -368,7 +368,7 @@ class EuInstance(Instance):
         if length == 0:
             self.sys("dd if="+srcdev+" of="+voldev+"; sync")
         else:
-            self.sys("head -"+str(length)+" "+srcdev+" > "+voldev+"; sync")
+            self.sys("tail -"+str(length)+" "+srcdev+" > "+voldev+"; sync")
         md5 = self.md5_attached_euvolume(euvolume, timepergig=timepergig,length=length)
         self.debug("Filled Volume:"+euvolume.id+" dev:"+voldev+" md5:"+md5)
         return md5
