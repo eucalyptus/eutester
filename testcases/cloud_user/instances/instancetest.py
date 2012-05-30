@@ -145,6 +145,42 @@ class InstanceBasics(unittest.TestCase):
                 self.assertTrue(re.search("Not Found", "".join(instance.get_metadata(key))), 'No fail message on invalid meta-data node')
         return self.reservation
            
+    def DNSResolveCheck(self, zone=None):
+        """Check DNS information for public/private DNS names and IP addresses"""
+        if zone is None:
+            zone = self.zone
+        self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name, zone=zone)
+        for instance in self.reservation.instances:
+            self.assertTrue(re.match(instance.get_metadata("local-ipv4")[0] , instance.private_ip_address), 'Incorrect private ip in metadata')
+            self.assertTrue(re.match(instance.get_metadata("public-ipv4")[0] , instance.ip_address), 'Incorrect public ip in metadata')          
+            self.assertTrue(re.match(instance.get_metadata("public-hostname")[0], instance.public_dns_name), 'Incorrect public host name in metadata')
+            self.assertTrue(re.match(instance.get_metadata("local-hostname")[0], instance.private_dns_name), 'Incorrect private host name in metadata')
+            self.assertTrue(re.match(instance.get_metadata("hostname")[0], instance.dns_name), 'Incorrect host name in metadata')
+           
+            # Test to see if Dynamic DNS has been configured # 
+            if re.match("internal", instance.private_dns_name.split('eucalyptus.')[-1]):
+                # Perform DNS resolution against private IP and private DNS name
+                 
+                # Perform DNS resolution against public IP and public DNS name
+
+        return self.reservation
+           
+    def DNSCheck(self, zone=None):
+        """Check  to make sure Dynamic DNS is reported correctly for public/private IP address and DNS names"""
+        if zone is None:
+            zone = self.zone
+        self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name, zone=zone)
+        for instance in self.reservation.instances:
+           
+            # Test to see if Dynamic DNS has been configured # 
+            if re.match("internal", instance.private_dns_name.split('eucalyptus.')[-1]):
+                # Make sure that private_ip_address is not the same as local-hostname
+                self.assertFalse(re.match(instance.private_ip_address, instance.private_dns_name), 'local-ipv4 and local-hostname are the same with DNS on') 
+                # Make sure that ip_address is not the same as public-hostname
+                self.assertFalse(re.match(instance.ip_address, instance.public_dns_name), 'public-ipv4 and public-hostname are the same with DNS on')
+
+        return self.reservation
+
     def Reboot(self, zone=None):
         """Reboot instance ensure IP connectivity and volumes stay attached"""
         if zone is None:
@@ -281,7 +317,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Parse test suite arguments.')
     parser.add_argument('--credpath', default=".eucarc")
     parser.add_argument('--xml', action="store_true", default=False)
-    parser.add_argument('--tests', nargs='+', default= ["BasicInstanceChecks","ElasticIps","PrivateIPAddressing","MaxSmallInstances","LargestInstance","MetaData","Reboot", "Churn"])
+    parser.add_argument('--tests', nargs='+', default= ["BasicInstanceChecks","ElasticIps","PrivateIPAddressing","MaxSmallInstances","LargestInstance","MetaData", "DNSResolveCheck", "DNSCheck" "Reboot", "Churn"])
     args = parser.parse_args()
     credpath = args.credpath
     for test in args.tests:
