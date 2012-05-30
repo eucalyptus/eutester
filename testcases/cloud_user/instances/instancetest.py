@@ -8,11 +8,13 @@ import re
 import random
 import argparse
 
-credpath = None
+arg_credpath = None
 
 class InstanceBasics(unittest.TestCase):
-    def setUp(self):
+    def setUp(self, credpath=None):
         # Setup basic eutester object
+        if credpath is None:
+            credpath = arg_credpath
         self.tester = Eucaops( credpath=credpath)
         self.tester.poll_count = 120
         
@@ -280,7 +282,7 @@ if __name__ == "__main__":
     parser.add_argument('--xml', action="store_true", default=False)
     parser.add_argument('--tests', nargs='+', default= ["BasicInstanceChecks","ElasticIps","PrivateIPAddressing","MaxSmallInstances","LargestInstance","MetaData","Reboot", "Churn"])
     args = parser.parse_args()
-    credpath = args.credpath
+    arg_credpath = args.credpath
     for test in args.tests:
         if args.xml:
             try:
