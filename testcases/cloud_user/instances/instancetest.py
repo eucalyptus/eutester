@@ -155,7 +155,7 @@ class InstanceBasics(unittest.TestCase):
             self.assertTrue(self.create_attach_volume(instance, 1), "Was not able to attach volume")
             ### Reboot instance
             instance.reboot()
-            self.tester.sleep(30) 
+            self.tester.ping(instance.public_dns_name, 30)
             self.tester.debug("Restarting SSH session to instance")
             instance.reset_ssh_connection()
             ### Check for device in instance
