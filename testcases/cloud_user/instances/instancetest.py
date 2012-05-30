@@ -8,11 +8,13 @@ import re
 import random
 import argparse
 
-credpath = None
+arg_credpath = None
 
 class InstanceBasics(unittest.TestCase):
-    def setUp(self):
+    def setUp(self, credpath=None):
         # Setup basic eutester object
+        if credpath is None:
+            credpath = arg_credpath
         self.tester = Eucaops( credpath=credpath)
         self.tester.poll_count = 120
         
@@ -192,7 +194,7 @@ class InstanceBasics(unittest.TestCase):
             self.assertTrue(self.create_attach_volume(instance, 1), "Was not able to attach volume")
             ### Reboot instance
             instance.reboot()
-            self.tester.sleep(30) 
+            self.tester.ping(instance.public_dns_name, 30)
             self.tester.debug("Restarting SSH session to instance")
             instance.reset_ssh_connection()
             ### Check for device in instance
@@ -319,7 +321,7 @@ if __name__ == "__main__":
     parser.add_argument('--xml', action="store_true", default=False)
     parser.add_argument('--tests', nargs='+', default= ["BasicInstanceChecks","ElasticIps","PrivateIPAddressing","MaxSmallInstances","LargestInstance","MetaData", "DNSResolveCheck", "DNSCheck" "Reboot", "Churn"])
     args = parser.parse_args()
-    credpath = args.credpath
+    arg_credpath = args.credpath
     for test in args.tests:
         if args.xml:
             try:

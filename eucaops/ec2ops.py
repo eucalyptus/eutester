@@ -662,6 +662,8 @@ class EC2ops(Eutester):
             
         self.debug( "Attempting to run "+ str(image.root_device_type)  +" image " + str(image) + " in group " + str(group))
         reservation = image.run(key_name=keypair,security_groups=[group],instance_type=type, placement=zone, min_count=min, max_count=max, user_data=user_data, addressing_type=addressing_type)
+        self.test_resources["reservations"].append(reservation)
+        
         if ((len(reservation.instances) < min) or (len(reservation.instances) > max)):
             self.fail("Reservation:"+str(reservation.id)+" returned "+str(len(reservation.instances))+" instances, not within min("+str(min)+") and max("+str(max)+" ")
         
@@ -686,8 +688,12 @@ class EC2ops(Eutester):
                 self.critical("Instance " + instance.id + " has he same public and private IPs of " + str(instance.ip_address))
             else:
                 self.debug(str(instance) + " got Public IP: " + str(instance.ip_address)  + " Private IP: " + str(instance.private_ip_address) + " Public DNS Name: " + str(instance.public_dns_name) + " Private DNS Name: " + str(instance.private_dns_name))
-                self.test_resources["reservations"].append(reservation)
+            
             self.wait_for_valid_ip(instance)
+            if (is_reachable) and (private_addressing is False) :
+                self.ping(instance.public_dns_name, 60)
+                
+            
         #if we can establish an SSH session convert the instances to the test class euinstance for access to instance specific test methods
         if(is_reachable) and ((keypair is not None) or (user is not None and password is not None)):
             return self.convert_reservation_to_euinstance(reservation, username=username, password=password, keyname=keypair)
