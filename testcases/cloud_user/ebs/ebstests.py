@@ -85,12 +85,13 @@ class EbsTests():
     multicluster=False
     image = None
     
-    def __init__(self, tester=None, zone=None, config_file='../input/2b_tested.lst', volumes=None, keypair=None, group=None, image=None, eof=1):
+    def __init__(self, tester=None, zone=None, config_file='../input/2b_tested.lst', password="foobar", volumes=None, keypair=None, group=None, image=None, eof=1):
+        
         if tester is None and self.tester is None:
-            self.tester = Eucaops( config_file=config_file)
+            self.tester = Eucaops( config_file=config_file,password=password)
         else:
             self.tester = tester
-        tester.exit_on_fail = eof
+        self.tester.exit_on_fail = eof
         
         self.image = image
             
@@ -100,7 +101,7 @@ class EbsTests():
             self.zonelist.append(self.zone)
         else: 
             for zone in self.tester.service_manager.partitions.keys():
-                partition = tester.service_manager.partitions.get(zone)
+                partition = self.tester.service_manager.partitions.get(zone)
                 tzone = TestZone(partition)
                 self.zonelist.append(tzone)
                 self.multicluster=True
@@ -116,9 +117,9 @@ class EbsTests():
             group_name='EbsTestGroup'
             
             try:
-                self.group = tester.add_group(group_name)
-                tester.authorize_group_by_name(self.group.name)
-                tester.authorize_group_by_name(self.group.name,protocol="icmp",port=-1)
+                self.group = self.tester.add_group(group_name)
+                self.tester.authorize_group_by_name(self.group.name)
+                self.tester.authorize_group_by_name(self.group.name,protocol="icmp",port=-1)
             except Exception, e:    
                 raise Exception("Error when setting up group:"+str(group_name)+", Error:"+str(e))   
         
@@ -128,11 +129,11 @@ class EbsTests():
             if (keypair is not None):
                 self.keypair = keypair
             else:     
-                keys = tester.get_all_current_local_keys()
+                keys = self.tester.get_all_current_local_keys()
                 if keys != []:
                     self.keypair = keys[0]
                 else:
-                    self.keypair = keypair = tester.add_keypair('ebs_test_key-' + str(time.time()))
+                    self.keypair = keypair = self.tester.add_keypair('ebs_test_key-' + str(time.time()))
         except Exception, ke:
             raise Exception("Failed to find/create a keypair, error:" + str(ke))
         

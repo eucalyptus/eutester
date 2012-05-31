@@ -7,6 +7,8 @@ eutester version 0.0.1
 
 [Writing Your First Testcase](http://testingclouds.wordpress.com/2012/04/02/eutester-basics-part-iii-creating-your-first-testcase/)
 
+[Guidelines for Contributing Testcases](https://github.com/eucalyptus/eutester/wiki/Guidelines-for-Contributing-Test-Cases)
+
 eutester is an attempt to leverage existing test code to make test writing faster and standardized.  
 
 Main Classes
@@ -51,13 +53,13 @@ The basic constructor can be used for 2 different connections:
  
 Config file
 ----------
-
-The configuration file for private cloud mode (option 1 above) has the following structure:
-
+    NETWORK MANAGED
     clc.mydomain.com CENTOS 5.7 64 REPO [CC00 CLC SC00 WS]    
     nc1.mydomain.com VMWARE ESX-4.0 64 REPO [NC00]
 
-
+Network
+------
+Possible values are MANAGED, MANAGED-NOVLAN, SYSTEM, or STATIC
 
 Columns
 ------ 
