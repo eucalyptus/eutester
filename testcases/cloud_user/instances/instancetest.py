@@ -158,15 +158,27 @@ class InstanceBasics(unittest.TestCase):
             if re.match("internal", instance.private_dns_name.split('eucalyptus.')[-1]):
                 # Per AWS standard, resolution should have private hostname or private IP as a valid response
                 # Perform DNS resolution against private IP and private DNS name
+                # Check to see if nslookup was able to resolve
+                assertTrue(re.search('answer\:', instance.sys("nslookup " +  instance.get_metadata("hostname")[0])[3]), "DNS lookup failed for hostname.")
+                # Since nslookup was able to resolve, now check to see if nslookup on local-hostname returns local-ipv4 address
+                assertTrue(re.search(instance.get_metadata("local-ipv4")[0], instance.sys("nslookup " + instance.get_metadata("hostname")[0])[5]), "Incorrect DNS resolution for hostname.")
+                # Check to see if nslookup was able to resolve
                 assertTrue(re.search('answer\:', instance.sys("nslookup " +  instance.get_metadata("local-hostname")[0])[3]), "DNS lookup failed for private hostname.")
+                # Since nslookup was able to resolve, now check to see if nslookup on local-hostname returns local-ipv4 address
                 assertTrue(re.search(instance.get_metadata("local-ipv4")[0], instance.sys("nslookup " + instance.get_metadata("local-hostname")[0])[5]), "Incorrect DNS resolution for private hostname.")
+                # Check to see if nslookup was able to resolve
                 assertTrue(re.search('answer\:', instance.sys("nslookup " +  instance.get_metadata("local-ipv4")[0])[3]), "DNS lookup failed for private IP address.")
+                # Since nslookup was able to resolve, now check to see if nslookup on local-ipv4 address returns local-hostname
                 assertTrue(re.search(instance.get_metadata("local-hostname")[0], instance.sys("nslookup " +  instance.get_metadata("local-ipv4")[0])[4]), "Incorrect DNS resolution for private IP address")       
                 # Perform DNS resolution against public IP and public DNS name
+                # Check to see if nslookup was able to resolve
                 assertTrue(re.search('answer\:', instance.sys("nslookup " +  instance.get_metadata("public-hostname")[0])[3]), "DNS lookup failed for public-hostname.")
+                # Since nslookup was able to resolve, now check to see if nslookup on public-hostname returns local-ipv4 address
                 assertTrue(re.search(instance.get_metadata("local-ipv4")[0], instance.sys("nslookup " + instance.get_metadata("public-hostname")[0])[5]), "Incorrect DNS resolution for public-hostname.")
+                # Check to see if nslookup was able to resolve
                 assertTrue(re.search('answer\:', instance.sys("nslookup " +  instance.get_metadata("public-ipv4")[0])[3]), "DNS lookup failed for public IP address.")
-                assertTrue(re.search(instance.get_metadata("local-hostname")[0], instance.sys("nslookup " +  instance.get_metadata("public-ipv4")[0])[4]), "Incorrect DNS resolution for public IP address")
+                # Since nslookup was able to resolve, now check to see if nslookup on public-ipv4 address returns public-hostname
+                assertTrue(re.search(instance.get_metadata("public-hostname")[0], instance.sys("nslookup " +  instance.get_metadata("public-ipv4")[0])[4]), "Incorrect DNS resolution for public IP address")
 
         return self.reservation
            
