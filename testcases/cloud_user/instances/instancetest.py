@@ -477,10 +477,15 @@ if __name__ == "__main__":
                                      description="Run interative test of operations to \
                                                   test instance functionality and features \
                                                   on a Eucalyptus Cloud.  For more information, \
-                                                  please refer to https://github.com/hspencer77/eutester/wiki/instancetest.")
-    parser.add_argument('--credpath', default=".eucarc")
-    parser.add_argument('--xml', action="store_true", default=False)
-    parser.add_argument('--tests', nargs='+', default= ["BasicInstanceChecks","ElasticIps","PrivateIPAddressing","MaxSmallInstances","LargestInstance","MetaData", "DNSResolveCheck", "DNSCheck" "Reboot", "Churn"])
+                                                  please refer to https://github.com/hspencer77/eutester/wiki/instancetest.",
+                                     usage="%(prog)s --credpath=<path to creds> [--xml] [--tests=test1,..testN]")
+    parser.add_argument('--credpath',
+                        help="path to user credentials", default=".eucarc")
+    parser.add_argument('--xml', 
+                        help="to provide JUnit style XML output", action="store_true", default=False)
+    parser.add_argument('--tests', nargs='+', 
+                        help="test cases to be executed", 
+                        default= ["BasicInstanceChecks","ElasticIps","PrivateIPAddressing","MaxSmallInstances","LargestInstance","MetaData", "DNSResolveCheck", "DNSCheck" "Reboot", "Churn"])
     args = parser.parse_args()
     arg_credpath = args.credpath
     for test in args.tests:
