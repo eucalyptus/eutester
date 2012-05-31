@@ -1,4 +1,145 @@
-#!/usr/bin/env python 
+#!/usr/bin/env python
+#
+#
+# Description:  This script encompasses test cases/modules concerning instance specific behavior and
+#               features for Eucalyptus.  The test cases/modules that are executed can be 
+#               found in the script under the "tests" list.
+#
+#
+##########################
+#                        #
+#       Test Cases       #
+#                        #
+##########################
+#
+# [create_attach_volume]
+#
+#               This case was developed to test the creation and attaching of volumes
+#               to an instance. If there is an issue with creating or attaching the
+#               volume, the test case errors out.  The results are logged.
+# 
+# [BasicInstanceChecks]
+#               
+#               This case was developed to run through a series of basic instance tests.
+#               The tests are as follows:
+#                   - execute run_instances command
+#                   - make sure that public DNS name and private IP aren't the same
+#                       (This is for Managed/Managed-NOVLAN networking modes)
+#                   - test to see if instance is ping-able
+#                   - test to make sure that instance is accessible via ssh
+#                       (ssh into instance and run basic ls command)
+#               If any of these tests fail, the test case will error out, logging the results.
+#
+# [ElasticIps]
+#
+#               This case was developed to test elastic IPs in Eucalyptus. This test case does
+#               not test instances that are launched using private-addressing option.
+#               The test case executes the following tests:
+#                   - allocates an IP, associates the IP to the instance, then pings the instance.
+#                   - disassociates the allocated IP, then pings the instance.
+#                   - releases the allocated IP address
+#               If any of the tests fail, the test case will error out, logging the results.
+#
+# [MaxSmallInstances]
+#
+#               This case was developed to test the maximum number of m1.small vm types a configured
+#               cloud can run.  The test runs the maximum number of m1.small vm types allowed, then
+#               tests to see if all the instances reached a running state.  If there is a failure,
+#               the test case errors out; logging the results.
+#
+# [LargestInstance]
+#
+#               This case was developed to test the maximum number of c1.xlarge vm types a configured
+#               cloud can run.  The test runs the maximum number of c1.xlarge vm types allowed, then
+#               tests to see if all the instances reached a running state.  If there is a failure,
+#               the test case errors out; logging the results.
+#
+# [MetaData]
+#
+#               This case was developed to test the metadata service of an instance for consistency.
+#               The following meta-data attributes are tested:
+#                   - public-keys/0/openssh-key
+#                   - security-groups
+#                   - instance-id
+#                   - local-ipv4
+#                   - public-ipv4
+#                   - ami-id
+#                   - ami-launch-index
+#                   - reservation-id
+#                   - placement/availability-zone
+#                   - kernel-id
+#                   - public-hostname
+#                   - local-hostname
+#                   - hostname
+#                   - ramdisk-id
+#                   - instance-type
+#                   - any bad metadata that shouldn't be present.
+#               If any of these tests fail, the test case will error out; logging the results.
+#
+# [DNSResolveCheck]
+#
+#               This case was developed to test DNS resolution information for public/private DNS
+#               names and IP addresses.  The tested DNS resolution behavior is expected to follow
+#               AWS EC2.  The following tests are ran using the associated meta-data attributes:
+#                   - check to see if Eucalyptus Dynamic DNS is configured
+#                   - nslookup on hostname; checks to see if it matches local-ipv4
+#                   - nslookup on local-hostname; check to see if it matches local-ipv4
+#                   - nslookup on local-ipv4; check to see if it matches local-hostname
+#                   - nslookup on public-hostname; check to see if it matches local-ipv4
+#                   - nslookup on public-ipv4; check to see if it matches public-host
+#               If any of these tests fail, the test case will error out; logging the results.
+#
+# [DNSCheck]
+#
+#               This case was developed to test to make sure Eucalyptus Dynamic DNS reports correct
+#               information for public/private IP address and DNS names passed to meta-data service.
+#               The following tests are ran using the associated meta-data attributes:
+#                   - check to see if Eucalyptus Dynamic DNS is configured
+#                   - check to see if local-ipv4 and local-hostname are not the same
+#                   - check to see if public-ipv4 and public-hostname are not the same
+#               If any of these tests fail, the test case will error out; logging the results.
+# [Reboot]
+#       
+#               This case was developed to test IP connectivity and volume attachment after
+#               instance reboot.  The following tests are done for this test case:
+#                   - creates a 1 gig EBS volume, then attach volume
+#                   - reboot instance
+#                   - attempts to connect to instance via ssh  
+#                   - checks to see if EBS volume is attached
+#                   - detaches volume
+#                   - deletes volume
+#               If any of these tests fail, the test case will error out; logging the results.
+#   
+# [Churn]
+#
+#               This case was developed to test robustness of Eucalyptus by starting instances,
+#               stopping them before they are running, and increase the time to terminate on each
+#               iteration.  This test case leverages the BasicInstanceChecks test case. The 
+#               following steps are ran:
+#                       - runs BasicInstanceChecks test case 5 times, 10 second apart.
+#                       - While each test is running, run and terminate instances with a 10sec sleep
+#                         in between.
+#                       - When a test finishes, rerun BasicInstanceChecks test case.
+#               If any of these tests fail, the test case will error out; logging the results.
+#
+# [PrivateIPAddressing]
+#
+#               This case was developed to test instances that are launched with private-addressing
+#               set to True.  The tests executed are as follows:
+#                   - run an instance with private-addressing set to True
+#                   - allocate/associate/disassociate/release an Elastic IP to that instance
+#                   - check to see if the instance went back to private addressing
+#               If any of these tests fail, the test case will error out; logging the results.
+#
+# [ReuseAddresses]
+#
+#               This case was developed to test when you run instances in a series, and make sure
+#               they get the same address.  The test launches an instance, checks the IP information
+#               , then terminates the instance. This test is launched 5 times in a row.  If there 
+#               is an error, the test case will error out; logging the results.
+#
+#
+
 import unittest
 import time
 from eucaops import Eucaops
@@ -148,7 +289,7 @@ class InstanceBasics(unittest.TestCase):
         return self.reservation
            
     def DNSResolveCheck(self, zone=None):
-        """Check DNS information for public/private DNS names and IP addresses"""
+        """Check DNS resolution information for public/private DNS names and IP addresses.  The DNS resolution behavior follows AWS EC2."""
         if zone is None:
             zone = self.zone
         self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name, zone=zone)
@@ -159,31 +300,31 @@ class InstanceBasics(unittest.TestCase):
                 # Per AWS standard, resolution should have private hostname or private IP as a valid response
                 # Perform DNS resolution against private IP and private DNS name
                 # Check to see if nslookup was able to resolve
-                assertTrue(re.search('answer\:', instance.sys("nslookup " +  instance.get_metadata("hostname")[0])[3]), "DNS lookup failed for hostname.")
+                self.assertTrue(re.search('answer\:', instance.sys("nslookup " +  instance.get_metadata("hostname")[0])[3]), "DNS lookup failed for hostname.")
                 # Since nslookup was able to resolve, now check to see if nslookup on local-hostname returns local-ipv4 address
-                assertTrue(re.search(instance.get_metadata("local-ipv4")[0], instance.sys("nslookup " + instance.get_metadata("hostname")[0])[5]), "Incorrect DNS resolution for hostname.")
+                self.assertTrue(re.search(instance.get_metadata("local-ipv4")[0], instance.sys("nslookup " + instance.get_metadata("hostname")[0])[5]), "Incorrect DNS resolution for hostname.")
                 # Check to see if nslookup was able to resolve
-                assertTrue(re.search('answer\:', instance.sys("nslookup " +  instance.get_metadata("local-hostname")[0])[3]), "DNS lookup failed for private hostname.")
+                self.assertTrue(re.search('answer\:', instance.sys("nslookup " +  instance.get_metadata("local-hostname")[0])[3]), "DNS lookup failed for private hostname.")
                 # Since nslookup was able to resolve, now check to see if nslookup on local-hostname returns local-ipv4 address
-                assertTrue(re.search(instance.get_metadata("local-ipv4")[0], instance.sys("nslookup " + instance.get_metadata("local-hostname")[0])[5]), "Incorrect DNS resolution for private hostname.")
+                self.assertTrue(re.search(instance.get_metadata("local-ipv4")[0], instance.sys("nslookup " + instance.get_metadata("local-hostname")[0])[5]), "Incorrect DNS resolution for private hostname.")
                 # Check to see if nslookup was able to resolve
-                assertTrue(re.search('answer\:', instance.sys("nslookup " +  instance.get_metadata("local-ipv4")[0])[3]), "DNS lookup failed for private IP address.")
+                self.assertTrue(re.search('answer\:', instance.sys("nslookup " +  instance.get_metadata("local-ipv4")[0])[3]), "DNS lookup failed for private IP address.")
                 # Since nslookup was able to resolve, now check to see if nslookup on local-ipv4 address returns local-hostname
-                assertTrue(re.search(instance.get_metadata("local-hostname")[0], instance.sys("nslookup " +  instance.get_metadata("local-ipv4")[0])[4]), "Incorrect DNS resolution for private IP address")       
+                self.assertTrue(re.search(instance.get_metadata("local-hostname")[0], instance.sys("nslookup " +  instance.get_metadata("local-ipv4")[0])[4]), "Incorrect DNS resolution for private IP address")       
                 # Perform DNS resolution against public IP and public DNS name
                 # Check to see if nslookup was able to resolve
-                assertTrue(re.search('answer\:', instance.sys("nslookup " +  instance.get_metadata("public-hostname")[0])[3]), "DNS lookup failed for public-hostname.")
+                self.assertTrue(re.search('answer\:', instance.sys("nslookup " +  instance.get_metadata("public-hostname")[0])[3]), "DNS lookup failed for public-hostname.")
                 # Since nslookup was able to resolve, now check to see if nslookup on public-hostname returns local-ipv4 address
-                assertTrue(re.search(instance.get_metadata("local-ipv4")[0], instance.sys("nslookup " + instance.get_metadata("public-hostname")[0])[5]), "Incorrect DNS resolution for public-hostname.")
+                self.assertTrue(re.search(instance.get_metadata("local-ipv4")[0], instance.sys("nslookup " + instance.get_metadata("public-hostname")[0])[5]), "Incorrect DNS resolution for public-hostname.")
                 # Check to see if nslookup was able to resolve
-                assertTrue(re.search('answer\:', instance.sys("nslookup " +  instance.get_metadata("public-ipv4")[0])[3]), "DNS lookup failed for public IP address.")
+                self.assertTrue(re.search('answer\:', instance.sys("nslookup " +  instance.get_metadata("public-ipv4")[0])[3]), "DNS lookup failed for public IP address.")
                 # Since nslookup was able to resolve, now check to see if nslookup on public-ipv4 address returns public-hostname
-                assertTrue(re.search(instance.get_metadata("public-hostname")[0], instance.sys("nslookup " +  instance.get_metadata("public-ipv4")[0])[4]), "Incorrect DNS resolution for public IP address")
+                self.assertTrue(re.search(instance.get_metadata("public-hostname")[0], instance.sys("nslookup " +  instance.get_metadata("public-ipv4")[0])[4]), "Incorrect DNS resolution for public IP address")
 
         return self.reservation
            
     def DNSCheck(self, zone=None):
-        """Check  to make sure Dynamic DNS is reported correctly for public/private IP address and DNS names"""
+        """Check to make sure Dynamic DNS reports correct information for public/private IP address and DNS names"""
         if zone is None:
             zone = self.zone
         self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name, zone=zone)
@@ -331,7 +472,12 @@ class InstanceBasics(unittest.TestCase):
     
 if __name__ == "__main__":
     ## If given command line arguments, use them as test names to launch
-    parser = argparse.ArgumentParser(description='Parse test suite arguments.')
+    parser = argparse.ArgumentParser(prog="instancetest.py",
+                                     version="Test Case [instancetest.py] Version 0.2",
+                                     description="Run interative test of operations to \
+                                                  test instance functionality and features \
+                                                  on a Eucalyptus Cloud.  For more information, \
+                                                  please refer to https://github.com/hspencer77/eutester/wiki/instancetest.")
     parser.add_argument('--credpath', default=".eucarc")
     parser.add_argument('--xml', action="store_true", default=False)
     parser.add_argument('--tests', nargs='+', default= ["BasicInstanceChecks","ElasticIps","PrivateIPAddressing","MaxSmallInstances","LargestInstance","MetaData", "DNSResolveCheck", "DNSCheck" "Reboot", "Churn"])
