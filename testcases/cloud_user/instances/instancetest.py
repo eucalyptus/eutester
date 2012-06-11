@@ -436,7 +436,7 @@ class InstanceBasics(unittest.TestCase):
             self.assertTrue( self.tester.ping(instance.public_dns_name), "Could not ping instance with new IP")
             address.release()
             if (instance.public_dns_name != instance.private_dns_name):
-                self.tester.critical("Instance received a new public IP: " + instance.public_dns_name)
+                self.fail("Instance received a new public IP: " + instance.public_dns_name)
         return self.reservation
     
     def ReuseAddresses(self, zone = None):
