@@ -7,8 +7,14 @@ from instancetest import InstanceBasics
 from eucaops import Eucaops
 from eutester import xmlrunner
 
-class BFEBSBasics(InstanceBasics):
+arg_credpath = None
 
+class BFEBSBasics(InstanceBasics):
+    def setUp(self, credpath=None):
+        if credpath is None:
+            credpath = arg_credpath
+        super(BFEBSBasics, self).setUp(credpath)
+        
     def RegisterImage(self, bfebs_img_url = "<image-url>"):
         '''Register a BFEBS snapshot'''
         self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name)
@@ -94,9 +100,11 @@ class BFEBSBasics(InstanceBasics):
 if __name__ == "__main__":
     ## If given command line arguments, use them as test names to launch
     parser = argparse.ArgumentParser(description='Parse test suite arguments.')
+    parser.add_argument('--credpath', default=".eucarc")
     parser.add_argument('--xml', action="store_true", default=False)
     parser.add_argument('--tests', nargs='+', default= ["RegisterImage","LaunchImage", "StopStart","MultipleBFEBSInstances","ChurnBFEBS"])
     args = parser.parse_args()
+    arg_credpath = args.credpath
     for test in args.tests:
         if args.xml:
             try:
