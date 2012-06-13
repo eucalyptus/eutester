@@ -349,10 +349,8 @@ class InstanceBasics(unittest.TestCase):
             ### Create 1GB volume in first AZ
             self.assertTrue(self.create_attach_volume(instance, 1), "Was not able to attach volume")
             ### Reboot instance
-            instance.reboot()
-            self.tester.sleep(30) 
+            instance.reboot_instance_and_verify(waitconnect=20)
             self.tester.debug("Restarting SSH session to instance")
-            instance.reset_ssh_connection()
             ### Check for device in instance
             ### Make sure volume is still attached after reboot
             if self.volume_device is None:
