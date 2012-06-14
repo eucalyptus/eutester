@@ -349,10 +349,8 @@ class InstanceBasics(unittest.TestCase):
             ### Create 1GB volume in first AZ
             self.assertTrue(self.create_attach_volume(instance, 1), "Was not able to attach volume")
             ### Reboot instance
-            instance.reboot()
-            self.tester.sleep(30) 
+            instance.reboot_instance_and_verify(waitconnect=20)
             self.tester.debug("Restarting SSH session to instance")
-            instance.reset_ssh_connection()
             ### Check for device in instance
             ### Make sure volume is still attached after reboot
             if self.volume_device is None:
@@ -436,7 +434,7 @@ class InstanceBasics(unittest.TestCase):
             self.assertTrue( self.tester.ping(instance.public_dns_name), "Could not ping instance with new IP")
             address.release()
             if (instance.public_dns_name != instance.private_dns_name):
-                self.tester.critical("Instance received a new public IP: " + instance.public_dns_name)
+                self.fail("Instance received a new public IP: " + instance.public_dns_name)
         return self.reservation
     
     def ReuseAddresses(self, zone = None):
