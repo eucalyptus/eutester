@@ -185,7 +185,7 @@ class EuPopulator(object):
         self.tester.cleanup_artifacts()  
     
     def prefix_generator(self, size=6, chars=string.ascii_lowercase + string.digits):
-        return ''.join(random.choice(chras) for x in range(size))
+        return ''.join(random.choice(chars) for x in range(size))
     
     def serialize_resources(self, output_file="cloud_objects.dat"):
         '''
