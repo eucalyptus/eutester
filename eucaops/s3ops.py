@@ -31,6 +31,7 @@
 # Author: vic.iglesias@eucalyptus.com
 
 from eutester import Eutester
+import os
 
 class S3ops(Eutester):
     def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,account="eucalyptus",user="admin", username="root",region=None, boto_debug=0):
