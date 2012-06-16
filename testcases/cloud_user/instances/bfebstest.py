@@ -28,8 +28,7 @@ class BFEBSBasics(InstanceBasics):
      
     def LaunchImage(self):
         '''Launch a BFEBS image'''
-        if self.image is None:
-            self.image = self.tester.get_emi(root_device_type="ebs")
+        self.image = self.tester.get_emi(root_device_type="ebs")
         self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name)
         self.assertTrue( self.tester.ping(self.reservation.instances[0].public_dns_name), 'Could not ping instance')
         
