@@ -15,9 +15,11 @@ class BFEBSBasics(InstanceBasics):
             credpath = arg_credpath
         super(BFEBSBasics, self).setUp(credpath)
         
-    def RegisterImage(self, bfebs_img_url = "<image-url>"):
+    def RegisterImage(self, bfebs_img_url = "<image-url>", zone= None):
         '''Register a BFEBS snapshot'''
-        self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name)
+        if zone is None:
+        	zone = self.zone
+        self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name, zone=zone)
         for instance in self.reservation.instances:
             self.assertTrue(self.create_attach_volume(instance, 2)) 
             instance.sys("curl " + bfebs_img_url + " > " + self.volume_device, timeout=800)
@@ -26,16 +28,20 @@ class BFEBSBasics(InstanceBasics):
             image_id = self.tester.register_snapshot(snapshot)
         self.image = self.tester.get_emi(image_id)
      
-    def LaunchImage(self):
+    def LaunchImage(self, zone= None):
         '''Launch a BFEBS image'''
+        if zone is None:
+         	zone = self.zone
         self.image = self.tester.get_emi(root_device_type="ebs")
-        self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name)
+        self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name, zone=zone)
         self.assertTrue( self.tester.ping(self.reservation.instances[0].public_dns_name), 'Could not ping instance')
         
-    def StopStart(self):
+    def StopStart(self, zone = None):
         '''Launch a BFEBS instance, stop it then start it again'''
+        if zone is None:
+         	zone = self.zone
         self.image = self.tester.get_emi(root_device_type="ebs")
-        self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name)
+        self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name, zone=zone)
         self.assertTrue(self.tester.stop_instances(self.reservation))
         self.assertFalse( self.tester.ping(self.reservation.instances[0].public_dns_name, poll_count=2), 'Was able to ping stopped instance')
         self.assertTrue(self.tester.start_instances(self.reservation))
@@ -72,8 +78,10 @@ class BFEBSBasics(InstanceBasics):
         self.assertEqual(self.failure, 0, str(self.failure) + " Tests failed out of " + str(total))
         self.failure = 0
         
-    def AddressIssue(self):
-        self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name)
+    def AddressIssue(self, zone = None):
+    	if zone is None:
+    	 	zone = self.zone
+        self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name, zone=zone)
         original_ip = ""
         for instance in self.reservation.instances:
             original_ip = instance.ip_address
