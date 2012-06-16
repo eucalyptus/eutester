@@ -18,7 +18,7 @@ class BFEBSBasics(InstanceBasics):
     def RegisterImage(self, bfebs_img_url = "<image-url>", zone= None):
         '''Register a BFEBS snapshot'''
         if zone is None:
-        	zone = self.zone
+            zone = self.zone
         self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name, zone=zone)
         for instance in self.reservation.instances:
             self.assertTrue(self.create_attach_volume(instance, 2)) 
@@ -79,8 +79,8 @@ class BFEBSBasics(InstanceBasics):
         self.failure = 0
         
     def AddressIssue(self, zone = None):
-    	if zone is None:
-    	 	zone = self.zone
+        if zone is None:
+    	 	     zone = self.zone
         self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name, zone=zone)
         original_ip = ""
         for instance in self.reservation.instances:
