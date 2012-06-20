@@ -677,9 +677,9 @@ class EC2ops(Eutester):
         
         for instance in reservation.instances:
             if instance.state != "running":
-                self.critical("Instance " + instance.id + " now in " + instance.state  + " state")
+                self.critical("Instance " + instance.id + " now in " + instance.state  + " state "  + " in zone: "  + instance.placement )
             else:
-                self.debug( "Instance " + instance.id + " now in " + instance.state  + " state")
+                self.debug( "Instance " + instance.id + " now in " + instance.state  + " state " + " in zone: "  + instance.placement )
         #    
         # check to see if public and private DNS names and IP addresses are the same
         #
