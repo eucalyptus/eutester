@@ -91,7 +91,7 @@ class EuInstance(Instance):
                                       password=None, 
                                       username="root",  
                                       verbose=True, 
-                                      timeout=60,
+                                      timeout=120,
                                       retry=2
                                       ):
         '''
@@ -301,12 +301,11 @@ class EuInstance(Instance):
     
     def get_metadata(self, element_path): 
         """Return the lines of metadata from the element path provided"""
-        if self.tester.config:
-            isManaged = re.search("managed", self.tester.get_network_mode())
-            if not isManaged:
-                return self.sys("curl http://" + self.tester.get_ec2_ip()  + ":8773/latest/meta-data/" + element_path)
-            
-        return self.sys("curl http://169.254.169.254/latest/meta-data/" + element_path)
+        ### If i can reach the metadata service ip use it to get metadata otherwise try the clc directly
+        if self.found("ping -c 1 169.254.169.254", "1 received"):
+            return self.sys("curl http://169.254.169.254/latest/meta-data/" + element_path)
+        else:
+            return self.sys("curl http://" + self.tester.get_ec2_ip()  + ":8773/latest/meta-data/" + element_path)
         
     def set_block_device_prefix(self):
         if self.found("lsmod | awk '{print $1}' | grep virtio_blk", "virtio_blk"):
@@ -368,7 +367,7 @@ class EuInstance(Instance):
         if length == 0:
             self.sys("dd if="+srcdev+" of="+voldev+"; sync")
         else:
-            self.sys("head -"+str(length)+" "+srcdev+" > "+voldev+"; sync")
+            self.sys("tail -"+str(length)+" "+srcdev+" > "+voldev+"; sync")
         md5 = self.md5_attached_euvolume(euvolume, timepergig=timepergig,length=length)
         self.debug("Filled Volume:"+euvolume.id+" dev:"+voldev+" md5:"+md5)
         return md5

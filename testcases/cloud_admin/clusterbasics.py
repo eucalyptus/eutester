@@ -34,6 +34,8 @@ import re
 import sys
 import pprint
 
+options = None
+
 class ClusterBasics(unittest.TestCase):
     def setUp(self):
            
@@ -69,9 +71,6 @@ class ClusterBasics(unittest.TestCase):
             else:
                 self.available = options.number
         
-        if options.print_debug:
-            self.tester.start_euca_logs()
-        
         self.security_groups = []
         self.reservations = []
 
@@ -79,8 +78,8 @@ class ClusterBasics(unittest.TestCase):
         ### Clean up after running test case
         for reservation in self.reservations:
             self.tester.terminate_instances(reservation)
-        for security_group in security_groups:
-            self.tester.delete_group(security_group.name)
+        for security_group in self.security_groups:
+            self.tester.delete_group(security_group)
         self.tester.delete_keypair(self.keypair)
         os.remove(self.keypath)
         self.keypath = None
@@ -89,11 +88,6 @@ class ClusterBasics(unittest.TestCase):
         self.num_vms = None
         self.available = None
         self.security_groups = None
-
-        if options.print_debug:
-            self.tester.stop_euca_logs()
-            self.tester.save_euca_logs()
-
         self.tester = None
 
     ### Test Cases ###
@@ -134,17 +128,6 @@ class ClusterBasics(unittest.TestCase):
 
             ### Decrement count of security groups and instances left to create
             self.available -= 1 
-
-
-        ### Loop through and terminate instances                
-        ### Grab total number of instances ran from by test case
-        ### Terminate each instance
-        for reservation in self.reservations:
-            self.assertTrue(self.tester.terminate_instances(reservation), "Failure when terminating instance.")
-
-        ### Loop through and delete security groups                
-        for group in self.security_groups: 
-            self.assertTrue(self.tester.delete_group(group), "Failure when deleting group " + group.name)
 
         ### Take snapshot of iptables after deleting security groups and terminating instances.
         ### Use service manager to get to enabled CC to get iptables rules
@@ -227,6 +210,8 @@ def get_options():
         help="Cloud config of AZ", default=None)
     parser.add_argument("-d", "--debug", action="store_false", dest="print_debug",
         help="Whether or not to print debugging")
+    parser.add_argument('--xml', action="store_true", default=False)
+    parser.add_argument('--tests', nargs='+', default= ['iptables_Cruft'])
     parser.add_argument('unittest_args', nargs='*')
 
     ## Grab arguments passed via commandline
@@ -236,16 +221,13 @@ def get_options():
 
 if __name__ == "__main__":
     ## If given command line arguments, use them as test names to launch
-    parser = argparse.ArgumentParser(description='Parse test suite arguments.')
-    parser.add_argument('--xml', action="store_true", default=False)
-    parser.add_argument('--tests', nargs='+', default= ['iptables_Cruft'])
-    args = parser.parse_args()
-    for test in args.tests:
-        if args.xml:
+    options = get_options()
+    for test in options.tests:
+        if options.xml:
             file = open("test-" + test + "result.xml", "w")
-            result = xmlrunner.XMLTestRunner(file).run(LoadGenerator(test))
+            result = xmlrunner.XMLTestRunner(file).run(ClusterBasics(test))
         else:
-            result = unittest.TextTestRunner(verbosity=2).run(LoadGenerator(test))
+            result = unittest.TextTestRunner(verbosity=2).run(ClusterBasics(test))
         if result.wasSuccessful():
             pass
         else:
