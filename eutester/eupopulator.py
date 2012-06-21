@@ -65,6 +65,10 @@ class EuPopulator(object):
             self.defaults.set('volumes', 'min_size', '1')
             self.defaults.set('volumes', 'max_size', '3')
             
+            ### Addresses
+            self.defaults.add_section('addresses')
+            self.defaults.set('addresses', 'count', '2')
+            
             ### Snapshot 
             self.defaults.add_section('snapshots')
             self.defaults.set('snapshots', 'count', '2')
@@ -130,7 +134,12 @@ class EuPopulator(object):
             size = random.randint(min_size, max_size)
             self.tester.create_volume(partition, size)
         
-    
+    def addresses(self):
+        print "Allocating addreses"
+        addr_count =  self.config.getint("addresses", "count")
+        for i in xrange(vol_count):
+            self.tester.allocate_address()
+        
     def snapshots(self):
         print "Creating snapshots"
         partition = self.config.get("global","partition")
