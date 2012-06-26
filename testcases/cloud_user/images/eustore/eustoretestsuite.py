@@ -68,6 +68,7 @@ from eucaops import Eucaops
 from eutester import euinstance, euvolume
 import logging
 from boto.ec2.snapshot import Snapshot
+from boto.ec2.image import Image
 import re
 import time
 import unittest
@@ -227,9 +228,7 @@ class EustoreImage():
         
 
 class Eustoretestsuite():
-    acceptable_users=["eucalyptus"]
     cur_image = None
-    
     
     def __init__(self, tester=None,  config_file='../input/2b_tested.lst', password="foobar",url=None, list=None, volumes=None, keypair=None, group=None, image=None, zone='PARTI00',  eof=1):
         if tester is None:
@@ -247,11 +246,17 @@ class Eustoretestsuite():
             self.list = self.get_eustore_images()
         else:
             self.list = list
+            
+        self.sync_installed_list()
+        self.cur_image = None
+        
+        #Test specific resources 
         self.group = self.get_a_group()
         self.keypair = self.get_a_key()
-        self.sync_installed_list()
+        self.test_volumes = []
+        self.test_snapshots = []
         
-            
+        
             
     def get_a_key(self):    
         '''
@@ -286,6 +291,41 @@ class Eustoretestsuite():
         return self.tester.debug(msg)
     
     
+    def create_image_from_emi(self,emi,name=None, id=None, size=2, add=True):
+        '''
+        Method used to build a eustore image object from an existing EMI. Mainly used to create an object that 
+        can be fed into the test suite. By default this will append the image to the Eustoretestsuite image list
+        Returns a eustore image object
+        '''
+        newimg = EustoreImage()
+        if id is None:
+            newimg.id = emi.location
+        else:
+            newimg.id = id
+            
+        if name is None:
+            newimg.name = newimg.id
+        else:
+            newimg.name = name
+            
+        newimg.eki = emi.kernel_id
+        newimg.eri = emi.ramdisk_id
+        newimg.emi = emi.id
+        newimg.size = size
+        if add:
+            self.list.append(newimg)
+        return newimg
+
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
     
     def get_eustore_images(self):
         '''
@@ -322,7 +362,7 @@ class Eustoretestsuite():
         """
         Get images matching the provided criteria. 
         By default matches image location containing the  string held by the 'location' option.
-        emi              (optional string ) Partial ID of the emi to return, defaults to the 'emi-" prefix to grab any
+        emi              (optional string ) Partial ID of the emi to return, ie to grab all EMI use emi="emi-"prefix to grab any
         root_device_type (optional string)  example: 'instance-store' or 'ebs'
         root_device_name (optional string)  example: '/dev/sdb' 
         location         (optional string)  partial on location match example: 'centos'
@@ -496,7 +536,7 @@ class Eustoretestsuite():
                     self.debug('EKI for Image:"'+str(image.name)+'" is not found on system after install')
                     raise Exception('EKI for Image:"'+str(image.name)+'" is not found on system after install')
                 else:
-                    if (eki.id != eki_id)[0]:
+                    if (eki.id != eki_id):
                         self.debug("Kernel specified does not match associated EKI. EMI:"+str(emi.id)+" Image:"+str(image.name))
                         raise Exception("Kernel specified does not match associated EKI. EMI:"+str(emi.id)+" Image:"+str(image.name))
             self.debug( "Image:"+str(image.name)+" installed kernel:"+str(eki_id))
@@ -548,7 +588,7 @@ class Eustoretestsuite():
         return ret
         
     
-    def get_eustore_image_by_string(self, searchstring, list=None):
+    def get_eustore_image_by_string(self, searchstring, list=None, searchall=False):
         '''
         Attempts to return a list of eustore images by matching the given string to any string in the eustore describe images output
         This output is stored in the eustoreimage.remotestring. 
@@ -558,7 +598,10 @@ class Eustoretestsuite():
         if list is None:
             list = self.list
         for image in list: 
-            if re.search(searchstring, image.remotestring):
+            if searchall:
+                if re.search(searchstring, it.tester.get_all_attributes(image, verbose=False)):
+                    retlist.append(image)
+            if re.search(searchstring, image.remotestring) or re.search(searchstring,image.id):
                 retlist.append(image)
         return retlist
         
@@ -856,7 +899,7 @@ class Eustoretestsuite():
         image.results[EustoreTests.metadata_test] = TestStatus.success
         
     
-    def instance_attach_vol_test(self,inst, volcount=1):
+    def instance_attach_vol_test(self,inst, volcount=1, recycle=True):
         '''
         This test attempt to verify attachment of volume(s) to an instance
         '''
@@ -867,12 +910,16 @@ class Eustoretestsuite():
         zone = inst.placement
         try:
             for i in xrange(0,volcount):
-                try:
-                    vol = self.tester.get_volume(status='available', zone=zone, maxsize=1)
-                except Exception, e:
-                    self.debug("Err trying to get an existing volume, making new one... err:"+str(e))
-                    vol = self.tester.create_volume(zone)
-                    pass
+                if recycle:
+                    try:
+                        vol = self.tester.get_volume(status='available', zone=zone, maxsize=1)
+                    except Exception, e:
+                        self.debug("Err trying to get an existing volume, making new one... err:"+str(e))
+                        vol = self.tester.create_volume(zone)
+                        pass
+                    else:
+                        vol = self.tester.create_volume(zone)
+                        
                 inst.attach_volume(vol)
         except Exception, ae:
             raise Exception("("+str(image.name)+") Failed to attach volume to:"+str(inst.id)+"err:"+str(ae))
