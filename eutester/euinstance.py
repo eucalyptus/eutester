@@ -300,7 +300,7 @@ class EuInstance(Instance):
         self.debug('Success attaching volume:'+str(euvolume.id)+' to instance:'+self.id+', cloud dev:'+str(euvolume.clouddev)+', attached dev:'+str(attached_dev))
         return attached_dev
     
-    def detach_euvolume(self, euvolume, timeout=180):
+    def detach_euvolume(self, euvolume, waitfordev=True, timeout=180):
         '''
         Method used to detach detach a volume to an instance and track it's use by that instance
         required - euvolume - the euvolume object being deattached
@@ -312,19 +312,31 @@ class EuInstance(Instance):
             if vol.id == euvolume.id:
                 dev = vol.guestdev
                 if (self.tester.detach_volume(euvolume,timeout=timeout)):
-                    while (elapsed < timeout):
-                        try:
-                            #check to see if device is still present on guest
-                            self.assertFilePresent(dev)
-                        except Exception, e:
-                            #if device is not present remove it
-                            self.attached_vols.remove(vol)
-                            return True
+                    if waitfordev:
+                        self.debug("Wait for device:"+str(dev)+" to be removed on guest...")
+                        while (elapsed < timeout):
+                            try:
+                                #check to see if device is still present on guest
+                                self.assertFilePresent(dev)
+                            except Exception, e:
+                                #if device is not present remove it
+                                self.attached_vols.remove(vol)
+                                return True
+                            time.sleep(10) 
+                            elapsed = int(time.time()-start)
+                            self.debug("Waiting for device '"+str(dev)+"' on guest to be removed.Elapsed:"+str(elapsed))
+                        #one last check, in case dev has changed. 
+                        self.debug("Device "+str(dev)+" still present on "+str(self.id)+" checking sync state...")
+                        if self.get_dev_md5(dev, euvolume.md5len) == euvolume.md5:
+                            raise Exception("Volume("+str(vol.id)+") detached, but device("+str(dev)+") still present on ("+str(self.id)+")")
                         else:
-                            time.sleep(5) 
-                        elapsed = int(time.time()-start)
-                        self.debug("Waiting for device '"+str(dev)+"' on guest to be removed.Elapsed:"+str(elapsed))
-                    raise Exception("Volume("+str(vol.id)+") detached, but device("+str(dev)+") still present on ("+str(self.id)+")")
+                            #assume the cloud has successfully released the device, guest may have not
+                            self.debug(str(self.id)+'previously attached device for vol('+str(euvolume.id)+') no longer matches md5')
+                            return True
+                    else:
+                        self.attached_vols.remove(vol)
+                        return True
+                        
                 else:
                     raise Exception("Volume("+str(vol.id)+") failed to detach from device("+str(dev)+") on ("+str(self.id)+")")
         raise Exception("Detach Volume("+str(euvolume.id)+") not found on ("+str(self.id)+")")
@@ -448,6 +460,7 @@ class EuInstance(Instance):
         #check to see if there's existing data that we should avoid overwriting 
         if overwrite or ( int(self.sys('head -c 32 '+str(voldev)+' | xargs -0 printf %s | wc -c')[0]) == 0):
             self.random_fill_volume(euvolume, srcdev=srcdev, length=length)
+        self.debug("Volume has existing data, skipping random data fill")
         #calculate checksum of euvolume attached device for given length
         md5 = self.md5_attached_euvolume(euvolume, timepergig=timepergig,length=length)
         self.debug("Filled Volume:"+euvolume.id+" dev:"+voldev+" md5:"+md5)
