@@ -708,6 +708,8 @@ class EC2ops(Eutester):
             addressing_type = "private"
         else:
             addressing_type = None
+        
+        start = time.time()
             
         self.debug( "Attempting to run "+ str(image.root_device_type)  +" image " + str(image) + " in group " + str(group))
         reservation = image.run(key_name=keypair,security_groups=[group],instance_type=type, placement=zone, min_count=min, max_count=max, user_data=user_data, addressing_type=addressing_type)
@@ -742,10 +744,11 @@ class EC2ops(Eutester):
             if (is_reachable) and (private_addressing is False) :
                 self.ping(instance.public_dns_name, 60)
                 
-            
+        #calculate remaining time to wait for establishing an ssh session/euinstance     
+        timeout = timeout-int(time.time()-start)  
         #if we can establish an SSH session convert the instances to the test class euinstance for access to instance specific test methods
         if(is_reachable) and ((keypair is not None) or (user is not None and password is not None)):
-            return self.convert_reservation_to_euinstance(reservation, username=username, password=password, keyname=keypair)
+            return self.convert_reservation_to_euinstance(reservation, username=username, password=password, keyname=keypair, timeout=timeout)
         else:
             return reservation
 
@@ -763,14 +766,14 @@ class EC2ops(Eutester):
                 
             
 
-    def convert_reservation_to_euinstance(self, reservation, username="root", password=None, keyname=None):
+    def convert_reservation_to_euinstance(self, reservation, username="root", password=None, keyname=None, timeout=120):
         euinstance_list = []
         for instance in reservation.instances:
             keypair = self.get_keypair(keyname)
             try:
-                euinstance_list.append( EuInstance.make_euinstance_from_instance( instance, self, keypair=keypair, username = username, password=password ))
+                euinstance_list.append( EuInstance.make_euinstance_from_instance( instance, self, keypair=keypair, username = username, password=password, timeout=timeout ))
             except Exception, e:
-                self.critical("Unable to create Euinstance from " + str(instance))
+                self.critical("Unable to create Euinstance from " + str(instance)+str(e))
                 euinstance_list.append(instance)
                 
         reservation.instances = euinstance_list

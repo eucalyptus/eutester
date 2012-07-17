@@ -304,8 +304,10 @@ class EbsTestSuite(unittest.TestCase):
         testmsg = testmsg+"\nVariables provided:\nzonelist:"+str(zonelist)+"\nimage:"+str(image)+"\nkeypair:"+str(keypair)+"\ngroup:"+str(group)+"\nvmtype:"+str(vmtype)
         
         self.startmsg(testmsg)
-        if image is not None:
-            image = self.tester.get_emi(location=image)
+        if image is None:
+            image = self.tester.get_emi(emi=self.image)
+        else:
+            image = self.tester.get_emi(emi=image)
         if group is None:
             group = self.group
         if keypair is None:
@@ -327,6 +329,33 @@ class EbsTestSuite(unittest.TestCase):
         for zone in zonelist:
             for instance in zone.instances:
                 self.tester.terminate_single_instance(instance, timeout)
+    
+    def negative_attach_in_use_volume_in_zones(self,zonelist=None,timeout=360):
+        testmsg =   """
+                    Iterates though zones and attempts to attach already attached volumes to instances within each zone.  
+                    """
+        testmsg = testmsg+"\nVariables provided:\nzonelist"+str(zonelist)+"\ntimeout:"+str(timeout)
+        self.startmsg(testmsg)
+        if zonelist is None:
+            zonelist = self.zonelist
+        instance = euinstance.EuInstance()
+        for zone in zonelist:
+            for volume in zone.volumes:
+                volume.update()
+                if (volume.status == "in-use"):
+                    for instance in zone.instances:
+                        try:
+                            #This should fail
+                            instance.attach_euvolume(volume,timeout=timeout)
+                        except Exception, e:
+                            #If it failed were good
+                            self.debug("negative_attach_in_use_volume_in_zones Passed. Could not attach in-use volume")
+                            self.endsuccess()
+                            pass
+                        else:
+                            #The operation did fail, but this test did
+                            raise Exception("negative_attach_in_use_volume_in_zones failed volume attached")
+        self.endsuccess()
                 
     
     def attach_all_avail_vols_to_instances_in_zones(self, zonelist=None, timeout=360):
@@ -348,7 +377,7 @@ class EbsTestSuite(unittest.TestCase):
                         except Exception, e:
                             self.debug("attach_all_vols_to_instances_in_zones failed to attach volume")
                             raise e
-                    instance.vol_write_random_data_get_md5(volume,timepergig=120)
+                    #instance.vol_write_random_data_get_md5(volume,timepergig=120)
         self.endsuccess()
                     
                         
@@ -499,7 +528,7 @@ class EbsTestSuite(unittest.TestCase):
                     Attempts to attach volumes which were created from snapshots and are not in use. 
                     After verifying the volume is attached and reported as so by cloud and guest, 
                     this test will attempt to compare the md5 sum of the volume to the md5 contained in 
-                    the snapshot which representst the md5 of the original volume. 
+                    the snapshot which represents the md5 of the original volume. 
                     This test accepts a timepergig value which is used to guesstimate a reasobale timeout while
                     waiting for the md5 operation to be executed. 
                     """
@@ -562,6 +591,8 @@ class EbsTestSuite(unittest.TestCase):
         testlist.append(self.create_testcase_from_method(self.attach_all_avail_vols_to_instances_in_zones))
         #attempt to delete attached volumes, should not be able to
         testlist.append(self.create_testcase_from_method(self.negative_delete_attached_volumes_in_zones))
+        #attempt to attach a volume which is already attached, should not be able to
+        testlist.append(self.create_testcase_from_method(self.negative_attach_in_use_volume_in_zones))
         #create second round of volumes
         testlist.append(self.create_testcase_from_method(self.create_vols_per_zone))
         #attach second round of volumes
@@ -586,6 +617,9 @@ class EbsTestSuite(unittest.TestCase):
                 
     
     def restart_clc_makevol(self, zonelist=None):
+        '''
+        Test start/stop cloud service recovery as it pertains to storage
+        ''' 
         if zonelist is None:
             zonelist = self.zonelist
     
@@ -626,6 +660,9 @@ class EbsTestSuite(unittest.TestCase):
         
         
     def spin_restart(self, count=1000):
+        '''
+        Churn test wrapping cloud service start/stop storage tests
+        '''
         for x in xrange(0,count):
             self.startmsg("test attempt("+str(x)+")")
             self.restart_clc_makevol()

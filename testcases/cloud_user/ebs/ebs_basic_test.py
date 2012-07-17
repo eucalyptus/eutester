@@ -1,7 +1,43 @@
 #!/usr/bin/env python
 
-
-
+#
+##########################
+#                        #
+#       Test Cases       #
+#                        #
+##########################
+#
+# [test_ebs_basic_test_suite]
+#       Full suite of ebs related tests
+#        Test Summary: 
+#
+#        -create a volume (do this first)
+#        -run an instance (do this second, if this fails at least we know we could create a vol)
+#        
+#        Usage Tests: 
+#        -negative -attempt to attach a volume to an instance in a separate cluster. 
+#        -attach a single volume to an instance in the zones given, write random data and calc md5 of volumes
+#        -negative:attempt to delete the attached instance, should fail
+#        -attach a 2nd volume to an instance, write random date to vol and calc md5 of volumes
+#        -reboot instance
+#        -verify both volumes are attached after reboot of instance
+#        -detach 1st volume
+#        -create snapshot of detached volume
+#        -create snapshot of attached volume
+#        
+#        Multi-cluster portion...
+#        -attempt to create a volume of each snapshot, if multi 1 in each cluster
+#        -attempt to attach each volume to an instance verify md5s
+#        
+#        Properties tests:
+#        -create a volume of greater than prop size, should fail
+#        -create a 2nd volume attempting to exceed the max aggregate size, should fail
+#        
+#        
+#        Cleanup:
+#        -terminates all instances run and deletes all volumes created within test
+#
+#
 
 
 import unittest
