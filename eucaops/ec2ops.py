@@ -619,9 +619,9 @@ class EC2ops(Eutester):
         """Used with instance connections. Checks if a device at a certain path exists"""
         return self.found("ls -1 " + device_path, device_path)
         
-    def get_volume(self, volume_id="vol-", status=None, attached_instance=None, attached_dev=None, snapid=None, zone=None, minsize=1, maxsize=None):
+    def get_volumes(self, volume_id="vol-", status=None, attached_instance=None, attached_dev=None, snapid=None, zone=None, minsize=1, maxsize=None, eof=False):
         '''
-        Return first volume that matches the criteria. Criteria options to be matched:
+        Return list of volumes that matches the criteria. Criteria options to be matched:
         volume_id         (optional string) string present within volume id
         status            (optional string) examples: 'in-use', 'creating', 'available'
         attached_instance (optional string) instance id example 'i-1234abcd'
@@ -630,7 +630,10 @@ class EC2ops(Eutester):
         zone              (optional string) zone of volume example 'PARTI00'
         minsize           (optional integer) minimum size of volume to be matched
         maxsize           (optional integer) maximum size of volume to be matched
+        eof               (optional boolean) exception on failure to find volume, else returns empty list
         '''
+        
+        retlist = []
         if (attached_instance is not None) or (attached_dev is not None):
             status='in-use'
     
@@ -642,21 +645,45 @@ class EC2ops(Eutester):
                 continue
             if (zone is not None) and (volume.zone != zone):
                 continue
-            if (status is not None):
-                if (volume.status != status):
+            if (status is not None) and (volume.status != status):
+                continue
+            if (volume.attach_data is not None):
+                if (attached_instance is not None) and ( volume.attach_data.instance_id != attached_instance):
                     continue
-                else:
-                    if (attached_instance is not None) and ( volume.attach_data.instance_id != attached_instance):
-                        continue
-                    if (attached_dev is not None) and (volume.attach_data.device != attached_dev):
-                        continue
+                if (attached_dev is not None) and (volume.attach_data.device != attached_dev):
+                    continue
             if not (volume.size >= minsize) and ((maxsize is None) or (volume.size <= maxsize)):
                 continue
-            return volume
-        raise Exception("Unable to find matching volume")
-        return None
+            retlist.append(volume)
+        if eof and retlist == []:
+            raise Exception("Unable to find matching volume")
+        else:
+            return retlist
 
-
+    def get_volume(self, volume_id="vol-", status=None, attached_instance=None, attached_dev=None, snapid=None, zone=None, minsize=1, maxsize=None, eof=True):
+        '''
+        Returns a single volume that matches the provided criteria
+        Return first volume that matches the criteria. Criteria options to be matched:
+        volume_id         (optional string) string present within volume id
+        status            (optional string) examples: 'in-use', 'creating', 'available'
+        attached_instance (optional string) instance id example 'i-1234abcd'
+        attached_dev      (optional string) example '/dev/sdf'
+        snapid            (optional string) snapshot volume was created from example 'snap-1234abcd'
+        zone              (optional string) zone of volume example 'PARTI00'
+        minsize           (optional integer) minimum size of volume to be matched
+        maxsize           (optional integer) maximum size of volume to be matched
+        eof               (optional boolean) exception on failure to find volume, else returns None
+        '''
+        vol = None
+        try:
+            vol = self.get_volumes(volume_id=volume_id, status=status, attached_instance=attached_instance, attached_dev=attached_dev, snapid=snapid, zone=zone, minsize=minsize, maxsize=maxsize, eof=eof)[0]
+        except Exception, e:
+            if eof:
+                raise e
+        return vol
+        
+            
+            
     def run_instance(self, image=None, keypair=None, group="default", type=None, zone=None, min=1, max=1, user_data=None,private_addressing=False, username="root", password=None, is_reachable=True, timeout=480):
         """
         Run instance/s and wait for them to go to the running state

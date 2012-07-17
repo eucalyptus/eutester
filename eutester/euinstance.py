@@ -376,14 +376,20 @@ class EuInstance(Instance):
         '''
         d='e'
         dev = None
+        cloudlist=self.tester.get_volumes(attached_instance=self.id)
         for x in xrange(0,maxdevs):
             inuse=False
             #double up the letter identifier to avoid exceeding z
             if d == 'z':
                 prefix= prefix+'e'
             dev = "/dev/"+prefix+str(d)
-            for vols in self.attached_vols:
-                if vols.clouddev == dev:
+            for avol in self.attached_vols:
+                if avol.clouddev == dev:
+                    inuse = True
+                    continue
+            #Check to see if the cloud has a conflict with this device name...
+            for vol in cloudlist:
+                if (vol.attach_data is not None) and (vol.attach_data.device == dev):
                     inuse = True
                     continue
             if inuse is False:
