@@ -264,7 +264,7 @@ if __name__ == '__main__':
         pmsg("Attached to guest dev:"+attached_block_dev+"\nSplat our remote image into volume")
         
         #Get the md5 of the remote image before writing it to the volume for comparison purposes
-        timeout=rfsize*time_per_gig
+        timeout=rfsize*time_per_gig+200
         if ( md5sum is None ):
             pmsg("MD5sum not provided, getting it now...")
             cmd="curl -s "+url+" | md5sum "  
@@ -299,7 +299,7 @@ if __name__ == '__main__':
         else:
             pmsg("Md5sum is good. Done splatting image, detaching volume...")
         time.sleep(5)
-        tester.detach_volume(volume)
+        tester.detach_volume(volume, timeout=timeout)
         
         pmsg("Creating snapshot from our splatted volume...")
         snapshot = tester.create_snapshot(volume.id, waitOnProgress=15, timeout=timeout)
