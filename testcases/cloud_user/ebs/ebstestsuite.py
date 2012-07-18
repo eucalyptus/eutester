@@ -9,6 +9,7 @@ Usage Tests:
 -negative -attempt to attach a volume to an instance in a separate cluster. 
 -attach a single volume to an instance in the zones given, write random data and calc md5 of volumes
 -negative:attempt to delete the attached instance, should fail
+-negative:attempt to attach an in-use volume, should fail
 -attach a 2nd volume to an instance, write random date to vol and calc md5 of volumes
 -reboot instance
 -verify both volumes are attached after reboot of instance
@@ -26,7 +27,7 @@ Properties tests:
 
 
 Cleanup:
--tbd
+-remove all volumes, instance, and snapshots created during this test
 
 '''
 from eucaops import Eucaops
@@ -486,6 +487,27 @@ class EbsTestSuite(unittest.TestCase):
                     self.debug("failed to delete volume:"+str(volume.id))
         self.endsuccess()
         
+        
+    def delete_snapshots_in_zones(self, zonelist=None,snaplist=None, timeout=300):
+        testmsg =   """
+                    Attempts to iterate through zonelist, and delete all snapshots 
+                    within that zone
+                    """
+        testmsg = testmsg +"\nVariables provided:\nzonelist:"+str(zonelist)+"\nsnaplist:"+str(snaplist)+"\ntimeout:"+str(timeout)
+        self.startmsg(testmsg)
+        if zonelist is None:
+            zonelist = self.zonelist
+        if snaplist is None:
+            snaplist = self.snaps
+        for zone in zonelist:
+            for snap in snaplist:
+                if snap.zone == zone:
+                    self.tester.delete_snapshot(snap, timeout=timeout)
+        self.endsuccess()
+        
+                
+        
+        
     def create_snapshots_all_vols_in_zone(self, zonelist=None, volstate="all", waitOnProgress=20):
         testmsg =   """
                     Attempts to iterate through each zone in zonelist, and create a snapshot from each volume
@@ -677,6 +699,7 @@ class EbsTestSuite(unittest.TestCase):
     def clean_created_resources(self, zonelist=None, timeout=360):
         self.terminate_test_instances_for_zones(zonelist=zonelist, timeout=timeout)
         self.delete_volumes_in_zones(zonelist=zonelist, timeout=timeout)
+        self.delete_snapshots_in_zones(zonelist=zonelist,  timeout=timeout)
         
     def create_testcase_from_method(self,method, *args):
         testcase =  EbsTestCase(method, args)

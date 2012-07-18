@@ -18,6 +18,7 @@
 #        -negative -attempt to attach a volume to an instance in a separate cluster. 
 #        -attach a single volume to an instance in the zones given, write random data and calc md5 of volumes
 #        -negative:attempt to delete the attached instance, should fail
+#        -negative:attempt to attach an in-use volume, should fail
 #        -attach a 2nd volume to an instance, write random date to vol and calc md5 of volumes
 #        -reboot instance
 #        -verify both volumes are attached after reboot of instance
@@ -35,8 +36,7 @@
 #        
 #        
 #        Cleanup:
-#        -terminates all instances run and deletes all volumes created within test
-#
+#        --remove all volumes, instance, and snapshots created during this test
 #
 
 

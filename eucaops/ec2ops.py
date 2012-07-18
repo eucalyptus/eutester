@@ -450,16 +450,18 @@ class EC2ops(Eutester):
         return None
         
     
-    def delete_snapshot(self,snapshot):
+    def delete_snapshot(self,snapshot,timeout=60):
         """Delete the snapshot object"""
         snapshot.delete()
         self.debug( "Sent snapshot delete request for snapshot: " + snapshot.id)
-        poll_count = 5
-        while ( len(self.ec2.get_all_snapshots(snapshot_ids=[snapshot.id])) > 0) and (poll_count > 0):
-            poll_count -= 1
+        start = time.time()
+        elapsed = 0
+        while ( len(self.ec2.get_all_snapshots(snapshot_ids=[snapshot.id])) > 0) and (elapsed < timeout):
             self.sleep(10)
-        if poll_count == 0:
-            self.fail(str(snapshot) + " left in " +  snapshot.status + " with " + str(snapshot.progress) + "% progress")
+            elapsed = int(time.time()-start)
+            self.debug(str(snapshot) + " status " +  snapshot.status + " with " + str(snapshot.progress) + "% progress. Elapsed:"+str(elapsed))
+        if ( len(self.ec2.get_all_snapshots(snapshot_ids=[snapshot.id])) > 0):
+            self.fail(str(snapshot) + " left in" +  snapshot.status + " with " + str(snapshot.progress) + "% progress. Elapsed:"+str(elapsed))
         return snapshot
     
     def register_snapshot(self, snapshot, rdn="/dev/sda1", description="bfebs", windows=False, bdmdev=None, name=None, ramdisk=None, kernel=None, dot=True):
