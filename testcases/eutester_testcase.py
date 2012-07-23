@@ -4,6 +4,28 @@ import inspect
 import time
 import gc
 
+'''
+This is the base class for any test case to be included in the Eutester repo. It should include any
+functionality that we expected to be repeated in most of the test cases that will be written.
+
+Currently included:
+ - Debug method
+ - Allow parameterized test cases
+ - Method to run test case
+ - Run a list of test cases
+ - Start, end and current status messages
+ - Enum class for possible test results
+ 
+Necessary to work on:
+ - Argument parsing
+ - Metric tracking (need to define what metrics we want
+ - Standardized result summary
+ - Logging standardization
+ - Use docstring as description for test case
+ - Standardized setUp and tearDown that provides useful/necessary cloud resources (ie group, keypair, image)
+'''
+
+
 class EutesterTestResult():
     '''
     standardized test results
@@ -26,6 +48,10 @@ class EutesterTestCase(unittest.TestCase):
         self.time_to_run=0
         self.eof=True
         self.error = ""
+    
+    def create_testcase_from_method(self,method, *args):
+        testcase =  EutesterTestCase(method, args)
+        return testcase
     
     def run(self):
         try:
