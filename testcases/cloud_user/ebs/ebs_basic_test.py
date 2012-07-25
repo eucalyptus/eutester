@@ -39,10 +39,9 @@
 #        --remove all volumes, instance, and snapshots created during this test
 #
 
-
 import unittest
-#from eucaops import Eucaops
-#from eutester import euconfig
+from testcases.eutester_testcase import EutesterTestCase
+from testcases.eutester_testcase import EutesterTestResult
 from ebstestsuite import EbsTestSuite
 import argparse
 import os
