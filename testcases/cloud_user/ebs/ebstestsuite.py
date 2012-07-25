@@ -38,8 +38,8 @@ import re
 import time
 import os
 
-from testcases.eutester_testcase import EutesterTestCase
-from testcases.eutester_testcase import EutesterTestResult
+from eutester.eutestcase import EutesterTestCase
+from eutester.eutestcase import EutesterTestResult
 
 class TestZone():
     def __init__(self, partition):

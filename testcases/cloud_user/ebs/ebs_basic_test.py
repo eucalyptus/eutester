@@ -40,8 +40,8 @@
 #
 
 import unittest
-from testcases.eutester_testcase import EutesterTestCase
-from testcases.eutester_testcase import EutesterTestResult
+from eutester.eutestcase import EutesterTestCase
+from eutester.eutestcase import EutesterTestResult
 from ebstestsuite import EbsTestSuite
 import argparse
 import os
