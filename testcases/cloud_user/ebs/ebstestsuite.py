@@ -582,7 +582,7 @@ class EbsTestSuite(EutesterTestCase):
         self.delete_snapshots_in_zones(zonelist=zonelist,  timeout=timeout)
         
     def create_testcase_from_method(self,method, *args):
-        testcase =  eutester_testcase.EutesterTestCase(method, args)
+        testcase =  EutesterTestCase(method, args)
         return testcase
     
     def print_test_list_results(self,list=None,printmethod=None):
