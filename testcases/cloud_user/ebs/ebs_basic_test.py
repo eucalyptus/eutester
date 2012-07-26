@@ -81,6 +81,8 @@ class ebs_tests(unittest.TestCase):
         '''
         try:
             self.ebssuite.clean_created_resources()
+        except:
+            self.ebssuite.debug("Cleanup failed. Exiting normally")
         finally:
             self.ebssuite.print_test_list_results()
             
