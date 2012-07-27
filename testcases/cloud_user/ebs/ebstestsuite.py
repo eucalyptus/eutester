@@ -89,6 +89,9 @@ class TestZone():
         self.name = partition.name
         self.instances = []
         self.volumes = []
+        
+    def __str__(self):
+        return self.name
     
 class TestSnap(Snapshot):
     
@@ -173,7 +176,7 @@ class EbsTestSuite(unittest.TestCase):
             if (keypair is not None):
                 self.keypair = keypair
             else:     
-                keys = self.tester.get_all_current_local_keys()
+                keys = self.tester.get_all_current_local_keys() 
                 if keys != []:
                     self.keypair = keys[0]
                 else:
@@ -330,6 +333,7 @@ class EbsTestSuite(unittest.TestCase):
         for zone in zonelist:
             for instance in zone.instances:
                 self.tester.terminate_single_instance(instance, timeout)
+                zone.instances.remove(instance)
     
     def negative_attach_in_use_volume_in_zones(self,zonelist=None,timeout=360):
         testmsg =   """
@@ -485,6 +489,8 @@ class EbsTestSuite(unittest.TestCase):
                     elapsed = int(time.time()-start)
                 if volume.status != "deleted":
                     self.debug("failed to delete volume:"+str(volume.id))
+                else:
+                    zone.volumes.remove(volume)
         self.endsuccess()
         
         
@@ -503,6 +509,7 @@ class EbsTestSuite(unittest.TestCase):
             for snap in snaplist:
                 if snap.zone == zone:
                     self.tester.delete_snapshot(snap, timeout=timeout)
+                    snaplist.remove(snap)
         self.endsuccess()
         
                 
@@ -745,8 +752,9 @@ class EbsTestSuite(unittest.TestCase):
         
             
     
-    
 if __name__ == "__main__":
+    ## If given command line arguments, use them as test names to launch
+
     ## If given command line arguments, use them as test names to launch
     parser = argparse.ArgumentParser(prog="ebs_basic_test.py",
                                      version="Test Case [ebs_basic_test.py] Version 0.1",
