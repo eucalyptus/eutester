@@ -544,7 +544,7 @@ class Eutester(object):
         self.fail_log.append(message)
         self.fail_count += 1
         if self.exit_on_fail == 1:
-            raise Exception("Test step failed")
+            raise Exception("Test step failed: "+str(message))
         else:
             return 0 
     
