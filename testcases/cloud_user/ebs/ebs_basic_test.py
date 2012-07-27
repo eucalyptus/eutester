@@ -38,10 +38,9 @@
 #
 #    @author: clarkmatthew
 
-
 import unittest
-#from eucaops import Eucaops
-#from eutester import euconfig
+from eutester.eutestcase import EutesterTestCase
+from eutester.eutestcase import EutesterTestResult
 from ebstestsuite import EbsTestSuite
 import argparse
 import os
@@ -82,6 +81,8 @@ class ebs_tests(unittest.TestCase):
         '''
         try:
             self.ebssuite.clean_created_resources()
+        except:
+            self.ebssuite.debug("Cleanup failed. Exiting normally")
         finally:
             self.ebssuite.print_test_list_results()
             
