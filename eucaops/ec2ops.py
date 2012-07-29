@@ -227,37 +227,43 @@ class EC2ops(Eutester):
         """
         return self.authorize_group_by_name(group.name, port, protocol, cidr_ip) 
     
-    def wait_for_instance(self,instance, state="running", poll_count = None):
+    def terminate_single_instance(self, instance, timeout=300 ):
+        instance.terminate()
+        return self.wait_for_instance(instance, state='terminated', timeout=timeout)
+    
+    def wait_for_instance(self,instance, state="running", poll_count = None, timeout=480):
         """
         Wait for the instance to enter the state
         instance      Boto instance object to check the state on
         state        state that we are looking for
+        poll_count   Number of 10 second poll intervals to wait before failure (for legacy test script support)
+        timeout     Time to wait before failure
         """
-        if poll_count is None:
-            poll_count = self.poll_count
+        if poll_count is not None:
+            timeout = poll_count*10 
         self.debug( "Beginning poll loop for instance " + str(instance) + " to go to " + str(state) )
         instance.update()
         instance_original_state = instance.state
         start = time.time()
         elapsed = 0
         ### If the instance changes state or goes to the desired state before my poll count is complete
-        while( poll_count > 0) and (instance.state != state):
-            poll_count -= 1
+        while( elapsed <  timeout ) and (instance.state != state):
+            #poll_count -= 1
             self.debug( "Instance("+instance.id+") State("+instance.state+"), elapsed:"+str(elapsed))
             time.sleep(10)
             instance.update()
             elapsed = int(time.time()- start)
             if (instance.state != instance_original_state):
                 break
-        self.debug("Instance("+instance.id+") State("+instance.state+") Poll("+str(self.poll_count-poll_count)+") time elapsed (" +str(elapsed).split('.')[0]+")")
+        self.debug("Instance("+instance.id+") State("+instance.state+") time elapsed (" +str(elapsed).split('.')[0]+")")
         #self.debug( "Waited a total o" + str( (self.poll_count - poll_count) * 10 ) + " seconds" )
         if instance.state != state:
-            self.fail(str(instance) + " did not enter the proper state and was left in " + instance.state)
-            raise Exception( str(instance) + " did not enter proper state")
+            self.fail(str(instance) + " did not enter the '"+str(state)+"' state and was left in " + instance.state)
+            raise Exception( str(instance) + " did not enter "+str(state)+" state after elapsed:"+str(elapsed))
         self.debug( str(instance) + ' is now in ' + instance.state )
         return True
 
-    def wait_for_reservation(self,reservation, state="running"):
+    def wait_for_reservation(self,reservation, state="running",timeout=480):
         """
         Wait for the an entire reservation to enter the state
         reservation  Boto reservation object to check the state on
@@ -266,39 +272,49 @@ class EC2ops(Eutester):
         self.debug( "Beginning poll loop for the " + str(len(reservation.instances))   + " found in " + str(reservation) )
         aggregate_result = True
         for instance in reservation.instances:
-            if self.wait_for_instance(instance, state) == False:
+            if self.wait_for_instance(instance, state, timeout=timeout) == False:
                 aggregate_result = False
         return aggregate_result
     
-    def create_volume(self, azone, size=1, snapshot=None): 
+    def create_volume(self, azone, size=1, snapshot=None, timeout=0, poll_interval=10,timepergig=120): 
         """
         Create a new EBS volume then wait for it to go to available state, size or snapshot is mandatory
         azone        Availability zone to create the volume in
         size         Size of the volume to be created
         snapshot     Snapshot to create the volume from
+        timeout      Time to wait before failing. timeout of 0 results in size of volume * timepergig seconds
+        timepergig   Time to wait per gigabyte size of volume, used when timeout is set to 0 
         """
         # Determine the Availability Zone of the instance
         poll_count = self.poll_count
-        poll_interval = 10
+        elapsed = 0
+        start = time.time()
+        #if timeout is set to 0, use size to create a reasonable timeout for this volume creation
+        if timeout == 0:
+            if snapshot is not None:
+                timeout = timepergig * int(snapshot.volume_size)
+            else:
+                timeout = timepergig * size
         self.debug( "Sending create volume request" )
         volume = self.ec2.create_volume(size, azone, snapshot)
         # Wait for the volume to be created.
         self.debug( "Polling for volume to become available")
-        while volume.status != 'available' and (poll_count > 0):
-            poll_count -= 1
+        
+        while volume.status != 'available' and (elapsed < timeout):
             self.debug("Volume ("+volume.id+") State("+volume.status+") sleeping " + str(poll_interval) + "s")
             time.sleep(poll_interval)
+            elapsed = int(time.time()-start)
             volume.update()
             self.debug( str(volume) + " in " + volume.status +" state") 
             if volume.status == 'failed':
                 self.fail(str(volume) + " went to: " + volume.status)
                 return None  
-        if poll_count == 0:
+        if (volume.status != 'available'):
             self.fail(str(volume) + " never went to available and stayed in " + volume.status)
             self.debug( "Deleting volume that never became available")
             volume.delete()
             return None
-        self.debug( "Done. Waited a total of " + str( (self.poll_count - poll_count) * poll_interval) + " seconds" )
+        self.debug( "Done. Waited a total of " + str(elapsed) + " seconds" )
         self.test_resources["volumes"].append(volume)
         return volume
     
@@ -330,28 +346,33 @@ class EC2ops(Eutester):
         for volume in volumes:
             self.delete_volume(volume.id)
     
-    def attach_volume(self, instance, volume, device_path, pause=10, timeout=60):
+    def attach_volume(self, instance, volume, device_path, pause=10, timeout=120):
         """
         Attach a volume to an instance
         instance    instance object to attach volume to
         volume      volume object to attach
         device_path device name to request on guest
         """
-        self.debug("Sending attach for " + str(volume) + " to be attached to " + str(instance) + " at device node " + device_path)
+        self.debug("Sending attach for " + str(volume) + " to be attached to " + str(instance) + " at requested device  " + device_path)
         volume.attach(instance.id,device_path )
         start = time.time()
         elapsed = 0  
         volume.update()
+        status = ""
         while (elapsed < timeout):
             volume.update()
-            if (volume.attach_data is not None) and (volume.attach_data.status is not None) :
-                if re.search("attached",volume.attach_data.status):
+            
+            if (volume.attach_data is not None):
+                if re.search("attached",str(volume.attach_data.status)):
                     return True
+                else:
+                    status = str(volume.attach_data.status)
+                    self.debug(str(volume)+" not 'attached', attach_data.status="+status)
             self.debug( str(volume) + " state:" + volume.status + " pause:"+str(pause)+" elapsed:"+str(elapsed))
             self.sleep(pause)
             elapsed = int(time.time()-start)
 
-        self.fail(str(volume) + " left in " +  volume.status)
+        self.fail(str(volume) + " left in " +  volume.status+ " - " + status + ", elapsed:"+str(elapsed))
         return False
       
     
@@ -375,13 +396,14 @@ class EC2ops(Eutester):
             self.debug( str(volume) + " state:" + volume.status + " pause:"+str(pause)+" elapsed:"+str(elapsed))
             self.sleep(pause)
             elapsed = int(time.time() - start)
-        self.fail(str(volume) + " left in " +  volume.status)
+        self.fail(str(volume) + " left in " +  volume.status +", elapsed:"+str(elapsed))
         return False
     
     def create_snapshot(self, volume_id, description="", waitOnProgress=0, poll_interval=10, timeout=0):
         """
         Create a new EBS snapshot from an existing volume then wait for it to go to the created state. By default will poll for poll_count.
-        If waitOnProgress is specified than will wait on "waitOnProgress" # of poll_interval periods w/o progress before failing
+        If waitOnProgress is specified than will wait on "waitOnProgress" overrides # of poll_interval periods, using waitonprogress # of
+        periods of poll_interval length in seconds w/o progress before failing
         An overall timeout can be given for both methods, by default the timeout is not used.    
         volume_id        (mandatory string) Volume id of the volume to create snapshot from
         description      (optional string) string used to describe the snapshot
@@ -416,7 +438,7 @@ class EC2ops(Eutester):
             else: 
                 poll_count -= 1
             elapsed = int(time.time()-snap_start)
-            self.debug("Snapshot:"+snapshot.id+" Status:"+snapshot.status+" Progress:"+snapshot.progress+" Polls:"+str(polls)+" Time Elapsed:"+str(elapsed))    
+            self.debug("Snapshot:"+snapshot.id+" Status:"+snapshot.status+" Progress:"+snapshot.progress+"Total Polls:"+str(polls)+" Polls remaining:"+str(poll_count)+" Time Elapsed:"+str(elapsed))    
             if (snapshot.status == 'completed'):
                 self.debug("Snapshot created after " + str(elapsed) + " seconds. " + str(polls) + " X ("+str(poll_interval)+" second) polling invervals. Status:"+snapshot.status+", Progress:"+snapshot.progress)
                 self.test_resources["snapshots"].append(snapshot)
@@ -428,16 +450,18 @@ class EC2ops(Eutester):
         return None
         
     
-    def delete_snapshot(self,snapshot):
+    def delete_snapshot(self,snapshot,timeout=60):
         """Delete the snapshot object"""
         snapshot.delete()
         self.debug( "Sent snapshot delete request for snapshot: " + snapshot.id)
-        poll_count = 5
-        while ( len(self.ec2.get_all_snapshots(snapshot_ids=[snapshot.id])) > 0) and (poll_count > 0):
-            poll_count -= 1
+        start = time.time()
+        elapsed = 0
+        while ( len(self.ec2.get_all_snapshots(snapshot_ids=[snapshot.id])) > 0) and (elapsed < timeout):
             self.sleep(10)
-        if poll_count == 0:
-            self.fail(str(snapshot) + " left in " +  snapshot.status + " with " + str(snapshot.progress) + "% progress")
+            elapsed = int(time.time()-start)
+            self.debug(str(snapshot) + " status " +  snapshot.status + " with " + str(snapshot.progress) + "% progress. Elapsed:"+str(elapsed))
+        if ( len(self.ec2.get_all_snapshots(snapshot_ids=[snapshot.id])) > 0):
+            self.fail(str(snapshot) + " left in" +  snapshot.status + " with " + str(snapshot.progress) + "% progress. Elapsed:"+str(elapsed))
         return snapshot
     
     def register_snapshot(self, snapshot, rdn="/dev/sda1", description="bfebs", windows=False, bdmdev=None, name=None, ramdisk=None, kernel=None, dot=True):
@@ -597,9 +621,9 @@ class EC2ops(Eutester):
         """Used with instance connections. Checks if a device at a certain path exists"""
         return self.found("ls -1 " + device_path, device_path)
         
-    def get_volume(self, volume_id="vol-", status=None, attached_instance=None, attached_dev=None, snapid=None, zone=None, minsize=1, maxsize=None):
+    def get_volumes(self, volume_id="vol-", status=None, attached_instance=None, attached_dev=None, snapid=None, zone=None, minsize=1, maxsize=None, eof=False):
         '''
-        Return first volume that matches the criteria. Criteria options to be matched:
+        Return list of volumes that matches the criteria. Criteria options to be matched:
         volume_id         (optional string) string present within volume id
         status            (optional string) examples: 'in-use', 'creating', 'available'
         attached_instance (optional string) instance id example 'i-1234abcd'
@@ -608,7 +632,10 @@ class EC2ops(Eutester):
         zone              (optional string) zone of volume example 'PARTI00'
         minsize           (optional integer) minimum size of volume to be matched
         maxsize           (optional integer) maximum size of volume to be matched
+        eof               (optional boolean) exception on failure to find volume, else returns empty list
         '''
+        
+        retlist = []
         if (attached_instance is not None) or (attached_dev is not None):
             status='in-use'
     
@@ -620,22 +647,46 @@ class EC2ops(Eutester):
                 continue
             if (zone is not None) and (volume.zone != zone):
                 continue
-            if (status is not None):
-                if (volume.status != status):
+            if (status is not None) and (volume.status != status):
+                continue
+            if (volume.attach_data is not None):
+                if (attached_instance is not None) and ( volume.attach_data.instance_id != attached_instance):
                     continue
-                else:
-                    if (attached_instance is not None) and ( volume.attach_data.instance_id != attached_instance):
-                        continue
-                    if (attached_dev is not None) and (volume.attach_data.device != attached_dev):
-                        continue
+                if (attached_dev is not None) and (volume.attach_data.device != attached_dev):
+                    continue
             if not (volume.size >= minsize) and ((maxsize is None) or (volume.size <= maxsize)):
                 continue
-            return volume
-        raise Exception("Unable to find matching volume")
-        return None
+            retlist.append(volume)
+        if eof and retlist == []:
+            raise Exception("Unable to find matching volume")
+        else:
+            return retlist
 
-
-    def run_instance(self, image=None, keypair=None, group="default", type=None, zone=None, min=1, max=1, user_data=None,private_addressing=False, username="root", password=None, is_reachable=True):
+    def get_volume(self, volume_id="vol-", status=None, attached_instance=None, attached_dev=None, snapid=None, zone=None, minsize=1, maxsize=None, eof=True):
+        '''
+        Returns a single volume that matches the provided criteria
+        Return first volume that matches the criteria. Criteria options to be matched:
+        volume_id         (optional string) string present within volume id
+        status            (optional string) examples: 'in-use', 'creating', 'available'
+        attached_instance (optional string) instance id example 'i-1234abcd'
+        attached_dev      (optional string) example '/dev/sdf'
+        snapid            (optional string) snapshot volume was created from example 'snap-1234abcd'
+        zone              (optional string) zone of volume example 'PARTI00'
+        minsize           (optional integer) minimum size of volume to be matched
+        maxsize           (optional integer) maximum size of volume to be matched
+        eof               (optional boolean) exception on failure to find volume, else returns None
+        '''
+        vol = None
+        try:
+            vol = self.get_volumes(volume_id=volume_id, status=status, attached_instance=attached_instance, attached_dev=attached_dev, snapid=snapid, zone=zone, minsize=minsize, maxsize=maxsize, eof=eof)[0]
+        except Exception, e:
+            if eof:
+                raise e
+        return vol
+        
+            
+            
+    def run_instance(self, image=None, keypair=None, group="default", type=None, zone=None, min=1, max=1, user_data=None,private_addressing=False, username="root", password=None, is_reachable=True, timeout=480):
         """
         Run instance/s and wait for them to go to the running state
         image      Image object to use, default is pick the first emi found in the system
@@ -659,6 +710,8 @@ class EC2ops(Eutester):
             addressing_type = "private"
         else:
             addressing_type = None
+        
+        start = time.time()
             
         self.debug( "Attempting to run "+ str(image.root_device_type)  +" image " + str(image) + " in group " + str(group))
         reservation = image.run(key_name=keypair,security_groups=[group],instance_type=type, placement=zone, min_count=min, max_count=max, user_data=user_data, addressing_type=addressing_type)
@@ -668,9 +721,9 @@ class EC2ops(Eutester):
             self.fail("Reservation:"+str(reservation.id)+" returned "+str(len(reservation.instances))+" instances, not within min("+str(min)+") and max("+str(max)+" ")
         
         try:
-            self.wait_for_reservation(reservation)
+            self.wait_for_reservation(reservation,timeout=timeout)
         except Exception, e:
-            self.critical("An instance did not enter proper state in " + str(reservation) )
+            self.critical("An instance did not enter proper running state in " + str(reservation) )
             self.critical("Terminatng instances in " + str(reservation))
             self.terminate_instances(reservation)
             raise Exception("Instances in " + str(reservation) + " did not enter proper state")
@@ -693,10 +746,11 @@ class EC2ops(Eutester):
             if (is_reachable) and (private_addressing is False) :
                 self.ping(instance.public_dns_name, 60)
                 
-            
+        #calculate remaining time to wait for establishing an ssh session/euinstance     
+        timeout = timeout-int(time.time()-start)  
         #if we can establish an SSH session convert the instances to the test class euinstance for access to instance specific test methods
         if(is_reachable) and ((keypair is not None) or (user is not None and password is not None)):
-            return self.convert_reservation_to_euinstance(reservation, username=username, password=password, keyname=keypair)
+            return self.convert_reservation_to_euinstance(reservation, username=username, password=password, keyname=keypair, timeout=timeout)
         else:
             return reservation
 
@@ -714,14 +768,14 @@ class EC2ops(Eutester):
                 
             
 
-    def convert_reservation_to_euinstance(self, reservation, username="root", password=None, keyname=None):
+    def convert_reservation_to_euinstance(self, reservation, username="root", password=None, keyname=None, timeout=120):
         euinstance_list = []
         for instance in reservation.instances:
             keypair = self.get_keypair(keyname)
             try:
-                euinstance_list.append( EuInstance.make_euinstance_from_instance( instance, self, keypair=keypair, username = username, password=password ))
+                euinstance_list.append( EuInstance.make_euinstance_from_instance( instance, self, keypair=keypair, username = username, password=password, timeout=timeout ))
             except Exception, e:
-                self.critical("Unable to create Euinstance from " + str(instance))
+                self.critical("Unable to create Euinstance from " + str(instance)+str(e))
                 euinstance_list.append(instance)
                 
         reservation.instances = euinstance_list

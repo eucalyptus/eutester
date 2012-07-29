@@ -9,6 +9,7 @@ from eucaops import Eucaops
 from eutester import xmlrunner
 
 arg_credpath = None
+arg_imgurl = None
 
 class BFEBSBasics(InstanceBasics):
     def setUp(self, credpath=None):
@@ -16,10 +17,15 @@ class BFEBSBasics(InstanceBasics):
             credpath = arg_credpath
         super(BFEBSBasics, self).setUp(credpath)
         
-    def RegisterImage(self, bfebs_img_url = "<image-url>", zone= None):
+    def RegisterImage(self, bfebs_img_url = None, zone= None):
         '''Register a BFEBS snapshot'''
         if zone is None:
             zone = self.zone
+        if bfebs_img_url is None:
+            if arg_imgurl is not None:
+                bfebs_img_url = arg_imgurl
+            else:
+                raise Exception("No image url provided when attempting to register a BFEBS image")
         self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name, zone=zone)
         for instance in self.reservation.instances:
             self.assertTrue(self.create_attach_volume(instance, 2)) 
@@ -111,8 +117,10 @@ if __name__ == "__main__":
     parser.add_argument('--credpath', default=".eucarc")
     parser.add_argument('--xml', action="store_true", default=False)
     parser.add_argument('--tests', nargs='+', default= ["RegisterImage","LaunchImage", "StopStart","MultipleBFEBSInstances","ChurnBFEBS"])
+    parser.add_argument('--imgurl')
     args = parser.parse_args()
     arg_credpath = args.credpath
+    arg_imgurl = args.imgurl
     for test in args.tests:
         if args.xml:
             try:
