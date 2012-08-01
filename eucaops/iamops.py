@@ -33,6 +33,12 @@ from eutester import Eutester
 
 class IAMops(Eutester):
     
+    def create_account(self,account_name):
+        '''Create an account with the given name'''
+        self.debug("Creating account: " + account_name)
+        params = {'AccountName': account_name}
+        self.euare.get_response('CreateAccount', params)
+    
     def create_user(self, user_name,path="/", delegate_account=None):
         self.debug("Attempting to create user: " + user_name)
         params = {'UserName': user_name,
@@ -102,14 +108,16 @@ class IAMops(Eutester):
                   'PolicyName': policy_name,
                   'DelegateAccount': delegate_account }
         self.euare.get_response('DeleteGroupPolicy', params, verb='POST')
-        
-    def create_account(self,account_name):
-        '''Create an account with the given name'''
-        self.debug("Creating account: " + account_name)
-        params = {'AccountName': account_name}
-        self.euare.get_response('CreateAccount', params)
     
-        
+    def create_access_key(self, user_name=None, delegate_account=None):
+        self.debug("Creating access key for " + user_name )
+        params = {'UserName': user_name,
+                  'DelegateAccount': delegate_account }
+        response = self.euare.get_response('CreateAccessKey', params)
+        access_tuple = {}
+        access_tuple['access_key_id'] = response['create_access_key_response']['create_access_key_result']['access_key']['access_key_id']
+        access_tuple['secret_access_key'] = response['create_access_key_response']['create_access_key_result']['access_key']['secret_access_key']
+        return access_tuple
     
         
     
