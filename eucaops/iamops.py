@@ -75,14 +75,14 @@ class IAMops(Eutester):
         self.euare.get_response('DeleteGroup', params)
     
     def add_user_to_group(self, group_name, user_name, delegate_account=None):
-        self.debug("Adding user "  +  user + " to group " + group)
+        self.debug("Adding user "  +  user_name + " to group " + group_name)
         params = {'GroupName': group_name,
                   'UserName': user_name,
                   'DelegateAccount': delegate_account }
         self.euare.get_response('AddUserToGroup', params)
     
     def remove_user_from_group(self, group_name, user_name, delegate_account=None):
-        self.debug("Removing user "  +  user + " to group " + group)
+        self.debug("Removing user "  +  user_name + " to group " + group_name)
         params = {'GroupName': group_name,
                   'UserName': user_name,
                   'DelegateAccount': delegate_account }
