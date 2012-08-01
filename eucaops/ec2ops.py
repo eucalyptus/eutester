@@ -708,6 +708,7 @@ class EC2ops(Eutester):
 
         if private_addressing is True:
             addressing_type = "private"
+            is_reachable= False
         else:
             addressing_type = None
         
@@ -743,7 +744,7 @@ class EC2ops(Eutester):
                 self.debug(str(instance) + " got Public IP: " + str(instance.ip_address)  + " Private IP: " + str(instance.private_ip_address) + " Public DNS Name: " + str(instance.public_dns_name) + " Private DNS Name: " + str(instance.private_dns_name))
             
             self.wait_for_valid_ip(instance)
-            if (is_reachable) and (private_addressing is False) :
+            if (is_reachable):
                 self.ping(instance.public_dns_name, 60)
                 
         #calculate remaining time to wait for establishing an ssh session/euinstance     
