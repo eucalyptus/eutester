@@ -540,6 +540,7 @@ class Eutester(object):
         return list(set(list1)-set(list2))
     
     def fail(self, message):
+    	"""Counts the errors, and also prints error message if program exits from an error"""
         self.critical(message)
         self.fail_log.append(message)
         self.fail_count += 1
