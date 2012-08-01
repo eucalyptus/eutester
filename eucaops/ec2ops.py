@@ -750,7 +750,7 @@ class EC2ops(Eutester):
         #calculate remaining time to wait for establishing an ssh session/euinstance     
         timeout = timeout-int(time.time()-start)  
         #if we can establish an SSH session convert the instances to the test class euinstance for access to instance specific test methods
-        if (is_reachable) and (keypair is not None):
+        if (is_reachable):
             return self.convert_reservation_to_euinstance(reservation, username=username, password=password, keyname=keypair, timeout=timeout)
         else:
             return reservation
