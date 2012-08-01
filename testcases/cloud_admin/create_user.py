@@ -2,7 +2,7 @@
 from eucaops import Eucaops
 import argparse
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Validate functions of the reporting mechanism')
+    parser = argparse.ArgumentParser(description='Create users and accounts with appropriate IAM permissions to use S3 and EC2')
     parser.add_argument('--credpath', required=True)
     parser.add_argument("--account-number", type=int, default=1)
     parser.add_argument("--user-number", type=int, default=1)
