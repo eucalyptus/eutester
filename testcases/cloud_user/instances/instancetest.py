@@ -430,7 +430,6 @@ class InstanceBasics(unittest.TestCase):
             address.disassociate()
             self.tester.sleep(30)
             instance.update()
-            self.assertTrue( self.tester.ping(instance.public_dns_name), "Could not ping instance with new IP")
             address.release()
             if (instance.public_dns_name != instance.private_dns_name):
                 self.fail("Instance received a new public IP: " + instance.public_dns_name)
