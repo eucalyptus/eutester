@@ -416,10 +416,9 @@ class InstanceBasics(unittest.TestCase):
            an Elastic IP. In the process check after diassociate
            the instance has only got private IP or new Public IP
            gets associated to it"""
-        self.private_addressing = True
         if zone is None:
             zone = self.zone
-        self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name, private_addressing=self.private_addressing, zone=zone)
+        self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name, private_addressing=True, zone=zone)
         self.tester.sleep(10)
         for instance in self.reservation.instances:
             address = self.tester.allocate_address()
