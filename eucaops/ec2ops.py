@@ -697,6 +697,7 @@ class EC2ops(Eutester):
         min        Minimum instnaces to launch, default 1
         max        Maxiumum instances to launch, default 1
         private_addressing  Runs an instance with only private IP address
+        is_reachable  Instance can be reached on its public IP (Default=True)
         """
         if image == None:
             images = self.ec2.get_all_images()
@@ -751,6 +752,7 @@ class EC2ops(Eutester):
         timeout = timeout-int(time.time()-start)  
         #if we can establish an SSH session convert the instances to the test class euinstance for access to instance specific test methods
         if (is_reachable):
+            self.debug("Converting " + str(reservation) + " into euinstances")
             return self.convert_reservation_to_euinstance(reservation, username=username, password=password, keyname=keypair, timeout=timeout)
         else:
             return reservation
