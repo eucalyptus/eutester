@@ -21,14 +21,12 @@
 #        -negative:attempt to attach an in-use volume, should fail
 #        -attach a 2nd volume to an instance, write random date to vol and calc md5 of volumes
 #        -reboot instance
-#        -verify both volumes are attached after reboot of instance
+#        -verify both volumes are attached after reboot of instance. 
 #        -detach 1st volume
 #        -create snapshot of detached volume
 #        -create snapshot of attached volume
-#        
-#        Multi-cluster portion...
-#        -attempt to create a volume of each snapshot, if multi 1 in each cluster
-#        -attempt to attach each volume to an instance verify md5s
+#        -attempt to create a volume of each snapshot, if within a multi-cluster env do 1 in each cluster 
+#        -attempt to attach each volume created from the previous snaps to an instance verify md5s
 #        
 #        Properties tests:
 #        -create a volume of greater than prop size, should fail
@@ -38,6 +36,7 @@
 #        Cleanup:
 #        --remove all volumes, instance, and snapshots created during this test
 #
+#    @author: clarkmatthew
 
 import unittest
 from eutester.eutestcase import EutesterTestCase
@@ -68,6 +67,7 @@ class ebs_tests(unittest.TestCase):
                             keypair=keypair, 
                             group=group, 
                             image=emi)
+        
     def test_ebs_basic_test_suite(self):
         '''
         Full suite of ebs related tests

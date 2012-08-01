@@ -47,6 +47,9 @@ class TestZone():
         self.name = partition.name
         self.instances = []
         self.volumes = []
+        
+    def __str__(self):
+        return self.name
     
 class TestSnap(Snapshot):
     
@@ -125,7 +128,7 @@ class EbsTestSuite(EutesterTestCase):
             if (keypair is not None):
                 self.keypair = keypair
             else:     
-                keys = self.tester.get_all_current_local_keys()
+                keys = self.tester.get_all_current_local_keys() 
                 if keys != []:
                     self.keypair = keys[0]
                 else:
@@ -215,6 +218,7 @@ class EbsTestSuite(EutesterTestCase):
         for zone in zonelist:
             for instance in zone.instances:
                 self.tester.terminate_single_instance(instance, timeout)
+                zone.instances.remove(instance)
     
     def negative_attach_in_use_volume_in_zones(self,zonelist=None,timeout=360):
         testmsg =   """
@@ -370,6 +374,8 @@ class EbsTestSuite(EutesterTestCase):
                     elapsed = int(time.time()-start)
                 if volume.status != "deleted":
                     self.debug("failed to delete volume:"+str(volume.id))
+                else:
+                    zone.volumes.remove(volume)
         self.endsuccess()
         
         
@@ -388,6 +394,7 @@ class EbsTestSuite(EutesterTestCase):
             for snap in snaplist:
                 if snap.zone == zone:
                     self.tester.delete_snapshot(snap, timeout=timeout)
+                    snaplist.remove(snap)
         self.endsuccess()
         
                 
@@ -597,8 +604,37 @@ class EbsTestSuite(EutesterTestCase):
                 printmethod('Error:'+str(testcase.error))
     
 
+    def run_test_case_list(self, list, eof=True, clean_on_exit=True, printresults=True):
+        '''
+        wrapper to execute a list of ebsTestCase objects
+        '''
+        try:
+            for test in list:
+                self.debug('Running list method:'+str(test.name))
+                try:
+                    test.run()
+                except Exception, e:
+                    self.debug('Testcase:'+ str(test.name)+' error:'+str(e))
+                    if eof:
+                        raise e
+                    else:
+                        pass
+        finally:
+            try:
+                 if clean_on_exit:
+                    self.clean_created_resources()
+            except: pass
+            if printresults:
+                try:
+                    ebssuite.print_test_list_results()
+                except:pass
+                
+        
+            
     
 if __name__ == "__main__":
+    ## If given command line arguments, use them as test names to launch
+
     ## If given command line arguments, use them as test names to launch
     parser = argparse.ArgumentParser(prog="ebs_basic_test.py",
                                      version="Test Case [ebs_basic_test.py] Version 0.1",
