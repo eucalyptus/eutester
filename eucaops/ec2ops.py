@@ -786,6 +786,13 @@ class EC2ops(Eutester):
    
     def get_keypair(self, name):
         return self.ec2.get_all_key_pairs([name])[0]
+    
+    def get_zones(self):
+        zone_objects = self.ec2.get_all_zones()
+        zone_names = []
+        for zone in zone_objects:
+            zone_names.append(zone.name)
+        return zone_names
  
     def get_instances(self, 
                       state=None, 
