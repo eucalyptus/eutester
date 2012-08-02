@@ -51,10 +51,9 @@ from threading import Thread
 from boto.ec2.regioninfo import RegionInfo
 from boto.s3.connection import OrdinaryCallingFormat
 
-from machine import machine
+
 import eulogger
-from euservice import EuserviceManager
-from euconfig import EuConfig
+
 
 
 class TimeoutFunctionException(Exception): 

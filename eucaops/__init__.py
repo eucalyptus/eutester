@@ -35,7 +35,11 @@ from iamops import IAMops
 from ec2ops import EC2ops
 from s3ops import S3ops
 import time
-
+from eutester.euservice import EuserviceManager
+from eutester.euconfig import EuConfig
+from eutester.machine import machine
+import re
+import os
 
 class Eucaops(EC2ops,S3ops,IAMops):
     
@@ -365,9 +369,10 @@ class Eucaops(EC2ops,S3ops,IAMops):
    
     def create_credentials(self, admin_cred_dir, account, user):
         cmd_download_creds = self.eucapath + "/usr/sbin/euca_conf --get-credentials " + admin_cred_dir + "/creds.zip " + "--cred-user "+ user +" --cred-account " + account 
-        if self.found( cmd_download_creds, "The MySQL server is not responding"):
+        
+        if self.clc.found( cmd_download_creds, "The MySQL server is not responding"):
             raise IOError("Error downloading credentials, looks like CLC was not running")
-        if self.found( "unzip -o " + admin_cred_dir + "/creds.zip " + "-d " + admin_cred_dir, "cannot find zipfile directory"):
+        if self.clc.found( "unzip -o " + admin_cred_dir + "/creds.zip " + "-d " + admin_cred_dir, "cannot find zipfile directory"):
             raise IOError("Empty ZIP file returned by CLC")
         
     
