@@ -72,7 +72,6 @@ class Eutester(object):
     def __init__(self, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, region=None, ec2_ip=None, s3_ip=None, boto_debug=0):
         """  
         This is the constructor for a eutester object, it takes care of setting up the connections that will be required for a test to run. 
-        
         """
         ### Default values for configuration
         self.boto_debug = boto_debug
@@ -202,20 +201,7 @@ class Eutester(object):
         """Parse the eucarc for the EC2_URL"""
         ec2_url = self.parse_eucarc("EC2_URL")
         return ec2_url.split("/")[2].split(":")[0]        
-        
-    def create_ssh(self, hostname, password=None, keypath=None, username="root"):
-        """ Returns a paramiko SSHClient object for the hostname provided, either keypath or password must be provided"""
-        hostname = self.swap_component_hostname(hostname)
-        client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())            
-        if keypath == None:
-            if password==None:
-                password= self.password
-            client.connect(hostname, username=username, password=password)
-        else:
-            client.connect(hostname,  username=username, key_filename=keypath)
-        return client    
-                               
+    
     def handle_timeout(self, signum, frame): 
         raise TimeoutFunctionException()
 
