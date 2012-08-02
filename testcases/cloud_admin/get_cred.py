@@ -7,4 +7,4 @@ if __name__ == "__main__":
     parser.add_argument('--config', default="../input/2b_tested.lst")
     parser.add_argument("--password",default='foobar')
     args = parser.parse_args()
-    tester = Eutester(config_file=args.config, password=args.password)       
+    tester = Eucaops(config_file=args.config, password=args.password)       
