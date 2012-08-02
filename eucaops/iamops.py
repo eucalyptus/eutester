@@ -39,80 +39,97 @@ class IAMops(Eutester):
         params = {'AccountName': account_name}
         self.euare.get_response('CreateAccount', params)
     
+    def delete_account(self,account_name):
+        '''Delete an account with the given name'''
+        self.debug("Deleting account: " + account_name)
+        params = {'AccountName': account_name}
+        self.euare.get_response('DelegateAccount', params)
+    
     def create_user(self, user_name,path="/", delegate_account=None):
         self.debug("Attempting to create user: " + user_name)
         params = {'UserName': user_name,
-                  'Path': path,
-                  'DelegateAccount': delegate_account }
+                  'Path': path }
+        if delegate_account:
+            params['DelegateAccount'] = delegate_account
         self.euare.get_response('CreateUser',params)
     
     def delete_user(self, user_name, delegate_account=None):
         self.debug("Deleting user " + user_name)
-        params = {'UserName': user_name,
-                  'DelegateAccount': delegate_account }
+        params = {'UserName': user_name}
+        if delegate_account:
+            params['DelegateAccount'] = delegate_account
         self.euare.get_response('DeleteUser', params)
     
     def attach_policy_user(self, user_name, policy_name, policy_json, delegate_account=None):
         self.debug("Attaching the following policy to " + user_name + ":" + policy_json)
         params = {'UserName': user_name,
                   'PolicyName': policy_name,
-                  'PolicyDocument': policy_json,
-                  'DelegateAccount': delegate_account }
+                  'PolicyDocument': policy_json}
+        if delegate_account:
+            params['DelegateAccount'] = delegate_account
         self.euare.get_response('PutUserPolicy', params, verb='POST')
     
     def detach_policy_user(self, user_name, policy_name, delegate_account=None):
         self.debug("Detaching the following policy from " + user_name + ":" + policy_name)
         params = {'UserName': user_name,
-                  'PolicyName': policy_name,
-                  'DelegateAccount': delegate_account }
+                  'PolicyName': policy_name}
+        if delegate_account:
+            params['DelegateAccount'] = delegate_account
         self.euare.get_response('DeleteUserPolicy', params, verb='POST')
     
     def create_group(self, group_name,path="/", delegate_account=None):
         self.debug("Attempting to create group: " + group_name)
         params = {'GroupName': group_name,
-                  'Path': path,
-                  'DelegateAccount': delegate_account }
+                  'Path': path}
+        if delegate_account:
+            params['DelegateAccount'] = delegate_account
         self.euare.get_response('CreateGroup', params)
     
     def delete_group(self, group_name, delegate_account=None):
         self.debug("Deleting group " + group_name)
-        params = {'GroupName': group_name,
-                  'DelegateAccount': delegate_account }
+        params = {'GroupName': group_name}
+        if delegate_account:
+            params['DelegateAccount'] = delegate_account
         self.euare.get_response('DeleteGroup', params)
     
     def add_user_to_group(self, group_name, user_name, delegate_account=None):
         self.debug("Adding user "  +  user_name + " to group " + group_name)
         params = {'GroupName': group_name,
-                  'UserName': user_name,
-                  'DelegateAccount': delegate_account }
+                  'UserName': user_name}
+        if delegate_account:
+            params['DelegateAccount'] = delegate_account
         self.euare.get_response('AddUserToGroup', params)
     
     def remove_user_from_group(self, group_name, user_name, delegate_account=None):
         self.debug("Removing user "  +  user_name + " to group " + group_name)
         params = {'GroupName': group_name,
-                  'UserName': user_name,
-                  'DelegateAccount': delegate_account }
+                  'UserName': user_name}
+        if delegate_account:
+            params['DelegateAccount'] = delegate_account
         self.euare.get_response('RemoveUserFromGroup', params)
     
     def attach_policy_group(self, group_name, policy_name, policy_json, delegate_account=None):
         self.debug("Attaching the following policy to " + group_name + ":" + policy_json)
         params = {'GroupName': group_name,
                   'PolicyName': policy_name,
-                  'PolicyDocument': policy_json,
-                  'DelegateAccount': delegate_account }
+                  'PolicyDocument': policy_json}
+        if delegate_account:
+            params['DelegateAccount'] = delegate_account
         self.euare.get_response('PutGroupPolicy', params, verb='POST')
     
     def detach_policy_group(self, group_name, policy_name, delegate_account=None):
         self.debug("Detaching the following policy from " + group_name + ":" + policy_name)
         params = {'GroupName': group_name,
-                  'PolicyName': policy_name,
-                  'DelegateAccount': delegate_account }
+                  'PolicyName': policy_name}
+        if delegate_account:
+            params['DelegateAccount'] = delegate_account
         self.euare.get_response('DeleteGroupPolicy', params, verb='POST')
     
     def create_access_key(self, user_name=None, delegate_account=None):
         self.debug("Creating access key for " + user_name )
-        params = {'UserName': user_name,
-                  'DelegateAccount': delegate_account }
+        params = {'UserName': user_name}
+        if delegate_account:
+            params['DelegateAccount'] = delegate_account
         response = self.euare.get_response('CreateAccessKey', params)
         access_tuple = {}
         access_tuple['access_key_id'] = response['create_access_key_response']['create_access_key_result']['access_key']['access_key_id']
