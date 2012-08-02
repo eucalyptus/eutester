@@ -783,8 +783,11 @@ class EC2ops(Eutester):
         return reservation
    
     def get_keypair(self, name):
-        return self.ec2.get_all_key_pairs([name])[0]
-    
+        try:
+            return self.ec2.get_all_key_pairs([name])[0]
+        except IndexError, e:
+            raise Exception("Keypair: " + name + " not found")
+        
     def get_zones(self):
         zone_objects = self.ec2.get_all_zones()
         zone_names = []
