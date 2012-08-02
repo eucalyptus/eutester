@@ -38,8 +38,8 @@ from s3ops import S3ops
 
 class Eucaops(EC2ops,S3ops,IAMops):
     
-    def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,  account="eucalyptus", user="admin", username=None, region=None, boto_debug=0):
-        super(Eucaops, self).__init__(config_file=config_file,password=password, keypath=keypath, credpath=credpath, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,account=account, user=user, username=username, region=region, boto_debug=boto_debug)
+    def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,  account="eucalyptus", user="admin", username=None, region=None, clc_ip=None, walrus_ip=None, boto_debug=0):
+        EC2ops.__init__(self, config_file=config_file,password=password, keypath=keypath, credpath=credpath, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,account=account, user=user, username=username, region=region, clc_ip=clc_ip, walrus_ip=walrus_ip, boto_debug=boto_debug)
         self.test_resources = {}
         self.setup_s3_resource_trackers()
         self.setup_ec2_resource_trackers()

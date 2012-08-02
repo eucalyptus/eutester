@@ -45,8 +45,8 @@ from boto.exception import EC2ResponseError
 from eutester.euinstance import EuInstance
 
 class EC2ops(Eutester):
-    def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,account="eucalyptus",user="admin", username="root",region=None, boto_debug=0):
-        super(EC2ops, self).__init__(config_file=config_file,password=password, keypath=keypath, credpath=credpath, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,account=account, user=user, region=region, boto_debug=boto_debug)
+    def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,account="eucalyptus",user="admin", username="root",region=None, clc_ip=None, walrus_ip=None, boto_debug=0):
+        Eutester.__init__(self, config_file=config_file,password=password, keypath=keypath, credpath=credpath, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,account=account, user=user, region=region,  walrus_ip=walrus_ip, clc_ip=clc_ip, boto_debug=boto_debug)
         self.poll_count = 48
         self.username = username
         if self.hypervisor is "vmware":
