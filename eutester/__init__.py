@@ -69,16 +69,14 @@ EC2RegionData = {
     'ap-southeast-1' : 'ec2.ap-southeast-1.amazonaws.com'}
 
 class Eutester(object):
-    def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,  account="eucalyptus", user="admin", region=None, boto_debug=0):
+    def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, account="eucalyptus", user="admin", region=None, clc_ip=None, walrus_ip=None, boto_debug=0):
         """  
         This is the constructor for a eutester object, it takes care of setting up the connections that will be required for a test to run. 
         
         """
-        
         ### Default values for configuration
         self.config_file = config_file 
         self.eucapath = "/opt/eucalyptus"
-        self.current_ssh = "clc"
         self.boto_debug = boto_debug
         self.ssh = None
         self.sftp = None
@@ -92,34 +90,17 @@ class Eutester(object):
         self.fail_count = 0
         self.start_time = time.time()
         self.key_dir = "./"
-        self.account_id = 0000000000001
         self.hypervisor = None
         self.region = RegionInfo()
-        
-        ##### Euca Logs 
-        self.cloud_log_buffer = ''
-        self.cc_log_buffer  = ''
-        self.nc_log_buffer = ''
-        self.sc_log_buffer = ''
-        self.walrus_log_buffer = ''
-        self.logging_thread = False
-        
+
         ### Eutester logs
         self.logger = eulogger.Eulogger(identifier="EUTESTER")
-        
-            
         self.debug = self.logger.log.debug
         self.critical = self.logger.log.critical
         self.info = self.logger.log.info
-        self.logging_thread_pool = []
         ### LOGS to keep for printing later
         self.fail_log = []
         self.running_log = self.logger.log
-        
-        ### SSH Channels for tailing log files
-        self.cloud_log_channel = None
-        self.cc_log_channel= None
-        self.nc_log_channel= None
         
         self.clc_index = 0
 
@@ -136,7 +117,7 @@ class Eutester(object):
                     self.eucapath="/"
             except Exception, e:
                 raise Exception("Could not get REPO info from input file\n" + str(e))
-            #self.hypervisor = self.get_hypervisor()
+
             ### No credpath but does have password and an ssh connection to the CLC
             ### Private cloud with root access 
             ### Need to get credentials for the user if there arent any passed in
@@ -161,32 +142,28 @@ class Eutester(object):
                             raise Exception("Could not get credentials from first CLC and no other to try")
                         self.swap_clc()
                         self.sftp = self.clc.ssh.connection.open_sftp()
-                        #try:
                         self.credpath = self.get_credentials(account,user)
-                        #except Exception, e:
-                        #    raise Exception("Could not get credentials from second CLC and no other to try\n" + str(e))
-                        
+        
                 self.service_manager = EuserviceManager(self)
                 self.clc = self.service_manager.get_enabled_clc().machine
                 self.walrus = self.service_manager.get_enabled_walrus().machine 
                 
-            ### Pull the access and secret keys from the eucarc
+        ### Pull the access and secret keys from the eucarc or use the ones provided to the constructor
         if (self.credpath != None):
             self.debug("Extracting keys from " + self.credpath)         
             self.aws_access_key_id = self.get_access_key()
             self.aws_secret_access_key = self.get_secret_key()
-                        
-            ### If you have credentials for the boto connections, create them
+        else:
+            self.aws_access_key_id = aws_access_key_id
+            self.aws_secret_access_key = aws_secret_access_key
+        
+        ### If you have credentials for the boto connections, create them
         if (self.aws_access_key_id != None) and (self.aws_secret_access_key != None):
             if not boto.config.has_section('Boto'):
                 boto.config.add_section('Boto')
             boto.config.set('Boto', 'num_retries', '2')  
-            self.setup_boto_connections(region=region)
-        
-    def __del__(self):
-        self.logging_thread = False
-    
-    
+            self.setup_boto_connections(region=region,clc_ip=clc_ip,walrus_ip=walrus_ip)
+          
     def setup_boto_connections(self, region=None, aws_access_key_id=None, aws_secret_access_key=None, clc_ip=None, walrus_ip=None, is_secure=False):
         
         if aws_access_key_id is None:
@@ -207,13 +184,13 @@ class Eutester(object):
         if not self.region.endpoint:
             #self.get_connection_details()
             self.region.name = 'eucalyptus'
-            self.region.endpoint = self.get_ec2_ip()       
+            if clc_ip is None:
+                self.region.endpoint = self.get_ec2_ip()       
+            else:
+                self.region.endpoint = clc_ip
             port = 8773
             service_path="/services/Eucalyptus"
             
-        if walrus_ip is None:
-            walrus_ip = self.get_walrus_ip()
-        
         try:    
             self.ec2 = boto.connect_ec2(aws_access_key_id=aws_access_key_id,
                                     aws_secret_access_key=aws_secret_access_key,
@@ -227,10 +204,16 @@ class Eutester(object):
             self.critical("Was unable to create ec2 connection because of exception: " + str(e))
 
         try:
+            if walrus_ip is not None:
+                walrus_endpoint = walrus_ip
+            else:
+                walrus_endpoint = self.get_walrus_ip()
+                
+            self.debug("Attempting to create S3 connection to " + walrus_endpoint)
             self.s3 = boto.connect_s3(aws_access_key_id=aws_access_key_id,
                                                   aws_secret_access_key=aws_secret_access_key,
                                                   is_secure=False,
-                                                  host=walrus_ip,
+                                                  host= walrus_endpoint,
                                                   port=8773,
                                                   path="/services/Walrus",
                                                   calling_format=OrdinaryCallingFormat(),
@@ -395,12 +378,7 @@ class Eutester(object):
         cred_file_name = "creds.zip"
         full_cred_path = admin_cred_dir + "/" + cred_file_name
         
-        ### Check if this directory exists already
-#        if os.path.exists(full_cred_path):
-#            self.debug("No need to redownload credentials as they already exist for this system")
-#            self.credpath = admin_cred_dir      
-    
-        ### IF I wasnt passed in credentials, download and sync them
+        ### IF I dont already have credentials, download and sync them
         if self.credpath is None:
             ### SETUP directory remotely
             self.setup_remote_creds_dir(admin_cred_dir)
@@ -415,8 +393,7 @@ class Eutester(object):
             self.download_creds_from_clc(admin_cred_dir)
             ### IF there are 2 clcs make sure to sync credentials across them
                 
-        ### sync the keys that were given to all CLCs
-        
+        ### sync the credentials  to all CLCs
         for clc in clcs:
             self.send_creds_to_machine(admin_cred_dir, clc)
         
