@@ -12,6 +12,13 @@ Contents:
    :maxdepth: 2
 
 .. automodule:: eutester
+   :members:
+
+.. automodule:: eucaops
+   :members:
+
+.. automodule:: eucaweb
+   :members:
 
 Indices and tables
 ==================
