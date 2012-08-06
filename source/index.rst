@@ -12,7 +12,6 @@ Contents:
    :maxdepth: 2
 
 .. automodule:: eutester
-   :members:
 
 Indices and tables
 ==================
