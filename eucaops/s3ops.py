@@ -31,11 +31,36 @@
 # Author: vic.iglesias@eucalyptus.com
 
 from eutester import Eutester
+
 import os
+import hashlib
+
+
+from boto.s3.connection import OrdinaryCallingFormat
+from boto.s3.connection import S3Connection
+from boto.s3.bucket import Bucket
+from boto.s3.key import Key
+from boto.s3.acl import ACL, Policy, Grant
+from boto.exception import S3ResponseError
+from boto.exception import S3CreateError
+from boto.s3.connection import Location
+import boto.s3
+
+class S3opsException(Exception):
+    """Exception raised for errors that occur when running S3 operations.
+
+    Attributes:
+        msg  -- explanation of the error
+    """
+    def __init__(self, msg):
+        self.msg = msg
+    
+    def __str__(self):
+        print msg
 
 class S3ops(Eutester):
-    def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,account="eucalyptus",user="admin", username="root",region=None, boto_debug=0):
-        super(S3ops, self).__init__(config_file=config_file,password=password, keypath=keypath, credpath=credpath, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,account=account, user=user, region=region, boto_debug=boto_debug)
+    def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,account="eucalyptus",user="admin", username="root",region=None, clc_ip=None, boto_debug=0):
+        super(S3ops, self).__init__(config_file=config_file,password=password, keypath=keypath, credpath=credpath, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,account=account, user=user, region=region,clc_ip=clc_ip, boto_debug=boto_debug)
         self.test_resources = {}
         self.setup_s3_resource_trackers()
         
@@ -65,11 +90,9 @@ class S3ops(Eutester):
             try:
                 bucket = self.s3.create_bucket(bucket_name)
             except self.s3.provider.storage_create_error, e:
-                self.debug( 'Bucket (%s) is owned by another user' % bucket_name )
-                return None
+                raise S3opsException( 'Bucket (%s) is owned by another user' % bucket_name )
             if not self.get_bucket_by_name(bucket.name):
-                self.fail("Bucket could not be found after creation")
-                return None
+                raise S3opsException("Bucket could not be found after creation")
         self.test_resources["buckets"].append(bucket)
         self.debug("Created bucket: " + bucket_name)
         return bucket
@@ -86,23 +109,20 @@ class S3ops(Eutester):
         try:
             bucket.delete()
         except self.s3.provider.storage_create_error, e:
-                self.debug( 'Bucket (%s) is owned by another user' % bucket_name )
-                return None
-            
+                raise S3opsException( 'Bucket (%s) is owned by another user' % bucket_name )
         ### Check if the bucket still exists
         if self.get_bucket_by_name(bucket_name):
-            self.fail("Bucket still exists after delete operation")
-        
+            raise S3opsException('Bucket (%s) still exists after delete operation'  % bucket_name )
     
     def get_bucket_by_name(self, bucket_name):
         """
-        Lookup a bucket by name, if it does not exist return false
+        Lookup a bucket by name, if it does not exist raise an exception
         """
         bucket = self.s3.lookup(bucket_name)
         if bucket:
             return bucket
         else:
-            return False
+            raise S3opsException("Bucket: " + bucket_name  +" not found")
     
     def upload_object(self, bucket_name, key_name, path_to_file=None, contents=None):
         """
@@ -113,8 +133,7 @@ class S3ops(Eutester):
         """
         bucket = self.get_bucket_by_name(bucket_name)
         if bucket == None:
-            self.fail("Could not find bucket " + bucket_name + " to upload file")
-            return
+            raise S3opsException("Could not find bucket " + bucket_name + " to upload file")
         # Get a new, blank Key object from the bucket.  This Key object only
         # exists locally until we actually store data in it.
         key = bucket.new_key(key_name)
@@ -150,6 +169,106 @@ class S3ops(Eutester):
         object.delete()
         try:
             self.s3.get_bucket(bucket).get_key(name)
-            self.fail("Walrus bucket still exists after delete")
+            raise S3opsException("Walrus object " + name + " in bucket "  +  bucket.name  + " still exists after delete")
         except Exception, e:
             return
+        
+    def clear_bucket(bucket):
+        """Deletes the contents of the bucket specified and the bucket itself
+           bucket       boto.bucket to delete recursively
+        """
+        try :
+            self.debug( "Getting bucket listing for " + bucket.name )     
+            self.debug(  "Iterating throught the bucket" )
+            key_list = bucket.list()        
+            self.debug(  "Starting loop" )
+            for k in key_list:
+                if isinstance(k, boto.s3.prefix.Prefix):
+                    self.debug(  "Skipping prefix" )
+                    continue
+                self.debug(  "Deleting key: " + k.name )
+                bucket.delete_key(k)
+            bucket.delete()
+        except S3ResponseError as e:
+            self.debug(  "Exception caught doing bucket cleanup." )
+            if e.status == 409:
+                #Do version cleanup
+                self.debug(  "Cleaning up versioning artifacts" )
+                try:
+                    keys = bucket.get_all_versions()
+                    for k in keys:
+                        if isinstance(k, Key):
+                            self.debug(  "Got version: " + k.name + "--" + k.version_id + "-- Delete marker? " + str(k.delete_marker) )
+                            self.debug(  "Deleting key: " + k.name )
+                            bucket.delete_key(key_name=k.name,version_id=k.version_id)
+                        elif isinstance(k, DeleteMarker):
+                            self.debug(  "Got marker: " + k.name + "--" + k.version_id + "--" + str(k.is_latest) )
+                            self.debug(  "Deleting delete marker" )
+                            bucket.delete_key(key_name=k.name,version_id=k.version_id)
+                    self.debug(  "Deleting bucket " + bucket.name )
+                    bucket.delete()
+                except Exception as e:
+                    self.debug(  "Exception deleting versioning artifacts: " + e.message )
+                    
+    def clear_keys_with_prefix(self, bucket, prefix):
+        try :
+            listing = BucketTest.walrus.get_all_buckets()        
+            for bucket in listing:
+                if bucket.name.startswith(BucketTest.bucket_prefix):
+                    self.debug( "Getting bucket listing for " + bucket.name)
+                    key_list = bucket.list()
+                    for k in key_list:
+                        if isinstance(k, boto.s3.prefix.Prefix):
+                            self.debug( "Skipping prefix" )
+                            continue
+                        self.debug( "Deleting key: " + k.name )
+                        bucket.delete_key(k)
+                    bucket.delete()
+                else:
+                    self.debug( "skipping bucket: " + bucket.name )
+        except S3ResponseError as e:
+            raise S3opsException( "Exception caught doing bucket cleanup." )
+                    
+    
+    def get_canned_acl(owner_id=None,canned_acl=None,bucket_owner_id=None):
+        '''
+        Returns an acl object that can be applied to a bucket or key
+        owner_id         Account id of the owner of the bucket. Required
+        canned_acl       Canned acl to implement. Required. 
+                         Options: ['public-read', 'public-read-write', 'authenticated-read',  'log-delivery-write', 'bucket-owner-full-control', 'bucket-owner-full-control']
+        bucket_owner_id  Required for bucket-owner-full-control and bucket-owner-full-control acls to be created
+        '''
+        if owner_id == None or canned_acl == None:
+            raise S3opsException( "No owner_id or canned_acl passed to get_canned_acl()" )
+        
+        owner_fc_grant = Grant(permission="FULL_CONTROL", id=owner_id)
+        built_acl = ACL()
+        built_acl.add_grant(owner_fc_grant)
+            
+        if canned_acl == "public-read":
+            built_acl.add_grant(Grant(permission="READ",uri=s3_groups["all_users"]))        
+        elif canned_acl == "public-read-write":
+            built_acl.add_grant(Grant(permission="READ",uri=s3_groups["all_users"]))
+            built_acl.add_grant(Grant(permission="WRITE",uri=s3_groups["all_users"]))                
+        elif canned_acl == "authenticated-read":
+            built_acl.add_grant(Grant(permission="READ",uri=s3_groups["authenticated_users"]))        
+        elif canned_acl == "log-delivery-write":
+            built_acl.add_grant(Grant(permission="WRITE",uri=s3_groups["log_delivery"]))        
+        elif canned_acl == "bucket-owner-read":
+            if bucket_owner_id is None:
+                raise Exception("No bucket_owner_id passed when trying to create bucket-owner-read canned acl ")
+            built_acl.add_grant(Grant(permission="READ",user_id=bucket_owner_id))        
+        elif canned_acl == "bucket-owner-full-control":
+            if bucket_owner_id is None:
+                raise Exception("No bucket_owner_id passed when trying to create bucket-owner-full-control canned acl ")
+            built_acl.add_grant(Grant(permission="FULL_CONTROL",user_id=bucket_owner_id))        
+        return built_acl
+
+    def check_md5(eTag=None, data=None):
+        hasher = hashlib.md5()
+        hasher.update(data)
+        data_hash = hasher.hexdigest()
+        if data_hash != eTag:
+            raise Exception( "Hash/eTag mismatch: \nhash = " + data_hash + "\neTag= " + eTag )
+            
+                

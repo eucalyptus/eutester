@@ -45,12 +45,10 @@ from boto.exception import EC2ResponseError
 from eutester.euinstance import EuInstance
 
 class EC2ops(Eutester):
-    def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,account="eucalyptus",user="admin", username="root",region=None, boto_debug=0):
-        super(EC2ops, self).__init__(config_file=config_file,password=password, keypath=keypath, credpath=credpath, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,account=account, user=user, region=region, boto_debug=boto_debug)
+    def __init__(self, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, username="root",region=None, ec2_ip=None, s3_ip=None, boto_debug=0):
+        Eutester.__init__(self, credpath=credpath, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,region=region,  s3_ip=s3_ip, ec2_ip=ec2_ip, boto_debug=boto_debug)
         self.poll_count = 48
         self.username = username
-        if self.hypervisor is "vmware":
-            self.poll_count = 96
         self.test_resources = {}
         self.setup_ec2_resource_trackers()
         
@@ -697,6 +695,7 @@ class EC2ops(Eutester):
         min        Minimum instnaces to launch, default 1
         max        Maxiumum instances to launch, default 1
         private_addressing  Runs an instance with only private IP address
+        is_reachable  Instance can be reached on its public IP (Default=True)
         """
         if image == None:
             images = self.ec2.get_all_images()
@@ -751,6 +750,7 @@ class EC2ops(Eutester):
         timeout = timeout-int(time.time()-start)  
         #if we can establish an SSH session convert the instances to the test class euinstance for access to instance specific test methods
         if (is_reachable):
+            self.debug("Converting " + str(reservation) + " into euinstances")
             return self.convert_reservation_to_euinstance(reservation, username=username, password=password, keyname=keypair, timeout=timeout)
         else:
             return reservation
@@ -783,7 +783,17 @@ class EC2ops(Eutester):
         return reservation
    
     def get_keypair(self, name):
-        return self.ec2.get_all_key_pairs([name])[0]
+        try:
+            return self.ec2.get_all_key_pairs([name])[0]
+        except IndexError, e:
+            raise Exception("Keypair: " + name + " not found")
+        
+    def get_zones(self):
+        zone_objects = self.ec2.get_all_zones()
+        zone_names = []
+        for zone in zone_objects:
+            zone_names.append(zone.name)
+        return zone_names
  
     def get_instances(self, 
                       state=None, 
