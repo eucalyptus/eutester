@@ -78,7 +78,8 @@ class Eutester(object):
         self.region = RegionInfo()
         
         ### Eutester logs
-        self.logger = eulogger.Eulogger(identifier="EUTESTER")
+        if self.logger is None:
+            self.logger = eulogger.Eulogger(identifier="EUTESTER")
         self.debug = self.logger.log.debug
         self.critical = self.logger.log.critical
         self.info = self.logger.log.info

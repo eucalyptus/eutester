@@ -38,6 +38,7 @@ import time
 from eutester.euservice import EuserviceManager
 from eutester.euconfig import EuConfig
 from eutester.machine import machine
+from eutester import eulogger
 import re
 import os
 
@@ -60,7 +61,7 @@ class Eucaops(EC2ops,S3ops,IAMops):
         self.hypervisor = None
         self.clc_index = 0
         
-        EC2ops.__init__(self, credpath=credpath, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, username=username, region=region, ec2_ip=ec2_ip, s3_ip=s3_ip, boto_debug=boto_debug)
+        self.logger = eulogger.Eulogger(identifier="EUTESTER")
         
         if self.config_file != None:
             ## read in the config file
@@ -103,7 +104,7 @@ class Eucaops(EC2ops,S3ops,IAMops):
                 self.service_manager = EuserviceManager(self)
                 self.clc = self.service_manager.get_enabled_clc().machine
                 self.walrus = self.service_manager.get_enabled_walrus().machine 
-        self.setup_boto_connections(region=region,ec2_ip=ec2_ip,s3_ip=s3_ip)
+        EC2ops.__init__(self, credpath=credpath, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, username=username, region=region, ec2_ip=ec2_ip, s3_ip=s3_ip, boto_debug=boto_debug)
         self.test_resources = {}
         self.setup_s3_resource_trackers()
         self.setup_ec2_resource_trackers()
