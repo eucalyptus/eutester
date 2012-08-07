@@ -80,9 +80,9 @@ class Eutester(object):
         ### Eutester logs
         if self.logger is None:
             self.logger = eulogger.Eulogger(identifier="EUTESTER")
-        self.debug = self.logger.log.debug
-        self.critical = self.logger.log.critical
-        self.info = self.logger.log.info
+            self.debug = self.logger.log.debug
+            self.critical = self.logger.log.critical
+            self.info = self.logger.log.info
         
         ### LOGS to keep for printing later
         self.fail_log = []

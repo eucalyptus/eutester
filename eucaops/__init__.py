@@ -60,8 +60,12 @@ class Eucaops(EC2ops,S3ops,IAMops):
         self.key_dir = "./"
         self.hypervisor = None
         self.clc_index = 0
+        self.credpath = credpath
         
         self.logger = eulogger.Eulogger(identifier="EUTESTER")
+        self.debug = self.logger.log.debug
+        self.critical = self.logger.log.critical
+        self.info = self.logger.log.info
         
         if self.config_file != None:
             ## read in the config file
@@ -104,7 +108,7 @@ class Eucaops(EC2ops,S3ops,IAMops):
                 self.service_manager = EuserviceManager(self)
                 self.clc = self.service_manager.get_enabled_clc().machine
                 self.walrus = self.service_manager.get_enabled_walrus().machine 
-        EC2ops.__init__(self, credpath=credpath, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, username=username, region=region, ec2_ip=ec2_ip, s3_ip=s3_ip, boto_debug=boto_debug)
+        EC2ops.__init__(self, credpath=self.credpath, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, username=username, region=region, ec2_ip=ec2_ip, s3_ip=s3_ip, boto_debug=boto_debug)
         self.test_resources = {}
         self.setup_s3_resource_trackers()
         self.setup_ec2_resource_trackers()
