@@ -207,9 +207,6 @@ class Eutester(object):
 
     def local(self, cmd):
         """ Run a command locally on the tester"""
-        for item in os.popen("ls").readlines():
-            if re.match(self.credpath,item):
-                cmd = ". " + self.credpath + "/eucarc && " + cmd
         std_out_return = os.popen(cmd).readlines()
         return std_out_return
     
