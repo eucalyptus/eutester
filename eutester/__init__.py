@@ -217,7 +217,29 @@ class Eutester(object):
             found = re.search(regex,line)
             if found:
                 return True
-        return False 
+        return False
+    
+    def ping(self, address, poll_count = 10):
+        '''
+        Ping an IP and poll_count times (Default = 10)
+        address      Hostname to ping
+        poll_count   The amount of times to try to ping the hostname iwth 2 second gaps in between
+        ''' 
+        found = False
+        if re.search("0.0.0.0", address): 
+            self.critical("Address is all 0s and will not be able to ping it") 
+            return False
+        self.debug("Attempting to ping " + address)
+        while (poll_count > 0):
+            poll_count -= 1 
+            if self.found("ping -c 1 " + address, "1.*received"):
+                self.debug("Was able to ping address")
+                return True
+            if poll_count == 0:
+                self.critical("Was unable to ping address")
+                return False
+            self.debug("Ping unsuccessful retrying in 2 seconds")
+            self.sleep(2)    
     
     def grep(self, string,list):
         """ Remove the strings from the list that do not match the regex string"""
