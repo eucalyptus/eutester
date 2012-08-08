@@ -1,17 +1,36 @@
-#! ../share/python_lib/vic-dev/bin/python
+#!/usr/bin/python
 import unittest
 import time
 import sys
+sys.path.append("../cloud_user/instances/")
+sys.path.append("../cloud_user/s3/")
 from instancetest import InstanceBasics
+from bucket_tests import BucketTestSuite
+from eutester.eutestcase import EutesterTestCase
 from eucaops import Eucaops 
 import os
 import re
+import random
 
-
-class HAtests(InstanceBasics):
-    def setUp(self):
-        super(HAtests, self).setUp()
+class HAtests(EutesterTestCase, InstanceBasics, BucketTestSuite):
+    def __init__(self, config_file="cloud.conf", password="foobar"):
+        self.tester = Eucaops( config_file=config_file, password=password)
         self.servman = self.tester.service_manager
+        self.tester.poll_count = 120
+        ### Add and authorize a group for the instance
+        self.group = self.tester.add_group(group_name="group-" + str(time.time()))
+        self.tester.authorize_group_by_name(group_name=self.group.name )
+        self.tester.authorize_group_by_name(group_name=self.group.name, port=-1, protocol="icmp" )
+        ### Generate a keypair for the instance
+        self.keypair = self.tester.add_keypair( "keypair-" + str(time.time()))
+        self.keypath = os.curdir + "/" + self.keypair.name + ".pem"
+        self.image = self.tester.get_emi(root_device_type="instance-store")
+        self.reservation = None
+        self.private_addressing = False
+        self.bucket_prefix = "buckettestsuite-" + str(int(time.time())) + "-"
+        self.test_user_id = self.tester.s3.get_canonical_user_id()
+        zones = self.tester.ec2.get_all_zones()
+        self.zone = random.choice(zones).name
     
     def tearDown(self):
         try:
@@ -26,21 +45,21 @@ class HAtests(InstanceBasics):
         except Exception, e: 
             self.tester.critical("Unable to teardown group and keypair")
             
-    def run_testcase(self, testcase_callback,zone):
+    def run_testcase(self, testcase_callback, **kwargs):
         poll_count = 10
         poll_interval = 60       
         while (poll_count > 0):
             try:
-                testcase_callback(zone)
+                testcase_callback(**kwargs)
                 break
             except Exception, e:
-                self.tester.debug("Attempt failed, retrying in " + str(poll_interval) )
+                self.tester.debug("Attempt failed due to: " + str(e)  + "\nRetrying testcase in " + str(poll_interval) )
             self.tester.sleep(poll_interval)     
             poll_count = poll_count - 1  
         if poll_count is 0:
             self.fail("Could not run an instance after " + str(poll_count) +" tries with " + str(poll_interval) + "s sleep in between")
         
-    def failoverService(self, service_aquisition_callback, testcase_callback, zone=None):
+    def failoverService(self, service_aquisition_callback, testcase_callback, **kwargs):
         ### Process Take down
         primary_service = service_aquisition_callback()
         secondary_service = self.tester.service_manager.wait_for_service(primary_service, state="DISABLED")
@@ -59,7 +78,7 @@ class HAtests(InstanceBasics):
             
         self.tester.sleep(30)
             
-        self.run_testcase(testcase_callback, zone)
+        self.run_testcase(testcase_callback, **kwargs)
         self.tester.terminate_instances(self.reservation)
         after_failover = self.tester.service_manager.wait_for_service(primary_service, state="ENABLED")
           
@@ -75,7 +94,7 @@ class HAtests(InstanceBasics):
         
     
     
-    def failoverReboot(self, service_aquisition_callback, testcase_callback, zone=None):
+    def failoverReboot(self, service_aquisition_callback, testcase_callback, **kwargs):
         ### Reboot the current enabled component
         primary_service = service_aquisition_callback()
         secondary_service = self.tester.service_manager.wait_for_service(primary_service, state="DISABLED")
@@ -95,7 +114,7 @@ class HAtests(InstanceBasics):
             
         self.tester.sleep(30)
             
-        self.run_testcase(testcase_callback, zone)
+        self.run_testcase(testcase_callback, **kwargs)
         self.tester.terminate_instances(self.reservation)
         after_failover =  self.tester.service_manager.wait_for_service(primary_service, state="ENABLED")
                
@@ -107,7 +126,7 @@ class HAtests(InstanceBasics):
         except Exception, e:
             self.fail("The secondary service never went to disabled")
             
-    def failoverNetwork(self, service_aquisition_callback, testcase_callback, zone=None):
+    def failoverNetwork(self, service_aquisition_callback, testcase_callback, **kwargs):
         
         ### Reboot the current enabled component
         primary_service = service_aquisition_callback()
@@ -127,7 +146,7 @@ class HAtests(InstanceBasics):
             
         self.tester.sleep(30)
             
-        self.run_testcase(testcase_callback, zone)
+        self.run_testcase(testcase_callback, **kwargs)
         self.tester.terminate_instances(self.reservation)
         after_failover =  self.tester.service_manager.wait_for_service(primary_service, state="ENABLED")
                      
@@ -139,55 +158,56 @@ class HAtests(InstanceBasics):
         except Exception, e:
             self.fail("The secondary service never went to disabled")
     
+    def post_run_checks(self):
+        for service in self.servman.get_all_services():
+            service.machine.refresh_ssh()
+        self.servman.all_services_operational()
+        
     def failoverCLC(self):
-        self.failoverService(self.servman.get_enabled_clc, super(HAtests, self).MetaData)
-        self.servman.all_services_operational()
-        self.failoverReboot(self.servman.get_enabled_clc, super(HAtests, self).MetaData)
-        self.servman.all_services_operational()
-        self.failoverNetwork(self.servman.get_enabled_clc, super(HAtests, self).MetaData)
-        self.servman.all_services_operational()
+        self.failoverService(self.servman.get_enabled_clc, self.MetaData)
+        self.post_run_checks()
+        self.failoverReboot(self.servman.get_enabled_clc, self.MetaData)
+        self.post_run_checks()
+        self.failoverNetwork(self.servman.get_enabled_clc, self.MetaData)
+        self.post_run_checks()
     
     def failoverWalrus(self):
-        self.failoverService(self.servman.get_enabled_walrus, super(HAtests, self).MetaData)
-        self.servman.all_services_operational()
-        self.failoverReboot(self.servman.get_enabled_walrus, super(HAtests, self).MetaData)
-        self.servman.all_services_operational()
-        self.failoverNetwork(self.servman.get_enabled_walrus, super(HAtests, self).MetaData)
-        self.servman.all_services_operational()
+        self.failoverService(self.servman.get_enabled_walrus, self.test_bucket_get_put_delete)
+        self.post_run_checks()
+        self.failoverReboot(self.servman.get_enabled_walrus,self.test_bucket_get_put_delete)
+        self.post_run_checks()
+        self.failoverNetwork(self.servman.get_enabled_walrus, self.test_bucket_get_put_delete)
+        self.post_run_checks()
     
     def failoverCC(self):
         zone = self.servman.partitions.keys()[0]
-        self.failoverService(self.servman.partitions[zone].get_enabled_cc, super(HAtests, self).MetaData,zone)
-        self.servman.all_services_operational()
-        self.failoverReboot(self.servman.partitions[zone].get_enabled_cc, super(HAtests, self).MetaData,zone)
-        self.servman.all_services_operational()
-        self.failoverNetwork(self.servman.partitions[zone].get_enabled_cc, super(HAtests, self).MetaData,zone)
-        self.servman.all_services_operational()
+        self.failoverService(self.servman.partitions[zone].get_enabled_cc, self.MetaData,self.zone)
+        self.post_run_checks()
+        self.failoverReboot(self.servman.partitions[zone].get_enabled_cc, self.MetaData,self.zone)
+        self.post_run_checks()
+        self.failoverNetwork(self.servman.partitions[zone].get_enabled_cc, self.MetaData,self.zone)
+        self.post_run_checks()
     
     def failoverSC(self):    
         zone = self.servman.partitions.keys()[0]
-        self.failoverService(self.servman.partitions[zone].get_enabled_sc, self.Reboot, zone)
+        self.failoverService(self.servman.partitions[zone].get_enabled_sc, InstanceBasics.Reboot, self.zone)
     
     def failoverVB(self):
         zone = self.servman.partitions.keys()[0]
         if len(self.servman.partitions[zone].vbs) > 1:
-            self.failoverService(self.servman.partitions[zone].get_enabled_vb, self.MetaData ,zone)
-
+            self.failoverService(self.servman.partitions[zone].get_enabled_vb, InstanceBasics.MetaData ,self.zone)
+    
+    def run_suite(self):  
+        self.testlist = [] 
+        testlist = self.testlist
+        testlist.append(self.create_testcase_from_method(self.failoverCLC))
+        testlist.append(self.create_testcase_from_method(self.failoverWalrus()))       
+        self.run_test_case_list(testlist)
 
 if __name__ == "__main__":
     import sys
     ## If given command line arguments, use them as test names to launch
-    if (len(sys.argv) > 1):
-        tests = sys.argv[1:]
-    else:
-    ### Other wise launch the whole suite
-        #tests = ["BasicInstanceChecks","ElasticIps","MaxSmallInstances","LargestInstance","MetaData","Reboot", "Churn"]
-        tests = ["failoverCLC"]
-    for test in tests:
-        result = unittest.TextTestRunner(verbosity=2).run(HAtests(test))
-        if result.wasSuccessful():
-            pass
-        else:
-            exit(1)       
-
-    
+    parser = HAtests.get_parser()       
+    args = parser.parse_args()
+    hasuite = HAtests(config_file=args.config, password = args.password)
+    hasuite.run_suite()
