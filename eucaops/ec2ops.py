@@ -362,6 +362,7 @@ class EC2ops(Eutester):
             
             if (volume.attach_data is not None):
                 if re.search("attached",str(volume.attach_data.status)):
+                    self.debug(str(volume) + ", Attached: " +  volume.status+ " - " + str(volume.attach_data.status) + ", elapsed:"+str(elapsed))
                     return True
                 else:
                     status = str(volume.attach_data.status)
