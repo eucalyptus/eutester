@@ -48,16 +48,8 @@ from boto.ec2 import keypair
 
 
 class SshConnection():
-    host = None
-    username = None
-    password = None
-    keypair = None
-    keypath = None
-    connection = None
-    debugmethod = None
-    timeout = 60
-    retry = 1
-    verbose = False
+    cmd_timeout_err_code = -100
+    cmd_not_executed_code = -99
     
     def __init__(self, 
                  host, 
@@ -90,6 +82,11 @@ class SshConnection():
         self.retry = retry
         self.debugmethod = debugmethod
         self.verbose = verbose
+        
+        #Used to store the last cmd attempted and it's exit code
+        self.lastcmd  = ""
+        self.lastexitcode = SshConnection.cmd_not_executed_code
+        
         
         
         if (self.keypair is not None):
@@ -127,15 +124,25 @@ class SshConnection():
         raise CommandTimeoutException("SSH Command timer fired after "+str(int(elapsed))+" seconds. Cmd:'"+str(cmd)+"'")   
     
      
-    def sys(self, cmd, verbose=None, timeout=120):
+    def sys(self, cmd, verbose=None, timeout=120, listformat=True):
         '''
         Issue a command cmd and return output in list format
         cmd - mandatory - string representing the command to be run  against the remote ssh session
         verbose - optional - will default to global setting, can be set per cmd() as well here
         timeout - optional - integer used to timeout the overall cmd() operation in case of remote blockingd
         '''
-        return self.cmd(cmd, verbose=verbose, timeout=timeout, listformat=True)
+        return self.cmd(cmd, verbose=verbose, timeout=timeout, listformat=listformat )['output']
     
+    def run(self, cmd, verbose=None, timeout=120, listformat=True):
+        '''
+        Issue a command 'cmd' and return dict containing output, exitstatus, and time to execute.
+        Can later be used to include/separate stderr/stdout, etc..
+        cmd - mandatory - string representing the command to be run  against the remote ssh session
+        verbose - optional - will default to global setting, can be set per cmd() as well here
+        timeout - optional - integer used to timeout the overall cmd() operation in case of remote blocking
+        listformat - optional - boolean, if set returns output as list of lines, else a single buffer/string
+        '''
+        return self.cmd(cmd, verbose=verbose, timeout=timeout, listformat=listformat )
     
     def cmd(self, cmd, verbose=None, timeout=120, listformat=False):
         """ 
@@ -149,8 +156,10 @@ class SshConnection():
             
         if verbose is None:
             verbose = self.verbose
-            
+        ret = {}
         cmd = str(cmd)
+        self.lastcmd = cmd
+        self.lastexitcode = SshConnection.cmd_not_executed_code
         t = None #used for timer 
         start = time.time()
         output = []
@@ -163,30 +172,36 @@ class SshConnection():
             f = chan.makefile()
             t = Timer(timeout, self.ssh_sys_timeout,[chan, start,cmd] )
             t.start()
-            chan.exec_command(cmd)
+            chan.exec_command(cmd)    
             if ( listformat is True):
                 #return output as list of lines
                 output = f.readlines()
             else:
                 #return output as single string buffer
                 output = f.read()
+            elapsed = int(time.time()-start)
+            ret['cmd']=cmd
+            ret['output']=output
+            ret['status']=chan.recv_exit_status()
+            ret['elapsed']=elapsed
             if verbose:
                 self.debug("done with exec")
+                
         except CommandTimeoutException, cte: 
-            elapsed = str(time.time()-start).split('.')[0]
+            self.lastexitcode = SshConnection.cmd_timeout_err_code
+            elapsed = str(int(time.time()-start))
             self.debug("Command ("+cmd+") timed out after " + str(elapsed) + " seconds\nException")     
             raise cte
         finally:
             if (t is not None):
                 t.cancel()          
         if verbose:
-            elapsed = str(time.time()-start).split('.')[0]
             if (listformat is True):
                 self.debug("".join(output))
             else:
                 self.debug(output)
                 
-        return output
+        return ret
         
     def refresh_connection(self):
         self.connection = self.get_ssh_connection(self.host, self.username,self.password , self.keypath, self.timeout, self.retry)

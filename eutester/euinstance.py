@@ -276,7 +276,7 @@ class EuInstance(Instance):
             while (elapsed < timeout):
                 self.debug("Checking for volume attachment on guest, elapsed time("+str(elapsed)+")")
                 dev_list_after = self.get_dev_dir()
-                self.debug("dev_list_after:"+"".join(dev_list_after))
+                self.debug("dev_list_after:"+" ".join(dev_list_after))
                 diff =list( set(dev_list_after) - set(dev_list_before) )
                 if len(diff) > 0:
                     devlist = str(diff[0]).split('/')
