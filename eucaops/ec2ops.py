@@ -45,12 +45,10 @@ from boto.exception import EC2ResponseError
 from eutester.euinstance import EuInstance
 
 class EC2ops(Eutester):
-    def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,account="eucalyptus",user="admin", username="root",region=None, boto_debug=0):
-        super(EC2ops, self).__init__(config_file=config_file,password=password, keypath=keypath, credpath=credpath, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,account=account, user=user, region=region, boto_debug=boto_debug)
+    def __init__(self, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, username="root",region=None, ec2_ip=None, s3_ip=None, boto_debug=0):
+        Eutester.__init__(self, credpath=credpath, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,region=region,  s3_ip=s3_ip, ec2_ip=ec2_ip, boto_debug=boto_debug)
         self.poll_count = 48
         self.username = username
-        if self.hypervisor is "vmware":
-            self.poll_count = 96
         self.test_resources = {}
         self.setup_ec2_resource_trackers()
         
@@ -593,30 +591,6 @@ class EC2ops(Eutester):
             self.critical("Address still associated with instance")
             return False
         return True
-        
-    
-    def ping(self, address, poll_count = 10):
-        '''
-        Ping an IP and poll_count times (Default = 10)
-        address      Hostname to ping
-        poll_count   The amount of times to try to ping the hostname iwth 2 second gaps in between
-        ''' 
-        found = False
-        if re.search("0.0.0.0", address): 
-            self.critical("Address is all 0s and will not be able to ping it") 
-            return False
-        self.debug("Attempting to ping " + address)
-        while (poll_count > 0):
-            poll_count -= 1 
-            if self.found("ping -c 1 " + address, "1 received"):
-                self.debug("Was able to ping address")
-                return True
-            if poll_count == 0:
-                self.critical("Was unable to ping address")
-                return False
-            self.debug("Ping unsuccessful retrying in 2 seconds")
-            self.sleep(2)
-            
     
     def check_device(self, device_path):
         """Used with instance connections. Checks if a device at a certain path exists"""
@@ -698,6 +672,7 @@ class EC2ops(Eutester):
         min        Minimum instnaces to launch, default 1
         max        Maxiumum instances to launch, default 1
         private_addressing  Runs an instance with only private IP address
+        is_reachable  Instance can be reached on its public IP (Default=True)
         """
         if image == None:
             images = self.ec2.get_all_images()
@@ -709,6 +684,7 @@ class EC2ops(Eutester):
 
         if private_addressing is True:
             addressing_type = "private"
+            is_reachable= False
         else:
             addressing_type = None
         
@@ -744,13 +720,14 @@ class EC2ops(Eutester):
                 self.debug(str(instance) + " got Public IP: " + str(instance.ip_address)  + " Private IP: " + str(instance.private_ip_address) + " Public DNS Name: " + str(instance.public_dns_name) + " Private DNS Name: " + str(instance.private_dns_name))
             
             self.wait_for_valid_ip(instance)
-            if (is_reachable) and (private_addressing is False) :
+            if (is_reachable):
                 self.ping(instance.public_dns_name, 60)
                 
         #calculate remaining time to wait for establishing an ssh session/euinstance     
         timeout = timeout-int(time.time()-start)  
         #if we can establish an SSH session convert the instances to the test class euinstance for access to instance specific test methods
-        if(is_reachable) and ((keypair is not None) or (user is not None and password is not None)):
+        if (is_reachable):
+            self.debug("Converting " + str(reservation) + " into euinstances")
             return self.convert_reservation_to_euinstance(reservation, username=username, password=password, keyname=keypair, timeout=timeout)
         else:
             return reservation
@@ -783,7 +760,17 @@ class EC2ops(Eutester):
         return reservation
    
     def get_keypair(self, name):
-        return self.ec2.get_all_key_pairs([name])[0]
+        try:
+            return self.ec2.get_all_key_pairs([name])[0]
+        except IndexError, e:
+            raise Exception("Keypair: " + name + " not found")
+        
+    def get_zones(self):
+        zone_objects = self.ec2.get_all_zones()
+        zone_names = []
+        for zone in zone_objects:
+            zone_names.append(zone.name)
+        return zone_names
  
     def get_instances(self, 
                       state=None, 
@@ -871,11 +858,6 @@ class EC2ops(Eutester):
                 print str(item)+" = "+str(obj.__dict__[item])
             buf += str(item)+" = "+str(obj.__dict__[item])+"\n"
         return buf
-              
-    
-    
-    
-    
 
     def release_address(self, ip=None):
         """
