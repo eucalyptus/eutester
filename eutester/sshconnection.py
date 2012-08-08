@@ -37,8 +37,17 @@ simple class to establish an ssh session
 example usage:
     import sshconnection
     ssh = SshConnection( '192.168.1.1', keypath='/home/testuser/keyfile.pem')
-    list = ssh.cmd('ls /dev/sd*',timeout=10)
-    print list[0]
+    
+    #use sys() to get either a list of output lines or a single string buffer depending on listformat flag
+    output = ssh.sys('ls /dev/sd*',timeout=10)
+    print output[0]
+    print ssh.lastcmd+" exited with code: "+str(ssh.lastexitcode)
+    
+    #...or use cmd to get a dict of output, exitstatus, and elapsed time to execute...
+    out = ssh.cmd('ping 192.168.1.2 -c 1 -W 5')
+   
+     print out['cmd']+" exited with status:"+out['status']+", elapsed time:"+out['elapsed']
+     print out['output']
 '''
 
 import time, os
@@ -133,17 +142,6 @@ class SshConnection():
         '''
         return self.cmd(cmd, verbose=verbose, timeout=timeout, listformat=listformat )['output']
     
-    def run(self, cmd, verbose=None, timeout=120, listformat=True):
-        '''
-        Issue a command 'cmd' and return dict containing output, exitstatus, and time to execute.
-        Can later be used to include/separate stderr/stdout, etc..
-        cmd - mandatory - string representing the command to be run  against the remote ssh session
-        verbose - optional - will default to global setting, can be set per cmd() as well here
-        timeout - optional - integer used to timeout the overall cmd() operation in case of remote blocking
-        listformat - optional - boolean, if set returns output as list of lines, else a single buffer/string
-        '''
-        return self.cmd(cmd, verbose=verbose, timeout=timeout, listformat=listformat )
-    
     def cmd(self, cmd, verbose=None, timeout=120, listformat=False):
         """ 
         Runs a command 'cmd' within an ssh connection. 
@@ -179,14 +177,12 @@ class SshConnection():
             else:
                 #return output as single string buffer
                 output = f.read()
-            elapsed = int(time.time()-start)
             ret['cmd']=cmd
             ret['output']=output
-            ret['status']=chan.recv_exit_status()
-            ret['elapsed']=elapsed
+            ret['status'] = self.lastexitcode = chan.recv_exit_status()
+            ret['elapsed']= elapsed = int(time.time()-start)
             if verbose:
                 self.debug("done with exec")
-                
         except CommandTimeoutException, cte: 
             self.lastexitcode = SshConnection.cmd_timeout_err_code
             elapsed = str(int(time.time()-start))
