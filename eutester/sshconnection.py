@@ -143,7 +143,8 @@ class SshConnection():
         '''
         return self.cmd(cmd, verbose=verbose, timeout=timeout, listformat=listformat )['output']
     
-    def cmd(self, cmd, verbose=None, timeout=120, readtimeout=20, listformat=False):
+    
+    def cmd(self, cmd, verbose=None, timeout=120, readtimeout=20, listformat=False, cb=None ):
         """ 
         Runs a command 'cmd' within an ssh connection. 
         Upon success returns a list of lines from the output of the command.
@@ -151,6 +152,8 @@ class SshConnection():
         verbose - optional - will default to global setting, can be set per cmd() as well here
         timeout - optional - integer used to timeout the overall cmd() operation in case of remote blocking
         listformat - optional - boolean, if set returns output as list of lines, else a single buffer/string
+        cb - optional - callback, method that can be used to handle output as 
+                        it's rx'd instead of waiting for the cmd to finish and returned buffer. Must accept string buffer, and return boolean whether to proceed. 
         """
             
         if verbose is None:
@@ -183,9 +186,18 @@ class SshConnection():
                 if len(rl) > 0:
                     new = chan.recv(1024)
                     if new:
+                        #We have data to handle...
                         output += new
-                        print new
+                        if verbose:
+                            self.debug(cmd)
+                        #Run call back if there is one
+                        if cb is not None:
+                            #If cb returns false break, end rx loop, return cmd outcome/output dict. 
+                            if not cb(new):
+                                chan.close()
+                                break
                     else:
+                        chan.close()
                         t.cancel()
                         break
             
