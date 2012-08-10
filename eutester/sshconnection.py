@@ -50,7 +50,7 @@ example usage:
      print out['output']
 '''
 
-import time, os
+import time, os, sys
 import paramiko
 from threading import Timer
 from boto.ec2 import keypair
@@ -176,7 +176,10 @@ class SshConnection():
             fd = chan.fileno()
             chan.setblocking(0)
             while True and chan.closed == 0:
-                rl, wl, xl = select.select([fd],[],[],0.0)
+                try:
+                    rl, wl, xl = select.select([fd],[],[],0.0)
+                except select.error:
+                    break
                 if len(rl) > 0:
                     new = chan.recv(1024)
                     if new:
