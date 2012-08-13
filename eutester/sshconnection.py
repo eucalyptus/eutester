@@ -50,10 +50,11 @@ example usage:
      print out['output']
 '''
 
-import time, os
+import time, os, sys
 import paramiko
 from threading import Timer
 from boto.ec2 import keypair
+import select
 
 
 class SshConnection():
@@ -142,7 +143,8 @@ class SshConnection():
         '''
         return self.cmd(cmd, verbose=verbose, timeout=timeout, listformat=listformat )['output']
     
-    def cmd(self, cmd, verbose=None, timeout=120, listformat=False):
+    
+    def cmd(self, cmd, verbose=None, timeout=120, readtimeout=20, listformat=False, cb=None ):
         """ 
         Runs a command 'cmd' within an ssh connection. 
         Upon success returns a list of lines from the output of the command.
@@ -150,6 +152,8 @@ class SshConnection():
         verbose - optional - will default to global setting, can be set per cmd() as well here
         timeout - optional - integer used to timeout the overall cmd() operation in case of remote blocking
         listformat - optional - boolean, if set returns output as list of lines, else a single buffer/string
+        cb - optional - callback, method that can be used to handle output as 
+                        it's rx'd instead of waiting for the cmd to finish and returned buffer. Must accept string buffer, and return boolean whether to proceed. 
         """
             
         if verbose is None:
@@ -170,13 +174,40 @@ class SshConnection():
             f = chan.makefile()
             t = Timer(timeout, self.ssh_sys_timeout,[chan, start,cmd] )
             t.start()
-            chan.exec_command(cmd)    
-            if ( listformat is True):
+            chan.exec_command(cmd) 
+            output = ""
+            fd = chan.fileno()
+            chan.setblocking(0)
+            while True and chan.closed == 0:
+                try:
+                    rl, wl, xl = select.select([fd],[],[],0.0)
+                except select.error:
+                    break
+                if len(rl) > 0:
+                    new = chan.recv(1024)
+                    if new:
+                        #We have data to handle...
+                        output += new
+                        if verbose:
+                            self.debug(cmd)
+                        #Run call back if there is one
+                        if cb is not None:
+                            #If cb returns false break, end rx loop, return cmd outcome/output dict. 
+                            if not cb(new):
+                                chan.close()
+                                break
+                    else:
+                        chan.close()
+                        t.cancel()
+                        break
+            
+            if ( listformat is True ):
                 #return output as list of lines
-                output = f.readlines()
+                output = output.splitlines()
+            '''
             else:
                 #return output as single string buffer
-                output = f.read()
+            '''
             ret['cmd']=cmd
             ret['output']=output
             ret['status'] = self.lastexitcode = chan.recv_exit_status()
@@ -186,7 +217,7 @@ class SshConnection():
         except CommandTimeoutException, cte: 
             self.lastexitcode = SshConnection.cmd_timeout_err_code
             elapsed = str(int(time.time()-start))
-            self.debug("Command ("+cmd+") timed out after " + str(elapsed) + " seconds\nException")     
+            self.debug("Command ("+cmd+") timeout exception after " + str(elapsed) + " seconds\nException")     
             raise cte
         finally:
             if (t is not None):
@@ -254,6 +285,8 @@ class CommandTimeoutException(Exception):
         self.value = value
     def __str__ (self):
         return repr(self.value)
+    
+
     
     
     
