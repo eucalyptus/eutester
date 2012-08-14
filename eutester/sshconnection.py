@@ -144,21 +144,34 @@ class SshConnection():
         return self.cmd(cmd, verbose=verbose, timeout=timeout, listformat=listformat )['output']
     
     
-    def cmd(self, cmd, verbose=None, timeout=120, readtimeout=20, listformat=False, cb=None ):
+    def cmd(self, cmd, verbose=None, timeout=120, readtimeout=20, listformat=False, cb=None, cbargs=[]):
         """ 
         Runs a command 'cmd' within an ssh connection. 
-        Upon success returns a list of lines from the output of the command.
+        Upon success returns dict representing outcome of the command.
+        Returns dict:
+            ['cmd'] - The command which was executed
+            ['output'] - The std out/err from the executed command
+            ['status'] - The exit (exitcode) of the command, in the case a call back fires, this status code is unreliable.
+            ['cbfired']  - Boolean to indicate whether or not the provided callback fired (ie returned False)
+            ['elapsed'] - Time elapsed waiting for command loop to end. 
+        Arguments:
         cmd - mandatory - string representing the command to be run  against the remote ssh session
         verbose - optional - will default to global setting, can be set per cmd() as well here
         timeout - optional - integer used to timeout the overall cmd() operation in case of remote blocking
         listformat - optional - boolean, if set returns output as list of lines, else a single buffer/string
-        cb - optional - callback, method that can be used to handle output as 
-                        it's rx'd instead of waiting for the cmd to finish and returned buffer. Must accept string buffer, and return boolean whether to proceed. 
+        cb - optional - callback, method that can be used to handle output as it's rx'd instead of...  
+                        waiting for the cmd to finish and returned buffer. 
+                        Must accept string buffer, and return an integer to be used as cmd status. 
+                        If cb returns False, recv loop will end, and channel will be closed.   
+        cbargs - optional - list of arguments to be appended to output buffer and passed to cb
+        
+        
         """
-            
+        args =[]
         if verbose is None:
             verbose = self.verbose
         ret = {}
+        cbfired = False
         cmd = str(cmd)
         self.lastcmd = cmd
         self.lastexitcode = SshConnection.cmd_not_executed_code
@@ -189,11 +202,12 @@ class SshConnection():
                         #We have data to handle...
                         output += new
                         if verbose:
-                            self.debug(cmd)
+                            self.debug(str(new))
                         #Run call back if there is one
                         if cb is not None:
                             #If cb returns false break, end rx loop, return cmd outcome/output dict. 
-                            if not cb(new):
+                            if not cb(new,*cbargs):
+                                cbfired=True
                                 chan.close()
                                 break
                     else:
@@ -201,16 +215,17 @@ class SshConnection():
                         t.cancel()
                         break
             
-            if ( listformat is True ):
+            if (listformat):
                 #return output as list of lines
                 output = output.splitlines()
-            '''
-            else:
-                #return output as single string buffer
-            '''
+                if output is None:
+                    output = []
+            #add command outcome in return dict. 
+            
             ret['cmd']=cmd
             ret['output']=output
             ret['status'] = self.lastexitcode = chan.recv_exit_status()
+            ret['cbfired'] = cbfired
             ret['elapsed']= elapsed = int(time.time()-start)
             if verbose:
                 self.debug("done with exec")
