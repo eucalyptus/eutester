@@ -47,26 +47,25 @@ class IAMops(Eutester):
         params = {'AccountName': account_name}
         self.euare.get_response('DelegateAccount', params)
         
-    def get_all_accounts(self, account_id=None, account_name=None, partial_match=False):
+    def get_all_accounts(self, account_id=None, account_name=None, search=False):
         '''
-        Request all accounts, return responses that match given criteria
-        Example account response for getmight look like this:
-        {'account_name': 'eucalyptus', 'account_id': '906382357716'}
+        Request all accounts, return account dicts that match given criteria
+        Options:
+            account_name - regex - to use for account_name
+            account_id - regex - to use for 
+            search - boolean - specify whether to use match or search when filtering the returned list
         '''
-        if partial_match:
+        if search:
             re_meth = re.search
-            el = ""
         else:
             re_meth = re.match
-            el ="$"
-            
         self.debug('Attempting to fetch all accounts matching- account_id:'+str(account_id)+' account_name:'+str(account_name))
         response = self.euare.get_response('ListAccounts',{}, list_marker='Accounts')
         retlist = []
         for account in response['list_accounts_response']['list_accounts_result']['accounts']:
-            if account_name is not None and not re_meth( account_name+el, account['account_name']):
+            if account_name is not None and not re_meth( account_name, account['account_name']):
                 continue
-            if account_id is not None and not re_meth(account_id+el, account['account_id']):
+            if account_id is not None and not re_meth(account_id, account['account_id']):
                 continue
             retlist.append(account)
         return retlist
@@ -88,27 +87,32 @@ class IAMops(Eutester):
     
     
         
-    def get_users_from_account(self, path=None, user_name=None, user_id=None, delegate_account=None, partial_match=False):
-        '''Request all users, return responses that match given criteria'''
+    def get_users_from_account(self, path=None, user_name=None, user_id=None, delegate_account=None, search=False):
+        '''
+        Returns users that match given criteria. By default will return current account. 
+        Options:
+            path - regex - to match for path
+            user_name - regex - to match for user_name
+            user_id - regex - to match for user_id
+            delegate_account - string - to use for delegating account lookup
+            search - boolean - specify whether to use match or search when filtering the returned list
+        '''
         self.debug('Attempting to fetch all users matching- user_id:'+str(user_id)+' user_name:'+str(user_name))
         retlist = []
         params = {}
-        if partial_match:
+        if search:
             re_meth = re.search
-            el = ""
         else:
             re_meth = re.match
-            el = "$"
-    
         if delegate_account:
             params['DelegateAccount'] = delegate_account         
         response = self.euare.get_response('ListUsers', params, list_marker='Users')
         for user in response['list_users_response']['list_users_result']['users']:
             if path is not None and not re_meth(path, user['path']):
                 continue
-            if user_name is not None and not re_meth(user_name+el, user['user_name']):
+            if user_name is not None and not re_meth(user_name, user['user_name']):
                 continue
-            if user_id is not None and not re_meth(user_id+el, user['user_id']):
+            if user_id is not None and not re_meth(user_id, user['user_id']):
                 continue
             retlist.append(user)
         return retlist
@@ -119,10 +123,20 @@ class IAMops(Eutester):
                               path=None,
                               user_name=None, 
                               user_id=None, 
-                              partial_match=False ):
-        list = self.get_all_users(account_name=account_name, account_id=account_id, path=path, user_name=user_name, user_id=user_id, partial_match=partial_match)
+                              search=False ):
+        '''
+        Debug Method to print a user list based on given filter criteria
+        Options:
+            path - regex - to match for path
+            user_name - regex - to match for user_name
+            user_id - regex - to match for user_id
+            account_name - regex - to use for account_name
+            account_id - regex - to use for 
+            search - boolean - specify whether to use match or search when filtering the returned list
+        ''' 
+        list = self.get_all_users(account_name=account_name, account_id=account_id, path=path, user_name=user_name, user_id=user_id, search=search)
         self.debug('-----------------------------------------------------------------------')
-        self.debug(str('ACCOUNT:').ljust(15) + str('USERNAME:').ljust(15) + str('USER_ID:') )
+        self.debug(str('ACCOUNT:').ljust(15) + str('USERNAME:').ljust(15) + str('USER_ID') )
         self.debug('-----------------------------------------------------------------------')
         for user in list:
             #self.debug('ACCOUNT:'+str(user['account_name']).ljust(15)+' USERNAME:'+str(user['user_name']).ljust(15)+' USER_ID:'+str(user['user_id']))
@@ -134,15 +148,22 @@ class IAMops(Eutester):
                       path=None,
                       user_name=None, 
                       user_id=None, 
-                      partial_match=False ):
+                      search=False ):
         '''
         Queries all accounts matching given account criteria, returns all users found within these accounts which then match the given user criteria. 
         Account info is added to the user dicts
+            Options:
+            path - regex - to match for path
+            user_name - regex - to match for user_name
+            user_id - regex - to match for user_id
+            account_name - regex - to use for account_name
+            account_id - regex - to use for 
+            search - boolean - specify whether to use match or search when filtering the returned list
         ''' 
         userlist=[]
-        accounts = self.get_all_accounts(account_id=account_id, account_name=account_name, partial_match=partial_match)
+        accounts = self.get_all_accounts(account_id=account_id, account_name=account_name, search=search)
         for account in accounts:
-            users = self.get_users_from_account(path=path, user_name=user_name, user_id=user_id, delegate_account=account['account_name'], partial_match=partial_match)
+            users = self.get_users_from_account(path=path, user_name=user_name, user_id=user_id, delegate_account=account['account_name'], search=search)
             for user in users:
                 user['account_name']=account['account_name']
                 user['account_id']=account['account_id']
