@@ -239,7 +239,9 @@ class EuInstance(Instance):
         filepath - mandatory - string, the filepath to verify
         '''
         filepath = str(filepath).strip()
-        if self.found("ls "+filepath+" &> /dev/null && echo 'good'", 'good') == False:
+        out = self.ssh.cmd("ls "+filepath)['status']
+        self.debug('exit code:'+str(out))
+        if out != 0:
             raise Exception("File:"+filepath+" not found on instance:"+self.id)
         self.debug('File '+filepath+' is present on '+self.id)
         
@@ -295,7 +297,7 @@ class EuInstance(Instance):
             self.debug('Failed to attach volume:'+str(euvolume.id)+' to instance:'+self.id)
             raise Exception('Failed to attach volume:'+str(euvolume.id)+' to instance:'+self.id)
         if (attached_dev is None):
-            self.debug("List after\n"+"".join(dev_list_after))
+            self.debug("List after\n"+" ".join(dev_list_after))
             raise Exception('Volume:'+str(euvolume.id)+' attached, but not found on guest'+str(self.id)+' after '+str(elapsed)+' seconds?')
         self.debug('Success attaching volume:'+str(euvolume.id)+' to instance:'+self.id+', cloud dev:'+str(euvolume.clouddev)+', attached dev:'+str(attached_dev))
         return attached_dev
@@ -607,6 +609,7 @@ class EuInstance(Instance):
                         except:pass 
                         if found:
                             break
+                        self.debug('Not found sleep and check again...')
                         time.sleep(10)
                         elapsed = int(time.time() - start)
                     if not found:

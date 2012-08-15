@@ -132,6 +132,7 @@ class Eutester(object):
             service_path="/services/Eucalyptus"
             
         try:    
+            self.debug("Attempting to create S3 connection to " + self.region.endpoint)
             self.ec2 = boto.connect_ec2(aws_access_key_id=aws_access_key_id,
                                     aws_secret_access_key=aws_secret_access_key,
                                     is_secure=is_secure,
