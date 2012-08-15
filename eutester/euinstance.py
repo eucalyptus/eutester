@@ -354,7 +354,7 @@ class EuInstance(Instance):
         
     def set_block_device_prefix(self):
         if self.found("dmesg | grep vda", "vda"):
-            self.rootfs_device = "vda"
+            self.block_device_prefix = "vda"
             self.virtio_blk = True
     
     def set_rootfs_device(self):
