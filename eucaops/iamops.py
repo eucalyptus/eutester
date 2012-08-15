@@ -30,6 +30,8 @@
 #
 # Author: vic.iglesias@eucalyptus.com
 from eutester import Eutester
+import re
+
 
 class IAMops(Eutester):
     
@@ -44,7 +46,31 @@ class IAMops(Eutester):
         self.debug("Deleting account: " + account_name)
         params = {'AccountName': account_name}
         self.euare.get_response('DelegateAccount', params)
-    
+        
+    def get_all_accounts(self, account_id=None, account_name=None, partial_match=False):
+        '''
+        Request all accounts, return responses that match given criteria
+        Example account response for getmight look like this:
+        {'account_name': 'eucalyptus', 'account_id': '906382357716'}
+        '''
+        if partial_match:
+            re_meth = re.search
+            el = ""
+        else:
+            re_meth = re.match
+            el ="$"
+            
+        self.debug('Attempting to fetch all accounts matching- account_id:'+str(account_id)+' account_name:'+str(account_name))
+        response = self.euare.get_response('ListAccounts',{}, list_marker='Accounts')
+        retlist = []
+        for account in response['list_accounts_response']['list_accounts_result']['accounts']:
+            if account_name is not None and not re_meth( account_name+el, account['account_name']):
+                continue
+            if account_id is not None and not re_meth(account_id+el, account['account_id']):
+                continue
+            retlist.append(account)
+        return retlist
+             
     def create_user(self, user_name,path="/", delegate_account=None):
         self.debug("Attempting to create user: " + user_name)
         params = {'UserName': user_name,
@@ -59,6 +85,70 @@ class IAMops(Eutester):
         if delegate_account:
             params['DelegateAccount'] = delegate_account
         self.euare.get_response('DeleteUser', params)
+    
+    
+        
+    def get_users_from_account(self, path=None, user_name=None, user_id=None, delegate_account=None, partial_match=False):
+        '''Request all users, return responses that match given criteria'''
+        self.debug('Attempting to fetch all users matching- user_id:'+str(user_id)+' user_name:'+str(user_name))
+        retlist = []
+        params = {}
+        if partial_match:
+            re_meth = re.search
+            el = ""
+        else:
+            re_meth = re.match
+            el = "$"
+    
+        if delegate_account:
+            params['DelegateAccount'] = delegate_account         
+        response = self.euare.get_response('ListUsers', params, list_marker='Users')
+        for user in response['list_users_response']['list_users_result']['users']:
+            if path is not None and not re_meth(path, user['path']):
+                continue
+            if user_name is not None and not re_meth(user_name+el, user['user_name']):
+                continue
+            if user_id is not None and not re_meth(user_id+el, user['user_id']):
+                continue
+            retlist.append(user)
+        return retlist
+    
+    def show_system_user_list(self,
+                              account_name=None, 
+                              account_id=None, 
+                              path=None,
+                              user_name=None, 
+                              user_id=None, 
+                              partial_match=False ):
+        list = self.get_all_users(account_name=account_name, account_id=account_id, path=path, user_name=user_name, user_id=user_id, partial_match=partial_match)
+        self.debug('-----------------------------------------------------------------------')
+        self.debug(str('ACCOUNT:').ljust(15) + str('USERNAME:').ljust(15) + str('USER_ID:') )
+        self.debug('-----------------------------------------------------------------------')
+        for user in list:
+            #self.debug('ACCOUNT:'+str(user['account_name']).ljust(15)+' USERNAME:'+str(user['user_name']).ljust(15)+' USER_ID:'+str(user['user_id']))
+            self.debug(str(user['account_name']).ljust(15)+str(user['user_name']).ljust(15)+str(user['user_id']))
+            
+    def get_all_users(self, 
+                      account_name=None, 
+                      account_id=None, 
+                      path=None,
+                      user_name=None, 
+                      user_id=None, 
+                      partial_match=False ):
+        '''
+        Queries all accounts matching given account criteria, returns all users found within these accounts which then match the given user criteria. 
+        Account info is added to the user dicts
+        ''' 
+        userlist=[]
+        accounts = self.get_all_accounts(account_id=account_id, account_name=account_name, partial_match=partial_match)
+        for account in accounts:
+            users = self.get_users_from_account(path=path, user_name=user_name, user_id=user_id, delegate_account=account['account_name'], partial_match=partial_match)
+            for user in users:
+                user['account_name']=account['account_name']
+                user['account_id']=account['account_id']
+                userlist.append(user)
+        return userlist
+        
     
     def attach_policy_user(self, user_name, policy_name, policy_json, delegate_account=None):
         self.debug("Attaching the following policy to " + user_name + ":" + policy_json)

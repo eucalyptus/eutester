@@ -113,7 +113,7 @@ class EC2ops(Eutester):
     def get_all_current_local_keys(self,path=None, exten=".pem"):
         '''
         Convenience function to provide a list of all keys in the local dir at 'path'
-        that exist on the server. To help avoid additional keys in test dev. 
+        that exist on the server. To help avoid producing additional keys in test dev. 
         '''
         keylist = []
         keys = self.ec2.get_all_key_pairs()
@@ -748,14 +748,18 @@ class EC2ops(Eutester):
 
     def convert_reservation_to_euinstance(self, reservation, username="root", password=None, keyname=None, timeout=120):
         euinstance_list = []
+        keypair = None
+        if keyname is not None:
+                keypair = self.get_keypair(keyname)
         for instance in reservation.instances:
-            keypair = self.get_keypair(keyname)
-            try:
-                euinstance_list.append( EuInstance.make_euinstance_from_instance( instance, self, keypair=keypair, username = username, password=password, timeout=timeout ))
-            except Exception, e:
-                self.critical("Unable to create Euinstance from " + str(instance)+str(e))
+            if keypair is not None or (password is not None and username is not None):
+                try:
+                    euinstance_list.append( EuInstance.make_euinstance_from_instance( instance, self, keypair=keypair, username = username, password=password, timeout=timeout ))
+                except Exception, e:
+                    self.critical("Unable to create Euinstance from " + str(instance)+str(e))
+                    euinstance_list.append(instance)
+            else:
                 euinstance_list.append(instance)
-                
         reservation.instances = euinstance_list
         return reservation
    
