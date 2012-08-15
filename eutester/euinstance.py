@@ -351,12 +351,12 @@ class EuInstance(Instance):
             return self.sys("curl http://" + self.tester.get_ec2_ip()  + ":8773/latest/meta-data/" + element_path)
         
     def set_block_device_prefix(self):
-        if self.found("lsmod | awk '{print $1}' | grep virtio_blk", "virtio_blk"):
-            self.block_device_prefix = "vd"
+        if self.found("dmesg | grep vda", "vda"):
+            self.rootfs_device = "vda"
             self.virtio_blk = True
     
     def set_rootfs_device(self):
-        if self.found("lsmod | awk '{print $1}' | grep virtio_pci", "virtio_pci"):
+        if self.found("dmesg | grep vda", "vda"):
             self.rootfs_device = "vda"
     
     def get_guestdevs_inuse_by_vols(self):
