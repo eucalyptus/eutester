@@ -2,10 +2,9 @@
 import unittest
 import time
 import sys
-sys.path.append("../cloud_user/instances/")
-sys.path.append("../cloud_user/s3/")
-from instancetest import InstanceBasics
-from bucket_tests import BucketTestSuite
+
+from testcases.cloud_user.instances.instancetest import InstanceBasics
+from testcases.cloud_user.s3.bucket_tests import BucketTestSuite
 from eutester.eutestcase import EutesterTestCase
 from eucaops import Eucaops 
 import os
