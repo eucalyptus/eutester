@@ -225,6 +225,9 @@ class IAMops(Eutester):
         return retlist
         
     def show_user_policy_summary(self,user_name,policy_name=None,delegate_account=None, doc=None, search=False):
+        '''
+        Debug method to display policy summary applied to a given user
+        '''
         policies = self.get_user_policies(user_name, policy_name=policy_name, delegate_account=delegate_account, doc=doc, search=search)
         for policy in policies:
             self.debug('-------------------------------------')
@@ -234,6 +237,9 @@ class IAMops(Eutester):
                 self.debug(" "+line)
     
     def show_user_summary(self,user_name, delegate_account=None, account_id=None):
+        '''
+        Debug method for to display euare/iam info for a specific user.
+        '''
         user_name = user_name
         if delegate_account is None:
             account_id=self.get_account_id()
@@ -243,7 +249,10 @@ class IAMops(Eutester):
         self.show_user_policy_summary(user_name, delegate_account=delegate_account)
         
         
-    def show_current_user_info(self):
+    def show_euare_whoami(self):
+        '''
+        Debug method used to display the who am I info related to iam/euare.
+        ''' 
         user= self.euare.get_user()['get_user_response']['get_user_result']['user']
         user_id = user['user_id']
         user_name = user['user_name']
