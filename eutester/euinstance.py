@@ -525,7 +525,7 @@ class EuInstance(Instance):
             bad_vols=self.get_unsynced_volumes()
             if bad_vols != []:
                 for bv in bad_vols:
-                    self.debug(str(self.id)+'Unsynced volume found:'+str(bad_vol.id))
+                    self.debug(str(self.id)+'Unsynced volume found:'+str(bv.id))
                 raise Exception(str(self.id)+"Could not reboot using checkvolstatus flag due to unsync'd volumes")
         self.reboot()
         time.sleep(waitconnect)

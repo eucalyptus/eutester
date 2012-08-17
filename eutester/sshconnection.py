@@ -178,6 +178,7 @@ class SshConnection():
         t = None #used for timer 
         start = time.time()
         output = []
+        status = None
         if verbose:
             self.debug( "[" + self.username +"@" + str(self.host) + "]# " + cmd)
         try:
@@ -208,9 +209,11 @@ class SshConnection():
                             #If cb returns false break, end rx loop, return cmd outcome/output dict. 
                             if not cb(new,*cbargs):
                                 cbfired=True
+                                status = self.lastexitcode = chan.recv_exit_status()
                                 chan.close()
                                 break
                     else:
+                        status = self.lastexitcode = chan.recv_exit_status()
                         chan.close()
                         t.cancel()
                         break
@@ -221,12 +224,13 @@ class SshConnection():
                 if output is None:
                     output = []
             #add command outcome in return dict. 
-            
-            ret['cmd']=cmd
-            ret['output']=output
-            ret['status'] = self.lastexitcode = chan.recv_exit_status()
+            if not status:
+                status = self.lastexitcode = chan.recv_exit_status()
+            ret['cmd'] = cmd
+            ret['output'] = output
+            ret['status'] = status
             ret['cbfired'] = cbfired
-            ret['elapsed']= elapsed = int(time.time()-start)
+            ret['elapsed'] = elapsed = int(time.time()-start)
             if verbose:
                 self.debug("done with exec")
         except CommandTimeoutException, cte: 
