@@ -7,7 +7,17 @@
 #                        #
 ##########################
 #
-
+#    "running_test" - verify instance goes to running 
+#    "metadata_test" - verify basic cloud metadata service can be used
+#    "user_test" = verify that only login users provided in userlist exist
+#    "root_test" - verify that a root password is not set, unless one is given
+#    "attach_volume_test" - verify volcount number of volumes can be attached, and appear within this instance
+#    "detach_volume_test" - verify attached volumes can be detached, guest dev is removed
+#    "reboot_test" - verify instance can be rebooted, ssh re-established, any volumes remain attached
+#    "terminate_test" - verify instance goes to proper instance state
+#    "ssh_test" - verify an ssh session can be established with this instance once running
+#    "zeroconf_test"= verify zero conf is disaabled on the image
+#    "virtiopresent_test" - verify that the virtio mods are available on this image
 #
 #    @author: clarkmatthew
 
@@ -38,7 +48,7 @@ class emi_tests(unittest.TestCase):
     
     def setUp(self):
         '''
-        Main function of setup is to instantiate an ebsTestSuite object. With command line args. 
+        Main function of setup is to instantiate an Eustore Test Suite object. With command line args. 
         '''
         testsuite = self.testsuite = Eustoretestsuite( config_file=config_file, 
                                            password=password,
@@ -46,8 +56,6 @@ class emi_tests(unittest.TestCase):
                                            group=group,  
                                            zone=zone,
                                            credpath=credpath )
-       
-            
         
     def test_emi_suite(self):
         '''
@@ -57,7 +65,7 @@ class emi_tests(unittest.TestCase):
         images = testsuite.get_system_images(emi = emi)
         if len(images) != 1:
             raise exception('('+str(len(images))+') != (1) image matches for emi string:'+str(emi) )
-        image = testsuite.convert_image_list_to_eustore_images(images)[0]
+        image = self.image = testsuite.convert_image_list_to_eustore_images(images)[0]
         self.testsuite.run_image_test_suite(image, vmtype=vmtype, zone=zone, userlist=userlist, rootpass=rootpass, xof=xof, volcount=volcount)
         
         
@@ -68,7 +76,11 @@ class emi_tests(unittest.TestCase):
         try:
             self.testsuite.clean_up_running_instances_for_image(image)
         except:
-            self.ebssuite.debug("Cleanup failed. Exiting normally")
+            self.testsuite.debug("Cleanup failed. Exiting normally")
+        finally:
+            #print the image test results
+            self.image.printdata()
+            
         
             
     
