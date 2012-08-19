@@ -37,27 +37,29 @@ simple class to establish an ssh session
 example usage:
     import sshconnection
     ssh = SshConnection( '192.168.1.1', keypath='/home/testuser/keyfile.pem')
-    list = ssh.cmd('ls /dev/sd*',timeout=10)
-    print list[0]
+    
+    #use sys() to get either a list of output lines or a single string buffer depending on listformat flag
+    output = ssh.sys('ls /dev/sd*',timeout=10)
+    print output[0]
+    print ssh.lastcmd+" exited with code: "+str(ssh.lastexitcode)
+    
+    #...or use cmd to get a dict of output, exitstatus, and elapsed time to execute...
+    out = ssh.cmd('ping 192.168.1.2 -c 1 -W 5')
+   
+     print out['cmd']+" exited with status:"+out['status']+", elapsed time:"+out['elapsed']
+     print out['output']
 '''
 
-import time, os
+import time, os, sys
 import paramiko
 from threading import Timer
 from boto.ec2 import keypair
+import select
 
 
 class SshConnection():
-    host = None
-    username = None
-    password = None
-    keypair = None
-    keypath = None
-    connection = None
-    debugmethod = None
-    timeout = 60
-    retry = 1
-    verbose = False
+    cmd_timeout_err_code = -100
+    cmd_not_executed_code = -99
     
     def __init__(self, 
                  host, 
@@ -90,6 +92,11 @@ class SshConnection():
         self.retry = retry
         self.debugmethod = debugmethod
         self.verbose = verbose
+        
+        #Used to store the last cmd attempted and it's exit code
+        self.lastcmd  = ""
+        self.lastexitcode = SshConnection.cmd_not_executed_code
+        
         
         
         if (self.keypair is not None):
@@ -127,33 +134,51 @@ class SshConnection():
         raise CommandTimeoutException("SSH Command timer fired after "+str(int(elapsed))+" seconds. Cmd:'"+str(cmd)+"'")   
     
      
-    def sys(self, cmd, verbose=None, timeout=120):
+    def sys(self, cmd, verbose=None, timeout=120, listformat=True):
         '''
         Issue a command cmd and return output in list format
         cmd - mandatory - string representing the command to be run  against the remote ssh session
         verbose - optional - will default to global setting, can be set per cmd() as well here
         timeout - optional - integer used to timeout the overall cmd() operation in case of remote blockingd
         '''
-        return self.cmd(cmd, verbose=verbose, timeout=timeout, listformat=True)
+        return self.cmd(cmd, verbose=verbose, timeout=timeout, listformat=listformat )['output']
     
     
-    def cmd(self, cmd, verbose=None, timeout=120, listformat=False):
+    def cmd(self, cmd, verbose=None, timeout=120, readtimeout=20, listformat=False, cb=None, cbargs=[]):
         """ 
         Runs a command 'cmd' within an ssh connection. 
-        Upon success returns a list of lines from the output of the command.
+        Upon success returns dict representing outcome of the command.
+        Returns dict:
+            ['cmd'] - The command which was executed
+            ['output'] - The std out/err from the executed command
+            ['status'] - The exit (exitcode) of the command, in the case a call back fires, this status code is unreliable.
+            ['cbfired']  - Boolean to indicate whether or not the provided callback fired (ie returned False)
+            ['elapsed'] - Time elapsed waiting for command loop to end. 
+        Arguments:
         cmd - mandatory - string representing the command to be run  against the remote ssh session
         verbose - optional - will default to global setting, can be set per cmd() as well here
         timeout - optional - integer used to timeout the overall cmd() operation in case of remote blocking
         listformat - optional - boolean, if set returns output as list of lines, else a single buffer/string
+        cb - optional - callback, method that can be used to handle output as it's rx'd instead of...  
+                        waiting for the cmd to finish and returned buffer. 
+                        Must accept string buffer, and return an integer to be used as cmd status. 
+                        If cb returns False, recv loop will end, and channel will be closed.   
+        cbargs - optional - list of arguments to be appended to output buffer and passed to cb
+        
+        
         """
-            
+        args =[]
         if verbose is None:
             verbose = self.verbose
-            
+        ret = {}
+        cbfired = False
         cmd = str(cmd)
+        self.lastcmd = cmd
+        self.lastexitcode = SshConnection.cmd_not_executed_code
         t = None #used for timer 
         start = time.time()
         output = []
+        status = None
         if verbose:
             self.debug( "[" + self.username +"@" + str(self.host) + "]# " + cmd)
         try:
@@ -163,30 +188,66 @@ class SshConnection():
             f = chan.makefile()
             t = Timer(timeout, self.ssh_sys_timeout,[chan, start,cmd] )
             t.start()
-            chan.exec_command(cmd)
-            if ( listformat is True):
+            chan.exec_command(cmd) 
+            output = ""
+            fd = chan.fileno()
+            chan.setblocking(0)
+            while True and chan.closed == 0:
+                try:
+                    rl, wl, xl = select.select([fd],[],[],0.0)
+                except select.error:
+                    break
+                if len(rl) > 0:
+                    new = chan.recv(1024)
+                    if new:
+                        #We have data to handle...
+                        output += new
+                        if verbose:
+                            self.debug(str(new))
+                        #Run call back if there is one
+                        if cb is not None:
+                            #If cb returns false break, end rx loop, return cmd outcome/output dict. 
+                            if not cb(new,*cbargs):
+                                cbfired=True
+                                status = self.lastexitcode = chan.recv_exit_status()
+                                chan.close()
+                                break
+                    else:
+                        status = self.lastexitcode = chan.recv_exit_status()
+                        chan.close()
+                        t.cancel()
+                        break
+            
+            if (listformat):
                 #return output as list of lines
-                output = f.readlines()
-            else:
-                #return output as single string buffer
-                output = f.read()
+                output = output.splitlines()
+                if output is None:
+                    output = []
+            #add command outcome in return dict. 
+            if not status:
+                status = self.lastexitcode = chan.recv_exit_status()
+            ret['cmd'] = cmd
+            ret['output'] = output
+            ret['status'] = status
+            ret['cbfired'] = cbfired
+            ret['elapsed'] = elapsed = int(time.time()-start)
             if verbose:
                 self.debug("done with exec")
         except CommandTimeoutException, cte: 
-            elapsed = str(time.time()-start).split('.')[0]
-            self.debug("Command ("+cmd+") timed out after " + str(elapsed) + " seconds\nException")     
+            self.lastexitcode = SshConnection.cmd_timeout_err_code
+            elapsed = str(int(time.time()-start))
+            self.debug("Command ("+cmd+") timeout exception after " + str(elapsed) + " seconds\nException")     
             raise cte
         finally:
             if (t is not None):
                 t.cancel()          
         if verbose:
-            elapsed = str(time.time()-start).split('.')[0]
             if (listformat is True):
                 self.debug("".join(output))
             else:
                 self.debug(output)
                 
-        return output
+        return ret
         
     def refresh_connection(self):
         self.connection = self.get_ssh_connection(self.host, self.username,self.password , self.keypath, self.timeout, self.retry)
@@ -243,6 +304,8 @@ class CommandTimeoutException(Exception):
         self.value = value
     def __str__ (self):
         return repr(self.value)
+    
+
     
     
     

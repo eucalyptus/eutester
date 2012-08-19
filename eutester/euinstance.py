@@ -239,7 +239,9 @@ class EuInstance(Instance):
         filepath - mandatory - string, the filepath to verify
         '''
         filepath = str(filepath).strip()
-        if self.found("ls "+filepath+" &> /dev/null && echo 'good'", 'good') == False:
+        out = self.ssh.cmd("ls "+filepath)['status']
+        self.debug('exit code:'+str(out))
+        if out != 0:
             raise Exception("File:"+filepath+" not found on instance:"+self.id)
         self.debug('File '+filepath+' is present on '+self.id)
         
@@ -276,7 +278,7 @@ class EuInstance(Instance):
             while (elapsed < timeout):
                 self.debug("Checking for volume attachment on guest, elapsed time("+str(elapsed)+")")
                 dev_list_after = self.get_dev_dir()
-                self.debug("dev_list_after:"+"".join(dev_list_after))
+                self.debug("dev_list_after:"+" ".join(dev_list_after))
                 diff =list( set(dev_list_after) - set(dev_list_before) )
                 if len(diff) > 0:
                     devlist = str(diff[0]).split('/')
@@ -295,7 +297,7 @@ class EuInstance(Instance):
             self.debug('Failed to attach volume:'+str(euvolume.id)+' to instance:'+self.id)
             raise Exception('Failed to attach volume:'+str(euvolume.id)+' to instance:'+self.id)
         if (attached_dev is None):
-            self.debug("List after\n"+"".join(dev_list_after))
+            self.debug("List after\n"+" ".join(dev_list_after))
             raise Exception('Volume:'+str(euvolume.id)+' attached, but not found on guest'+str(self.id)+' after '+str(elapsed)+' seconds?')
         self.debug('Success attaching volume:'+str(euvolume.id)+' to instance:'+self.id+', cloud dev:'+str(euvolume.clouddev)+', attached dev:'+str(attached_dev))
         return attached_dev
@@ -351,12 +353,12 @@ class EuInstance(Instance):
             return self.sys("curl http://" + self.tester.get_ec2_ip()  + ":8773/latest/meta-data/" + element_path)
         
     def set_block_device_prefix(self):
-        if self.found("lsmod | awk '{print $1}' | grep virtio_blk", "virtio_blk"):
+        if self.found("dmesg | grep vda", "vda"):
             self.block_device_prefix = "vd"
             self.virtio_blk = True
     
     def set_rootfs_device(self):
-        if self.found("lsmod | awk '{print $1}' | grep virtio_pci", "virtio_pci"):
+        if self.found("dmesg | grep vda", "vda"):
             self.rootfs_device = "vda"
     
     def get_guestdevs_inuse_by_vols(self):
@@ -366,7 +368,7 @@ class EuInstance(Instance):
         return retlist
     
     
-    def get_free_scsi_dev(self, prefix='sd',maxdevs=16):
+    def get_free_scsi_dev(self, prefix=None,maxdevs=16):
         '''
         The volume attach command requires a cloud level device name that is not currently associated with a volume 
         Note: This is the device name from the clouds perspective, not necessarily the guest's 
@@ -376,7 +378,10 @@ class EuInstance(Instance):
         '''
         d='e'
         dev = None
+        if prefix is None:
+            prefix = self.block_device_prefix
         cloudlist=self.tester.get_volumes(attached_instance=self.id)
+        
         for x in xrange(0,maxdevs):
             inuse=False
             #double up the letter identifier to avoid exceeding z
@@ -520,7 +525,7 @@ class EuInstance(Instance):
             bad_vols=self.get_unsynced_volumes()
             if bad_vols != []:
                 for bv in bad_vols:
-                    self.debug(str(self.id)+'Unsynced volume found:'+str(bad_vol.id))
+                    self.debug(str(self.id)+'Unsynced volume found:'+str(bv.id))
                 raise Exception(str(self.id)+"Could not reboot using checkvolstatus flag due to unsync'd volumes")
         self.reboot()
         time.sleep(waitconnect)
@@ -607,6 +612,7 @@ class EuInstance(Instance):
                         except:pass 
                         if found:
                             break
+                        self.debug('Not found sleep and check again...')
                         time.sleep(10)
                         elapsed = int(time.time() - start)
                     if not found:
