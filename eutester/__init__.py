@@ -186,6 +186,10 @@ class Eutester(object):
     def get_account_id(self):
         """Parse the eucarc for the EC2_ACCOUNT_NUMBER"""
         return self.parse_eucarc("EC2_ACCOUNT_NUMBER")
+    
+    def get_user_id(self):
+        """Parse the eucarc for the EC2_ACCOUNT_NUMBER"""
+        return self.parse_eucarc("EC2_USER_ID")
         
     def parse_eucarc(self, field):
         with open( self.credpath + "/eucarc") as eucarc: 

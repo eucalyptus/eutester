@@ -46,6 +46,7 @@ class IAMops(Eutester):
         self.debug("Deleting account: " + account_name)
         params = {'AccountName': account_name}
         self.euare.get_response('DelegateAccount', params)
+    
         
     def get_all_accounts(self, account_id=None, account_name=None, search=False):
         '''
@@ -97,7 +98,7 @@ class IAMops(Eutester):
             delegate_account - string - to use for delegating account lookup
             search - boolean - specify whether to use match or search when filtering the returned list
         '''
-        self.debug('Attempting to fetch all users matching- user_id:'+str(user_id)+' user_name:'+str(user_name))
+        self.debug('Attempting to fetch all users matching- user_id:'+str(user_id)+' user_name:'+str(user_name)+" acct_name:"+str(delegate_account))
         retlist = []
         params = {}
         if search:
@@ -117,7 +118,7 @@ class IAMops(Eutester):
             retlist.append(user)
         return retlist
     
-    def show_system_user_list(self,
+    def show_all_users(self,
                               account_name=None, 
                               account_id=None, 
                               path=None,
@@ -136,11 +137,10 @@ class IAMops(Eutester):
         ''' 
         list = self.get_all_users(account_name=account_name, account_id=account_id, path=path, user_name=user_name, user_id=user_id, search=search)
         self.debug('-----------------------------------------------------------------------')
-        self.debug(str('ACCOUNT:').ljust(15) + str('USERNAME:').ljust(15) + str('USER_ID') )
+        self.debug(str('ACCOUNT:').ljust(15) + str('USERNAME:').ljust(15) + str('USER_ID').ljust(25) + str('ACCT_ID') )
         self.debug('-----------------------------------------------------------------------')
         for user in list:
-            #self.debug('ACCOUNT:'+str(user['account_name']).ljust(15)+' USERNAME:'+str(user['user_name']).ljust(15)+' USER_ID:'+str(user['user_id']))
-            self.debug(str(user['account_name']).ljust(15)+str(user['user_name']).ljust(15)+str(user['user_id']))
+            self.debug(str(user['account_name']).ljust(15)+str(user['user_name']).ljust(15)+str(user['user_id']).ljust(25)+str(user['account_id']))
             
     def get_all_users(self, 
                       account_name=None, 
@@ -152,7 +152,7 @@ class IAMops(Eutester):
         '''
         Queries all accounts matching given account criteria, returns all users found within these accounts which then match the given user criteria. 
         Account info is added to the user dicts
-            Options:
+        Options:
             path - regex - to match for path
             user_name - regex - to match for user_name
             user_id - regex - to match for user_id
@@ -169,7 +169,96 @@ class IAMops(Eutester):
                 user['account_id']=account['account_id']
                 userlist.append(user)
         return userlist
+    
+    def get_user_policy_names(self, user_name, policy_name=None,delegate_account=None, search=False):
+        '''
+        Returns list of policy names associated with a given user, and match given criteria. 
+        Options:
+            username - string - user to get policies for. 
+            policy_name - regex - to match/filter returned policies
+            delegate_account - string - used for user lookup
+            search - boolean - specify whether to use match or search when filtering the returned list
+        '''
+        retlist = []
+        params = {}
+        if search:
+            re_meth = re.search
+        else:
+            re_meth = re.match
+        params = {'UserName': user_name}
+        if delegate_account:
+            params['DelegateAccount'] = delegate_account
+        response = self.euare.get_response('ListUserPolicies',params, list_marker='PolicyNames')
+        for name in response['list_user_policies_response']['list_user_policies_result']['policy_names']:
+            if policy_name is not None and not re_meth(policy_name, name):
+                continue
+            retlist.append(name)
+        return retlist
+    
+    
+    def get_user_policies(self, user_name, policy_name=None,delegate_account=None, doc=None, search=False):
+        '''
+        Returns list of policy dicts associated with a given user, and match given criteria. 
+        Options:
+            username - string - user to get policies for. 
+            policy_name - regex - to match/filter returned policies
+            delegate_account - string - used for user lookup
+            search - boolean - specify whether to use match or search when filtering the returned list
+        '''
+        retlist = []
+        params = {}
+        if search:
+            re_meth = re.search
+        else:
+            re_meth = re.match
+        names = self.get_user_policy_names(user_name, policy_name=policy_name, delegate_account=delegate_account, search=search)
         
+        for p_name in names:
+            params = {'UserName': user_name,
+                      'PolicyName': p_name}
+            if delegate_account:
+                params['DelegateAccount'] = delegate_account
+            policy = self.euare.get_response('GetUserPolicy', params, verb='POST')['get_user_policy_response']['get_user_policy_result']
+            if doc is not None and not re_meth(doc, policy['policy_document']):
+                continue
+            retlist.append(policy)
+        return retlist
+        
+    def show_user_policy_summary(self,user_name,policy_name=None,delegate_account=None, doc=None, search=False):
+        '''
+        Debug method to display policy summary applied to a given user
+        '''
+        policies = self.get_user_policies(user_name, policy_name=policy_name, delegate_account=delegate_account, doc=doc, search=search)
+        for policy in policies:
+            self.debug('-------------------------------------')
+            self.debug("\tPOLICY NAME: "+str(policy['policy_name'])  )   
+            self.debug('-------------------------------------')
+            for line in str(policy['policy_document']).splitlines():
+                self.debug(" "+line)
+    
+    def show_user_summary(self,user_name, delegate_account=None, account_id=None):
+        '''
+        Debug method for to display euare/iam info for a specific user.
+        '''
+        user_name = user_name
+        if delegate_account is None:
+            account_id=self.get_account_id()
+            delegate_account= self.get_all_accounts(account_id=account_id)[0]['account_name']
+        self.debug('Fetching user summary for: user_name:'+str(user_name)+" account:"+str(delegate_account)+" account_id:"+str(account_id))
+        self.show_all_users(account_name=delegate_account, account_id=account_id, user_name=user_name)
+        self.show_user_policy_summary(user_name, delegate_account=delegate_account)
+        
+        
+    def show_euare_whoami(self):
+        '''
+        Debug method used to display the who am I info related to iam/euare.
+        ''' 
+        user= self.euare.get_user()['get_user_response']['get_user_result']['user']
+        user_id = user['user_id']
+        user_name = user['user_name']
+        account_id = self.get_account_id()
+        self.show_all_users(account_id=account_id, user_id=user_id)
+        self.show_user_policy_summary(user_name)
     
     def attach_policy_user(self, user_name, policy_name, policy_json, delegate_account=None):
         self.debug("Attaching the following policy to " + user_name + ":" + policy_json)

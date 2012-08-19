@@ -368,7 +368,7 @@ class EuInstance(Instance):
         return retlist
     
     
-    def get_free_scsi_dev(self, prefix='sd',maxdevs=16):
+    def get_free_scsi_dev(self, prefix=None,maxdevs=16):
         '''
         The volume attach command requires a cloud level device name that is not currently associated with a volume 
         Note: This is the device name from the clouds perspective, not necessarily the guest's 
@@ -378,7 +378,10 @@ class EuInstance(Instance):
         '''
         d='e'
         dev = None
+        if prefix is None:
+            prefix = self.block_device_prefix
         cloudlist=self.tester.get_volumes(attached_instance=self.id)
+        
         for x in xrange(0,maxdevs):
             inuse=False
             #double up the letter identifier to avoid exceeding z
@@ -522,7 +525,7 @@ class EuInstance(Instance):
             bad_vols=self.get_unsynced_volumes()
             if bad_vols != []:
                 for bv in bad_vols:
-                    self.debug(str(self.id)+'Unsynced volume found:'+str(bad_vol.id))
+                    self.debug(str(self.id)+'Unsynced volume found:'+str(bv.id))
                 raise Exception(str(self.id)+"Could not reboot using checkvolstatus flag due to unsync'd volumes")
         self.reboot()
         time.sleep(waitconnect)
