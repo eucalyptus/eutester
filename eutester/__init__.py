@@ -46,6 +46,7 @@ import random
 import time
 import signal
 import copy 
+import string
 from threading import Thread
 
 from boto.ec2.regioninfo import RegionInfo
@@ -276,6 +277,13 @@ class Eutester(object):
         """Convinience function for time.sleep()"""
         self.debug("Sleeping for " + str(seconds) + " seconds")
         time.sleep(seconds)
+    
+    def id_generator(self, size=6, chars=string.ascii_uppercase + string.ascii_lowercase  + string.digits ):
+        '''Returns a string of size with random charachters from the chars array. 
+             size    Size of string to return
+             chars   Array of characters to use in generation of the string
+        '''
+        return ''.join(random.choice(chars) for x in range(size))
         
     def __str__(self):
         '''
