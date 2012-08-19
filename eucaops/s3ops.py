@@ -56,7 +56,7 @@ class S3opsException(Exception):
         self.msg = msg
     
     def __str__(self):
-        print msg
+        print self.msg
 
 class S3ops(Eutester):
     def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,account="eucalyptus",user="admin", username="root",region=None, clc_ip=None, boto_debug=0):
@@ -122,7 +122,7 @@ class S3ops(Eutester):
         if bucket:
             return bucket
         else:
-            raise S3opsException("Bucket: " + bucket_name  +" not found")
+            return None
     
     def upload_object(self, bucket_name, key_name, path_to_file=None, contents=None):
         """

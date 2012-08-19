@@ -37,7 +37,7 @@ from s3ops import S3ops
 import time
 from eutester.euservice import EuserviceManager
 from eutester.euconfig import EuConfig
-from eutester.machine import machine
+from eutester.machine import Machine
 from eutester import eulogger
 import re
 import os
@@ -60,8 +60,12 @@ class Eucaops(EC2ops,S3ops,IAMops):
         self.key_dir = "./"
         self.hypervisor = None
         self.clc_index = 0
+        self.credpath = credpath
         
         self.logger = eulogger.Eulogger(identifier="EUTESTER")
+        self.debug = self.logger.log.debug
+        self.critical = self.logger.log.critical
+        self.info = self.logger.log.info
         
         if self.config_file != None:
             ## read in the config file
@@ -100,11 +104,11 @@ class Eucaops(EC2ops,S3ops,IAMops):
                         self.swap_clc()
                         self.sftp = self.clc.ssh.connection.open_sftp()
                         self.credpath = self.get_credentials(account,user)
-        
+                        
                 self.service_manager = EuserviceManager(self)
                 self.clc = self.service_manager.get_enabled_clc().machine
                 self.walrus = self.service_manager.get_enabled_walrus().machine 
-        EC2ops.__init__(self, credpath=credpath, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, username=username, region=region, ec2_ip=ec2_ip, s3_ip=s3_ip, boto_debug=boto_debug)
+        EC2ops.__init__(self, credpath=self.credpath, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, username=username, region=region, ec2_ip=ec2_ip, s3_ip=s3_ip, boto_debug=boto_debug)
         self.test_resources = {}
         self.setup_s3_resource_trackers()
         self.setup_ec2_resource_trackers()
@@ -251,16 +255,23 @@ class Eucaops(EC2ops,S3ops,IAMops):
                 machine_dict["arch"] = machine_details[3]
                 machine_dict["source"] = machine_details[4]
                 machine_dict["components"] = map(str.lower, machine_details[5].strip('[]').split())
+               
+                ### We dont want to login to ESX boxes
+                if re.search("vmware", machine_dict["distro"], re.IGNORECASE):
+                    connect=False
+                else:
+                    connect=True
                 ### ADD the machine to the array of machine
-                cloud_machine = machine(   machine_dict["hostname"], 
-                                        machine_dict["distro"], 
-                                        machine_dict["distro_ver"], 
-                                        machine_dict["arch"], 
-                                        machine_dict["source"], 
-                                        machine_dict["components"],
-                                        self.password,
-                                        self.keypath,
-                                        username
+                cloud_machine = Machine(   machine_dict["hostname"], 
+                                        distro = machine_dict["distro"], 
+                                        distro_ver = machine_dict["distro_ver"], 
+                                        arch = machine_dict["arch"], 
+                                        source = machine_dict["source"], 
+                                        components = machine_dict["components"],
+                                        connect = connect,
+                                        password = self.password,
+                                        keypath = self.keypath,
+                                        username = username
                                         )
                 machines.append(cloud_machine)
                 
@@ -309,7 +320,8 @@ class Eucaops(EC2ops,S3ops,IAMops):
     
     def get_machine_by_ip(self, hostname):
         machines = [machine for machine in self.config['machines'] if re.search(hostname, machine.hostname)]
-        if len(machines) == 0:
+        
+        if machines is None or len(machines) == 0:
             self.fail("Could not find machine at "  + hostname + " in list of machines")
             return None
         else:
@@ -354,27 +366,31 @@ class Eucaops(EC2ops,S3ops,IAMops):
             
             ### Create credential from Active CLC
             self.create_credentials(admin_cred_dir, account, user)
-            
+        
             ### SETUP directory locally
             self.setup_local_creds_dir(admin_cred_dir)
-        
+          
             ### DOWNLOAD creds from clc
             self.download_creds_from_clc(admin_cred_dir)
             ### IF there are 2 clcs make sure to sync credentials across them
-                
+          
         ### sync the credentials  to all CLCs
         for clc in clcs:
             self.send_creds_to_machine(admin_cred_dir, clc)
-        
+
         return admin_cred_dir
    
     def create_credentials(self, admin_cred_dir, account, user):
+       
+        cred_dir =  admin_cred_dir + "/creds.zip"
+        self.sys('rm -f '+cred_dir)
         cmd_download_creds = self.eucapath + "/usr/sbin/euca_conf --get-credentials " + admin_cred_dir + "/creds.zip " + "--cred-user "+ user +" --cred-account " + account 
-        
+       
         if self.clc.found( cmd_download_creds, "The MySQL server is not responding"):
             raise IOError("Error downloading credentials, looks like CLC was not running")
         if self.clc.found( "unzip -o " + admin_cred_dir + "/creds.zip " + "-d " + admin_cred_dir, "cannot find zipfile directory"):
             raise IOError("Empty ZIP file returned by CLC")
+       
         
     
     def download_creds_from_clc(self, admin_cred_dir):

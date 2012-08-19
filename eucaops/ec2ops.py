@@ -113,7 +113,7 @@ class EC2ops(Eutester):
     def get_all_current_local_keys(self,path=None, exten=".pem"):
         '''
         Convenience function to provide a list of all keys in the local dir at 'path'
-        that exist on the server. To help avoid additional keys in test dev. 
+        that exist on the server. To help avoid producing additional keys in test dev. 
         '''
         keylist = []
         keys = self.ec2.get_all_key_pairs()
@@ -362,6 +362,7 @@ class EC2ops(Eutester):
             
             if (volume.attach_data is not None):
                 if re.search("attached",str(volume.attach_data.status)):
+                    self.debug(str(volume) + ", Attached: " +  volume.status+ " - " + str(volume.attach_data.status) + ", elapsed:"+str(elapsed))
                     return True
                 else:
                     status = str(volume.attach_data.status)
@@ -590,30 +591,6 @@ class EC2ops(Eutester):
             self.critical("Address still associated with instance")
             return False
         return True
-        
-    
-    def ping(self, address, poll_count = 10):
-        '''
-        Ping an IP and poll_count times (Default = 10)
-        address      Hostname to ping
-        poll_count   The amount of times to try to ping the hostname iwth 2 second gaps in between
-        ''' 
-        found = False
-        if re.search("0.0.0.0", address): 
-            self.critical("Address is all 0s and will not be able to ping it") 
-            return False
-        self.debug("Attempting to ping " + address)
-        while (poll_count > 0):
-            poll_count -= 1 
-            if self.found("ping -c 1 " + address, "1 received"):
-                self.debug("Was able to ping address")
-                return True
-            if poll_count == 0:
-                self.critical("Was unable to ping address")
-                return False
-            self.debug("Ping unsuccessful retrying in 2 seconds")
-            self.sleep(2)
-            
     
     def check_device(self, device_path):
         """Used with instance connections. Checks if a device at a certain path exists"""
@@ -771,14 +748,18 @@ class EC2ops(Eutester):
 
     def convert_reservation_to_euinstance(self, reservation, username="root", password=None, keyname=None, timeout=120):
         euinstance_list = []
+        keypair = None
+        if keyname is not None:
+                keypair = self.get_keypair(keyname)
         for instance in reservation.instances:
-            keypair = self.get_keypair(keyname)
-            try:
-                euinstance_list.append( EuInstance.make_euinstance_from_instance( instance, self, keypair=keypair, username = username, password=password, timeout=timeout ))
-            except Exception, e:
-                self.critical("Unable to create Euinstance from " + str(instance)+str(e))
+            if keypair is not None or (password is not None and username is not None):
+                try:
+                    euinstance_list.append( EuInstance.make_euinstance_from_instance( instance, self, keypair=keypair, username = username, password=password, timeout=timeout ))
+                except Exception, e:
+                    self.critical("Unable to create Euinstance from " + str(instance)+str(e))
+                    euinstance_list.append(instance)
+            else:
                 euinstance_list.append(instance)
-                
         reservation.instances = euinstance_list
         return reservation
    
@@ -881,11 +862,6 @@ class EC2ops(Eutester):
                 print str(item)+" = "+str(obj.__dict__[item])
             buf += str(item)+" = "+str(obj.__dict__[item])+"\n"
         return buf
-              
-    
-    
-    
-    
 
     def release_address(self, ip=None):
         """

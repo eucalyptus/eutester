@@ -36,31 +36,53 @@ from threading import Thread
 import re
 import os
 
-class machine:
-    def __init__(self, hostname, distro, distro_ver, arch, source, components, password=None, keypath=None, username="root", timeout=120,retry=2,debugmethod=None):
+class Machine:
+    def __init__(self, 
+                 hostname, 
+                 distro="", 
+                 distro_ver="", 
+                 arch="", 
+                 source="", 
+                 components="", 
+                 connect=True, 
+                 password=None, 
+                 keypath=None, 
+                 username="root", 
+                 timeout=120,
+                 retry=2,
+                 debugmethod=None, 
+                 verbose = True ):
+        
         self.hostname = hostname
         self.distro = distro
         self.distro_ver = distro_ver
         self.arch = arch
         self.source = source
         self.components = components
+        self.connect = connect
+        self.password = password
+        self.keypath = keypath
+        self.username = username
+        self.timeout = timeout
+        self.retry = retry
+        self.debugmethod = debugmethod
+        self.verbose = verbose
         self.log_threads = {}
         self.log_buffers = {}
         self.log_active = {}
-        if debugmethod is None:
+        
+        if self.debugmethod is None:
             logger = eulogger.Eulogger(identifier= str(hostname) + ":" + str(components))
             self.debugmethod = logger.log.debug
-        ### We dont want to login to ESX boxes
-        if not re.search("vmware", self.distro, re.IGNORECASE):
-            self.ssh = sshconnection.SshConnection(     hostname, 
-                                                        keypath=keypath,          
-                                                        password=password, 
-                                                        username=username, 
-                                                        timeout=timeout, 
-                                                        retry=retry,
-                                                        debugmethod=self.debugmethod,
-                                                        verbose=True)
-    
+        if self.connect:
+            self.ssh = sshconnection.SshConnection( hostname, 
+                                                    keypath=keypath,          
+                                                    password=password, 
+                                                    username=username, 
+                                                    timeout=timeout, 
+                                                    retry=retry,
+                                                    debugmethod=self.debugmethod,
+                                                    verbose=True)
             self.sftp = self.ssh.connection.open_sftp()
     
     def refresh_ssh(self):
@@ -92,24 +114,78 @@ class machine:
     def interrupt_network(self, time = 120, interface = "eth0"):
         self.sys("ifdown " + interface + " && sleep " + str(time) + " && ifup eth0",  timeout=3)
         
-    def sys(self, cmd, verbose=True, timeout=120):
+    def sys(self, cmd, verbose=True, timeout=120, listformat=True):
         '''
         Issues a command against the ssh connection to this instance
         Returns a list of the lines from stdout+stderr as a result of the command
+        '''
+        return self.cmd(cmd, verbose=verbose, timeout=timeout, listformat=listformat)['output']
+    
+
+    def cmd(self, cmd, verbose=True, timeout=120, listformat=False, cb=None, cbargs=[]):
+        '''
+        Issues a command against the ssh connection to this instance
+        returns dict containing:
+            ['cmd'] - The command which was executed
+            ['output'] - The std out/err from the executed command
+            ['status'] - The exit (exitcode) of the command, in the case a call back fires, this status code is unreliable.
+            ['cbfired']  - Boolean to indicate whether or not the provided callback fired (ie returned False)
+            ['elapsed'] - Time elapsed waiting for command loop to end. 
         cmd - mandatory - string, the command to be executed 
         verbose - optional - boolean flag to enable debug
         timeout - optional - command timeout in seconds 
+        listformat -optional - specifies returned output in list of lines, or single string buffer
+        cb - optional - call back function, accepting string buffer, returning true false see sshconnection for more info
         '''
-        output = []
         if (self.ssh is not None):
-            output = self.ssh.sys(cmd, verbose=verbose, timeout=timeout)
-            return output
+            return self.ssh.cmd(cmd, verbose=verbose, timeout=timeout, listformat=listformat, cb=cb, cbargs=cbargs)
         else:
             raise Exception("Euinstance ssh connection is None")
-    
-    def found(self, command, regex):
+        
+    def sys_until_found(self, cmd, regex, verbose=True, timeout=120, listformat=True):
+        '''
+        Run a command until output of command satisfies/finds regex or EOF is found. 
+        returns dict containing:
+            ['cmd'] - The command which was executed
+            ['output'] - The std out/err from the executed command
+            ['status'] - The exit (exitcode) of the command, in the case a call back fires, this status code is unreliable.
+            ['cbfired']  - Boolean to indicate whether or not the provided callback fired (ie returned False)
+            ['elapsed'] - Time elapsed waiting for command loop to end.
+        cmd - mandatory - string, the command to be executed 
+        regex - mandatory - regex to look for
+        verbose - optional - boolean flag to enable debug
+        timeout - optional - command timeout in seconds 
+        listformat -optional - specifies returned output in list of lines, or single string buffer 
+        '''
+        return self.cmd(cmd, verbose=verbose,timeout=timeout,listformat=listformat,cb=self.str_not_found, cbargs=[regex])
+        
+        
+    def str_not_found(self,buf,regex,search=True):
+        '''
+        Return True if given regex does NOT match against given string
+        '''
+        return not self.str_found(buf, regex=regex, search=search)
+        
+        
+    def str_found(self, buf, regex, search=True):
+        '''
+        Return True if given regex matches against given string
+        '''
+        if search:
+            found = re.search(regex,buf)
+        else:
+            found = re.match(regex, buf)
+        if found:
+            return True
+        else:
+            return False
+        
+         
+    def found(self, command, regex, verbose=True):
         """ Returns a Boolean of whether the result of the command contains the regex"""
-        result = self.sys(command)
+        result = self.sys(command, verbose=verbose)
+        if result is None or result == []:
+            return False
         for line in result:
             found = re.search(regex,line)
             if found:
@@ -151,6 +227,8 @@ class machine:
         '''Save log buffers to a file'''
         for log_file in self.log_buffers.keys():
             self.save_all_logs(log_file,path)
+            
+            
         
     
     def __str__(self):

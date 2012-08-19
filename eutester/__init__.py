@@ -46,6 +46,7 @@ import random
 import time
 import signal
 import copy 
+import string
 from threading import Thread
 
 from boto.ec2.regioninfo import RegionInfo
@@ -80,9 +81,9 @@ class Eutester(object):
         ### Eutester logs
         if self.logger is None:
             self.logger = eulogger.Eulogger(identifier="EUTESTER")
-        self.debug = self.logger.log.debug
-        self.critical = self.logger.log.critical
-        self.info = self.logger.log.info
+            self.debug = self.logger.log.debug
+            self.critical = self.logger.log.critical
+            self.info = self.logger.log.info
         
         ### LOGS to keep for printing later
         self.fail_log = []
@@ -132,6 +133,7 @@ class Eutester(object):
             service_path="/services/Eucalyptus"
             
         try:    
+            self.debug("Attempting to create S3 connection to " + self.region.endpoint)
             self.ec2 = boto.connect_ec2(aws_access_key_id=aws_access_key_id,
                                     aws_secret_access_key=aws_secret_access_key,
                                     is_secure=is_secure,
@@ -184,6 +186,10 @@ class Eutester(object):
     def get_account_id(self):
         """Parse the eucarc for the EC2_ACCOUNT_NUMBER"""
         return self.parse_eucarc("EC2_ACCOUNT_NUMBER")
+    
+    def get_user_id(self):
+        """Parse the eucarc for the EC2_ACCOUNT_NUMBER"""
+        return self.parse_eucarc("EC2_USER_ID")
         
     def parse_eucarc(self, field):
         with open( self.credpath + "/eucarc") as eucarc: 
@@ -207,9 +213,6 @@ class Eutester(object):
 
     def local(self, cmd):
         """ Run a command locally on the tester"""
-        for item in os.popen("ls").readlines():
-            if re.match(self.credpath,item):
-                cmd = ". " + self.credpath + "/eucarc && " + cmd
         std_out_return = os.popen(cmd).readlines()
         return std_out_return
     
@@ -220,7 +223,29 @@ class Eutester(object):
             found = re.search(regex,line)
             if found:
                 return True
-        return False 
+        return False
+    
+    def ping(self, address, poll_count = 10):
+        '''
+        Ping an IP and poll_count times (Default = 10)
+        address      Hostname to ping
+        poll_count   The amount of times to try to ping the hostname iwth 2 second gaps in between
+        ''' 
+        found = False
+        if re.search("0.0.0.0", address): 
+            self.critical("Address is all 0s and will not be able to ping it") 
+            return False
+        self.debug("Attempting to ping " + address)
+        while (poll_count > 0):
+            poll_count -= 1 
+            if self.found("ping -c 1 " + address, "1.*received"):
+                self.debug("Was able to ping address")
+                return True
+            if poll_count == 0:
+                self.critical("Was unable to ping address")
+                return False
+            self.debug("Ping unsuccessful retrying in 2 seconds")
+            self.sleep(2)    
     
     def grep(self, string,list):
         """ Remove the strings from the list that do not match the regex string"""
@@ -256,6 +281,13 @@ class Eutester(object):
         """Convinience function for time.sleep()"""
         self.debug("Sleeping for " + str(seconds) + " seconds")
         time.sleep(seconds)
+    
+    def id_generator(self, size=6, chars=string.ascii_uppercase + string.ascii_lowercase  + string.digits ):
+        '''Returns a string of size with random charachters from the chars array. 
+             size    Size of string to return
+             chars   Array of characters to use in generation of the string
+        '''
+        return ''.join(random.choice(chars) for x in range(size))
         
     def __str__(self):
         '''
