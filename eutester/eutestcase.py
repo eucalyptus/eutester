@@ -3,6 +3,7 @@ import unittest
 import inspect
 import time
 import gc
+import argparse
 
 '''
 This is the base class for any test case to be included in the Eutester repo. It should include any
@@ -150,3 +151,22 @@ class EutesterTestCase(unittest.TestCase):
                 try:
                     self.print_test_list_results()
                 except:pass
+    
+    @classmethod
+    def get_parser(self):
+        parser = argparse.ArgumentParser(prog="testcase.py",
+                                     description="Test Case Default Option Parser")
+        parser.add_argument('--emi', 
+                            help="pre-installed emi id which to execute these tests against", default=None)
+        parser.add_argument('--credpath', 
+                            help="path to credentials", default=None)
+        parser.add_argument('--password', 
+                            help="password to use for machine root ssh access", default='foobar')
+        parser.add_argument('--config',
+                           help='path to config file', default='../input/2btested.lst')         
+        parser.add_argument('--tests', nargs='+', 
+                            help="test cases to be executed", 
+                            default= ['run_test_suite'])
+        
+        return parser
+    

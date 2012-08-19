@@ -245,7 +245,7 @@ class EbsTestSuite(EutesterTestCase):
                         else:
                             #The operation did fail, but this test did
                             raise Exception("negative_attach_in_use_volume_in_zones failed volume attached")
-        self.endsuccess()
+        
                 
     
     def attach_all_avail_vols_to_instances_in_zones(self, zonelist=None, timeout=360):
@@ -345,7 +345,7 @@ class EbsTestSuite(EutesterTestCase):
                 badvols = instance.get_unsynced_volumes() 
                 if (badvols is not None) and (badvols != []):
                     self.debug("failed")
-                    raise Exception("Unsync volumes found on:"+str(instance.id)+"\n"+"".join(badvols))
+                    raise Exception("Unsync volumes found on:"+str(instance.id)+"\n"+" ".join(badvols))
                 for volume in instance.attached_vols:
                     #detach number of volumes equal to volcount
                     if vc >= volcount:
@@ -487,6 +487,15 @@ class EbsTestSuite(EutesterTestCase):
                     snap.new_vol_list.append(newvol)
         self.endsuccess()
         
+    ''' 
+    def snap_vol_during_io_test(self, zonelist,None,timepergig=600):
+        testmsg =   """
+                    Attempts to create a snapshot from a volume while under some amount of test produced I/O. 
+                    Attach a volume to an instance, begin reading and writing to the volume. Snapshot the volume. 
+                    returns the elapsed time of snapshot creation. 
+                    """
+    ''' 
+                
         
     def run_ebs_basic_test_suite(self):  
         self.testlist = [] 
