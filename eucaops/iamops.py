@@ -41,11 +41,14 @@ class IAMops(Eutester):
         params = {'AccountName': account_name}
         self.euare.get_response('CreateAccount', params)
     
-    def delete_account(self,account_name):
+    def delete_account(self,account_name,recursive=False):
         '''Delete an account with the given name'''
         self.debug("Deleting account: " + account_name)
-        params = {'AccountName': account_name}
-        self.euare.get_response('DelegateAccount', params)
+        params = {
+            'AccountName': account_name,
+            'Recursive': recursive
+        }
+        self.euare.get_response('DeleteAccount', params)
     
         
     def get_all_accounts(self, account_id=None, account_name=None, search=False):
