@@ -179,7 +179,6 @@ class Eutester(object):
                 aws_access_key_id=aws_access_key_id,
                 aws_secret_access_key=aws_secret_access_key,
                 region=self.region,
-                host=self.get_ec2_ip(),
                 port=8773,
                 path="/services/Tokens",
                 is_secure=False,

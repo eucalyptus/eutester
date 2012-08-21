@@ -63,8 +63,8 @@ class StsBasics(unittest.TestCase):
             path=self.tester.ec2.path,
             api_version=self.tester.ec2.APIVersion,
             is_secure=self.tester.ec2.is_secure )
-        ec2connection.create_key_pair('testEC2TemporaryCredentials_key')
-        ec2connection.delete_key_pair('testEC2TemporaryCredentials_key')
+        ec2connection.create_key_pair('test_ec2_temporary_credentials_key')
+        ec2connection.delete_key_pair('test_ec2_temporary_credentials_key')
         ec2connection.close()
 
     def testS3TemporaryCredentials(self):
@@ -82,8 +82,8 @@ class StsBasics(unittest.TestCase):
             path=self.tester.s3.path,
             is_secure=self.tester.s3.is_secure,
             calling_format=calling_format)
-        s3connection.create_bucket('testEC2TemporaryCredentials_bucket')
-        s3connection.delete_bucket('testEC2TemporaryCredentials_bucket')
+        s3connection.create_bucket('test_s3_temporary_credentials_bucket')
+        s3connection.delete_bucket('test_s3_temporary_credentials_bucket')
         s3connection.close()
 
 if __name__ == "__main__":
