@@ -173,8 +173,21 @@ class Eutester(object):
                                                   debug=self.boto_debug)
         except Exception, e:
             self.critical("Was unable to create IAM connection because of exception: " + str(e))
-    
-        
+
+        try:
+            self.tokens = boto.connect_sts(
+                aws_access_key_id=aws_access_key_id,
+                aws_secret_access_key=aws_secret_access_key,
+                region=self.region,
+                host=self.get_ec2_ip(),
+                port=8773,
+                path="/services/Tokens",
+                is_secure=False,
+                debug=self.boto_debug)
+
+        except Exception, e:
+            self.critical("Was unable to create STS connection because of exception: " + str(e))
+
     def get_access_key(self):
         """Parse the eucarc for the EC2_ACCESS_KEY"""
         return self.parse_eucarc("EC2_ACCESS_KEY")   

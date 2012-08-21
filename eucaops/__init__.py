@@ -34,6 +34,7 @@
 from iamops import IAMops
 from ec2ops import EC2ops
 from s3ops import S3ops
+from stsops import STSops
 import time
 from eutester.euservice import EuserviceManager
 from eutester.euconfig import EuConfig
@@ -42,7 +43,7 @@ from eutester import eulogger
 import re
 import os
 
-class Eucaops(EC2ops,S3ops,IAMops):
+class Eucaops(EC2ops,S3ops,IAMops,STSops):
     
     def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,  account="eucalyptus", user="admin", username=None, region=None, ec2_ip=None, s3_ip=None, boto_debug=0):
         self.config_file = config_file 
