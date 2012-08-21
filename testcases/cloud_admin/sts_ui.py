@@ -133,7 +133,7 @@ if __name__ == "__main__":
         help="to provide JUnit style XML output", action="store_true", default=False)
     parser.add_argument('--tests', nargs='+',
         help="test cases to be executed",
-        default= ["testIssueToken","testIssueTokenWithDuration","testEC2TemporaryCredentials","testS3TemporaryCredentials"])
+        default= ['testIssueToken'])
     args = parser.parse_args()
     arg_credpath = args.credpath
     for test in args.tests:
