@@ -180,7 +180,56 @@ class Machine:
         else:
             return False
         
-         
+    def get_masked_pass(self, pwd, firstlast=True, charcount=True, show=False):
+        '''
+        format password for printing
+        options:
+        pwd - string- the text password to format
+        firstlast -boolean - show the first and last characters in pwd
+        charcount -boolean - print a "*" for each char in pwd, otherwise return fixed string '**hidden**'
+        show - boolean - convert pwd to str() and return it in plain text
+        '''
+        ret =""
+        if pwd is None:
+            return ""
+        if show is True:
+            return str(pwd)
+        if charcount is False:
+            return "**hidden**"
+        
+        for x in xrange(0,len(pwd)):
+            if (x == 0 or x == len(pwd)) and firstlast:
+                ret = ret+pwd[x]
+            else:
+                ret = ret+"*"
+            
+    def ping_check(self,host):
+        out = self.ping_cmd(host)
+        self.debug('Ping attempt to host:'+str(host)+", status code:"+str(out['status']))
+        if out['status'] != 0:
+            raise Exception('Ping returned error:'+str(out['status'])+' to host:'+str(host))
+    
+    def ping_cmd(self, host, count=2, pingtimeout=10, commandtimeout=120, listformat=False, verbose=True):
+        cmd = 'ping -c ' +str(count)+' -t '+str(pingtimeout)
+        if verbose:
+            cmd = cmd + ' -v '
+        cmd = cmd + ' '+ str(host)
+        out = self.cmd(cmd, verbose=verbose, timeout=commandtimeout, listformat=listformat)
+        if verbose:
+            #print all returned attributes from ping command dict
+            for item in sorted(out):
+                self.debug(str(item)+" = "+str(out[item]) )  
+        return out
+        
+        
+    def dump_netfail_info(self,ip=None, mac=None, pass1=None, pass2=None, showpass=True):
+        '''
+        Debug method to provide potentially helpful info when debugging connectivity issues. 
+        '''
+        self.debug('Attempting to dump network information, args: ip:'+str(ip)+' mac:'+str(mac)+' pass1:'+self.get_masked_pass(pass1,show=True)+' pass2:'+self.get_masked_pass(pass2,show=True))
+        self.ping_cmd(ip,verbose=True)
+        
+        
     def found(self, command, regex, verbose=True):
         """ Returns a Boolean of whether the result of the command contains the regex"""
         result = self.sys(command, verbose=verbose)
@@ -192,6 +241,26 @@ class Machine:
                 return True
         return False   
     
+    def wget_remote_image(self,url,path=None, user=None, password=None, retryconn=True, timeout=300):
+        self.debug('wget_remote_image, url:'+str(url)+", path:"+str(path))
+        cmd = 'wget '
+        if path:
+            cmd = cmd + " -P " + str(path)
+        if user:
+            cmd = cmd + " --user " + str(user)
+        if password:
+            cmd = cmd + " --password " + str(password)
+        if retryconn:
+            cmd = cmd + '--retry-connrefused'
+        cmd = cmd + ' ' + str(url)
+        self.debug('wget_remote_image cmd: '+str(cmd))
+        ret = self.cmd(cmd, timeout=timeout)
+        if ret['statuscode'] != 0:
+            raise Exception('wget_remote_image failed with statuscode:'+str(ret['statuscode']))
+        self.debug('wget_remote_image succeeded')
+        
+    
+        
     def poll_log(self, log_file="/var/log/messages"):
         self.debug( "Starting to poll " + log_file )     
         self.log_channel = self.ssh.invoke_shell()
@@ -227,7 +296,8 @@ class Machine:
         '''Save log buffers to a file'''
         for log_file in self.log_buffers.keys():
             self.save_all_logs(log_file,path)
-            
+    
+    
             
         
     

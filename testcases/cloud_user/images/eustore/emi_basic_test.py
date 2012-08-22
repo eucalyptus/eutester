@@ -7,9 +7,9 @@
 #                        #
 ##########################
 #
-#    "running_test" - verify instance goes to running 
-#    "metadata_test" - verify basic cloud metadata service can be used
-#    "user_test" = verify that only login users provided in userlist exist
+#    "running_test" - verify image-instance goes to running 
+#    "metadata_test" - verify basic cloud metadata service can be used from this image-instance
+#    "user_test" = verify that only login users provided in userlist exist on this image-instance
 #    "root_test" - verify that a root password is not set, unless one is given
 #    "attach_volume_test" - verify volcount number of volumes can be attached, and appear within this instance
 #    "detach_volume_test" - verify attached volumes can be detached, guest dev is removed
