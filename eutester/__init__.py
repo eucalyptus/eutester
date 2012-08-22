@@ -46,6 +46,7 @@ import random
 import time
 import signal
 import copy 
+import string
 from threading import Thread
 
 from boto.ec2.regioninfo import RegionInfo
@@ -172,8 +173,20 @@ class Eutester(object):
                                                   debug=self.boto_debug)
         except Exception, e:
             self.critical("Was unable to create IAM connection because of exception: " + str(e))
-    
-        
+
+        try:
+            self.tokens = boto.connect_sts(
+                aws_access_key_id=aws_access_key_id,
+                aws_secret_access_key=aws_secret_access_key,
+                region=self.region,
+                port=8773,
+                path="/services/Tokens",
+                is_secure=False,
+                debug=self.boto_debug)
+
+        except Exception, e:
+            self.critical("Was unable to create STS connection because of exception: " + str(e))
+
     def get_access_key(self):
         """Parse the eucarc for the EC2_ACCESS_KEY"""
         return self.parse_eucarc("EC2_ACCESS_KEY")   
@@ -280,6 +293,13 @@ class Eutester(object):
         """Convinience function for time.sleep()"""
         self.debug("Sleeping for " + str(seconds) + " seconds")
         time.sleep(seconds)
+    
+    def id_generator(self, size=6, chars=string.ascii_uppercase + string.ascii_lowercase  + string.digits ):
+        '''Returns a string of size with random charachters from the chars array. 
+             size    Size of string to return
+             chars   Array of characters to use in generation of the string
+        '''
+        return ''.join(random.choice(chars) for x in range(size))
         
     def __str__(self):
         '''
