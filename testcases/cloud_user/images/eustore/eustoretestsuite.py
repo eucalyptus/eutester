@@ -130,10 +130,12 @@ class EustoreTests():
     reboot_test = "reboot_test"
     terminate_test = "terminate_test"
     ssh_test = "ssh_test"
+    zeroconf_test = "zeroconf_test"
+    virtiopresent_test = "virtiopresent_test"
 
 class EustoreImage():
     '''
-    simple class to hold data and state related to eustore images
+    simple class to hold data and state related to eustore images and catalog information
     '''
     
     def __init__(self, 
@@ -154,6 +156,7 @@ class EustoreImage():
                 eki = '',
                 eri = '',
                 remotestring = '',
+                loginuser = 'root',
                 logdir='../artifacts/'):
         
         self.id = id   
@@ -173,6 +176,7 @@ class EustoreImage():
         self.eki = eki
         self.eri = eri
         self.remotestring = remotestring
+        self.loginuser = loginuser
         self.reservation = []
         self.name = id+"_"+ver+"_"+rev+"_"+arch  
         if not os.path.exists(logdir):
@@ -190,12 +194,17 @@ class EustoreImage():
                 EustoreTests.running_test : TestStatus.not_run,
                 EustoreTests.metadata_test: TestStatus.not_run,
                 EustoreTests.user_test : TestStatus.not_run,
+                EustoreTests.zeroconf_test : TestStatus.not_run,
                 EustoreTests.root_test : TestStatus.not_run,
+                EustoreTests.virtiopresent_test : TestStatus.not_run,
                 EustoreTests.attach_volume_test :TestStatus.not_run,
                 EustoreTests.reboot_test : TestStatus.not_run,
                 EustoreTests.terminate_test :  TestStatus.not_run
                }
         self.debug("######################START#############################", verbose = False)
+        
+    def __str__(self):
+        return self.name
  
     def debug(self, msg, verbose=True):
         if verbose:
@@ -294,17 +303,22 @@ class Eustoretestsuite():
     def create_image_from_emi(self,emi,name=None, id=None, size=2, add=True):
         '''
         Method used to build a eustore image object from an existing EMI. Mainly used to create an object that 
-        can be fed into the test suite. By default this will append the image to the Eustoretestsuite image list
+        can be fed into the test suite. By default this will append the image to this Eustoretestsuite image list
         Returns a eustore image object
+        emi - mandatory - emi image object
+        name -optional- name used in eustore object to be created
+        id -optional- id used in eustore object to be created
+        size -optional- size used in eustore object to be created
+        add -optional- boolean- add to local eustore list of this eustoretestsuite
         '''
         newimg = EustoreImage()
         if id is None:
-            newimg.id = emi.location
+            newimg.id = emi.id
         else:
             newimg.id = id
             
         if name is None:
-            newimg.name = newimg.id
+            newimg.name = emi.location
         else:
             newimg.name = name
             
@@ -317,13 +331,20 @@ class Eustoretestsuite():
         return newimg
 
         
-        
-        
-        
-        
-        
-        
-        
+    def convert_image_list_to_eustore_images(self,list, prefix="", size=2, add=True):
+        '''
+        Method to convert list of non-eustore system images to eustore images. Returns list of the converted eustore images
+        list - mandatory - list of images to convert
+        prefix - a string prefixed to the stored image name
+        id - a string to be used as the image's id, otherwise will use the underlying image's location string
+        size - expected size of the image, used for determining the appropriate minimum instance type when running
+        add - boolean, used to determine if this eustore image should be added to the main eustore image list
+        '''
+        retlist = []
+        for image in list:
+            name = str(prefix)+"-"+str(image.location)
+            retlist.append(self.create_image_from_emi(image, name=name, id=image.location, size=size, add=add))
+        return retlist
         
         
     
@@ -351,12 +372,22 @@ class Eustoretestsuite():
                                 id3 = line[ii.id3],
                                 type = line[ii.type],
                                 email = line[ii.email],
-                                remotestring = out[l].strip()+out[l+1].strip()
+                                remotestring = out[l].strip()+out[l+1].strip(),
                                 )
+            image.loginuser = self.get_default_login_user_by_distro(ii.distro)
+            
             images.append(image)
             l += 2
         return images
             
+    def get_default_login_user_by_distro(self,distro):
+        '''
+        helper method to return default login user per distro
+        '''
+        if re.search('UBUNTU', str(distro).upper()):
+            return 'ubuntu'
+        else:
+            return 'root'
             
     def get_system_images(self, emi=None, root_device_type=None, root_device_name=None, location=None, state="available", arch=None, owner_id=None):
         """
@@ -397,6 +428,8 @@ class Eustoretestsuite():
     def get_registered_emis(self, eustore_image,  emi="emi-"):
         '''
         Attempts to return a list of emis using this eustore image
+        eustore_image - mandatory - eustore image object
+        emi - optional - string used to filter matched images 
         '''
         images = self.get_system_images(emi, location=eustore_image.id)    
         if images == []:
@@ -407,12 +440,14 @@ class Eustoretestsuite():
     def get_registered_ekis(self, eustore_image):
         '''
         Attempts to get a list of ekis using this eustore image
+        eustore_image - mandatory - eustore image object
         '''
         return self.get_registered_emis(eustore_image, emi="eki-")
     
     def get_registered_eris(self, eustore_image):
         '''
-        Attempts to get a list of eris using this eustore iamge
+        Attempts to get a list of eris using this eustore image
+        eustore_image - mandatory - eustore image object
         '''
         return self.get_registered_emis(eustore_image, emi="eri-")
     
@@ -436,14 +471,31 @@ class Eustoretestsuite():
                       secret_key=None,
                       force=False, 
                       eucarc=False,
+                      rcpath="eucarc",
                       xof=False,
                       timepergig=1000):
         '''
         Attempts to install and verify an image using the eustore-install command. Creates the command with all the available arguments, and then verifies that
         the appropriate images were installed and registered correctly. 
+        help - optional - Boolean - issue eustore command with help flag
+        tarball - optional - String - specify local tarball path in which to install from
+        description - optional - String - provide description arg to eustore command
+        arch= - optional - String provide arch type of image i386 or x86_64
+        prefix - optional - String -prefix to use when naming the image, mostly used with tarball option
+        bucket= - optional - String - bucket name
+        kernel_type -optional -String representing xen or kvm kernel type
+        dir - optional -String local directory to unbundle image
+        kernel - optional - String eki of installed kernel image to use instead
+        ramdisk - optional - string eri of installed ramdisk image to use instead
+        url - optional - overide url with this option
+        region - optional - String, Name of the region to connect to
+        access_key - optional - String, Override access key value
+        secret_key - optional - String, Override secret key value
+        force - optional - boolean, force installation if image is detected as already installed
+        eucarc - optional - boolean, to source eucarc at rc_path
+        xof - optional - boolean, to exit on fail
+        timepergig - optional - time expected per gig used to determine timeouts
         '''
-  
-
         image = eustore_image
         self.cur_image = image
         cmd = ""
@@ -459,7 +511,7 @@ class Eustoretestsuite():
         
         #Build the eustore command...
         if eucarc:
-            cmd = "source eucarc && "
+            cmd = "source "+str(rcpath)+" && "
         cmd = cmd + self.url_export_string+" eustore-install-image"+self.get_standard_opts(url=url, region=region, access_key=access_key, secret_key=secret_key)  
         cmd = cmd + " -i "+str(eustore_image.id)
         if help == True:
@@ -712,7 +764,7 @@ class Eustoretestsuite():
             
                 
                 
-    def run_image_test_suite(self,image, vmtype=None, zone='PARTI00', userlist=[], rootpass=None, xof=False,volcount=2):  
+    def run_image_test_suite(self,image, vmtype=None, zone='PARTI00', userlist=[], rootpass=None, xof=False, volcount=2):  
         '''
         Runs a set of tests against an image, starts by running an euinstance of an image. If the image continues
         to running the remaining tests are ran against the image. Logging/results/debugging messages should be printed to the
@@ -722,6 +774,7 @@ class Eustoretestsuite():
         self.cur_image = image #set logger for this image    
         image.clearresults()
         failcode = 0 
+        
         try:
             #first try to run the image, exit if this fails as there's no point in running the remaining tests
             try:
@@ -734,7 +787,7 @@ class Eustoretestsuite():
                 return
             
             try:
-                self.instance_ssh_test(inst)
+                self.instance_ssh_test(inst, image=image)
                 self.debug("SUCCESS - SSH TEST - ("+str(image.name)+")")
             except Exception, e:
                 self.debug("!!!!!! FAILED - SSH TEST - ("+str(image.name)+") error:"+str(e))
@@ -744,7 +797,7 @@ class Eustoretestsuite():
             
             #Perform tests on the running instance, continue on failure for these tests
             try:
-                self.instance_metadata_test(inst)
+                self.instance_metadata_test(inst, image=image)
                 self.debug("SUCCESS - METADATA TEST - ("+str(image.name)+")")
             except Exception, e:
                 self.debug("!!!!!! FAILED - METADATA TEST - ("+str(image.name)+") error:"+str(e))
@@ -752,7 +805,7 @@ class Eustoretestsuite():
                 pass
             
             try:
-                self.instance_root_test(inst)
+                self.instance_root_test(inst, image=image)
                 self.debug("SUCCESS - ROOT TEST - ("+str(image.name)+")")
             except Exception, e:
                 self.debug("!!!!!! FAILED - ROOT TEST - ("+str(image.name)+") error:"+str(e))
@@ -760,15 +813,31 @@ class Eustoretestsuite():
                 pass
             
             try:
-                self.instance_users_test(inst)
+                self.instance_users_test(inst, userlist=userlist, image=image)
                 self.debug("SUCCESS - USERS TEST - ("+str(image.name)+")")
             except Exception, e:
                 self.debug("!!!!!! FAILED - USERS TEST - ("+str(image.name)+") error:"+str(e))
                 failcode = 1 
                 pass
             
+            try:
+                self.instance_zeroconf_test(inst, image=image)
+                self.debug("SUCCESS - ZEROCONF TEST - ("+str(image.name)+")")
+            except Exception, e:
+                self.debug("!!!!!! FAILED - ZEROCONF TEST - ("+str(image.name)+") error:"+str(e))
+                failcode = 1 
+                pass
+            
+            try:
+                self.instance_virtio_present_test(inst, image=image)
+                self.debug("SUCCESS - VIRTIO PRESENT TEST - ("+str(image.name)+")")
+            except Exception, e:
+                self.debug("!!!!!! FAILED - VIRTIO PRESENT TEST - ("+str(image.name)+") error:"+str(e))
+                failcode = 1 
+                pass
+            
             try:    
-                self.instance_attach_vol_test(inst,volcount=volcount)
+                self.instance_attach_vol_test(inst,volcount=volcount, image=image)
                 self.debug("SUCCESS - ATTACH VOLUMES TEST - ("+str(image.name)+")")
             except Exception, e:
                 self.debug("!!!!!! FAILED - ATTACH VOLUME TEST - ("+str(image.name)+") error:"+str(e))
@@ -776,7 +845,7 @@ class Eustoretestsuite():
                 pass
             
             try:
-                self.instance_reboot_test(inst)
+                self.instance_reboot_test(inst, image=image)
                 self.debug("SUCCESS - REBOOT TEST - ("+str(image.name)+")")
             except Exception, e:
                 self.debug("!!!!!! FAILED - REBOOT TEST - ("+str(image.name)+") error:"+str(e))
@@ -784,7 +853,7 @@ class Eustoretestsuite():
                 pass
             
             try:
-                self.instace_detach_volumes_test(inst, count=volcount)
+                self.instance_detach_volumes_test(inst, count=volcount, image=image)
                 self.debug("SUCCESS - DETACH VOLUMES TEST - ("+str(image.name)+")")
             except Exception, e:
                 self.debug("!!!!!! FAILED - DETACH VOLUMES TEST - ("+str(image.name)+") error:"+str(e))
@@ -792,7 +861,7 @@ class Eustoretestsuite():
                 pass
                 
             try:
-                self.instance_terminate_test(res)
+                self.instance_terminate_test(res, image=image)
                 self.debug("SUCCESS - TERMINATE TEST - ("+str(image.name)+")")
             except Exception, e: 
                 self.debug("!!!!!! FAILED -  TEST - ("+str(image.name)+") error:"+str(e))
@@ -806,6 +875,7 @@ class Eustoretestsuite():
             raise e
         finally:
             self.clean_up_running_instances_for_image(image)
+            
             self.debug(str('FAIL' if failcode == 1 else "SUCCESS")+" IMAGE:"+str(image.name))
             image.printdata(printmethod=self.debug)
             self.cur_image = None
@@ -815,6 +885,9 @@ class Eustoretestsuite():
     def clean_up_running_instances_for_image(self,image, timeout=300):
         '''
         Additional cleanup mechanism to help remove instances from failed terminate tests
+        image - optional - eustoreimage object to report results against
+        timeout - optional - seconds to wait on cleanup before failure
+        
         '''
         self.debug("clean_up_running_instance_for_image: "+str(image.name))
         failstr=''
@@ -838,12 +911,18 @@ class Eustoretestsuite():
         
                 
             
-    def run_image(self,image, vmtype=None, zone='PARTI00'):
+    def run_image(self,image, username=None, password=None, vmtype=None, zone='PARTI00'):
         '''
         Attempts to verify that an instance from the provided image can be ran, by
         default an ssh session will be created to this sesssion. If the instance does not progress
         to running state within a given timeout, or if the ssh connection can not be established, the 
         test will fail. 
+        inst - mandatory - euinstance object
+        username - optional- username to use for ssh login for this instance
+        password - optional - password to user for ssh login for this instance (key'd login by default)
+        vmtype - optional - string representing vmtype, otherwise test will attempt to determine vmtype based on eustoreimage size
+        zone - optional - string representing availability zone to launch image in
+        image - optional - eustoreimage object to report results against
         '''
         
         if vmtype is None:
@@ -855,86 +934,145 @@ class Eustoretestsuite():
                 vmtype = 'm1.xlarge'
         self.debug("#####STARTING run_image test########")
         image.results[EustoreTests.running_test] = TestStatus.failed
+        if username is None:
+            username = str(image.loginuser)
         try:
             emi = self.get_registered_emis(image)[0]
         except Exception, e:
-            raise Exception("Could not get registered EMI for image:"+str(image.name)+" err:"+str(e))
+            raise Exception("Could not get registered EMI for image:"+str(image)+" err:"+str(e))
         
-        self.debug("Running image:"+str(image.name)+", vmtype:"+str(vmtype)+" keypair:"+str(self.keypair.name)+" group:"+str(self.group)+" zone:"+str(zone))
-        res = self.tester.run_instance(image=emi, keypair=self.keypair.name, group=self.group, type=vmtype, zone=zone)
+        self.debug("Running image:"+str(image)+", vmtype:"+str(vmtype)+" keypair:"+str(self.keypair.name)+" group:"+str(self.group)+" zone:"+str(zone))
+        res = self.tester.run_instance(image=emi, keypair=self.keypair.name, group=self.group, type=vmtype, zone=zone,username=username, password=password)
         if res == []:          
-            raise Exception("Reservation was empty, failed to run: "+str(image.name))      
+            raise Exception("Reservation was empty, failed to run: "+str(image))      
         image.results[EustoreTests.running_test] = TestStatus.success
         return res
         
         
-    def instance_ssh_test(self,inst):
+    def instance_ssh_test(self,inst,image=None):
         '''
         This test attempts to issue a remote command via the euinstance ssh session and
         verify the  output
+        inst - mandatory - euinstance object
+        image - optional - eustoreimage object to report results against
         '''
         self.debug("################STARTING instance_ssh_test #####################")
-        image = self.get_eustore_image_by_id(emi_id=inst.image_id)
-        image.results[EustoreTests.ssh_test] = TestStatus.failed
+        if image is None:
+            image = self.get_eustore_image_by_id(emi_id=inst.image_id)
+        self.set_result(image,EustoreTests.ssh_test, TestStatus.failed )
         try:
             if inst.found("echo 'good'", "^good"):
-                image.results[EustoreTests.ssh_test] = TestStatus.success
+               self.set_result(image,EustoreTests.ssh_test, TestStatus.success)
+               return
             else:
                 raise Exception("Expected text not returned from remote ssh command")
         except Exception, e:
-            raise Exception("("+str(image.name)+") Failed ssh command test:"+str(inst.id)+"err:"+str(e))
+            raise Exception("("+str(image)+") Failed ssh command test:"+str(inst.id)+"err:"+str(e))
             
         
             
-    def instance_metadata_test(self,inst):
+    def instance_metadata_test(self,inst,image=None):
         '''
         This test attempts to verify the basic functionality of Metadata
         on this instance
+        inst - mandatory - euinstance object
+        image - optional - eustoreimage object to report results against
         '''
         self.debug("#######STARTING instance_metadata_test##########")
-        image = self.get_eustore_image_by_id(emi_id=inst.image_id)
-        image.results[EustoreTests.metadata_test] = TestStatus.failed
+        if image is None:
+            image = self.get_eustore_image_by_id(emi_id=inst.image_id)
+        self.set_result(image, EustoreTests.metadata_test, TestStatus.failed)
+       
         if inst.get_metadata('instance-id')[0] != inst.id:
-            raise Exception("("+str(image.name)+") Metadata test failed")
-        image.results[EustoreTests.metadata_test] = TestStatus.success
+            raise Exception("("+str(image)+") Metadata test failed")
+        self.set_result(image, EustoreTests.metadata_test, TestStatus.success)
         
-    
-    def instance_attach_vol_test(self,inst, volcount=1, recycle=True):
+        
+    def instance_virtio_present_test(self,inst,image=None):
+        '''
+        This test attempts to verify that the instance has the virtio kernel modules available. 
+        It does not check if they are installed per NC configuration. 
+        inst - mandatory - euinstance object
+        image - optional - eustoreimage object to report results against
+        '''
+        self.debug("#######STARTING instance_virtio_present_test##########")
+        if image is None:
+            image = self.get_eustore_image_by_id(emi_id=inst.image_id)
+        self.set_result(image, EustoreTests.virtiopresent_test, TestStatus.failed)
+        #look for filename line in modinfo...
+        #filename:       /lib/modules/2.6.28-11-generic/kernel/drivers/virtio/virtio.ko
+        out = inst.sys('modinfo virtio')
+        for line in out:
+            if (re.search("^filename", line) and re.search("virtio.ko", line)):
+                self.set_result(image, EustoreTests.virtiopresent_test, TestStatus.success) 
+                return          
+        raise Exception("("+str(image)+") virtio present test failed")
+               
+   
+        
+    def instance_attach_vol_test(self,inst, volcount=1, recycle=True, image=None, vol_list=[], timepergig=180):
         '''
         This test attempt to verify attachment of volume(s) to an instance
+        inst - mandatory - euinstance object
+        volcount - optional - number of volumes to attach to instance if a vol_list is not provided
+        recycle - boolean - first attempt to use existing volumes for this test rather create new ones
+        image - optional - eustoreimage object to report results against
+        vol_list -optional -list of euvolumes to be attached to instance
         '''
-        
+
         self.debug("###########STARTING instance_attach_vol_test##########")
-        image = self.get_eustore_image_by_id(emi_id=inst.image_id)
-        image.results[EustoreTests.attach_volume_test] = TestStatus.failed
+        vols = 0
+        if image is None:
+            image = self.get_eustore_image_by_id(emi_id=inst.image_id)
+        self.set_result(image, EustoreTests.attach_volume_test, TestStatus.failed)
+    
         zone = inst.placement
         try:
-            for i in xrange(0,volcount):
-                if recycle:
-                    try:
-                        vol = self.tester.get_volume(status='available', zone=zone, maxsize=1)
-                    except Exception, e:
-                        self.debug("Err trying to get an existing volume, making new one... err:"+str(e))
-                        vol = self.tester.create_volume(zone)
-                        pass
+            if vol_list != []:
+                for vol in vol_list and vols <= volcount:
+                    inst.attach_volume(vol)
+                    vols += 1 
+            else:
+                for i in xrange(0,volcount):
+                    if recycle:
+                        try:
+                            vol = self.tester.get_volume(status='available', zone=zone, maxsize=1)
+                            self.debug('Using recycled and available:'+str(vol))
+                        except Exception, e:
+                            self.debug("Err trying to get an existing volume, making new one... err:"+str(e))
+                            vol = self.tester.create_volume(zone, timepergig=timepergig)
+                            pass
                     else:
-                        vol = self.tester.create_volume(zone)
-                        
-                inst.attach_volume(vol)
+                        elf.debug("Recycle vols not set, created new")      
+                        vol = self.tester.create_volume(zone)              
+                    timeout= vol.size * timepergig
+                    inst.attach_volume(vol,timeout=timeout)
         except Exception, ae:
-            raise Exception("("+str(image.name)+") Failed to attach volume to:"+str(inst.id)+"err:"+str(ae))
-        image.results[EustoreTests.attach_volume_test] = TestStatus.success
+            raise Exception("("+str(image)+") Failed to attach volume to:"+str(inst.id)+"err:"+str(ae))
+        self.set_result(image, EustoreTests.attach_volume_test, TestStatus.success)
         
     
-    def instace_detach_volumes_test(self, inst, count=0, timeout=60):
+    def instance_detach_volumes_test(self, inst, image=None, count=0, timeout=60):
         '''
-        Attempts to verify volumes detach correctly from an instance
+        Attempts to verify 'count' number of volumes detach correctly from an instance
+        inst - mandatory - euinstance object
+        image - optional - eustoreimage object to report results against
+        count - optional - integer, # of volumes to detach from instance. 0 = all
+        timeout - optional - integer. # of seconds to wait for volumes to detach before failure
         '''
         self.debug("#############STARTING instance_detach_volume_test#############")
+       
+        attached_count = len(inst.attached_vols)
+        if attached_count == 0:
+            self.debug("("+str(image)+")No attached volumes detected, skipping detach volume test:"+str(inst.id))
+            self.set_result(image, EustoreTests.detach_volume_test, TestStatus.not_run)
+            return
         if count == 0:
-            count = len(inst.attached_vols)
-        image = self.get_eustore_image_by_id(emi_id=inst.image_id)
-        image.results[EustoreTests.detach_volume_test] = TestStatus.failed
+            count = attached_count
+        if image is None:
+            image = self.get_eustore_image_by_id(emi_id=inst.image_id)
+        self.set_result(image, EustoreTests.detach_volume_test, TestStatus.failed)
+       
         try:
             detached = 0
             for evol in inst.attached_vols:
@@ -943,74 +1081,139 @@ class Eustoretestsuite():
                 if detached >= count:
                     break
         except Exception, e:
-            raise Exception("("+str(image.name)+") Failed to detattach volumes:"+str(inst.id)+"err:"+str(e))
-        image.results[EustoreTests.detach_volume_test] = TestStatus.success
+            raise Exception("("+str(image)+") Failed to detattach volumes:"+str(inst.id)+"err:"+str(e))
+        self.set_result(image, EustoreTests.detach_volume_test, TestStatus.success)
         
     
-    def instance_reboot_test(self,inst, checkvolstatus=True):
+    def instance_reboot_test(self,inst, checkvolstatus=True, image=None):
         '''
         This attempt to reboot an instance, if volumes were present before the reboot, this test
         will attempt to verify that those volumes are intact as well as verify data integrity with md5
+        inst - mandatory - euinstance object
+        image - optional - eustoreimage object to report results against
+        checkvolstatus - boolean - flag to confirm volume attached states post reboot
+        
         '''
         
         self.debug("############STARTING instance_reboot_test#############")
-        image = self.get_eustore_image_by_id(emi_id=inst.image_id)
-        image.results[EustoreTests.reboot_test] = TestStatus.failed
+        if image is None:
+            image = self.get_eustore_image_by_id(emi_id=inst.image_id)
+        self.set_result(image, EustoreTests.reboot_test, TestStatus.failed)
+        
         try:
             inst.reboot_instance_and_verify(checkvolstatus=checkvolstatus)
-            image.results[EustoreTests.reboot_test] = TestStatus.success
+            self.set_result(image, EustoreTests.reboot_test, TestStatus.success)
+            return
         except Exception, e:
-            image.results[EustoreTests.reboot_test] = TestStatus.failed
-            raise Exception("("+str(image.name)+")Failed instance_reboot_test, err:"+str(e))
+            self.set_result(image, EustoreTests.reboot_test, TestStatus.failed)
+            raise Exception("("+str(image)+")Failed instance_reboot_test, err:"+str(e))
         
         
-    def instance_users_test(self, inst, userlist=[]):
+    def instance_users_test(self, inst, userlist=[], image=None):
         '''
         This attempts to verify that no nomral (non-system) users are present on 
         the instance/image.
+        inst - mandatory - euinstance object
+        userlist - optional - list strings representing user names  expected to be found on instance. 
+        image - optional - eustoreimage object to report results against
+        
         '''
         self.debug("############STARTING instance_users_test#################")
-        image = self.get_eustore_image_by_id(emi_id=inst.image_id)
-        image.results[EustoreTests.user_test] = TestStatus.failed
+        if image is None:
+            image = self.get_eustore_image_by_id(emi_id=inst.image_id)
+        self.set_result(image, EustoreTests.user_test, TestStatus.failed)
+       
         users = inst.get_users() 
         if users != userlist:
-            raise Exception("("+str(image.name)+")Image has unknown Non-system users: "+"".join(users))
-        image.results[EustoreTests.user_test] = TestStatus.success
+            raise Exception("("+str(image)+")Image has unknown Non-system users: "+"".join(users))
+        self.set_result(image, EustoreTests.user_test, TestStatus.success)
         
-    def instance_root_test(self, inst, password = None):
+        
+        
+    def instance_zeroconf_test(self, inst, netfile='/etc/sysconfig/network', image=None):
+        '''
+        This test attempts to verify the instance is not using zeroconf network configuration. 
+        The zeroconf config may conflict with certain network modes.
+        Note: netfile set to null only checks routing table for 169.254.0.0 addr
+        inst - mandatory - euinstance object
+        netfile - optional -string representing file path to network config
+        image - optional - eustoreimage object to report results against
+        '''
+        self.debug("############STARTING instance_zeroconf_test#################")
+        if image is None:
+            image = self.get_eustore_image_by_id(emi_id=inst.image_id)
+        self.set_result(image, EustoreTests.zeroconf_test, TestStatus.failed)
+            
+        if netfile is not None:
+            #First verify netfile exists
+            try:
+                out = inst.sys("ls "+str(netfile))[0].strip()
+                if ( out != netfile ):
+                    raise Exception(str(out) +"!=" +  str(netfile))
+            except Exception, e:
+                raise Exception("Could not stat:"+str(netfile)+", err:"+str(e))
+            
+            #Verify the network file has zeroconf disabled
+            cmd = "cat "+str(netfile)+" | grep NOZEROCONF | grep -v '^#'"         
+            if inst.found(cmd,"NOZEROCONF"):
+                self.debug("Found NOZEROCONF in:"+str(netfile))
+            else:
+                raise Exception("NOZEROCONF not found, zero conf is not disabled")
+        
+        if inst.found('route -n', '169.254.0.0'):
+            raise Exception("ZEROCONF network detected in instance")
+        self.set_result(image, EustoreTests.zeroconf_test, TestStatus.success)
+        
+
+        
+    def instance_root_test(self, inst, password = None, image=None):
         '''
         Attempts to verify whether the root user on the instance has a password or not. 
         A password can be specififed if it is expected, by default it expects no password
+        inst - mandatory - euinstance object
+        password - optional - string representing an expected root user password
+        image - optional - eustoreimage object to report results against
         '''
         self.debug("############STARTING isntance_root_test################")
-        image = self.get_eustore_image_by_id(emi_id=inst.image_id)
+        if image is None:
+            image = self.get_eustore_image_by_id(emi_id=inst.image_id)
+        self.set_result(image, EustoreTests.root_test, TestStatus.failed)
         ipassword = inst.get_user_password('root') 
         if ipassword != password:
-            image.results[EustoreTests.root_test] = TestStatus.failed
-            raise Exception("("+str(image.name)+")root user has bad password! found:"+str(ipassword)+"!="+str(password))
-        image.results[EustoreTests.root_test] = TestStatus.success
+            self.set_result(image, EustoreTests.root_test, TestStatus.failed)
+            raise Exception("("+str(image)+")root user has bad password! found:"+str(ipassword)+"!="+str(password))
+        self.set_result(image, EustoreTests.root_test, TestStatus.success)
+       
         
         
  
         
-    def instance_terminate_test(self,res):
+    def instance_terminate_test(self,res,image=None):
         '''
         Attempts to confirm that an image terminates within a certain timeout
+        res - mandatory - reservation of instance(s) to terminate
+        image - optional - eustoreimage object to report results against
         '''
         self.debug("#######STARTING instance_terminate_test##########")
+        if res.instances == []:
+            self.debug('Reservation was empty in instance_terminate_test. Not running')
+            self.set_result(image, EustoreTests.terminate_test, TestStatus.not_run)
+            return
         try:
-            inst = res.instances[0]
-            image = self.get_eustore_image_by_id(emi_id=inst.image_id)
-            image.results[EustoreTests.terminate_test] = TestStatus.failed
+            if image is None:
+                inst = res.instances[0]
+                image = self.get_eustore_image_by_id(emi_id=inst.image_id)
+            self.set_result(image, EustoreTests.terminate_test, TestStatus.failed)
             self.tester.terminate_instances(res)
-            image.results[EustoreTests.terminate_test] = TestStatus.success
+            self.set_result(image, EustoreTests.terminate_test, TestStatus.success)
         except Exception, e:
             self.debug("Trying single Termination, Problem with terminating reservation:" +str(e))
             try:
                 self.clean_up_running_instances_for_image(image)
-                image.results[EustoreTests.terminate_test] = TestStatus.success
+                self.set_result(image, EustoreTests.terminate_test, TestStatus.success)
+                return
             except Exception, se:
-                self.debug("Failed single termination for image:"+str(image.name))
+                self.debug("Failed single termination for image:"+str(image))
                 raise se
                 
 
@@ -1019,6 +1222,9 @@ class Eustoretestsuite():
         Attempts to return a subset list of images who's test results match the result give. 
         By default this will traverse each image in self.list, will then traverse the image.results list for each
         EustoreTest matching TestStatus.failed.
+        list - optional - list of eustoreimages to search within
+        eustoretest - optional - eustore test used in search criteria
+        result - optional - TestStatus type result to search for
         """
         retlist = []
         if list is None:
@@ -1045,11 +1251,42 @@ class Eustoretestsuite():
     
     
         
-                            
+    def set_result(self,image,test,status):
+        '''
+        convience method to apply test results to an image
+        '''
+        #if image is none do nothing
+        if image is None:
+            return
+        self.validate_eustore_test(test)
+        self.validate_eustore_status(status)
+        image.results[test] = status
+        
+    def validate_eustore_test(self,test):
+        '''
+        Validate a given test is defined as a eustore test
+        '''
+        for k in EustoreTests.__dict__:
+            if test == EustoreTests.__dict__[k]:
+                return 
+        raise Exception("Test '"+str(test)+"' is  not defined in EustoreTests")
+    
+    def validate_eustore_status(self, status):
+        '''
+        Validate a given status is defined
+        '''
+        for k in TestStatus.__dict__:
+            if status == TestStatus.__dict__[k]:
+                return 
+        raise Exception("Status '"+str(status)+"' is not defined in TestStatus")                        
                 
     
     
     def print_image_list_results(self,list=None):
+        '''
+        prints the image data and results for a list of eustore images. Defaults to current eustoretestsuite's list
+        list - optional - list of eustore images
+        '''
         if list is None:
             list = self.list
         for image in list:

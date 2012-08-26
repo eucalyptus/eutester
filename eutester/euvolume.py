@@ -53,4 +53,5 @@ class EuVolume(Volume):
         newvol = EuVolume(volume.connection)
         newvol.__dict__ = volume.__dict__
         newvol.md5 = ""
+        newvol.md5len = 32
         return newvol

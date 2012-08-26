@@ -320,7 +320,10 @@ class EuserviceManager(object):
             raise Exception("Did not properly modify service")
     
     def stop(self, euservice):
-        self.modify_process(euservice, "stop")
+        if re.search("cluster", euservice.type):
+            self.modify_process(euservice, "cleanstop")
+        else:
+            self.modify_process(euservice, "stop")
         euservice.running = False
         
     def start(self, euservice):
@@ -334,7 +337,7 @@ class EuserviceManager(object):
         self.modify_service(euservice, "DISABLED")
         
     def wait_for_service(self, euservice, state = "ENABLED", attempt_both = True, timeout=600):
-        interval = 60
+        interval = 20
         poll_count = timeout / interval
         while (poll_count > 0):
             matching_services = []
