@@ -239,9 +239,9 @@ class EustoreImage():
 class Eustoretestsuite():
     cur_image = None
     
-    def __init__(self, tester=None,  config_file='../input/2b_tested.lst', password="foobar",url=None, list=None, volumes=None, keypair=None, group=None, image=None, zone='PARTI00',  eof=1):
+    def __init__(self, tester=None,  config_file='../input/2b_tested.lst', password="foobar", credpath=None, url=None, list=None, volumes=None, keypair=None, group=None, image=None, zone='PARTI00',  eof=1):
         if tester is None:
-            self.tester = Eucaops( config_file=config_file, password = password)
+            self.tester = Eucaops( config_file=config_file, password = password, credpath=credpath)
             self.tester.exit_on_fail = eof
         else:
             self.tester = tester
