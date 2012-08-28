@@ -321,7 +321,7 @@ class Machine:
             self.debug('get_df_info cmd:'+str(cmd))
         out = self.cmd(cmd,listformat=True)
         if out['status'] != 0:
-            raise Exception("df")
+            raise Exception("df returned err code:"+str(out['status']))
         output = out['output']
         # Get the presented fields from commands output,
         # Convert to lowercase, use this as our dict keys
