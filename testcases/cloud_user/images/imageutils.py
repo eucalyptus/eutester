@@ -18,6 +18,9 @@ class ImageUtils(EutesterTestCase):
     
     #Define the bytes per gig
     gig = 1073741824
+    mb = 1048576
+    kb = 1024
+    
     
     def __init__(self, 
                  tester=None, 
@@ -45,7 +48,7 @@ class ImageUtils(EutesterTestCase):
         self.destpath = str(destpath)
         self.time_per_gig = time_per_gig
         self.emi = emi
-        self.credpath=credpath
+        self.credpath=credpath or self.tester.credpath
         self.url = url
         #self.zonelist = []
 
@@ -121,7 +124,7 @@ class ImageUtils(EutesterTestCase):
                      kernel=None,
                      ramdisk=None,
                      block_device_mapping=None,
-                     destination=None,
+                     destination='/disk1/storage',
                      debug=False,
                      interbundle_timeout=120, 
                      time_per_gig=None):
@@ -129,30 +132,37 @@ class ImageUtils(EutesterTestCase):
         Bundle an image on a 'component'. 
         where credpath to creds on component
         '''
-        #build our tools bundle-image command...
-        if prefix:
-            cmdargs = cmdargs + " --prefix " +str(prefix)
-        if kernel:
-            cmdargs = cmdargs + " --kernel"  +str(kernel)
-        if ramdisk:
-            cmdargs = cmdargs + " --ramdisk" +str(ramdisk)
-        if block_device_mapping:
-            cmdargs = cmdargs + " --block-device-mapping " + str(block_device_mapping)
-        if destination:
-            cmdargs = cmdargs + " --destination " + str(destintaion)
-        if debug:
-            cmdargs = cmdargs + " --debug "
-        
-        cmdargs = cmdargs + "-i " + str(path)
-        
         time_per_gig = time_per_gig or self.time_per_gig
-        credpath = credpath or self.tester.credpath
+        credpath = component_credpath or self.credpath
         machine = component or self.component
         image_size = machine.get_file_size(path)/self.gig or 1
         timeout = time_per_gig * image_size
-        cbargs = [timeout, interbundle_timeout, time.time(),0]
+        cbargs = [timeout, interbundle_timeout, time.time(),0, True]
+        if destination is None:
+            destination = machine.sys('pwd')[0]
+        if (machine.get_available(str(destination),(self.gig/self.kb)) < image_size):
+            raise Exception("Not enough free space at:"+str(destination))
         
-        if component_credpath is not None:
+        #build our tools bundle-image command...
+        cmdargs = ""
+        if prefix:
+            cmdargs = cmdargs + " --prefix " +str(prefix)
+        if kernel:
+            cmdargs = cmdargs + " --kernel "  +str(kernel)
+        if ramdisk:
+            cmdargs = cmdargs + " --ramdisk " +str(ramdisk)
+        if block_device_mapping:
+            cmdargs = cmdargs + " --block-device-mapping " + str(block_device_mapping)
+        if destination:
+            cmdargs = cmdargs + " --destination " + str(destination)
+        if debug:
+            cmdargs = cmdargs + " --debug "
+        
+        cmdargs = cmdargs + " -i " + str(path)
+        
+        
+        
+        if credpath is not None:
             cmd = 'source '+str(credpath)+'/eucarc && euca-bundle-image ' + str(cmdargs)
         else:
             skey = self.tester.get_secret_key()
@@ -181,13 +191,15 @@ class ImageUtils(EutesterTestCase):
                       debug=False, 
                       interbundle_timeout=120, 
                       timeout=0, 
+                      image_check_timeout=300,
                       uniquebucket=True):
         '''
         Bundle an image on a 'component'. 
         where credpath to creds on component
         '''
         machine = component or self.component
-        cbargs = [timeout, interbundle_timeout, time.time(),0]
+        credpath = component_credpath or self.credpath
+        cbargs = [timeout, interbundle_timeout, time.time(),0,True]
         bname = ''
         cmdargs = ""
         manifest = str(manifest)
@@ -214,16 +226,15 @@ class ImageUtils(EutesterTestCase):
         if debug:
             cmdargs = cmdargs + " --debug "
         cmdargs = cmdargs + " -b " + str(bname) + " -m " +str(manifest)
-      
-       
-        if component_credpath is not None:
+
+        if credpath is not None:
             cmd = 'source '+str(credpath)+'/eucarc && euca-upload-bundle ' + str(cmdargs)
         else:
             skey = self.tester.get_secret_key()
             akey = self.tester.get_access_key()
             cmd = 'euca-upload-bundle -a '+str(akey) + ' -s ' + str(skey) + str(cmdargs)
         #execute upload-bundle command...
-        out = machine.cmd(cmd, timeout=timeout, cb=self.bundle_status_cb, cbargs=cbargs)
+        out = machine.cmd(cmd, timeout=image_check_timeout, cb=self.bundle_status_cb, cbargs=cbargs)
         if out['status'] != 0:
             raise Exception('upload_bundle "'+str(manifest)+'" failed. Errcode:'+str(out['status']))
         for line in out['output']:
@@ -235,8 +246,8 @@ class ImageUtils(EutesterTestCase):
         return upmanifest
     
     
-    def bundle_status_cb(self,buf, cmdtimeout, parttimeout, starttime,lasttime):
-        #self.debug('bundle_status_cb: cmdtimeout:'+str(cmdtimeout)+", partimeout:"+str(parttimeout)+", starttime:"+str(starttime)+", lasttime:"+str(lasttime))
+    def bundle_status_cb(self,buf, cmdtimeout, parttimeout, starttime,lasttime, check_image_stage):
+        self.debug('bundle_status_cb: cmdtimeout:'+str(cmdtimeout)+", partimeout:"+str(parttimeout)+", starttime:"+str(starttime)+", lasttime:"+str(lasttime)+", check_image_stage:"+str(check_image_stage))
         ret = SshCbReturn(stop=False)
         #if the over timeout or the callback interval has expired, then return stop=true
         #interval timeout should not be hit due to the setting of the timer value, but check here anyways
@@ -246,22 +257,24 @@ class ImageUtils(EutesterTestCase):
             ret.statuscode=-100 
             ret.stop = True
             return ret
-        if (parttimeout != 0 and lasttime != 0) and (int(time.time()-lasttime) > parttimeout):
-            self.debug('bundle_status_cb inter-part time out after '+str(parttimeout)+' seconds')
-            ret.statuscode=-100 
-            ret.stop = True
-            return ret
-        
-        #Command is still going, reset timer thread to intervaltimeout, provide arguments for  next time this is called from ssh cmd.
-        ret.stop = False
-        ret.settimer = parttimeout
-        ret.nextargs =[cmdtimeout,parttimeout,starttime,time.time()]
-        
+        if not check_image_stage:
+            ret.settimer = parttimeout
+            if (parttimeout != 0 and lasttime != 0) and (int(time.time()-lasttime) > parttimeout):
+                self.debug('bundle_status_cb inter-part time out after '+str(parttimeout)+' seconds')
+                ret.statuscode=-100 
+                ret.stop = True
+                return ret
+    
         if re.match('[P|p]art:',buf):
             sys.stdout.write("\r\x1b[K"+str(buf))
             sys.stdout.flush()
+            check_image_stage=False
         else: 
             self.debug(str(buf))
+        #Command is still going, reset timer thread to intervaltimeout, provide arguments for  next time this is called from ssh cmd.
+        ret.stop = False
+        
+        ret.nextargs =[cmdtimeout,parttimeout,starttime,time.time(),check_image_stage]
         return ret
     
              
@@ -294,7 +307,7 @@ class ImageUtils(EutesterTestCase):
                             kernel=None,
                             ramdisk=None,
                             block_device_mapping=None,
-                            destination=None,
+                            destination='/disk1/storage',
                             root_device_name=None,
                             interbundle_timeout=120, 
                             upload_timeout=0, 
@@ -303,22 +316,29 @@ class ImageUtils(EutesterTestCase):
                             wget_user=None, 
                             wget_password=None, 
                             wget_retryconn=True, 
-                            timepergig=300,
+                            filepath=None,
+                            bundle_manifest=None,
+                            upload_manifest=None,
+                            time_per_gig=300,
                             ):
-        filename = str(url).split('/')[-1]
-        dir = destpath or self.destpath
-        filepath = dir + '/' + str(filename) 
+         
         self.debug('create_emi_from_url:'+str(url)+", starting...")
-        filesize = self.wget_image(url, destpath=destpath, component=component, user=wget_user, 
-                                   password=wget_password, retryconn=retryconn, timepergig=timepergig)
+        if filepath is None:
+            filename = str(url).split('/')[-1]
+            dir = destpath or self.destpath
+            filepath = dir + '/' + str(filename)
+            filesize = self.wget_image(url, destpath=destpath, component=component, user=wget_user, 
+                                       password=wget_password, retryconn=wget_retryconn, timepergig=timepergig)
         self.debug('create_emi_from_url: Image downloaded to machine, now bundling image...')
-        bundle_manifest = self.bundle_image(filepath, component=component, component_credpath=component_credpath, 
-                          prefix=prefix, kernel=kernel, ramdisk=ramdisk, block_device_mapping=block_device_mapping, 
-                          destination=destination, debug=debug, interbundle_timeout=interbundle_timeout, time_per_gig=timer_per_gig)
+        if bundle_manifest is None:
+            bundle_manifest = self.bundle_image(filepath, component=component, component_credpath=component_credpath, 
+                              prefix=prefix, kernel=kernel, ramdisk=ramdisk, block_device_mapping=block_device_mapping, 
+                              destination=destination, debug=debug, interbundle_timeout=interbundle_timeout, time_per_gig=time_per_gig)
         self.debug('create_emi_from_url: Image bundled, now uploading...')
-        upload_manifest = self.upload_bundle(bundle_manifest, component=component, bucketname=bucketname, 
-                                             component_credpath=component_credpath, debug=debug, interbundle_timeout=interbundle_timeout, 
-                                             timeout=timeout, uniquebucket=uniquebucket)
+        if upload_manifest is None:
+            upload_manifest = self.upload_bundle(bundle_manifest, component=component, bucketname=bucketname, 
+                                                 component_credpath=component_credpath, debug=debug, interbundle_timeout=interbundle_timeout, 
+                                                 timeout=timeout, uniquebucket=uniquebucket)
         self.debug('create_emi_from_url: Now registering...')
         emi = self.tester.register_image(image_location=upload_manifest, rdn=root_device_name, 
                                    description=description, bdmdev=block_device_mapping, 
