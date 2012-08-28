@@ -92,14 +92,14 @@ class ImageUtils(EutesterTestCase):
                     conn.close()
             return rfsize
 
-    def wget_image(self,url,destpath=None, component=None, user=None, password=None, retryconn=True, timepergig=300):
+    def wget_image(self,url,destpath=None, component=None, user=None, password=None, retryconn=True, time_per_gig=300):
         machine = component or self.component
         if destpath is None and self.destpath is not None:
             destpath = self.destpath
         size = self.getHttpRemoteImageSize(url)
         if (size <  machine.get_available(destpath,unit=self.__class__.gig)):
             raise Exception("Not enough available space at: "+str(destpath)+", for image: "+str(url))
-        timeout = size * timepergig
+        timeout = size * time_per_gig
         self.debug('wget_image: '+str(url)+ ' to destpath'+str(destpath)+' on machine:'+str(machine.hostname))
         machine.wget_remote_image(url, path=destpath, user=user, password=password, retryconn=retryconn, timeout=timeout)
         return size
@@ -330,7 +330,7 @@ class ImageUtils(EutesterTestCase):
             dir = destpath or self.destpath
             filepath = dir + '/' + str(filename)
             filesize = self.wget_image(url, destpath=destpath, component=component, user=wget_user, 
-                                       password=wget_password, retryconn=wget_retryconn, timepergig=timepergig)
+                                       password=wget_password, retryconn=wget_retryconn, time_per_gig=time_per_gig)
             
         self.debug('create_emi_from_url: Image downloaded to machine, now bundling image...')
         if bundle_manifest is None and upload_manifest is None:
