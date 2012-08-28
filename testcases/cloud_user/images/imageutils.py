@@ -309,6 +309,8 @@ class ImageUtils(EutesterTestCase):
                             block_device_mapping=None,
                             destination='/disk1/storage',
                             root_device_name=None,
+                            description=None,
+                            name=None,
                             interbundle_timeout=120, 
                             upload_timeout=0, 
                             uniquebucket=True,
