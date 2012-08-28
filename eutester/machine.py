@@ -32,9 +32,11 @@
 
 import eulogger
 import sshconnection
+from sshconnection import SshCbReturn
 from threading import Thread
 import re
 import os
+import sys
 
 class Machine:
     def __init__(self, 
@@ -70,6 +72,7 @@ class Machine:
         self.log_threads = {}
         self.log_buffers = {}
         self.log_active = {}
+        self.wget_last_status = 0 
         
         if self.debugmethod is None:
             logger = eulogger.Eulogger(identifier= str(hostname) + ":" + str(components))
@@ -157,14 +160,16 @@ class Machine:
         timeout - optional - command timeout in seconds 
         listformat -optional - specifies returned output in list of lines, or single string buffer 
         '''
-        return self.cmd(cmd, verbose=verbose,timeout=timeout,listformat=listformat,cb=self.str_not_found, cbargs=[regex])
+        return self.cmd(cmd, verbose=verbose,timeout=timeout,listformat=listformat,cb=self.str_found_cb, cbargs=[regex, verbose])
         
         
-    def str_not_found(self,buf,regex,search=True):
+    def str_found_cb(self,buf,regex,verbose,search=True):
         '''
-        Return True if given regex does NOT match against given string
+        Return sshcbreturn type setting stop to True if given regex matches against given string buf
         '''
-        return not self.str_found(buf, regex=regex, search=search)
+        if verbose:
+            self.debug(str(buf))
+        return sshconnection.SshCbReturn( stop=self.str_found(buf, regex=regex, search=search))
         
         
     def str_found(self, buf, regex, search=True):
@@ -179,7 +184,22 @@ class Machine:
             return True
         else:
             return False
+    
+    def get_file_stat(self,path):
+        return self.sftp.lstat(path)
         
+    def get_file_size(self, path):
+        return self.sftp.lstat(path).st_size
+    
+    def get_file_perms_flag(self,path):
+        return self.sftp.lstat(path).FLAG_PERMISSIONS 
+    
+    def get_file_groupid(self, path):
+        returnself.sftp.lstat(path).st_gid
+        
+    def get_file_userid(self,path):
+        self.sftp.lstat(path).st_uid
+    
     def get_masked_pass(self, pwd, firstlast=True, charcount=True, show=False):
         '''
         format password for printing
@@ -196,7 +216,6 @@ class Machine:
             return str(pwd)
         if charcount is False:
             return "**hidden**"
-        
         for x in xrange(0,len(pwd)):
             if (x == 0 or x == len(pwd)) and firstlast:
                 ret = ret+pwd[x]
@@ -222,13 +241,15 @@ class Machine:
         return out
         
         
-    def dump_netfail_info(self,ip=None, mac=None, pass1=None, pass2=None, showpass=True):
+    def dump_netfail_info(self,ip=None, mac=None, pass1=None, pass2=None, showpass=True, taillength=50):
         '''
-        Debug method to provide potentially helpful info when debugging connectivity issues. 
+        Debug method to provide potentially helpful info from current machine when debugging connectivity issues. 
         '''
         self.debug('Attempting to dump network information, args: ip:'+str(ip)+' mac:'+str(mac)+' pass1:'+self.get_masked_pass(pass1,show=True)+' pass2:'+self.get_masked_pass(pass2,show=True))
         self.ping_cmd(ip,verbose=True)
-        
+        self.sys('arp -a')
+        self.sys('dmesg | tail -'+str(taillength))
+        self.sys('cat /var/log/messages | tail -'+str(taillength))
         
     def found(self, command, regex, verbose=True):
         """ Returns a Boolean of whether the result of the command contains the regex"""
@@ -251,15 +272,78 @@ class Machine:
         if password:
             cmd = cmd + " --password " + str(password)
         if retryconn:
-            cmd = cmd + '--retry-connrefused'
+            cmd = cmd + ' --retry-connrefused '
         cmd = cmd + ' ' + str(url)
         self.debug('wget_remote_image cmd: '+str(cmd))
-        ret = self.cmd(cmd, timeout=timeout)
-        if ret['statuscode'] != 0:
-            raise Exception('wget_remote_image failed with statuscode:'+str(ret['statuscode']))
+        ret = self.cmd(cmd, timeout=timeout, cb=self.wget_status_cb )
+        if ret['status'] != 0:
+            raise Exception('wget_remote_image failed with status:'+str(ret['status']))
         self.debug('wget_remote_image succeeded')
-        
     
+    def wget_status_cb(self, buf):
+        ret = sshconnection.SshCbReturn(stop=False)
+        try:
+            buf = buf.strip()
+            val = buf.split()[0] 
+            if val != self.wget_last_status:
+                if re.match('^\d+\%',buf):
+                    sys.stdout.write("\r\x1b[K"+str(buf))
+                    sys.stdout.flush()
+                    self.wget_last_status = val
+                else:
+                    print buf
+        except Exception, e:
+            pass
+        finally:
+            return ret
+
+            
+        
+    def get_df_info(self, path=None, verbose=True):
+        '''
+        Return df's output in dict format for a given path.
+        If path is not given will give the df info for the current working dir used in the ssh
+        session this command is executed in (ie: /home/user or /root). 
+        path - optional -string, used to specifiy path to use in df command. Default is PWD of ssh shelled command
+        verbose - optional -boolean, used to specify whether or debug is printed during this command. 
+        Example:
+            dirpath = '/disk1/storage'
+            dfout = self.get_df_info(path=dirpath)
+            available_space = dfout['available']
+            mounted_on = dfout['mounted']   
+            filesystem = dfout['filesystem']
+        '''
+        ret = {}
+        if path is None:
+            path = '${PWD}'
+        cmd = 'df '+str(path)
+        if verbose:
+            self.debug('get_df_info cmd:'+str(cmd))
+        out = self.cmd(cmd,listformat=True)
+        if out['status'] != 0:
+            raise Exception("df")
+        output = out['output']
+        # Get the presented fields from commands output,
+        # Convert to lowercase, use this as our dict keys
+        fields=[]
+        for field in str(output[0]).split():
+            fields.append(str(field).lower())
+        x = 0 
+        for value in str(output[1]).split():
+                ret[fields[x]]=value
+                if verbose:
+                    self.debug(str('DF FIELD: '+fields[x])+' = '+str(value))
+                x += 1
+        return ret
+            
+    def get_available(self, path, unit=1):
+        '''
+        Return df output's available field. By default this is KB.
+        path - optional -string. 
+        unit - optional -integer used to divide return value. Can be used to convert KB to MB, GB, TB, etc..
+        '''
+        size = int(self.get_df_info(path=path)['available'])
+        return (size/unit)        
         
     def poll_log(self, log_file="/var/log/messages"):
         self.debug( "Starting to poll " + log_file )     
