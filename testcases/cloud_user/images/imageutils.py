@@ -169,7 +169,7 @@ class ImageUtils(EutesterTestCase):
             akey = self.tester.get_access_key()
             cmd = 'euca-bundle-image -a '+str(akey) + ' -s ' + str(skey) + str(cmdargs)
         #execute the command  
-        out = machine.cmd(cmd, timeout=timeout, cb = self.bundle_status_cb, cbargs=cbargs)
+        out = machine.cmd(cmd, timeout=timeout, listformat=True, cb = self.bundle_status_cb, cbargs=cbargs)
         if out['status'] != 0:
             raise Exception('bundle_image "'+str(path)+'" failed. Errcode:'+str(out['status']))
         manifest = None
@@ -203,6 +203,7 @@ class ImageUtils(EutesterTestCase):
         bname = ''
         cmdargs = ""
         manifest = str(manifest)
+        upmanifest = None
         part_count = -1
         try:
             part_count = self.get_manifest_part_count(component, path)
@@ -234,7 +235,7 @@ class ImageUtils(EutesterTestCase):
             akey = self.tester.get_access_key()
             cmd = 'euca-upload-bundle -a '+str(akey) + ' -s ' + str(skey) + str(cmdargs)
         #execute upload-bundle command...
-        out = machine.cmd(cmd, timeout=image_check_timeout, cb=self.bundle_status_cb, cbargs=cbargs)
+        out = machine.cmd(cmd, timeout=image_check_timeout, listformat=True, cb=self.bundle_status_cb, cbargs=cbargs)
         if out['status'] != 0:
             raise Exception('upload_bundle "'+str(manifest)+'" failed. Errcode:'+str(out['status']))
         for line in out['output']:
@@ -242,12 +243,14 @@ class ImageUtils(EutesterTestCase):
             if re.search('Uploaded image',line):
                 upmanifest = line.split()[3]
                 break
+        if upmanifest is None:
+            raise Exception('Failed to find upload manifest from upload_bundle command')
         self.debug('upload_image:'+str(manifest)+'. manifest:'+str(upmanifest))
         return upmanifest
     
     
     def bundle_status_cb(self,buf, cmdtimeout, parttimeout, starttime,lasttime, check_image_stage):
-        self.debug('bundle_status_cb: cmdtimeout:'+str(cmdtimeout)+", partimeout:"+str(parttimeout)+", starttime:"+str(starttime)+", lasttime:"+str(lasttime)+", check_image_stage:"+str(check_image_stage))
+        #self.debug('bundle_status_cb: cmdtimeout:'+str(cmdtimeout)+", partimeout:"+str(parttimeout)+", starttime:"+str(starttime)+", lasttime:"+str(lasttime)+", check_image_stage:"+str(check_image_stage))
         ret = SshCbReturn(stop=False)
         #if the over timeout or the callback interval has expired, then return stop=true
         #interval timeout should not be hit due to the setting of the timer value, but check here anyways
@@ -265,11 +268,13 @@ class ImageUtils(EutesterTestCase):
                 ret.stop = True
                 return ret
     
-        if re.match('[P|p]art:',buf):
-            sys.stdout.write("\r\x1b[K"+str(buf))
+        if re.search('[P|p]art:',buf):
+            sys.stdout.write("\r\x1b[K"+str(buf).strip())
             sys.stdout.flush()
             check_image_stage=False
         else: 
+            #Print command output and write to ssh.cmd['output'] buffer
+            ret.buf = buf
             self.debug(str(buf))
         #Command is still going, reset timer thread to intervaltimeout, provide arguments for  next time this is called from ssh cmd.
         ret.stop = False
@@ -323,26 +328,30 @@ class ImageUtils(EutesterTestCase):
                             ):
          
         self.debug('create_emi_from_url:'+str(url)+", starting...")
-        if filepath is None:
+        if filepath is None and bundle_manifest is None and upload_manifest is None:
             filename = str(url).split('/')[-1]
             dir = destpath or self.destpath
             filepath = dir + '/' + str(filename)
             filesize = self.wget_image(url, destpath=destpath, component=component, user=wget_user, 
                                        password=wget_password, retryconn=wget_retryconn, timepergig=timepergig)
+            
         self.debug('create_emi_from_url: Image downloaded to machine, now bundling image...')
-        if bundle_manifest is None:
+        if bundle_manifest is None and upload_manifest is None:
             bundle_manifest = self.bundle_image(filepath, component=component, component_credpath=component_credpath, 
-                              prefix=prefix, kernel=kernel, ramdisk=ramdisk, block_device_mapping=block_device_mapping, 
-                              destination=destination, debug=debug, interbundle_timeout=interbundle_timeout, time_per_gig=time_per_gig)
+                                                prefix=prefix, kernel=kernel, ramdisk=ramdisk, block_device_mapping=block_device_mapping, 
+                                                destination=destination, debug=debug, interbundle_timeout=interbundle_timeout, 
+                                                time_per_gig=time_per_gig)
+        
         self.debug('create_emi_from_url: Image bundled, now uploading...')
         if upload_manifest is None:
             upload_manifest = self.upload_bundle(bundle_manifest, component=component, bucketname=bucketname, 
                                                  component_credpath=component_credpath, debug=debug, interbundle_timeout=interbundle_timeout, 
-                                                 timeout=timeout, uniquebucket=uniquebucket)
+                                                 timeout=upload_timeout, uniquebucket=uniquebucket)
+        
         self.debug('create_emi_from_url: Now registering...')
         emi = self.tester.register_image(image_location=upload_manifest, rdn=root_device_name, 
-                                   description=description, bdmdev=block_device_mapping, 
-                                   name=name, ramdisk=ramdisk, kernel=kernel)
+                                         description=description, bdmdev=block_device_mapping, 
+                                         name=name, ramdisk=ramdisk, kernel=kernel)
         self.debug('create_emi_from_url: Done, image registered as:'+str(emi))
         return emi
     

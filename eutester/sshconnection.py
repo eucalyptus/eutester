@@ -66,12 +66,12 @@ class SshCbReturn():
         if cb statuscode is != -1 cmd status will return with this value
         if cb nextargs is set, the next time cb is called these args will be passed instead
     '''
-    def __init__(self, stop=False, statuscode=-1, settimer=0, nextargs=[]):
+    def __init__(self, stop=False, statuscode=-1, settimer=0, buf=None,nextargs=[]):
         self.stop = stop
         self.statuscode = statuscode
         self.settimer = settimer
         self.nextargs = nextargs
-
+        self.buf = buf
 
 class SshConnection():
     cmd_timeout_err_code = -100
@@ -214,6 +214,7 @@ class SshConnection():
             fd = chan.fileno()
             chan.setblocking(0)
             while True and chan.closed == 0:
+                time.sleep(0.01)
                 try:
                     rl, wl, xl = select.select([fd],[],[],0.0)
                 except select.error:
@@ -246,6 +247,8 @@ class SshConnection():
                                     t.cancel()
                                     t = Timer(cbreturn.settimer, self.ssh_sys_timeout,[chan, time.time(),cmd] )
                                     t.start()
+                                if cbreturn.buf:
+                                    output += cbreturn.buf
                         else:
                             #if no call back then append output to return dict and handle debug
                             output += new
