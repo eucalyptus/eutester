@@ -104,7 +104,7 @@ class ImageUtils(EutesterTestCase):
         machine.wget_remote_image(url, path=destpath, user=user, password=password, retryconn=retryconn, timeout=timeout)
         return size
     
-    def get_manifest_part_count(self, component, path, timeout=30):
+    def get_manifest_part_count(self, path, component=None, timeout=30):
         machine = component or self.component
         cmd = 'cat '+str(path)
         out = machine.cmd(cmd,timeout=timeout, verbose=True)
@@ -206,7 +206,7 @@ class ImageUtils(EutesterTestCase):
         upmanifest = None
         part_count = -1
         try:
-            part_count = self.get_manifest_part_count(component, path)
+            part_count = self.get_manifest_part_count(manifest, component=component)
         except:
             pass
         self.debug('Attempting to upload_bundle:'+str(manifest)+", bucketname:"+str(bucketname)+", part_count:"+str(part_count))
@@ -282,9 +282,6 @@ class ImageUtils(EutesterTestCase):
         ret.nextargs =[cmdtimeout,parttimeout,starttime,time.time(),check_image_stage]
         return ret
     
-             
-    
-    
     def register_image(self,
                        manifest,
                        prefix=None,
@@ -296,9 +293,7 @@ class ImageUtils(EutesterTestCase):
                        block_device_mapping=None,
                        destination=None,
                        debug=False):
-        '''
-        convience method to register an s3 image manifest
-        '''
+        '''convience method to register an s3 image manifest'''
         return self.tester.register_image( manifest, rdn=root_device_name, description=description, bdmdev=block_device_mapping, name=name, ramdisk=ramdisk, kernel=kernel)
     
     
