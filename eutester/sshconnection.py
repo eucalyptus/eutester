@@ -56,6 +56,22 @@ from threading import Timer
 from boto.ec2 import keypair
 import select
 
+class SshCbReturn():
+    '''
+    Used to return data from an ssh cmd callback method that can be used to handle output as it's rx'd instead of...  
+    waiting for the cmd to finish and returned buffer. See SshConnection.cmd() for more info.
+    The call back must return type SshCbReturn.   
+        If cb returns stop==True, recv loop will end, and channel will be closed, cmd will return. 
+        if cb settimer is > 0, timer timeout will be adjusted for this time
+        if cb statuscode is != -1 cmd status will return with this value
+        if cb nextargs is set, the next time cb is called these args will be passed instead
+    '''
+    def __init__(self, stop=False, statuscode=-1, settimer=0, nextargs=[]):
+        self.stop = stop
+        self.statuscode = statuscode
+        self.settimer = settimer
+        self.nextargs = nextargs
+
 
 class SshConnection():
     cmd_timeout_err_code = -100
@@ -144,7 +160,7 @@ class SshConnection():
         return self.cmd(cmd, verbose=verbose, timeout=timeout, listformat=listformat )['output']
     
     
-    def cmd(self, cmd, verbose=None, timeout=120, readtimeout=20, listformat=False, cb=None, cbargs=[]):
+    def cmd(self, cmd, verbose=None, timeout=120, readtimeout=20, listformat=False, cb=None, cbargs=[] ):
         """ 
         Runs a command 'cmd' within an ssh connection. 
         Upon success returns dict representing outcome of the command.
@@ -162,7 +178,11 @@ class SshConnection():
         cb - optional - callback, method that can be used to handle output as it's rx'd instead of...  
                         waiting for the cmd to finish and returned buffer. 
                         Must accept string buffer, and return an integer to be used as cmd status. 
-                        If cb returns False, recv loop will end, and channel will be closed.   
+                        Must return type 'sshconnection.SshCbReturn'
+                        If cb returns stop, recv loop will end, and channel will be closed.
+                        if cb settimer is > 0, timer timeout will be adjusted for this time
+                        if cb statuscode is != -1 cmd status will return with this value
+                        if cb nextargs is set, the next time cb is called these args will be passed instead
         cbargs - optional - list of arguments to be appended to output buffer and passed to cb
         
         
@@ -178,6 +198,7 @@ class SshConnection():
         t = None #used for timer 
         start = time.time()
         output = []
+        cbnextargs = []
         status = None
         if verbose:
             self.debug( "[" + self.username +"@" + str(self.host) + "]# " + cmd)
@@ -201,17 +222,36 @@ class SshConnection():
                     new = chan.recv(1024)
                     if new:
                         #We have data to handle...
-                        output += new
-                        if verbose:
-                            self.debug(str(new))
-                        #Run call back if there is one
+                        
+                        #Run call back if there is one, let call back handle data read in
                         if cb is not None:
                             #If cb returns false break, end rx loop, return cmd outcome/output dict. 
-                            if not cb(new,*cbargs):
+                            cbreturn = SshCbReturn()
+                            cbreturn = cb(new,*cbargs)
+                            #Let the callback control whether or not to continue
+                            if cbreturn.stop:
                                 cbfired=True
-                                status = self.lastexitcode = chan.recv_exit_status()
+                                #Let the callback dictate the return code, otherwise -1 for connection err may occur
+                                if cbreturn.statuscode != -1:
+                                    status = cbreturn.statuscode
+                                else:
+                                    status = self.lastexitcode = chan.recv_exit_status()
                                 chan.close()
                                 break
+                            else:
+                                #Let the callback update its calling args if needed
+                                cbargs = cbreturn.nextargs or cbargs
+                                #Let the callback update/reset the timeout if needed
+                                if cbreturn.settimer > 0: 
+                                    t.cancel()
+                                    t = Timer(cbreturn.settimer, self.ssh_sys_timeout,[chan, time.time(),cmd] )
+                                    t.start()
+                        else:
+                            #if no call back then append output to return dict and handle debug
+                            output += new
+                            if verbose:
+                                #Dont print line by line output if cb is used, let cb handle that 
+                                self.debug(str(new))
                     else:
                         status = self.lastexitcode = chan.recv_exit_status()
                         chan.close()
