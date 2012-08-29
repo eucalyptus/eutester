@@ -24,15 +24,10 @@ class ImageUtils(EutesterTestCase):
     
     def __init__(self, 
                  tester=None, 
-                 config_file='../input/2b_tested.lst', 
+                 config_file=None, 
                  password="foobar", 
                  credpath=None, 
-                 destpath='/disk1/storage/', 
-                 url=None, 
-                 zones=None, 
-                 keypair=None, 
-                 group=None, 
-                 emi=None,
+                 destpath='/disk1/storage/',  
                  time_per_gig = 300,
                  eof=True,
                  work_component=None):
@@ -47,10 +42,8 @@ class ImageUtils(EutesterTestCase):
         
         self.destpath = str(destpath)
         self.time_per_gig = time_per_gig
-        self.emi = emi
         self.credpath=credpath or self.tester.credpath
-        self.url = url
-        #self.zonelist = []
+     
 
     def getHttpHeader(self, url):
         url = url.replace('http://','')
@@ -293,7 +286,7 @@ class ImageUtils(EutesterTestCase):
                        block_device_mapping=None,
                        destination=None,
                        debug=False):
-        '''convience method to register an s3 image manifest'''
+        '''convience method to register an s3 image manifest, calls eutester main method'''
         return self.tester.register_image( manifest, rdn=root_device_name, description=description, bdmdev=block_device_mapping, name=name, ramdisk=ramdisk, kernel=kernel)
     
     
