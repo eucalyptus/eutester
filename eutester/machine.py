@@ -117,14 +117,19 @@ class Machine:
     def interrupt_network(self, time = 120, interface = "eth0"):
         self.sys("ifdown " + interface + " && sleep " + str(time) + " && ifup eth0",  timeout=3)
         
-    def sys(self, cmd, verbose=True, timeout=120, listformat=True):
+    def sys(self, cmd, verbose=True, timeout=120, listformat=True, code=None):
         '''
         Issues a command against the ssh connection to this instance
         Returns a list of the lines from stdout+stderr as a result of the command
         '''
-        return self.cmd(cmd, verbose=verbose, timeout=timeout, listformat=listformat)['output']
+        out = self.cmd(cmd, verbose=verbose, timeout=timeout, listformat=listformat)
+        output = out['output']
+        if code is not None:
+            if out['status'] != code:
+                self.debug(output)
+                raise Exception('Cmd:'+str(cmd)+' failed with status code:'+str(out['status']))
+        return output
     
-
     def cmd(self, cmd, verbose=True, timeout=120, listformat=False, cb=None, cbargs=[]):
         '''
         Issues a command against the ssh connection to this instance
@@ -344,7 +349,7 @@ class Machine:
         '''
         size = int(self.get_df_info(path=path)['available'])
         return (size/unit)        
-        
+    
     def poll_log(self, log_file="/var/log/messages"):
         self.debug( "Starting to poll " + log_file )     
         self.log_channel = self.ssh.invoke_shell()
