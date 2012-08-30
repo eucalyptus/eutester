@@ -7,9 +7,9 @@
 #                        #
 ##########################
 #
-#    "running_test" - verify instance goes to running 
-#    "metadata_test" - verify basic cloud metadata service can be used
-#    "user_test" = verify that only login users provided in userlist exist
+#    "running_test" - verify image-instance goes to running 
+#    "metadata_test" - verify basic cloud metadata service can be used from this image-instance
+#    "user_test" = verify that only login users provided in userlist exist on this image-instance
 #    "root_test" - verify that a root password is not set, unless one is given
 #    "attach_volume_test" - verify volcount number of volumes can be attached, and appear within this instance
 #    "detach_volume_test" - verify attached volumes can be detached, guest dev is removed
@@ -109,7 +109,7 @@ if __name__ == "__main__":
     parser.add_argument('--group', 
                         help="group to use when launching instances within the test", default=None) 
     parser.add_argument('--config',
-                       help='path to config file', default='../input/2btested.lst') 
+                       help='path to config file', default=None) 
     parser.add_argument('--vmtype',
                        help='vmtype to run this image with', default=None) 
     parser.add_argument('--rootpass',
@@ -130,11 +130,14 @@ if __name__ == "__main__":
     '''
     Assign parsed arguments to this testcase globals
     '''
-    
-    #if file was not provided or is not found
-    if not os.path.exists(args.config):
-        print "Error: Mandatory Config File '"+str(args.config)+"' not found."
-        parser.print_help()
+    if args.config is not None:
+        #if file was not provided or is not found
+        if not os.path.exists(args.config):
+            print "Error: Mandatory Config File '"+str(args.config)+"' not found."
+            parser.print_help()
+            exit(1)
+    elif args.credpath is None:
+        print "Error either config file or credpath needs to be provided"
         exit(1)
     zone = args.zone
     config_file = args.config

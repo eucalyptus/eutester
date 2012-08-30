@@ -498,10 +498,9 @@ class EC2ops(Eutester):
         self.debug("Image now registered as " + image_id)
         return image_id
         
-    def register_image( self, snap_id, rdn=None, description=None, image_location=None, windows=False, bdmdev=None, name=None, ramdisk=None, kernel=None ):
+    def register_image( self, image_location, rdn=None, description=None, bdmdev=None, name=None, ramdisk=None, kernel=None ):
         '''
-        Register an image snapshot
-        snap_id        (optional string) snapshot id
+        Register an image based on the s3 stored manifest location
         name           (optional string) name of image to be registered
         description    (optional string) description of image to be registered
         bdm            (optional block_device_mapping) block-device-mapping object for image
