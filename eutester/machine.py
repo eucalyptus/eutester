@@ -37,6 +37,45 @@ from threading import Thread
 import re
 import os
 import sys
+from repoutils import RepoUtils
+
+class DistroName:
+    ubuntu = "ubuntu"
+    rhel = "rhel"
+    centos = "centos"
+    fedora = "fedora"
+    debian = "debian"
+    vmware = "vmware"
+
+class DistroRelease:
+    def __init__(self, distro_name, distro_number,  distro_release = None, package_manager= None):
+        self.name = distro_name
+        self.number = distro_number
+        self.release = distro_release
+        self.package_manager = package_manager
+        
+class Distro:
+    ubuntu_lucid = DistroRelease(DistroName.ubuntu,"10.04",  "lucid",  package_manager="apt")
+    ubuntu_precise = DistroRelease(DistroName.ubuntu,  "12.04", "precise",  package_manager="apt")
+    debian_squeeze = DistroRelease(DistroName.debian, "6", "squeeze",  package_manager="apt")
+    debian_wheezy = DistroRelease(DistroName.debian, "7", "wheezy",  package_manager="apt")
+    rhel_6 = DistroRelease(DistroName.rhel, "6",  package_manager="yum")
+    centos_6 = DistroRelease(DistroName.centos, "6",  package_manager="yum")
+    rhel_5 = DistroRelease(DistroName.rhel, "5",  package_manager="yum")
+    centos_5 = DistroRelease(DistroName.centos, "5",  package_manager="yum")
+    fedora_18 = DistroRelease(DistroName.fedora, "18",  package_manager="yum")
+    vmware_5 = DistroRelease(DistroName.vmware, "5")
+    vmware_4 = DistroRelease(DistroName.vmware, "4")
+
+    @classmethod
+    def get_distros(Distro):
+        distros = []
+        for distro in Distro.__dict__:
+            if isinstance(Distro.__dict__[distro], DistroRelease):
+                distros.append(Distro.__dict__[distro])
+        return distros
+        
+    
 
 class Machine:
     def __init__(self, 
@@ -56,8 +95,9 @@ class Machine:
                  verbose = True ):
         
         self.hostname = hostname
-        self.distro = distro
-        self.distro_ver = distro_ver
+        self.distro = self.convert_to_distro(distro, distro_ver)
+        if self.distro.package_manager is not None:
+            self.repo_utils = RepoUtils(self, self.distro.package_manager)
         self.arch = arch
         self.source = source
         self.components = components
@@ -74,6 +114,7 @@ class Machine:
         self.log_active = {}
         self.wget_last_status = 0 
         
+            
         if self.debugmethod is None:
             logger = eulogger.Eulogger(identifier= str(hostname) + ":" + str(components))
             self.debugmethod = logger.log.debug
@@ -87,6 +128,14 @@ class Machine:
                                                     debugmethod=self.debugmethod,
                                                     verbose=True)
             self.sftp = self.ssh.connection.open_sftp()
+            
+    def convert_to_distro(self, distro_name, distro_release):
+        distro_name = distro_name.lower()
+        distro_release = distro_release.lower()
+        for distro in Distro.get_distros():
+            if re.search( distro.name, distro_name,re.IGNORECASE) and (re.search( distro.release, distro_release,re.IGNORECASE) or re.search( distro.number, distro_release,re.IGNORECASE)) :
+                return distro
+        raise Exception("Unable to find distro " + str(distro_name) + " and version " + str(distro_release) + " for hostname " + str(self.hostname))
     
     def refresh_ssh(self):
         self.ssh.refresh_connection()
@@ -335,6 +384,24 @@ class Machine:
                     self.debug(str('DF FIELD: '+fields[x])+' = '+str(value))
                 x += 1
         return ret
+    
+    def upgrade(self, package=None):
+        self.repo_utils.package_manager.upgrade(package)
+    
+    def add_repo(self, url):
+        self.repo_utils.package_manager.add_repo(url)
+    
+    def install(self, package):
+        self.repo_utils.package_manager.install(package)
+    
+    def update_repos(self):
+        self.repo_utils.package_manager.update_repos(package)
+    
+    def get_package_info(self):
+        self.repo_utils.package_manager.get_package_info(package)
+    
+    def get_installed_packages(self):
+        self.repo_utils.package_manager.get_installed_packages(package)           
             
     def get_available(self, path, unit=1):
         '''
