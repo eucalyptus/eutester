@@ -21,7 +21,7 @@ If easy_install is not available in your environment use your package manager to
     yum install python-setuptools
     apt-get install python-setuptools
 
-For development purposes you can then checkout the clone the code from github and then reinstall with your changes
+For development purposes you can then clone the code from github and then reinstall with your changes
 
     git clone https://github.com/eucalyptus/eutester.git
     cd eutester
