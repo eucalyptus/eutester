@@ -214,53 +214,54 @@ class SshConnection():
             fd = chan.fileno()
             chan.setblocking(0)
             while True and chan.closed == 0:
-                time.sleep(0.01)
+                time.sleep(0.05)
                 try:
                     rl, wl, xl = select.select([fd],[],[],0.0)
                 except select.error:
                     break
                 if len(rl) > 0:
-                    new = chan.recv(1024)
-                    if new:
-                        #We have data to handle...
-                        
-                        #Run call back if there is one, let call back handle data read in
-                        if cb is not None:
-                            #If cb returns false break, end rx loop, return cmd outcome/output dict. 
-                            cbreturn = SshCbReturn()
-                            cbreturn = cb(new,*cbargs)
-                            #Let the callback control whether or not to continue
-                            if cbreturn.stop:
-                                cbfired=True
-                                #Let the callback dictate the return code, otherwise -1 for connection err may occur
-                                if cbreturn.statuscode != -1:
-                                    status = cbreturn.statuscode
+                    while chan.recv_ready():
+                        new = chan.recv(1024)
+                        if new is not None:
+                            #We have data to handle...
+                            
+                            #Run call back if there is one, let call back handle data read in
+                            if cb is not None:
+                                #If cb returns false break, end rx loop, return cmd outcome/output dict. 
+                                cbreturn = SshCbReturn()
+                                cbreturn = cb(new,*cbargs)
+                                #Let the callback control whether or not to continue
+                                if cbreturn.stop:
+                                    cbfired=True
+                                    #Let the callback dictate the return code, otherwise -1 for connection err may occur
+                                    if cbreturn.statuscode != -1:
+                                        status = cbreturn.statuscode
+                                    else:
+                                        status = self.lastexitcode = chan.recv_exit_status()
+                                    chan.close()
+                                    break
                                 else:
-                                    status = self.lastexitcode = chan.recv_exit_status()
-                                chan.close()
-                                break
+                                    #Let the callback update its calling args if needed
+                                    cbargs = cbreturn.nextargs or cbargs
+                                    #Let the callback update/reset the timeout if needed
+                                    if cbreturn.settimer > 0: 
+                                        t.cancel()
+                                        t = Timer(cbreturn.settimer, self.ssh_sys_timeout,[chan, time.time(),cmd] )
+                                        t.start()
+                                    if cbreturn.buf:
+                                        output += cbreturn.buf
                             else:
-                                #Let the callback update its calling args if needed
-                                cbargs = cbreturn.nextargs or cbargs
-                                #Let the callback update/reset the timeout if needed
-                                if cbreturn.settimer > 0: 
-                                    t.cancel()
-                                    t = Timer(cbreturn.settimer, self.ssh_sys_timeout,[chan, time.time(),cmd] )
-                                    t.start()
-                                if cbreturn.buf:
-                                    output += cbreturn.buf
+                                #if no call back then append output to return dict and handle debug
+                                output += new
+                                if verbose:
+                                    #Dont print line by line output if cb is used, let cb handle that 
+                                    self.debug(str(new))
                         else:
-                            #if no call back then append output to return dict and handle debug
-                            output += new
-                            if verbose:
-                                #Dont print line by line output if cb is used, let cb handle that 
-                                self.debug(str(new))
-                    else:
-                        status = self.lastexitcode = chan.recv_exit_status()
-                        chan.close()
-                        t.cancel()
-                        break
-            
+                            status = self.lastexitcode = chan.recv_exit_status()
+                            chan.close()
+                            t.cancel()
+                            break
+                
             if (listformat):
                 #return output as list of lines
                 output = output.splitlines()
