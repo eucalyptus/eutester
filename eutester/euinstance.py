@@ -783,7 +783,7 @@ class EuInstance(Instance):
         password = None
         out = self.sys("cat /etc/passwd | grep '^"+str(username)+"'")
         if out != []:
-            print "pwd out:"+str(out[0])
+            self.debug("pwd out:"+str(out[0]))
             if (str(out[0]).split(":")[1] == "x"):
                 out = self.sys("cat /etc/shadow | grep '^"+str(username)+"'")
                 if out != []:

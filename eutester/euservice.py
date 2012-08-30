@@ -165,7 +165,7 @@ class EuserviceManager(object):
                 raise IndexError("Did not receive proper response from describe services when looking for " + str(type))
         except Exception, e:
             if len(self.tester.get_component_machines("clc")) is 1:
-                raise Exception("Unable to get service information from the only clc: " + self.tester.clc.hostname )
+                raise Exception("Unable to get service information from the only clc: " + self.tester.clc.hostname+", err:" +str(e))
             if attempt_both:
                 self.tester.swap_clc()
                 describe_services = self.tester.clc.sys(self.eucaprefix + "/usr/sbin/euca-describe-services " + str(type)  + " | grep SERVICE "  + str(partition)  , timeout=15)
