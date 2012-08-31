@@ -1,3 +1,4 @@
+#!/usr/bin/python
 import unittest
 import re
 import os
@@ -7,11 +8,25 @@ from instancetest import InstanceBasics
 from eucaops import Eucaops
 from eutester import xmlrunner
 
-class BFEBSBasics(InstanceBasics):
+arg_credpath = None
+arg_imgurl = None
 
-    def RegisterImage(self, bfebs_img_url = "<image-url>"):
+class BFEBSBasics(InstanceBasics):
+    def setUp(self, credpath=None):
+        if credpath is None:
+            credpath = arg_credpath
+        super(BFEBSBasics, self).setUp(credpath)
+        
+    def RegisterImage(self, bfebs_img_url = None, zone= None):
         '''Register a BFEBS snapshot'''
-        self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name)
+        if zone is None:
+            zone = self.zone
+        if bfebs_img_url is None:
+            if arg_imgurl is not None:
+                bfebs_img_url = arg_imgurl
+            else:
+                raise Exception("No image url provided when attempting to register a BFEBS image")
+        self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name, zone=zone)
         for instance in self.reservation.instances:
             self.assertTrue(self.create_attach_volume(instance, 2)) 
             instance.sys("curl " + bfebs_img_url + " > " + self.volume_device, timeout=800)
@@ -20,17 +35,20 @@ class BFEBSBasics(InstanceBasics):
             image_id = self.tester.register_snapshot(snapshot)
         self.image = self.tester.get_emi(image_id)
      
-    def LaunchImage(self):
+    def LaunchImage(self, zone= None):
         '''Launch a BFEBS image'''
-        if self.image is None:
-            self.image = self.tester.get_emi(root_device_type="ebs")
-        self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name)
+        if zone is None:
+         	zone = self.zone
+        self.image = self.tester.get_emi(root_device_type="ebs")
+        self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name, zone=zone)
         self.assertTrue( self.tester.ping(self.reservation.instances[0].public_dns_name), 'Could not ping instance')
         
-    def StopStart(self):
+    def StopStart(self, zone = None):
         '''Launch a BFEBS instance, stop it then start it again'''
+        if zone is None:
+         	zone = self.zone
         self.image = self.tester.get_emi(root_device_type="ebs")
-        self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name)
+        self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name, zone=zone)
         self.assertTrue(self.tester.stop_instances(self.reservation))
         self.assertFalse( self.tester.ping(self.reservation.instances[0].public_dns_name, poll_count=2), 'Was able to ping stopped instance')
         self.assertTrue(self.tester.start_instances(self.reservation))
@@ -67,8 +85,10 @@ class BFEBSBasics(InstanceBasics):
         self.assertEqual(self.failure, 0, str(self.failure) + " Tests failed out of " + str(total))
         self.failure = 0
         
-    def AddressIssue(self):
-        self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name)
+    def AddressIssue(self, zone = None):
+        if zone is None:
+    	 	     zone = self.zone
+        self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name, zone=zone)
         original_ip = ""
         for instance in self.reservation.instances:
             original_ip = instance.ip_address
@@ -94,9 +114,13 @@ class BFEBSBasics(InstanceBasics):
 if __name__ == "__main__":
     ## If given command line arguments, use them as test names to launch
     parser = argparse.ArgumentParser(description='Parse test suite arguments.')
+    parser.add_argument('--credpath', default=".eucarc")
     parser.add_argument('--xml', action="store_true", default=False)
     parser.add_argument('--tests', nargs='+', default= ["RegisterImage","LaunchImage", "StopStart","MultipleBFEBSInstances","ChurnBFEBS"])
+    parser.add_argument('--imgurl')
     args = parser.parse_args()
+    arg_credpath = args.credpath
+    arg_imgurl = args.imgurl
     for test in args.tests:
         if args.xml:
             try:

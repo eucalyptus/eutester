@@ -1,5 +1,5 @@
 #!/usr/bin/python
-from eutester import Eutester
+from eucaops import Eucaops
 import argparse
 if __name__ == "__main__":
     ## If given command line arguments, use them as test names to launch
@@ -7,4 +7,4 @@ if __name__ == "__main__":
     parser.add_argument('--config', default="../input/2b_tested.lst")
     parser.add_argument("--password",default='foobar')
     args = parser.parse_args()
-    tester = Eutester(config_file=args.config, password=args.password)       
+    tester = Eucaops(config_file=args.config, password=args.password)       

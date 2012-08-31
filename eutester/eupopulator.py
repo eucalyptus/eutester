@@ -37,15 +37,14 @@ Created on Apr 25, 2012
 import pickle
 import ConfigParser
 import random 
-
+import os
+import string
 class EuPopulator(object):
     '''
     This class is intended to read in a config file using ConfigParser, then create resources based on the config file
     It is also able to serialize the current resources in a cloud into a file, read in that file and verify that the resources still
     exist in the same way. Serialization is done with Pickle. 
     '''
-    
-    
 
     def __init__(self, eucaops, config_file = None):
         '''
@@ -60,12 +59,15 @@ class EuPopulator(object):
             self.defaults.add_section('global')
             partition = self.tester.ec2.get_all_zones()[0].name
             self.defaults.set('global', 'partition', partition)
-            
             ### Volume 
             self.defaults.add_section('volumes')
             self.defaults.set('volumes', 'count', '2')
             self.defaults.set('volumes', 'min_size', '1')
             self.defaults.set('volumes', 'max_size', '3')
+            
+            ### Addresses
+            self.defaults.add_section('addresses')
+            self.defaults.set('addresses', 'count', '2')
             
             ### Snapshot 
             self.defaults.add_section('snapshots')
@@ -77,12 +79,12 @@ class EuPopulator(object):
             ### Keypair 
             self.defaults.add_section('keypairs')
             self.defaults.set('keypairs', 'count', '2')
-            self.defaults.set('keypairs', 'prefix', 'key-')
+            self.defaults.set('keypairs', 'prefix', self.prefix_generator())
             
             ### Groups 
             self.defaults.add_section('security_groups')
             self.defaults.set('security_groups', 'count', '2')
-            self.defaults.set('security_groups', 'prefix', 'sg-')
+            self.defaults.set('security_groups', 'prefix', self.prefix_generator())
             self.defaults.set('security_groups', 'port_min', '22')
             self.defaults.set('security_groups', 'port_max', '80')
             self.defaults.set('security_groups', 'protocol', 'tcp')
@@ -91,10 +93,10 @@ class EuPopulator(object):
             ### Buckets
             self.defaults.add_section('buckets')
             self.defaults.set('buckets', 'count', '2')
-            self.defaults.set('buckets', 'prefix', 'bukkit-')
+            self.defaults.set('buckets', 'prefix', self.prefix_generator())
             self.defaults.set('buckets', 'add_keys', 'true')
             self.defaults.set('buckets', 'key_count', '2')
-            self.defaults.set('buckets', 'key_prefix', 'key-')
+            self.defaults.set('buckets', 'key_prefix', self.prefix_generator())
             self.config = self.defaults
 
         else:
@@ -132,7 +134,12 @@ class EuPopulator(object):
             size = random.randint(min_size, max_size)
             self.tester.create_volume(partition, size)
         
-    
+    def addresses(self):
+        print "Allocating addreses"
+        addr_count =  self.config.getint("addresses", "count")
+        for i in xrange(vol_count):
+            self.tester.allocate_address()
+        
     def snapshots(self):
         print "Creating snapshots"
         partition = self.config.get("global","partition")
@@ -185,6 +192,8 @@ class EuPopulator(object):
     def depopulate(self):
         self.tester.cleanup_artifacts()  
     
+    def prefix_generator(self, size=6, chars=string.ascii_lowercase + string.digits):
+        return ''.join(random.choice(chars) for x in range(size))
     
     def serialize_resources(self, output_file="cloud_objects.dat"):
         '''
