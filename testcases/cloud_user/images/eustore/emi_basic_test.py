@@ -109,7 +109,7 @@ if __name__ == "__main__":
     parser.add_argument('--group', 
                         help="group to use when launching instances within the test", default=None) 
     parser.add_argument('--config',
-                       help='path to config file', default='../input/2btested.lst') 
+                       help='path to config file', default=None) 
     parser.add_argument('--vmtype',
                        help='vmtype to run this image with', default=None) 
     parser.add_argument('--rootpass',
@@ -130,11 +130,14 @@ if __name__ == "__main__":
     '''
     Assign parsed arguments to this testcase globals
     '''
-    
-    #if file was not provided or is not found
-    if not os.path.exists(args.config):
-        print "Error: Mandatory Config File '"+str(args.config)+"' not found."
-        parser.print_help()
+    if args.config is not None:
+        #if file was not provided or is not found
+        if not os.path.exists(args.config):
+            print "Error: Mandatory Config File '"+str(args.config)+"' not found."
+            parser.print_help()
+            exit(1)
+    elif args.credpath is None:
+        print "Error either config file or credpath needs to be provided"
         exit(1)
     zone = args.zone
     config_file = args.config
