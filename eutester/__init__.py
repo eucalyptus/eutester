@@ -70,8 +70,19 @@ EC2RegionData = {
 
 class Eutester(object):
     def __init__(self, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, region=None, ec2_ip=None, s3_ip=None, boto_debug=0):
-        """  
-        This is the constructor for a eutester object, it takes care of setting up the connections that will be required for a test to run. 
+        """
+        This class is intended to setup boto connections for the
+        various services that the *ops classes will use.
+        :type: str
+        :param credpath: Path to a valid eucarc file.
+        :param aws_access_key_id: Used in conjuction with aws_secret_access_key allows for creation of connections without needing a credpath.
+        :param aws_secret_access_key: Used in conjuction with aws_access_key_id allows for creation of connections without needing a credpath.
+        :param region: When connecting to Amazon EC2 allows you to point to a specific region.
+        :param ec2_ip: Hostname or IP of the EC2 endpoint to connect to. Can be used in the absence of region.
+        :param s3_ip: Hostname or IP of the S3 endpoint to connect to.
+        :param boto_debug: Hostname or IP of the S3 endpoint to connect to.
+        :rtype: :class:`eutester.Eutester` or ``None``
+        :return: A Eutester object with all connections that were able to be created. Currently EC2, S3, IAM, and STS.
         """
         ### Default values for configuration
         self.boto_debug = boto_debug
