@@ -172,7 +172,7 @@ class EC2ops(Eutester):
         if group_name is None:
             group_name = "group-" + str(int(time.time()))
         if self.check_group(group_name):
-            if fail_if_exists == True:
+            if fail_if_exists:
                 self.fail(  "Group " + group_name + " already exists")
             else:
                 self.debug(  "Group " + group_name + " already exists")
@@ -439,7 +439,7 @@ class EC2ops(Eutester):
 
         snapshot = self.ec2.create_snapshot( volume_id )
         self.debug("Waiting for snapshot (" + snapshot.id + ") creation to complete")
-        while (poll_count > 0) and ((timeout == 0) or (elapsed <= timeout)):
+        while (poll_count > 0) and (timeout == 0 or elapsed <= timeout):
             time.sleep(poll_interval)
             polls += 1
             snapshot.update()
