@@ -29,11 +29,12 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 # Author: vic.iglesias@eucalyptus.com
+import select
+import threading
+import time
 
 import eulogger
 import sshconnection
-from sshconnection import SshCbReturn
-from threading import Thread
 import re
 import os
 import sys
@@ -141,11 +142,11 @@ class Machine:
         self.ssh.refresh_connection()
         
     def debug(self,msg):
-        '''
+        """
         Used to print debug, defaults to print() but over ridden by self.debugmethod if not None
         msg - mandatory -string, message to be printed
-        '''
-        if ( self.verbose is True ):
+        """
+        if self.verbose is True:
                 self.debugmethod(msg)
                 
     def refresh_connection(self):
@@ -249,10 +250,10 @@ class Machine:
         return self.sftp.lstat(path).FLAG_PERMISSIONS 
     
     def get_file_groupid(self, path):
-        returnself.sftp.lstat(path).st_gid
+        return self.sftp.lstat(path).st_gid
         
     def get_file_userid(self,path):
-        self.sftp.lstat(path).st_uid
+        return self.sftp.lstat(path).st_uid
     
     def get_masked_pass(self, pwd, firstlast=True, charcount=True, show=False):
         '''
@@ -274,7 +275,7 @@ class Machine:
             if (x == 0 or x == len(pwd)) and firstlast:
                 ret = ret+pwd[x]
             else:
-                ret = ret+"*"
+                ret += "*"
             
     def ping_check(self,host):
         out = self.ping_cmd(host)
@@ -285,7 +286,7 @@ class Machine:
     def ping_cmd(self, host, count=2, pingtimeout=10, commandtimeout=120, listformat=False, verbose=True):
         cmd = 'ping -c ' +str(count)+' -t '+str(pingtimeout)
         if verbose:
-            cmd = cmd + ' -v '
+            cmd += ' -v '
         cmd = cmd + ' '+ str(host)
         out = self.cmd(cmd, verbose=verbose, timeout=commandtimeout, listformat=listformat)
         if verbose:
@@ -296,9 +297,9 @@ class Machine:
         
         
     def dump_netfail_info(self,ip=None, mac=None, pass1=None, pass2=None, showpass=True, taillength=50):
-        '''
-        Debug method to provide potentially helpful info from current machine when debugging connectivity issues. 
-        '''
+        """
+        Debug method to provide potentially helpful info from current machine when debugging connectivity issues.
+        """
         self.debug('Attempting to dump network information, args: ip:'+str(ip)+' mac:'+str(mac)+' pass1:'+self.get_masked_pass(pass1,show=True)+' pass2:'+self.get_masked_pass(pass2,show=True))
         self.ping_cmd(ip,verbose=True)
         self.sys('arp -a')
@@ -326,7 +327,7 @@ class Machine:
         if password:
             cmd = cmd + " --password " + str(password)
         if retryconn:
-            cmd = cmd + ' --retry-connrefused '
+            cmd += ' --retry-connrefused '
         cmd = cmd + ' ' + str(url)
         self.debug('wget_remote_image cmd: '+str(cmd))
         ret = self.cmd(cmd, timeout=timeout, cb=self.wget_status_cb )
@@ -354,19 +355,19 @@ class Machine:
             
         
     def get_df_info(self, path=None, verbose=True):
-        '''
+        """
         Return df's output in dict format for a given path.
         If path is not given will give the df info for the current working dir used in the ssh
-        session this command is executed in (ie: /home/user or /root). 
+        session this command is executed in (ie: /home/user or /root).
         path - optional -string, used to specifiy path to use in df command. Default is PWD of ssh shelled command
-        verbose - optional -boolean, used to specify whether or debug is printed during this command. 
+        verbose - optional -boolean, used to specify whether or debug is printed during this command.
         Example:
             dirpath = '/disk1/storage'
             dfout = self.get_df_info(path=dirpath)
             available_space = dfout['available']
-            mounted_on = dfout['mounted']   
+            mounted_on = dfout['mounted']
             filesystem = dfout['filesystem']
-        '''
+        """
         ret = {}
         if path is None:
             path = '${PWD}'
@@ -398,28 +399,28 @@ class Machine:
     
     def install(self, package):
         self.repo_utils.package_manager.install(package)
-    
+
     def update_repos(self):
-        self.repo_utils.package_manager.update_repos(package)
+        self.repo_utils.package_manager.update_repos()
     
     def get_package_info(self):
-        self.repo_utils.package_manager.get_package_info(package)
+        self.repo_utils.package_manager.get_package_info()
     
     def get_installed_packages(self):
-        self.repo_utils.package_manager.get_installed_packages(package)           
+        self.repo_utils.package_manager.get_installed_packages()
             
     def get_available(self, path, unit=1):
-        '''
+        """
         Return df output's available field. By default this is KB.
-        path - optional -string. 
+        path - optional -string.
         unit - optional -integer used to divide return value. Can be used to convert KB to MB, GB, TB, etc..
-        '''
+        """
         size = int(self.get_df_info(path=path)['available'])
-        return (size/unit)        
+        return size/unit
     
     def poll_log(self, log_file="/var/log/messages"):
         self.debug( "Starting to poll " + log_file )     
-        self.log_channel = self.ssh.invoke_shell()
+        self.log_channel = self.ssh.connection.invoke_shell()
         self.log_channel.send("tail -f " + log_file + " \n")
         ### Begin polling channel for any new data
         while self.log_active[log_file]:
@@ -427,21 +428,21 @@ class Machine:
             rl, wl, xl = select.select([self.log_channel],[],[],0.0)
             if len(rl) > 0:
                 self.log_buffers[log_file] += self.log_channel.recv(1024)
-            self.sleep(1)                                             
+            time.sleep(1)
     
     def start_log(self, log_file="/var/log/messages"):
-        '''Start thread to poll logs''' 
-        thread = threading.Thread(target=self.poll_log, args=(log_file))
+        """Start thread to poll logs"""
+        thread = threading.Thread(target=self.poll_log, args=log_file)
         thread.daemon = True
         self.log_threads[log_file]= thread.start()
         self.log_active[log_file] = True
         
     def stop_log(self, log_file="/var/log/messages"):
-        '''Terminate thread that is polling logs''' 
+        """Terminate thread that is polling logs"""
         self.log_active[log_file] = False
         
     def save_log(self, log_file, path="logs"):
-        '''Save log buffer for log_file to the path to a file'''
+        """Save log buffer for log_file to the path to a file"""
         if not os.path.exists(path):
             os.mkdir(path)
         FILE = open( path + '/' + log_file,"w")
@@ -449,9 +450,9 @@ class Machine:
         FILE.close()
         
     def save_all_logs(self, path="logs"):
-        '''Save log buffers to a file'''
+        """Save log buffers to a file"""
         for log_file in self.log_buffers.keys():
-            self.save_all_logs(log_file,path)
+            self.save_log(log_file,path)
     
     
             
