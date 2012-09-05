@@ -30,17 +30,13 @@
 #
 # Author: vic.iglesias@eucalyptus.com
 
+
 from eutester import Eutester
 import time
 import re
-import sys
 import os
-import pprint
 from M2Crypto import RSA
-import boto
-from boto.ec2.image import Image
-from boto.ec2.instance import Reservation
-from boto.ec2.volume import Volume
+import base64
 from boto.ec2.blockdevicemapping import BlockDeviceMapping, BlockDeviceType
 from boto.exception import EC2ResponseError
 from eutester.euinstance import EuInstance
@@ -146,10 +142,10 @@ class EC2ops(Eutester):
             return False
         return True
     
-    def get_windows_instance_password(self, instance, privkeypath=None):
-        if privatekeypath is None:
-            privatekeypath = self.tester.verify_local_keypath(keyname, path, exten)
-        key = tester.ec2.get_password_data(instance.id)
+    def get_windows_instance_password(self, instance, private_key_path=None, key=None, exten=None):
+        if private_key_path is None:
+            private_key_path = self.verify_local_keypath(key.name, private_key_path, exten)
+        encrypted_string = self.ec2.get_password_data(instance.id)
         return self.decrypt_string(encrypted_string, private_key_path)
         
     
