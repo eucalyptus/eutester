@@ -10,17 +10,12 @@
 
 from eucaops import Eucaops
 import argparse
-import re
 import time
-import os
-from eutester import xmlrunner
 
 from eutester.eutestcase import EutesterTestCase
-from eutester.eutestcase import EutesterTestResult
 from boto.exception import S3ResponseError
 from boto.exception import S3CreateError
 import boto
-import unittest
 
 class BucketTestSuite(EutesterTestCase):
     
