@@ -35,7 +35,6 @@ from eutester import Eutester
 import time
 import re
 import os
-from M2Crypto import RSA
 import base64
 from boto.ec2.blockdevicemapping import BlockDeviceMapping, BlockDeviceType
 from boto.exception import EC2ResponseError
@@ -150,6 +149,11 @@ class EC2ops(Eutester):
         
     
     def decrypt_string(self, encrypted_string, private_key_path, encoded=False):
+        try:
+            from M2Crypto import RSA
+        except ImportError:
+            raise ImportError("Unable to load M2Crypto. Please install by using your package manager to install "
+                              "python-m2crypto or 'easy_install M2crypto'")
         user_priv_key = RSA.load_key(private_key_path)
         string_to_decrypt = encrypted_string
         if encoded:
