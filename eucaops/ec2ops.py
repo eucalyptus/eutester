@@ -48,7 +48,8 @@ class EC2ops(Eutester):
         self.username = username
         self.test_resources = {}
         self.setup_ec2_resource_trackers()
-        
+        self.key_dir = "./"
+
     def setup_ec2_resource_trackers(self):
         """
         Setup keys in the test_resources hash in order to track artifacts created
@@ -65,7 +66,7 @@ class EC2ops(Eutester):
         Add a keypair with name key_name unless it already exists
         key_name      The name of the keypair to add and download.
         """
-        if key_name==None:
+        if key_name is None:
             key_name = "keypair-" + str(int(time.time())) 
         self.debug(  "Looking up keypair " + key_name )
         key = []
@@ -74,7 +75,7 @@ class EC2ops(Eutester):
         except EC2ResponseError:
             pass
         
-        if key == []:
+        if not key:
             self.debug( 'Creating keypair: %s' % key_name)
             # Create an SSH key to use when logging into instances.
             key = self.ec2.create_key_pair(key_name)
@@ -91,27 +92,27 @@ class EC2ops(Eutester):
             
             
     def verify_local_keypath(self,keyname, path=None, exten=".pem"):
-        '''
+        """
         Convenience function to verify if a given ssh key 'keyname' exists on the local server at 'path'
         Returns the keypath if the key is found.
         Example:
         instance= self.get_instances(state='running')[0]
         keypath = self.get_local_keypath(instance.key_name)
-        '''
-        if (path is None):
+        """
+        if path is None:
             path = os.getcwd()
         keypath = path + "/" + keyname + exten
         try:
-            mode = os.stat(keypath).st_mode
+            os.stat(keypath).st_mode
         except:
             raise Exception("key:"+keyname+"not found at the provided path:"+str(path))
         return keypath
     
     def get_all_current_local_keys(self,path=None, exten=".pem"):
-        '''
+        """
         Convenience function to provide a list of all keys in the local dir at 'path'
-        that exist on the server. To help avoid producing additional keys in test dev. 
-        '''
+        that exist on the server. To help avoid producing additional keys in test dev.
+        """
         keylist = []
         keys = self.ec2.get_all_key_pairs()
         for k in keys:
@@ -168,11 +169,10 @@ class EC2ops(Eutester):
         fail_if_exists  IF set, will fail if group already exists, otherwise will return the existing group
         returns boto group object upon success or None for failure
         """
-        group=None
-        if group_name == None:
+        if group_name is None:
             group_name = "group-" + str(int(time.time()))
         if self.check_group(group_name):
-            if ( fail_if_exists == True ):
+            if fail_if_exists == True:
                 self.fail(  "Group " + group_name + " already exists")
             else:
                 self.debug(  "Group " + group_name + " already exists")
@@ -209,7 +209,7 @@ class EC2ops(Eutester):
         except EC2ResponseError:
             return False
         
-        if group == []:
+        if not group:
             return False
         else:
             return True    
@@ -268,7 +268,7 @@ class EC2ops(Eutester):
             time.sleep(10)
             instance.update()
             elapsed = int(time.time()- start)
-            if (instance.state != instance_original_state):
+            if instance.state != instance_original_state:
                 break
         self.debug("Instance("+instance.id+") State("+instance.state+") time elapsed (" +str(elapsed).split('.')[0]+")")
         #self.debug( "Waited a total o" + str( (self.poll_count - poll_count) * 10 ) + " seconds" )
@@ -287,7 +287,7 @@ class EC2ops(Eutester):
         self.debug( "Beginning poll loop for the " + str(len(reservation.instances))   + " found in " + str(reservation) )
         aggregate_result = True
         for instance in reservation.instances:
-            if self.wait_for_instance(instance, state, timeout=timeout) == False:
+            if not self.wait_for_instance(instance, state, timeout=timeout):
                 aggregate_result = False
         return aggregate_result
     
@@ -301,7 +301,7 @@ class EC2ops(Eutester):
         timepergig   Time to wait per gigabyte size of volume, used when timeout is set to 0 
         """
         # Determine the Availability Zone of the instance
-        poll_count = self.poll_count
+
         elapsed = 0
         start = time.time()
         #if timeout is set to 0, use size to create a reasonable timeout for this volume creation
@@ -324,7 +324,7 @@ class EC2ops(Eutester):
             if volume.status == 'failed':
                 self.fail(str(volume) + " went to: " + volume.status)
                 return None  
-        if (volume.status != 'available'):
+        if volume.status != 'available':
             self.fail(str(volume) + " never went to available and stayed in " + volume.status)
             self.debug( "Deleting volume that never became available")
             volume.delete()
@@ -374,10 +374,10 @@ class EC2ops(Eutester):
         elapsed = 0  
         volume.update()
         status = ""
-        while (elapsed < timeout):
+        while elapsed < timeout:
             volume.update()
             
-            if (volume.attach_data is not None):
+            if volume.attach_data is not None:
                 if re.search("attached",str(volume.attach_data.status)):
                     self.debug(str(volume) + ", Attached: " +  volume.status+ " - " + str(volume.attach_data.status) + ", elapsed:"+str(elapsed))
                     return True
@@ -397,16 +397,16 @@ class EC2ops(Eutester):
         Detach a volume
         volume   volume to detach
         """
-        if volume == None:
+        if volume is None:
             self.fail("Volume does not exist")
             return False
         volume.detach()
         self.debug( "Sent detach for volume: " + volume.id + " which is currently in state: " + volume.status)
         start = time.time()
         elapsed = 0  
-        while (elapsed < timeout):
+        while elapsed < timeout:
             volume.update()
-            if ( volume.status != "in-use"):
+            if volume.status != "in-use":
                 self.debug(str(volume) + " left in " +  volume.status)
                 return True
             self.debug( str(volume) + " state:" + volume.status + " pause:"+str(pause)+" elapsed:"+str(elapsed))
@@ -415,7 +415,7 @@ class EC2ops(Eutester):
         self.fail(str(volume) + " left in " +  volume.status +", elapsed:"+str(elapsed))
         return False
     
-    def create_snapshot(self, volume_id, description="", waitOnProgress=0, poll_interval=10, timeout=0):
+    def create_snapshot(self, volume_id, waitOnProgress=0, poll_interval=10, timeout=0, description=""):
         """
         Create a new EBS snapshot from an existing volume then wait for it to go to the created state. By default will poll for poll_count.
         If waitOnProgress is specified than will wait on "waitOnProgress" overrides # of poll_interval periods, using waitonprogress # of
@@ -428,11 +428,10 @@ class EC2ops(Eutester):
         timeout          (optional integer) over all time to wait before exiting as failure
         returns snapshot 
         """
-        if (waitOnProgress > 0 ):
+        if waitOnProgress > 0:
             poll_count = waitOnProgress
         else:
             poll_count = self.poll_count
-        curr_progress = 0 
         last_progress = 0
         elapsed = 0
         polls = 0
@@ -440,22 +439,22 @@ class EC2ops(Eutester):
 
         snapshot = self.ec2.create_snapshot( volume_id )
         self.debug("Waiting for snapshot (" + snapshot.id + ") creation to complete")
-        while ( (poll_count > 0) and ((timeout == 0) or (elapsed <= timeout)) ):
+        while (poll_count > 0) and ((timeout == 0) or (elapsed <= timeout)):
             time.sleep(poll_interval)
             polls += 1
             snapshot.update()
-            if ( snapshot.status == 'failed'):
+            if snapshot.status == 'failed':
                 self.fail(str(snapshot) + " failed after Polling("+str(polls)+") ,Waited("+str(elapsed)+" sec), last reported (status:" + snapshot.status+" progress:"+snapshot.progress+")")
                 return None
             curr_progress = int(snapshot.progress.replace('%',''))
             #if progress was made, then reset timer 
-            if ((waitOnProgress > 0) and (curr_progress > last_progress)):
+            if (waitOnProgress > 0) and (curr_progress > last_progress):
                 poll_count = waitOnProgress
             else: 
                 poll_count -= 1
             elapsed = int(time.time()-snap_start)
             self.debug("Snapshot:"+snapshot.id+" Status:"+snapshot.status+" Progress:"+snapshot.progress+"Total Polls:"+str(polls)+" Polls remaining:"+str(poll_count)+" Time Elapsed:"+str(elapsed))    
-            if (snapshot.status == 'completed'):
+            if snapshot.status == 'completed':
                 self.debug("Snapshot created after " + str(elapsed) + " seconds. " + str(polls) + " X ("+str(poll_interval)+" second) polling invervals. Status:"+snapshot.status+", Progress:"+snapshot.progress)
                 self.test_resources["snapshots"].append(snapshot)
                 return snapshot
@@ -476,16 +475,16 @@ class EC2ops(Eutester):
             self.sleep(10)
             elapsed = int(time.time()-start)
             self.debug(str(snapshot) + " status " +  snapshot.status + " with " + str(snapshot.progress) + "% progress. Elapsed:"+str(elapsed))
-        if ( len(self.ec2.get_all_snapshots(snapshot_ids=[snapshot.id])) > 0):
+        if len(self.ec2.get_all_snapshots(snapshot_ids=[snapshot.id])) > 0:
             self.fail(str(snapshot) + " left in" +  snapshot.status + " with " + str(snapshot.progress) + "% progress. Elapsed:"+str(elapsed))
         return snapshot
     
     def register_snapshot(self, snapshot, rdn="/dev/sda1", description="bfebs", windows=False, bdmdev=None, name=None, ramdisk=None, kernel=None, dot=True):
-        '''Convience function for passing a snapshot instead of its id'''
+        """Convience function for passing a snapshot instead of its id"""
         return self.register_snapshot_by_id( snapshot.id, rdn, description, windows, bdmdev, name, ramdisk, kernel, dot )
         
     def register_snapshot_by_id( self, snap_id, rdn="/dev/sda1", description="bfebs", windows=False, bdmdev=None, name=None, ramdisk=None, kernel=None, dot=True ):
-        '''
+        """
         Register an image snapshot
         snap_id        (mandatory string) snapshot id
         name           (mandatory string) name of image to be registered
@@ -495,11 +494,11 @@ class EC2ops(Eutester):
         dot            (optional boolean) Delete On Terminate boolean
         windows        (optional boolean) Is windows image boolean
         kernel         (optional string) kernal (note for windows this name should be "windows"
-        '''
+        """
         
-        if (bdmdev is None):
+        if bdmdev is None:
             bdmdev=rdn
-        if (name is None):
+        if name is None:
             name="bfebs_"+ snap_id
         if ( windows is True ) and ( kernel is not None):
             kernel="windows"     
@@ -516,15 +515,15 @@ class EC2ops(Eutester):
         return image_id
         
     def register_image( self, image_location, rdn=None, description=None, bdmdev=None, name=None, ramdisk=None, kernel=None ):
-        '''
+        """
         Register an image based on the s3 stored manifest location
         name           (optional string) name of image to be registered
         description    (optional string) description of image to be registered
         bdm            (optional block_device_mapping) block-device-mapping object for image
         rdn            (optional string) root-device-name for image
         kernel         (optional string) kernal (note for windows this name should be "windows"
-        image_location (optional string) path to s3 stored manifest 
-        '''
+        image_location (optional string) path to s3 stored manifest
+        """
 
         image_id = self.ec2.register_image(name=name, description=description, kernel_id=kernel, image_location=image_location, ramdisk_id=ramdisk, block_device_map=bdmdev, root_device_name=rdn)
         self.test_resources["images"].append(image_id)
@@ -550,17 +549,17 @@ class EC2ops(Eutester):
             
             if not re.search(emi, image.id):      
                 continue  
-            if ((root_device_type is not None) and (image.root_device_type != root_device_type)):
+            if (root_device_type is not None) and (image.root_device_type != root_device_type):
                 continue            
-            if ((root_device_name is not None) and (image.root_device_name != root_device_name)):
+            if (root_device_name is not None) and (image.root_device_name != root_device_name):
                 continue       
-            if ((state is not None) and (image.state != state)):
+            if (state is not None) and (image.state != state):
                 continue            
-            if ((location is not None) and (not re.search( location, image.location))):
+            if (location is not None) and (not re.search( location, image.location)):
                 continue           
-            if ((arch is not None) and (image.architecture != arch)):
+            if (arch is not None) and (image.architecture != arch):
                 continue                
-            if ((owner_id is not None) and (image.owner_id != owner_id)):
+            if (owner_id is not None) and (image.owner_id != owner_id):
                 continue
             
             return image
@@ -613,7 +612,7 @@ class EC2ops(Eutester):
         return self.found("ls -1 " + device_path, device_path)
         
     def get_volumes(self, volume_id="vol-", status=None, attached_instance=None, attached_dev=None, snapid=None, zone=None, minsize=1, maxsize=None, eof=False):
-        '''
+        """
         Return list of volumes that matches the criteria. Criteria options to be matched:
         volume_id         (optional string) string present within volume id
         status            (optional string) examples: 'in-use', 'creating', 'available'
@@ -624,7 +623,7 @@ class EC2ops(Eutester):
         minsize           (optional integer) minimum size of volume to be matched
         maxsize           (optional integer) maximum size of volume to be matched
         eof               (optional boolean) exception on failure to find volume, else returns empty list
-        '''
+        """
         
         retlist = []
         if (attached_instance is not None) or (attached_dev is not None):
@@ -640,12 +639,12 @@ class EC2ops(Eutester):
                 continue
             if (status is not None) and (volume.status != status):
                 continue
-            if (volume.attach_data is not None):
+            if volume.attach_data is not None:
                 if (attached_instance is not None) and ( volume.attach_data.instance_id != attached_instance):
                     continue
                 if (attached_dev is not None) and (volume.attach_data.device != attached_dev):
                     continue
-            if not (volume.size >= minsize) and ((maxsize is None) or (volume.size <= maxsize)):
+            if not (volume.size >= minsize) and (maxsize is None or volume.size <= maxsize):
                 continue
             retlist.append(volume)
         if eof and retlist == []:
@@ -654,7 +653,7 @@ class EC2ops(Eutester):
             return retlist
 
     def get_volume(self, volume_id="vol-", status=None, attached_instance=None, attached_dev=None, snapid=None, zone=None, minsize=1, maxsize=None, eof=True):
-        '''
+        """
         Returns a single volume that matches the provided criteria
         Return first volume that matches the criteria. Criteria options to be matched:
         volume_id         (optional string) string present within volume id
@@ -666,7 +665,7 @@ class EC2ops(Eutester):
         minsize           (optional integer) minimum size of volume to be matched
         maxsize           (optional integer) maximum size of volume to be matched
         eof               (optional boolean) exception on failure to find volume, else returns None
-        '''
+        """
         vol = None
         try:
             vol = self.get_volumes(volume_id=volume_id, status=status, attached_instance=attached_instance, attached_dev=attached_dev, snapid=snapid, zone=zone, minsize=minsize, maxsize=maxsize, eof=eof)[0]
@@ -690,7 +689,7 @@ class EC2ops(Eutester):
         private_addressing  Runs an instance with only private IP address
         is_reachable  Instance can be reached on its public IP (Default=True)
         """
-        if image == None:
+        if image is None:
             images = self.ec2.get_all_images()
             for emi in images:
                 if re.match("emi",emi.name):
@@ -710,7 +709,7 @@ class EC2ops(Eutester):
         reservation = image.run(key_name=keypair,security_groups=[group],instance_type=type, placement=zone, min_count=min, max_count=max, user_data=user_data, addressing_type=addressing_type)
         self.test_resources["reservations"].append(reservation)
         
-        if ((len(reservation.instances) < min) or (len(reservation.instances) > max)):
+        if (len(reservation.instances) < min) or (len(reservation.instances) > max):
             self.fail("Reservation:"+str(reservation.id)+" returned "+str(len(reservation.instances))+" instances, not within min("+str(min)+") and max("+str(max)+" ")
         
         try:
@@ -736,13 +735,13 @@ class EC2ops(Eutester):
                 self.debug(str(instance) + " got Public IP: " + str(instance.ip_address)  + " Private IP: " + str(instance.private_ip_address) + " Public DNS Name: " + str(instance.public_dns_name) + " Private DNS Name: " + str(instance.private_dns_name))
             
             self.wait_for_valid_ip(instance)
-            if (is_reachable):
+            if is_reachable:
                 self.ping(instance.public_dns_name, 60)
                 
         #calculate remaining time to wait for establishing an ssh session/euinstance     
-        timeout = timeout-int(time.time()-start)  
+        timeout -= int(time.time() - start)
         #if we can establish an SSH session convert the instances to the test class euinstance for access to instance specific test methods
-        if (is_reachable):
+        if is_reachable:
             self.debug("Converting " + str(reservation) + " into euinstances")
             return self.convert_reservation_to_euinstance(reservation, username=username, password=password, keyname=keypair, timeout=timeout)
         else:
@@ -755,7 +754,7 @@ class EC2ops(Eutester):
             if zeros.search(instance.public_dns_name):
                 self.sleep(1)
                 instance.update()
-                elapsed = elapsed + 1
+                elapsed += 1
             else:
                 return True
         raise Exception("Timed out waiting for a valid IP (ie anything other than 0.0.0.0.)")
@@ -843,19 +842,18 @@ class EC2ops(Eutester):
     
     
     def get_connectable_euinstances(self,path=None,connect=True):
-        '''
+        """
         convenience method returns a list of all running instances, for the current creduser
         for which there are local keys at 'path'
-        '''
+        """
         try:
-            instances = []  
             euinstances = []
             keys = self.get_all_current_local_keys(path=path)
-            if keys != []:
+            if keys:
                 for keypair in keys:
                     self.debug('looking for instances using keypair:'+keypair.name)
                     instances = self.get_instances(state='running',key=keypair.name)
-                    if instances != []:
+                    if instances:
                         for instance in instances:
                             if not connect:
                                 keypair=None
@@ -868,9 +866,9 @@ class EC2ops(Eutester):
     
     
     def get_all_attributes(self, obj, buf="", verbose=True):   
-        '''
+        """
         Get a formatted list of all the key pair values pertaining to the object 'obj'
-        '''   
+        """
         buf=""
         list = sorted(obj.__dict__)
         for item in list:
@@ -891,7 +889,7 @@ class EC2ops(Eutester):
             ## IF i am searching for a particular IP and this is not it skip it
             #if (ip is not None) and (address.public_ip is not ip):
             #    continue
-            if address.allocation_id != None:
+            if address.allocation_id is not None:
                 try:
                     self.debug("Releasing address: " + str(address))
                     address.release()
@@ -907,7 +905,7 @@ class EC2ops(Eutester):
         """
         ### If a reservation is not passed then kill all instances
         aggregate_result = True
-        if reservation==None:
+        if reservation is None:
             reservations = self.ec2.get_all_instances()
             for res in reservations:
                 for instance in res.instances:
