@@ -70,10 +70,8 @@ EC2RegionData = {
 
 class Eutester(object):
     def __init__(self, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, region=None, ec2_ip=None, s3_ip=None, boto_debug=0):
-        """
-        This class is intended to setup boto connections for the
-        various services that the *ops classes will use.
-        :type: str
+        """This class is intended to setup boto connections for the various services that the *ops classes will use.
+
         :param credpath: Path to a valid eucarc file.
         :param aws_access_key_id: Used in conjuction with aws_secret_access_key allows for creation of connections without needing a credpath.
         :param aws_secret_access_key: Used in conjuction with aws_access_key_id allows for creation of connections without needing a credpath.
@@ -82,7 +80,7 @@ class Eutester(object):
         :param s3_ip: Hostname or IP of the S3 endpoint to connect to.
         :param boto_debug: Hostname or IP of the S3 endpoint to connect to.
         :rtype: :class:`eutester.Eutester` or ``None``
-        :return: A Eutester object with all connections that were able to be created. Currently EC2, S3, IAM, and STS.
+        :returns: A Eutester object with all connections that were able to be created. Currently EC2, S3, IAM, and STS.
         """
         ### Default values for configuration
         self.boto_debug = boto_debug
@@ -261,7 +259,7 @@ class Eutester(object):
         self.debug("Attempting to ping " + address)
         while (poll_count > 0):
             poll_count -= 1 
-            if self.found("ping -c 1 " + address, "1.*received"):
+            if self.found("ping -c 1 " + address, "1.*1.*received"):
                 self.debug("Was able to ping address")
                 return True
             if poll_count == 0:
