@@ -37,7 +37,7 @@ class EutesterTestResult():
     
     
     
-class EutesterTestCase(unittest.TestCase):
+class EutesterTestUnit():
     '''
     Convenience class to run wrap individual methods, and run and store and access results.
     '''
@@ -49,10 +49,6 @@ class EutesterTestCase(unittest.TestCase):
         self.time_to_run=0
         self.eof=True
         self.error = ""
-    
-    def create_testcase_from_method(self,method, *args):
-        testcase =  EutesterTestCase(method, args)
-        return testcase
     
     def run(self):
         try:
@@ -72,6 +68,17 @@ class EutesterTestCase(unittest.TestCase):
                 pass
         finally:
             self.time_to_run = int(time.time()-start)
+        
+    def get_doc_strings(self):
+        doc = self.method.im_func.func_doc
+        
+    
+    
+class EutesterTestCase(unittest.TestCase):
+            
+    def create_testcase_from_method(self,method, *args):
+        testcase =  EutesterTestUnit(method, args)
+        return testcase
 
     def debug(self,msg,traceback=1):
         msg = str(msg)       
