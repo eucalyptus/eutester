@@ -130,7 +130,7 @@ class EuInstance(Instance):
         newins.retry = retry    
         newins.connect_to_instance(timeout=timeout)
         newins.set_block_device_prefix()
-        #newins.set_rootfs_device()
+        newins.set_rootfs_device()
         
         return newins
     
@@ -191,7 +191,7 @@ class EuInstance(Instance):
             
 
                 
-    def sys(self, cmd, verbose=True, timeout=120, listformat=True, code=None):
+    def sys(self, cmd, verbose=True, timeout=120):
         '''
         Issues a command against the ssh connection to this instance
         Returns a list of the lines from stdout+stderr as a result of the command
@@ -201,7 +201,7 @@ class EuInstance(Instance):
         '''
         output = []
         if (self.ssh is not None):
-            output = self.ssh.sys(cmd, verbose=verbose, timeout=timeout,listformat=True, code=code)
+            output = self.ssh.sys(cmd, verbose=verbose, timeout=timeout)
             return output
         else:
             raise Exception("Euinstance ssh connection is None")
@@ -356,24 +356,10 @@ class EuInstance(Instance):
         if self.found("dmesg | grep vda", "vda"):
             self.block_device_prefix = "vd"
             self.virtio_blk = True
-            self.rootfs_device = "vda"
-            
-        elif self.found("dmesg | grep xvda", "xvda"):
-            self.block_device_prefix = "xvd"
-            self.virtio_blk = False
-            self.rootfs_device = "xvda"
-        else:
-            self.block_device_prefix = "sd"
-            self.virtio_blk = False
-            self.rootfs_device = "sda"
-            
-    '''
+    
     def set_rootfs_device(self):
         if self.found("dmesg | grep vda", "vda"):
             self.rootfs_device = "vda"
-        elif self.found("dmesg | grep xvda", "xvda"):
-            self.rootfs_device = "xvda"
-    ''' 
     
     def get_guestdevs_inuse_by_vols(self):
         retlist = []

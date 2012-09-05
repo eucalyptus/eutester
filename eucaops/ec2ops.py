@@ -36,7 +36,6 @@ import re
 import sys
 import os
 import pprint
-from M2Crypto import RSA
 import boto
 from boto.ec2.image import Image
 from boto.ec2.instance import Reservation
@@ -44,7 +43,6 @@ from boto.ec2.volume import Volume
 from boto.ec2.blockdevicemapping import BlockDeviceMapping, BlockDeviceType
 from boto.exception import EC2ResponseError
 from eutester.euinstance import EuInstance
-
 
 class EC2ops(Eutester):
     def __init__(self, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, username="root",region=None, ec2_ip=None, s3_ip=None, boto_debug=0):
@@ -145,21 +143,6 @@ class EC2ops(Eutester):
             self.fail("Keypair found after attempt to delete it")
             return False
         return True
-    
-    def get_windows_instance_password(self, instance, privkeypath=None):
-        if privatekeypath is None:
-            privatekeypath = self.tester.verify_local_keypath(keyname, path, exten)
-        key = tester.ec2.get_password_data(instance.id)
-        return self.decrypt_string(encrypted_string, private_key_path)
-        
-    
-    def decrypt_string(self, encrypted_string, private_key_path, encoded=False):
-        user_priv_key = RSA.load_key(private_key_path)
-        string_to_decrypt = encrypted_string
-        if encoded:
-            string_to_decrypt = base64.b64decode(encrypted_string)
-        return user_priv_key.private_decrypt(string_to_decrypt,
-                RSA.pkcs1_padding)
     
     def add_group(self, group_name=None, fail_if_exists=False ):
         """
