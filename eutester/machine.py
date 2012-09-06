@@ -32,7 +32,6 @@
 import select
 import threading
 import time
-
 import eulogger
 import sshconnection
 import re
@@ -49,7 +48,7 @@ class DistroName:
     vmware = "vmware"
 
 class DistroRelease:
-    def __init__(self, distro_name, distro_number,  distro_release = None, package_manager= None):
+    def __init__(self, distro_name, distro_number,  distro_release = "", package_manager= None):
         self.name = distro_name
         self.number = distro_number
         self.release = distro_release
