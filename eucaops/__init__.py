@@ -30,6 +30,8 @@
 #
 # Author: vic.iglesias@eucalyptus.com
 # Author: matt.clark@eucalyptus.com
+from boto.ec2.image import Image
+from boto.ec2.volume import Volume
 
 from iamops import IAMops
 from ec2ops import EC2ops
@@ -37,6 +39,7 @@ from s3ops import S3ops
 from stsops import STSops
 import time
 from eutester.euservice import EuserviceManager
+from boto.ec2.instance import Reservation
 from eutester.euconfig import EuConfig
 from eutester.machine import Machine
 from eutester import eulogger
@@ -68,7 +71,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops):
         self.critical = self.logger.log.critical
         self.info = self.logger.log.info
         
-        if self.config_file != None:
+        if self.config_file is not None:
             ## read in the config file
             self.debug("Reading config file: " + config_file)
             self.config = self.read_config(config_file)
@@ -84,7 +87,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops):
             ### Private cloud with root access 
             ### Need to get credentials for the user if there arent any passed in
             ### Need to create service manager for user if we have an ssh connection and password
-            if (self.password != None):
+            if self.password is not None:
                 clc_array = self.get_component_machines("clc")
                 self.clc = clc_array[0]
                 walrus_array = self.get_component_machines("ws")
@@ -120,12 +123,12 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops):
         type        VM type to get available vms 
         """
         
-        zones = self.ec2.get_all_zones('verbose') 
-        if type == None:
+        zones = self.ec2.get_all_zones("verbose")
+        if type is None:
             type = "m1.small"
         ### Look for the right place to start parsing the zones
         zone_index = 0
-        if zone != None: 
+        if zone is not None:
             while zone_index < len(zones):
                 current_zone = zones[zone_index]
                 if re.search( zone, current_zone.name):
@@ -160,9 +163,9 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops):
         """
         command = self.eucapath + "/usr/sbin/euca-modify-property -p " + property + "=" + value
         if self.found(command, property):
-            self.test_name("Properly modified property")
+            self.debug("Properly modified property " + property)
         else:
-            self.fail("Could not modify " + property)
+            raise Exception("Setting property " + property + " failed")
     
    
     def cleanup_artifacts(self):
@@ -203,7 +206,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops):
         current_artifacts["zones"] = self.ec2.get_all_zones()
         
         if verbose:
-            self.info("Current resources in the system:\n" + pprint.pformat(current_artifacts))
+            self.debug("Current resources in the system:\n" + str(current_artifacts))
         return current_artifacts
     
     def read_config(self, filepath, username="root"):
