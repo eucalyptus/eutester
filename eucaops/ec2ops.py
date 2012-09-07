@@ -140,8 +140,7 @@ class EC2ops(Eutester):
             self.fail("Keypair found after attempt to delete it")
             return False
         return True
-    
-<<<<<<< HEAD
+
     def get_windows_instance_password(self, instance, private_key_path=None, key=None, exten=None):
         if private_key_path is None:
             private_key_path = self.verify_local_keypath(key.name, private_key_path, exten)
@@ -162,8 +161,7 @@ class EC2ops(Eutester):
         return user_priv_key.private_decrypt(string_to_decrypt,
                 RSA.pkcs1_padding)
     
-=======
->>>>>>> master
+
     def add_group(self, group_name=None, fail_if_exists=False ):
         """
         Add a security group to the system with name group_name, if it exists dont create it
