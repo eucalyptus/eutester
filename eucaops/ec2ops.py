@@ -40,7 +40,6 @@ from boto.ec2.blockdevicemapping import BlockDeviceMapping, BlockDeviceType
 from boto.exception import EC2ResponseError
 from eutester.euinstance import EuInstance
 
-
 class EC2ops(Eutester):
     def __init__(self, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, username="root",region=None, ec2_ip=None, s3_ip=None, boto_debug=0):
         Eutester.__init__(self, credpath=credpath, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,region=region,  s3_ip=s3_ip, ec2_ip=ec2_ip, boto_debug=boto_debug)
@@ -142,6 +141,7 @@ class EC2ops(Eutester):
             return False
         return True
     
+<<<<<<< HEAD
     def get_windows_instance_password(self, instance, private_key_path=None, key=None, exten=None):
         if private_key_path is None:
             private_key_path = self.verify_local_keypath(key.name, private_key_path, exten)
@@ -162,6 +162,8 @@ class EC2ops(Eutester):
         return user_priv_key.private_decrypt(string_to_decrypt,
                 RSA.pkcs1_padding)
     
+=======
+>>>>>>> master
     def add_group(self, group_name=None, fail_if_exists=False ):
         """
         Add a security group to the system with name group_name, if it exists dont create it
