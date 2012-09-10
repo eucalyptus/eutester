@@ -33,7 +33,7 @@
 # Author: vic.iglesias@eucalyptus.com
 
 
-__version__ = '0.0.1'
+__version__ = '0.0.3'
 
 import re
 import os
