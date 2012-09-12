@@ -394,7 +394,7 @@ class InstanceBasics(unittest.TestCase):
         ### Once the previous test is complete rerun the BasicInstanceChecks test case
         q = Queue()
         queue_pool.append(q)
-        p = Process(target=self.run_testcase_thread, args=(q, step * i,"BasicInstanceChecks"))
+        p = Process(target=self.run_testcase_thread, args=(q, step,"BasicInstanceChecks"))
         thread_pool.append(p)
         p.start()
         
