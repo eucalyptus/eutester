@@ -381,7 +381,7 @@ class InstanceBasics(unittest.TestCase):
             thread_pool.append(p)
             self.tester.debug("Starting Thread " + str(i) +" in " + str(step * i))
             p.start()
-        
+
         ### While the other tests are running, run and terminate count instances with a 10s sleep in between
         for i in xrange(count):
             self.reservation = self.image.run()
@@ -392,6 +392,11 @@ class InstanceBasics(unittest.TestCase):
                 self.assertTrue(self.tester.wait_for_instance(instance, "terminated"), "Instance did not go to terminated")
         
         ### Once the previous test is complete rerun the BasicInstanceChecks test case
+        ### Wait for an instance to become available
+        count = self.tester.get_available_vms("m1.small")
+        while count < 1:
+            self.tester.sleep(5)
+
         q = Queue()
         queue_pool.append(q)
         p = Process(target=self.run_testcase_thread, args=(q, step,"BasicInstanceChecks"))
