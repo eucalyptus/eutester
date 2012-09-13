@@ -187,7 +187,7 @@ class InstanceBasics(unittest.TestCase):
         
     def create_attach_volume(self, instance, size):
             self.volume = self.tester.create_volume(instance.placement, size)
-            device_path = "/dev/" + instance.block_device_prefix  +"j"
+            device_path = "/dev/"
             before_attach = instance.get_dev_dir()
             try:
                 self.assertTrue(self.tester.attach_volume(instance, self.volume, device_path), "Failure attaching volume")
