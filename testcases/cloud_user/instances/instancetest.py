@@ -336,7 +336,6 @@ class InstanceBasics(unittest.TestCase):
             self.volume_device = instance.attach_volume(self.volume)
             ### Reboot instance
             instance.reboot_instance_and_verify(waitconnect=20)
-            self.tester.debug("Restarting SSH session to instance")
             ### Check for device in instance
             ### Make sure volume is still attached after reboot
             if instance.assertFilePresent(self.volume_device)  is None:
