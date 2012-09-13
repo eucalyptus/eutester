@@ -18,7 +18,7 @@ class GatherDebug(InstanceBasics, BucketTestSuite):
                         'netstat -lnp']
 
     euca_commands = ['cat /etc/eucalyptus/eucalyptus.conf | grep -v \'#\'',
-                     'cat /etc/eucalyptus/eucalyptus-version'
+                     'cat /etc/eucalyptus/eucalyptus-version',
                      'ps aux | grep euca']
 
     def __init__(self, config_file="cloud.conf", password="foobar"):
@@ -27,13 +27,13 @@ class GatherDebug(InstanceBasics, BucketTestSuite):
 
     def debug_clc(self, **kwargs):
         cc_commands = self.basic_commands + self.network_commands + self.euca_commands
-        for machine in self.tester.get_component_machines("cc"):
+        for machine in self.tester.get_component_machines("clc"):
             for command in cc_commands:
                 machine.sys(command)
 
     def debug_walrus(self, **kwargs):
         cc_commands = self.basic_commands + self.network_commands + self.euca_commands
-        for machine in self.tester.get_component_machines("cc"):
+        for machine in self.tester.get_component_machines("ws"):
             for command in cc_commands:
                 machine.sys(command)
 
@@ -45,13 +45,13 @@ class GatherDebug(InstanceBasics, BucketTestSuite):
 
     def debug_sc(self, **kwargs):
         cc_commands = self.basic_commands + self.network_commands + self.euca_commands
-        for machine in self.tester.get_component_machines("cc"):
+        for machine in self.tester.get_component_machines("sc"):
             for command in cc_commands:
                 machine.sys(command)
 
     def debug_nc(self, **kwargs):
         cc_commands = self.basic_commands + self.network_commands + self.euca_commands
-        for machine in self.tester.get_component_machines("cc"):
+        for machine in self.tester.get_component_machines("nc"):
             for command in cc_commands:
                 machine.sys(command)
 
