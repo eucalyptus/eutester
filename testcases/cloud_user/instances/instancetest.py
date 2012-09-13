@@ -165,7 +165,7 @@ class InstanceBasics(unittest.TestCase):
         self.tester.authorize_group_by_name(group_name=self.group.name, port=-1, protocol="icmp" )
         ### Generate a keypair for the instance
         self.keypair = self.tester.add_keypair( "keypair-" + str(time.time()))
-        self.keypath = os.curdir + "/" + self.keypair.name + ".pem"
+        self.keypath = '%s/%s.pem' % (os.curdir, self.keypair.name)
         self.image = self.tester.get_emi(root_device_type="instance-store")
         self.reservation = None
         self.private_addressing = False
@@ -176,6 +176,8 @@ class InstanceBasics(unittest.TestCase):
     def tearDown(self):
         if self.reservation is not None:
             self.assertTrue(self.tester.terminate_instances(self.reservation), "Unable to terminate instance(s)")
+        if self.volume:
+            self.tester.delete_volume(self.volume)
         self.tester.delete_group(self.group)
         self.tester.delete_keypair(self.keypair)
         os.remove(self.keypath)
@@ -184,24 +186,8 @@ class InstanceBasics(unittest.TestCase):
         self.keypair = None
         self.tester = None
         self.ephemeral = None
-        
-    def create_attach_volume(self, instance, size):
-            self.volume = self.tester.create_volume(instance.placement, size)
-            device_path = "/dev/"
-            before_attach = instance.get_dev_dir()
-            try:
-                self.assertTrue(self.tester.attach_volume(instance, self.volume, device_path), "Failure attaching volume")
-            except AssertionError, e:
-                self.assertTrue( self.tester.delete_volume(self.volume))
-                return False
-            after_attach = instance.get_dev_dir()
-            new_devices = self.tester.diff(after_attach, before_attach)
-            if len(new_devices) is 0:
-                return False
-            self.volume_device = "/dev/" + new_devices[0].strip()
-            instance.assertFilePresent(self.volume_device)
-            return True
-    
+
+
     def BasicInstanceChecks(self, zone = None):
         """Instance checks including reachability and ephemeral storage"""
         if zone is None:
@@ -223,7 +209,7 @@ class InstanceBasics(unittest.TestCase):
             Release the address"""
         if zone is None:
             zone = self.zone
-        self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name)
+        self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name,zone=zone)
         self.tester.sleep(10)
         for instance in self.reservation.instances:
             address = self.tester.allocate_address()
@@ -253,7 +239,7 @@ class InstanceBasics(unittest.TestCase):
         """Run 1 of the largest instance c1.xlarge"""
         if zone is None:
             zone = self.zone
-        self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name,type="c1.xlarge")
+        self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name,type="c1.xlarge",zone=zone)
         self.assertTrue( self.tester.wait_for_reservation(self.reservation) ,'Not all instances  went to running')
         return self.reservation
     
@@ -347,15 +333,15 @@ class InstanceBasics(unittest.TestCase):
         self.tester.sleep(10)
         for instance in self.reservation.instances:
             ### Create 1GB volume in first AZ
-            self.assertTrue(self.create_attach_volume(instance, 1), "Was not able to attach volume")
+            self.volume = self.tester.create_volume(instance.placement, 1)
+            self.volume_device = instance.attach_volume(self.volume)
             ### Reboot instance
             instance.reboot_instance_and_verify(waitconnect=20)
             self.tester.debug("Restarting SSH session to instance")
             ### Check for device in instance
             ### Make sure volume is still attached after reboot
-            if self.volume_device is None:
+            if instance.assertFilePresent(self.volume_device)  is None:
                  self.assertTrue(False, "Failed to find volume on instance")
-            instance.assertFilePresent(self.volume_device) 
             self.assertTrue(self.tester.detach_volume(self.volume), "Unable to detach volume")
             self.assertTrue(self.tester.delete_volume(self.volume), "Unable to delete volume")
         return self.reservation
@@ -437,7 +423,7 @@ class InstanceBasics(unittest.TestCase):
             instance.update()
             self.assertFalse( self.tester.ping(instance.public_dns_name), "Was able to ping instance that should have only had a private IP")
             address.release()
-            if (instance.public_dns_name != instance.private_dns_name):
+            if instance.public_dns_name != instance.private_dns_name:
                 self.fail("Instance received a new public IP: " + instance.public_dns_name)
         return self.reservation
     
