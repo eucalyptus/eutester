@@ -602,12 +602,12 @@ class EC2ops(Eutester):
             raise Exception( "Exception({0}): {1}".format(errno, strerror))
 
         poll_count = 15
-        address = self.ec2.get_all_addresses(addresses=[instance.public_dns_name])
+        address = self.ec2.get_all_addresses(addresses=[instance.public_dns_name])[0]
         while address.instance_id is not instance.id:
             if poll_count == 0:
                 raise Exception('Address ' + str(address) + 'never associated with instance')
             self.sleep(5)
-            address = self.ec2.get_all_addresses(addresses=[instance.public_dns_name])
+            address = self.ec2.get_all_addresses(addresses=[instance.public_dns_name])[0]
             poll_count -= 1
 
         self.debug("Associated IP successfully")
@@ -623,12 +623,12 @@ class EC2ops(Eutester):
             self.critical("Unable to disassociate address\n" + str(e))
             return False
         poll_count = 15
-        address = self.ec2.get_all_addresses(addresses=[instance.public_dns_name])
+        address = self.ec2.get_all_addresses(addresses=[instance.public_dns_name])[0]
         while address.instance_id is instance.id:
             if poll_count == 0:
                 raise Exception('Address ' + str(address) + 'still associated with instance')
             self.sleep(5)
-            address = self.ec2.get_all_addresses(addresses=[instance.public_dns_name])
+            address = self.ec2.get_all_addresses(addresses=[instance.public_dns_name])[0]
             poll_count -= 1
     
     def check_device(self, device_path):
