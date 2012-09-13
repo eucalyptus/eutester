@@ -599,8 +599,17 @@ class EC2ops(Eutester):
             address.associate(instance.id)
         except Exception as (errno, strerror):
             self.critical("Unable to associate address\n")
-            self.critical( "Exception({0}): {1}".format(errno, strerror))
-            return False
+            raise Exception( "Exception({0}): {1}".format(errno, strerror))
+
+        poll_count = 15
+        address = self.ec2.get_all_addresses(addresses=[instance.public_dns_name])
+        while address.instance_id is not instance.id:
+            if poll_count == 0:
+                raise Exception('Address ' + str(address) + 'never associated with instance')
+            self.sleep(5)
+            address = self.ec2.get_all_addresses(addresses=[instance.public_dns_name])
+            poll_count -= 1
+
         self.debug("Associated IP successfully")
         return address
     
@@ -613,12 +622,14 @@ class EC2ops(Eutester):
         except Exception, e:
             self.critical("Unable to disassociate address\n" + str(e))
             return False
-        self.sleep(15)
+        poll_count = 15
         address = self.ec2.get_all_addresses(addresses=[instance.public_dns_name])
-        if address.instance_id is instance.id:
-            self.critical("Address still associated with instance")
-            return False
-        return True
+        while address.instance_id is instance.id:
+            if poll_count == 0:
+                raise Exception('Address ' + str(address) + 'still associated with instance')
+            self.sleep(5)
+            address = self.ec2.get_all_addresses(addresses=[instance.public_dns_name])
+            poll_count -= 1
     
     def check_device(self, device_path):
         """Used with instance connections. Checks if a device at a certain path exists"""
