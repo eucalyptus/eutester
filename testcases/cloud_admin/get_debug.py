@@ -70,11 +70,7 @@ class GatherDebug(InstanceBasics, BucketTestSuite):
             self.fail("Could not run an instance after " + str(poll_count) +" tries with " + str(poll_interval) + "s sleep in between")
 
     def cleanup(self):
-        try:
-            self.tester.terminate_instances()
-        except Exception, e:
-            self.tester.critical("Unable to terminate all instances")
-        self.servman.start_all()
+        pass
 
     def run_suite(self):
         self.testlist = []
