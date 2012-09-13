@@ -21,15 +21,23 @@ class GatherDebug(InstanceBasics, BucketTestSuite):
                      'cat /etc/eucalyptus/eucalyptus-version',
                      'ps aux | grep euca']
 
+    clc_commands = ['euca-describe-services -E -A',
+                    'euca-describe-availability-zones verbose',
+                    'euca-describe-instances verbose',
+                    'euca-describe-volumes verbose',
+                    'euca-describe-snapshots verbose',
+                    'euca-describe-keypairs verbose',
+                    'euca-describe-groups verbose']
+
     def __init__(self, config_file="cloud.conf", password="foobar"):
         self.tester = Eucaops( config_file=config_file, password=password)
         self.servman = self.tester.service_manager
 
     def debug_clc(self, **kwargs):
-        cc_commands = self.basic_commands + self.network_commands + self.euca_commands
+        cc_commands = self.basic_commands + self.network_commands + self.euca_commands + self.clc_commands
         for machine in self.tester.get_component_machines("clc"):
             for command in cc_commands:
-                machine.sys(command)
+                machine.sys("source " + self.tester.credpath + "/eucarc && " + command)
 
     def debug_walrus(self, **kwargs):
         cc_commands = self.basic_commands + self.network_commands + self.euca_commands
