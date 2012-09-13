@@ -144,6 +144,7 @@ import unittest
 import time
 from eucaops import Eucaops
 from eutester import xmlrunner
+from eutester.euvolume import EuVolume
 import os
 import re
 import random
@@ -333,15 +334,11 @@ class InstanceBasics(unittest.TestCase):
         for instance in self.reservation.instances:
             ### Create 1GB volume in first AZ
             self.volume = self.tester.create_volume(instance.placement, 1)
-            self.volume_device = instance.attach_volume(self.volume)
+            euvolume = EuVolume.make_euvol_from_vol(self.volume)
+            self.volume_device = instance.attach_euvolume(euvolume)
             ### Reboot instance
             instance.reboot_instance_and_verify(waitconnect=20)
-            ### Check for device in instance
-            ### Make sure volume is still attached after reboot
-            if instance.assertFilePresent(self.volume_device)  is None:
-                 self.assertTrue(False, "Failed to find volume on instance")
-            self.assertTrue(self.tester.detach_volume(self.volume), "Unable to detach volume")
-            self.assertTrue(self.tester.delete_volume(self.volume), "Unable to delete volume")
+            instance.detach_euvolume(euvolume)
         return self.reservation
     
     def Churn(self, testcase="BasicInstanceChecks"):
