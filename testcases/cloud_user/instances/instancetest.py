@@ -383,6 +383,7 @@ class InstanceBasics(unittest.TestCase):
         fail_count = 0
         ### Block until the script returns a result
         for queue in queue_pool:
+            pass
             test_result = queue.get(True)
             self.tester.debug("Got Result: " + str(test_result) )
             fail_count += test_result
