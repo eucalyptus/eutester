@@ -330,7 +330,6 @@ class InstanceBasics(unittest.TestCase):
         if zone is None:
             zone = self.zone
         self.reservation = self.tester.run_instance(self.image, keypair=self.keypair.name, group=self.group.name, zone=zone)
-        self.tester.sleep(10)
         for instance in self.reservation.instances:
             ### Create 1GB volume in first AZ
             self.volume = self.tester.create_volume(instance.placement, 1)
