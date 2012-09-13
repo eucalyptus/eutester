@@ -528,6 +528,19 @@ class EC2ops(Eutester):
         image_id = self.ec2.register_image(name=name, description=description, kernel_id=kernel, image_location=image_location, ramdisk_id=ramdisk, block_device_map=bdmdev, root_device_name=rdn)
         self.test_resources["images"].append(image_id)
         return image_id
+
+    def deregister_image(self, image):
+        """
+        Deregister an image.
+        :param image: boto image object to deregister
+        :return:
+        """
+        self.ec2.deregister_image(image.id)
+        image = self.get_emi(image.id)
+        if image.state is not "deregistered":
+            raise Exception("Image " + image.id +  " did not enter deregistered state after deregistration was sent to server")
+        else:
+            self.ec2.deregister_image(image.id)
     
     def get_emi(self, emi=None, root_device_type=None, root_device_name=None, location=None, state="available", arch=None, owner_id=None):
         """
