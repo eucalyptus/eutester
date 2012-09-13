@@ -177,8 +177,6 @@ class InstanceBasics(unittest.TestCase):
     def tearDown(self):
         if self.reservation is not None:
             self.assertTrue(self.tester.terminate_instances(self.reservation), "Unable to terminate instance(s)")
-        if self.volume:
-            self.tester.delete_volume(self.volume)
         self.tester.delete_group(self.group)
         self.tester.delete_keypair(self.keypair)
         os.remove(self.keypath)
