@@ -193,7 +193,6 @@ class InstanceBasics(unittest.TestCase):
             zone = self.zone
         if self.reservation is None:
             self.reservation = self.tester.run_instance(self.image, keypair=self.keypair.name, group=self.group.name, zone=zone)
-            self.tester.sleep(10)
         for instance in self.reservation.instances:
             self.assertTrue( self.tester.wait_for_reservation(self.reservation) ,'Instance did not go to running')
             self.assertNotEqual( instance.public_dns_name, instance.private_ip_address, 'Public and private IP are the same')
@@ -209,7 +208,6 @@ class InstanceBasics(unittest.TestCase):
         if zone is None:
             zone = self.zone
         self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name,zone=zone)
-        self.tester.sleep(10)
         for instance in self.reservation.instances:
             address = self.tester.allocate_address()
             self.assertTrue(address,'Unable to allocate address')
@@ -403,7 +401,6 @@ class InstanceBasics(unittest.TestCase):
         if zone is None:
             zone = self.zone
         self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name, private_addressing=True, zone=zone)
-        self.tester.sleep(10)
         for instance in self.reservation.instances:
             address = self.tester.allocate_address()
             self.assertTrue(address,'Unable to allocate address')
