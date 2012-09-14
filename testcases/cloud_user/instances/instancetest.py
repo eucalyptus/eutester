@@ -211,15 +211,13 @@ class InstanceBasics(unittest.TestCase):
         for instance in self.reservation.instances:
             address = self.tester.allocate_address()
             self.assertTrue(address,'Unable to allocate address')
-            self.assertTrue(self.tester.associate_address(instance, address))
-            self.tester.sleep(30)
+            self.tester.associate_address(instance, address)
             instance.update()
             self.assertTrue( self.tester.ping(instance.public_dns_name), "Could not ping instance with new IP")
-            address.disassociate()
-            self.tester.sleep(30)
+            self.tester.disassociate_address_from_instance(instance)
+            self.tester.release_address(address)
             instance.update()
-            self.assertTrue( self.tester.ping(instance.public_dns_name), "Could not ping instance with new IP")
-            address.release()
+            self.assertTrue( self.tester.ping(instance.public_dns_name), "Could not ping after dissassociate")
         return self.reservation
     
     def MaxSmallInstances(self, available_small=None,zone = None):
@@ -371,8 +369,13 @@ class InstanceBasics(unittest.TestCase):
         ### Once the previous test is complete rerun the BasicInstanceChecks test case
         ### Wait for an instance to become available
         count = self.tester.get_available_vms("m1.small")
-        while count < 1:
+        poll_count = 30
+        while poll_count > 0:
             self.tester.sleep(5)
+            count = self.tester.get_available_vms("m1.small")
+            if count > 0:
+                break
+            count -= 1
 
         q = Queue()
         queue_pool.append(q)
