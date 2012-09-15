@@ -374,19 +374,13 @@ class InstanceBasics(unittest.TestCase):
             self.tester.sleep(5)
             count = self.tester.get_available_vms("m1.small")
             if count > 0:
+                self.tester.debug("There is an available VM to use for final test")
                 break
-            count -= 1
-
-        q = Queue()
-        queue_pool.append(q)
-        p = Process(target=self.run_testcase_thread, args=(q, step,"BasicInstanceChecks"))
-        thread_pool.append(p)
-        p.start()
+            poll_count -= 1
         
         fail_count = 0
         ### Block until the script returns a result
         for queue in queue_pool:
-            pass
             test_result = queue.get(True)
             self.tester.debug("Got Result: " + str(test_result) )
             fail_count += test_result
@@ -394,7 +388,10 @@ class InstanceBasics(unittest.TestCase):
         for thread in thread_pool:
             thread.join()
         
-        self.assertEquals(fail_count, 0, "Failure detected in one of the " + str(count)  + " Basic Instance tests")
+        if fail_count > 0:
+            raise Exception("Failure detected in one of the " + str(count)  + " Basic Instance tests")
+
+        self.tester.debug("Successfully completed churn test")
 
     def PrivateIPAddressing(self, zone = None):
         """Basic test to run an instance with Private only IP
