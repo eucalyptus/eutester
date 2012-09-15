@@ -32,10 +32,11 @@
 
 
 
-
+from eutester import sshconnection 
 from eutester.sshconnection import SshConnection 
 from eutester.eulogger import Eulogger
 import time
+import re
 
 class WindowsProxyTests():
      
@@ -120,13 +121,19 @@ class WindowsProxyTests():
             self.debug('ps_cmd: cmd:"'+str(cmd)+'", attempt:'+str(attempt)+'/'+str(retries)+', elapsed:'+str(elapsed))
             try:
                 try:
-                    output = self.ssh.cmd(cmd,listformat=listformat,timeout=cmdtimeout)
+                    self.debug('-------------------------( Attempt:'+str(attempt)+' )------------------------------------')
+                    output = self.ssh.cmd(cmd,
+                                          listformat = listformat,
+                                          timeout = cmdtimeout,
+                                          cb = self.check_pshell_output )
                     self.debug('Command returned!!!!')
                     self.debug("\nstatus:"+str(output['status']))
                 except Exception, e:
                     raise Exception('Error while attempting to execute remote ssh command to proxy, err:'+str(e))
                 if output['status'] != 0:
                     raise Exception('Proxied ssh cmd:"'+str(command)+'", proxy returned error code:'+str(output['status']))
+                if re.search('FullyQualifiedErrorId',output['output']):
+                    raise Exception('Powershell error in output, see logs')
                 if expect is not None:
                     expect = str(expect)
                     if re.search(expect,output['output']):
@@ -143,6 +150,14 @@ class WindowsProxyTests():
             if elapsed > timeout:
                 raise Exception('ps_cmd timed out after:'+str(elapsed)+'seconds, and "'+str(attempt)+'" attempts')
         raise Exception('Command failed after '+str(attempt+1)+' attempts')
+    
+    def check_pshell_output(self,msg):
+        ret = sshconnection.SshCbReturn()
+        self.debug(str(msg))
+        if re.search('FullyQualifiedErrorId',msg):
+            raise Exception('Powershell error found in line:'+str(msg))
+            ret.stop = True
+        return ret
         
     def ps_ephemeral_test(self, host=None, password=None, retries=2, retryinterval=15, cmdtimeout=15, timeout=360):
         self.debug('Running command ps_ephemeral_test...')

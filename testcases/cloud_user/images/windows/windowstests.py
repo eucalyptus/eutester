@@ -43,6 +43,7 @@ from eutester.euvolume import EuVolume
 import socket
 import os
 import time
+import re
 
 class WindowsTests(EutesterTestCase):
     
@@ -83,7 +84,8 @@ class WindowsTests(EutesterTestCase):
         else:
             self.tester = tester
         self.tester.exit_on_fail = eof
-        if instance is not None:
+        self.instance = instance
+        if self.instance:
             self.instance = self.tester.get_instances(idstring=str(instance))[0]
         self.destpath = str(destpath)
         self.bucketname = bucketname
@@ -117,12 +119,12 @@ class WindowsTests(EutesterTestCase):
                              proxy_password = win_proxy_password,
                              debugmethod = lambda msg: self.debug(msg, traceback=2)
                              )
-            self.update_proxy_instance_data()
         self.setup_test_env()
-         
+        if self.instance and self.proxy:
+                self.update_proxy_instance_data()
     
     def setup_proxy(self, proxy_hostname, proxy_keypath=None, proxy_username=None, proxy_password=None, debugmethod=None):
-        debugmethod = debugmethod or (lambda msg: self.debug(msg))
+        debugmethod = debugmethod or (lambda msg: self.debug(msg, traceback=2))
         proxy = windowsproxytests.WindowsProxyTests(proxy_hostname, 
                                                          proxy_keypath = proxy_keypath,
                                                          proxy_username = proxy_username,
@@ -140,12 +142,26 @@ class WindowsTests(EutesterTestCase):
         self.setupWindowsSecurityGroup()
         self.setupWindowsZones()
         
+    def get_images_by_location(self, match='windows'):
+        retlist=[]
+        for image in self.tester.ec2.get_all_images():
+            if re.search(match,image.location):
+                retlist.append(image)
+        return retlist
+        
     def update_proxy_instance_data(self, win_instance=None, instance_password=None ):
-        instance = win_instance or self.instance
-        password = instance_password or self.instance_password
-        if self.proxy:
-            self.proxy.win_instance = instance
+        if self.proxy is None:
+            return
+        self.proxy.win_instance = win_instance or self.instance
+        try:
+            password = instance_password or self.instance_password
+            if password is None:
+                password = self.test_get_windows_instance_password()
             self.proxy.win_password = password
+        except Exception, e:
+            self.debug('Warning: update_proxy_instance_data: Could not get instance password')    
+        
+        
             
     def setupWindowsSecurityGroup(self):
         #Setup our security group for later use...
@@ -366,6 +382,23 @@ class WindowsTests(EutesterTestCase):
             s.close()
         self.debug('test_rdp_port, success')
         
+    def test_poll_for_rdp(self, ip=None, port=3389, count=10, interval=10, timeout=120):
+        start = time.time()
+        elapsed = 0 
+        for x in xrange(0,count):
+            elapsed = int(time.time() -start)
+            if elapsed < timeout:
+                try:
+                    self.test_rdp_port(ip=ip, port=port)
+                    return
+                except Exception, e:
+                    self.debug('Failed to connect to rdp at:'+str(ip)+', attempt:'+str(x)+'/'+str(count)+', elapsed:'+str(elapsed)+', err:'+str(e))
+                    time.sleep(interval)
+            else:
+                self.debug('test_poll_for_rdp timeout after '+str(elapsed)+' seconds')
+                break
+        raise Exception('Could not connect to rdp at:'+str(ip)+', attempt:'+str(x)+'/'+str(count)+', elapsed:'+str(elapsed)+', err:'+str(e))
+            
     
     def test_get_windows_emi(self):
         emi = None
