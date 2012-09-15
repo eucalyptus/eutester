@@ -144,6 +144,7 @@ import unittest
 import time
 from eucaops import Eucaops
 from eutester import xmlrunner
+from eutester.euvolume import EuVolume
 import os
 import re
 import random
@@ -165,7 +166,7 @@ class InstanceBasics(unittest.TestCase):
         self.tester.authorize_group_by_name(group_name=self.group.name, port=-1, protocol="icmp" )
         ### Generate a keypair for the instance
         self.keypair = self.tester.add_keypair( "keypair-" + str(time.time()))
-        self.keypath = os.curdir + "/" + self.keypair.name + ".pem"
+        self.keypath = '%s/%s.pem' % (os.curdir, self.keypair.name)
         self.image = self.tester.get_emi(root_device_type="instance-store")
         self.reservation = None
         self.private_addressing = False
@@ -184,24 +185,8 @@ class InstanceBasics(unittest.TestCase):
         self.keypair = None
         self.tester = None
         self.ephemeral = None
-        
-    def create_attach_volume(self, instance, size):
-            self.volume = self.tester.create_volume(instance.placement, size)
-            device_path = "/dev/" + instance.block_device_prefix  +"j"
-            before_attach = instance.get_dev_dir()
-            try:
-                self.assertTrue(self.tester.attach_volume(instance, self.volume, device_path), "Failure attaching volume")
-            except AssertionError, e:
-                self.assertTrue( self.tester.delete_volume(self.volume))
-                return False
-            after_attach = instance.get_dev_dir()
-            new_devices = self.tester.diff(after_attach, before_attach)
-            if len(new_devices) is 0:
-                return False
-            self.volume_device = "/dev/" + new_devices[0].strip()
-            instance.assertFilePresent(self.volume_device)
-            return True
-    
+
+
     def BasicInstanceChecks(self, zone = None):
         """Instance checks including reachability and ephemeral storage"""
         if zone is None:
@@ -223,7 +208,7 @@ class InstanceBasics(unittest.TestCase):
             Release the address"""
         if zone is None:
             zone = self.zone
-        self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name)
+        self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name,zone=zone)
         self.tester.sleep(10)
         for instance in self.reservation.instances:
             address = self.tester.allocate_address()
@@ -253,7 +238,7 @@ class InstanceBasics(unittest.TestCase):
         """Run 1 of the largest instance c1.xlarge"""
         if zone is None:
             zone = self.zone
-        self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name,type="c1.xlarge")
+        self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name,type="c1.xlarge",zone=zone)
         self.assertTrue( self.tester.wait_for_reservation(self.reservation) ,'Not all instances  went to running')
         return self.reservation
     
@@ -344,20 +329,14 @@ class InstanceBasics(unittest.TestCase):
         if zone is None:
             zone = self.zone
         self.reservation = self.tester.run_instance(self.image, keypair=self.keypair.name, group=self.group.name, zone=zone)
-        self.tester.sleep(10)
         for instance in self.reservation.instances:
             ### Create 1GB volume in first AZ
-            self.assertTrue(self.create_attach_volume(instance, 1), "Was not able to attach volume")
+            self.volume = self.tester.create_volume(instance.placement, 1)
+            euvolume = EuVolume.make_euvol_from_vol(self.volume)
+            self.volume_device = instance.attach_euvolume(euvolume)
             ### Reboot instance
             instance.reboot_instance_and_verify(waitconnect=20)
-            self.tester.debug("Restarting SSH session to instance")
-            ### Check for device in instance
-            ### Make sure volume is still attached after reboot
-            if self.volume_device is None:
-                 self.assertTrue(False, "Failed to find volume on instance")
-            instance.assertFilePresent(self.volume_device) 
-            self.assertTrue(self.tester.detach_volume(self.volume), "Unable to detach volume")
-            self.assertTrue(self.tester.delete_volume(self.volume), "Unable to delete volume")
+            instance.detach_euvolume(euvolume)
         return self.reservation
     
     def Churn(self, testcase="BasicInstanceChecks"):
@@ -381,7 +360,7 @@ class InstanceBasics(unittest.TestCase):
             thread_pool.append(p)
             self.tester.debug("Starting Thread " + str(i) +" in " + str(step * i))
             p.start()
-        
+
         ### While the other tests are running, run and terminate count instances with a 10s sleep in between
         for i in xrange(count):
             self.reservation = self.image.run()
@@ -392,9 +371,14 @@ class InstanceBasics(unittest.TestCase):
                 self.assertTrue(self.tester.wait_for_instance(instance, "terminated"), "Instance did not go to terminated")
         
         ### Once the previous test is complete rerun the BasicInstanceChecks test case
+        ### Wait for an instance to become available
+        count = self.tester.get_available_vms("m1.small")
+        while count < 1:
+            self.tester.sleep(5)
+
         q = Queue()
         queue_pool.append(q)
-        p = Process(target=self.run_testcase_thread, args=(q, step * i,"BasicInstanceChecks"))
+        p = Process(target=self.run_testcase_thread, args=(q, step,"BasicInstanceChecks"))
         thread_pool.append(p)
         p.start()
         
@@ -432,7 +416,7 @@ class InstanceBasics(unittest.TestCase):
             instance.update()
             self.assertFalse( self.tester.ping(instance.public_dns_name), "Was able to ping instance that should have only had a private IP")
             address.release()
-            if (instance.public_dns_name != instance.private_dns_name):
+            if instance.public_dns_name != instance.private_dns_name:
                 self.fail("Instance received a new public IP: " + instance.public_dns_name)
         return self.reservation
     
