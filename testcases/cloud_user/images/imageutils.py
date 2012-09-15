@@ -316,7 +316,8 @@ class ImageUtils(EutesterTestCase):
                             upload_manifest=None,
                             time_per_gig=300,
                             ):
-         
+        
+        start = time.time() 
         self.debug('create_emi_from_url:'+str(url)+", starting...")
         if filepath is None and bundle_manifest is None and upload_manifest is None:
             filename = str(url).split('/')[-1]
@@ -342,6 +343,7 @@ class ImageUtils(EutesterTestCase):
         emi = self.tester.register_image(image_location=upload_manifest, rdn=root_device_name, 
                                          description=description, bdmdev=block_device_mapping, 
                                          name=name, ramdisk=ramdisk, kernel=kernel)
-        self.debug('create_emi_from_url: Done, image registered as:'+str(emi))
+        elapsed= int(time.time()-start)
+        self.debug('create_emi_from_url: Done, image registered as:'+str(emi)+", after "+str(elapsed)+" seconds")
         return emi
     
