@@ -10,21 +10,16 @@
 
 from eucaops import Eucaops
 import argparse
-import re
 import time
-import os
-from eutester import xmlrunner
 
 from eutester.eutestcase import EutesterTestCase
-from eutester.eutestcase import EutesterTestResult
 from boto.exception import S3ResponseError
 from boto.exception import S3CreateError
 import boto
-import unittest
 
-class BucketTestSuite(unittest.TestCase):
+class BucketTestSuite(EutesterTestCase):
     
-    def setUp(self, credpath):
+    def __init__(self, credpath):
         self.bucket_prefix = "buckettestsuite-" + str(int(time.time())) + "-"
         self.tester = Eucaops(credpath=credpath)
         self.test_user_id = self.tester.s3.get_canonical_user_id()

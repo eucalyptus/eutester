@@ -33,21 +33,14 @@
 # Author: vic.iglesias@eucalyptus.com
 
 
-__version__ = '0.0.1'
+__version__ = '0.0.3'
 
 import re
 import os
-import subprocess
-import threading
-import paramiko
-import select
 import boto
 import random
 import time
-import signal
-import copy 
 import string
-from threading import Thread
 
 from boto.ec2.regioninfo import RegionInfo
 from boto.s3.connection import OrdinaryCallingFormat
@@ -70,8 +63,17 @@ EC2RegionData = {
 
 class Eutester(object):
     def __init__(self, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, region=None, ec2_ip=None, s3_ip=None, boto_debug=0):
-        """  
-        This is the constructor for a eutester object, it takes care of setting up the connections that will be required for a test to run. 
+        """This class is intended to setup boto connections for the various services that the *ops classes will use.
+
+        :param credpath: Path to a valid eucarc file.
+        :param aws_access_key_id: Used in conjuction with aws_secret_access_key allows for creation of connections without needing a credpath.
+        :param aws_secret_access_key: Used in conjuction with aws_access_key_id allows for creation of connections without needing a credpath.
+        :param region: When connecting to Amazon EC2 allows you to point to a specific region.
+        :param ec2_ip: Hostname or IP of the EC2 endpoint to connect to. Can be used in the absence of region.
+        :param s3_ip: Hostname or IP of the S3 endpoint to connect to.
+        :param boto_debug: Hostname or IP of the S3 endpoint to connect to.
+        :rtype: :class:`eutester.Eutester` or ``None``
+        :returns: A Eutester object with all connections that were able to be created. Currently EC2, S3, IAM, and STS.
         """
         ### Default values for configuration
         self.boto_debug = boto_debug
@@ -90,7 +92,7 @@ class Eutester(object):
         self.running_log = self.logger.log
 
         ### Pull the access and secret keys from the eucarc or use the ones provided to the constructor
-        if (self.credpath != None):
+        if self.credpath is not None:
             self.debug("Extracting keys from " + self.credpath)         
             self.aws_access_key_id = self.get_access_key()
             self.aws_secret_access_key = self.get_secret_key()
@@ -99,12 +101,12 @@ class Eutester(object):
             self.aws_secret_access_key = aws_secret_access_key
         
         ### If you have credentials for the boto connections, create them
-        if (self.aws_access_key_id != None) and (self.aws_secret_access_key != None):
+        if (self.aws_access_key_id is not None) and (self.aws_secret_access_key != None):
             if not boto.config.has_section('Boto'):
                 boto.config.add_section('Boto')
-            boto.config.set('Boto', 'num_retries', '2')  
+            boto.config.set('Boto', 'num_retries', '2')
             self.setup_boto_connections(region=region,ec2_ip=ec2_ip,s3_ip=s3_ip)
-          
+
     def setup_boto_connections(self, region=None, aws_access_key_id=None, aws_secret_access_key=None, ec2_ip=None, s3_ip=None, is_secure=False):
         
         if aws_access_key_id is None:
@@ -228,8 +230,9 @@ class Eutester(object):
         std_out_return = os.popen(cmd).readlines()
         return std_out_return
     
-    def found(self, command, regex, timeout=120):
-        """ Returns a Boolean of whether the result of the command contains the regex"""
+    def found(self, command, regex):
+        """ Returns a Boolean of whether the result of the command contains the regex
+        """
         result = self.local(command)
         for line in result:
             found = re.search(regex,line)
@@ -238,19 +241,18 @@ class Eutester(object):
         return False
     
     def ping(self, address, poll_count = 10):
-        '''
+        """
         Ping an IP and poll_count times (Default = 10)
         address      Hostname to ping
         poll_count   The amount of times to try to ping the hostname iwth 2 second gaps in between
-        ''' 
-        found = False
+        """
         if re.search("0.0.0.0", address): 
             self.critical("Address is all 0s and will not be able to ping it") 
             return False
         self.debug("Attempting to ping " + address)
-        while (poll_count > 0):
+        while poll_count > 0:
             poll_count -= 1 
-            if self.found("ping -c 1 " + address, "1.*received"):
+            if self.found("ping -c 1 " + address, "1.*1.*received"):
                 self.debug("Was able to ping address")
                 return True
             if poll_count == 0:
@@ -286,7 +288,7 @@ class Eutester(object):
         return time.time() - self.start_time
        
     def clear_fail_count(self):
-        ''' The counter for keeping track of all the errors '''
+        """ The counter for keeping track of all the errors """
         self.fail_count = 0
         
     def sleep(self, seconds=1):
@@ -295,17 +297,17 @@ class Eutester(object):
         time.sleep(seconds)
     
     def id_generator(self, size=6, chars=string.ascii_uppercase + string.ascii_lowercase  + string.digits ):
-        '''Returns a string of size with random charachters from the chars array. 
+        """Returns a string of size with random charachters from the chars array.
              size    Size of string to return
              chars   Array of characters to use in generation of the string
-        '''
+        """
         return ''.join(random.choice(chars) for x in range(size))
         
     def __str__(self):
-        '''
-        Prints informations about configuration of Eucateser as configuration file, 
+        """
+        Prints informations about configuration of Eucateser as configuration file,
         how many errors, the path of the Eucalyptus, and the path of the user credentials
-        '''
+        """
         s  = "+++++++++++++++++++++++++++++++++++++++++++++++++++++\n"
         s += "+" + "Eucateser Configuration" + "\n"
         s += "+" + "+++++++++++++++++++++++++++++++++++++++++++++++\n"

@@ -11,7 +11,7 @@ import os
 import re
 import random
 
-class HAtests(EutesterTestCase, InstanceBasics, BucketTestSuite):
+class HAtests(InstanceBasics, BucketTestSuite):
     def __init__(self, config_file="cloud.conf", password="foobar"):
         self.tester = Eucaops( config_file=config_file, password=password)
         self.servman = self.tester.service_manager

@@ -1,4 +1,4 @@
-eutester version 0.0.1
+eutester version 0.0.3
 ======================
 
 [Intro to Eutester](http://testingclouds.wordpress.com/2012/03/04/test1/)
@@ -32,6 +32,8 @@ Main Classes
 ------
 eutester contains the framework pieces like parsing config/creds, setting up connections and providing test primatives  
 eucaops uses the framework provided by eutester to provide validated higher order operations on those cloud connections
+
+![class-diagram](https://s3.amazonaws.com/vic-bucket/eutester-class-diagram.jpg)
 
 Example test cases written with this library can be found in the testcases/unstable directory of the source tree
 

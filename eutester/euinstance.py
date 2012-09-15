@@ -191,7 +191,7 @@ class EuInstance(Instance):
             
 
                 
-    def sys(self, cmd, verbose=True, timeout=120, listformat=True, code=None):
+    def sys(self, cmd, verbose=True, timeout=120):
         '''
         Issues a command against the ssh connection to this instance
         Returns a list of the lines from stdout+stderr as a result of the command
@@ -201,7 +201,7 @@ class EuInstance(Instance):
         '''
         output = []
         if (self.ssh is not None):
-            output = self.ssh.sys(cmd, verbose=verbose, timeout=timeout,listformat=True, code=code)
+            output = self.ssh.sys(cmd, verbose=verbose, timeout=timeout)
             return output
         else:
             raise Exception("Euinstance ssh connection is None")
@@ -380,7 +380,6 @@ class EuInstance(Instance):
             self.rootfs_device = "sda"
             self.virtio_blk = False
             
-    
     
     def get_guestdevs_inuse_by_vols(self):
         retlist = []
