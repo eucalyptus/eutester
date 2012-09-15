@@ -716,7 +716,7 @@ class EC2ops(Eutester):
         if image is None:
             images = self.ec2.get_all_images()
             for emi in images:
-                if re.match("emi",emi.name):
+                if re.match("emi",emi.id):
                     image = emi      
         if image is None:
             raise Exception("emi is None. run_instance could not auto find an emi?")   
