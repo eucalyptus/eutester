@@ -172,7 +172,13 @@ class WindowsTests(EutesterTestCase):
                 self.group = self.tester.add_group(group_name)
                 self.tester.authorize_group_by_name(self.group.name)
                 #enable windows RDP port
-                self.tester.authorize_group_by_name(self.group.name,protocol="tcp",port=3389)
+                self.tester.authorize_group_by_name(self.group.name,protocol="tcp",port=3389) 
+                #enable http/https
+                self.tester.authorize_group_by_name(self.group.name,protocol="tcp",port=80)
+                self.tester.authorize_group_by_name(self.group.name,protocol="tcp",port=443)
+                #enable remote powershell
+                self.tester.authorize_group_by_name(self.group.name,protocol="tcp",port=5985)
+                self.tester.authorize_group_by_name(self.group.name,protocol="tcp",port=5986)
             except Exception, e:    
                 raise Exception("Error when setting up group:"+str(group_name)+", Error:"+str(e)) 
          
@@ -280,14 +286,15 @@ class WindowsTests(EutesterTestCase):
         Work is done on a given machine and requires euca2ools present on that machine. 
         Returns the emi of the registered image
         '''
+        
         return self.iu.create_emi_from_url(url, 
                                            component = (component or self.component), 
                                            bucketname = (bucketname or self.bucketname), 
                                            component_credpath = (component_credpath or self.component_credpath), 
-                                           destination = (destination or self.destpath),
+                                           destination = (destpath or self.destpath),
                                            interbundle_timeout = (inter_bundle_timeout or self.inter_bundle_timeout), 
                                            upload_timeout = (upload_timeout or self.upload_timeout),
-                                           destpath = (destination or self.destpath),
+                                           destpath = (destpath or self.destpath),
                                            wget_user = (wget_user), 
                                            wget_password = (wget_password),   
                                            time_per_gig = (time_per_gig or self.time_per_gig) )
@@ -311,10 +318,10 @@ class WindowsTests(EutesterTestCase):
                                            component = (component or self.component), 
                                            bucketname = (bucketname or self.bucketname), 
                                            component_credpath = (component_credpath or self.component_credpath), 
-                                           destination = (destination or self.destpath),
+                                           destination = (destpath or self.destpath),
                                            interbundle_timeout = (inter_bundle_timeout or self.inter_bundle_timeout), 
                                            upload_timeout = (upload_timeout or self.upload_timeout),
-                                           destpath = (destination or self.destpath),
+                                           destpath = (destpath or self.destpath),
                                            filepath = fpath,
                                            time_per_gig = (time_per_gig or self.time_per_gig) )
         
