@@ -1,5 +1,6 @@
-
+    
 from eucaops import Eucaops
+import eutester.eutestcase
 from eutester.eutestcase import EutesterTestCase
 from eutester.eutestcase import EutesterTestResult
 import eutester.machine 
@@ -10,6 +11,7 @@ import windowsproxytests
 from eutester.euvolume import EuVolume
 import socket
 import os
+import time
 
 class WindowsTests(EutesterTestCase):
     
@@ -50,6 +52,8 @@ class WindowsTests(EutesterTestCase):
         else:
             self.tester = tester
         self.tester.exit_on_fail = eof
+        if instance is not None:
+            self.instance = self.tester.get_instances(idstring=str(instance))[0]
         self.destpath = str(destpath)
         self.bucketname = bucketname
         self.component = work_component 
@@ -63,30 +67,55 @@ class WindowsTests(EutesterTestCase):
         self.group = group 
         self.keypair = keypair
         self.zonelist = []
-        self.emi = self.tester.get_emi(self.emi)
+        self.emi = self.tester.get_emi(emi)
         self.image_path = image_path
+        
         self.emi_location = emi_location
         if zone is not None:
             self.zonelist.append(zone)
         self.testvolcount = testvolcount
         self.testvolumes = testvolumes
-        self.instance = instance
         self.instance_password = None
         #setup zone list
         self.setupWindowsZones()
         #setup windows proxy 
         if win_proxy_hostname is not None:
-            self.proxy = windowsproxytests.WindowsProxyTests(proxy_hostname, 
-                                                             proxy_keypath = win_proxy_keypath,
-                                                             proxy_username = win_proxy_username,
-                                                             proxy_password = win_proxy_password,
-                                                             debugmethod = self.proxydebug,
-                                                             )
+            self.setup_proxy(win_proxy_hostname,
+                             proxy_keypath = win_proxy_keypath,
+                             proxy_username = win_proxy_username,
+                             proxy_password = win_proxy_password,
+                             debugmethod = lambda msg: self.debug(msg, traceback=2)
+                             )
+            self.update_proxy_instance_data()
+        self.setup_test_env()
          
-        
+    
+    def setup_proxy(self, proxy_hostname, proxy_keypath=None, proxy_username=None, proxy_password=None, debugmethod=None):
+        debugmethod = debugmethod or (lambda msg: self.debug(msg))
+        proxy = windowsproxytests.WindowsProxyTests(proxy_hostname, 
+                                                         proxy_keypath = proxy_keypath,
+                                                         proxy_username = proxy_username,
+                                                         proxy_password = proxy_password,
+                                                         debugmethod = debugmethod,
+                                                         )
+        self.proxy = proxy
+        return proxy
+    '''       
     def proxydebug(self, msg):
         return self.debug(msg, traceback=2)
-    
+    '''
+    def setup_test_env(self):
+        self.setupWindowsKeypair()
+        self.setupWindowsSecurityGroup()
+        self.setupWindowsZones()
+        
+    def update_proxy_instance_data(self, win_instance=None, instance_password=None ):
+        instance = win_instance or self.instance
+        password = instance_password or self.instance_password
+        if self.proxy:
+            self.proxy.win_instance = instance
+            self.proxy.win_password = password
+            
     def setupWindowsSecurityGroup(self):
         #Setup our security group for later use...
         if self.group is None:
@@ -99,8 +128,7 @@ class WindowsTests(EutesterTestCase):
                 self.tester.authorize_group_by_name(self.group.name,protocol="tcp",port=3389)
             except Exception, e:    
                 raise Exception("Error when setting up group:"+str(group_name)+", Error:"+str(e)) 
-        else:
-            return  
+         
         
     def setupWindowsKeypair(self):
         #Setup the keypairs for later use
@@ -115,10 +143,13 @@ class WindowsTests(EutesterTestCase):
                 return
         except Exception, ke:
             raise Exception("Failed to find/create a keypair, error:" + str(ke))
+        
            
         
-    def test_get_windows_instance_password(self, instance, privkeypath=None):
-        password = self.tester.get_windows_instance_password(instance, privkeypath)
+    def test_get_windows_instance_password(self, instance=None, privkeypath=None):
+        instance =instance or self.instance
+        privkeypath = privkeypath or self.tester.verify_local_keypath(self.keypair.name)
+        password = self.tester.get_windows_instance_password(instance, private_key_path = privkeypath)
         self.instance_password = password
         return password
         
@@ -258,13 +289,16 @@ class WindowsTests(EutesterTestCase):
         if not emi:
             raise Exception('test_run_windows_emi, no emi provided. ')
         res = self.tester.run_instance(emi, 
-                                 keypair = keypair or self.keypair, 
+                                 keypair = keypair or self.keypair.name, 
                                  group = group or self.group, 
                                  type = type, 
                                  zone=zone, 
                                  min=min, max=max, user_data=user_data, private_addressing=private_addressing, is_reachable=False, timeout=timeout)
-        self.debug('test_run_windows_emi, setting test instance to:'+str(instance.id))
+        
+        
         self.instance = res.instances[0]
+        self.debug('test_run_windows_emi, setting test instance to:'+str(self.instance.id))
+        self.debug('')
         return res
         
         
@@ -334,8 +368,9 @@ class WindowsTests(EutesterTestCase):
             
     
     def test_update_proxy_with_instance_info(self):
+        self.debug('Updating proxy object with new instance info...')
         if not self.instance or not self.win_password:
-            raise Exception('test_update_proxy_with_instance, instance and/or win_password None')
+            raise Exception('test_update_proxy_with_instance_info, instance and/or win_password None')
         self.proxy.win_instance = self.instance
         self.proxy.win_password = self.instance_password
         
@@ -362,6 +397,12 @@ class WindowsTests(EutesterTestCase):
             list.append(self.proxy.ps_virtio_test)
         else:
             list.append(self.proxy.ps_xenpv_test)
+            
+        self.run_test_case_list(list)
+        
+            
+        
+    
         
         
     
