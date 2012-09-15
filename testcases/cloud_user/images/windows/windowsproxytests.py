@@ -85,27 +85,46 @@ class WindowsProxyTests():
                 self.debugmethod(msg)
             else:
                 print(msg)
-                
+    def reset_ssh(self):
+        self.ssh.close()
+        self.ssh.refresh_connection()
+
+    
     def ps_cmd(self, 
                hostname, 
                password,
                ps1source = '. C:\eutester_profile.ps1;', 
                command=None,
                cmdprefix=None, 
-               expect='SUCCESS', 
+               expect=None,
                listformat=False, 
-               retries=2, 
+               retries=1, 
                retryinterval=10, 
                cmdtimeout=30, 
+               pscb = None,
                timeout=360):
         '''
         Send command over ssh connection to power shell proxy server. Proxy server then excutes Power shell command
         against 'hostname' using 'password'. Checks for ssh errors, as well as attempts to match the text 'expect' against the text returned from executing 
         the command. 
         Returns the command output in either a single string buffer or list of lines depending on 'listformat' setting. 
+        hostname - mandatory - string, hostname or ip addr of instance
+        password - mandatory - string, windows Administrator password derived from instance
+        ps1source - optional - string, in ". <filename;" form. A prefix to source a given powershell script for cmdlets default: '. C:\eutester_profile.ps1;'
+        command= optional - string, command/cmdlet to run after the login sequence. 
+        cmdprefix - optional - string, command prefix to run other than default login sequence 
+        expect -  optional - regex, regex to match to return success. ie: expect='SUCCESS'
+        listformat - optional - boolean, indicate whether or not returned string buffer is split per lines in a list or single buffer  
+        retries - optional - integer, number of times to retry this command after failure  
+        retryinterval - optional - integer, number of seconds to sleep between retries after failure 
+        cmdtimeout - optional - integer,  number of seconds to wait before giving up on each command retry
+        pscb - optional - callback to handle per line output of command, default is: self.check_pshell_output used to fail fast on remote powershell errors
+        timeout -optional - integer, number of seconds to wait before giving up on this method (sum of all retries)
         '''
         start = time.time()
         elapsed = 0
+        if pscb is None:
+            pscb = self.check_pshell_output
         #if no command is provided assume only the prefix is run, usually to test login. 
         if command is None:
             loginoutput=';'
@@ -114,18 +133,21 @@ class WindowsProxyTests():
             loginoutput=' | out-null;'
         
         if cmdprefix is None:
-                #cmdprefix = 'powershell -command "&{New-Euca-QA -hostname ' + hostname + ' | out-null; Test-Euca-Login -hostname ' + hostname + ' -password ' + password + loginoutput
+                #Build the power shell command to run on remote proxy...
                 cmdprefix = 'powershell -command "&{'+str(ps1source)+' Eutester-New-Euca-QA -hostname ' + hostname + ' ; Eutester-Test-Euca-Login -hostname ' + hostname + ' -password ' + password + loginoutput
         cmd = cmdprefix + str(command) + '}"'
+        
+        #Attempt to run the command until number of retries is exceeded...
         for attempt in xrange(0,retries):
             self.debug('ps_cmd: cmd:"'+str(cmd)+'", attempt:'+str(attempt)+'/'+str(retries)+', elapsed:'+str(elapsed))
             try:
                 try:
-                    self.debug('-------------------------( Attempt:'+str(attempt)+' )------------------------------------')
+                    self.ps_status_msg('    ( Attempt:'+str(attempt)+' )')
+                    #
                     output = self.ssh.cmd(cmd,
                                           listformat = listformat,
                                           timeout = cmdtimeout,
-                                          cb = self.check_pshell_output )
+                                          cb = pscb )
                     self.debug('Command returned!!!!')
                     self.debug("\nstatus:"+str(output['status']))
                 except Exception, e:
@@ -137,19 +159,28 @@ class WindowsProxyTests():
                 if expect is not None:
                     expect = str(expect)
                     if re.search(expect,output['output']):
-                        self.debug('Command was successful')
+                        self.ps_status_msg('Command was successful')
                         return output['output']
                     else:
                         raise Exception('Could not find text:"'+ expect + '" in command output')
                 
-                self.debug('Command was successful')
+                self.ps_status_msg('Command was successful')
                 return output['output']
             except Exception, ae:
-                self.debug('ps_cmd, attempt:'+str(attempt)+', failed:'+str(ae))
+                self.ps_status_msg('ps_cmd, attempt:'+str(attempt)+', failed:'+str(ae))
+                time.sleep(retryinterval)
+            finally:
+                #Windows ssh doesn't clean up well...
+                self.reset_ssh()
             elapsed =  int(time.time()-start)
             if elapsed > timeout:
                 raise Exception('ps_cmd timed out after:'+str(elapsed)+'seconds, and "'+str(attempt)+'" attempts')
         raise Exception('Command failed after '+str(attempt+1)+' attempts')
+    
+    def ps_status_msg(self,msg):
+        self.debug('-----------------------------------------------------------------------------------------')
+        self.debug(msg)
+        self.debug('-----------------------------------------------------------------------------------------')
     
     def check_pshell_output(self,msg):
         ret = sshconnection.SshCbReturn()
