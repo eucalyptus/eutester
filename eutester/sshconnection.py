@@ -65,6 +65,7 @@ class SshCbReturn():
         if cb settimer is > 0, timer timeout will be adjusted for this time
         if cb statuscode is != -1 cmd status will return with this value
         if cb nextargs is set, the next time cb is called these args will be passed instead
+        if cb buf is not None, the cmd['output'] buffer will be appended with this buf
     '''
     def __init__(self, stop=False, statuscode=-1, settimer=0, buf=None,nextargs=[]):
         self.stop = stop
