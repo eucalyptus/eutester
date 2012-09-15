@@ -134,7 +134,7 @@ class WindowsProxyTests():
         
         if cmdprefix is None:
                 #Build the power shell command to run on remote proxy...
-                cmdprefix = 'powershell -command "&{'+str(ps1source)+' Eutester-New-Euca-QA -hostname ' + hostname + ' ; Eutester-Test-Euca-Login -hostname ' + hostname + ' -password ' + password + loginoutput
+                cmdprefix = 'echo "\n" | powershell -command "&{'+str(ps1source)+' Eutester-New-Euca-QA -hostname ' + hostname + ' ; Eutester-Test-Euca-Login -hostname ' + hostname + ' -password ' + password + loginoutput
         cmd = cmdprefix + str(command) + '}"'
         
         #Attempt to run the command until number of retries is exceeded...
@@ -151,7 +151,7 @@ class WindowsProxyTests():
                     self.debug('Command returned!!!!')
                     self.debug("\nstatus:"+str(output['status']))
                 except Exception, e:
-                    raise Exception('Error while attempting to execute remote ssh command to proxy, err:'+str(e))
+                    raise Exception('Error while attempting to execute remote ssh command to proxy,\nError:'+str(e))
                 if output['status'] != 0:
                     raise Exception('Proxied ssh cmd:"'+str(command)+'", proxy returned error code:'+str(output['status']))
                 if re.search('FullyQualifiedErrorId',output['output']):
@@ -181,7 +181,8 @@ class WindowsProxyTests():
         self.debug('-----------------------------------------------------------------------------------------')
         self.debug(msg)
         self.debug('-----------------------------------------------------------------------------------------')
-    
+        
+        
     def check_pshell_output(self,msg):
         ret = sshconnection.SshCbReturn()
         self.debug(str(msg))
@@ -190,6 +191,22 @@ class WindowsProxyTests():
             ret.stop = True
         return ret
         
+    def ps_check_powershell(self, echomsg='YES powershell is working'):
+        '''
+        Basic echo function to test the remote proxy's powershell status
+        '''
+        cmdprefix = 'echo "\n" | powershell -command "&{. C:\eutester_profile.ps1; Eutester-echo -word '+str(echomsg)
+        out = self.ps_cmd("test", 
+                          "test",
+                          command=None,
+                          cmdprefix=cmdprefix, 
+                          retries=1, 
+                          retryinterval=5, 
+                          cmdtimeout=10, 
+                          timeout=20)
+        return out
+            
+    
     def ps_ephemeral_test(self, host=None, password=None, retries=2, retryinterval=15, cmdtimeout=15, timeout=360):
         self.debug('Running command ps_ephemeral_test...')
         host = host or self.win_instance.public_dns_name
