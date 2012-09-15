@@ -36,7 +36,6 @@ import re
 import sys
 import os
 import pprint
-from M2Crypto import RSA
 import boto
 from boto.ec2.image import Image
 from boto.ec2.instance import Reservation
@@ -146,20 +145,25 @@ class EC2ops(Eutester):
             return False
         return True
     
-    def get_windows_instance_password(self, instance, privkeypath=None):
-        if privatekeypath is None:
-            privatekeypath = self.tester.verify_local_keypath(keyname, path, exten)
-        key = tester.ec2.get_password_data(instance.id)
-        return self.decrypt_string(encrypted_string, private_key_path)
-        
-    
-    def decrypt_string(self, encrypted_string, private_key_path, encoded=False):
+    def get_windows_instance_password(self, instance, private_key_path=None, key=None, dir=None, exten=".pem", encoded=True):
+        self.debug("get_windows_instance_password, instance:"+str(instance.id)+", keypath:"+str(private_key_path)+", dir:"+str(dir)+", exten:"+str(exten)+", encoded:"+str(encoded))
+        try:
+            from M2Crypto import RSA
+            import base64
+        except ImportError:
+            raise ImportError("Unable to load M2Crypto. Please install by using your package manager to install "
+                              "python-m2crypto or 'easy_install M2crypto'")
+        if private_key_path is None and key is not None:
+            private_key_path = str(self.verify_local_keypath( key.name , dir, exten))
+        if not private_key_path:
+            raise Exception('get_windows_instance_password, keypath not found?')        
+        encrypted_string = self.ec2.get_password_data(instance.id)
         user_priv_key = RSA.load_key(private_key_path)
-        string_to_decrypt = encrypted_string
         if encoded:
             string_to_decrypt = base64.b64decode(encrypted_string)
-        return user_priv_key.private_decrypt(string_to_decrypt,
-                RSA.pkcs1_padding)
+        else:
+            string_to_decrypt = encrypted_string
+        return user_priv_key.private_decrypt(string_to_decrypt,RSA.pkcs1_padding)   
     
     def add_group(self, group_name=None, fail_if_exists=False ):
         """
@@ -262,7 +266,7 @@ class EC2ops(Eutester):
         start = time.time()
         elapsed = 0
         ### If the instance changes state or goes to the desired state before my poll count is complete
-        while( elapsed <  timeout ) and (instance.state != state):
+        while( elapsed <  timeout ) and (instance.state != state) and (instance.state != 'terminated'):
             #poll_count -= 1
             self.debug( "Instance("+instance.id+") State("+instance.state+"), elapsed:"+str(elapsed))
             time.sleep(10)
@@ -740,7 +744,7 @@ class EC2ops(Eutester):
                 self.ping(instance.public_dns_name, 60)
                 
         #calculate remaining time to wait for establishing an ssh session/euinstance     
-        timeout = timeout-int(time.time()-start)  
+        timeout = int(timeout)-int(time.time()-start)  
         #if we can establish an SSH session convert the instances to the test class euinstance for access to instance specific test methods
         if (is_reachable):
             self.debug("Converting " + str(reservation) + " into euinstances")
