@@ -778,7 +778,7 @@ class EC2ops(Eutester):
             
             self.wait_for_valid_ip(instance)
             if is_reachable:
-                self.ping(instance.public_dns_name, 60)
+                self.ping(instance.public_dns_name, 20)
                 
         #calculate remaining time to wait for establishing an ssh session/euinstance     
         timeout -= int(time.time() - start)
