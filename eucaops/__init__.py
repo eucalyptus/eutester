@@ -48,7 +48,7 @@ import os
 
 class Eucaops(EC2ops,S3ops,IAMops,STSops):
     
-    def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,  account="eucalyptus", user="admin", username=None, region=None, ec2_ip=None, s3_ip=None, boto_debug=0):
+    def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,  account="eucalyptus", user="admin", username=None, region=None, ec2_ip=None, s3_ip=None, download_creds=True,boto_debug=0):
         self.config_file = config_file 
         self.eucapath = "/opt/eucalyptus"
         self.ssh = None
@@ -65,7 +65,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops):
         self.hypervisor = None
         self.clc_index = 0
         self.credpath = credpath
-        
+        self.download_creds = download_creds
         self.logger = eulogger.Eulogger(identifier="EUTESTER")
         self.debug = self.logger.log.debug
         self.critical = self.logger.log.critical
@@ -87,7 +87,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops):
             ### Private cloud with root access 
             ### Need to get credentials for the user if there arent any passed in
             ### Need to create service manager for user if we have an ssh connection and password
-            if self.password is not None:
+            if self.password is not None and self.download_creds:
                 clc_array = self.get_component_machines("clc")
                 self.clc = clc_array[0]
                 walrus_array = self.get_component_machines("ws")
