@@ -56,6 +56,23 @@ from threading import Timer
 from boto.ec2 import keypair
 import select
 
+class SshCbReturn():
+    '''
+    Used to return data from an ssh cmd callback method that can be used to handle output as it's rx'd instead of...  
+    waiting for the cmd to finish and returned buffer. See SshConnection.cmd() for more info.
+    The call back must return type SshCbReturn.   
+        If cb returns stop==True, recv loop will end, and channel will be closed, cmd will return. 
+        if cb settimer is > 0, timer timeout will be adjusted for this time
+        if cb statuscode is != -1 cmd status will return with this value
+        if cb nextargs is set, the next time cb is called these args will be passed instead
+        if cb buf is not None, the cmd['output'] buffer will be appended with this buf
+    '''
+    def __init__(self, stop=False, statuscode=-1, settimer=0, buf=None,nextargs=[]):
+        self.stop = stop
+        self.statuscode = statuscode
+        self.settimer = settimer
+        self.nextargs = nextargs
+        self.buf = buf
 
 class SshConnection():
     cmd_timeout_err_code = -100
@@ -143,25 +160,47 @@ class SshConnection():
         '''
         return self.cmd(cmd, verbose=verbose, timeout=timeout, listformat=listformat )['output']
     
-    def cmd(self, cmd, verbose=None, timeout=120, readtimeout=20, listformat=False):
+    
+    def cmd(self, cmd, verbose=None, timeout=120, readtimeout=20, listformat=False, cb=None, cbargs=[] ):
         """ 
         Runs a command 'cmd' within an ssh connection. 
-        Upon success returns a list of lines from the output of the command.
+        Upon success returns dict representing outcome of the command.
+        Returns dict:
+            ['cmd'] - The command which was executed
+            ['output'] - The std out/err from the executed command
+            ['status'] - The exit (exitcode) of the command, in the case a call back fires, this status code is unreliable.
+            ['cbfired']  - Boolean to indicate whether or not the provided callback fired (ie returned False)
+            ['elapsed'] - Time elapsed waiting for command loop to end. 
+        Arguments:
         cmd - mandatory - string representing the command to be run  against the remote ssh session
         verbose - optional - will default to global setting, can be set per cmd() as well here
         timeout - optional - integer used to timeout the overall cmd() operation in case of remote blocking
         listformat - optional - boolean, if set returns output as list of lines, else a single buffer/string
+        cb - optional - callback, method that can be used to handle output as it's rx'd instead of...  
+                        waiting for the cmd to finish and returned buffer. 
+                        Must accept string buffer, and return an integer to be used as cmd status. 
+                        Must return type 'sshconnection.SshCbReturn'
+                        If cb returns stop, recv loop will end, and channel will be closed.
+                        if cb settimer is > 0, timer timeout will be adjusted for this time
+                        if cb statuscode is != -1 cmd status will return with this value
+                        if cb nextargs is set, the next time cb is called these args will be passed instead
+        cbargs - optional - list of arguments to be appended to output buffer and passed to cb
+        
+        
         """
-            
+        args =[]
         if verbose is None:
             verbose = self.verbose
         ret = {}
+        cbfired = False
         cmd = str(cmd)
         self.lastcmd = cmd
         self.lastexitcode = SshConnection.cmd_not_executed_code
         t = None #used for timer 
         start = time.time()
         output = []
+        cbnextargs = []
+        status = None
         if verbose:
             self.debug( "[" + self.username +"@" + str(self.host) + "]# " + cmd)
         try:
@@ -176,30 +215,67 @@ class SshConnection():
             fd = chan.fileno()
             chan.setblocking(0)
             while True and chan.closed == 0:
+                time.sleep(0.05)
                 try:
                     rl, wl, xl = select.select([fd],[],[],0.0)
                 except select.error:
                     break
                 if len(rl) > 0:
-                    new = chan.recv(1024)
-                    if new:
-                        output += new
-                        print new
-                    else:
-                        t.cancel()
-                        break
-            
-            if ( listformat is True ):
+                    while chan.recv_ready():
+                        new = chan.recv(1024)
+                        if new is not None:
+                            #We have data to handle...
+                            
+                            #Run call back if there is one, let call back handle data read in
+                            if cb is not None:
+                                #If cb returns false break, end rx loop, return cmd outcome/output dict. 
+                                cbreturn = SshCbReturn()
+                                cbreturn = cb(new,*cbargs)
+                                #Let the callback control whether or not to continue
+                                if cbreturn.stop:
+                                    cbfired=True
+                                    #Let the callback dictate the return code, otherwise -1 for connection err may occur
+                                    if cbreturn.statuscode != -1:
+                                        status = cbreturn.statuscode
+                                    else:
+                                        status = self.lastexitcode = chan.recv_exit_status()
+                                    chan.close()
+                                    break
+                                else:
+                                    #Let the callback update its calling args if needed
+                                    cbargs = cbreturn.nextargs or cbargs
+                                    #Let the callback update/reset the timeout if needed
+                                    if cbreturn.settimer > 0: 
+                                        t.cancel()
+                                        t = Timer(cbreturn.settimer, self.ssh_sys_timeout,[chan, time.time(),cmd] )
+                                        t.start()
+                                    if cbreturn.buf:
+                                        output += cbreturn.buf
+                            else:
+                                #if no call back then append output to return dict and handle debug
+                                output += new
+                                if verbose:
+                                    #Dont print line by line output if cb is used, let cb handle that 
+                                    self.debug(str(new))
+                        else:
+                            status = self.lastexitcode = chan.recv_exit_status()
+                            chan.close()
+                            t.cancel()
+                            break
+                
+            if (listformat):
                 #return output as list of lines
                 output = output.splitlines()
-            '''
-            else:
-                #return output as single string buffer
-            '''
-            ret['cmd']=cmd
-            ret['output']=output
-            ret['status'] = self.lastexitcode = chan.recv_exit_status()
-            ret['elapsed']= elapsed = int(time.time()-start)
+                if output is None:
+                    output = []
+            #add command outcome in return dict. 
+            if not status:
+                status = self.lastexitcode = chan.recv_exit_status()
+            ret['cmd'] = cmd
+            ret['output'] = output
+            ret['status'] = status
+            ret['cbfired'] = cbfired
+            ret['elapsed'] = elapsed = int(time.time()-start)
             if verbose:
                 self.debug("done with exec")
         except CommandTimeoutException, cte: 
