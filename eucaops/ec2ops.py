@@ -775,8 +775,13 @@ class EC2ops(Eutester):
                 self.critical("Instance " + instance.id + " has he same public and private IPs of " + str(instance.ip_address))
             else:
                 self.debug(str(instance) + " got Public IP: " + str(instance.ip_address)  + " Private IP: " + str(instance.private_ip_address) + " Public DNS Name: " + str(instance.public_dns_name) + " Private DNS Name: " + str(instance.private_dns_name))
-            
-            self.wait_for_valid_ip(instance)
+
+            try:
+                self.wait_for_valid_ip(instance)
+            except Exception:
+                self.terminate_instances(reservation)
+                raise Exception("Reservation " +  str(reservation) + " has been terminated because instance " + str(instance) + " did not receive a valid IP")
+
             if is_reachable:
                 self.ping(instance.public_dns_name, 20)
                 
@@ -919,22 +924,16 @@ class EC2ops(Eutester):
             buf += str(item)+" = "+str(obj.__dict__[item])+"\n"
         return buf
 
-    def release_address(self, address=None):
+    def release_address(self, address):
         """
         Release all addresses or a particular IP
-        ip        IP to release
+        address        Address object to release
         """
-        addresses = self.ec2.get_all_addresses()
-        for addr in addresses:
-            ## IF i am searching for a particular IP and this is not it skip it
-            if addr.public_ip not in address.public_ip:
-                continue
-            if address.allocation_id is not None:
-                try:
-                    self.debug("Releasing address: " + str(address))
-                    address.release()
-                except Exception, e:
-                    raise Exception("Failed to release the address: " + str(address) + ": " +  str(e))
+        try:
+            self.debug("Releasing address: " + str(address))
+            address.release()
+        except Exception, e:
+            raise Exception("Failed to release the address: " + str(address) + ": " +  str(e))
 
     def terminate_instances(self, reservation=None):
         """
