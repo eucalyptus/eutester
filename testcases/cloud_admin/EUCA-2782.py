@@ -15,7 +15,7 @@ class EUCA2782(unittest.TestCase):
             self.fail('Failed to setup unit test for EUCA-2782 due to ' + str(e))
 
     def test_EUCA2782(self):
-        ### Make a HEAD request against the bucket that was previous created and a key that does not exist
+        ### Make a HEAD request against the bucket that was previously created and a key that does not exist
         response = self.tester.s3.make_request(method='HEAD', bucket=self.bucket_obj, key='key')
 
         ### Assert that the HTTP response has no message body and status is 404
