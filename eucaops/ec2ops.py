@@ -140,26 +140,26 @@ class EC2ops(Eutester):
             self.fail("Keypair found after attempt to delete it")
             return False
         return True
-
-    def get_windows_instance_password(self, instance, private_key_path=None, key=None, exten=None):
-        if private_key_path is None:
-            private_key_path = self.verify_local_keypath(key.name, private_key_path, exten)
-        encrypted_string = self.ec2.get_password_data(instance.id)
-        return self.decrypt_string(encrypted_string, private_key_path)
-        
     
-    def decrypt_string(self, encrypted_string, private_key_path, encoded=False):
+    def get_windows_instance_password(self, instance, private_key_path=None, key=None, dir=None, exten=".pem", encoded=True):
+        self.debug("get_windows_instance_password, instance:"+str(instance.id)+", keypath:"+str(private_key_path)+", dir:"+str(dir)+", exten:"+str(exten)+", encoded:"+str(encoded))
         try:
             from M2Crypto import RSA
+            import base64
         except ImportError:
             raise ImportError("Unable to load M2Crypto. Please install by using your package manager to install "
                               "python-m2crypto or 'easy_install M2crypto'")
+        if private_key_path is None and key is not None:
+            private_key_path = str(self.verify_local_keypath( key.name , dir, exten))
+        if not private_key_path:
+            raise Exception('get_windows_instance_password, keypath not found?')        
+        encrypted_string = self.ec2.get_password_data(instance.id)
         user_priv_key = RSA.load_key(private_key_path)
-        string_to_decrypt = encrypted_string
         if encoded:
             string_to_decrypt = base64.b64decode(encrypted_string)
-        return user_priv_key.private_decrypt(string_to_decrypt,
-                RSA.pkcs1_padding)
+        else:
+            string_to_decrypt = encrypted_string
+        return user_priv_key.private_decrypt(string_to_decrypt,RSA.pkcs1_padding)   
     
 
     def add_group(self, group_name=None, fail_if_exists=False ):
@@ -262,7 +262,7 @@ class EC2ops(Eutester):
         start = time.time()
         elapsed = 0
         ### If the instance changes state or goes to the desired state before my poll count is complete
-        while( elapsed <  timeout ) and (instance.state != state):
+        while( elapsed <  timeout ) and (instance.state != state) and (instance.state != 'terminated'):
             #poll_count -= 1
             self.debug( "Instance("+instance.id+") State("+instance.state+"), elapsed:"+str(elapsed))
             time.sleep(10)
