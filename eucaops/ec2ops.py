@@ -140,26 +140,26 @@ class EC2ops(Eutester):
             self.fail("Keypair found after attempt to delete it")
             return False
         return True
-
-    def get_windows_instance_password(self, instance, private_key_path=None, key=None, exten=None):
-        if private_key_path is None:
-            private_key_path = self.verify_local_keypath(key.name, private_key_path, exten)
-        encrypted_string = self.ec2.get_password_data(instance.id)
-        return self.decrypt_string(encrypted_string, private_key_path)
-        
     
-    def decrypt_string(self, encrypted_string, private_key_path, encoded=False):
+    def get_windows_instance_password(self, instance, private_key_path=None, key=None, dir=None, exten=".pem", encoded=True):
+        self.debug("get_windows_instance_password, instance:"+str(instance.id)+", keypath:"+str(private_key_path)+", dir:"+str(dir)+", exten:"+str(exten)+", encoded:"+str(encoded))
         try:
             from M2Crypto import RSA
+            import base64
         except ImportError:
             raise ImportError("Unable to load M2Crypto. Please install by using your package manager to install "
                               "python-m2crypto or 'easy_install M2crypto'")
+        if private_key_path is None and key is not None:
+            private_key_path = str(self.verify_local_keypath( key.name , dir, exten))
+        if not private_key_path:
+            raise Exception('get_windows_instance_password, keypath not found?')        
+        encrypted_string = self.ec2.get_password_data(instance.id)
         user_priv_key = RSA.load_key(private_key_path)
-        string_to_decrypt = encrypted_string
         if encoded:
             string_to_decrypt = base64.b64decode(encrypted_string)
-        return user_priv_key.private_decrypt(string_to_decrypt,
-                RSA.pkcs1_padding)
+        else:
+            string_to_decrypt = encrypted_string
+        return user_priv_key.private_decrypt(string_to_decrypt,RSA.pkcs1_padding)   
     
 
     def add_group(self, group_name=None, fail_if_exists=False ):
@@ -262,7 +262,7 @@ class EC2ops(Eutester):
         start = time.time()
         elapsed = 0
         ### If the instance changes state or goes to the desired state before my poll count is complete
-        while( elapsed <  timeout ) and (instance.state != state):
+        while( elapsed <  timeout ) and (instance.state != state) and (instance.state != 'terminated'):
             #poll_count -= 1
             self.debug( "Instance("+instance.id+") State("+instance.state+"), elapsed:"+str(elapsed))
             time.sleep(10)
@@ -528,6 +528,19 @@ class EC2ops(Eutester):
         image_id = self.ec2.register_image(name=name, description=description, kernel_id=kernel, image_location=image_location, ramdisk_id=ramdisk, block_device_map=bdmdev, root_device_name=rdn)
         self.test_resources["images"].append(image_id)
         return image_id
+
+    def deregister_image(self, image):
+        """
+        Deregister an image.
+        :param image: boto image object to deregister
+        :return:
+        """
+        self.ec2.deregister_image(image.id)
+        image = self.get_emi(image.id)
+        if image.state is not "deregistered":
+            raise Exception("Image " + image.id +  " did not enter deregistered state after deregistration was sent to server")
+        else:
+            self.ec2.deregister_image(image.id)
     
     def get_emi(self, emi=None, root_device_type=None, root_device_name=None, location=None, state="available", arch=None, owner_id=None):
         """
@@ -586,8 +599,17 @@ class EC2ops(Eutester):
             address.associate(instance.id)
         except Exception as (errno, strerror):
             self.critical("Unable to associate address\n")
-            self.critical( "Exception({0}): {1}".format(errno, strerror))
-            return False
+            raise Exception( "Exception({0}): {1}".format(errno, strerror))
+
+        poll_count = 15
+        address = self.ec2.get_all_addresses(addresses=[instance.public_dns_name])[0]
+        while address.instance_id is not instance.id:
+            if poll_count == 0:
+                raise Exception('Address ' + str(address) + 'never associated with instance')
+            self.sleep(5)
+            address = self.ec2.get_all_addresses(addresses=[instance.public_dns_name])[0]
+            poll_count -= 1
+
         self.debug("Associated IP successfully")
         return address
     
@@ -600,12 +622,14 @@ class EC2ops(Eutester):
         except Exception, e:
             self.critical("Unable to disassociate address\n" + str(e))
             return False
-        self.sleep(15)
-        address = self.ec2.get_all_addresses(addresses=[instance.public_dns_name])
-        if address.instance_id is instance.id:
-            self.critical("Address still associated with instance")
-            return False
-        return True
+        poll_count = 15
+        address = self.ec2.get_all_addresses(addresses=[instance.public_dns_name])[0]
+        while address.instance_id is instance.id:
+            if poll_count == 0:
+                raise Exception('Address ' + str(address) + 'still associated with instance')
+            self.sleep(5)
+            address = self.ec2.get_all_addresses(addresses=[instance.public_dns_name])[0]
+            poll_count -= 1
     
     def check_device(self, device_path):
         """Used with instance connections. Checks if a device at a certain path exists"""

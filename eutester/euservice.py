@@ -183,7 +183,7 @@ class EuserviceManager(object):
     def populate_nodes(self):
         clc = self.get_enabled_clc()
         nodes_list = clc.machine.sys("euca_conf --list-nodes")
-        for node_string in node_lists:
+        for node_string in nodes_list:
             split_string = node_string.split()
             node = Eunode(split_string[1], split_string[2])
             for part in self.partitions:
