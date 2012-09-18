@@ -74,7 +74,7 @@ class ResourceGeneration(EutesterTestCase):
             self.tester.disassociate_address_from_instance(instance)
             self.tester.release_address(address)
             self.tester.terminate_instances(reservation)
-            volume = self.tester.create_volume(size=1, azone=zone)
+            volume = self.tester.create_volume(size=2, azone=zone)
             snapshot = self.tester.create_snapshot(volume_id=volume.id)
             volume_from_snap = self.tester.create_volume(snapshot=snapshot, azone=zone)
             bucket = self.tester.create_bucket(self.tester.id_generator(12, string.ascii_lowercase  + string.digits))
