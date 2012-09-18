@@ -1,4 +1,4 @@
-CSS: style.css
+CSS: stylesheets/style.css
 
 # Test Case Submission Framework
 
