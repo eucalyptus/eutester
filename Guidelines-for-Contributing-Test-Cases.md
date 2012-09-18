@@ -1,3 +1,5 @@
+CSS: style.css
+
 # Test Case Submission Framework
 
 1.  Do a fork of Eucalyptus eutester project (requires github account for information on how to set up a Github account, refer to the following URL: [http://help.github.com/set-up-git-redirect/](http://help.github.com/set-up-git-redirect/)).  On information on how to fork a project, refer to the following link: [http://help.github.com/fork-a-repo/](http://help.github.com/fork-a-repo/).
