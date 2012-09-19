@@ -224,10 +224,7 @@ class EuInstance(Instance):
         '''
         retlist = []
         if match is None:
-            if self.block_device_prefix is not None and self.block_device_prefix != "":
-                match = self.block_device_prefix
-            else:
-                match = '^sd\|^vd\|^xd|^xvd'
+            match = '^sd\|^vd\|^xd|^xvd'
         out = self.sys("ls -1 /dev/ | grep '^"+str(match)+"'" )
         for line in out:
             retlist.append(line.strip())
