@@ -384,7 +384,7 @@ class WindowsTests(EutesterTestCase):
     
     def scan_port_range(self, start,stop,ip=None,timeout=1, tcp=True):
         ip = ip or self.instance.public_dns_name 
-        return self.tester.scan_port_range(ip, start, stop, timeout, tcp)
+        return self.tester.scan_port_range(ip, int(start),int(stop), timeout=int(timeout), tcp=tcp)
     
     def test_port_status(self, port, ip=None, timeout=5, tcp=True, verbose=True):
         ip = ip or self.instance.public_dns_name 
