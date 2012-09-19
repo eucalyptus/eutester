@@ -37,7 +37,7 @@ class EutesterTestResult():
     
     
     
-class EutesterTestCase(unittest.TestCase):
+class EutesterTestUnit(unittest.TestCase):
     '''
     Convenience class to run wrap individual methods, and run and store and access results.
     '''
@@ -45,13 +45,15 @@ class EutesterTestCase(unittest.TestCase):
         self.method = method
         self.args = args
         self.name = str(method.__name__)
+        self._testMethodName = self.name
         self.result=EutesterTestResult.not_run
         self.time_to_run=0
         self.eof=True
         self.error = ""
     
-    def create_testcase_from_method(self,method, *args):
-        testcase =  EutesterTestCase(method, args)
+    @classmethod
+    def create_testcase_from_method(cls, method, *args):
+        testcase =  EutesterTestUnit(method, args)
         return testcase
     
     def run(self):
@@ -73,6 +75,8 @@ class EutesterTestCase(unittest.TestCase):
         finally:
             self.time_to_run = int(time.time()-start)
 
+class EutesterTestCase():
+
     def debug(self,msg,traceback=1):
         msg = str(msg)       
         curframe = None
@@ -86,7 +90,7 @@ class EutesterTestCase(unittest.TestCase):
             else:
                 curframe = frame
                 lineno = curframe.f_lineno
-        '''
+        '''     
         curframe = inspect.currentframe(traceback)
         lineno = curframe.f_lineno
         self.curframe = curframe
@@ -105,6 +109,10 @@ class EutesterTestCase(unittest.TestCase):
         for line in msg.split("\n"):
             self.tester.debug("("+str(cur_method)+":"+str(lineno)+"): "+line.strip() )
             
+            
+    def create_testcase_from_method(self,method, *args):
+        return EutesterTestUnit.create_testcase_from_method(method, *args)
+        
             
     def status(self,msg,traceback=2, b=0,a=0):
         alines = ""
