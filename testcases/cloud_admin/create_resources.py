@@ -63,19 +63,30 @@ class ResourceGeneration(EutesterTestCase):
         for tester in testers:
             import random
             zone = random.choice(tester.get_zones())
+            keypair = self.tester.add_keypair(self.tester.id_generator())
+            group = self.tester.add_group(self.tester.id_generator())
+            self.tester.authorize_group_by_name(group_name=group.name )
+            self.tester.authorize_group_by_name(group_name=group.name, port=-1, protocol="icmp" )
+            reservation = self.tester.run_instance(keypair=keypair.name,group=group.name,zone=zone)
+            instance = reservation.instances[0]
+            address = self.tester.allocate_address()
+            self.tester.associate_address(instance=instance, address=address)
+            self.tester.disassociate_address_from_instance(instance)
+            self.tester.release_address(address)
+            self.tester.terminate_instances(reservation)
             volume = self.tester.create_volume(size=1, azone=zone)
             snapshot = self.tester.create_snapshot(volume_id=volume.id)
             volume_from_snap = self.tester.create_volume(snapshot=snapshot, azone=zone)
             bucket = self.tester.create_bucket(self.tester.id_generator(12, string.ascii_lowercase  + string.digits))
             key = self.tester.upload_object(bucket_name= bucket.name, key_name= self.tester.id_generator(12, string.ascii_lowercase  + string.digits), contents= self.tester.id_generator(200))
-            keypair = self.tester.add_keypair(self.tester.id_generator())
-            group = self.tester.add_group(self.tester.id_generator())
+
+
     
     def run_suite(self):  
         self.testlist = [] 
         testlist = self.testlist
         testlist.append(self.create_testcase_from_method(self.CreateResources))
-        self.run_test_case_list(testlist)  
+        self.run_test_case_list(testlist)
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog="create_resources.py",

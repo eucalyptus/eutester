@@ -663,34 +663,52 @@ class EC2ops(Eutester):
             raise Exception( "Exception({0}): {1}".format(errno, strerror))
 
         poll_count = 15
-        address = self.ec2.get_all_addresses(addresses=[instance.public_dns_name])[0]
-        while address.instance_id is not instance.id:
-            if poll_count == 0:
-                raise Exception('Address ' + str(address) + 'never associated with instance')
-            self.sleep(5)
-            address = self.ec2.get_all_addresses(addresses=[instance.public_dns_name])[0]
-            poll_count -= 1
+        address = self.ec2.get_all_addresses(addresses=[address.public_ip])[0]
 
+        ### Ensure address object hold correct instance value
+        while instance.id not in address.instance_id:
+            if poll_count == 0:
+                raise Exception('Address ' + str(address) + ' never associated with instance')
+            address = self.ec2.get_all_addresses(addresses=[address.public_ip])[0]
+            self.debug('Address {0} not attached to {1} but rather {2}'.format(str(address), instance.id, address.instance_id) )
+            poll_count -= 1
+            self.sleep(5)
+
+        ### Ensure instance gets correct address
+        while instance.public_dns_name not in address.public_ip:
+            if poll_count == 0:
+                raise Exception('Address ' + str(address) + ' never associated with instance')
+            instance.update()
+            self.debug('Instance {0} has IP {1} attached instead of {2}'.format(instance.id, instance.public_dns_name, address.public_ip) )
+            poll_count -= 1
+            self.sleep(5)
         self.debug("Associated IP successfully")
-        return address
     
     def disassociate_address_from_instance(self, instance):
         """Disassociate address from instance and ensure that it no longer holds the IP
         instance     An instance that has an IP allocated"""
         address = self.ec2.get_all_addresses(addresses=[instance.public_dns_name])[0]
-        try:
-            address.disassociate()
-        except Exception, e:
-            self.critical("Unable to disassociate address\n" + str(e))
-            return False
+        address.disassociate()
+
         poll_count = 15
-        address = self.ec2.get_all_addresses(addresses=[instance.public_dns_name])[0]
-        while address.instance_id is instance.id:
+        address = self.ec2.get_all_addresses(addresses=[address.public_ip])[0]
+        ### Ensure address object hold correct instance value
+        while instance.id in address.instance_id:
             if poll_count == 0:
-                raise Exception('Address ' + str(address) + 'still associated with instance')
-            self.sleep(5)
-            address = self.ec2.get_all_addresses(addresses=[instance.public_dns_name])[0]
+                raise Exception('Address ' + str(address) + ' never associated with instance')
+            address = self.ec2.get_all_addresses(addresses=[address.public_ip])[0]
+            self.debug('Address {0} not attached to {1} but rather {2}'.format(str(address), instance.id, address.instance_id) )
             poll_count -= 1
+            self.sleep(5)
+
+        ### Ensure instance gets correct address
+        while instance.public_dns_name in address.public_ip:
+            if poll_count == 0:
+                raise Exception('Address ' + str(address) + ' never associated with instance')
+            instance.update()
+            self.debug('Instance {0} has IP {1} attached instead of {2}'.format(instance.id, instance.public_dns_name, address.public_ip) )
+            poll_count -= 1
+            self.sleep(5)
     
     def check_device(self, device_path):
         """Used with instance connections. Checks if a device at a certain path exists"""
@@ -818,10 +836,15 @@ class EC2ops(Eutester):
                 self.critical("Instance " + instance.id + " has he same public and private IPs of " + str(instance.ip_address))
             else:
                 self.debug(str(instance) + " got Public IP: " + str(instance.ip_address)  + " Private IP: " + str(instance.private_ip_address) + " Public DNS Name: " + str(instance.public_dns_name) + " Private DNS Name: " + str(instance.private_dns_name))
-            
-            self.wait_for_valid_ip(instance)
+
+            try:
+                self.wait_for_valid_ip(instance)
+            except Exception:
+                self.terminate_instances(reservation)
+                raise Exception("Reservation " +  str(reservation) + " has been terminated because instance " + str(instance) + " did not receive a valid IP")
+
             if is_reachable:
-                self.ping(instance.public_dns_name, 60)
+                self.ping(instance.public_dns_name, 20)
                 
         #calculate remaining time to wait for establishing an ssh session/euinstance     
         timeout -= int(time.time() - start)
@@ -962,27 +985,17 @@ class EC2ops(Eutester):
             buf += str(item)+" = "+str(obj.__dict__[item])+"\n"
         return buf
 
-    def release_address(self, ip=None):
+    def release_address(self, address):
         """
         Release all addresses or a particular IP
-        ip        IP to release
-        """   
-        ## Clear out all addresses found
-        self.debug( "Releasing all unassociated and allocated addresses")
-        addresses = self.ec2.get_all_addresses()
-        for address in addresses:
-            ## IF i am searching for a particular IP and this is not it skip it
-            #if (ip is not None) and (address.public_ip is not ip):
-            #    continue
-            if address.allocation_id is not None:
-                try:
-                    self.debug("Releasing address: " + str(address))
-                    address.release()
-                except Exception, e:
-                    self.critical("Failed to release the address: " + str(address) + ": " +  str(e))
-                    return False
-        return True
-            
+        address        Address object to release
+        """
+        try:
+            self.debug("Releasing address: " + str(address))
+            address.release()
+        except Exception, e:
+            raise Exception("Failed to release the address: " + str(address) + ": " +  str(e))
+
     def terminate_instances(self, reservation=None):
         """
         Terminate instances in the system
