@@ -1,125 +1,152 @@
-
-
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
-  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-
-
-<html xmlns="http://www.w3.org/1999/xhtml">
+<!doctype html>
+<html>
   <head>
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-    
-    <title>Welcome to Eutester’s documentation! &mdash; Eutester 0.0.2 documentation</title>
-    
-    <link rel="stylesheet" href="_static/default.css" type="text/css" />
-    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
-    
-    <script type="text/javascript">
-      var DOCUMENTATION_OPTIONS = {
-        URL_ROOT:    '',
-        VERSION:     '0.0.2',
-        COLLAPSE_INDEX: false,
-        FILE_SUFFIX: '.html',
-        HAS_SOURCE:  true
-      };
-    </script>
-    <script type="text/javascript" src="_static/jquery.js"></script>
-    <script type="text/javascript" src="_static/underscore.js"></script>
-    <script type="text/javascript" src="_static/doctools.js"></script>
-    <link rel="top" title="Eutester 0.0.2 documentation" href="#" /> 
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <title>Eutester by eucalyptus</title>
+    <link rel="stylesheet" href="stylesheets/styles.css">
+    <link rel="stylesheet" href="stylesheets/pygment_trac.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
+    <script src="javascripts/respond.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <!--[if lt IE 8]>
+    <link rel="stylesheet" href="stylesheets/ie.css">
+    <![endif]-->
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+
   </head>
   <body>
-    <div class="related">
-      <h3>Navigation</h3>
-      <ul>
-        <li class="right" style="margin-right: 10px">
-          <a href="genindex.html" title="General Index"
-             accesskey="I">index</a></li>
-        <li class="right" >
-          <a href="py-modindex.html" title="Python Module Index"
-             >modules</a> |</li>
-        <li><a href="#">Eutester 0.0.2 documentation</a> &raquo;</li> 
-      </ul>
-    </div>  
+      <div id="header">
+        <nav>
+          <li class="fork"><a href="https://github.com/eucalyptus/eutester">View On GitHub</a></li>
+          <li class="downloads"><a href="https://github.com/eucalyptus/eutester/zipball/master">ZIP</a></li>
+          <li class="downloads"><a href="https://github.com/eucalyptus/eutester/tarball/master">TAR</a></li>
+          <li class="title">DOWNLOADS</li>
+        </nav>
+      </div><!-- end header -->
 
-    <div class="document">
-      <div class="documentwrapper">
-        <div class="bodywrapper">
-          <div class="body">
-            
-  <div class="section" id="welcome-to-eutester-s-documentation">
-<h1>Welcome to Eutester&#8217;s documentation!<a class="headerlink" href="#welcome-to-eutester-s-documentation" title="Permalink to this headline">¶</a></h1>
-<p>Contents:</p>
-<div class="toctree-wrapper compound">
-<ul class="simple">
-</ul>
-</div>
-<span class="target" id="module-eutester"></span><dl class="exception">
-<dt id="eutester.TimeoutFunctionException">
-<em class="property">exception </em><tt class="descclassname">eutester.</tt><tt class="descname">TimeoutFunctionException</tt><a class="headerlink" href="#eutester.TimeoutFunctionException" title="Permalink to this definition">¶</a></dt>
-<dd><p>Exception to raise on a timeout</p>
-</dd></dl>
+    <div class="wrapper">
 
-<span class="target" id="module-eucaops"></span></div>
-<div class="section" id="indices-and-tables">
-<h1>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Permalink to this headline">¶</a></h1>
-<ul class="simple">
-<li><a class="reference internal" href="genindex.html"><em>Index</em></a></li>
-<li><a class="reference internal" href="py-modindex.html"><em>Module Index</em></a></li>
-<li><a class="reference internal" href="search.html"><em>Search Page</em></a></li>
-</ul>
-</div>
-
-
-          </div>
+      <section>
+        <div id="title">
+          <h1>Eutester</h1>
+          <p>Automated Test Framework for Eucalyptus</p>
+          <hr>
+          <span class="credits left">Project maintained by <a href="https://github.com/eucalyptus">eucalyptus</a></span>
+          <span class="credits right">Hosted on GitHub Pages &mdash; Theme by <a href="http://twitter.com/#!/michigangraham">mattgraham</a></span>
         </div>
-      </div>
-      <div class="sphinxsidebar">
-        <div class="sphinxsidebarwrapper">
-  <h3><a href="#">Table Of Contents</a></h3>
-  <ul>
-<li><a class="reference internal" href="#">Welcome to Eutester&#8217;s documentation!</a><ul>
-</ul>
+
+        <h1>eutester version 0.0.3</h1>
+
+<p><a href="http://testingclouds.wordpress.com/2012/03/04/test1/">Intro to Eutester</a></p>
+
+<p><a href="http://testingclouds.wordpress.com/2012/03/29/eutester-basics-part-ii-setting-up-a-development-environment/">Getting Setup</a></p>
+
+<p><a href="http://testingclouds.wordpress.com/2012/04/02/eutester-basics-part-iii-creating-your-first-testcase/">Writing Your First Testcase</a></p>
+
+<p><a href="http://eucalyptus.github.com/eutester/Guidelines-for-Contributing-Test-Cases.html">Guidelines for Contributing Testcases</a></p>
+
+<p>eutester is an attempt to leverage existing test code to make test writing faster and standardized.  </p>
+
+<h2>Installation</h2>
+
+<p>Installing eutester and its dependencies is as easy as:</p>
+
+<pre><code>easy_install eutester
+</code></pre>
+
+<p>If easy_install is not available in your environment use your package manager to install python-setuptools</p>
+
+<pre><code>yum install python-setuptools
+apt-get install python-setuptools
+</code></pre>
+
+<p>For development purposes you can then clone the code from github and then reinstall with your changes</p>
+
+<pre><code>git clone https://github.com/eucalyptus/eutester.git
+cd eutester
+[CHANGE CODE]
+python setup.py install
+</code></pre>
+
+<h2>Main Classes</h2>
+
+<p>eutester contains the framework pieces like parsing config/creds, setting up connections and providing test primatives<br>
+eucaops uses the framework provided by eutester to provide validated higher order operations on those cloud connections</p>
+
+<p><img src="https://s3.amazonaws.com/vic-bucket/eutester-class-diagram.jpg" alt="class-diagram"></p>
+
+<p>Example test cases written with this library can be found in the testcases/unstable directory of the source tree</p>
+
+<h2>Design</h2>
+
+<p>Eutester is designed to allow a user to quickly generate automated tests for testing a Eucalyptus or Amazon cloud. In the case of testing a private cloud a configuration file can be used to create cases that require root access to the machines.
+The config file describes a few things about the clouds configuration including the bare metal machine configuration and IPs.</p>
+
+<p>The <code>eucaops</code> class can be imported in order to use pre-defined routines which validate common operations on the cloud:</p>
+
+<pre><code>from eucaops import Eucaops
+</code></pre>
+
+<h2>Constructor</h2>
+
+<p>The basic constructor can be used for 2 different connections:</p>
+
+<ol>
+<li>
+<p>Private cloud with root access - CLC SSH, Cloud, and Walrus connections<br>
+Purpose - connect to and manipulate Eucalyptus components using boto and command line. Recommended to use Eucaops.<br>
+Required arguments: root password, config file with topology information<br>
+Optional arguments: credential path so that new credentials are not created</p>
+
+<pre><code>private_cloud = Eucaops( password="my_root_pass",  config_file="cloud.conf")
+private_cloud.sys("euca-describe-availability-zones") ### use local credentials to determine viable availability-zones
+</code></pre>
 </li>
-<li><a class="reference internal" href="#indices-and-tables">Indices and tables</a></li>
-</ul>
+<li>
+<p>Public cloud - local SSH, EC2 and S3 connections<br>
+Purpose - can be used to wrap euca2ools commands installed locally on the tester machine or with Eucaops<br>
+Required arguments: credential path</p>
 
-  <h3>This Page</h3>
-  <ul class="this-page-menu">
-    <li><a href="_sources/index.txt"
-           rel="nofollow">Show Source</a></li>
-  </ul>
-<div id="searchbox" style="display: none">
-  <h3>Quick search</h3>
-    <form class="search" action="search.html" method="get">
-      <input type="text" name="q" />
-      <input type="submit" value="Go" />
-      <input type="hidden" name="check_keywords" value="yes" />
-      <input type="hidden" name="area" value="default" />
-    </form>
-    <p class="searchtip" style="font-size: 90%">
-    Enter search terms or a module, class or function name.
-    </p>
-</div>
-<script type="text/javascript">$('#searchbox').show(0);</script>
-        </div>
-      </div>
-      <div class="clearer"></div>
+<pre><code>public_cloud = Eucaops(credpath="~/.eucarc")    
+public_cloud.run_instance(image) ## run an m1.small instance using image
+</code></pre>
+</li>
+</ol><h2>Config file</h2>
+
+<pre><code>NETWORK MANAGED
+clc.mydomain.com CENTOS 5.7 64 REPO [CC00 CLC SC00 WS]    
+nc1.mydomain.com VMWARE ESX-4.0 64 REPO [NC00]
+</code></pre>
+
+<h2>Network</h2>
+
+<p>Possible values are MANAGED, MANAGED-NOVLAN, SYSTEM, or STATIC</p>
+
+<h2>Columns</h2>
+
+<pre><code>IP or hostname of machine  
+Distro installed on machine  
+Distro version on machine  
+Distro base architecture
+System built from packages (REPO) or source (BZR), packages assumes path to eucalyptus is /, bzr assumes path to eucalyptus is /opt/eucalyptus
+List of components installed on this machine encapsulated in brackets []
+</code></pre>
+
+<p>These components can be:</p>
+
+<pre><code>CLC - Cloud Controller   
+WS - Walrus   
+SC00 - Storage controller for cluster 00   
+CC00 - Cluster controller for cluster 00    
+NC00 - A node controller in cluster 00   
+</code></pre>
+      </section>
+
     </div>
-    <div class="related">
-      <h3>Navigation</h3>
-      <ul>
-        <li class="right" style="margin-right: 10px">
-          <a href="genindex.html" title="General Index"
-             >index</a></li>
-        <li class="right" >
-          <a href="py-modindex.html" title="Python Module Index"
-             >modules</a> |</li>
-        <li><a href="#">Eutester 0.0.2 documentation</a> &raquo;</li> 
-      </ul>
-    </div>
-    <div class="footer">
-        &copy; Copyright 2012, Vic Iglesias, Matt Clark, Harold J Spencer.
-      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
-    </div>
+    <!--[if !IE]><script>fixScale(document);</script><![endif]-->
+    
   </body>
 </html>
