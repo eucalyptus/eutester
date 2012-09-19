@@ -37,7 +37,7 @@ except ImportError:
     from distutils.core import setup
 
 setup(name = "eutester",
-      version = "0.0.1",
+      version = "0.0.3",
       description = "Test Framework for AWS compatible clouds",
       long_description="Test Framework for AWS compatible clouds",
       author = "Victor Iglesias",
