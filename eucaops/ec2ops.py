@@ -721,7 +721,7 @@ class EC2ops(Eutester):
         address = self.ec2.get_all_addresses(addresses=[address.public_ip])[0]
 
         ### Ensure address object hold correct instance value
-        while instance.id not in address.instance_id:
+        while not address.instance_id:
             if poll_count == 0:
                 raise Exception('Address ' + str(address) + ' never associated with instance')
             address = self.ec2.get_all_addresses(addresses=[address.public_ip])[0]
@@ -748,7 +748,7 @@ class EC2ops(Eutester):
         poll_count = 15
         address = self.ec2.get_all_addresses(addresses=[address.public_ip])[0]
         ### Ensure address object hold correct instance value
-        while instance.id in address.instance_id:
+        while address.instance_id:
             if poll_count == 0:
                 raise Exception('Address ' + str(address) + ' never associated with instance')
             address = self.ec2.get_all_addresses(addresses=[address.public_ip])[0]

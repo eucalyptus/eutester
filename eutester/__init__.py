@@ -258,7 +258,7 @@ class Eutester(object):
             if poll_count == 0:
                 self.critical("Was unable to ping address")
                 return False
-            self.debug("Ping unsuccessful retrying in 2 seconds")
+            self.debug("Ping unsuccessful retrying in 2 seconds " + str(poll_count) + " more times")
             self.sleep(2)    
     
     def grep(self, string,list):
