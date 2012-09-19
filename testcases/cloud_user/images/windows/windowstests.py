@@ -45,7 +45,7 @@ import socket
 import os
 import time
 import re
-from datetime import datetime, timedelta
+from datetime import datetime
 
 class WindowsTests(EutesterTestCase):
     
@@ -238,7 +238,7 @@ class WindowsTests(EutesterTestCase):
         else:
             return
                 
-    def set_windows_test_volumes(self):
+    def setup_windows_test_volumes(self):
         '''
         Description:
             Attempts to confirm that each zone provided has the minimum number of volumes in it. 
@@ -354,12 +354,12 @@ class WindowsTests(EutesterTestCase):
                       private_addressing=None,
                       timeout=None):
         '''
-        returns a reservation of running emi instances run with the provided parameters.
+        Description: Attempts to return a reservation of running emi instances run with the provided parameters.
         '''
         emi = emi or self.emi
         zone = zone or self.zonelist[0] if self.zonelist else None
         keypair = keypair or self.keypair
-        type = type or self.type or 'm1.xlarge'
+        type = type or self.vmtype or 'm1.xlarge'
         group = group or self.group
         user_data = user_data or self.user_data
         private_addressing = private_addressing if private_addressing is not None else self.private_addressing
@@ -382,6 +382,9 @@ class WindowsTests(EutesterTestCase):
         
     
     def test_rdp_port(self, ip=None, port=3389, timeout=10):
+        '''
+        Description: Attempts to test that the host is accepting tcp connections to the RDP port
+        '''
         return self.test_port_status(ip=ip, port=port, timeout=timeout)
     
     
@@ -393,8 +396,14 @@ class WindowsTests(EutesterTestCase):
         ip = ip or self.instance.public_dns_name 
         return self.tester.test_port_status(ip, port, timeout=timeout, tcp=tcp, verbose=verbose)
 
-    def test_poll_for_rdp_port_status(self, ip=None,interval=10,socktimeout=5,timeout=180):
-        ip = ip or self.instance.public_dns_name
+    def test_poll_for_rdp_port_status(self, instance=None,interval=10,socktimeout=5,timeout=180, waitforboot=120):
+        instance = instance or self.instance
+        #Make sure some time has passed before we test on the guest side before running guest test...
+        attached_seconds = self.tester.get_instance_time_launched(instance)
+        sleeptime =  0 if attached_seconds > waitforboot else (waitforboot - attached_seconds)
+        self.debug("Instance was launched "+str(attached_seconds)+" seconds ago, waiting:"+str(sleeptime)+" for instance to boot")
+        time.sleep(sleeptime)
+        ip = instance.public_dns_name
         return self.test_poll_for_port_status(3389, ip=ip, interval=interval, socktimeout=socktimeout, timeout=timeout)
     
     def test_poll_for_port_status(self, port, ip=None, interval=10, socktimeout=5, timeout=180):
@@ -424,7 +433,7 @@ class WindowsTests(EutesterTestCase):
     def get_windows_emi(self):
         emi = None
         if self.emi is not None:
-            self.debug("get_windows_emi returning provided emi:"+self.emi)
+            self.debug("get_windows_emi returning provided emi:"+str(self.emi))
             emi = self.emi
         elif self.emi_location is not None:
             self.debug("get_windows_emi returning emi based on emi location"+str(self.emi_location))
@@ -460,6 +469,7 @@ class WindowsTests(EutesterTestCase):
         self.test_run_windows_emi()
     
     def get_free_ebs_devname(self, instance=None, max=16):
+        self.debug('get_free_ebs_dev_name starting...')
         instance = instance or self.instance
         attachedvols = self.tester.get_volumes(attached_instance=instance.id)
         count=0
@@ -468,7 +478,7 @@ class WindowsTests(EutesterTestCase):
             dev = '/dev/sd'+str(d)
             in_use = False
             for volume in attachedvols:
-                if volume.volume.attach_data.device == dev:
+                if volume.attach_data.device == dev:
                     in_use = True
                     count += 1
                     continue
@@ -484,12 +494,16 @@ class WindowsTests(EutesterTestCase):
     def test_attach_single_volume(self, instance=None, dev=None):
         instance = instance or self.instance
         if instance is None:
-            raise Exception('test_attache_single_volume: instance is None')
+            raise Exception('test_attach_single_volume: instance is None')
         vol = None
         for zone in self.zonelist:
+            self.debug('Checking for available volumes in zone:'+str(zone.name))
             if zone.name == instance.placement:
-                for vol in zone.volumes:
-                    if vol.status == 'available':
+                self.debug('Checking Volume:'+str(zone.name))
+                for volume in zone.volumes:
+                    if volume.status == 'available':
+                        self.debug('Found Available Volume:'+str(volume.id))
+                        vol = volume
                         break
         if not vol:
             raise Exception('test_attach_single_volume, no available volumes')
@@ -504,26 +518,12 @@ class WindowsTests(EutesterTestCase):
         if volume.attach_data.instance_id != instance.id:
             raise Exception('Volume:'+str(volume.id)+" not attached to:"+str(instance.id) )
         #Make sure some time has passed before we test on the guest side before running guest test...
-        attached_seconds = self.get_time_since_vol_attached(volume)
+        attached_seconds = self.tester.get_volume_time_attached(volume)
         sleeptime =  0 if attached_seconds > wait else (wait - attached_seconds)
         self.debug("Volume has been attached for "+str(attached_seconds)+" seconds, waiting:"+str(sleeptime)+" for guest to detect attached vol")
-        time.sleep(0)
+        time.sleep(sleeptime)
         self.debug("Running Proxy ebs test now...")
         self.proxy.ps_ebs_test(retryinterval=30)
-        
-        
-    def get_time_since_vol_attached(self,volume):
-        self.debug("Getting time elapsed since volume attached...")
-        #get timestamp from attach_data
-        t = re.findall('\w+',str(volume.attach_data.attach_time).replace('T',' '))
-        #remove milliseconds from list...
-        t.pop()
-        #create a time_struct out of our list
-        attached_time = datetime.strptime(" ".join(t), "%Y %m %d %H %M %S")
-        #return the elapsed time in seconds
-        return time.mktime(datetime.utcnow().utctimetuple()) - time.mktime(attached_time.utctimetuple())
-        
-        
         
         
     def is_kvm(self, component=None):
@@ -539,24 +539,37 @@ class WindowsTests(EutesterTestCase):
         instance = instance or self.instance
         list = []
         if instance is None or instance.state != 'running':
-            raise Exception('basic_proxy_test_suite needs running instance to execute against')
-            
+            self.debug("basic_proxy_test_suite: No running instances found, creating instance now")
+            test = self.create_testcase_from_method(self.get_windows_emi)
+            test.eof = True
+            list.append(test)
+            test = self.create_testcase_from_method(self.test_run_windows_emi)
+            test.eof = True
+            list.append(test)
         list.append(self.create_testcase_from_method(self.test_get_windows_instance_password))
-        list.append(self.create_testcase_from_method(self.test_rdp_port))
-        list.append(self.create_testcase_from_method(self.update_proxy_instance_data))
-        list.append(self.create_testcase_from_method(self.proxy.ps_login_test))
+        test = self.create_testcase_from_method(self.test_poll_for_rdp_port_status)
+        test.eof=True
+        list.append(test)
+        test = self.create_testcase_from_method(self.update_proxy_instance_data)
+        test.eof=True
+        list.append(test)
+        test = self.create_testcase_from_method(self.proxy.ps_login_test)
+        test.eof=True
+        list.append(test)
         list.append(self.create_testcase_from_method(self.proxy.ps_ephemeral_test))
         list.append(self.create_testcase_from_method(self.proxy.ps_hostname_test))
-        list.append(self.create_testcase_from_method(self.set_windows_test_volumes))
+        list.append(self.create_testcase_from_method(self.setup_windows_test_volumes))
+        list.append(self.create_testcase_from_method(self.proxy.ps_hostname_test))
         list.append(self.create_testcase_from_method(self.test_attach_single_volume))
         #The guest test may not work on a 32bit host...
         list.append(self.create_testcase_from_method(self.test_proxy_ebs_guest_attachment))
-        list.append(self.create_testcase_from_method(self.proxy.ps_hostname_test))
+       
         if self.is_kvm(): 
             list.append(self.proxy.ps_virtio_test)
         else:
             list.append(self.proxy.ps_xenpv_test)
-        self.run_test_case_list(list)
+        #Run this test case list only exit on fail if a given test method has the flag set. 
+        self.run_test_case_list(list, eof=False)
         
             
         

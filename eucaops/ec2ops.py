@@ -38,6 +38,7 @@ import os
 import base64
 import socket
 import sys
+from datetime import datetime
 from boto.ec2.blockdevicemapping import BlockDeviceMapping, BlockDeviceType
 from boto.exception import EC2ResponseError
 from eutester.euinstance import EuInstance
@@ -476,6 +477,60 @@ class EC2ops(Eutester):
         self.fail(str(volume) + " left in " +  volume.status +", elapsed:"+str(elapsed))
         return False
     
+    def get_volume_time_attached(self,volume):
+        '''
+        Description: Get the seconds elapsed since the volume was attached. 
+        
+        :type volume: boto volume object
+        :param volume: The volume used to calculate the elapsed time since attached. 
+        
+        :rtype: integer
+        :returns: The number of seconds elapsed since this volume was attached. 
+        '''
+        self.debug("Getting time elapsed since volume attached...")
+        volume.update()
+        if volume.attach_data is None:
+            raise Exception('get_time_since_vol_attached: Volume '+str(volume.id)+" not attached")
+        #get timestamp from attach_data
+        attached_time = self.get_datetime_from_resource_string(volume.attach_data.attach_time)
+        #return the elapsed time in seconds
+        return time.mktime(datetime.utcnow().utctimetuple()) - time.mktime(attached_time.utctimetuple())
+    
+    
+    def get_instance_time_launched(self,instance):
+        '''
+        Description: Get the seconds elapsed since the volume was attached. 
+        
+        :type volume: boto volume object
+        :param volume: The volume used to calculate the elapsed time since attached. 
+        
+        :rtype: integer
+        :returns: The number of seconds elapsed since this volume was attached. 
+        '''
+        self.debug("Getting time elapsed since instance "+str(instance.id)+" launched...")
+        instance.update()
+        #get timestamp from launch data
+        launch_time = self.get_datetime_from_resource_string(instance.launch_time)
+        #return the elapsed time in seconds
+        return time.mktime(datetime.utcnow().utctimetuple()) - time.mktime(launch_time.utctimetuple())
+    
+    def get_datetime_from_resource_string(self,timestamp):
+        '''
+        Description: Convert a typical resource timestamp to datetime time_struct. 
+        
+        :type timestamp: string
+        :param timestamp: Timestamp held within specific boto resource objects.Example timestamp format: 2012-09-19T21:24:03.864Z
+        
+        :rtype: time_struct
+        :returns: The time_struct representation of the timestamp provided. 
+        '''
+        t = re.findall('\w+',str(timestamp).replace('T',' '))
+        #remove milliseconds from list...
+        t.pop()
+        #create a time_struct out of our list
+        return datetime.strptime(" ".join(t), "%Y %m %d %H %M %S")
+        
+    
     def create_snapshot(self, volume_id, waitOnProgress=0, poll_interval=10, timeout=0, description=""):
         """
         Create a new EBS snapshot from an existing volume then wait for it to go to the created state. By default will poll for poll_count.
@@ -727,12 +782,11 @@ class EC2ops(Eutester):
         maxsize           (optional integer) maximum size of volume to be matched
         eof               (optional boolean) exception on failure to find volume, else returns empty list
         """
-        
         retlist = []
         if (attached_instance is not None) or (attached_dev is not None):
             status='in-use'
     
-        volumes = self.ec2.get_all_volumes()
+        volumes = self.ec2.get_all_volumes()             
         for volume in volumes:
             if not re.match(volume_id, volume.id):
                 continue
@@ -805,6 +859,10 @@ class EC2ops(Eutester):
             is_reachable= False
         else:
             addressing_type = None
+        #In the case a keypair object was passed instead of the keypair name
+        if keypair:
+            if not isinstance(keypair, basestring):
+                keypair = keypair.name
         
         start = time.time()
             
