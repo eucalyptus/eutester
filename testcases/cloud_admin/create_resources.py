@@ -57,6 +57,7 @@ class ResourceGeneration(EutesterTestCase):
     def CreateResources(self):
         users = self.tester.get_all_users() 
         testers = []
+        testers.append(self.tester)
         for user in users:
             user_name = user['user_name']
             user_account = user['account_name']
@@ -66,7 +67,8 @@ class ResourceGeneration(EutesterTestCase):
             secret_key = keys['secret_access_key']
             self.tester.debug("Creating Eucaops object with access key " + access_key + " and secret key " +  secret_key)
             new_tester = Eucaops(aws_access_key_id=access_key, aws_secret_access_key=secret_key, ec2_ip=self.tester.ec2.host, s3_ip=self.tester.s3.host,username=user_name, account=user_account)
-            testers.append(new_tester)
+            if not re.search("eucalyptus", user_account ):
+                testers.append(new_tester)
 
         self.tester.debug("Created a total of " + str(len(testers)) + " testers" )
 
