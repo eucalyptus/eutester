@@ -729,6 +729,7 @@ class EC2ops(Eutester):
             poll_count -= 1
             self.sleep(5)
 
+        poll_count = 15
         ### Ensure instance gets correct address
         while instance.public_dns_name not in address.public_ip:
             if poll_count == 0:
@@ -756,6 +757,7 @@ class EC2ops(Eutester):
             poll_count -= 1
             self.sleep(5)
 
+        poll_count = 15
         ### Ensure instance gets correct address
         while instance.public_dns_name in address.public_ip:
             if poll_count == 0:
@@ -764,6 +766,18 @@ class EC2ops(Eutester):
             self.debug('Instance {0} has IP {1} attached instead of {2}'.format(instance.id, instance.public_dns_name, address.public_ip) )
             poll_count -= 1
             self.sleep(5)
+
+    def release_address(self, address):
+        """
+        Release all addresses or a particular IP
+        address        Address object to release
+        """
+        try:
+            self.debug("Releasing address: " + str(address))
+            address.release()
+        except Exception, e:
+            raise Exception("Failed to release the address: " + str(address) + ": " +  str(e))
+
     
     def check_device(self, device_path):
         """Used with instance connections. Checks if a device at a certain path exists"""
@@ -1042,17 +1056,6 @@ class EC2ops(Eutester):
                 print str(item)+" = "+str(obj.__dict__[item])
             buf += str(item)+" = "+str(obj.__dict__[item])+"\n"
         return buf
-
-    def release_address(self, address):
-        """
-        Release all addresses or a particular IP
-        address        Address object to release
-        """
-        try:
-            self.debug("Releasing address: " + str(address))
-            address.release()
-        except Exception, e:
-            raise Exception("Failed to release the address: " + str(address) + ": " +  str(e))
 
     def terminate_instances(self, reservation=None):
         """
