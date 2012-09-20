@@ -73,7 +73,7 @@ class Yum(PackageManager):
         self.name = "yum"
         
     def install(self, package):
-        self.machine.sys("yum install " + package)
+        self.machine.sys("yum install -y " + package)
     
     def upgrade(self, package = None):
         self.package_manager.upgrade(package)
@@ -81,10 +81,10 @@ class Yum(PackageManager):
     def add_repo(self, url, name= None):
         if name is None:
             name = "new-repo-" + str(int(time.time()))
-        repo_file = "/etc/yum.repos.d/" + name
-        self.machine.sys("echo '[%s]' >> %s" % (name, repo_file) )
+        repo_file = "/etc/yum.repos.d/" + name + ".repo"
+        self.machine.sys("echo '[%s]' > %s" % (name, repo_file) )
         self.machine.sys("echo 'name=%s' >> %s"  % (name, repo_file)  );
-        self.machine.sys("echo 'baseurl=%s >> %s" % (url, repo_file) )
+        self.machine.sys("echo 'baseurl=%s' >> %s" % (url, repo_file) )
         self.machine.sys("echo -e 'enabled=1\ngpgcheck=0' >> %s " % repo_file)
         self.update_repos()
         

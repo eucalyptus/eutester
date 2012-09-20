@@ -129,7 +129,7 @@ class EuInstance(Instance):
         newins.timeout = timeout
         newins.retry = retry    
         newins.connect_to_instance(timeout=timeout)
-        newins.set_block_device_prefix()
+        #newins.set_block_device_prefix()
         newins.set_rootfs_device()
         
         return newins
@@ -224,10 +224,7 @@ class EuInstance(Instance):
         '''
         retlist = []
         if match is None:
-            if self.block_device_prefix is not None and self.block_device_prefix != "":
-                match = self.block_device_prefix
-            else:
-                match = '^sd\|^vd\|^xd'
+            match = '^sd\|^vd\|^xd|^xvd'
         out = self.sys("ls -1 /dev/ | grep '^"+str(match)+"'" )
         for line in out:
             retlist.append(line.strip())
@@ -353,13 +350,33 @@ class EuInstance(Instance):
             return self.sys("curl http://" + self.tester.get_ec2_ip()  + ":8773/latest/meta-data/" + element_path)
         
     def set_block_device_prefix(self):
+        return self.set_rootfs_device()
+        '''
         if self.found("dmesg | grep vda", "vda"):
             self.block_device_prefix = "vd"
             self.virtio_blk = True
-    
+            self.rootfs_device = "vda"
+        elif self.found("dmesg | grep xvda", "xvda"):
+            self.block_device_prefix = "xvd"
+            self.virtio_blk = False
+            self.rootfs_device = "xvda"
+        else:
+            self.block_device_prefix = "sd"
+            self.virtio_blk = False
+            self.rootfs_device = "sda"
+            
+        '''
     def set_rootfs_device(self):
         if self.found("dmesg | grep vda", "vda"):
             self.rootfs_device = "vda"
+            self.virtio_blk = True
+        elif self.found("dmesg | grep xvda", "xvda"):
+            self.rootfs_device = "xvda"
+            self.virtio_blk = False
+        else:
+            self.rootfs_device = "sda"
+            self.virtio_blk = False
+            
     
     def get_guestdevs_inuse_by_vols(self):
         retlist = []

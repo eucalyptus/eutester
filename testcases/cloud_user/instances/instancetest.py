@@ -193,7 +193,6 @@ class InstanceBasics(unittest.TestCase):
             zone = self.zone
         if self.reservation is None:
             self.reservation = self.tester.run_instance(self.image, keypair=self.keypair.name, group=self.group.name, zone=zone)
-            self.tester.sleep(10)
         for instance in self.reservation.instances:
             self.assertTrue( self.tester.wait_for_reservation(self.reservation) ,'Instance did not go to running')
             self.assertNotEqual( instance.public_dns_name, instance.private_ip_address, 'Public and private IP are the same')
@@ -209,19 +208,16 @@ class InstanceBasics(unittest.TestCase):
         if zone is None:
             zone = self.zone
         self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name,zone=zone)
-        self.tester.sleep(10)
         for instance in self.reservation.instances:
             address = self.tester.allocate_address()
             self.assertTrue(address,'Unable to allocate address')
-            self.assertTrue(self.tester.associate_address(instance, address))
-            self.tester.sleep(30)
+            self.tester.associate_address(instance, address)
             instance.update()
             self.assertTrue( self.tester.ping(instance.public_dns_name), "Could not ping instance with new IP")
-            address.disassociate()
-            self.tester.sleep(30)
+            self.tester.disassociate_address_from_instance(instance)
+            self.tester.release_address(address)
             instance.update()
-            self.assertTrue( self.tester.ping(instance.public_dns_name), "Could not ping instance with new IP")
-            address.release()
+            self.assertTrue( self.tester.ping(instance.public_dns_name), "Could not ping after dissassociate")
         return self.reservation
     
     def MaxSmallInstances(self, available_small=None,zone = None):
@@ -373,14 +369,14 @@ class InstanceBasics(unittest.TestCase):
         ### Once the previous test is complete rerun the BasicInstanceChecks test case
         ### Wait for an instance to become available
         count = self.tester.get_available_vms("m1.small")
-        while count < 1:
+        poll_count = 30
+        while poll_count > 0:
             self.tester.sleep(5)
-
-        q = Queue()
-        queue_pool.append(q)
-        p = Process(target=self.run_testcase_thread, args=(q, step,"BasicInstanceChecks"))
-        thread_pool.append(p)
-        p.start()
+            count = self.tester.get_available_vms("m1.small")
+            if count > 0:
+                self.tester.debug("There is an available VM to use for final test")
+                break
+            poll_count -= 1
         
         fail_count = 0
         ### Block until the script returns a result
@@ -392,7 +388,10 @@ class InstanceBasics(unittest.TestCase):
         for thread in thread_pool:
             thread.join()
         
-        self.assertEquals(fail_count, 0, "Failure detected in one of the " + str(count)  + " Basic Instance tests")
+        if fail_count > 0:
+            raise Exception("Failure detected in one of the " + str(count)  + " Basic Instance tests")
+
+        self.tester.debug("Successfully completed churn test")
 
     def PrivateIPAddressing(self, zone = None):
         """Basic test to run an instance with Private only IP
@@ -403,7 +402,6 @@ class InstanceBasics(unittest.TestCase):
         if zone is None:
             zone = self.zone
         self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name, private_addressing=True, zone=zone)
-        self.tester.sleep(10)
         for instance in self.reservation.instances:
             address = self.tester.allocate_address()
             self.assertTrue(address,'Unable to allocate address')

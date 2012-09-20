@@ -17,7 +17,7 @@ class GatherDebug(InstanceBasics, BucketTestSuite):
                         'route',
                         'netstat -lnp']
 
-    euca_commands = ['cat /etc/eucalyptus/eucalyptus.conf | grep -v \'#\'',
+    euca_commands = ['cat /etc/eucalyptus/eucalyptus.conf | grep -v \'#\' ',
                      'cat /etc/eucalyptus/eucalyptus-version',
                      'ps aux | grep euca']
 
@@ -33,35 +33,35 @@ class GatherDebug(InstanceBasics, BucketTestSuite):
         self.tester = Eucaops( config_file=config_file, password=password)
         self.servman = self.tester.service_manager
 
+    def run_command_list(self,machine, list):
+        for command in list:
+            machine.sys(command)
+
     def debug_clc(self, **kwargs):
-        cc_commands = self.basic_commands + self.network_commands + self.euca_commands + self.clc_commands
+        clc_commands = self.basic_commands + self.network_commands + self.euca_commands + self.clc_commands
         for machine in self.tester.get_component_machines("clc"):
-            for command in cc_commands:
+            for command in clc_commands:
                 machine.sys("source " + self.tester.credpath + "/eucarc && " + command)
 
     def debug_walrus(self, **kwargs):
-        cc_commands = self.basic_commands + self.network_commands + self.euca_commands
+        walrus_commands = self.basic_commands + self.network_commands + self.euca_commands
         for machine in self.tester.get_component_machines("ws"):
-            for command in cc_commands:
-                machine.sys(command)
+            self.run_command_list(machine,walrus_commands)
 
     def debug_cc(self, **kwargs):
         cc_commands = self.basic_commands + self.network_commands + self.euca_commands
         for machine in self.tester.get_component_machines("cc"):
-            for command in cc_commands:
-                machine.sys(command)
+            self.run_command_list(machine,cc_commands)
 
     def debug_sc(self, **kwargs):
-        cc_commands = self.basic_commands + self.network_commands + self.euca_commands
+        sc_commands = self.basic_commands + self.network_commands + self.euca_commands
         for machine in self.tester.get_component_machines("sc"):
-            for command in cc_commands:
-                machine.sys(command)
+            self.run_command_list(machine,sc_commands)
 
     def debug_nc(self, **kwargs):
-        cc_commands = self.basic_commands + self.network_commands + self.euca_commands
+        nc_commands = self.basic_commands + self.network_commands + self.euca_commands
         for machine in self.tester.get_component_machines("nc"):
-            for command in cc_commands:
-                machine.sys(command)
+            self.run_command_list(machine,nc_commands)
 
     def run_testcase(self, testcase_callback, **kwargs):
         poll_count = 20
