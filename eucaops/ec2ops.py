@@ -744,12 +744,14 @@ class EC2ops(Eutester):
         """Disassociate address from instance and ensure that it no longer holds the IP
         instance     An instance that has an IP allocated"""
         address = self.ec2.get_all_addresses(addresses=[instance.public_dns_name])[0]
+
+        self.debug("Attemtping to disassociate " + str(address) + " from " + str(instance))
         address.disassociate()
 
         poll_count = 15
         address = self.ec2.get_all_addresses(addresses=[address.public_ip])[0]
         ### Ensure address object hold correct instance value
-        while address.instance_id:
+        while not re.search('available',address.instance_id):
             if poll_count == 0:
                 raise Exception('Address ' + str(address) + ' never associated with instance')
             address = self.ec2.get_all_addresses(addresses=[address.public_ip])[0]
