@@ -36,7 +36,6 @@ import time
 import re
 import os
 import base64
-import socket
 import sys
 from datetime import datetime
 from boto.ec2.blockdevicemapping import BlockDeviceMapping, BlockDeviceType
@@ -163,62 +162,7 @@ class EC2ops(Eutester):
         else:
             string_to_decrypt = encrypted_string
         return user_priv_key.private_decrypt(string_to_decrypt,RSA.pkcs1_padding)   
-    
-    def scan_port_range(self, ip, start, stop, timeout=1, tcp=True):
-        '''
-        Attempts to connect to ports, returns list of ports which accepted a connection
-        '''
-        ret = []
-        for x in xrange(start,stop+1):
-            try:
-                sys.stdout.write("\r\x1b[K"+str('scanning:'+str(x)))
-                sys.stdout.flush()
-                self.test_port_status(ip, x, timeout=timeout,tcp=tcp, verbose=False)
-                ret.append(x)
-            except socket.error, se:
-                pass
-        return ret
-    
-    def test_port_status(self, ip, port, timeout=5, tcp=True, verbose=True):
-        '''
-        Attempts to connect to tcp port at ip:port within timeout seconds
-        '''
-        if verbose:
-            debug = self.debug
-        else:
-            debug = lambda msg: None
-        debug('test_port_status, ip:'+str(ip)+', port:'+str(port)+', TCP:'+str(tcp))
-        if tcp:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        else:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM,socket.IPPROTO_UDP)
-        s.settimeout(timeout)
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        try:
-            if tcp:
-                s.connect((ip, port))
-            else:
-                s.sendto("--TEST LINE--", (ip, port))
-                recv, svr = s.recvfrom(255)
-        except socket.error, se:
-            debug('test_port_status failed socket error:'+str(se[0]))
-            #handle specific errors here, for now just for debug...
-            ecode=se[0]
-            if ecode == socket.errno.ECONNREFUSED:
-                debug("test_port_status: Connection Refused")
-            if ecode == socket.errno.ENETUNREACH:
-                debug("test_port_status: Network unreachable")
-            if ecode == socket.errno.ETIMEDOUT or ecode == "timed out":
-                debug("test_port_status: Connect to "+str(ip)+":" +str(port)+ " timed out")
-            raise se
-        except socket.timeout, st:
-            debug('test_port_status failed socket timeout')
-            raise st
-        finally:
-            s.settimeout(None)
-            s.close()
-        debug('test_port_status, success')
-    
+        
 
     def add_group(self, group_name=None, fail_if_exists=False ):
         """

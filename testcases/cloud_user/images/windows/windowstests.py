@@ -84,6 +84,7 @@ class WindowsTests(EutesterTestCase):
                  win_proxy_username = 'Administrator',
                  win_proxy_password = None, 
                  win_proxy_keypath = None,
+                 authports=['tcp:3389','tcp:80','tcp:443', 'tcp:5985', 'tcp:5986']
                  ):
         if tester is None:
             self.tester = Eucaops( config_file=config_file,password=password,credpath=credpath)
@@ -113,6 +114,7 @@ class WindowsTests(EutesterTestCase):
             self.zonelist.append(zone)
         self.testvolcount = testvolcount
         self.testvolumes = testvolumes
+        self.authports=authports
         self.instance_password = instance_password
         self.vmtype= vmtype 
         self.user_data = user_data
@@ -172,14 +174,15 @@ class WindowsTests(EutesterTestCase):
         
         
             
-    def setupWindowsSecurityGroup(self):
+    def setupWindowsSecurityGroup(self, portlist=None):
+        portlist = portlist or self.authports
         #Setup our security group for later use...
         if self.group is None:
             
             group_name='WindowsTestGroup'
             try:
                 self.group = self.tester.add_group(group_name)
-                self.tester.authorize_group_by_name(self.group.name)
+                self.setupWindowsGroupAuthorization(portlist=portlist)
                 #enable windows RDP port
             except Exception, e:    
                 raise Exception("Error when setting up group:"+str(group_name)+", Error:"+str(e)) 
@@ -192,16 +195,7 @@ class WindowsTests(EutesterTestCase):
         for p in authports:
             protocol,port = str(p).split(':')
             self.tester.authorize_group_by_name(self.group.name,protocol=str(protocol),port=int(port)) 
-            '''
-            self.tester.authorize_group_by_name(self.group.name,protocol="tcp",port=3389) 
-            #enable http/https
-            self.tester.authorize_group_by_name(self.group.name,protocol="tcp",port=80)
-            self.tester.authorize_group_by_name(self.group.name,protocol="tcp",port=443)
-            #enable remote powershell
-            self.tester.authorize_group_by_name(self.group.name,protocol="tcp",port=5985)
-            self.tester.authorize_group_by_name(self.group.name,protocol="tcp",port=5986)
-            '''
-            self.authports=['tcp:3389','tcp:80','tcp:443', 'tcp:5985', 'tcp:5986']
+            
         
     def setupWindowsKeypair(self):
         #Setup the keypairs for later use
@@ -390,7 +384,7 @@ class WindowsTests(EutesterTestCase):
     
     def scan_port_range(self, start,stop,ip=None,timeout=1, tcp=True):
         ip = ip or self.instance.public_dns_name 
-        return self.tester.scan_port_range(ip, start, stop, timeout, tcp)
+        return self.tester.scan_port_range(ip, int(start),int(stop), timeout=int(timeout), tcp=tcp)
     
     def test_port_status(self, port, ip=None, timeout=5, tcp=True, verbose=True):
         ip = ip or self.instance.public_dns_name 
