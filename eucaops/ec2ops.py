@@ -651,6 +651,16 @@ class EC2ops(Eutester):
                     ret.append(addr)
         return ret
     
+    def get_available_addresses(self):
+        self.debug("get_available_addresses...")
+        ret = []
+        addrs = self.ec2.get_all_addresses()
+        for addr in addrs:
+            if addr.instance_id and re.search(r"(available|nobody)", addr.instance_id):
+                ret.append(addr)
+        return ret
+    
+    
     def allocate_address(self):
         """
         Allocate an address for the current user
