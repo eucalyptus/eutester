@@ -639,6 +639,18 @@ class EC2ops(Eutester):
         raise Exception("Unable to find an EMI")
         return None
     
+    def get_all_allocated_addresses(self,account_id=None):
+        self.debug("get_all_allocated_addresses...")
+        account_id = account_id or self.get_account_id()
+        ret = []
+        if account_id:
+            account_id = str(account_id)
+            addrs = self.ec2.get_all_addresses()
+            for addr in addrs:
+                if addr.instance_id and re.search(account_id, str(addr.instance_id)):
+                    ret.append(addr)
+        return ret
+    
     def allocate_address(self):
         """
         Allocate an address for the current user
