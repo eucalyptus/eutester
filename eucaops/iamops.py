@@ -33,6 +33,8 @@ from eutester import Eutester
 import re
 
 
+
+
 class IAMops(Eutester):
     
     def create_account(self,account_name):
@@ -121,13 +123,59 @@ class IAMops(Eutester):
             retlist.append(user)
         return retlist
     
+    def show_all_accounts(self,
+                          account_name=None, 
+                          account_id=None,  
+                          search=False ):
+        '''
+        Debug Method to print an account list based on given filter criteria
+        Options:
+            account_name - regex - to use for account_name
+            account_id - regex - to use for 
+            search - boolean - specify whether to use match or search when filtering the returned list
+        ''' 
+        list = self.get_all_accounts(account_name=account_name, account_id=account_id, search=search)
+        self.debug('-----------------------------------------------------------------------')
+        self.debug(str('ACCOUNT_NAME:').ljust(25) + str('ACCT_ID:'))
+        self.debug('-----------------------------------------------------------------------')
+        for account in list:
+            self.debug(str(account['account_name']).ljust(25)+str(account['account_id']))
+            
+    
+    def show_all_groups(self,
+                        account_name=None, 
+                        account_id=None, 
+                        path=None,
+                        group_name=None, 
+                        group_id=None, 
+                        search=False):
+        '''
+        Debug Method to print a group list based on given filter criteria
+        Options:
+            path - regex - to match for path
+            group_name - regex - to match for user_name
+            group_id - regex - to match for user_id
+            acount_name - regex - to use for account_name
+            account_id - regex - to use for 
+            search - boolean - specify whether to use match or search when filtering the returned list
+        ''' 
+        list = self.get_all_groups(account_name=account_name, account_id=account_id, path=path, group_name=group_name, group_id=group_id, search=search)
+        self.debug('-----------------------------------------------------------------------')
+        self.debug(str('ACCOUNT:').ljust(15) + str('GROUPNAME:').ljust(15) + str('GROUP_ID').ljust(25)  )
+        self.debug('-----------------------------------------------------------------------')
+        for group in list:
+            self.debug(str(group['account_name']).ljust(15)+str(group['group_name']).ljust(15)+str(group['group_id']))
+            
+        
+    
+    
     def show_all_users(self,
-                              account_name=None, 
-                              account_id=None, 
-                              path=None,
-                              user_name=None, 
-                              user_id=None, 
-                              search=False ):
+                       account_name=None, 
+                       account_id=None, 
+                       path=None,
+                       user_name=None, 
+                       user_id=None, 
+                       search=False ):
         '''
         Debug Method to print a user list based on given filter criteria
         Options:
@@ -144,6 +192,12 @@ class IAMops(Eutester):
         self.debug('-----------------------------------------------------------------------')
         for user in list:
             self.debug(str(user['account_name']).ljust(15)+str(user['user_name']).ljust(15)+str(user['user_id']).ljust(25)+str(user['account_id']))
+            
+    def get_euare_username(self):
+        return self.get_all_users(account_id=str(self.get_account_id()))[0]['user_name']
+    
+    def get_euare_accountname(self):
+        return self.get_all_users(account_id=str(self.get_account_id()))[0]['account_name']
             
     def get_all_users(self, 
                       account_name=None, 
@@ -262,6 +316,7 @@ class IAMops(Eutester):
         account_id = self.get_account_id()
         self.show_all_users(account_id=account_id, user_id=user_id)
         self.show_user_policy_summary(user_name)
+        
     
     def attach_policy_user(self, user_name, policy_name, policy_json, delegate_account=None):
         self.debug("Attaching the following policy to " + user_name + ":" + policy_json)
@@ -279,6 +334,66 @@ class IAMops(Eutester):
         if delegate_account:
             params['DelegateAccount'] = delegate_account
         self.euare.get_response('DeleteUserPolicy', params, verb='POST')
+        
+    def get_all_groups(self, 
+                      account_name=None, 
+                      account_id=None, 
+                      path=None,
+                      group_name=None, 
+                      group_id=None, 
+                      search=False ):
+        '''
+        Queries all accounts matching given account criteria, returns all groups found within these accounts which then match the given user criteria. 
+        Account info is added to the group dicts
+        Options:
+            path - regex - to match for path
+            group_name - regex - to match for group_name
+            group_id - regex - to match for group_id
+            account_name - regex - to use for account_name
+            account_id - regex - to use for 
+            search - boolean - specify whether to use match or search when filtering the returned list
+        ''' 
+        grouplist=[]
+        accounts = self.get_all_accounts(account_id=account_id, account_name=account_name, search=search)
+        for account in accounts:
+            groups = self.get_groups_from_account(path=path, group_name=group_name, group_id=group_id, delegate_account=account['account_name'], search=search)
+            for group in groups:
+                group['account_name']=account['account_name']
+                group['account_id']=account['account_id']
+                grouplist.append(group)
+        return grouplist
+        
+    
+    def get_groups_from_account(self, path=None, group_name=None, group_id=None, delegate_account=None, search=False):
+        '''
+        Returns groups that match given criteria. By default will return groups from current account. 
+        Options:
+            path - regex - to match for path
+            group_name - regex - to match for group_name
+            group_id - regex - to match for group_id
+            delegate_account - string - to use for delegating account lookup
+            search - boolean - specify whether to use match or search when filtering the returned list
+        '''
+        self.debug('Attempting to fetch all groups matching- group_id:'+str(group_id)+' group_name:'+str(group_name)+" acct_name:"+str(delegate_account))
+        retlist = []
+        params = {}
+        if search:
+            re_meth = re.search
+        else:
+            re_meth = re.match
+        if delegate_account:
+            params['DelegateAccount'] = delegate_account         
+        response = self.euare.get_response('ListGroups', params, list_marker='Groups')
+        for group in response['list_groups_response']['list_groups_result']['groups']:
+            if path is not None and not re_meth(path, group['path']):
+                continue
+            if group_name is not None and not re_meth(user_name, group['group_name']):
+                continue
+            if group_id is not None and not re_meth(user_id, group['group_id']):
+                continue
+            retlist.append(group)
+        return retlist
+        
     
     def create_group(self, group_name,path="/", delegate_account=None):
         self.debug("Attempting to create group: " + group_name)

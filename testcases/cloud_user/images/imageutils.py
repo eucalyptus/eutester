@@ -132,7 +132,7 @@ class ImageUtils(EutesterTestCase):
     def get_manifest_part_count(self, path, component=None, timeout=30):
         machine = component or self.component
         cmd = 'cat '+str(path)
-        out = machine.cmd(cmd,timeout=timeout, verbose=True)
+        out = machine.cmd(cmd,timeout=timeout, verbose=False)
         if out['status'] != 0:
             raise Exception('get_manifest_part_count failed, cmd status:'+str(out['status']))
         output = out['output']
