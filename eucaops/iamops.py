@@ -161,12 +161,14 @@ class IAMops(Eutester):
         ''' 
         list = self.get_all_groups(account_name=account_name, account_id=account_id, path=path, group_name=group_name, group_id=group_id, search=search)
         self.debug('-----------------------------------------------------------------------')
-        self.debug(str('ACCOUNT:').ljust(15) + str('GROUPNAME:').ljust(15) + str('GROUP_ID').ljust(25)  )
+        self.debug(str('ACCOUNT:').ljust(25) + str('GROUPNAME:').ljust(15) + str('GROUP_ID:').ljust(25)  )
         self.debug('-----------------------------------------------------------------------')
         for group in list:
-            self.debug(str(group['account_name']).ljust(15)+str(group['group_name']).ljust(15)+str(group['group_id']))
+            self.debug(str(group['account_name']).ljust(25)+str(group['group_name']).ljust(15)+str(group['group_id']))
             
-        
+       
+    
+    
     
     
     def show_all_users(self,
@@ -188,10 +190,10 @@ class IAMops(Eutester):
         ''' 
         list = self.get_all_users(account_name=account_name, account_id=account_id, path=path, user_name=user_name, user_id=user_id, search=search)
         self.debug('-----------------------------------------------------------------------')
-        self.debug(str('ACCOUNT:').ljust(15) + str('USERNAME:').ljust(15) + str('USER_ID').ljust(25) + str('ACCT_ID') )
+        self.debug(str('ACCOUNT:').ljust(25) + str('USERNAME:').ljust(15) + str('USER_ID').ljust(25) + str('ACCT_ID') )
         self.debug('-----------------------------------------------------------------------')
         for user in list:
-            self.debug(str(user['account_name']).ljust(15)+str(user['user_name']).ljust(15)+str(user['user_id']).ljust(25)+str(user['account_id']))
+            self.debug(str(user['account_name']).ljust(25)+str(user['user_name']).ljust(15)+str(user['user_id']).ljust(25)+str(user['account_id']))
             
     def get_euare_username(self):
         return self.get_all_users(account_id=str(self.get_account_id()))[0]['user_name']
