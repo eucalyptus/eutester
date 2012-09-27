@@ -116,12 +116,24 @@ class EC2ops(Eutester):
         """
         keylist = []
         keys = self.ec2.get_all_key_pairs()
+        keyfile = None
         for k in keys:
             try:
-                self.verify_local_keypath(k.name, path, exten)
-                self.debug('Found key:'+k.name)
-                keylist.append(k)
+                keypath = self.verify_local_keypath(k.name, path, exten)
+                keyfile = open(keypath,'r')
+                for line in keyfile:
+                    if re.search('KEYPAIR',line):
+                        fingerprint = line.split()[2]
+                        break
+                keyfile.close()
+                if fingerprint == k.fingerprint:
+                    self.debug('Found key:'+k.name)
+                    keylist.append(k)
             except: pass
+            finally:
+                if keyfile and not keyfile.closed:
+                    keyfile.close()
+                
         return keylist
             
         
