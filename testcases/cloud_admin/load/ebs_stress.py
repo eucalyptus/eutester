@@ -19,6 +19,8 @@
 #                           - iscsivolumeinfo relation
 #                           - volumes relation
 #                           - iscsimetadata relation
+#                   * PSQL database state of eucalyptus_cloud table:
+#                           - metadata_volumes
 #                   * Loopback device integrity
 #                   * LVM integrity
 #               after stressing the SC with asynchronous volume create/delete calls.
@@ -40,6 +42,7 @@ import argparse
 import string
 import sys
 import pprint
+import datetime
 
 class LoadGenerator(unittest.TestCase):
     def setUp(self):
@@ -66,12 +69,14 @@ class LoadGenerator(unittest.TestCase):
         """
         self.overall_ebs_reporting()
         """
-        Display information in eucalyptus_storage table related to EBS -
-        iscsivolumeinfo, iscsimetadata, volumes tables
+        Display information in eucalyptus_storage,eucalyptus_cloud tables related to EBS -
+            * eucalyptus_storage relations: iscsivolumeinfo, iscsimetadata, volumes
+            * eucalyptus_cloud relations: metadata_volumes
         """
         self.iscivolumeinfo_db_dump()
         self.iscsimetadata_db_dump()
         self.volumes_db_dump()
+        self.cloudmetadata_db_dump()
         """
         If extra debugging is set, print additional CLC and SC information
         """
@@ -167,50 +172,90 @@ class LoadGenerator(unittest.TestCase):
         """
         Print contents of iscsivolumeinfo relation in eucalyptus_storage table
         """
-        db_contents = ""
+        now = datetime.datetime.now()
+        iscsivolinfo_file = "~/iscsivolinfo_file-" + str(now.microsecond) + ".txt"
+        db_dump = ""
         for machine in self.tester.get_component_machines("clc"):
-            db_contents = (machine.sys("psql -p 8777 -e -t -h ${EUCALYPTUS}/var/lib/eucalyptus/db/data eucalyptus_storage -c 'BEGIN; select * from iscsivolumeinfo; COMMIT'"))
+            machine.sys("psql -p 8777 -x -e -t -S -h ${EUCALYPTUS}/var/lib/eucalyptus/db/data eucalyptus_storage -c 'select * from iscsivolumeinfo' -o " + iscsivolinfo_file)
+            db_dump = (machine.sys("cat " + iscsivolinfo_file))
+            machine.sys("rm -rf " + iscsivolinfo_file)
 
         self.tester.debug("##########################################\n")
-        self.tester.debug("\t**** Data in iscsivolumeinfo relation in eucalyptus_storage table ****\n")
-        for content in db_contents:
+        self.tester.debug("\t**** Content of iscsivolumeinfo relation ****\n")
+        for content in db_dump:
             self.tester.debug(content + "\n")
         self.tester.debug("##########################################\n")
-        
-        db_contents = None
 
+        now = None
+        iscsivolinfo_file = None
+        db_dump = None
+            
     def iscsimetadata_db_dump(self):
         """
         Print contents of iscsimetadata relation in eucalyptus_storage table
         """
-        db_contents = ""
+        now = datetime.datetime.now()
+        iscsimetadata_file = "~/iscsimetadata_file-" + str(now.microsecond) + ".txt"
+        db_dump = ""
         for machine in self.tester.get_component_machines("clc"):
-            db_contents = (machine.sys("psql -p 8777 -e -t -h ${EUCALYPTUS}/var/lib/eucalyptus/db/data eucalyptus_storage -c 'BEGIN; select * from iscsimetadata; COMMIT'"))
+            machine.sys("psql -p 8777 -x -e -t -S -h ${EUCALYPTUS}/var/lib/eucalyptus/db/data eucalyptus_storage -c 'select * from iscsimetadata' -o " + iscsimetadata_file)
+            db_dump = (machine.sys("cat " + iscsimetadata_file))
+            machine.sys("rm -rf " + iscsimetadata_file)
 
         self.tester.debug("##########################################\n")
-        self.tester.debug("\t**** Data in iscsimetadata relation in eucalyptus_storage table ****\n")
-        for content in db_contents:
+        self.tester.debug("\t**** Content of iscsimetadata relation ****\n")
+        for content in db_dump:
             self.tester.debug(content + "\n")
         self.tester.debug("##########################################\n")
 
-        db_contents = None
+        now = None
+        iscsimetadata_file= None
+        db_dump = None
 
     def volumes_db_dump(self):
         """
         Print contents of volumes relation in eucalyptus_storage table
         """
-        db_contents = ""
+        now = datetime.datetime.now()
+        volumes_file = "~/volumes_file-" + str(now.microsecond) + ".txt"
+        db_dump = ""
         for machine in self.tester.get_component_machines("clc"):
-            db_contents = (machine.sys("psql -p 8777 -e -t -h ${EUCALYPTUS}/var/lib/eucalyptus/db/data eucalyptus_storage -c 'BEGIN; select * from volumes; COMMIT'"))
+            machine.sys("psql -p 8777 -x -e -t -S -h ${EUCALYPTUS}/var/lib/eucalyptus/db/data eucalyptus_storage -c 'select * from volumes' -o " + volumes_file)
+            db_dump = (machine.sys("cat " + volumes_file))
+            machine.sys("rm -rf " + volumes_file)
 
         self.tester.debug("##########################################\n")
-        self.tester.debug("\t**** Data in volumes relation in eucalyptus_storage table ****\n")
-        for content in db_contents:
+        self.tester.debug("\t**** Content of volume relation ****\n")
+        for content in db_dump:
             self.tester.debug(content + "\n")
         self.tester.debug("##########################################\n")
 
-        db_contents = None
-  
+        now = None
+        volumes_file= None
+        db_dump = None
+
+    def cloudmetadata_db_dump(self):
+        """
+        Print contents of metadata_volumes relation in eucalyptus_cloud table
+        """
+        now = datetime.datetime.now()
+        cloudmetadata_file = "~/cloudmetadata_file-" + str(now.microsecond) + ".txt"
+        db_dump = ""
+        for machine in self.tester.get_component_machines("clc"):
+            machine.sys("psql -p 8777 -x -e -t -S -h ${EUCALYPTUS}/var/lib/eucalyptus/db/data eucalyptus_cloud -c 'select * from metadata_volumes' -o " + cloudmetadata_file)
+            db_dump = (machine.sys("cat " + cloudmetadata_file))
+            machine.sys("rm -rf " + cloudmetadata_file)
+
+        self.tester.debug("##########################################\n")
+        self.tester.debug("\t**** Content of metadata_volumes relation ****\n")
+        for content in db_dump:
+            self.tester.debug(content + "\n")
+        self.tester.debug("##########################################\n")
+
+        now = None
+        cloudmetadata_file= None
+        db_dump = None
+
     def run_command_list(self,machine, list):
         for command in list:
             machine.sys(command)
