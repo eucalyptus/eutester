@@ -70,13 +70,14 @@ class LoadGenerator(unittest.TestCase):
         self.overall_ebs_reporting()
         """
         Display information in eucalyptus_storage,eucalyptus_cloud tables related to EBS -
-            * eucalyptus_storage relations: iscsivolumeinfo, iscsimetadata, volumes
+            * eucalyptus_storage relations: iscsivolumeinfo, iscsimetadata, volumes, storage_stats_info
             * eucalyptus_cloud relations: metadata_volumes
         """
         self.iscivolumeinfo_db_dump()
         self.iscsimetadata_db_dump()
         self.volumes_db_dump()
         self.cloudmetadata_db_dump()
+        self.storagestats_db_dump()
         """
         If extra debugging is set, print additional CLC and SC information
         """
@@ -256,6 +257,28 @@ class LoadGenerator(unittest.TestCase):
         cloudmetadata_file= None
         db_dump = None
 
+    def storagestats_db_dump(self):
+        """
+        Print contents of storage_stats_info relation in eucalyptus_storage table
+        """
+        now = datetime.datetime.now()
+        storagestats_file = "~/storagestats_file-" + str(now.microsecond) + ".txt"
+        db_dump = ""
+        for machine in self.tester.get_component_machines("clc"):
+            machine.sys("psql -p 8777 -x -e -t -S -h ${EUCALYPTUS}/var/lib/eucalyptus/db/data eucalyptus_storage -c 'select * from storage_stats_info' -o " + storagestats_file)
+            db_dump = (machine.sys("cat " + storagestats_file))
+            machine.sys("rm -rf " + storagestats_file)
+
+        self.tester.debug("##########################################\n")
+        self.tester.debug("\t**** Content of storage_stats_info relation ****\n")
+        for content in db_dump:
+            self.tester.debug(content + "\n")
+        self.tester.debug("##########################################\n")
+
+        now = None
+        storagestats_file= None
+        db_dump = None
+
     def run_command_list(self,machine, list):
         for command in list:
             machine.sys(command)
@@ -292,7 +315,9 @@ class LoadGenerator(unittest.TestCase):
         sc_commands = ['tgtadm --lld iscsi --op show --mode account',
                        'tgtadm --lld iscsi --op show --mode target',
                        'du -sh ' + volumes_dir[0],
-                       'lvdisplay | grep "/dev/vg-" | wc -l',
+                       'lvdisplay | grep "/dev/vg-"',
+                       'vgdisplay',
+                       'pvdisplay',
                        'losetup -a | grep ' + volumes_dir[0] + ' | wc -l',
                        'ls -l ' + volumes_dir[0]]
 
