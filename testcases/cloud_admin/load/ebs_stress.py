@@ -42,7 +42,9 @@
 #                           - iscsimetadata relation
 #                           - storage_stats_info
 #                   * PSQL database state of eucalyptus_cloud table:
-#                           - metadata_volumes       
+#                           - metadata_volumes   
+#
+#    
 
 import unittest
 import time
@@ -391,6 +393,7 @@ class LoadGenerator(unittest.TestCase):
         from multiprocessing import Queue
 
         ### Increase time to by step seconds on each iteration
+        ### This also gives enough time for creds to be pulled from CLC
         step = 10
 
         """
@@ -404,7 +407,7 @@ class LoadGenerator(unittest.TestCase):
         queue_pool = []
 
         ## Start asynchronous activity
-        ## Run GenerateVolumesLoad testcase 5s apart
+        ## Run GenerateVolumesLoad testcase seconds apart
         for i in xrange(options.number_of_threads):
             q = Queue()
             queue_pool.append(q)
@@ -424,24 +427,24 @@ class LoadGenerator(unittest.TestCase):
             thread.join()
         
         if fail_count > 0:
-            self.tester.critical("Failure detected in one of the " + str(fail_count)  + " GenerateVolumesLoad tests")
+            self.tester.critical("Failure detected in one of the " + str(fail_count)  + " " + testcase + " tests")
 
         self.tester.debug("Successfully completed EbsStress test")
         
-    def run_testcase_thread(self, queue,delay = 20, name="EbsStress"):
+    def run_testcase_thread(self, queue,delay=20, testname=None):
         ### Thread that runs a testcase (function) and returns its pass or fail result
         self.tester.sleep(delay)
         try:
-            result = unittest.TextTestRunner(verbosity=2).run(LoadGenerator(name))
+            result = unittest.TextTestRunner(verbosity=2).run(LoadGenerator(testname))
         except Exception, e:
             queue.put(1)
             raise e
         if result.wasSuccessful():
-            self.tester.debug("Passed test: " + name)
+            self.tester.debug("Passed test: " + testname)
             queue.put(0)
             return False
         else:
-            self.tester.debug("Failed test: " + name)
+            self.tester.debug("Failed test: " + testname)
             queue.put(1)
             return True
 
