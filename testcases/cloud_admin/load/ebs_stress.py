@@ -45,6 +45,19 @@
 #                           - metadata_volumes   
 #
 #    
+# [EbsBotoStress]
+#
+#               This case does the same as EbsStress, except it uses boto calls to create the volumes.
+#               This allows for create_volumes to be called without waiting for the volume to get into
+#               an available state.  The volumes that do reach an "available" state are deleted in 
+#               GenerateCloudStatistics.
+#
+# [GenerateVolumesBoto]
+#
+#               This case was developed to test the creation of volumes in a serial manner using boto.
+#               This case is a subcase of EbsStressBoto.
+# 
+#
 
 import unittest
 import time
@@ -104,7 +117,7 @@ class LoadGenerator(unittest.TestCase):
         Now destroy volumes created and reached available state from test
         """
         for vol in self.volumes:
-            if vol.status == "available":
+            if vol.status == 'available':
                 self.tester.delete_volume(vol)
         self.volumes = None
         self.statuses = None
@@ -175,6 +188,15 @@ class LoadGenerator(unittest.TestCase):
         self.tester.debug("Disk Space Used under Cloud defined Storage Directory [ " + volumes_dir[0] + " ]: " + ebs_filesystem_size[0] + "\n")
         self.tester.debug("##########################################\n")
 
+        """
+        Make sure and clean up volumes that got to "available" state; this is mostly for EbsBotoStress cleanup
+        """
+        for vol in volumes:
+            if vol.status == 'available':
+                self.tester.delete_volume(vol)
+        """
+        Clean up everything else
+        """
         statuses = None
         volumes = None
         ebs_filesystem_size = None
@@ -368,6 +390,34 @@ class LoadGenerator(unittest.TestCase):
         self.tester.debug("###\n")
         self.tester.sleep(float(ebs_timeout[0]))
 
+    def GenerateVolumesBoto(self):
+        """
+        Grab EBS Timeout property of Cloud
+        """
+        ebs_timeout = ""
+        for machine in self.tester.get_component_machines("clc"):
+            if ebs_timeout == "":
+                ebs_timeout = (machine.sys("source " + self.tester.credpath + "/eucarc && euca-describe-properties | grep ebs_volume_creation_timeout | awk '{print $3}'"))
+        
+        """
+        Create 1 Gig volumes in series
+        """
+        vol_size = 1
+        for i in xrange(options.number_of_vol):
+            volume = self.tester.ec2.create_volume(vol_size, self.zone)
+            if volume is not None:
+                self.tester.debug("Volume (" + volume.id + ") is in (" + volume.status + ") state.\n")
+                self.volumes.append(volume)
+                self.statuses.append(volume.status)
+
+        """
+        Sleep the EBS Timeout property; only have to call it once
+        """
+        self.tester.debug("###\n")
+        self.tester.debug("###\tWaiting till EBS Timeout is reached; sleep for " + ebs_timeout[0] + " seconds.\n")
+        self.tester.debug("###\n")
+        self.tester.sleep(float(ebs_timeout[0]))
+
     def GenerateCloudStatistics(self):
         """
         Grab status of all volumes on cloud, along with database information
@@ -430,6 +480,53 @@ class LoadGenerator(unittest.TestCase):
             self.tester.critical("Failure detected in one of the " + str(fail_count)  + " " + testcase + " tests")
 
         self.tester.debug("Successfully completed EbsStress test")
+
+    def EbsBotoStress(self, testcase="GenerateVolumesBoto"):
+        """
+        Generate volume load; For each thread created - options.number_of_threads
+         - options.number_of_vol will be created
+        """
+        from multiprocessing import Process
+        from multiprocessing import Queue
+
+        ### Increase time to by step seconds on each iteration
+        ### This also gives enough time for creds to be pulled from CLC
+        step = 10
+
+        """
+        If extra debugging is set, print additional CLC and SC information
+        """
+        if options.print_debug is True:
+            self.get_clc_stats()
+            self.get_sc_stats()
+        
+        thread_pool = []
+        queue_pool = []
+
+        ## Start asynchronous activity
+        ## Run GenerateVolumesLoad testcase seconds apart
+        for i in xrange(options.number_of_threads):
+            q = Queue()
+            queue_pool.append(q)
+            p = Process(target=self.run_testcase_thread, args=(q, step * i,testcase))
+            thread_pool.append(p)
+            self.tester.debug("Starting Thread " + str(i) +" in " + str(step * i))
+            p.start()
+
+        fail_count = 0
+        ### Block until the script returns a result
+        for queue in queue_pool:
+            test_result = queue.get(True)
+            self.tester.debug("Got Result: " + str(test_result) )
+            fail_count += test_result
+
+        for thread in thread_pool:
+            thread.join()
+        
+        if fail_count > 0:
+            self.tester.critical("Failure detected in one of the " + str(fail_count)  + " " + testcase + " tests")
+
+        self.tester.debug("Successfully completed EbsBotoStress test")
         
     def run_testcase_thread(self, queue,delay=20, testname=None):
         ### Thread that runs a testcase (function) and returns its pass or fail result
@@ -469,7 +566,7 @@ def get_options():
     parser.add_argument("-d", "--debug", action="store_true", dest="print_debug",
         help="Whether or not to print debugging")
     parser.add_argument('--xml', action="store_true", default=False)
-    parser.add_argument('--tests', nargs='+', default= ["EbsStress","GenerateCloudStatistics"])
+    parser.add_argument('--tests', nargs='+', default= ["EbsStress","GenerateCloudStatistics","EbsBotoStress","GenerateCloudStatistics"])
     parser.add_argument('unittest_args', nargs='*')
 
     ## Grab arguments passed via commandline
