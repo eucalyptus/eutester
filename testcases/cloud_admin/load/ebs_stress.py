@@ -19,6 +19,7 @@
 #                           - iscsivolumeinfo relation
 #                           - volumes relation
 #                           - iscsimetadata relation
+#                           - storage_stats_info
 #                   * PSQL database state of eucalyptus_cloud table:
 #                           - metadata_volumes
 #                   * Loopback device integrity
@@ -29,7 +30,19 @@
 #
 #               This case was developed to test the creation of volumes in a serial manner.
 #               This case is a subcase of EbsStress.
+# 
+# [GenerateCloudStatistics] 
 #               
+#               This case was developed to provide statistical output of EBS related information
+#               for the cloud.  Currently, it displays the following infromation:
+#                   * number of creating, available, deleting, deleted, and failed volumes
+#                   * PSQL database state of eucalyptus_storage table:
+#                           - iscsivolumeinfo relation
+#                           - volumes relation
+#                           - iscsimetadata relation
+#                           - storage_stats_info
+#                   * PSQL database state of eucalyptus_cloud table:
+#                           - metadata_volumes       
 
 import unittest
 import time
@@ -61,34 +74,36 @@ class LoadGenerator(unittest.TestCase):
 
     def tearDown(self):
         """
-        Print the results of volumes created and total volumes of cloud
-        """
-        self.current_ebs_reporting()
-        """
-        Print all the volumes' statuses for the entire cloud
-        """
-        self.overall_ebs_reporting()
-        """
-        Display information in eucalyptus_storage,eucalyptus_cloud tables related to EBS -
-            * eucalyptus_storage relations: iscsivolumeinfo, iscsimetadata, volumes, storage_stats_info
-            * eucalyptus_cloud relations: metadata_volumes
-        """
-        self.iscivolumeinfo_db_dump()
-        self.iscsimetadata_db_dump()
-        self.volumes_db_dump()
-        self.cloudmetadata_db_dump()
-        self.storagestats_db_dump()
-        """
         If extra debugging is set, print additional CLC and SC information
         """
         if options.print_debug is True:
             self.get_clc_stats()
             self.get_sc_stats()
+            """
+            Print the results of volumes created and total volumes of cloud
+            """
+            self.current_ebs_reporting()
+            """
+            Print all the volumes' statuses for the entire cloud
+            """
+            self.overall_ebs_reporting()
+            """
+            Display information in eucalyptus_storage,eucalyptus_cloud tables related to EBS -
+                * eucalyptus_storage relations: iscsivolumeinfo, iscsimetadata, volumes, storage_stats_info
+                * eucalyptus_cloud relations: metadata_volumes
+            """
+            self.iscivolumeinfo_db_dump()
+            self.iscsimetadata_db_dump()
+            self.volumes_db_dump()
+            self.cloudmetadata_db_dump()
+            self.storagestats_db_dump()
+
         """
-        Now destroy volumes created from test
+        Now destroy volumes created and reached available state from test
         """
         for vol in self.volumes:
-            self.tester.delete_volume(vol)
+            if vol.status == "available":
+                self.tester.delete_volume(vol)
         self.volumes = None
         self.statuses = None
         self.tester = None
@@ -350,6 +365,22 @@ class LoadGenerator(unittest.TestCase):
         self.tester.debug("###\tWaiting till EBS Timeout is reached; sleep for " + ebs_timeout[0] + " seconds.\n")
         self.tester.debug("###\n")
         self.tester.sleep(float(ebs_timeout[0]))
+
+    def GenerateCloudStatistics(self):
+        """
+        Grab status of all volumes on cloud, along with database information
+        """
+        self.overall_ebs_reporting()
+        """
+        Display information in eucalyptus_storage,eucalyptus_cloud tables related to EBS -
+            * eucalyptus_storage relations: iscsivolumeinfo, iscsimetadata, volumes, storage_stats_info
+            * eucalyptus_cloud relations: metadata_volumes
+        """
+        self.iscivolumeinfo_db_dump()
+        self.iscsimetadata_db_dump()
+        self.volumes_db_dump()
+        self.cloudmetadata_db_dump()
+        self.storagestats_db_dump()
         
     def EbsStress(self, testcase="GenerateVolumesLoad"):
         """
@@ -359,7 +390,7 @@ class LoadGenerator(unittest.TestCase):
         from multiprocessing import Process
         from multiprocessing import Queue
 
-        ### Increase time to delete by step seconds on each iteration
+        ### Increase time to by step seconds on each iteration
         step = 10
 
         """
@@ -435,7 +466,7 @@ def get_options():
     parser.add_argument("-d", "--debug", action="store_true", dest="print_debug",
         help="Whether or not to print debugging")
     parser.add_argument('--xml', action="store_true", default=False)
-    parser.add_argument('--tests', nargs='+', default= ["EbsStress"])
+    parser.add_argument('--tests', nargs='+', default= ["EbsStress","GenerateCloudStatistics"])
     parser.add_argument('unittest_args', nargs='*')
 
     ## Grab arguments passed via commandline
