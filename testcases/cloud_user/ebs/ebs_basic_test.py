@@ -52,6 +52,7 @@ password = None
 credpath = None
 keypair = None
 group = None
+vmtype = None
 emi = None
 
 class ebs_tests(unittest.TestCase):
@@ -66,6 +67,7 @@ class ebs_tests(unittest.TestCase):
                             credpath=credpath, 
                             keypair=keypair, 
                             group=group, 
+                            vmtype=vmtype,
                             image=emi)
         
     def test_ebs_basic_test_suite(self):
@@ -113,8 +115,8 @@ if __name__ == "__main__":
                         help="group to use when launching instances within the test", default=None) 
     parser.add_argument('--config',
                        help='path to config file', default='../input/2btested.lst') 
-    
-
+    parser.add_argument('--vmtype',
+                       help='vmtype to run this test with', default=None) 
     parser.add_argument('--tests', nargs='+', 
                         help="test cases to be executed", 
                         default= ['test_ebs_basic_test_suite'])
@@ -137,6 +139,7 @@ if __name__ == "__main__":
     keypair = args.keypair
     group = args.group
     emi = args.emi
+    vmtype = args.vmtype
     
     for test in args.tests:
         result = unittest.TextTestRunner(verbosity=2).run( ebs_tests(test))

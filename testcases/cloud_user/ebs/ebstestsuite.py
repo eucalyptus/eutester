@@ -81,7 +81,18 @@ class EbsTestSuite(EutesterTestCase):
     multicluster=False
     image = None
     
-    def __init__(self, tester=None, zone=None, config_file='../input/2b_tested.lst', password="foobar", credpath=None, volumes=None, keypair=None, group=None, image=None, eof=1):
+    def __init__(self, 
+                 tester=None, 
+                 zone=None, 
+                 config_file='../input/2b_tested.lst', 
+                 password="foobar", 
+                 credpath=None, 
+                 volumes=None, 
+                 keypair=None, 
+                 group=None, 
+                 image=None, 
+                 vmtype=None,
+                 eof=1):
         
         if tester is None:
             self.tester = Eucaops( config_file=config_file,password=password,credpath=credpath)
@@ -92,19 +103,18 @@ class EbsTestSuite(EutesterTestCase):
         self.testlist =[]
         
         self.image = image
+        self.vmtype = vmtype
+        self.zone = None    
+        self.zonelist = []
             
         #create some zone objects and append them to the zonelist
-        if zone is not None:
+        if self.zone is not None:
+            partition = self.tester.service_manager.partitions.get(zone)
             self.zone = TestZone(zone)
             self.zonelist.append(self.zone)
         else: 
-            for zone in self.tester.service_manager.partitions.keys():
-                partition = self.tester.service_manager.partitions.get(zone)
-                tzone = TestZone(partition)
-                self.zonelist.append(tzone)
-                self.multicluster=True
-        
-        
+            self.setup_testzones()
+    
         #If the list of volumes passed in looks good, sort them into the zones
         if self.volumes_list_check(volumes):
             self.sort_volumes(volumes)
@@ -137,7 +147,14 @@ class EbsTestSuite(EutesterTestCase):
             raise Exception("Failed to find/create a keypair, error:" + str(ke))
         
         
-            
+    def setup_testzones(self):
+        for zone in self.tester.service_manager.partitions.keys():
+                partition = self.tester.service_manager.partitions.get(zone)
+                tzone = TestZone(partition)
+                self.zonelist.append(tzone)
+                self.multicluster=True
+        if not self.zonelist:
+            raise Exception("Could not discover an availability zone to perform tests in. Please specify zone")
     
     def volumes_list_check(self, volumes):
         #helper method to validate volumes for use as a list
@@ -145,8 +162,6 @@ class EbsTestSuite(EutesterTestCase):
             return True
         else:
             return False
-
-
 
     def instances_list_check(self, instances):
         #helper method to validate instances for use as a list
@@ -156,7 +171,6 @@ class EbsTestSuite(EutesterTestCase):
             return False
         
     
-        
     def sort_volumes(self, volumes):
         for vol in volumes:
             for zone in self.zonelist:
@@ -204,6 +218,7 @@ class EbsTestSuite(EutesterTestCase):
                 
         if zonelist is None:
             zonelist = self.zonelist
+        vmtype = vmtype or self.vmtype
             
         for testzone in zonelist:
             zone = testzone.name
@@ -596,11 +611,12 @@ class EbsTestSuite(EutesterTestCase):
         self.terminate_test_instances_for_zones(zonelist=zonelist, timeout=timeout)
         self.delete_volumes_in_zones(zonelist=zonelist, timeout=timeout)
         self.delete_snapshots_in_zones(zonelist=zonelist,  timeout=timeout)
-        
-    def create_testcase_from_method(self,method, *args):
+    '''  
+    def create_testcase_from_method(self, method, *args):
         testcase =  EutesterTestCase(method, args)
         return testcase
-    
+    '''
+        
     def print_test_list_results(self,list=None,printmethod=None):
         if list is None:
             list=self.testlist

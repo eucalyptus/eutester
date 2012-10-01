@@ -1,4 +1,4 @@
-eutester version 0.0.3
+eutester version 0.0.4
 ======================
 
 [Intro to Eutester](http://testingclouds.wordpress.com/2012/03/04/test1/)
@@ -13,13 +13,14 @@ eutester is an attempt to leverage existing test code to make test writing faste
 
 Installation
 ------
+If easy_install is not available in your environment use your package manager to install python-setuptools
+    
+    yum install python-setuptools gcc python-devel
+    apt-get install python-setuptools gcc python-dev
+
 Installing eutester and its dependencies is as easy as:
 
     easy_install eutester
-If easy_install is not available in your environment use your package manager to install python-setuptools
-
-    yum install python-setuptools
-    apt-get install python-setuptools
 
 For development purposes you can then clone the code from github and then reinstall with your changes
 
