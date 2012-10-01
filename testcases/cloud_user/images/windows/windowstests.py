@@ -54,11 +54,11 @@ class WindowsTests(EutesterTestCase):
                  tester=None, 
                  config_file=None, 
                  cred_path=None,
-                 password="foobar", 
+                 password=None, 
                  credpath=None, 
                  eof=True,
                  #Information on where to do image bundle work, and related timeouts
-                 destpath='/disk1/storage/',  
+                 destpath=None,  
                  time_per_gig = 300,
                  inter_bundle_timeout=120, 
                  upload_timeout=0,
@@ -94,7 +94,7 @@ class WindowsTests(EutesterTestCase):
         self.instance = instance
         if self.instance:
             self.instance = self.tester.get_instances(idstring=str(instance))[0]
-        self.destpath = str(destpath)
+        self.destpath = destpath or '/tmp'
         self.bucketname = bucketname
         self.component = work_component 
         self.component_credpath = component_credpath
@@ -298,7 +298,7 @@ class WindowsTests(EutesterTestCase):
         Work is done on a given machine and requires euca2ools present on that machine. 
         Returns the emi of the registered image
         '''
-        return self.iu.create_emi_from_url(url, 
+        return self.iu.create_emi_from_url(url = (url or self.url), 
                                            component = (component or self.component), 
                                            bucketname = (bucketname or self.bucketname), 
                                            component_credpath = (component_credpath or self.component_credpath), 
