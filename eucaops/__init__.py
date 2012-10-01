@@ -48,7 +48,7 @@ import os
 
 class Eucaops(EC2ops,S3ops,IAMops,STSops):
     
-    def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,  account="eucalyptus", user="admin", username=None, region=None, ec2_ip=None, s3_ip=None, boto_debug=0):
+    def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,  account="eucalyptus", user="admin", username=None, region=None, ec2_ip=None, s3_ip=None, download_creds=True,boto_debug=0):
         self.config_file = config_file 
         self.eucapath = "/opt/eucalyptus"
         self.ssh = None
@@ -65,7 +65,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops):
         self.hypervisor = None
         self.clc_index = 0
         self.credpath = credpath
-        
+        self.download_creds = download_creds
         self.logger = eulogger.Eulogger(identifier="EUTESTER")
         self.debug = self.logger.log.debug
         self.critical = self.logger.log.critical
@@ -87,7 +87,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops):
             ### Private cloud with root access 
             ### Need to get credentials for the user if there arent any passed in
             ### Need to create service manager for user if we have an ssh connection and password
-            if self.password is not None:
+            if self.password is not None and self.download_creds:
                 clc_array = self.get_component_machines("clc")
                 self.clc = clc_array[0]
                 walrus_array = self.get_component_machines("ws")
@@ -413,7 +413,6 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops):
             machine.sys("unzip -o " + admin_cred_dir + "/creds.zip -d " + admin_cred_dir )
             machine.sys("sed -i 's/" + self.clc.hostname + "/" + machine.hostname  +"/g' " + admin_cred_dir + "/eucarc")
             
-
         
     def setup_local_creds_dir(self, admin_cred_dir):
         if not os.path.exists(admin_cred_dir):
@@ -422,10 +421,13 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops):
     def setup_remote_creds_dir(self, admin_cred_dir):
         self.sys("mkdir " + admin_cred_dir)
     
-    def sys(self, cmd, verbose=True, timeout=120):
+    def sys(self, cmd, verbose=True, listformat=True, timeout=120, code=None):
         """ By default will run a command on the CLC machine, the connection used can be changed by passing a different hostname into the constructor
             For example:
             instance = Eutester( hostname=instance.ip_address, keypath="my_key.pem")
             instance.sys("mount") # check mount points on instance and return the output as a list
         """
-        return self.clc.sys(cmd, verbose=verbose, timeout=timeout)
+        return self.clc.sys(cmd, verbose=verbose,  listformat=listformat, timeout=timeout, code=code)
+    
+
+    

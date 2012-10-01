@@ -36,6 +36,8 @@ import time
 import re
 import os
 import base64
+import sys
+from datetime import datetime
 from boto.ec2.blockdevicemapping import BlockDeviceMapping, BlockDeviceType
 from boto.exception import EC2ResponseError
 from eutester.euinstance import EuInstance
@@ -114,12 +116,24 @@ class EC2ops(Eutester):
         """
         keylist = []
         keys = self.ec2.get_all_key_pairs()
+        keyfile = None
         for k in keys:
             try:
-                self.verify_local_keypath(k.name, path, exten)
-                self.debug('Found key:'+k.name)
-                keylist.append(k)
+                keypath = self.verify_local_keypath(k.name, path, exten)
+                keyfile = open(keypath,'r')
+                for line in keyfile:
+                    if re.search('KEYPAIR',line):
+                        fingerprint = line.split()[2]
+                        break
+                keyfile.close()
+                if fingerprint == k.fingerprint:
+                    self.debug('Found key:'+k.name)
+                    keylist.append(k)
             except: pass
+            finally:
+                if keyfile and not keyfile.closed:
+                    keyfile.close()
+                
         return keylist
             
         
@@ -140,27 +154,27 @@ class EC2ops(Eutester):
             self.fail("Keypair found after attempt to delete it")
             return False
         return True
-
-    def get_windows_instance_password(self, instance, private_key_path=None, key=None, exten=None):
-        if private_key_path is None:
-            private_key_path = self.verify_local_keypath(key.name, private_key_path, exten)
-        encrypted_string = self.ec2.get_password_data(instance.id)
-        return self.decrypt_string(encrypted_string, private_key_path)
-        
     
-    def decrypt_string(self, encrypted_string, private_key_path, encoded=False):
+    def get_windows_instance_password(self, instance, private_key_path=None, key=None, dir=None, exten=".pem", encoded=True):
+        self.debug("get_windows_instance_password, instance:"+str(instance.id)+", keypath:"+str(private_key_path)+", dir:"+str(dir)+", exten:"+str(exten)+", encoded:"+str(encoded))
         try:
             from M2Crypto import RSA
+            import base64
         except ImportError:
             raise ImportError("Unable to load M2Crypto. Please install by using your package manager to install "
                               "python-m2crypto or 'easy_install M2crypto'")
+        if private_key_path is None and key is not None:
+            private_key_path = str(self.verify_local_keypath( key.name , dir, exten))
+        if not private_key_path:
+            raise Exception('get_windows_instance_password, keypath not found?')        
+        encrypted_string = self.ec2.get_password_data(instance.id)
         user_priv_key = RSA.load_key(private_key_path)
-        string_to_decrypt = encrypted_string
         if encoded:
             string_to_decrypt = base64.b64decode(encrypted_string)
-        return user_priv_key.private_decrypt(string_to_decrypt,
-                RSA.pkcs1_padding)
-    
+        else:
+            string_to_decrypt = encrypted_string
+        return user_priv_key.private_decrypt(string_to_decrypt,RSA.pkcs1_padding)   
+        
 
     def add_group(self, group_name=None, fail_if_exists=False ):
         """
@@ -262,7 +276,7 @@ class EC2ops(Eutester):
         start = time.time()
         elapsed = 0
         ### If the instance changes state or goes to the desired state before my poll count is complete
-        while( elapsed <  timeout ) and (instance.state != state):
+        while( elapsed <  timeout ) and (instance.state != state) and (instance.state != 'terminated'):
             #poll_count -= 1
             self.debug( "Instance("+instance.id+") State("+instance.state+"), elapsed:"+str(elapsed))
             time.sleep(10)
@@ -382,8 +396,12 @@ class EC2ops(Eutester):
                     self.debug(str(volume) + ", Attached: " +  volume.status+ " - " + str(volume.attach_data.status) + ", elapsed:"+str(elapsed))
                     return True
                 else:
-                    status = str(volume.attach_data.status)
-                    self.debug(str(volume)+" not 'attached', attach_data.status="+status)
+                    status = volume.attach_data.status
+                    if status:
+                        laststatus = status
+                    elif laststatus and not status:
+                        raise Exception('Volume status reverted from '+str(laststatus)+' to None, attach failed')
+                    self.debug(str(volume)+" not 'attached', attach_data.status="+str(status))
             self.debug( str(volume) + " state:" + volume.status + " pause:"+str(pause)+" elapsed:"+str(elapsed))
             self.sleep(pause)
             elapsed = int(time.time()-start)
@@ -414,6 +432,60 @@ class EC2ops(Eutester):
             elapsed = int(time.time() - start)
         self.fail(str(volume) + " left in " +  volume.status +", elapsed:"+str(elapsed))
         return False
+    
+    def get_volume_time_attached(self,volume):
+        '''
+        Description: Get the seconds elapsed since the volume was attached. 
+        
+        :type volume: boto volume object
+        :param volume: The volume used to calculate the elapsed time since attached. 
+        
+        :rtype: integer
+        :returns: The number of seconds elapsed since this volume was attached. 
+        '''
+        self.debug("Getting time elapsed since volume attached...")
+        volume.update()
+        if volume.attach_data is None:
+            raise Exception('get_time_since_vol_attached: Volume '+str(volume.id)+" not attached")
+        #get timestamp from attach_data
+        attached_time = self.get_datetime_from_resource_string(volume.attach_data.attach_time)
+        #return the elapsed time in seconds
+        return time.mktime(datetime.utcnow().utctimetuple()) - time.mktime(attached_time.utctimetuple())
+    
+    
+    def get_instance_time_launched(self,instance):
+        '''
+        Description: Get the seconds elapsed since the volume was attached. 
+        
+        :type volume: boto volume object
+        :param volume: The volume used to calculate the elapsed time since attached. 
+        
+        :rtype: integer
+        :returns: The number of seconds elapsed since this volume was attached. 
+        '''
+        self.debug("Getting time elapsed since instance "+str(instance.id)+" launched...")
+        instance.update()
+        #get timestamp from launch data
+        launch_time = self.get_datetime_from_resource_string(instance.launch_time)
+        #return the elapsed time in seconds
+        return time.mktime(datetime.utcnow().utctimetuple()) - time.mktime(launch_time.utctimetuple())
+    
+    def get_datetime_from_resource_string(self,timestamp):
+        '''
+        Description: Convert a typical resource timestamp to datetime time_struct. 
+        
+        :type timestamp: string
+        :param timestamp: Timestamp held within specific boto resource objects.Example timestamp format: 2012-09-19T21:24:03.864Z
+        
+        :rtype: time_struct
+        :returns: The time_struct representation of the timestamp provided. 
+        '''
+        t = re.findall('\w+',str(timestamp).replace('T',' '))
+        #remove milliseconds from list...
+        t.pop()
+        #create a time_struct out of our list
+        return datetime.strptime(" ".join(t), "%Y %m %d %H %M %S")
+        
     
     def create_snapshot(self, volume_id, waitOnProgress=0, poll_interval=10, timeout=0, description=""):
         """
@@ -528,6 +600,19 @@ class EC2ops(Eutester):
         image_id = self.ec2.register_image(name=name, description=description, kernel_id=kernel, image_location=image_location, ramdisk_id=ramdisk, block_device_map=bdmdev, root_device_name=rdn)
         self.test_resources["images"].append(image_id)
         return image_id
+
+    def deregister_image(self, image):
+        """
+        Deregister an image.
+        :param image: boto image object to deregister
+        :return:
+        """
+        self.ec2.deregister_image(image.id)
+        image = self.get_emi(image.id)
+        if image.state is not "deregistered":
+            raise Exception("Image " + image.id +  " did not enter deregistered state after deregistration was sent to server")
+        else:
+            self.ec2.deregister_image(image.id)
     
     def get_emi(self, emi=None, root_device_type=None, root_device_name=None, location=None, state="available", arch=None, owner_id=None):
         """
@@ -566,6 +651,28 @@ class EC2ops(Eutester):
         raise Exception("Unable to find an EMI")
         return None
     
+    def get_all_allocated_addresses(self,account_id=None):
+        self.debug("get_all_allocated_addresses...")
+        account_id = account_id or self.get_account_id()
+        ret = []
+        if account_id:
+            account_id = str(account_id)
+            addrs = self.ec2.get_all_addresses()
+            for addr in addrs:
+                if addr.instance_id and re.search(account_id, str(addr.instance_id)):
+                    ret.append(addr)
+        return ret
+    
+    def get_available_addresses(self):
+        self.debug("get_available_addresses...")
+        ret = []
+        addrs = self.ec2.get_all_addresses()
+        for addr in addrs:
+            if addr.instance_id and re.search(r"(available|nobody)", addr.instance_id):
+                ret.append(addr)
+        return ret
+    
+    
     def allocate_address(self):
         """
         Allocate an address for the current user
@@ -579,33 +686,86 @@ class EC2ops(Eutester):
         self.debug("Allocated " + str(address))
         return address
     
-    def associate_address(self,instance, address):
+    def associate_address(self,instance, address, timeout=75):
         """ Associate an address object with an instance"""
+        ip =  str(address.public_ip)
+        self.debug("Attemtping to associate " + str(ip) + " with " + str(instance.id))
         try:
-            self.debug("Attemtping to associate " + str(address) + " from " + str(instance))
             address.associate(instance.id)
-        except Exception as (errno, strerror):
-            self.critical("Unable to associate address\n")
-            self.critical( "Exception({0}): {1}".format(errno, strerror))
-            return False
+        except Exception, e:
+            self.critical("Unable to associate address "+str(ip)+" with instance:"+str(instance.id)+"\n")
+            raise e
+        
+        start = time.time()
+        elapsed = 0
+        address = self.ec2.get_all_addresses(addresses=[ip])[0] 
+        ### Ensure address object holds correct instance value
+        while not address.instance_id:
+            if elapsed > timeout:
+                raise Exception('Address ' + str(ip) + ' never associated with instance')
+            self.debug('Address {0} not attached to {1} but rather {2}'.format(str(address), instance.id, address.instance_id) )
+            self.sleep(5)
+            address = self.ec2.get_all_addresses(addresses=[ip])[0]
+            elapsed = int(time.time()-start)
+
+        poll_count = 15
+        ### Ensure instance gets correct address
+        while instance.public_dns_name not in address.public_ip:
+            if elapsed > timeout:
+                raise Exception('Address ' + str(address) + ' did not associate with instance after:'+str(elapsed)+" seconds")
+            self.debug('Instance {0} has IP {1} attached instead of {2}'.format(instance.id, instance.public_dns_name, address.public_ip) )
+            self.sleep(5)
+            instance.update()
+            elapsed = int(time.time()-start)
         self.debug("Associated IP successfully")
-        return address
     
-    def disassociate_address_from_instance(self, instance):
+    def disassociate_address_from_instance(self, instance, timeout=75):
         """Disassociate address from instance and ensure that it no longer holds the IP
         instance     An instance that has an IP allocated"""
+        self.debug("disassociate_address_from_instance: instance.public_dns_name:" + str(instance.public_dns_name) + " instance:" + str(instance))
+        ip=str(instance.public_dns_name)
         address = self.ec2.get_all_addresses(addresses=[instance.public_dns_name])[0]
+        
+        
+        start = time.time()
+        elapsed = 0
+      
+        address = self.ec2.get_all_addresses(addresses=[address.public_ip])[0]
+        ### Ensure address object hold correct instance value
+        while address.instance_id and not re.search(instance.id,str(address.instance_id)):
+            self.debug('Address {0} not attached to "{1}" but rather "{2}" after {3} seconds'.format(str(address), instance.id, address.instance_id, str(elapsed)) )
+            if elapsed > timeout:
+                raise Exception('Address ' + str(address) + ' never associated with instance after '+str(elapsed)+' seconds')
+            address = self.ec2.get_all_addresses(addresses=[address.public_ip])[0]
+            self.sleep(5)
+            elapsed = int(time.time()-start)
+            
+        
+        self.debug("Attemtping to disassociate " + str(address) + " from " + str(instance.id))
+        address.disassociate()
+        
+        start = time.time()
+        ### Ensure instance gets correct address
+        while address.public_ip and re.search( instance.public_dns_name,address.public_ip):
+            self.debug('Instance {0} has IP "{1}" still using address "{2}" after {3} seconds'.format(instance.id, instance.public_dns_name, address.public_ip, str(elapsed)) )
+            if elapsed > timeout:
+                raise Exception('Address ' + str(address) + ' never disassociated with instance after '+str(elapsed)+' seconds')
+            instance.update()
+            self.sleep(5)
+            elapsed = int(time.time()-start)
+        self.debug("Disassociated IP successfully")    
+
+    def release_address(self, address):
+        """
+        Release all addresses or a particular IP
+        address        Address object to release
+        """
         try:
-            address.disassociate()
+            self.debug("Releasing address: " + str(address))
+            address.release()
         except Exception, e:
-            self.critical("Unable to disassociate address\n" + str(e))
-            return False
-        self.sleep(15)
-        address = self.ec2.get_all_addresses(addresses=[instance.public_dns_name])
-        if address.instance_id is instance.id:
-            self.critical("Address still associated with instance")
-            return False
-        return True
+            raise Exception("Failed to release the address: " + str(address) + ": " +  str(e))
+
     
     def check_device(self, device_path):
         """Used with instance connections. Checks if a device at a certain path exists"""
@@ -624,12 +784,11 @@ class EC2ops(Eutester):
         maxsize           (optional integer) maximum size of volume to be matched
         eof               (optional boolean) exception on failure to find volume, else returns empty list
         """
-        
         retlist = []
         if (attached_instance is not None) or (attached_dev is not None):
             status='in-use'
     
-        volumes = self.ec2.get_all_volumes()
+        volumes = self.ec2.get_all_volumes()             
         for volume in volumes:
             if not re.match(volume_id, volume.id):
                 continue
@@ -692,7 +851,7 @@ class EC2ops(Eutester):
         if image is None:
             images = self.ec2.get_all_images()
             for emi in images:
-                if re.match("emi",emi.name):
+                if re.match("emi",emi.id):
                     image = emi      
         if image is None:
             raise Exception("emi is None. run_instance could not auto find an emi?")   
@@ -702,6 +861,10 @@ class EC2ops(Eutester):
             is_reachable= False
         else:
             addressing_type = None
+        #In the case a keypair object was passed instead of the keypair name
+        if keypair:
+            if not isinstance(keypair, basestring):
+                keypair = keypair.name
         
         start = time.time()
             
@@ -733,10 +896,15 @@ class EC2ops(Eutester):
                 self.critical("Instance " + instance.id + " has he same public and private IPs of " + str(instance.ip_address))
             else:
                 self.debug(str(instance) + " got Public IP: " + str(instance.ip_address)  + " Private IP: " + str(instance.private_ip_address) + " Public DNS Name: " + str(instance.public_dns_name) + " Private DNS Name: " + str(instance.private_dns_name))
-            
-            self.wait_for_valid_ip(instance)
+
+            try:
+                self.wait_for_valid_ip(instance)
+            except Exception:
+                self.terminate_instances(reservation)
+                raise Exception("Reservation " +  str(reservation) + " has been terminated because instance " + str(instance) + " did not receive a valid IP")
+
             if is_reachable:
-                self.ping(instance.public_dns_name, 60)
+                self.ping(instance.public_dns_name, 20)
                 
         #calculate remaining time to wait for establishing an ssh session/euinstance     
         timeout -= int(time.time() - start)
@@ -877,27 +1045,6 @@ class EC2ops(Eutester):
             buf += str(item)+" = "+str(obj.__dict__[item])+"\n"
         return buf
 
-    def release_address(self, ip=None):
-        """
-        Release all addresses or a particular IP
-        ip        IP to release
-        """   
-        ## Clear out all addresses found
-        self.debug( "Releasing all unassociated and allocated addresses")
-        addresses = self.ec2.get_all_addresses()
-        for address in addresses:
-            ## IF i am searching for a particular IP and this is not it skip it
-            #if (ip is not None) and (address.public_ip is not ip):
-            #    continue
-            if address.allocation_id is not None:
-                try:
-                    self.debug("Releasing address: " + str(address))
-                    address.release()
-                except Exception, e:
-                    self.critical("Failed to release the address: " + str(address) + ": " +  str(e))
-                    return False
-        return True
-            
     def terminate_instances(self, reservation=None):
         """
         Terminate instances in the system

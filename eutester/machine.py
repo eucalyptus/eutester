@@ -98,6 +98,7 @@ class Machine:
         self.distro = self.convert_to_distro(distro, distro_ver)
         if self.distro.package_manager is not None:
             self.repo_utils = RepoUtils(self, self.distro.package_manager)
+            self.package_manager = self.repo_utils.package_manager
         self.arch = arch
         self.source = source
         self.components = components
@@ -112,9 +113,7 @@ class Machine:
         self.log_threads = {}
         self.log_buffers = {}
         self.log_active = {}
-        self.wget_last_status = 0 
-        
-            
+        self.wget_last_status = 0
         if self.debugmethod is None:
             logger = eulogger.Eulogger(identifier= str(hostname) + ":" + str(components))
             self.debugmethod = logger.log.debug
@@ -275,7 +274,16 @@ class Machine:
                 ret = ret+pwd[x]
             else:
                 ret += "*"
-            
+
+    def mkfs(self, partition, type="ext3"):
+        self.sys("mkfs."+ type + " -F " + partition)
+
+    def mount(self, device, path):
+        self.sys("mount "+ device + " " + path)
+
+    def chown(self, user, path):
+        self.sys("chwon "+ user + ":" + user + " " + path)
+
     def ping_check(self,host):
         out = self.ping_cmd(host)
         self.debug('Ping attempt to host:'+str(host)+", status code:"+str(out['status']))
