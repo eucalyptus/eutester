@@ -69,6 +69,7 @@ class ImageUtils(EutesterTestCase):
         else:
             self.tester = tester
         self.tester.exit_on_fail = eof
+        self.debugmethod = self.tester.debug    
         
         self.component = work_component or self.tester.clc
         
