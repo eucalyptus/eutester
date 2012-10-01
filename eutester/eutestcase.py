@@ -7,6 +7,8 @@ import argparse
 import re
 import sys
 import traceback
+from eutester.eulogger import Eulogger
+import StringIO
 
 '''
 This is the base class for any test case to be included in the Eutester repo. It should include any
@@ -38,9 +40,28 @@ class EutesterTestResult():
     passed="passed"
     failed="failed"
     
+class TestColor():
+    #list of defined color schemes to add to
+    whiteonblue='\33[1;37;44m'
+    red='\033[m'
+    failred='\033[101m'
+    blueongrey='\33[1;34;47m'
+    redongrey='\33[1;31;47m'
+    blinkwhiteonred='\33[1;5;37;41m'
+    
+    reset = '\033[0m'  
+    
+    @classmethod
+    def get_color_from_string(cls,color):
+        try:
+            return TestColor.__dict__[color]
+        except:
+            return ""    
     
     
-class EutesterTestUnit(unittest.TestCase):
+    
+    
+class EutesterTestUnit():
     '''
     Description: Convenience class to run wrap individual methods, and run and store and access results.
     
@@ -53,18 +74,18 @@ class EutesterTestUnit(unittest.TestCase):
     type eof: boolean
     param eof: boolean to indicate whether a failure while running the given 'method' should end the test case exectution. 
     '''
-    def __init__(self,method, eof=True, *args):
+    def __init__(self,method, eof=False, args=None):
         self.method = method
         self.args = args
         self.name = str(method.__name__)
         self.result=EutesterTestResult.not_run
         self.time_to_run=0
         self.description=self.get_test_method_description()
-        self.eof=True
+        self.eof=eof
         self.error = ""
     
     @classmethod
-    def create_testcase_from_method(cls, method, *args):
+    def create_testcase_from_method(cls, method, args=None):
         '''
         Description: Creates a EutesterTestUnit object from a method and set of arguments to be fed to that method
         
@@ -118,14 +139,18 @@ class EutesterTestUnit(unittest.TestCase):
         
         try:
             start = time.time()
-            if (self.args) == ((),):
+            if not self.args:
                 ret = self.method()
             else:
-                ret = self.method(*self.args)
+                ret = self.method(**self.args)
             self.result=EutesterTestResult.passed
             return ret
         except Exception, e:
-            traceback.print_exception(*sys.exc_info())
+            out = StringIO.StringIO()
+            traceback.print_exception(*sys.exc_info(),file=out)
+            out.seek(0)
+            buf = out.read()
+            print TestColor.failred+buf+TestColor.reset
             self.error = str(e)
             self.result = EutesterTestResult.failed
             if self.eof:
@@ -134,10 +159,60 @@ class EutesterTestUnit(unittest.TestCase):
                 pass
         finally:
             self.time_to_run = int(time.time()-start)
+        
+                
+class EutesterTestCase():
+    '''
+    def __init__(self,name=None, debugmethod=None):
+        
+        self.name = name or 'EutesterTestCase'
+        if not debugmethod:
+            logger = Eulogger(identifier=self.name)
+            debugmethod = logger.log.debug
+        self.debugmethod = debugmethod
+    '''                                             
+    
+    def setup_parser(self,
+                   testname=None, 
+                   description=None,
+                   emi=True,
+                   credpath=True,
+                   password=True,
+                   config=True,
+                   testlist=True):
+        testname = testname or 'TEST NAME'
+        description = description or "Test Case Default Option Parser Description"
+        #create parser
+        parser = argparse.ArgumentParser( prog=testname, description=description)
+        #add some typical defaults:
+        if emi:
+            parser.add_argument('--emi', 
+                            help="pre-installed emi id which to execute these tests against", default=None)
+        if credpath:
+            parser.add_argument('--credpath', 
+                            help="path to credentials", default=None)
+        if password:
+            parser.add_argument('--password', 
+                            help="password to use for machine root ssh access", default='foobar')
+        if config:
+            parser.add_argument('--config',
+                           help='path to config file', default='../input/2btested.lst')         
+        if testlist:
+            parser.add_argument('--tests', nargs='+', 
+                            help="test cases to be executed", 
+                            default= ['run_test_suite'])   
+        self.parser = parser  
+        return parser
+    
+    def setup_debugmethod(self,name=None):
+        try:
+            self.debugmethod = self.tester.debug
+        except:
+            name = name or self.__class__.__name__
+            logger = Eulogger(identifier=str(name))
+            self.debugmethod = logger.log.debug
 
-class EutesterTestCase(unittest.TestCase):
-
-    def debug(self,msg,traceback=1):
+    def debug(self,msg,traceback=1,color=None):
         '''
         Description: Method for printing debug
         
@@ -147,7 +222,17 @@ class EutesterTestCase(unittest.TestCase):
         type traceback: integer
         param traceback: integer value for what frame to inspect to derive the originating method and method line number
         '''
-        
+        try:
+            if not self.debugmethod:
+                self.setup_debugmethod()
+        except:
+            self.setup_debugmethod()
+            
+        colorprefix=""
+        colorreset=""
+        if color:
+            colorprefix = TestColor.get_color_from_string(color) or color
+            colorreset = str(TestColor.reset)
         msg = str(msg)       
         curframe = None    
         curframe = inspect.currentframe(traceback)
@@ -166,10 +251,10 @@ class EutesterTestCase(unittest.TestCase):
                             return None
             cur_method= funcs[0].func_name if funcs else ""
         for line in msg.split("\n"):
-            self.tester.debug("("+str(cur_method)+":"+str(lineno)+"): "+line.strip() )
+            self.debugmethod("("+str(cur_method)+":"+str(lineno)+"): "+colorprefix+line.strip()+colorreset )
             
             
-    def create_testcase_from_method(self,method, *args):
+    def create_testcase_from_method(self,method,eof=True, args=None):
         '''
         Description: Convenience method calling EutesterTestUnit. 
                      Creates a EutesterTestUnit object from a method and set of arguments to be fed to that method
@@ -180,9 +265,9 @@ class EutesterTestCase(unittest.TestCase):
         type args: list of arguments
         param args: the arguments to be fed to the given 'method'
         '''
-        return EutesterTestUnit.create_testcase_from_method(method, *args)
+        return EutesterTestUnit(method, eof=eof, args=args)
         
-    def status(self,msg,traceback=2, b=0,a=0):
+    def status(self,msg,traceback=2, b=0,a=0 ,testcolor=None):
         '''
         Description: Convenience method to format debug output
         
@@ -206,21 +291,37 @@ class EutesterTestCase(unittest.TestCase):
             alines=alines+"\n"
         line = "-------------------------------------------------------------------------"
         out = blines+line+"\n"+msg+"\n"+line+alines
-        self.debug(out, traceback=traceback)  
+        self.debug(out, traceback=traceback, color=testcolor)  
         
     def startmsg(self,msg=""):
         msg = "- STARTING - " + msg
-        self.status(msg, traceback=3)
+        self.status(msg, traceback=3,testcolor=TestColor.whiteonblue)
         
     def endsuccess(self,msg=""):
         msg = "- SUCCESS ENDED - " + msg
-        self.status(msg, traceback=3)
+        self.status(msg, traceback=3,testcolor=TestColor.whiteonblue)
         self.debug("\n\n")
       
     def endfailure(self,msg=""):
         msg = "- FAILED - " + msg
-        self.status(msg, traceback=3)
+        self.status(msg, traceback=3,testcolor=TestColor.failred)
         self.debug("\n\n")  
+    
+    def resultdefault(self,msg):
+        self.debug(msg,traceback=2,color=TestColor.blueongrey)
+    
+    def resultfail(self,msg):
+        self.debug(msg,traceback=2, color=TestColor.redongrey)
+        
+    def resulterr(self,msg):
+        self.debug(msg,traceback=2, color=TestColor.failred)
+    
+    def get_pretty_args(self,testunit):
+        buf = "End on Failure :" +str(testunit.eof)
+        if testunit.args:
+            for key in testunit.args:
+                buf += "\n"+str(key)+" : "+str(testunit.args[key])
+        return buf
     
     def run_test_case_list(self, list, eof=True, clean_on_exit=True, printresults=True):
         '''
@@ -240,9 +341,11 @@ class EutesterTestCase(unittest.TestCase):
         :param printresults: Flag to indicate whether or not to print a summary of results upon run_test_case_list completion. 
         '''
         exitcode = 0
+        self.testlist = list 
         try:
             for test in list:
-                self.startmsg(str(test.description))
+                argbuf =self.get_pretty_args(test)
+                self.startmsg(str(test.description)+argbuf)
                 self.debug('Running list method:'+str(test.name))
                 try:
                     test.run()
@@ -255,18 +358,23 @@ class EutesterTestCase(unittest.TestCase):
                         raise e
                     else:
                         self.endfailure(str(test.name))
-                        pass
+                        
         finally:
-            try:
-                 if clean_on_exit:
-                    self.clean_created_resources()
-            except: pass
+            self.status("RUN TEST CASE LIST DONE...")
             if printresults:
                 try:
                     self.print_test_list_results(list=list)
                 except:pass
+            try:
+                 if clean_on_exit:
+                    self.clean_method()
+            except: pass
+            
         return exitcode
-                
+    
+    def clean_method(self):
+        self.debug("Implement this method")
+
     def print_test_list_results(self,list=None,printmethod=None):
         '''
         Description: Prints a formated list of results for a list of EutesterTestUnits
@@ -279,15 +387,22 @@ class EutesterTestCase(unittest.TestCase):
         '''
         if list is None:
             list=self.testlist
-        if printmethod is None:
-            printmethod = self.debug
-        for testcase in list:
+            
+        if not printmethod:
+            printmethod = self.resultdefault
+            printfailure = self.resultfail
+            printerr = self.resulterr
+        else:
+            printfailure = printerr = printmethod
+           
+        for testcase in list:           
             printmethod('-----------------------------------------------')
-            printmethod(str("TEST:"+str(testcase.name)).ljust(50)+str(" RESULT:"+testcase.result).ljust(10)+str(' Time:'+str(testcase.time_to_run)).ljust(0))
+            pmethod = printfailure if not testcase.result == EutesterTestResult.passed else printmethod
+            pmethod(str("TEST:"+str(testcase.name)).ljust(50)+str(" RESULT:"+testcase.result).ljust(10)+str(' Time:'+str(testcase.time_to_run)).ljust(0))
             if testcase.result == EutesterTestResult.failed:
-                printmethod('Error:'+str(testcase.error))
+                printerr('Error:'+str(testcase.error))
     
-    @classmethod
+    #@classmethod
     def get_parser(self):
         parser = argparse.ArgumentParser(prog="testcase.py",
                                      description="Test Case Default Option Parser")
