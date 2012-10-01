@@ -413,7 +413,6 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops):
             machine.sys("unzip -o " + admin_cred_dir + "/creds.zip -d " + admin_cred_dir )
             machine.sys("sed -i 's/" + self.clc.hostname + "/" + machine.hostname  +"/g' " + admin_cred_dir + "/eucarc")
             
-
         
     def setup_local_creds_dir(self, admin_cred_dir):
         if not os.path.exists(admin_cred_dir):
@@ -422,10 +421,13 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops):
     def setup_remote_creds_dir(self, admin_cred_dir):
         self.sys("mkdir " + admin_cred_dir)
     
-    def sys(self, cmd, verbose=True, timeout=120):
+    def sys(self, cmd, verbose=True, listformat=True, timeout=120, code=None):
         """ By default will run a command on the CLC machine, the connection used can be changed by passing a different hostname into the constructor
             For example:
             instance = Eutester( hostname=instance.ip_address, keypath="my_key.pem")
             instance.sys("mount") # check mount points on instance and return the output as a list
         """
-        return self.clc.sys(cmd, verbose=verbose, timeout=timeout)
+        return self.clc.sys(cmd, verbose=verbose,  listformat=listformat, timeout=timeout, code=code)
+    
+
+    

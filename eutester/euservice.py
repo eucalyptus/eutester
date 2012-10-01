@@ -154,14 +154,16 @@ class EuserviceManager(object):
             type = " -T " + str(type) 
         else:
             type = ""
+        describe_services = []
         #### This is a hack around the fact that the -P filter is not working need to fix this once that functionality is fixed
-        if partition is not None:
-            partition = " | grep " + str(partition) 
-        else:
+        if partition is None:
             partition = ""
         try:
-            describe_services = self.tester.clc.sys(self.eucaprefix + "/usr/sbin/euca-describe-services " + str(type)  +  "| grep SERVICE" + str(partition), timeout=15)
-            if len(describe_services) < 1:
+            out = self.tester.clc.sys(self.eucaprefix + "/usr/sbin/euca-describe-services " + str(type), timeout=15)
+            for line in out:
+                if re.search(r"SERVICE.+"+str(partition), line):
+                    describe_services.append(line)
+            if not describe_services:
                 raise IndexError("Did not receive proper response from describe services when looking for " + str(type))
         except Exception, e:
             if len(self.tester.get_component_machines("clc")) is 1:
