@@ -939,7 +939,7 @@ class EC2ops(Eutester):
                 try:
                     euinstance_list.append( EuInstance.make_euinstance_from_instance( instance, self, keypair=keypair, username = username, password=password, timeout=timeout ))
                 except Exception, e:
-                    self.critical("Unable to create Euinstance from " + str(instance)+str(e))
+                    self.fail("Unable to create Euinstance from " + str(instance)+str(e))
                     euinstance_list.append(instance)
             else:
                 euinstance_list.append(instance)
