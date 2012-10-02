@@ -160,12 +160,11 @@ class WalrusBasics(unittest.TestCase):
 def get_options():
     ### Parse args
     ## If given command line arguments, use them as test names to launch
-    parser = argparse.ArgumentParser(prog="canonical_headers_test.py",
-        version="Test Case [canonical_headers_test.py] Version 0.0.1", 
-        description='Unit test for CanonicalizedAmzHeaders elements against Eucalyptus Walrus')
+    parser = argparse.ArgumentParser(prog="canonical_headers_test.py", 
+        description='Test Case [canonical_headers_test.py] Version 0.0.1 - Unit test for CanonicalizedAmzHeaders elements against Eucalyptus Walrus')
     parser.add_argument('--credpath', dest='credpath', required=True, help='Path to folder containing credentials')
     parser.add_argument('--xml', action="store_true", default=False)
-    parser.add_argument('--tests', nargs='+', default= ["CanonicalizedAmzNullHeaders","CanonicalizedAmzCommaHeaders","CanonicalizedAmzSeparateHeadersBroken","CanonicalizedAmzSeparateHeaders"])
+    parser.add_argument('--tests', nargs='+', default= ["CanonicalizedAmzNullHeaders","CanonicalizedAmzCommaHeaders","CanonicalizedAmzSeparateHeaders","CanonicalizedAmzSeparateHeadersBroken"])
     parser.add_argument('unittest_args', nargs='*')
 
     ## Grab arguments passed via commandline
