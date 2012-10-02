@@ -134,8 +134,8 @@ class WalrusBasics(unittest.TestCase):
         """
         Create x-amz-wutang separated headers broken up 
         """
-        test_header1= {'x-amz-wutang': ['RZA','GZA','Method Man','Raekwon','Ghostface Killah','Inspectah Deck','U-God','Masta Killa']}
-        test_header2 = ['x-amz-wutang:Ol Dirty Bastard']
+        test_header1 = {'x-amz-wutang': ['RZA','GZA','Method Man','Raekwon','Ghostface Killah','Inspectah Deck','U-God','Masta Killa']}
+        test_header2 = ['x-amz-wutang:RZA']
         """
         Check to see if GET will work with x-amz-wutang separated header broken up;
         should come back with 403 error complaining about mismatch signature
