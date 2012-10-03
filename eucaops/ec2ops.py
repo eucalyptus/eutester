@@ -85,6 +85,15 @@ class EC2ops(Eutester):
             # The save method will also chmod the file to protect
             # your private key.
             key.save(self.key_dir)
+            #Add the fingerprint header to file
+            keyfile = open(self.key_dir+key.name+'.pem','r')
+            data = keyfile.read()
+            keyfile.close()
+            keyfile = open(self.key_dir+key.name+'.pem','w')
+            keyfile.write('KEYPAIR '+str(key.name)+' '+str(key.fingerprint)+"\n")
+            keyfile.write(data)
+            keyfile.close()
+            
             self.test_resources["keypairs"].append(key)
             return key
         else:
@@ -104,7 +113,8 @@ class EC2ops(Eutester):
             path = os.getcwd()
         keypath = path + "/" + keyname + exten
         try:
-            os.stat(keypath).st_mode
+            os.stat(keypath)
+            self.debug("Found key at path:"+str(keypath))
         except:
             raise Exception("key:"+keyname+"not found at the provided path:"+str(path))
         return keypath
@@ -121,7 +131,7 @@ class EC2ops(Eutester):
             try:
                 keypath = self.verify_local_keypath(k.name, path, exten)
                 keyfile = open(keypath,'r')
-                for line in keyfile:
+                for line in keyfile.readlines():
                     if re.search('KEYPAIR',line):
                         fingerprint = line.split()[2]
                         break
