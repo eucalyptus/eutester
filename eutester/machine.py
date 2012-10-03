@@ -98,8 +98,8 @@ class Machine:
         self.distro = self.convert_to_distro(distro, distro_ver)
         if self.distro.package_manager is not None:
             self.repo_utils = RepoUtils(self, self.distro.package_manager)
+            self.package_manager = self.repo_utils.package_manager
         self.arch = arch
-        self.package_manager = self.repo_utils.package_manager
         self.source = source
         self.components = components
         self.connect = connect
