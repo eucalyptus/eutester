@@ -225,7 +225,7 @@ class EuInstance(Instance):
         retlist = []
         if match is None:
             match = '^sd\|^vd\|^xd|^xvd'
-        out = self.sys("ls -1 /dev/ | grep '^"+str(match)+"'" )
+        out = self.sys("ls -1 /dev/ | grep '"+str(match)+"'" )
         for line in out:
             retlist.append(line.strip())
         return retlist
