@@ -606,55 +606,14 @@ class EbsTestSuite(EutesterTestCase):
     def test_max_volume_size_property(self, volumes=None, maxsize=1, zones=None):
         if zones is None or zones == []:
             zones = self.zones
-        
+    def clean_method(self):
+        self.clean_created_resources(zonelist=self.zonelist, timeout=360)
+    
     def clean_created_resources(self, zonelist=None, timeout=360):
         self.terminate_test_instances_for_zones(zonelist=zonelist, timeout=timeout)
         self.delete_volumes_in_zones(zonelist=zonelist, timeout=timeout)
         self.delete_snapshots_in_zones(zonelist=zonelist,  timeout=timeout)
-    '''  
-    def create_testcase_from_method(self, method, *args):
-        testcase =  EutesterTestCase(method, args)
-        return testcase
-    '''
-        
-    def print_test_list_results(self,list=None,printmethod=None):
-        if list is None:
-            list=self.testlist
-        if printmethod is None:
-            printmethod = self.debug
-        for testcase in list:
-            printmethod('-----------------------------------------------')
-            printmethod(str("TEST:"+str(testcase.name)).ljust(50)+str(" RESULT:"+testcase.result).ljust(10)+str(' Time:'+str(testcase.time_to_run)).ljust(0))
-            if testcase.result == EutesterTestResult.failed:
-                printmethod('Error:'+str(testcase.error))
-    
-
-    def run_test_case_list(self, list, eof=True, clean_on_exit=True, printresults=True):
-        '''
-        wrapper to execute a list of ebsTestCase objects
-        '''
-        try:
-            for test in list:
-                self.debug('Running list method:'+str(test.name))
-                try:
-                    test.run()
-                except Exception, e:
-                    self.debug('Testcase:'+ str(test.name)+' error:'+str(e))
-                    if eof:
-                        raise e
-                    else:
-                        pass
-        finally:
-            try:
-                 if clean_on_exit:
-                    self.clean_created_resources()
-            except: pass
-            if printresults:
-                try:
-                    ebssuite.print_test_list_results()
-                except:pass
-                
-        
+   
             
     
 if __name__ == "__main__":
