@@ -539,7 +539,7 @@ class WindowsProxyTests():
         self.debug('ps_get_xenpv_test passed.')
         return out
         
-    def ps_ADMembership_test(self,host=None, password=None, retries=1, retryinterval=5, cmdtimeout=300, timeout=360):
+    def ps_admembership_test(self,host=None, password=None, retries=1, retryinterval=5, cmdtimeout=300, timeout=360):
         '''
         Description:Run Active Dir. Memberhsip powershell test on remote Windows instance 
         
@@ -576,7 +576,7 @@ class WindowsProxyTests():
         return out
     
     
-    def ps_EucaADKey_test(self,host=None, password=None, retries=1, retryinterval=5, cmdtimeout=300, timeout=360):
+    def ps_eucaadkey_test(self,host=None, password=None, retries=1, retryinterval=5, cmdtimeout=300, timeout=360):
         '''
         Description:Run Active Dir. Memberhsip powershell test on remote Windows instance 
         
@@ -613,7 +613,7 @@ class WindowsProxyTests():
         return out
     
     
-    def ps_RDPermission_test(self,host=None, password=None, retries=1, retryinterval=5, cmdtimeout=300, timeout=360):
+    def ps_rdpermission_test(self,host=None, password=None, retries=1, retryinterval=5, cmdtimeout=300, timeout=360):
         '''
         Description:Run Remote Desktop Permission powershell test on remote Windows instance 
         
