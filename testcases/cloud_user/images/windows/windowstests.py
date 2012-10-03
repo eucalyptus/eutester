@@ -76,8 +76,9 @@ class WindowsTests(EutesterTestCase):
                  emi=None,
                  private_addressing=False,
                  instance_password = None,
+                 instance_keypath = None,
                  vmtype='m1.xlarge',
-                 emi_location=None,
+                 emi_location='windows',
                  image_path=None, #note this must be available on the work_component
                  instance=None,
                  win_proxy_hostname = None, 
@@ -94,6 +95,7 @@ class WindowsTests(EutesterTestCase):
         self.instance = instance
         if self.instance:
             self.instance = self.tester.get_instances(idstring=str(instance))[0]
+        self.instance_keypath = instance_keypath
         self.destpath = destpath or '/tmp'
         self.bucketname = bucketname
         self.component = work_component 
@@ -136,7 +138,7 @@ class WindowsTests(EutesterTestCase):
                 self.update_proxy_instance_data()
     
     def setup_proxy(self, proxy_hostname, proxy_keypath=None, proxy_username=None, proxy_password=None, debugmethod=None):
-        debugmethod = debugmethod or (lambda msg: self.debug(msg, traceback=2))
+        debugmethod = debugmethod or (lambda msg: self.debug(msg, traceback=3))
         proxy = windowsproxytests.WindowsProxyTests(proxy_hostname, 
                                                          proxy_keypath = proxy_keypath,
                                                          proxy_username = proxy_username,
@@ -144,6 +146,12 @@ class WindowsTests(EutesterTestCase):
                                                          debugmethod = debugmethod,
                                                          )
         self.proxy = proxy
+        self.proxy.win_instance = self.instance
+        try:
+            self.test_get_windows_instance_password()
+        except: pass
+        self.proxy.win_password = self.instance_password
+        self.proxy.win_keypath = self.instance_keypath
         return proxy
 
     def setup_test_env(self):
@@ -420,7 +428,7 @@ class WindowsTests(EutesterTestCase):
                         self.debug("test_poll_for_port_status: Connect "+str(ip)+":" +str(port)+ " timed out retrying. Time remaining("+str(timeout-elapsed)+")")
                 except Exception, e:
                     self.debug('test_poll_for_port_status:'+str(ip)+':'+str(port)+' FAILED after attempts:'+str(attempt)+', elapsed:'+str(elapsed)+', err:'+str(e) )
-                    time.sleep(interval)
+                time.sleep(interval)
                 elapsed = int(time.time() -start)    
         raise Exception('test_poll_for_port_status:'+str(ip)+':'+str(port)+' FAILED after attempts:'+str(attempt)+', elapsed:'+str(elapsed)+' seconds')
             
@@ -444,24 +452,47 @@ class WindowsTests(EutesterTestCase):
         return emi
     
     def find_windows_instance(self,emi=None, location=None):
+        self.debug('find_windows_instance attempting to find a pre-existing and running instance...')
         emi = emi or self.emi
-        if not emi and location:
+        if not emi and location is not None:
             emi = self.get_images_by_location(location)
-        else:
-            raise Exception("find_windows_instance: Could not find emi to match against instances")
-        instances = self.tester.get_instances(state='running',image_id=emi )
+        if not emi:
+            raise Exception("find_windows_instance: No emi provided, and could not find emi to match against instances")
+        self.debug("Using emi:"+str(emi)+" to look for running instances...")
+        instances = self.tester.get_instances(state='running',image_id=emi.id )
+        self.debug("Returning instance list:"+str(instances))
         return instances
     
     def get_windows_instance(self):
-        #check to see if we've been provided a running instance
+        self.debug("get_windows_instance, check to see if we've been provided a running instance...")
         if self.instance:
             self.instance.update()
             if self.instance.state == 'running':
                 return
+        instances = self.find_windows_instance()
+        for instance in instances:
+            if instance.state =='running':
+                try:
+                    keypair = self.get_local_key_for_instance(instance)
+                    self.instance = instance
+                    self.keypair = keypair
+                    return instance
+                except: pass
         #We need to create a new instance...
         self.get_windows_emi()
         self.test_run_windows_emi()
-    
+        
+    def get_local_key_for_instance(self,instance,keypath=None, exten=".pem"):
+        self.debug("Looking for local keys for instance:"+str(instance.id))
+        keypath = keypath or self.instance_keypath
+        keys = self.tester.get_all_current_local_keys(path=keypath, exten=exten)
+        for key in keys:
+            if key.name == instance.key_name:
+                self.debug("Found key:"+str(key.name))
+                return key
+        raise Exception("No local key found for "+str(instance.id)+":"+str(instance.key_name)+", at path:"+str(keypath)+" exten:"+str(exten))
+        
+        
     def get_free_ebs_devname(self, instance=None, max=16):
         self.debug('get_free_ebs_dev_name starting...')
         instance = instance or self.instance
@@ -537,7 +568,7 @@ class WindowsTests(EutesterTestCase):
             test = self.create_testcase_from_method(self.get_windows_emi)
             test.eof = True
             list.append(test)
-            test = self.create_testcase_from_method(self.test_run_windows_emi)
+            test = self.create_testcase_from_method(self.get_windows_instance())
             test.eof = True
             list.append(test)
         list.append(self.create_testcase_from_method(self.test_get_windows_instance_password))
