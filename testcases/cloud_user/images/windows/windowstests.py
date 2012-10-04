@@ -78,7 +78,7 @@ class WindowsTests(EutesterTestCase):
                  instance_password = None,
                  instance_keypath = None,
                  vmtype='m1.xlarge',
-                 emi_location='windows',
+                 emi_location=None,
                  image_path=None, #note this must be available on the work_component
                  instance=None,
                  win_proxy_hostname = None, 
@@ -410,6 +410,20 @@ class WindowsTests(EutesterTestCase):
         ip = instance.public_dns_name
         return self.test_poll_for_port_status(3389, ip=ip, interval=interval, socktimeout=socktimeout, timeout=timeout)
     
+    def test_wait_for_instance_boot(self,instance=None,waitforboot=420):
+        instance = instance or self.instance
+        boot_seconds = self.tester.get_instance_time_launched(instance)
+        sleeptime =  0 if boot_seconds > waitforboot else (waitforboot - boot_seconds)
+        self.debug("Instance was launched "+str(boot_seconds)+" seconds ago, waiting:"+str(sleeptime)+" for instance to boot")
+        start = time.time()
+        elapsed = 0
+        print "Waiting for Windows to fully boot:",
+        while elapsed < sleeptime:
+            print "Waiting for Windows to fully boot:"+str(sleeptime-elapsed),
+            time.sleep(5)
+            elapsed=int(time.time()-start)
+        self.debug("test_wait_for_instance_boot: done waiting, instance up for "+str(waitforboot)+" seconds") 
+    
     def test_poll_for_port_status(self, port, ip=None, interval=10, socktimeout=5, timeout=180):
         ip = ip or self.instance.public_dns_name
         start = time.time()
@@ -573,14 +587,20 @@ class WindowsTests(EutesterTestCase):
         else:
             return True
         
-    def setup_active_dir_dns(self,zone,ad_dns=None):
+    def setup_active_dir_dns(self,zone=None,ad_dns=None):
         ad_dns = ad_dns or self.win_proxy_hostname 
         if not ad_dns:
             if self.proxy:
                 ad_dns = self.proxy.proxy_hostname
             else:
                 raise Exception('Need hostname/ip of AD DNS to use?')
-        self.debug("setup_active_dir_dns starting, zone:"+str(zone.name)+", dns:"+str(ad_dns))
+        if not zone:
+            for zone in self.zonelist:
+                if zone.name == self.instance.placement:
+                    break
+        if not zone:
+            raise Exception('setup_active_dir_dns zone unknown')
+        self.debug("setup_active_dir_dns starting, zone:"+str(zone)+", dns:"+str(ad_dns))
         ccs = zone.partition.ccs
         for cc in ccs:
             #update the CC of this zone to use this DNS server...
@@ -603,7 +623,7 @@ class WindowsTests(EutesterTestCase):
             test = self.create_testcase_from_method(self.get_windows_emi)
             test.eof = True
             list.append(test)
-            test = self.create_testcase_from_method(self.get_windows_instance())
+            test = self.create_testcase_from_method(self.get_windows_instance)
             test.eof = True
             list.append(test)
         list.append(self.create_testcase_from_method(self.test_get_windows_instance_password))
@@ -613,6 +633,7 @@ class WindowsTests(EutesterTestCase):
         test = self.create_testcase_from_method(self.update_proxy_instance_data)
         test.eof=True
         list.append(test)
+        list.append(self.create_testcase_from_method(self.test_wait_for_instance_boot(instance, waitforboot))
         test = self.create_testcase_from_method(self.proxy.ps_login_test)
         test.eof=True
         list.append(test)
@@ -625,10 +646,12 @@ class WindowsTests(EutesterTestCase):
         list.append(self.create_testcase_from_method(self.test_proxy_ebs_guest_attachment))
        
         if self.is_kvm(): 
-            list.append(self.proxy.ps_virtio_test)
+            list.append(self.create_testcase_from_method(self.proxy.ps_virtio_test))
         else:
-            list.append(self.proxy.ps_xenpv_test)
-        list.append(self.create_testcase_from_method(self.setup_active_dir_dns, eof=True))
+            list.append(self.create_testcase_from_method(self.proxy.ps_xenpv_test))
+        test = self.create_testcase_from_method(self.setup_active_dir_dns)
+        test.eof = True
+        list.append(test)
         list.append(self.create_testcase_from_method(self.proxy.ps_admembership_test))
         list.append(self.create_testcase_from_method(self.proxy.ps_eucaadkey_test))
         list.append(self.create_testcase_from_method(self.proxy.ps_rdpermission_test))
