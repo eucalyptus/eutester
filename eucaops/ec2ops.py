@@ -288,7 +288,7 @@ class EC2ops(Eutester):
         ### If the instance changes state or goes to the desired state before my poll count is complete
         while( elapsed <  timeout ) and (instance.state != state) and (instance.state != 'terminated'):
             #poll_count -= 1
-            self.debug( "Instance("+instance.id+") State("+instance.state+"), elapsed:"+str(elapsed))
+            self.debug( "Instance("+instance.id+") State("+instance.state+"), elapsed:"+str(elapsed)+"/"+str(timeout))
             time.sleep(10)
             instance.update()
             elapsed = int(time.time()- start)
