@@ -85,7 +85,7 @@ class EutesterTestUnit():
         self.error = ""
     
     @classmethod
-    def create_testcase_from_method(cls, method, args=None):
+    def create_testcase_from_method(cls, method, eof=False, args=None):
         '''
         Description: Creates a EutesterTestUnit object from a method and set of arguments to be fed to that method
         
@@ -95,7 +95,7 @@ class EutesterTestUnit():
         type args: list of arguments
         param args: the arguments to be fed to the given 'method'
         '''
-        testcase =  EutesterTestUnit(method, args)
+        testcase =  EutesterTestUnit(method, eof, args)
         return testcase
     
     def get_test_method_description(self):
@@ -254,7 +254,7 @@ class EutesterTestCase():
             self.debugmethod("("+str(cur_method)+":"+str(lineno)+"): "+colorprefix+line.strip()+colorreset )
             
             
-    def create_testcase_from_method(self,method,eof=True, args=None):
+    def create_testcase_from_method(self,method,eof=False, args=None):
         '''
         Description: Convenience method calling EutesterTestUnit. 
                      Creates a EutesterTestUnit object from a method and set of arguments to be fed to that method
