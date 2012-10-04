@@ -126,6 +126,8 @@ class WindowsTests(EutesterTestCase):
         #setup zone list
         self.setupWindowsZones()
         #setup windows proxy 
+        self.win_proxy_hostname = win_proxy_hostname
+        self.proxy = None
         if win_proxy_hostname is not None:
             self.setup_proxy(win_proxy_hostname,
                              proxy_keypath = win_proxy_keypath,
@@ -536,20 +538,33 @@ class WindowsTests(EutesterTestCase):
             dev = self.get_free_ebs_devname(instance=instance)
         self.tester.attach_volume(self.instance, vol, device_path=dev)
         
-    def test_proxy_ebs_guest_attachment(self, volume, instance=None, wait=60):
+    def test_proxy_ebs_guest_attachment(self, instance=None, volume=None, wait=60):
         self.debug('test_proxy_ebs_guest_attachment starting...')
+        fail = None
         instance = instance or self.instance
-        volume.update()
-        if volume.attach_data.instance_id != instance.id:
-            raise Exception('Volume:'+str(volume.id)+" not attached to:"+str(instance.id) )
-        #Make sure some time has passed before we test on the guest side before running guest test...
-        attached_seconds = self.tester.get_volume_time_attached(volume)
-        sleeptime =  0 if attached_seconds > wait else (wait - attached_seconds)
-        self.debug("Volume has been attached for "+str(attached_seconds)+" seconds, waiting:"+str(sleeptime)+" for guest to detect attached vol")
-        time.sleep(sleeptime)
-        self.debug("Running Proxy ebs test now...")
-        self.proxy.ps_ebs_test(retryinterval=30)
-        
+        if not instance:
+            raise Exception("test_proxy_ebs_guest_attachment, instance is None")
+        if volume:
+            volume.update()
+            if volume.attach_data.instance_id != instance.id:
+                raise Exception('Volume:'+str(volume.id)+" not attached to:"+str(instance.id) )
+            vols = [volume]
+        else:
+            vols = self.tester.get_volumes(attached_instance=instance.id)
+        for volume in vols:
+            #Make sure some time has passed before we test on the guest side before running guest test...
+            attached_seconds = self.tester.get_volume_time_attached(volume)
+            sleeptime =  0 if attached_seconds > wait else (wait - attached_seconds)
+            self.debug("Volume has been attached for "+str(attached_seconds)+" seconds, waiting:"+str(sleeptime)+" for guest to detect attached vol")
+            time.sleep(sleeptime)
+            self.debug("Running Proxy ebs test now...")
+            try:
+                self.proxy.ps_ebs_test(retryinterval=30)
+            except Exception, e:
+                fail = e+"test_proxy_ebs_guest_attachment, "+str(instance)+"/"+str(volume)+", failed:"+str(e)+"\n"
+        if fail:
+            raise Exception(fail)
+                
         
     def is_kvm(self, component=None):
         component = component or self.component or self.tester.get_component_machines("nc")[0]
@@ -558,8 +573,28 @@ class WindowsTests(EutesterTestCase):
         else:
             return True
         
+    def setup_active_dir_dns(self,zone,ad_dns=None):
+        ad_dns = ad_dns or self.win_proxy_hostname 
+        if not ad_dns:
+            if self.proxy:
+                ad_dns = self.proxy.proxy_hostname
+            else:
+                raise Exception('Need hostname/ip of AD DNS to use?')
+        self.debug("setup_active_dir_dns starting, zone:"+str(zone.name)+", dns:"+str(ad_dns))
+        ccs = zone.partition.ccs
+        for cc in ccs:
+            #update the CC of this zone to use this DNS server...
+            cmd = 'sed -i \'s/VNET_DNS.*$/VNET_DNS="'+str(ad_dns)+'"/g\' '+str(self.tester.eucapath)+'/etc/eucalyptus/eucalyptus.conf'
+            self.debug('Attempting to update VNET DNS on:'+str(cc.hostname)+', cmd:'+str(cmd))
+            cc.machine.sys(cmd,code=0)
+            cc.stop()    
+        zone.partition.service_manager.wait_for_service(cc, state='NOTREADY',timeout=120)
+        for cc in ccs:
+            cc.start()
+        zone.partition.service_manager.wait_for_service(cc, state='ENABLED',timeout=120)
+        self.debug("setup_active_dir VNET_DNS done")
     
-        
+    
     def basic_proxy_test_suite(self, instance=None):
         instance = instance or self.instance
         list = []
@@ -593,6 +628,10 @@ class WindowsTests(EutesterTestCase):
             list.append(self.proxy.ps_virtio_test)
         else:
             list.append(self.proxy.ps_xenpv_test)
+        list.append(self.create_testcase_from_method(self.setup_active_dir_dns, eof=True))
+        list.append(self.create_testcase_from_method(self.proxy.ps_admembership_test))
+        list.append(self.create_testcase_from_method(self.proxy.ps_eucaadkey_test))
+        list.append(self.create_testcase_from_method(self.proxy.ps_rdpermission_test))
         #Run this test case list only exit on fail if a given test method has the flag set. 
         self.run_test_case_list(list, eof=False)
         
