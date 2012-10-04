@@ -398,6 +398,7 @@ class EC2ops(Eutester):
         elapsed = 0  
         volume.update()
         status = ""
+        laststatus=None
         while elapsed < timeout:
             volume.update()
             
