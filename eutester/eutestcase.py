@@ -192,10 +192,14 @@ class EutesterTestCase():
                    credpath=True,
                    password=True,
                    config=True,
+                   configblocks=True,
+                   ignoreblocks=True,
                    testlist=True):
         '''
         Description: Convenience method to setup argparse parser and some canned default arguments, based
-        upon the boolean values provided. 
+        upon the boolean values provided. For each item marked as 'True' this method will add pre-defined 
+        command line arguments, help strings and default values. This will then be available by the end script 
+        as an alternative to recreating these items on a per script bassis. 
     
         :type testname: string
         :param testname: Name used for argparse (help menu, etc.)
@@ -216,7 +220,17 @@ class EutesterTestCase():
         :type config: boolean
         :param config: Flag to provide the config file command line argument/option for providing path to config file
         
-        :type testlist: boolean
+        :type configblocks: string list
+        :param configblocks: Flag to provide the configblocks command line arg/option used to provide list of 
+                             configuration blocks to read from
+                             Note: By default if a config file is provided the script will only look for blocks; 'globals', and the filename of the script being run.
+        
+        :type ignoreblocks: string list
+        :param ignoreblocks: Flag to provide the configblocks command line arg/option used to provide list of 
+                             configuration blocks to ignore if present in configfile
+                             Note: By default if a config file is provided the script will look for blocks; 'globals', and the filename of the script being run
+ 
+        :type testlist: string list
         :param testlist: Flag to provide the testlist command line argument/option for providing a list of testnames to run
         '''
         testname = testname or self.name or 'TEST NAME'
@@ -226,20 +240,25 @@ class EutesterTestCase():
         #add some typical defaults:
         if emi:
             parser.add_argument('--emi', 
-                            help="pre-installed emi id which to execute these tests against", default=None)
+                                help="pre-installed emi id which to execute these tests against", default=None)
         if credpath:
             parser.add_argument('--credpath', 
-                            help="path to credentials", default=None)
+                                help="path to credentials", default=None)
         if password:
             parser.add_argument('--password', 
-                            help="password to use for machine root ssh access", default='foobar')
+                                help="password to use for machine root ssh access", default='foobar')
         if config:
             parser.add_argument('--config',
-                           help='path to config file', default='../input/2btested.lst')         
+                                help='path to config file', default='../input/2btested.lst')   
+        if configblocks:
+            parser.add_argument('--configblocks', nargs='+',
+                                help="Config sections/blocks in config file to read in", default=[])
+        if ignoreblocks:
+            parser.add_argument('--ingnoreblocks', nargs='+',
+                                help="Config blocks to ignore, ie:'globals', 'my_scripts_name', etc..", default=[])
         if testlist:
             parser.add_argument('--tests', nargs='+', 
-                            help="test cases to be executed", 
-                            default= ['run_test_suite'])   
+                                help="test cases to be executed", default= ['run_test_suite'])   
         self.parser = parser  
         return parser
     
@@ -487,29 +506,31 @@ class EutesterTestCase():
         return self.run_with_args(meth, *args, **kwargs)
         
         
-    '''
-    def run_function_by_name(self,name, *args, **kwargs):
         
-        Description: Find a defined function found by name with either args/kwargs provided or
-        any self.args which match the methods varname. 
+    
+    def create_testunit_by_name(self, name, obj=None, eof=False, *args,**kwargs):
+        '''
+        Description: Attempts to match a method name contained with object 'obj', and create a EutesterTestUnit object from that method and the provided
+        positional as well as keyword arguments provided. 
         
         :type name: string
-        :param name: Name of function to look for 
+        :param name: Name of method to look for within instance of object 'obj'
+        
+        :type obj: class instance
+        :param obj: Instance type, defaults to self testcase object
         
         :type args: positional arguements
         :param args: None or more positional arguments to be passed to method to be run
         
         :type kwargs: keyword arguments
         :param kwargs: None or more keyword arguements to be passed to method to be run
-    '''
+        '''
         
-    
-    def create_testunit_by_name(self, list, obj=None, eof=False, *args,**kwargs):
-         obj = obj or self
-         meth = getattr(obj,name)
-         testunit = EutesterTestUnit(meth, eof=eof, *args, **kwargs)
-         return testunit
-        
+        obj = obj or self
+        meth = getattr(obj,name)
+        testunit = EutesterTestUnit(meth, eof=eof, *args, **kwargs)
+        return testunit
+
         
     def get_args(self,sections=[]):
         '''
@@ -524,31 +545,46 @@ class EutesterTestCase():
         :rtype: arparse.namespace obj
         :returns: namespace object with values from cli and config file arguements 
         '''
+        confblocks=['globals']
         if self.name:
-            sections.append(self.name)
+            confblocks.append(self.name)
         if not self.parser:
             self.setup_parser()
         #first get command line args to see if there's a config file
         args = self.parser.parse_args()
         #if a config file was passed, combine the config file and command line args into a single namespace object
-        if args.config:
+        if args and ('config' in args.__dict__) and  args.config:
+            
+            #Check to see if there's explicit config sections to read
+            if 'configblocks' in args.__dict__:
+                confblocks = confblocks +args.configblocks
+            #Check to see if there's explicit config sections to ignore
+            if 'ignoreblocks' in args.__dict__:
+                for block in args.ignoreblocks:
+                    if block in confblocks:
+                        confblocks.remove(block)
             #build out a namespace object from the config file first
             cf = argparse.Namespace()
             conf = EuConfig(filename=args.config)
-            #add globals first if the section is present
-            if conf.config.has_section('globals'):
-                for item in conf.config.items('globals'):
-                    cf.__setattr__(str(item[0]), item[1])
-            for section in sections:
-                if conf.config.has_section(section):
+            #If globals are still in our confblocks, add globals first if the section is present in config
+            if 'globals' in confblocks:
+                if conf.config.has_section('globals'):
                     for item in conf.config.items('globals'):
                         cf.__setattr__(str(item[0]), item[1])
-            #now make sure the command line args take precedence
+                    confblocks.remove('globals')
+            #No iterate through remaining config block in file and add to args...
+            for section in confblocks:
+                if conf.config.has_section(section):
+                    for item in conf.config.items(section):
+                        cf.__setattr__(str(item[0]), item[1])
+            #Now make sure any conflicting args provided on the command line take precedence over config file args
             for val in args._get_kwargs():
                 cf.__setattr__(str(val[0]), val[1])
             args = cf
+        #Legacy script support: level set var names for config_file vs configfile vs config and credpath vs cred_path
         try:
             args.config_file = args.config
+            args.configfile = args.config
         except: pass
         try:
             args.cred_path = args.credpath
@@ -595,7 +631,7 @@ class EutesterTestCase():
                 f_code = meth.func_code
             except:pass
         if not f_code:
-            raise Exception("create_with_args: Could not find varnames for passed method")
+            raise Exception("create_with_args: Could not find varnames for passed method of type:"+str(type(meth)))
         vars = f_code.co_varnames
         #first populate matching method args with our global testcase args...
         for val in tc_args._get_kwargs():
