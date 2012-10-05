@@ -1,3 +1,4 @@
+#!/usr/bin/python
 from eutester.eutestcase import EutesterTestCase, EutesterTestUnit, EutesterTestResult
 from testcases.cloud_user.images.windows.windowstests import WindowsTests
 from eutester.euconfig import EuConfig
@@ -21,6 +22,7 @@ testcase.parser.add_argument('--urluser',help='Username needed to retrieve remot
 testcase.parser.add_argument('--gigtime',dest='time_per_gig', help='Time allowed per gig size of image to be used', default=300)
 testcase.parser.add_argument('--interbundletime',dest='inter_bundle_timeout', help='Inter-bundle timeout', default=120)
 testcase.parser.add_argument('--bucket',dest='bucketname', help='bucketname', default=None)
+
 args = testcase.get_args()
 
 if (not args.url and not args.image_file) or (args.url and args.image_file):
