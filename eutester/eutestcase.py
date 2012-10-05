@@ -182,7 +182,33 @@ class EutesterTestCase():
                    password=True,
                    config=True,
                    testlist=True):
-        testname = testname or 'TEST NAME'
+        '''
+        Description: Convenience method to setup argparse parser and some canned default arguments, based
+        upon the boolean values provided. 
+    
+        :type testname: string
+        :param testname: Name used for argparse (help menu, etc.)
+        
+        :type description: string
+        :param description: Description used for argparse (help menu, etc.)
+        
+        :type emi: boolean
+        :param emi: Flag to provide the emi command line argument/option for providing an image emi id
+        
+        :type credpath: boolean
+        :param credpath: Flag to provide the credpath command line argument/option for providing a local path to creds
+        
+        :type password: boolean
+        :param password: Flag to provide the password command line argument/option for providing password 
+        used in establishing machine ssh sessions
+        
+        :type config: boolean
+        :param config: Flag to provide the config file command line argument/option for providing path to config file
+        
+        :type testlist: boolean
+        :param testlist: Flag to provide the testlist command line argument/option for providing a list of testnames to run
+        '''
+        testname = testname or self.name or 'TEST NAME'
         description = description or "Test Case Default Option Parser Description"
         #create parser
         parser = argparse.ArgumentParser( prog=testname, description=description)
@@ -406,6 +432,9 @@ class EutesterTestCase():
     
     #@classmethod
     def get_parser(self):
+        '''
+        Description: Convenience method used to create set of default argparse arguments
+        '''
         parser = argparse.ArgumentParser(prog="testcase.py",
                                      description="Test Case Default Option Parser")
         parser.add_argument('--emi', 
@@ -424,6 +453,18 @@ class EutesterTestCase():
     
     
     def get_args(self,sections=[]):
+        '''
+        Description: Method will attempt to retrieve all command line arguments presented through local 
+        testcase's 'argparse' methods, as well as retrieve all EuConfig file arguments. All arguments 
+        will be combined into a single namespace object held locally at 'testcase.args'. Note: cli arg 'config'
+        must be provided for config file valus to be store in self.args. 
+        
+        :type sections: list
+        :param sections: list of EuConfig sections to read configuration values from, and store in self.args.
+        
+        :rtype: arparse.namespace obj
+        :returns: namespace object with values from cli and config file arguements 
+        '''
         if self.name:
             sections.append(self.name)
         if not self.parser:
@@ -452,10 +493,25 @@ class EutesterTestCase():
         return args
         
     
-    def run_with_args(self, meth, namespace=None):
-        args = namespace or self.args
-        if not args:
-            raise Exception("create_with_args: No args")
+    def run_with_args(self, meth, *args, **kwargs):
+        '''
+        Description: Convenience method used to wrap the provided method 'meth' and populate meth's positional 
+        and keyword arguments with the local testcase.args created from the CLI and/or config file, as well as
+        the *args and **kwargs variable length arguments passed into this method. 
+        
+        :type meth: method
+        :param meth: A method or class initiator to wrapped/populated with this testcase objects namespace args
+        
+        :type args: positional arguments
+        :param args: None or more values representing positional arguments to be passed to 'meth' when executed. These will
+                     take precedence over local testcase obj namespace args
+        
+        :type kwargs: keyword arguments
+        :param kwargs: None or more values reprsenting keyword arguments to be passed to 'meth' when executed. These will
+                     take precedence over local testcase obj namespace args and positional args
+        
+        '''
+        tc_args = self.args
         cmdargs={}
         vars = []
         #Do some ugly guessing here for class vs method...
@@ -470,10 +526,19 @@ class EutesterTestCase():
                 except:
                     raise Exception("create_with_args: Could not find varnames for passed method")
         vars = f_code.co_varnames
-        for val in args._get_kwargs():
+        #first populate matching method args with our global testcase args...
+        for val in tc_args._get_kwargs():
             for var in vars:
                 if var == val[0]:
                     cmdargs[var]=val[1]
+        #Then overwrite/populate with any given positional local args...
+        for count,arg in enumerate(args):
+            cmdargs[vars[count+1]]=arg
+        #Finall overwrite/populate with any given key word local args...
+        for name,value in kwargs.items():
+            for var in vars:
+                if var == name:
+                    cmdargs[var]=value
         self.debug('create_with_args: running '+str(f_code.co_name)+"("+str(cmdargs).replace(':','=')+")")
         return meth(**cmdargs)            
         
