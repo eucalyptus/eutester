@@ -7,6 +7,7 @@ import argparse
 import re
 import sys
 import os
+import types
 import traceback
 from eutester.eulogger import Eulogger
 from eutester.euconfig import EuConfig
@@ -76,18 +77,23 @@ class EutesterTestUnit():
     type eof: boolean
     param eof: boolean to indicate whether a failure while running the given 'method' should end the test case exectution. 
     '''
-    def __init__(self,method, eof=False, args=None):
+    def __init__(self,method, *args, **kwargs):
         self.method = method
         self.args = args
+        self.kwargs = kwargs
         self.name = str(method.__name__)
         self.result=EutesterTestResult.not_run
         self.time_to_run=0
         self.description=self.get_test_method_description()
-        self.eof=eof
+        self.eof=False
         self.error = ""
+        for count, thing in enumerate(args):
+            print '{0}. {1}'.format(count, thing)
+        for name, value in kwargs.items():
+            print '{0} = {1}'.format(name, value)
     
     @classmethod
-    def create_testcase_from_method(cls, method, eof=False, args=None):
+    def create_testcase_from_method(cls, method, eof=False, *args, **kwargs):
         '''
         Description: Creates a EutesterTestUnit object from a method and set of arguments to be fed to that method
         
@@ -97,7 +103,8 @@ class EutesterTestUnit():
         type args: list of arguments
         param args: the arguments to be fed to the given 'method'
         '''
-        testcase =  EutesterTestUnit(method, eof, args)
+        testcase =  EutesterTestUnit(method, args, kwargs)
+        testcase.eof = eof
         return testcase
     
     def get_test_method_description(self):
@@ -111,7 +118,7 @@ class EutesterTestUnit():
             doc = str(self.method.__doc__)
             if not doc or not re.search('Description:',doc):
                 try:
-                    desc = desc+"\n".join(self.method.im_func.func_doc.title())
+                    desc = desc+"\n".join(self.method.im_func.func_doc.title().splitlines())
                 except:pass
                 return desc
             has_end_marker = re.search('EndDescription', doc)
@@ -141,13 +148,17 @@ class EutesterTestUnit():
         '''
         Description: Wrapper which attempts to run self.method and handle failures, record time.
         '''
+        for count, thing in enumerate(self.args):
+            print '{0}. {1}'.format(count, thing)
+        for name, value in self.kwargs.items():
+            print '{0} = {1}'.format(name, value)
         
         try:
             start = time.time()
             if not self.args:
                 ret = self.method()
             else:
-                ret = self.method(**self.args)
+                ret = self.method(*self.args, **self.kwargs)
             self.result=EutesterTestResult.passed
             return ret
         except Exception, e:
@@ -171,7 +182,7 @@ class EutesterTestCase():
     def __init__(self,name=None, debugmethod=None):
         self.name = name 
         if not self.name:
-                callerfilename=inspect.getouterframes(inspect.currentframe())[2][1]
+                callerfilename=inspect.getouterframes(inspect.currentframe())[1][1]
                 self.name = os.path.splitext(os.path.basename(callerfilename))[0]  
                                    
     def setup_parser(self,
@@ -282,7 +293,7 @@ class EutesterTestCase():
             self.debugmethod("("+str(cur_method)+":"+str(lineno)+"): "+colorprefix+line.strip()+colorreset )
             
             
-    def create_testcase_from_method(self,method,eof=False, args=None):
+    def create_testcase_from_method(self,method,eof=False, *args, **kwargs):
         '''
         Description: Convenience method calling EutesterTestUnit. 
                      Creates a EutesterTestUnit object from a method and set of arguments to be fed to that method
@@ -292,9 +303,11 @@ class EutesterTestCase():
         
         type args: list of arguments
         param args: the arguments to be fed to the given 'method'
-        '''
-        return EutesterTestUnit(method, eof=eof, args=args)
-        
+        '''   
+        testunit = EutesterTestUnit(method, *args, **kwargs).eof = eof
+        testunit.eof = eof
+        return testunit 
+    
     def status(self,msg,traceback=2, b=0,a=0 ,testcolor=None):
         '''
         Description: Convenience method to format debug output
@@ -434,6 +447,7 @@ class EutesterTestCase():
     def get_parser(self):
         '''
         Description: Convenience method used to create set of default argparse arguments
+        Soon to be replaced by setup_parser()
         '''
         parser = argparse.ArgumentParser(prog="testcase.py",
                                      description="Test Case Default Option Parser")
@@ -448,10 +462,55 @@ class EutesterTestCase():
         parser.add_argument('--tests', nargs='+', 
                             help="test cases to be executed", 
                             default= ['run_test_suite'])
-        
         return parser
     
     
+    def run_method_by_name(self,name, obj=None,*args, **kwargs):
+        '''
+        Description: Find a method within an instance of obj and run that method with either args/kwargs provided or
+        any self.args which match the methods varname. 
+        
+        :type name: string
+        :param name: Name of method to look for within instance of object 'obj'
+        
+        :type obj: class instance
+        :param obj: Instance type, defaults to self testcase object
+        
+        :type args: positional arguements
+        :param args: None or more positional arguments to be passed to method to be run
+        
+        :type kwargs: keyword arguments
+        :param kwargs: None or more keyword arguements to be passed to method to be run
+        '''
+        obj = obj or self
+        meth = getattr(obj,name)
+        return self.run_with_args(meth, *args, **kwargs)
+        
+        
+    '''
+    def run_function_by_name(self,name, *args, **kwargs):
+        
+        Description: Find a defined function found by name with either args/kwargs provided or
+        any self.args which match the methods varname. 
+        
+        :type name: string
+        :param name: Name of function to look for 
+        
+        :type args: positional arguements
+        :param args: None or more positional arguments to be passed to method to be run
+        
+        :type kwargs: keyword arguments
+        :param kwargs: None or more keyword arguements to be passed to method to be run
+    '''
+        
+    
+    def create_testunit_by_name(self, list, obj=None, eof=False, *args,**kwargs):
+         obj = obj or self
+         meth = getattr(obj,name)
+         testunit = EutesterTestUnit(meth, eof=eof, *args, **kwargs)
+         return testunit
+        
+        
     def get_args(self,sections=[]):
         '''
         Description: Method will attempt to retrieve all command line arguments presented through local 
@@ -488,7 +547,12 @@ class EutesterTestCase():
             for val in args._get_kwargs():
                 cf.__setattr__(str(val[0]), val[1])
             args = cf
-        args.config_file = args.config
+        try:
+            args.config_file = args.config
+        except: pass
+        try:
+            args.cred_path = args.credpath
+        except: pass
         self.args = args
         return args
         
@@ -509,22 +573,29 @@ class EutesterTestCase():
         :type kwargs: keyword arguments
         :param kwargs: None or more values reprsenting keyword arguments to be passed to 'meth' when executed. These will
                      take precedence over local testcase obj namespace args and positional args
-        
         '''
         tc_args = self.args
         cmdargs={}
         vars = []
-        #Do some ugly guessing here for class vs method...
-        try:
-            f_code = meth.__init__.__func__.func_code
-        except:
+        f_code = None
+        #Find the args for the method passed in...
+        #Check for object/class init...
+        if isinstance(meth,types.ObjectType):
+            try:
+                f_code = meth.__init__.__func__.func_code
+            except:pass   
+        #Check for instance method...
+        if isinstance(meth,types.MethodType):
             try:
                 f_code = meth.im_func.func_code
-            except:
-                try:
-                    f_code = meth.func_code
-                except:
-                    raise Exception("create_with_args: Could not find varnames for passed method")
+            except:pass    
+        #Check for function...
+        if isinstance(meth,types.FunctionType):
+            try:
+                f_code = meth.func_code
+            except:pass
+        if not f_code:
+            raise Exception("create_with_args: Could not find varnames for passed method")
         vars = f_code.co_varnames
         #first populate matching method args with our global testcase args...
         for val in tc_args._get_kwargs():
