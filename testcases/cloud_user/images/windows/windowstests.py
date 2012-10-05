@@ -292,7 +292,7 @@ class WindowsTests(EutesterTestCase):
         self.endsuccess() 
     
     def create_windows_emi_from_url(self,
-                                      url, 
+                                      url=None, 
                                       component = None, 
                                       component_credpath = None,
                                       bucketname = None, 
@@ -335,7 +335,7 @@ class WindowsTests(EutesterTestCase):
         Work is done on a given machine and requires euca2ools present on that machine. 
         Returns the emi of the registered image
         '''
-        return self.iu.create_emi_from_url(url, 
+        return self.iu.create_emi_from_url( 
                                            component = (component or self.component), 
                                            bucketname = (bucketname or self.bucketname), 
                                            component_credpath = (component_credpath or self.component_credpath), 
