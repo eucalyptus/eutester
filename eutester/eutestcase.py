@@ -6,8 +6,10 @@ import gc
 import argparse
 import re
 import sys
+import os
 import traceback
 from eutester.eulogger import Eulogger
+from eutester.euconfig import EuConfig
 import StringIO
 
 '''
@@ -108,6 +110,9 @@ class EutesterTestUnit():
         try:
             doc = str(self.method.__doc__)
             if not doc or not re.search('Description:',doc):
+                try:
+                    desc = desc+"\n".join(self.method.im_func.func_doc.title())
+                except:pass
                 return desc
             has_end_marker = re.search('EndDescription', doc)
             
@@ -162,16 +167,13 @@ class EutesterTestUnit():
         
                 
 class EutesterTestCase():
-    '''
+
     def __init__(self,name=None, debugmethod=None):
-        
-        self.name = name or 'EutesterTestCase'
-        if not debugmethod:
-            logger = Eulogger(identifier=self.name)
-            debugmethod = logger.log.debug
-        self.debugmethod = debugmethod
-    '''                                             
-    
+        self.name = name 
+        if not self.name:
+                callerfilename=inspect.getouterframes(inspect.currentframe())[2][1]
+                self.name = os.path.splitext(os.path.basename(callerfilename))[0]  
+                                   
     def setup_parser(self,
                    testname=None, 
                    description=None,
@@ -419,4 +421,63 @@ class EutesterTestCase():
                             default= ['run_test_suite'])
         
         return parser
+    
+    
+    def get_args(self,sections=[]):
+        if self.name:
+            sections.append(self.name)
+        if not self.parser:
+            self.setup_parser()
+        #first get command line args to see if there's a config file
+        args = self.parser.parse_args()
+        #if a config file was passed, combine the config file and command line args into a single namespace object
+        if args.config:
+            #build out a namespace object from the config file first
+            cf = argparse.Namespace()
+            conf = EuConfig(filename=args.config)
+            #add globals first if the section is present
+            if conf.config.has_section('globals'):
+                for item in conf.config.items('globals'):
+                    cf.__setattr__(str(item[0]), item[1])
+            for section in sections:
+                if conf.config.has_section(section):
+                    for item in conf.config.items('globals'):
+                        cf.__setattr__(str(item[0]), item[1])
+            #now make sure the command line args take precedence
+            for val in args._get_kwargs():
+                cf.__setattr__(str(val[0]), val[1])
+            args = cf
+        args.config_file = args.config
+        self.args = args
+        return args
+        
+    
+    def run_with_args(self, meth, namespace=None):
+        args = namespace or self.args
+        if not args:
+            raise Exception("create_with_args: No args")
+        cmdargs={}
+        vars = []
+        #Do some ugly guessing here for class vs method...
+        try:
+            f_code = meth.__init__.__func__.func_code
+        except:
+            try:
+                f_code = meth.im_func.func_code
+            except:
+                try:
+                    f_code = meth.func_code
+                except:
+                    raise Exception("create_with_args: Could not find varnames for passed method")
+        vars = f_code.co_varnames
+        for val in args._get_kwargs():
+            for var in vars:
+                if var == val[0]:
+                    cmdargs[var]=val[1]
+        self.debug('create_with_args: running '+str(f_code.co_name)+"("+str(cmdargs).replace(':','=')+")")
+        return meth(**cmdargs)            
+        
+                    
+            
+            
     
