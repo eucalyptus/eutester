@@ -590,7 +590,7 @@ class EutesterTestCase():
             args.cred_path = args.credpath
         except: pass
         self.args = args
-        argbuf = str("TEST ARGS:").ljust(25)+"        "+str("VALUE")
+        argbuf = str("TEST ARGS:").ljust(25)+"        "+str("VALUE:")
         argbuf += str("\n----------").ljust(25)+"        "+str("------")
         for val in args._get_kwargs():
             argbuf += '\n'+str(val[0]).ljust(25)+" --->:  "+str(val[1])
