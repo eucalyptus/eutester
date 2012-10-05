@@ -633,7 +633,7 @@ class WindowsTests(EutesterTestCase):
         test = self.create_testcase_from_method(self.update_proxy_instance_data)
         test.eof=True
         list.append(test)
-        list.append(self.create_testcase_from_method(self.test_wait_for_instance_boot(instance, waitforboot))
+        list.append(self.create_testcase_from_method(self.test_wait_for_instance_boot))
         test = self.create_testcase_from_method(self.proxy.ps_login_test)
         test.eof=True
         list.append(test)
@@ -644,7 +644,6 @@ class WindowsTests(EutesterTestCase):
         list.append(self.create_testcase_from_method(self.test_attach_single_volume))
         #The guest test may not work on a 32bit host...
         list.append(self.create_testcase_from_method(self.test_proxy_ebs_guest_attachment))
-       
         if self.is_kvm(): 
             list.append(self.create_testcase_from_method(self.proxy.ps_virtio_test))
         else:
