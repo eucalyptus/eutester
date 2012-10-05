@@ -469,7 +469,8 @@ class Machine:
     def __str__(self):
         s  = "+++++++++++++++++++++++++++++++++++++++++++++++++++++\n"
         s += "+" + "Hostname:" + str(self.hostname) + "\n"
-        s += "+" + "Distro: " + str(self.distro) +"\n"
+        dname = self.distro.name if self.distro else ""
+        s += "+" + "Distro: " + str(dname) +"\n"
         s += "+" + "Distro Version: " +  str(self.distro_ver) +"\n"
         s += "+" + "Install Type: " +  str(self.source) +"\n"
         s += "+" + "Components: " +   str(self.components) +"\n"
