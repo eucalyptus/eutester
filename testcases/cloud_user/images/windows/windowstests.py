@@ -36,7 +36,6 @@ from eutester.eutestcase import EutesterTestCase
 from eutester.eutestcase import EutesterTestResult
 from eutester import machine
 import eutester.machine 
-from imageutils import ImageUtils
 from testcases.cloud_user.images.imageutils import ImageUtils
 from testcases.cloud_user.ebs.ebstestsuite import TestZone
 import windowsproxytests

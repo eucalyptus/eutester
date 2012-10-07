@@ -12,6 +12,7 @@ import traceback
 from eutester.eulogger import Eulogger
 from eutester.euconfig import EuConfig
 import StringIO
+import copy
 
 '''
 This is the base class for any test case to be included in the Eutester repo. It should include any
@@ -566,6 +567,9 @@ class EutesterTestCase():
             #build out a namespace object from the config file first
             cf = argparse.Namespace()
             conf = EuConfig(filename=args.config)
+            #store blocks for debug purposes
+            
+            cf.__setattr__('configsections',copy.copy(confblocks))
             #If globals are still in our confblocks, add globals first if the section is present in config
             if 'globals' in confblocks:
                 if conf.config.has_section('globals'):
@@ -579,7 +583,8 @@ class EutesterTestCase():
                         cf.__setattr__(str(item[0]), item[1])
             #Now make sure any conflicting args provided on the command line take precedence over config file args
             for val in args._get_kwargs():
-                cf.__setattr__(str(val[0]), val[1])
+                if (not val[0] in cf ) or (val[1] is not None):
+                    cf.__setattr__(str(val[0]), val[1])
             args = cf
         #Legacy script support: level set var names for config_file vs configfile vs config and credpath vs cred_path
         try:
