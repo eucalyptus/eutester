@@ -42,7 +42,7 @@ import sys
 import unittest
 from eutester.eutestcase import EutesterTestCase
 from eutester.eutestcase import EutesterTestResult
-from eutester.eutestzone import euTestZone
+from testcases.cloud_user.ebs.ebstestsuite import TestZone
 from eutester.sshconnection import SshCbReturn
 
 

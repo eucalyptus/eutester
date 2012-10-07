@@ -45,20 +45,112 @@ class EutesterTestResult():
     failed="failed"
     
 class TestColor():
-    #list of defined color schemes to add to
-    whiteonblue='\33[1;37;44m'
-    red='\033[m'
-    failred='\033[101m'
-    blueongrey='\33[1;34;47m'
-    redongrey='\33[1;31;47m'
-    blinkwhiteonred='\33[1;5;37;41m'
+    reset = '\033[0m'
+    #formats
+    formats={'reset':'0',
+             'bold':'1',
+             'dim':'2',
+             'uline':'4',
+             'blink':'5',
+             'reverse':'7',
+             'hidden':'8',
+             }
     
-    reset = '\033[0m'  
+    foregrounds = {'black':30,
+                   'red':31,
+                   'green':32,
+                   'yellow':33,
+                   'blue':34,
+                   'magenta':35,
+                   'cyan':36,
+                   'white':37,
+                   'setasdefault':39}
+    
+    backgrounds = {'black':40,
+                   'red':41,
+                   'green':42,
+                   'yellow':43,
+                   'blue':44,
+                   'magenta':45,
+                   'cyan':46,
+                   'white':47,
+                   'setasdefault':49}
+    
+    #list of canned color schemes, for now add em as you need 'em?
+    canned_colors ={'reset' : '\033[0m', #self.TestColor.get_color(fg=0)
+                    'whiteonblue' : '\33[1;37;44m', #get_color(fmt=bold, fg=37,bg=44)
+                    'red' : '\33[31m', #TestColor.get_color(fg=31)
+                    'failred' : '\033[101m', #TestColor.get_color(fg=101) 
+                    'blueongrey' : '\33[1;34;47m', #TestColor.get_color(fmt=bold, fg=34, bg=47)#'\33[1;34;47m'
+                    'redongrey' : '\33[1;31;47m', #TestColor.get_color(fmt=bold, fg=31, bg=47)#'\33[1;31;47m'
+                    'blinkwhiteonred' : '\33[1;5;37;41m', #TestColor.get_color(fmt=[bold,blink],fg=37,bg=41)#
+                    }
     
     @classmethod
-    def get_color_from_string(cls,color):
+    def get_color(cls,fmt=0,fg='', bg=''):
+        '''
+        Description: Method to return ascii color codes to format terminal output. 
+        Examples:
+                blinking_red_on_black = get_color('blink', 'red', 'blue')
+                bold_white_fg = get_color('bold', 'white, '')
+                green_fg = get_color('','green','')
+                
+                print bold_white_fg+"This text is bold white"+TestColor.reset
+        :type fmt: color attribute
+        :param fmt: An integer or string that represents an ascii color attribute. see TestColor.formats
+        
+        :type fg: ascii foreground attribute
+        :param fg: An integer or string that represents an ascii foreground color attribute. see TestColor.foregrounds
+        
+        :type bg: ascii background attribute
+        :param bg: An integer or string that represents an ascii background color attribute. see TestColor.backgrounds
+        '''
+        
+        fmts=''
+        if not isinstance(fmt, types.ListType):
+            fmt = [fmt]
+        for f in fmt:
+            if isinstance(f,types.StringType):
+                f = TestColor.get_format_from_string(f)
+            if f:
+                fmts += str(f)+';'
+        if bg:
+            if isinstance(bg,types.StringType):
+                bg = TestColor.get_bg_from_string(bg)
+            if bg:
+                bg = str(bg)
+        if fg:
+            if isinstance(fg,types.StringType):
+                fg = TestColor.get_fg_from_string(fg)
+            if fg:
+                fg = str(fg)+';'
+        
+        return '\033['+str(fmts)+str(fg)+str(bg)+'m'
+    
+    @classmethod
+    def get_format_from_string(cls,format):
+        if format in TestColor.formats:
+            return TestColor.formats[format]
+        else:
+            return ''
+        
+    @classmethod
+    def get_fg_from_string(cls,fg):
+        if fg in TestColor.foregrounds:
+            return TestColor.foregrounds[fg]
+        else:
+            return ''
+    @classmethod
+    def get_bg_from_string(cls,bg):
+        if bg in TestColor.backgrounds:
+            return TestColor.backgrounds[bg]
+        else:
+            return ''
+        
+    @classmethod
+    def get_canned_color(cls,color):
         try:
-            return TestColor.__dict__[color]
+            return TestColor.canned_colors[color]
         except:
             return ""    
     
@@ -167,7 +259,7 @@ class EutesterTestUnit():
             traceback.print_exception(*sys.exc_info(),file=out)
             out.seek(0)
             buf = out.read()
-            print TestColor.failred+buf+TestColor.reset
+            print TestColor.get_canned_color('failred')+buf+TestColor.reset
             self.error = str(e)
             self.result = EutesterTestResult.failed
             if self.eof:
@@ -179,8 +271,12 @@ class EutesterTestUnit():
         
                 
 class EutesterTestCase():
+    color = TestColor()
 
     def __init__(self,name=None, debugmethod=None):
+        return self.setupself(name=name, debugmethod=debugmethod)
+        
+    def setupself(self, name=None, debugmethod=None):
         self.name = name 
         if not self.name:
                 callerfilename=inspect.getouterframes(inspect.currentframe())[1][1]
@@ -234,7 +330,9 @@ class EutesterTestCase():
         :type testlist: string list
         :param testlist: Flag to provide the testlist command line argument/option for providing a list of testnames to run
         '''
-        testname = testname or self.name or 'TEST NAME'
+        
+        testname = testname or self.name 
+        
         description = description or "Test Case Default Option Parser Description"
         #create parser
         parser = argparse.ArgumentParser( prog=testname, description=description)
@@ -280,9 +378,12 @@ class EutesterTestCase():
         
         type traceback: integer
         param traceback: integer value for what frame to inspect to derive the originating method and method line number
+        
+        type color: TestColor color
+        param color: Optional ascii text color scheme. See TestColor for more info. 
         '''
         try:
-            if not self.debugmethod:
+            if not hasatter(self, debugmethod) or not self.debugmethod:
                 self.setup_debugmethod()
         except:
             self.setup_debugmethod()
@@ -290,8 +391,8 @@ class EutesterTestCase():
         colorprefix=""
         colorreset=""
         if color:
-            colorprefix = TestColor.get_color_from_string(color) or color
-            colorreset = str(TestColor.reset)
+            colorprefix = TestColor.get_canned_color(color) or color
+            colorreset = str(TestColor.get_canned_color('reset'))
         msg = str(msg)       
         curframe = None    
         curframe = inspect.currentframe(traceback)
@@ -343,6 +444,9 @@ class EutesterTestCase():
         
         type a: integer
         param a:number of blank lines to print after msg
+        
+        type testcolor: TestColor color
+        param testcolor: Optional TestColor ascii color scheme
         '''
         alines = ""
         blines = ""
@@ -356,26 +460,24 @@ class EutesterTestCase():
         
     def startmsg(self,msg=""):
         msg = "- STARTING - " + msg
-        self.status(msg, traceback=3,testcolor=TestColor.whiteonblue)
+        self.status(msg, traceback=3,testcolor=TestColor.get_canned_color('whiteonblue'))
         
     def endsuccess(self,msg=""):
         msg = "- SUCCESS ENDED - " + msg
-        self.status(msg, traceback=3,testcolor=TestColor.whiteonblue)
-        self.debug("\n\n")
+        self.status(msg, traceback=2,a=3, testcolor=TestColor.get_canned_color('whiteonblue'))
       
     def endfailure(self,msg=""):
         msg = "- FAILED - " + msg
-        self.status(msg, traceback=3,testcolor=TestColor.failred)
-        self.debug("\n\n")  
+        self.status(msg, traceback=2,a=3,testcolor=TestColor.get_canned_color('failred'))
     
     def resultdefault(self,msg):
-        self.debug(msg,traceback=2,color=TestColor.blueongrey)
+        self.debug(msg,traceback=2,color=TestColor.get_canned_color('blueongrey'))
     
     def resultfail(self,msg):
-        self.debug(msg,traceback=2, color=TestColor.redongrey)
+        self.debug(msg,traceback=2, color=TestColor.get_canned_color('redongrey'))
         
     def resulterr(self,msg):
-        self.debug(msg,traceback=2, color=TestColor.failred)
+        self.debug(msg,traceback=2, color=TestColor.get_canned_color('failred'))
     
     def get_pretty_args(self,testunit):
         buf = "End on Failure :" +str(testunit.eof)
