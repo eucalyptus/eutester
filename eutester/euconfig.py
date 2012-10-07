@@ -159,7 +159,7 @@ class EuConfig():
                     buf=buf+line
                     start=True
             else:
-                if re.match("^\s+#",line) or re.match("^\s+$",line):
+                if re.match("^\s+#",line) or re.match("^\s+$",line) or not re.search("=",line):
                     self.debug("Ignoring line for config buf:"+str(line))
                     continue
                 else:
