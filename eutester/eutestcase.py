@@ -291,6 +291,7 @@ class EutesterTestCase():
                    config=True,
                    configblocks=True,
                    ignoreblocks=True,
+                   color=True,
                    testlist=True):
         '''
         Description: Convenience method to setup argparse parser and some canned default arguments, based
@@ -329,6 +330,9 @@ class EutesterTestCase():
  
         :type testlist: string list
         :param testlist: Flag to provide the testlist command line argument/option for providing a list of testnames to run
+        
+        :type nocolor: flag
+        :param nocolor: Flag to disable use of ascci color codes in debug output. 
         '''
         
         testname = testname or self.name 
@@ -357,10 +361,19 @@ class EutesterTestCase():
                                 help="Config blocks to ignore, ie:'globals', 'my_scripts_name', etc..", default=[])
         if testlist:
             parser.add_argument('--tests', nargs='+', 
-                                help="test cases to be executed", default= ['run_test_suite'])   
+                                help="test cases to be executed", default= ['run_test_suite'])  
+        if color: 
+            parser.add_argument('--nocolor', dest='nocolor', action='store_true', default=False)
         self.parser = parser  
         return parser
     
+    def disable_color(self):
+        self.no_color = True
+    
+    def enable_color(self):
+        self.no_color = False
+        
+        
     def setup_debugmethod(self,name=None):
         try:
             self.debugmethod = self.tester.debug
@@ -383,14 +396,20 @@ class EutesterTestCase():
         param color: Optional ascii text color scheme. See TestColor for more info. 
         '''
         try:
-            if not hasatter(self, debugmethod) or not self.debugmethod:
+            if not hasatter(self, 'debugmethod') or not self.debugmethod:
                 self.setup_debugmethod()
         except:
             self.setup_debugmethod()
+        
+        try: 
+            self.nocolor = self.args.nocolor
+        except: 
+            self.nocolor = False
             
         colorprefix=""
         colorreset=""
-        if color:
+        print "no color:"+str(self.nocolor)
+        if color and not self.nocolor:
             colorprefix = TestColor.get_canned_color(color) or color
             colorreset = str(TestColor.get_canned_color('reset'))
         msg = str(msg)       
@@ -651,7 +670,7 @@ class EutesterTestCase():
         confblocks=['globals']
         if self.name:
             confblocks.append(self.name)
-        if not self.parser:
+        if not hasattr(self,'parser') or not self.parser:
             self.setup_parser()
         #first get command line args to see if there's a config file
         args = self.parser.parse_args()
@@ -690,8 +709,9 @@ class EutesterTestCase():
             args = cf
         #Legacy script support: level set var names for config_file vs configfile vs config and credpath vs cred_path
         try:
-            args.config_file = args.config
-            args.configfile = args.config
+            if 'config' in args:
+                args.config_file = args.config
+                args.configfile = args.config
         except: pass
         try:
             args.cred_path = args.credpath
