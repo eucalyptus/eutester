@@ -732,7 +732,7 @@ class EutesterTestCase(unittest.TestCase):
         return args
         
     def show_args(self,args=None):
-        args= args or self.args
+        args= args or self.args if hasattr(self,'args') else None
         argbuf = str("TEST ARGS:").ljust(25)+"        "+str("VALUE:")
         argbuf += str("\n----------").ljust(25)+"        "+str("------")
         if args:
