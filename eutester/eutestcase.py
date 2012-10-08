@@ -728,13 +728,18 @@ class EutesterTestCase(unittest.TestCase):
             args.cred_path = args.credpath
         except: pass
         self.args = args
-        argbuf = str("TEST ARGS:").ljust(25)+"        "+str("VALUE:")
-        argbuf += str("\n----------").ljust(25)+"        "+str("------")
-        for val in args._get_kwargs():
-            argbuf += '\n'+str(val[0]).ljust(25)+" --->:  "+str(val[1])
-        self.status(argbuf)
+        self.show_args(args)
         return args
         
+    def show_args(self,args=None):
+        args= args or self.args
+        argbuf = str("TEST ARGS:").ljust(25)+"        "+str("VALUE:")
+        argbuf += str("\n----------").ljust(25)+"        "+str("------")
+        if args:
+            for val in args._get_kwargs():
+                argbuf += '\n'+str(val[0]).ljust(25)+" --->:  "+str(val[1])
+            self.status(argbuf)
+            
     
     def run_with_args(self, meth, *args, **kwargs):
         '''
