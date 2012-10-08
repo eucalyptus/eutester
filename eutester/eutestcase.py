@@ -361,7 +361,7 @@ class EutesterTestCase():
                                 help="Config blocks to ignore, ie:'globals', 'my_scripts_name', etc..", default=[])
         if testlist:
             parser.add_argument('--tests', nargs='+', 
-                                help="test cases to be executed", default= ['run_test_suite'])  
+                                help="test cases to be executed", default = [])  
         if color: 
             parser.add_argument('--nocolor', dest='nocolor', action='store_true', default=False)
         self.parser = parser  
@@ -583,13 +583,13 @@ class EutesterTestCase():
             pmethod(str("TEST:"+str(testcase.name)).ljust(50)+str(" RESULT:"+testcase.result).ljust(10)+str(' Time:'+str(testcase.time_to_run)).ljust(0))
             if testcase.result == EutesterTestResult.failed:
                 printerr('Error:'+str(testcase.error))
-    
+    '''
     #@classmethod
     def get_parser(self):
-        '''
+        """
         Description: Convenience method used to create set of default argparse arguments
         Soon to be replaced by setup_parser()
-        '''
+        """
         parser = argparse.ArgumentParser(prog="testcase.py",
                                      description="Test Case Default Option Parser")
         parser.add_argument('--emi', 
@@ -604,7 +604,7 @@ class EutesterTestCase():
                             help="test cases to be executed", 
                             default= ['run_test_suite'])
         return parser
-    
+    '''
     
     def run_method_by_name(self,name, obj=None,*args, **kwargs):
         '''
@@ -667,7 +667,7 @@ class EutesterTestCase():
         :rtype: arparse.namespace obj
         :returns: namespace object with values from cli and config file arguements 
         '''
-        confblocks=['globals']
+        confblocks = sections or ['MEMO','globals']
         if self.name:
             confblocks.append(self.name)
         if not hasattr(self,'parser') or not self.parser:
@@ -687,9 +687,8 @@ class EutesterTestCase():
                         confblocks.remove(block)
             #build out a namespace object from the config file first
             cf = argparse.Namespace()
-            conf = EuConfig(filename=args.config)
+            conf = self.config = EuConfig(filename=args.config)
             #store blocks for debug purposes
-            
             cf.__setattr__('configsections',copy.copy(confblocks))
             #If globals are still in our confblocks, add globals first if the section is present in config
             if 'globals' in confblocks:
@@ -727,7 +726,7 @@ class EutesterTestCase():
     
     def run_with_args(self, meth, *args, **kwargs):
         '''
-        Description: Convenience method used to wrap the provided method 'meth' and populate meth's positional 
+        Description: Convenience method used to wrap the provided instance_method, function, or object type 'meth' and populate meth's positional 
         and keyword arguments with the local testcase.args created from the CLI and/or config file, as well as
         the *args and **kwargs variable length arguments passed into this method. 
         

@@ -152,6 +152,8 @@ class EuConfig():
         if lines is None:
             lines = self.lines
         for line in lines:
+            if re.match("^MEMO\s+", line):
+                line = '['+str(line).strip()+']\n'
             #read file until first section  header
             if not start:
                 if re.match("^\[", line):
