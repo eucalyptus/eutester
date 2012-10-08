@@ -270,7 +270,7 @@ class EutesterTestUnit():
             self.time_to_run = int(time.time()-start)
         
                 
-class EutesterTestCase():
+class EutesterTestCase(unittest.TestCase):
     color = TestColor()
 
     def __init__(self,name=None, debugmethod=None):
@@ -553,6 +553,18 @@ class EutesterTestCase():
             except: pass
             
         return exitcode
+    
+    def has_arg(self,arg):
+        arg = str(arg)
+        if hasattr(self,'args'):
+            if arg in self.args:
+                return True
+        return False
+         
+    def get_arg(self,arg):
+        if self.has_arg(arg):
+            return getattr(self.args,str(arg))
+        return None
     
     def clean_method(self):
         self.debug("Implement this method")
