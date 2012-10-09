@@ -703,8 +703,7 @@ class EutesterTestCase(unittest.TestCase):
         cf = argparse.Namespace()
         
         
-        if self.use_default_file:
-            if not self.default_config:
+        if self.use_default_file and self.default_config:
                 configfiles.append(EuConfig(filename=self.default_config))
             
                 
@@ -806,6 +805,8 @@ class EutesterTestCase(unittest.TestCase):
         list.append(('TEST LIST:', str(self.testlist)))
         list.append(('CONFIG FILES:', self.configfiles))
         argbuf=""
+        argbuf = str("TESTCASE INFO:").ljust(25)        
+        argbuf += str("\n----------").ljust(25)
         for val in list:
             argbuf += '\n'+str(val[0]).ljust(25)+" --->:  "+str(val[1])
         self.status(argbuf)

@@ -1020,7 +1020,7 @@ class EC2ops(Eutester):
         return ilist
     
     
-    def get_connectable_euinstances(self,path=None,connect=True):
+    def get_connectable_euinstances(self,path=None,username='root', password=None, connect=True):
         """
         convenience method returns a list of all running instances, for the current creduser
         for which there are local keys at 'path'
@@ -1036,7 +1036,9 @@ class EC2ops(Eutester):
                         for instance in instances:
                             if not connect:
                                 keypair=None
-                            euinstances.append(EuInstance.make_euinstance_from_instance( instance, self, keypair=keypair))
+                                euinstance.append(instance)
+                            else:
+                                euinstances.append(EuInstance.make_euinstance_from_instance( instance, self, username=username,password=password,keypair=keypair))
                       
             return euinstances
         except Exception, e:

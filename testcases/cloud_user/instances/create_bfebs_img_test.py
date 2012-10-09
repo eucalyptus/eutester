@@ -10,6 +10,7 @@
 #
 
 from eucaops import Eucaops
+from eutester.euinstance import EuInstance
 from optparse import OptionParser
 import os, re
 import time
@@ -173,7 +174,7 @@ if __name__ == '__main__':
                     pmsg('looking for instances using keypair:'+keypair.name)
                     instances = tester.get_instances(state='running',key=keypair.name)
                     if instances != []:
-                        instance = instances[0]
+                        instance = EuInstance(instances[0])
                         pmsg('Found usable instance:'+instance.id+'using key:'+keypair.name)
                         break
         except Exception, e:
