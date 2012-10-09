@@ -273,14 +273,28 @@ class EutesterTestUnit():
 class EutesterTestCase(unittest.TestCase):
     color = TestColor()
 
-    def __init__(self,name=None, debugmethod=None):
-        return self.setupself(name=name, debugmethod=debugmethod)
+    def __init__(self,name=None, debugmethod=None, use_default_file=True, default_config='eutester.conf'):
+        return self.setupself(name=name, debugmethod=debugmethod, use_default_file=use_default_file, default_config=default_config)
         
-    def setupself(self, name=None, debugmethod=None):
+    def setupself(self, name=None, debugmethod=None, use_default_file=True, default_config='eutester.conf' ):
         self.name = name 
         if not self.name:
                 callerfilename=inspect.getouterframes(inspect.currentframe())[1][1]
                 self.name = os.path.splitext(os.path.basename(callerfilename))[0]  
+                self.debugmethod = debugmethod
+                if not self.debugmethod:
+                    self.setup_debugmethod(name)
+                self.testlist = []
+                self.default_config = default_config 
+                self.configfiles=[]
+                self.use_default_file = use_default_file
+                if use_default_file:
+                    #first add $USERHOME/.eutester/eutester.conf if it exists
+                    self.default_config=self.get_default_userhome_config(fname=default_config)
+                    if self.default_config:
+                        self.configfiles.append(self.default_config)
+                self.show_self()
+               
                                    
     def setup_parser(self,
                    testname=None, 
@@ -331,8 +345,8 @@ class EutesterTestCase(unittest.TestCase):
         :type testlist: string list
         :param testlist: Flag to provide the testlist command line argument/option for providing a list of testnames to run
         
-        :type nocolor: flag
-        :param nocolor: Flag to disable use of ascci color codes in debug output. 
+        :type use_color: flag
+        :param use_color: Flag to enable/disable use of ascci color codes in debug output. 
         '''
         
         testname = testname or self.name 
@@ -363,22 +377,20 @@ class EutesterTestCase(unittest.TestCase):
             parser.add_argument('--tests', nargs='+', 
                                 help="test cases to be executed", default = [])  
         if color: 
-            parser.add_argument('--nocolor', dest='nocolor', action='store_true', default=False)
+            parser.add_argument('--_use_color', dest='use_color', action='store_true', default=False)
         self.parser = parser  
         return parser
     
     def disable_color(self):
-        self.no_color = True
+        self.use_color = False
     
     def enable_color(self):
-        self.no_color = False
+        self.use_color = True
         
         
     def setup_debugmethod(self,name=None):
-        try:
-            self.debugmethod = self.tester.debug
-        except:
-            name = name or self.__class__.__name__
+            name = name or self.name or self.__class__.__name__
+            print "Setting up debug method using name:"+str(name)
             logger = Eulogger(identifier=str(name))
             self.debugmethod = logger.log.debug
 
@@ -396,20 +408,20 @@ class EutesterTestCase(unittest.TestCase):
         param color: Optional ascii text color scheme. See TestColor for more info. 
         '''
         try:
-            if not hasatter(self, 'debugmethod') or not self.debugmethod:
+            if not self.debugmethod:
                 self.setup_debugmethod()
         except:
             self.setup_debugmethod()
         
         try: 
-            self.nocolor = self.args.nocolor
+            self.use_color = self.args.use_color
         except: 
-            self.nocolor = False
+            self.use_color = False
             
         colorprefix=""
         colorreset=""
-        print "no color:"+str(self.nocolor)
-        if color and not self.nocolor:
+        #if a color was provide
+        if color and self.use_color:
             colorprefix = TestColor.get_canned_color(color) or color
             colorreset = str(TestColor.get_canned_color('reset'))
         msg = str(msg)       
@@ -666,12 +678,18 @@ class EutesterTestCase(unittest.TestCase):
         return testunit
 
         
-    def get_args(self,sections=[]):
+    def get_args(self,use_cli=True, file_sections=[]):
         '''
         Description: Method will attempt to retrieve all command line arguments presented through local 
         testcase's 'argparse' methods, as well as retrieve all EuConfig file arguments. All arguments 
         will be combined into a single namespace object held locally at 'testcase.args'. Note: cli arg 'config'
         must be provided for config file valus to be store in self.args. 
+        
+        :type use_cli: boolean
+        :param use_cli: Boolean to indicate whether or not to create and read from a cli argparsing object
+        
+        :type use_default_file: boolean
+        :param use_default_files: Boolean to indicate whether or not to read default config file at $HOME/.eutester/eutester.conf (not indicated by cli)
         
         :type sections: list
         :param sections: list of EuConfig sections to read configuration values from, and store in self.args.
@@ -679,42 +697,80 @@ class EutesterTestCase(unittest.TestCase):
         :rtype: arparse.namespace obj
         :returns: namespace object with values from cli and config file arguements 
         '''
-        confblocks = sections or ['MEMO','globals']
+        configfiles=[]
+        args=None
+        #build out a namespace object from the config file first
+        cf = argparse.Namespace()
+        
+        
+        if self.use_default_file:
+            if not self.default_config:
+                configfiles.append(EuConfig(filename=self.default_config))
+            
+                
+        #Setup/define the config file block/sections we intend to read from
+        confblocks = file_sections or ['MEMO','globals']
         if self.name:
             confblocks.append(self.name)
-        if not hasattr(self,'parser') or not self.parser:
-            self.setup_parser()
-        #first get command line args to see if there's a config file
-        args = self.parser.parse_args()
-        #if a config file was passed, combine the config file and command line args into a single namespace object
-        if args and ('config' in args.__dict__) and  args.config:
+        
+        if use_cli:
+            #See if we have CLI args to read
+            if not hasattr(self,'parser') or not self.parser:
+                self.setup_parser()
+            #first get command line args to see if there's a config file
+            cliargs = self.parser.parse_args()
             
+        #if a config file was passed, combine the config file and command line args into a single namespace object
+        if cliargs:
             #Check to see if there's explicit config sections to read
-            if 'configblocks' in args.__dict__:
-                confblocks = confblocks +args.configblocks
+            if 'configblocks' in cliargs.__dict__:
+                confblocks = confblocks +cliargs.configblocks
             #Check to see if there's explicit config sections to ignore
-            if 'ignoreblocks' in args.__dict__:
-                for block in args.ignoreblocks:
+            if 'ignoreblocks' in cliargs.__dict__:
+                for block in cliargs.ignoreblocks:
                     if block in confblocks:
                         confblocks.remove(block)
-            #build out a namespace object from the config file first
-            cf = argparse.Namespace()
-            conf = self.config = EuConfig(filename=args.config)
-            #store blocks for debug purposes
-            cf.__setattr__('configsections',copy.copy(confblocks))
+            
+            #if a file or list of config files is specified add it to our list...
+            if ('config' in cliargs.__dict__) and  cliargs.config:
+                for cfile in str(cliargs.config).split(','):
+                    if not cfile in configfiles:
+                        configfiles.append(cfile)
+            
+        #store config block list for debug purposes
+        cf.__setattr__('configsections',copy.copy(confblocks))
+        
+        #create euconfig configparser objects from each file. 
+        euconfigs = []
+        self.configfiles = configfiles
+        for configfile in configfiles:
+            euconfigs.append(EuConfig(filename=configfile))
+        
+        for conf in euconfigs:
+            cblocks = copy.copy(confblocks)
+            #if MEMO field in our config block add it first if
+            if 'MEMO' in cblocks:
+                if conf.config.has_section('MEMO'):
+                    for item in conf.config.items('MEMO'):
+                        cf.__setattr__(str(item[0]), item[1])
+                    cblocks.remove('MEMO')
+            
             #If globals are still in our confblocks, add globals first if the section is present in config
-            if 'globals' in confblocks:
+            if 'globals' in cblocks:
                 if conf.config.has_section('globals'):
                     for item in conf.config.items('globals'):
                         cf.__setattr__(str(item[0]), item[1])
-                    confblocks.remove('globals')
+                    cblocks.remove('globals')
+            
             #No iterate through remaining config block in file and add to args...
             for section in confblocks:
                 if conf.config.has_section(section):
                     for item in conf.config.items(section):
                         cf.__setattr__(str(item[0]), item[1])
+                        
+        if cliargs:
             #Now make sure any conflicting args provided on the command line take precedence over config file args
-            for val in args._get_kwargs():
+            for val in cliargs._get_kwargs():
                 if (not val[0] in cf ) or (val[1] is not None):
                     cf.__setattr__(str(val[0]), val[1])
             args = cf
@@ -728,8 +784,36 @@ class EutesterTestCase(unittest.TestCase):
             args.cred_path = args.credpath
         except: pass
         self.args = args
-        self.show_args(args)
+        self.show_self()
         return args
+    
+        
+    
+    def get_default_userhome_config(self,fname='eutester.conf'):
+        try:
+            def_path = os.getenv('HOME')+'/.eutester/'+str(fname)
+        except: return None
+        try:
+            os.stat(def_path)
+            return def_path
+        except:
+            self.debug("Default config not found:"+str(def_path))
+            return None
+    
+    def show_self(self):
+        list=[]
+        list.append(("NAME:", str(self.name)))
+        list.append(('TEST LIST:', str(self.testlist)))
+        list.append(('CONFIG FILES:', self.configfiles))
+        argbuf=""
+        for val in list:
+            argbuf += '\n'+str(val[0]).ljust(25)+" --->:  "+str(val[1])
+        self.status(argbuf)
+        self.show_args()
+        
+        
+        
+        
         
     def show_args(self,args=None):
         args= args or self.args if hasattr(self,'args') else None
@@ -739,6 +823,7 @@ class EutesterTestCase(unittest.TestCase):
             for val in args._get_kwargs():
                 argbuf += '\n'+str(val[0]).ljust(25)+" --->:  "+str(val[1])
             self.status(argbuf)
+        
             
     
     def run_with_args(self, meth, *args, **kwargs):
@@ -758,6 +843,8 @@ class EutesterTestCase(unittest.TestCase):
         :param kwargs: None or more values reprsenting keyword arguments to be passed to 'meth' when executed. These will
                      take precedence over local testcase obj namespace args and positional args
         '''
+        if not hasattr(self,'args'):
+            raise Exception('TestCase object does not have args yet, see: get_args and setup_parser options')
         tc_args = self.args
         cmdargs={}
         vars = []
