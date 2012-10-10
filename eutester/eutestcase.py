@@ -970,6 +970,7 @@ class EutesterTestCase(unittest.TestCase):
         fcode = self.get_method_fcode(meth)
         return fcode.co_varnames
         
+
         
             
     
