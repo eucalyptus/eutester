@@ -900,7 +900,7 @@ class EutesterTestCase(unittest.TestCase):
        
         
     
-    def run_with_args(self, meth, *args, **kwargs):
+    def do_with_args(self, meth, *args, **kwargs):
         '''
         Description: Convenience method used to wrap the provided instance_method, function, or object type 'meth' and populate meth's positional 
         and keyword arguments with the local testcase.args created from the CLI and/or config file, as well as

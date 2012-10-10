@@ -30,7 +30,7 @@ if (not args.url and not args.image_file) or (args.url and args.image_file):
 if args.workip:
     machine = Machine(hostname=args.workip,password=args.password)
 
-WinTests = testcase.run_with_args(WindowsTests,work_component=machine)
+WinTests = testcase.do_with_args(WindowsTests,work_component=machine)
 
 test = EutesterTestUnit(WinTests.create_windows_emi_from_url, url = args.url,wget_user = args.urluser, wget_password = args.urlpass)
 

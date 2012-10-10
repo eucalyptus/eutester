@@ -699,7 +699,7 @@ if __name__ == "__main__":
         parser.print_help()
         exit(1)
     #ebssuite = EbsTestSuite(zone=args.zone, config_file= args.config, password=args.password,credpath=args.credpath, keypair=args.keypair, group=args.group, image=args.emi)
-    ebssuite = tc.run_with_args(EbsTestSuite)
+    ebssuite = tc.do_with_args(EbsTestSuite)
     kbtime=time.time()
     try:
        list = ebssuite.run_ebs_basic_test_suite(run=False)
