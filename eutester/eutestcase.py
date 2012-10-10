@@ -738,8 +738,11 @@ class EutesterTestCase(unittest.TestCase):
         
         
         if self.use_default_file and self.default_config:
+            try:
                 configfiles.append(EuConfig(filename=self.default_config))
-            
+            except Exception, e:
+                self.debug("Unable to read config from file: " + str(e))
+
         #Setup/define the config file block/sections we intend to read from
         confblocks = file_sections or ['MEMO','globals']
         if self.name:
@@ -775,9 +778,12 @@ class EutesterTestCase(unittest.TestCase):
         #create euconfig configparser objects from each file. 
         euconfigs = []
         self.configfiles = configfiles
-        for configfile in configfiles:
-            euconfigs.append(EuConfig(filename=configfile))
-        
+        try:
+            for configfile in configfiles:
+                euconfigs.append(EuConfig(filename=configfile))
+        except Exception, e:
+            self.debug("Unable to read config from file: " + str(e))
+
         for conf in euconfigs:
             cblocks = copy.copy(confblocks)
             #if MEMO field in our config block add it first if to set least precedence
@@ -886,7 +892,7 @@ class EutesterTestCase(unittest.TestCase):
             for var in vars:
                 if var == val[0]:
                     #Don't overwrite existing testunit args/kwargs that have already been assigned
-                    if val[0] in mkwargs:
+                    if val[0] in kwargs:
                             break
                     #Append cmdargs list to testunits kwargs 
                     testunit.kwargs[var]=val[1]
@@ -915,7 +921,8 @@ class EutesterTestCase(unittest.TestCase):
             raise Exception('TestCase object does not have args yet, see: get_args and setup_parser options')
         tc_args = self.args
         cmdargs={}
-        vars = self.get_method_varnames(meth)
+        f_code = self.get_method_fcode(meth)
+        vars = self.get_meth_varnames(meth)
         
         #first populate matching method args with our global testcase args...
         for val in tc_args._get_kwargs():
