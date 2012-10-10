@@ -90,7 +90,7 @@ class EbsTestSuite(EutesterTestCase):
                  volumes=None, 
                  keypair=None, 
                  group=None, 
-                 image=None, 
+                 emi=None, 
                  vmtype=None,
                  eof=1):
         
@@ -102,7 +102,7 @@ class EbsTestSuite(EutesterTestCase):
     
         self.testlist =[]
         
-        self.image = image
+        self.image = emi
         self.vmtype = vmtype
         self.zone = None    
         self.zonelist = []
@@ -265,18 +265,23 @@ class EbsTestSuite(EutesterTestCase):
     
     def attach_all_avail_vols_to_instances_in_zones(self, zonelist=None, timeout=360):
         testmsg =   """
-                    Iterates though zones and attempts to attach volumes to instances within each zone.  
+                    Iterates though zones and attempts to attach volumes to an instance within each zone.  
                     """
         testmsg = testmsg+"\nVariables provided:\nzonelist"+str(zonelist)+"\ntimeout:"+str(timeout)
         self.startmsg(testmsg)
         if zonelist is None:
             zonelist = self.zonelist
-        instance = euinstance.EuInstance()
+        if not zonelist:
+             raise Exception("attach_all_avail_vols_to_instances_in_zones: Zonelist is empty")
         for zone in zonelist:
+            if not zone.volumes:
+                raise Exception('attach_all_avail_vols_to_instances_in_zones: Zone.volumes is empty')
+            if not zone.instances:
+                raise Exception('attach_all_avail_vols_to_instances_in_zones: Instance list is empty')
+            instance in zone.instances[0]
             for volume in zone.volumes:
                 volume.update()
                 if (volume.status == "available"):
-                    for instance in zone.instances:
                         try:
                             instance.attach_euvolume(volume,timeout=timeout)
                         except Exception, e:
@@ -374,6 +379,23 @@ class EbsTestSuite(EutesterTestCase):
                             raise e
         self.endsuccess()
         
+    def detach_all_volumes_from_stopped_instances_in_zones(self,zonelist=None, timeout=360):
+        testmsg="""
+                Attempts to detach volumes from instances while in the stopped state and
+                verify volumes are detached, and upon instance start verify that both guest
+                and cloud states are correct.
+                """
+        self.startmsg(testmsg)
+        for zone in zonelist:
+            instance = euinstance.EuInstance()
+            for instance in zone.instances:
+                if not instance.attached_vols:
+                    raise Exception('detach_all_volumes_from_stopped_instances_in_zones: No attached volumes for:'+str(instance.id))
+                instance.stop_instance_and_verify()
+                for vol in instance.attached_vols:
+                    instance.detach_euvolume(vol, waitfordev=False)
+                instance.start_instance_and_verify(checkvolstatus=True)
+        self.endsuccess()
     
     def delete_volumes_in_zones(self, zonelist=None, timeout=60):
         self.startmsg()
@@ -463,15 +485,20 @@ class EbsTestSuite(EutesterTestCase):
                     """
         testmsg = testmsg + "\nVariables provided:\nzonelist:"+str(zonelist)+"\ntimeout:"+str(timeout)+"\ntimepergig:"+str(timepergig)
         self.startmsg(testmsg)
-        instance = euinstance.EuInstance()
         if zonelist is None:
             zonelist = self.zonelist
+        if not zonelist:
+             raise Exception("attach_new_vols_from_snap_verify_md5: Zonelist is empty")
         for zone in zonelist:
             self.debug("checking zone:"+zone.name)
             #use a single instance per zone for this test
             instance = zone.instances[0]
+            if not self.snaps:
+                raise Exception('attach_new_vols_from_snap_verify_md5: self.snaps is None')
             for snap in self.snaps:
                 self.debug("Checking volumes associated with snap:"+snap.id)
+                if not snap.new_vol_list:
+                    raise Exception('attach_new_vols_from_snap_verify_md5: snap '+str(snap.id)+" new_vol_list is None")
                 for vol in snap.new_vol_list:
                     self.debug("Checking volume:"+vol.id+" status:"+vol.status)
                     if (vol.zone == zone.name) and (vol.status == "available"):
@@ -512,10 +539,8 @@ class EbsTestSuite(EutesterTestCase):
     ''' 
                 
         
-    def run_ebs_basic_test_suite(self):  
-        self.testlist = [] 
-        testlist = self.testlist
-        
+    def run_ebs_basic_test_suite(self, run=True):  
+        testlist = [] 
         #create first round of volumes
         testlist.append(self.create_testcase_from_method(self.create_vols_per_zone))
         #launch instances to interact with ebs volumes
@@ -545,7 +570,11 @@ class EbsTestSuite(EutesterTestCase):
             testlist.append(self.create_testcase_from_method(self.create_vols_from_snap_in_different_zone))
             #verify the integrity of the new volumes by attaching to instance and checking md5 against original
             testlist.append(self.create_testcase_from_method(self.attach_new_vols_from_snap_verify_md5))
-        self.run_test_case_list(testlist)
+        testlist.append(self.create_testcase_from_method(self.detach_all_volumes_from_stopped_instances_in_zones))
+        if run:
+            self.run_test_case_list(testlist)
+        else:
+            return testlist
         
                 
     
@@ -619,27 +648,40 @@ class EbsTestSuite(EutesterTestCase):
 if __name__ == "__main__":
     ## If given command line arguments, use them as test names to launch
 
+    tc = EutesterTestCase()
+
+    tc.setup_parser(testname='ebstestsuite.py', description='collection of ebs related tests', testlist=False)
+
+    '''
     ## If given command line arguments, use them as test names to launch
     parser = argparse.ArgumentParser(prog="ebs_basic_test.py",
                                      version="Test Case [ebs_basic_test.py] Version 0.1",
                                      description="Attempts to tests and provide info on focused areas related to\
                                      Eucalyptus EBS related functionality.",
                                      usage="%(prog)s --credpath=<path to creds> [--xml] [--tests=test1,..testN]")
+    '''
     
-    
-    
+    """
     parser.add_argument('--emi', 
                         help="pre-installed emi id which to execute these tests against", default=None)
     parser.add_argument('--credpath', 
                         help="path to credentials", default=None)
-    parser.add_argument('--zone', 
+    """
+    tc.parser.add_argument('--zone', 
                         help="zone to use in this test, defaults to testing all zones", default=None)
+    '''
     parser.add_argument('--password', 
                         help="password to use for machine root ssh access", default='foobar')
-    parser.add_argument('--keypair', 
+    '''
+    tc.parser.add_argument('--keypair', 
                         help="keypair to use when launching instances within the test", default=None)
-    parser.add_argument('--group', 
+    
+    tc.parser.add_argument('--group', 
                         help="group to use when launching instances within the test", default=None) 
+    
+    tc.parser.add_argument('--type',dest='vmtype',
+                           help='vmtype to use when launching instances within the test', default='c1.medium')
+    '''
     parser.add_argument('--config',
                        help='path to config file', default='../input/2btested.lst') 
     parser.add_argument('--xml', 
@@ -648,17 +690,20 @@ if __name__ == "__main__":
     parser.add_argument('--tests', nargs='+', 
                         help="test cases to be executed", 
                         default= ['run_test_suite'])
+    '''
     
-    args = parser.parse_args()
+    args = tc.get_args()
     #if file was not provided or is not found
     if not os.path.exists(args.config):
         print "Error: Mandatory Config File '"+str(args.config)+"' not found."
         parser.print_help()
         exit(1)
-    ebssuite = EbsTestSuite(zone=args.zone, config_file= args.config, password=args.password,credpath=args.credpath, keypair=args.keypair, group=args.group, image=args.emi)
+    #ebssuite = EbsTestSuite(zone=args.zone, config_file= args.config, password=args.password,credpath=args.credpath, keypair=args.keypair, group=args.group, image=args.emi)
+    ebssuite = tc.run_with_args(EbsTestSuite)
     kbtime=time.time()
     try:
-       ebssuite.run_ebs_basic_test_suite()
+       list = ebssuite.run_ebs_basic_test_suite(run=False)
+       tc.run_test_case_list(list)
     except KeyboardInterrupt:
         ebssuite.debug("Caught keyboard interrupt...")
         if ((time.time()-kbtime) < 2):
@@ -667,7 +712,7 @@ if __name__ == "__main__":
             ebssuite.clean_created_resources()
             raise
         else:          
-            ebssuite.print_test_list_results()
+            tc.print_test_list_results(list)
             kbtime=time.time()
             pass     
     except Exception, e:
