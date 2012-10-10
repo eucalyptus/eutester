@@ -294,6 +294,7 @@ class EutesterTestCase(unittest.TestCase):
                     self.default_config=self.get_default_userhome_config(fname=default_config)
                     if self.default_config:
                         self.configfiles.append(self.default_config)
+                self.args=argparse.Namespace()
                 self.show_self()
                
                                    
@@ -870,7 +871,7 @@ class EutesterTestCase(unittest.TestCase):
         tc_args = namespace or self.args
         pargs = testunit.args
     
-        kwargs =  self.get_meth_kwarg_names(meth)
+        kwargs =  self.get_meth_kwarg_names(testunit.method)
         margs = self.get_meth_arg_names(testunit.method)
         #Add the var names of the positional args provided in testunit.args to check against later
         #Append to the known keyword arg list
@@ -887,9 +888,10 @@ class EutesterTestCase(unittest.TestCase):
                     #Don't overwrite existing testunit args/kwargs that have already been assigned
                     if val[0] in mkwargs:
                             break
-                    cmdargs[var]=val[1]
-        #Append cmdargs list to testunits kwargs 
-        testunit.kwargs += cmdargs
+                    #Append cmdargs list to testunits kwargs 
+                    testunit.kwargs[var]=val[1]
+       
+       
         
     
     def run_with_args(self, meth, *args, **kwargs):
