@@ -536,7 +536,7 @@ class EC2ops(Eutester):
             else: 
                 poll_count -= 1
             elapsed = int(time.time()-snap_start)
-            self.debug("Snapshot:"+snapshot.id+" Status:"+snapshot.status+" Progress:"+snapshot.progress+"Total Polls:"+str(polls)+" Polls remaining:"+str(poll_count)+" Time Elapsed:"+str(elapsed))    
+            self.debug("Snapshot:"+snapshot.id+" Status:"+snapshot.status+" Progress:"+snapshot.progress+" Total Polls:"+str(polls)+" Polls remaining:"+str(poll_count)+" Time Elapsed:"+str(elapsed))    
             if snapshot.status == 'completed':
                 self.debug("Snapshot created after " + str(elapsed) + " seconds. " + str(polls) + " X ("+str(poll_interval)+" second) polling invervals. Status:"+snapshot.status+", Progress:"+snapshot.progress)
                 self.test_resources["snapshots"].append(snapshot)
