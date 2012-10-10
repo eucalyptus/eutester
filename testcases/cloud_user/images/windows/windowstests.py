@@ -38,7 +38,7 @@ from eutester import machine
 import eutester.machine 
 from testcases.cloud_user.images.imageutils import ImageUtils
 from testcases.cloud_user.ebs.ebstestsuite import TestZone
-from testcaess.cloud_user.images.windows import windowsproxytests
+from testcases.cloud_user.images.windows import windowsproxytests
 from eutester.euvolume import EuVolume
 import socket
 import os
