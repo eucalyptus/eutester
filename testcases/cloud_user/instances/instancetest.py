@@ -4,141 +4,6 @@
 # Description:  This script encompasses test cases/modules concerning instance specific behavior and
 #               features for Eucalyptus.  The test cases/modules that are executed can be 
 #               found in the script under the "tests" list.
-#
-#
-##########################
-#                        #
-#       Test Cases       #
-#                        #
-##########################
-#
-# [create_attach_volume]
-#
-#               This case was developed to test the creation and attaching of volumes
-#               to an instance. If there is an issue with creating or attaching the
-#               volume, the test case errors out.  The results are logged.
-# 
-# [BasicInstanceChecks]
-#               
-#               This case was developed to run through a series of basic instance tests.
-#               The tests are as follows:
-#                   - execute run_instances command
-#                   - make sure that public DNS name and private IP aren't the same
-#                       (This is for Managed/Managed-NOVLAN networking modes)
-#                   - test to see if instance is ping-able
-#                   - test to make sure that instance is accessible via ssh
-#                       (ssh into instance and run basic ls command)
-#               If any of these tests fail, the test case will error out, logging the results.
-#
-# [ElasticIps]
-#
-#               This case was developed to test elastic IPs in Eucalyptus. This test case does
-#               not test instances that are launched using private-addressing option.
-#               The test case executes the following tests:
-#                   - allocates an IP, associates the IP to the instance, then pings the instance.
-#                   - disassociates the allocated IP, then pings the instance.
-#                   - releases the allocated IP address
-#               If any of the tests fail, the test case will error out, logging the results.
-#
-# [MaxSmallInstances]
-#
-#               This case was developed to test the maximum number of m1.small vm types a configured
-#               cloud can run.  The test runs the maximum number of m1.small vm types allowed, then
-#               tests to see if all the instances reached a running state.  If there is a failure,
-#               the test case errors out; logging the results.
-#
-# [LargestInstance]
-#
-#               This case was developed to test the maximum number of c1.xlarge vm types a configured
-#               cloud can run.  The test runs the maximum number of c1.xlarge vm types allowed, then
-#               tests to see if all the instances reached a running state.  If there is a failure,
-#               the test case errors out; logging the results.
-#
-# [MetaData]
-#
-#               This case was developed to test the metadata service of an instance for consistency.
-#               The following meta-data attributes are tested:
-#                   - public-keys/0/openssh-key
-#                   - security-groups
-#                   - instance-id
-#                   - local-ipv4
-#                   - public-ipv4
-#                   - ami-id
-#                   - ami-launch-index
-#                   - reservation-id
-#                   - placement/availability-zone
-#                   - kernel-id
-#                   - public-hostname
-#                   - local-hostname
-#                   - hostname
-#                   - ramdisk-id
-#                   - instance-type
-#                   - any bad metadata that shouldn't be present.
-#               If any of these tests fail, the test case will error out; logging the results.
-#
-# [DNSResolveCheck]
-#
-#               This case was developed to test DNS resolution information for public/private DNS
-#               names and IP addresses.  The tested DNS resolution behavior is expected to follow
-#               AWS EC2.  The following tests are ran using the associated meta-data attributes:
-#                   - check to see if Eucalyptus Dynamic DNS is configured
-#                   - nslookup on hostname; checks to see if it matches local-ipv4
-#                   - nslookup on local-hostname; check to see if it matches local-ipv4
-#                   - nslookup on local-ipv4; check to see if it matches local-hostname
-#                   - nslookup on public-hostname; check to see if it matches local-ipv4
-#                   - nslookup on public-ipv4; check to see if it matches public-host
-#               If any of these tests fail, the test case will error out; logging the results.
-#
-# [DNSCheck]
-#
-#               This case was developed to test to make sure Eucalyptus Dynamic DNS reports correct
-#               information for public/private IP address and DNS names passed to meta-data service.
-#               The following tests are ran using the associated meta-data attributes:
-#                   - check to see if Eucalyptus Dynamic DNS is configured
-#                   - check to see if local-ipv4 and local-hostname are not the same
-#                   - check to see if public-ipv4 and public-hostname are not the same
-#               If any of these tests fail, the test case will error out; logging the results.
-# [Reboot]
-#       
-#               This case was developed to test IP connectivity and volume attachment after
-#               instance reboot.  The following tests are done for this test case:
-#                   - creates a 1 gig EBS volume, then attach volume
-#                   - reboot instance
-#                   - attempts to connect to instance via ssh  
-#                   - checks to see if EBS volume is attached
-#                   - detaches volume
-#                   - deletes volume
-#               If any of these tests fail, the test case will error out; logging the results.
-#   
-# [Churn]
-#
-#               This case was developed to test robustness of Eucalyptus by starting instances,
-#               stopping them before they are running, and increase the time to terminate on each
-#               iteration.  This test case leverages the BasicInstanceChecks test case. The 
-#               following steps are ran:
-#                       - runs BasicInstanceChecks test case 5 times, 10 second apart.
-#                       - While each test is running, run and terminate instances with a 10sec sleep
-#                         in between.
-#                       - When a test finishes, rerun BasicInstanceChecks test case.
-#               If any of these tests fail, the test case will error out; logging the results.
-#
-# [PrivateIPAddressing]
-#
-#               This case was developed to test instances that are launched with private-addressing
-#               set to True.  The tests executed are as follows:
-#                   - run an instance with private-addressing set to True
-#                   - allocate/associate/disassociate/release an Elastic IP to that instance
-#                   - check to see if the instance went back to private addressing
-#               If any of these tests fail, the test case will error out; logging the results.
-#
-# [ReuseAddresses]
-#
-#               This case was developed to test when you run instances in a series, and make sure
-#               they get the same address.  The test launches an instance, checks the IP information
-#               , then terminates the instance. This test is launched 5 times in a row.  If there 
-#               is an error, the test case will error out; logging the results.
-#
-#
 
 import unittest
 import time
@@ -188,7 +53,17 @@ class InstanceBasics(unittest.TestCase):
 
 
     def BasicInstanceChecks(self, zone = None):
-        """Instance checks including reachability and ephemeral storage"""
+        """
+        This case was developed to run through a series of basic instance tests.
+             The tests are as follows:
+                   - execute run_instances command
+                   - make sure that public DNS name and private IP aren't the same
+                       (This is for Managed/Managed-NOVLAN networking modes)
+                   - test to see if instance is ping-able
+                   - test to make sure that instance is accessible via ssh
+                       (ssh into instance and run basic ls command)
+             If any of these tests fail, the test case will error out, logging the results.
+        """
         if zone is None:
             zone = self.zone
         if self.reservation is None:
@@ -201,10 +76,15 @@ class InstanceBasics(unittest.TestCase):
         return self.reservation
     
     def ElasticIps(self, zone = None):
-        """ Basic test for elastic IPs
-            Allocate an IP, associate it with an instance, ping the instance
-            Disassociate the IP, ping the instance
-            Release the address"""
+        """
+       This case was developed to test elastic IPs in Eucalyptus. This test case does
+       not test instances that are launched using private-addressing option.
+       The test case executes the following tests:
+           - allocates an IP, associates the IP to the instance, then pings the instance.
+           - disassociates the allocated IP, then pings the instance.
+           - releases the allocated IP address
+       If any of the tests fail, the test case will error out, logging the results.
+        """
         if zone is None:
             zone = self.zone
         self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name,zone=zone)
@@ -221,7 +101,12 @@ class InstanceBasics(unittest.TestCase):
         return self.reservation
     
     def MaxSmallInstances(self, available_small=None,zone = None):
-        """Run the maximum m1.smalls available"""
+        """
+        This case was developed to test the maximum number of m1.small vm types a configured
+        cloud can run.  The test runs the maximum number of m1.small vm types allowed, then
+        tests to see if all the instances reached a running state.  If there is a failure,
+        the test case errors out; logging the results.
+        """
         if available_small is None:
             available_small = self.tester.get_available_vms()
         if zone is None:
@@ -231,7 +116,12 @@ class InstanceBasics(unittest.TestCase):
         return self.reservation
     
     def LargestInstance(self, zone = None): 
-        """Run 1 of the largest instance c1.xlarge"""
+        """
+        This case was developed to test the maximum number of c1.xlarge vm types a configured
+        cloud can run.  The test runs the maximum number of c1.xlarge vm types allowed, then
+        tests to see if all the instances reached a running state.  If there is a failure,
+        the test case errors out; logging the results.
+        """
         if zone is None:
             zone = self.zone
         self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name,type="c1.xlarge",zone=zone)
@@ -239,9 +129,29 @@ class InstanceBasics(unittest.TestCase):
         return self.reservation
     
     def MetaData(self, zone=None):
-        """Check metadata for consistency"""
-        # Missing nodes
-        # ['block-device-mapping/',  'ami-manifest-path']
+        """
+        This case was developed to test the metadata service of an instance for consistency.
+        The following meta-data attributes are tested:
+           - public-keys/0/openssh-key
+           - security-groups
+           - instance-id
+           - local-ipv4
+           - public-ipv4
+           - ami-id
+           - ami-launch-index
+           - reservation-id
+           - placement/availability-zone
+           - kernel-id
+           - public-hostname
+           - local-hostname
+           - hostname
+           - ramdisk-id
+           - instance-type
+           - any bad metadata that shouldn't be present.
+        Missing nodes
+         ['block-device-mapping/',  'ami-manifest-path']
+        If any of these tests fail, the test case will error out; logging the results.
+        """
         if zone is None:
             zone = self.zone
         self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name, zone=zone)
@@ -270,7 +180,18 @@ class InstanceBasics(unittest.TestCase):
         return self.reservation
            
     def DNSResolveCheck(self, zone=None):
-        """Check DNS resolution information for public/private DNS names and IP addresses.  The DNS resolution behavior follows AWS EC2."""
+        """
+        This case was developed to test DNS resolution information for public/private DNS
+        names and IP addresses.  The tested DNS resolution behavior is expected to follow
+        AWS EC2.  The following tests are ran using the associated meta-data attributes:
+           - check to see if Eucalyptus Dynamic DNS is configured
+           - nslookup on hostname; checks to see if it matches local-ipv4
+           - nslookup on local-hostname; check to see if it matches local-ipv4
+           - nslookup on local-ipv4; check to see if it matches local-hostname
+           - nslookup on public-hostname; check to see if it matches local-ipv4
+           - nslookup on public-ipv4; check to see if it matches public-host
+        If any of these tests fail, the test case will error out; logging the results.
+        """
         if zone is None:
             zone = self.zone
         self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name, zone=zone)
@@ -305,7 +226,15 @@ class InstanceBasics(unittest.TestCase):
         return self.reservation
            
     def DNSCheck(self, zone=None):
-        """Check to make sure Dynamic DNS reports correct information for public/private IP address and DNS names"""
+        """
+        This case was developed to test to make sure Eucalyptus Dynamic DNS reports correct
+        information for public/private IP address and DNS names passed to meta-data service.
+        The following tests are ran using the associated meta-data attributes:
+           - check to see if Eucalyptus Dynamic DNS is configured
+           - check to see if local-ipv4 and local-hostname are not the same
+           - check to see if public-ipv4 and public-hostname are not the same
+        If any of these tests fail, the test case will error out; logging the results.
+        """
         if zone is None:
             zone = self.zone
         self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name, zone=zone)
@@ -321,7 +250,17 @@ class InstanceBasics(unittest.TestCase):
         return self.reservation
 
     def Reboot(self, zone=None):
-        """Reboot instance ensure IP connectivity and volumes stay attached"""
+        """
+        This case was developed to test IP connectivity and volume attachment after
+        instance reboot.  The following tests are done for this test case:
+                   - creates a 1 gig EBS volume, then attach volume
+                   - reboot instance
+                   - attempts to connect to instance via ssh
+                   - checks to see if EBS volume is attached
+                   - detaches volume
+                   - deletes volume
+        If any of these tests fail, the test case will error out; logging the results.
+        """
         if zone is None:
             zone = self.zone
         self.reservation = self.tester.run_instance(self.image, keypair=self.keypair.name, group=self.group.name, zone=zone)
@@ -336,7 +275,16 @@ class InstanceBasics(unittest.TestCase):
         return self.reservation
     
     def Churn(self, testcase="BasicInstanceChecks"):
-        """Start instances and stop them before they are running, increase time to terminate on each iteration"""
+        """
+        This case was developed to test robustness of Eucalyptus by starting instances,
+        stopping them before they are running, and increase the time to terminate on each
+        iteration.  This test case leverages the BasicInstanceChecks test case. The
+        following steps are ran:
+            - runs BasicInstanceChecks test case 5 times, 10 second apart.
+            - While each test is running, run and terminate instances with a 10sec sleep in between.
+            - When a test finishes, rerun BasicInstanceChecks test case.
+        If any of these tests fail, the test case will error out; logging the results.
+        """
         from multiprocessing import Process
         from multiprocessing import Queue
         ### Increase time to terminate by step seconds on each iteration
@@ -394,11 +342,14 @@ class InstanceBasics(unittest.TestCase):
         self.tester.debug("Successfully completed churn test")
 
     def PrivateIPAddressing(self, zone = None):
-        """Basic test to run an instance with Private only IP
-           and later allocate/associate/diassociate/release 
-           an Elastic IP. In the process check after diassociate
-           the instance has only got private IP or new Public IP
-           gets associated to it"""
+        """
+        This case was developed to test instances that are launched with private-addressing
+        set to True.  The tests executed are as follows:
+            - run an instance with private-addressing set to True
+            - allocate/associate/disassociate/release an Elastic IP to that instance
+            - check to see if the instance went back to private addressing
+        If any of these tests fail, the test case will error out; logging the results.
+        """
         if zone is None:
             zone = self.zone
         self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name, private_addressing=True, zone=zone)
@@ -419,7 +370,12 @@ class InstanceBasics(unittest.TestCase):
         return self.reservation
     
     def ReuseAddresses(self, zone = None):
-        """ Run instances in series and ensure they get the same address"""
+        """
+        This case was developed to test when you run instances in a series, and make sure
+        they get the same address.  The test launches an instance, checks the IP information,
+        then terminates the instance. This test is launched 5 times in a row.  If there
+        is an error, the test case will error out; logging the results.
+        """
         prev_address = None
         if zone is None:
             zone = self.zone
