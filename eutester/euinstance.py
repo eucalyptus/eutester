@@ -189,7 +189,6 @@ class EuInstance(Instance):
         if ( self.verbose is True ):
             self.debugmethod(msg)
             
-
                 
     def sys(self, cmd, verbose=True, timeout=120):
         '''
