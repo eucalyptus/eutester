@@ -38,6 +38,7 @@ import os
 import base64
 import sys
 from datetime import datetime
+from boto.ec2.image import Image
 from boto.ec2.blockdevicemapping import BlockDeviceMapping, BlockDeviceType
 from boto.exception import EC2ResponseError
 from eutester.euinstance import EuInstance
@@ -864,9 +865,10 @@ class EC2ops(Eutester):
             for emi in images:
                 if re.match("emi",emi.id):
                     image = emi      
+        if not isinstance(image, Image):
+            image = self.get_emi(emi=str(image))
         if image is None:
             raise Exception("emi is None. run_instance could not auto find an emi?")   
-
         if private_addressing is True:
             addressing_type = "private"
             is_reachable= False
