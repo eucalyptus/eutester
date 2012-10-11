@@ -604,7 +604,7 @@ class EutesterTestCase(unittest.TestCase):
         finally:
             elapsed = int(time.time()-start)
             msgout =  "RUN TEST CASE LIST DONE:\n"
-            msgout += "Ran "+str(tests_ran)+" / "+str(test_count)+" in "+str(elapsed)+" seconds\n"
+            msgout += "Ran "+str(tests_ran)+"/"+str(test_count)+" tests in "+str(elapsed)+" seconds\n"
             self.status(msgout)
             if printresults:
                 try:
