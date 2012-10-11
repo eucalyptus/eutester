@@ -201,6 +201,8 @@ class EutesterTestUnit():
         testunit.eof = eof
         return testunit
        
+    def set_kwarg(self,kwarg,val):
+        self.kwargs[kwarg]=val
     
     def get_test_method_description(self):
         '''
@@ -244,13 +246,13 @@ class EutesterTestUnit():
         Description: Wrapper which attempts to run self.method and handle failures, record time.
         '''
         for count, thing in enumerate(self.args):
-            print '{0}. {1}'.format(count, thing)
+            print 'ARG:{0}. {1}'.format(count, thing)
         for name, value in self.kwargs.items():
-            print '{0} = {1}'.format(name, value)
+            print 'KWARG:{0} = {1}'.format(name, value)
         
         try:
             start = time.time()
-            if not self.args:
+            if not self.args and not self.kwargs:
                 ret = self.method()
             else:
                 ret = self.method(*self.args, **self.kwargs)
@@ -470,7 +472,7 @@ class EutesterTestCase(unittest.TestCase):
             for line in msg.split("\n"):
                 self.debugmethod("("+str(cur_method)+":"+str(lineno)+"): "+colorprefix+line.strip()+colorreset )
         else:
-            self.debugmethod("("+str(cur_method)+":"+str(msg)+"): "+colorprefix+line.strip()+colorreset )
+            self.debugmethod("("+str(cur_method)+":"+str(lineno)+"): "+colorprefix+str(msg)+colorreset )
             
    
             
@@ -534,31 +536,44 @@ class EutesterTestCase(unittest.TestCase):
         self.debug(out, traceback=traceback, color=testcolor,linebyline=False)  
         
     def startmsg(self,msg=""):
-        msg = "- STARTING - " + msg
+        msg = "- STARTING TESTUNIT:  - " + msg
         self.status(msg, traceback=3,testcolor=TestColor.get_canned_color('whiteonblue'))
         
     def endsuccess(self,msg=""):
         msg = "- SUCCESS ENDED - " + msg
-        self.status(msg, traceback=2,a=3, testcolor=TestColor.get_canned_color('whiteonblue'))
+        self.status(msg, traceback=2,a=1, testcolor=TestColor.get_canned_color('whiteonblue'))
       
-    def endfailure(self,msg=""):
+    def endfailure(self,msg="" ):
         msg = "- FAILED - " + msg
-        self.status(msg, traceback=2,a=3,testcolor=TestColor.get_canned_color('failred'))
+        self.status(msg, traceback=2,a=1,testcolor=TestColor.get_canned_color('failred'))
     
-    def resultdefault(self,msg):
-        self.debug(msg,traceback=2,color=TestColor.get_canned_color('blueongrey'),linebyline=False)
+    def resultdefault(self,msg,printout=True,color='blueongrey'):
+        if printout:
+            self.debug(msg,traceback=2,color=TestColor.get_canned_color('blueongrey'),linebyline=False)
+        msg = TestColor.get_canned_color(color)+str(msg)+TestColor.reset
+        return msg
     
-    def resultfail(self,msg):
-        self.debug(msg,traceback=2, color=TestColor.get_canned_color('redongrey'),linebyline=False)
+    def resultfail(self,msg,printout=True, color='redongrey'):
+        if printout:
+            self.debug(msg,traceback=2, color=TestColor.get_canned_color('redongrey'),linebyline=False)
+        msg = TestColor.get_canned_color(color)+str(msg)+TestColor.reset
+        return msg
         
-    def resulterr(self,msg):
-        self.debug(msg,traceback=2, color=TestColor.get_canned_color('failred'),linebyline=False)
+    def resulterr(self,msg,printout=True,color='failred'):
+        self.debug(msg,traceback=2, color=TestColor.get_canned_color(color),linebyline=False)
     
     def get_pretty_args(self,testunit):
-        buf = "End on Failure :" +str(testunit.eof)
+        buf =  "End on Failure :" +str(testunit.eof)
+        buf += "\nPassing ARGS:\n"
+        buf += "---------------------\n"
+        varnames = self.get_meth_kwarg_names(testunit.method)
         if testunit.args:
-            for key in testunit.args:
-                buf += "\n"+str(key)+" : "+str(testunit.args[key])
+            for count,arg in enumerate(testunit.args):
+                buf += str(varnames[count+1])+" : "+str(arg)+"\n"
+        if testunit.kwargs:
+            for key in testunit.kwargs:
+                buf += str(key)+" : "+str(testunit.kwargs[key])+"\n"
+            buf += "---------------------\n"
         return buf
     
     def run_test_case_list(self, list, eof=True, clean_on_exit=True, printresults=True):
@@ -589,9 +604,11 @@ class EutesterTestCase(unittest.TestCase):
         try:
             for test in list:
                 tests_ran += 1
+                startbuf = ""
                 argbuf =self.get_pretty_args(test)
-                self.startmsg(str(test.description)+argbuf)
-                self.debug('Running list method:'+str(test.name))
+                startbuf += str(test.description)+str(argbuf)
+                startbuf += 'Running list method: "'+str(test.name)+'"'
+                self.startmsg(startbuf)
                 try:
                     test.run()
                     self.endsuccess(str(test.name))
@@ -667,18 +684,28 @@ class EutesterTestCase(unittest.TestCase):
             list=self.testlist
             
         if not printmethod:
+            printbuf=True
             printmethod = self.resultdefault
             printfailure = self.resultfail
             printerr = self.resulterr
         else:
             printfailure = printerr = printmethod
-           
-        for testcase in list:           
-            printmethod('-----------------------------------------------')
-            pmethod = printfailure if not testcase.result == EutesterTestResult.passed else printmethod
-            pmethod(str("TEST:"+str(testcase.name)).ljust(50)+str(" RESULT:"+testcase.result).ljust(10)+str(' Time:'+str(testcase.time_to_run)).ljust(0))
-            if testcase.result == EutesterTestResult.failed:
-                printerr('Error:'+str(testcase.error))
+            
+        if printbuf :
+            for testcase in list:
+                buf =  ""
+                buf += '-----------------------------------------------'
+                pmethod = printfailure if not testcase.result == EutesterTestResult.passed else printmethod
+                buf +=  pmethod(str("TEST:"+str(testcase.name)).ljust(50)+str(" RESULT:"+testcase.result).ljust(10)+str(' Time:'+str(testcase.time_to_run)).ljust(0),printout=False)
+                if testcase.result == EutesterTestResult.failed:
+                        buf += printerr('Error:'+str(testcase.error), printout=False)
+        else:
+            for testcase in list:           
+                printmethod('-----------------------------------------------')
+                pmethod = printfailure if not testcase.result == EutesterTestResult.passed else printmethod
+                pmethod(str("TEST:"+str(testcase.name)).ljust(50)+str(" RESULT:"+testcase.result).ljust(10)+str(' Time:'+str(testcase.time_to_run)).ljust(0))
+                if testcase.result == EutesterTestResult.failed:
+                    printerr('Error:'+str(testcase.error))
     
     
     def run_method_by_name(self,name, obj=None, *args, **kwargs):
@@ -897,27 +924,36 @@ class EutesterTestCase(unittest.TestCase):
             
     
     def populate_testunit_with_args(self,testunit,namespace=None):
+        self.debug("Attempting to populate testunit:"+str(testunit.name)+", with testcase.args...")
         args_to_apply = namespace or self.args
     
         testunit_obj_args =  copy.copy(testunit.kwargs)
+        self.debug("Testunit keyword args:"+str(testunit_obj_args))
+        
         #Get all the var names of the underlying method the testunit is wrapping
         method_args = self.get_meth_arg_names(testunit.method)
-    
+        self.debug("Got method args:"+str(method_args))
+       
+            
         #Add the var names of the positional args provided in testunit.args to check against later
         #Append to the known keyword arg list
         for x,arg in enumerate(testunit.args):
             testunit_obj_args.append([method_args[x+1]])
-            
+        
+        self.debug("test unit toal args:"+str(testunit_obj_args))
         #populate any global args which do not conflict with args already contained within the test case
         #first populate matching method args with our global testcase args taking least precedence
         for apply_val in args_to_apply._get_kwargs():
             for methvar in method_args:
                 if methvar == apply_val[0]:
+                    self.debug("Found matching arg for:"+str(methvar))
                     #Don't overwrite existing testunit args/kwargs that have already been assigned
                     if apply_val[0] in testunit_obj_args:
+                            self.debug("Skipping populate because testunit already has this arg:"+str(methvar))
                             break
-                    #Append cmdargs list to testunits kwargs 
-                    testunit.kwargs[var]=val[1]
+                    #Append cmdargs list to testunits kwargs
+                    testunit.set_kwarg(methvar,apply_val[1]) 
+                    #testunit.kwargs[methvar]=apply_val[1]
        
        
         
@@ -939,13 +975,14 @@ class EutesterTestCase(unittest.TestCase):
         :param kwargs: None or more values reprsenting keyword arguments to be passed to 'meth' when executed. These will
                      take precedence over local testcase obj namespace args and positional args
         '''
+        
         if not hasattr(self,'args'):
             raise Exception('TestCase object does not have args yet, see: get_args and setup_parser options')
         tc_args = self.args
         cmdargs={}
         f_code = self.get_method_fcode(meth)
         vars = self.get_meth_arg_names(meth)
-        self.debug("Method:"+str(f_code.co_name)+", Vars:"+str(vars))
+        self.debug("do_with_args: Method:"+str(f_code.co_name)+", Vars:"+str(vars))
         
         #first populate matching method args with our global testcase args...
         for val in tc_args._get_kwargs():

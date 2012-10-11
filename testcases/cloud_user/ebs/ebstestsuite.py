@@ -88,6 +88,7 @@ class EbsTestSuite(EutesterTestCase):
                  zone=None, 
                  config_file='../input/2b_tested.lst', 
                  password="foobar", 
+                 inst_pass=None,
                  credpath=None, 
                  volumes=None, 
                  keypair=None, 
@@ -105,7 +106,7 @@ class EbsTestSuite(EutesterTestCase):
         self.tester.exit_on_fail = eof
     
         self.testlist =[]
-        
+        self.inst_pass=inst_pass
         self.image = emi
         self.vmtype = vmtype
         self.zone = None    
@@ -201,10 +202,10 @@ class EbsTestSuite(EutesterTestCase):
                 testzone.volumes.append(vol)
                 self.debug('create_vols_per_zone created  vol('+str(x)+') zone:'+str(zone)+' vol:'+str(vol.id))
             
-        self.endsuccess()      
+        #self.endsuccess()      
             
           
-    def create_test_instances_for_zones(self, zonelist=None, image=None, keypair=None, group=None, vmtype=None):
+    def create_test_instances_for_zones(self, zonelist=None, image=None, keypair=None, username='root', inst_pass=None, group=None, vmtype=None):
         testmsg = """
                     Create an instance within each TestZone object in zonelist to help test ebs functionality.
                   """
@@ -219,6 +220,7 @@ class EbsTestSuite(EutesterTestCase):
             group = self.group
         if keypair is None:
             keypair = self.keypair
+        inst_pass = inst_pass or self.inst_pass
                 
         if zonelist is None:
             zonelist = self.zonelist
@@ -226,10 +228,10 @@ class EbsTestSuite(EutesterTestCase):
             
         for testzone in zonelist:
             zone = testzone.name
-            inst = self.tester.run_instance(image=image, keypair=keypair.name, group=group, type=vmtype, zone=zone).instances[0]
+            inst = self.tester.run_instance(image=image, keypair=keypair.name, group=group, username=username, password=inst_pass, type=vmtype, zone=zone).instances[0]
             testzone.instances.append(inst)
             self.debug('Created instance: ' + str(inst.id)+" in zone:"+str(zone))
-        self.endsuccess()
+        #self.endsuccess()
     
     def terminate_test_instances_for_zones(self, zonelist=None, timeout=360):
         if zonelist is None:
@@ -259,7 +261,7 @@ class EbsTestSuite(EutesterTestCase):
                         except Exception, e:
                             #If it failed were good
                             self.debug("negative_attach_in_use_volume_in_zones Passed. Could not attach in-use volume")
-                            self.endsuccess()
+                            #self.endsuccess()
                             pass
                         else:
                             #The operation did fail, but this test did
@@ -292,7 +294,7 @@ class EbsTestSuite(EutesterTestCase):
                             self.debug("attach_all_vols_to_instances_in_zones failed to attach volume")
                             raise e
                     #instance.vol_write_random_data_get_md5(volume,timepergig=120)
-        self.endsuccess()
+        #self.endsuccess()
                     
                         
     def negative_delete_attached_volumes_in_zones(self,zonelist=None, timeout=60):
@@ -334,7 +336,7 @@ class EbsTestSuite(EutesterTestCase):
                         if (volume.status == "deleted"):
                             self.debug("negative_delete_attached_volumes_in_zones, failed:"+str(volume.id))
                             raise Exception("Was able to delete attached volume:"+str(volume.id))
-        self.endsuccess()            
+        #self.endsuccess()            
                         
     def reboot_instances_in_zone_verify_volumes(self,zonelist=None,waitconnect=30, timeout=360):
         testmsg =   """
@@ -349,7 +351,7 @@ class EbsTestSuite(EutesterTestCase):
         for zone in zonelist:
             for instance in zone.instances:
                 instance.reboot_instance_and_verify(waitconnect=waitconnect, timeout=timeout, checkvolstatus=True)
-        self.endsuccess()
+        #self.endsuccess()
         
     def detach_volumes_in_zones(self,zonelist=None, timeout=360, volcount=1):
         testmsg =   """
@@ -381,7 +383,7 @@ class EbsTestSuite(EutesterTestCase):
                         except Exception, e: 
                             self.debug("fail. Could not detach Volume:"+str(volume.id)+"from instance:"+str(instance.id))
                             raise e
-        self.endsuccess()
+        #self.endsuccess()
         
     def detach_all_volumes_from_stopped_instances_in_zones(self,zonelist=None, timeout=360):
         testmsg="""
@@ -393,13 +395,15 @@ class EbsTestSuite(EutesterTestCase):
         for zone in zonelist:
             instance = euinstance.EuInstance()
             for instance in zone.instances:
+                if instance.block_device_mapping != 'ebs':
+                    continue
                 if not instance.attached_vols:
                     raise Exception('detach_all_volumes_from_stopped_instances_in_zones: No attached volumes for:'+str(instance.id))
                 instance.stop_instance_and_verify()
                 for vol in instance.attached_vols:
                     instance.detach_euvolume(vol, waitfordev=False)
                 instance.start_instance_and_verify(checkvolstatus=True)
-        self.endsuccess()
+        #self.endsuccess()
     
     def delete_volumes_in_zones(self, zonelist=None, timeout=60):
         self.startmsg()
@@ -417,7 +421,7 @@ class EbsTestSuite(EutesterTestCase):
                     self.debug("failed to delete volume:"+str(volume.id))
                 else:
                     zone.volumes.remove(volume)
-        self.endsuccess()
+        #self.endsuccess()
         
         
     def delete_snapshots_in_zones(self, zonelist=None,snaplist=None, timeout=300):
@@ -436,7 +440,7 @@ class EbsTestSuite(EutesterTestCase):
                 if snap.zone == zone:
                     self.tester.delete_snapshot(snap, timeout=timeout)
                     snaplist.remove(snap)
-        self.endsuccess()
+        #self.endsuccess()
         
                 
         
@@ -455,7 +459,7 @@ class EbsTestSuite(EutesterTestCase):
                 volume.update()
                 if volstate == "all" or volume.status == volstate:
                     self.snaps.append(TestSnap.make_testsnap_from_snap(self.tester.create_snapshot(volume.id, description="ebstest", waitOnProgress=20),zone))
-        self.endsuccess()
+        #self.endsuccess()
         
         
     def create_vols_from_snap_in_same_zone(self, zonelist=None,timepergig=300):
@@ -476,7 +480,7 @@ class EbsTestSuite(EutesterTestCase):
                     newvol = euvolume.EuVolume.make_euvol_from_vol(self.tester.create_volume(zone.name, size=0, snapshot=snap,timepergig=timepergig))
                     zone.volumes.append(newvol)
                     snap.new_vol_list.append(newvol)
-        self.endsuccess()
+        #self.endsuccess()
         
     def attach_new_vols_from_snap_verify_md5(self,zonelist=None, timeout=360,timepergig=360):
         testmsg =   """
@@ -513,7 +517,7 @@ class EbsTestSuite(EutesterTestCase):
                             self.debug("Volume:"+str(vol.id)+" MD5:"+str(vol.md5)+" != Snap:"+str(snap.id)+" MD5:"+str(snap.md5))
                             raise Exception("Volume:"+str(vol.id)+" MD5:"+str(vol.md5)+" != Snap:"+str(snap.id)+" MD5:"+str(snap.md5))
                         self.debug("Successfully verified volume:"+str(vol.id)+" to snapshot:"+str(snap.id))
-        self.endsuccess()
+        #self.endsuccess()
         
     def create_vols_from_snap_in_different_zone(self,zonelist=None, timepergig=300):
         testmsg =   """
@@ -531,7 +535,7 @@ class EbsTestSuite(EutesterTestCase):
                     newvol = euvolume.EuVolume.make_euvol_from_vol(self.tester.create_volume(zone.name,size=0, snapshot=snap, timepergig=timepergig))
                     zone.volumes.append(newvol)
                     snap.new_vol_list.append(newvol)
-        self.endsuccess()
+        #self.endsuccess()
         
     ''' 
     def snap_vol_during_io_test(self, zonelist,None,timepergig=600):
@@ -655,46 +659,8 @@ if __name__ == "__main__":
     tc = EutesterTestCase()
 
     tc.setup_parser(testname='ebstestsuite.py', description='collection of ebs related tests', testlist=False)
-
-    '''
-    ## If given command line arguments, use them as test names to launch
-    parser = argparse.ArgumentParser(prog="ebs_basic_test.py",
-                                     version="Test Case [ebs_basic_test.py] Version 0.1",
-                                     description="Attempts to tests and provide info on focused areas related to\
-                                     Eucalyptus EBS related functionality.",
-                                     usage="%(prog)s --credpath=<path to creds> [--xml] [--tests=test1,..testN]")
-    '''
-    
-    """
-    parser.add_argument('--emi', 
-                        help="pre-installed emi id which to execute these tests against", default=None)
-    parser.add_argument('--credpath', 
-                        help="path to credentials", default=None)
-    """
-    tc.parser.add_argument('--zone', 
-                        help="zone to use in this test, defaults to testing all zones", default=None)
-    '''
-    parser.add_argument('--password', 
-                        help="password to use for machine root ssh access", default='foobar')
-    '''
-    tc.parser.add_argument('--keypair', 
-                        help="keypair to use when launching instances within the test", default=None)
-    
-    tc.parser.add_argument('--group', 
-                        help="group to use when launching instances within the test", default=None) 
-    
-    tc.parser.add_argument('--type',dest='vmtype',
-                           help='vmtype to use when launching instances within the test', default='c1.medium')
-    '''
-    parser.add_argument('--config',
-                       help='path to config file', default='../input/2btested.lst') 
-    parser.add_argument('--xml', 
-                        help="to provide JUnit style XML output", action="store_true", default=False)
-    
-    parser.add_argument('--tests', nargs='+', 
-                        help="test cases to be executed", 
-                        default= ['run_test_suite'])
-    '''
+    tc.parser.add_argument('--inst_pass', 
+                        help="Instance password for ssh session if not key enabled", default=None)
     
     args = tc.get_args()
     #if file was not provided or is not found
@@ -706,7 +672,7 @@ if __name__ == "__main__":
     ebssuite = tc.do_with_args(EbsTestSuite)
     kbtime=time.time()
     try:
-       list = ebssuite.run_ebs_basic_test_suite(run=False)
+       list = ebssuite.ebs_basic_test_suite(run=False)
        tc.run_test_case_list(list)
     except KeyboardInterrupt:
         ebssuite.debug("Caught keyboard interrupt...")
@@ -714,6 +680,7 @@ if __name__ == "__main__":
             ebssuite.clean_created_resources()
             ebssuite.debug("Caught 2 keyboard interupts within 2 seconds, exiting test")
             ebssuite.clean_created_resources()
+            tc.print_test_list_results(list)
             raise
         else:          
             tc.print_test_list_results(list)
@@ -722,6 +689,8 @@ if __name__ == "__main__":
     except Exception, e:
         raise e
         exit(1)
+    finally:
+        tc.print_test_list_results(list)
     exit(0)
         
 
