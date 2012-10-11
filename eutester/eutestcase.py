@@ -419,7 +419,7 @@ class EutesterTestCase(unittest.TestCase):
             logger = Eulogger(identifier=str(name))
             self.debugmethod = logger.log.debug
 
-    def debug(self,msg,traceback=1,color=None):
+    def debug(self,msg,traceback=1,color=None, linebyline=True):
         '''
         Description: Method for printing debug
         
@@ -438,9 +438,9 @@ class EutesterTestCase(unittest.TestCase):
         except:
             self.setup_debugmethod()
         
-        try: 
-            self.use_color = self.args.use_color
-        except: 
+        if self.hasarg('use_color'):
+            self.use_color = boolean(self.args.use_color)
+        else: 
             self.use_color = False
             
         colorprefix=""
@@ -466,8 +466,11 @@ class EutesterTestCase(unittest.TestCase):
                         if len(funcs) > 1:
                             return None
             cur_method= funcs[0].func_name if funcs else ""
-        for line in msg.split("\n"):
-            self.debugmethod("("+str(cur_method)+":"+str(lineno)+"): "+colorprefix+line.strip()+colorreset )
+        if linebyline:
+            for line in msg.split("\n"):
+                self.debugmethod("("+str(cur_method)+":"+str(lineno)+"): "+colorprefix+line.strip()+colorreset )
+        else:
+            self.debugmethod("("+str(cur_method)+":"+str(msg)+"): "+colorprefix+line.strip()+colorreset )
             
    
             
@@ -501,7 +504,7 @@ class EutesterTestCase(unittest.TestCase):
             self.populate_testunit_with_args(testunit)
         return testunit 
     
-    def status(self,msg,traceback=2, b=0,a=0 ,testcolor=None):
+    def status(self,msg,traceback=2, b=1,a=0 ,testcolor=None):
         '''
         Description: Convenience method to format debug output
         
@@ -528,7 +531,7 @@ class EutesterTestCase(unittest.TestCase):
             alines=alines+"\n"
         line = "-------------------------------------------------------------------------"
         out = blines+line+"\n"+msg+"\n"+line+alines
-        self.debug(out, traceback=traceback, color=testcolor)  
+        self.debug(out, traceback=traceback, color=testcolor,linebyline=False)  
         
     def startmsg(self,msg=""):
         msg = "- STARTING - " + msg
@@ -543,13 +546,13 @@ class EutesterTestCase(unittest.TestCase):
         self.status(msg, traceback=2,a=3,testcolor=TestColor.get_canned_color('failred'))
     
     def resultdefault(self,msg):
-        self.debug(msg,traceback=2,color=TestColor.get_canned_color('blueongrey'))
+        self.debug(msg,traceback=2,color=TestColor.get_canned_color('blueongrey'),linebyline=False)
     
     def resultfail(self,msg):
-        self.debug(msg,traceback=2, color=TestColor.get_canned_color('redongrey'))
+        self.debug(msg,traceback=2, color=TestColor.get_canned_color('redongrey'),linebyline=False)
         
     def resulterr(self,msg):
-        self.debug(msg,traceback=2, color=TestColor.get_canned_color('failred'))
+        self.debug(msg,traceback=2, color=TestColor.get_canned_color('failred'),linebyline=False)
     
     def get_pretty_args(self,testunit):
         buf = "End on Failure :" +str(testunit.eof)
@@ -757,7 +760,7 @@ class EutesterTestCase(unittest.TestCase):
         
         if self.use_default_file and self.default_config:
             try:
-                configfiles.append(EuConfig(filename=self.default_config))
+                configfiles.append(self.default_config)
             except Exception, e:
                 self.debug("Unable to read config from file: " + str(e))
 
@@ -894,25 +897,24 @@ class EutesterTestCase(unittest.TestCase):
             
     
     def populate_testunit_with_args(self,testunit,namespace=None):
-        tc_args = namespace or self.args
-        pargs = testunit.args
+        args_to_apply = namespace or self.args
     
-        tu_args =  copy.copy(testunit.kwargs)
+        testunit_obj_args =  copy.copy(testunit.kwargs)
         #Get all the var names of the underlying method the testunit is wrapping
-        vars = self.get_meth_arg_names(testunit.method)
+        method_args = self.get_meth_arg_names(testunit.method)
     
         #Add the var names of the positional args provided in testunit.args to check against later
         #Append to the known keyword arg list
         for x,arg in enumerate(testunit.args):
-            kwargs.append([meth_args[x+1]])
+            testunit_obj_args.append([method_args[x+1]])
             
         #populate any global args which do not conflict with args already contained within the test case
         #first populate matching method args with our global testcase args taking least precedence
-        for val in tc_args._get_kwargs():
-            for var in vars:
-                if var == val[0]:
+        for apply_val in args_to_apply._get_kwargs():
+            for methvar in method_args:
+                if methvar == apply_val[0]:
                     #Don't overwrite existing testunit args/kwargs that have already been assigned
-                    if val[0] in tu_args:
+                    if apply_val[0] in testunit_obj_args:
                             break
                     #Append cmdargs list to testunits kwargs 
                     testunit.kwargs[var]=val[1]
