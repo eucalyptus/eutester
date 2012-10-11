@@ -437,10 +437,10 @@ class EutesterTestCase(unittest.TestCase):
                 self.setup_debugmethod()
         except:
             self.setup_debugmethod()
-        
-        if self.hasarg('use_color'):
-            self.use_color = boolean(self.args.use_color)
-        else: 
+
+        if self.has_arg("use_color"):
+            self.use_color = bool(self.args.use_color)
+        else:
             self.use_color = False
             
         colorprefix=""
