@@ -97,7 +97,7 @@ class EbsTestSuite(EutesterTestCase):
                  eof=1):
         
         self.args = args
-        self.setupself(name)
+        self.setuptestcase(name)
         if tester is None:
             self.tester = Eucaops( config_file=config_file,password=password,credpath=credpath)
         else:
