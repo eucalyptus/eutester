@@ -275,9 +275,9 @@ class EutesterTestCase(unittest.TestCase):
     color = TestColor()
 
     def __init__(self,name=None, debugmethod=None, use_default_file=True, default_config='eutester.conf'):
-        return self.setupself(name=name, debugmethod=debugmethod, use_default_file=use_default_file, default_config=default_config)
+        return self.setuptestcase(name=name, debugmethod=debugmethod, use_default_file=use_default_file, default_config=default_config)
         
-    def setupself(self, name=None, debugmethod=None, use_default_file=True, default_config='eutester.conf' ):
+    def setuptestcase(self, name=None, debugmethod=None, use_default_file=True, default_config='eutester.conf' ):
         self.name = name 
         if not self.name:
             callerfilename=inspect.getouterframes(inspect.currentframe())[1][1]
@@ -303,6 +303,9 @@ class EutesterTestCase(unittest.TestCase):
                    testname=None, 
                    description=None,
                    emi=True,
+                   zone=True,
+                   vmtype=True,
+                   keypair=True,
                    credpath=True,
                    password=True,
                    config=True,
@@ -323,30 +326,39 @@ class EutesterTestCase(unittest.TestCase):
         :param description: Description used for argparse (help menu, etc.)
         
         :type emi: boolean
-        :param emi: Flag to provide the emi command line argument/option for providing an image emi id
+        :param emi: Flag to present the emi command line argument/option for providing an image emi id via the cli
+        
+        :type zone: boolean
+        :param zone: Flag to present the zone command line argument/option for providing a zone via the cli
+        
+        :type vmtype: boolean
+        :param vmtype: Flag to present the vmtype command line argument/option for providing a vmtype via the cli
+        
+        :type keypair: boolean
+        :param kepair: Flag to present the keypair command line argument/option for providing a keypair via the cli
         
         :type credpath: boolean
-        :param credpath: Flag to provide the credpath command line argument/option for providing a local path to creds
+        :param credpath: Flag to present the credpath command line argument/option for providing a local path to creds via the cli
         
         :type password: boolean
-        :param password: Flag to provide the password command line argument/option for providing password 
+        :param password: Flag to present the password command line argument/option for providing password 
         used in establishing machine ssh sessions
         
         :type config: boolean
-        :param config: Flag to provide the config file command line argument/option for providing path to config file
+        :param config: Flag to present the config file command line argument/option for providing path to config file
         
         :type configblocks: string list
-        :param configblocks: Flag to provide the configblocks command line arg/option used to provide list of 
+        :param configblocks: Flag to present the configblocks command line arg/option used to provide list of 
                              configuration blocks to read from
                              Note: By default if a config file is provided the script will only look for blocks; 'globals', and the filename of the script being run.
         
         :type ignoreblocks: string list
-        :param ignoreblocks: Flag to provide the configblocks command line arg/option used to provide list of 
+        :param ignoreblocks: Flag to present the configblocks command line arg/option used to provide list of 
                              configuration blocks to ignore if present in configfile
                              Note: By default if a config file is provided the script will look for blocks; 'globals', and the filename of the script being run
  
         :type testlist: string list
-        :param testlist: Flag to provide the testlist command line argument/option for providing a list of testnames to run
+        :param testlist: Flag to present the testlist command line argument/option for providing a list of testnames to run
         
         :type use_color: flag
         :param use_color: Flag to enable/disable use of ascci color codes in debug output. 
@@ -374,11 +386,20 @@ class EutesterTestCase(unittest.TestCase):
             parser.add_argument('--configblocks', nargs='+',
                                 help="Config sections/blocks in config file to read in", default=[])
         if ignoreblocks:
-            parser.add_argument('--ingnoreblocks', nargs='+',
+            parser.add_argument('--ignoreblocks', nargs='+',
                                 help="Config blocks to ignore, ie:'globals', 'my_scripts_name', etc..", default=[])
         if testlist:
             parser.add_argument('--tests', nargs='+', 
                                 help="test cases to be executed", default = [])  
+        if keypair:
+            parser.add_argument('--keypair',
+                                help="Keypair to use in this test", default=None)
+        if zone:
+            parser.add_argument('--zone',
+                                help="Zone to use in this test", default=None)
+        if vmtype:
+            parser.add_argument('--vmtype',
+                                help="Virtual Machine Type to use in this test", default='c1.medium')
         if color: 
             parser.add_argument('--use_color', dest='use_color', action='store_true', default=False)
         self.parser = parser  
@@ -857,22 +878,22 @@ class EutesterTestCase(unittest.TestCase):
         tc_args = namespace or self.args
         pargs = testunit.args
     
-        kwargs =  self.get_meth_kwarg_names(testunit.method)
-        margs = self.get_meth_arg_names(testunit.method)
+        tu_args =  copy.copy(testunit.kwargs)
+        #Get all the var names of the underlying method the testunit is wrapping
+        vars = self.get_meth_arg_names(testunit.method)
+    
         #Add the var names of the positional args provided in testunit.args to check against later
         #Append to the known keyword arg list
         for x,arg in enumerate(testunit.args):
-            kwargs.append([margs[x+1]])
+            kwargs.append([meth_args[x+1]])
             
-        #Get all the var names of the underlying method the testunit is wrapping
-        vars = self.get_meth_varnames(testunit.method)
         #populate any global args which do not conflict with args already contained within the test case
         #first populate matching method args with our global testcase args taking least precedence
         for val in tc_args._get_kwargs():
             for var in vars:
                 if var == val[0]:
                     #Don't overwrite existing testunit args/kwargs that have already been assigned
-                    if val[0] in kwargs:
+                    if val[0] in tu_args:
                             break
                     #Append cmdargs list to testunits kwargs 
                     testunit.kwargs[var]=val[1]
@@ -902,12 +923,14 @@ class EutesterTestCase(unittest.TestCase):
         tc_args = self.args
         cmdargs={}
         f_code = self.get_method_fcode(meth)
-        vars = self.get_meth_varnames(meth)
+        vars = self.get_meth_arg_names(meth)
+        self.debug("Method:"+str(f_code.co_name)+" Vars:"+str(vars))
         
         #first populate matching method args with our global testcase args...
         for val in tc_args._get_kwargs():
             for var in vars:
                 if var == val[0]:
+                    print "Adding var:"+str(var)+" == value:"+str(val[0])
                     cmdargs[var]=val[1]
         #Then overwrite/populate with any given positional local args...
         for count,arg in enumerate(args):
@@ -940,7 +963,7 @@ class EutesterTestCase(unittest.TestCase):
                 f_code = meth.func_code
             except:pass
         if not f_code:
-            raise Exception("get_method_varnames: Could not find varnames for passed method of type:"+str(type(meth)))
+            raise Exception("get_method_fcode: Could not find function_code for passed method of type:"+str(type(meth)))
         return f_code
     
     def get_meth_arg_names(self,meth):
@@ -949,10 +972,12 @@ class EutesterTestCase(unittest.TestCase):
         return varnames
     
     def get_meth_kwarg_names(self,meth):
+        return self.get_meth_arg_names(meth)
+        '''
         fcode = self.get_method_fcode(meth)
         varnames = fcode.co_varnames[fcode.co_argcount:len(fcode.co_varnames)]
         return varnames
-    
+        '''
     def get_meth_varnames(self,meth):
         fcode = self.get_method_fcode(meth)
         return fcode.co_varnames
