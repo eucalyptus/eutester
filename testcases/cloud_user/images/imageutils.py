@@ -42,7 +42,7 @@ import sys
 import unittest
 from eutester.eutestcase import EutesterTestCase
 from eutester.eutestcase import EutesterTestResult
-from eutester.eutestzone import euTestZone
+from testcases.cloud_user.ebs.ebstestsuite import TestZone
 from eutester.sshconnection import SshCbReturn
 
 
@@ -69,6 +69,7 @@ class ImageUtils(EutesterTestCase):
         else:
             self.tester = tester
         self.tester.exit_on_fail = eof
+        self.debugmethod = self.tester.debug    
         
         self.component = work_component or self.tester.clc
         
@@ -132,7 +133,7 @@ class ImageUtils(EutesterTestCase):
     def get_manifest_part_count(self, path, component=None, timeout=30):
         machine = component or self.component
         cmd = 'cat '+str(path)
-        out = machine.cmd(cmd,timeout=timeout, verbose=True)
+        out = machine.cmd(cmd,timeout=timeout, verbose=False)
         if out['status'] != 0:
             raise Exception('get_manifest_part_count failed, cmd status:'+str(out['status']))
         output = out['output']

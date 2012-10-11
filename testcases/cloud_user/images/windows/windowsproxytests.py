@@ -52,6 +52,46 @@ class WindowsProxyTests():
                   win_instance = None,
                   win_keypath = None,
                   win_password = None ):
+        '''
+        Description: Help class to execute remote powershell cmdlets over an ssh connection in order to 
+                    test Windows Instance functionality within the cloud.
+                    
+        :type proxy_host: string
+        :param proxy_host: The ip address or FQDN hostname of the windows server to connect via ssh, and exectute the powershell commands on.
+        
+        :type proxy_username: string
+        :param proxy_username: The username used for created the remote ssh session, and executing the powershell cmdlets
+        
+        :type proxy_password: string
+        :param proxy_passwrd: The password used fro creating the remote ssh session. 
+        
+        :type proxy_keypath: string
+        :param proxy_keypath: The path to the ssh keyfile used for establishing the ssh session to the remote powershell server. 
+        
+        :type timeout: integer
+        :param timeout: Timeout to be used as a default for method timeouts. ie  timeout used for establising an ssh session to powershell server. 
+        
+        :type retry:
+        :param retry: Used to define the amount of times to retry a failed method before giving up. 
+        
+        :type debugmethod: method
+        :param debugmethod: A method which can be pass and used for self.debug
+        
+        :type verbose: boolean
+        :param verbose: A boolean to flag on or off debug messages. 
+        
+        :type win_instance: instance object
+        :param win_instance: instance object used as the default target for running tests against
+        
+        :type win_keypath: string
+        :param win_keypath: A string representing the path to the keyfile used when launching the win_instance instance. 
+                            This is used for building the password to win_instance if necessarry. 
+                            See ec2ops for get_windows_instance_password method
+        
+        :type win_password: string
+        :param win_password: The cloud generated password associated with win_instance. See ec2ops for get_windows_instance_password method
+         
+        '''
         
         self.proxy_hostname = proxy_hostname
         self.proxy_username = proxy_username or 'Administrator'
@@ -104,22 +144,50 @@ class WindowsProxyTests():
                exitcode=0,
                timeout=360):
         '''
-        Send command over ssh connection to power shell proxy server. Proxy server then excutes Power shell command
-        against 'hostname' using 'password'. Checks for ssh errors, and command exit status code.  
-        the command. 
-        Returns the command output in either a single string buffer or list of lines depending on 'listformat' setting. 
-        hostname - mandatory - string, hostname or ip addr of instance
-        password - mandatory - string, windows Administrator password derived from instance
-        ps1source - optional - string, in ". <filename;" form. A prefix to source a given powershell script for cmdlets default: '. C:\eutester_profile.ps1;'
-        command= optional - string, command/cmdlet to run after the login sequence. 
-        cmdprefix - optional - string, command prefix to run other than default login sequence 
-        listformat - optional - boolean, indicate whether or not returned string buffer is split per lines in a list or single buffer  
-        retries - optional - integer, number of times to retry this command after failure  
-        retryinterval - optional - integer, number of seconds to sleep between retries after failure 
-        cmdtimeout - optional - integer,  number of seconds to wait before giving up on each command retry
-        exitcode - optional - integer, exit code to check remote command return value against, default = 0. 
-        pscb - optional - callback to handle per line output of command, default is: self.check_pshell_output used to fail fast on remote powershell errors
-        timeout -optional - integer, number of seconds to wait before giving up on this method (sum of all retries)
+        Description: Issues a powershell command on a remote windows server over ssh. (ie the windows server is running cygwin, etc).
+                    Send command over ssh connection to power shell proxy server. Proxy server then excutes Power shell command
+                    against 'hostname' using 'password'. Checks for ssh errors, and command exit status code.  
+                    the command. 
+                    Returns the command output in either a single string buffer or list of lines depending on 'listformat' setting. 
+                    
+        :type hostname: string
+        :param hostname: mandatory - string, hostname or ip addr of instance
+        
+        :type password: string
+        :param password: mandatory - string, windows Administrator password derived from instance
+        
+        :type ps1source: string
+        :param ps1source: optional - string, in ". <filename;" form. A prefix to source a given powershell script for cmdlets default: '. C:\eutester_profile.ps1;'
+        
+        :type command: string
+        :param command: optional - string, command/cmdlet to run after the login sequence. 
+        
+        :type cmdprefix: string
+        :param cmdprefix: optional - string, command prefix to run other than default login sequence 
+        
+        :type listformat: boolean
+        :param listformat: optional - boolean, indicate whether or not returned string buffer is split per lines in a list or single buffer  
+        
+        :type retries: integer
+        :param retries: optional - integer, number of times to retry this command after failure  
+        
+        :type retryinterval: integer
+        :param retryinterval: optional - integer, number of seconds to sleep between retries after failure 
+        
+        :type cmdtimeout: integer
+        :param cmdtimeout: optional - integer,  number of seconds to wait before giving up on each command retry
+        
+        :type exitcode: integer
+        :param exitcode: optional - integer, exit code to check remote command return value against, default = 0. 
+        
+        :type pscb: method
+        :param pscb: optional - callback to handle per line output of command, default is: self.check_pshell_output used to fail fast on remote powershell errors
+        
+        :type timeout: integer
+        :param timeout: optional - integer, number of seconds to wait before giving up on this method (sum of all retries)
+        
+        :rtype: string
+        :returns: The string buffer containing stdout/err of the remote powershell session. 
         '''
         start = time.time()
         elapsed = 0
@@ -138,8 +206,9 @@ class WindowsProxyTests():
         cmd = cmdprefix + str(command) + '}"'
         
         #Attempt to run the command until number of retries is exceeded...
+        attempt=0
         for attempt in xrange(0,retries):
-            self.debug('ps_cmd: cmd:"'+str(cmd)+'", attempt:'+str(attempt)+'/'+str(retries)+', elapsed:'+str(elapsed))
+            self.debug('ps_cmd: cmd:"'+str(repr(cmd))+'", attempt:'+str(attempt)+'/'+str(retries)+', elapsed:'+str(elapsed))
             try:
                 try:
                     self.ps_status_msg('    ( Attempt:'+str(attempt)+' )')
@@ -158,14 +227,15 @@ class WindowsProxyTests():
                 return output['output']
             except Exception, ae:
                 self.ps_status_msg('ps_cmd, attempt:'+str(attempt)+', failed:'+str(ae))
-                time.sleep(retryinterval)
+                if (attempt+1 < retries):
+                    time.sleep(retryinterval)
             finally:
                 #Windows ssh doesn't clean up well...
                 self.reset_ssh()
             elapsed =  int(time.time()-start)
             if elapsed > timeout:
                 raise Exception('ps_cmd timed out after:'+str(elapsed)+'seconds, and "'+str(attempt)+'" attempts')
-        raise Exception('Command failed after '+str(attempt+1)+' attempts')
+        raise Exception('Powershell Proxy command failed after '+str(attempt+1)+' attempts')
     
     def ps_status_msg(self,msg):
         self.debug('-----------------------------------------------------------------------------------------')
@@ -185,7 +255,14 @@ class WindowsProxyTests():
         
     def ps_check_powershell(self, echomsg='YES powershell is working'):
         '''
-        Basic echo function to test the remote proxy's powershell status
+        Description: Tests basic rmote connection and powershell functionality using echo like cmdlet
+                    Basic echo function to test the remote proxy's powershell status
+                    
+        :type echomsg: string
+        :param echomsg: optional string to be echoed by remote powershell cmdlet
+        
+        :rtype: string
+        :returns: The string buffer containing stdout/err of the remote powershell session. 
         '''
         echomsg = "'"+str(echomsg)+"'"
         cmdprefix = 'echo "\n" | powershell -command "&{. C:\eutester_profile.ps1; Eutester-echo -word '+str(echomsg)
@@ -200,7 +277,29 @@ class WindowsProxyTests():
         return out
             
     
-    def ps_ephemeral_test(self, host=None, password=None, retries=2, retryinterval=15, cmdtimeout=15, timeout=360):
+    def ps_ephemeral_test(self, host=None, password=None, retries=1, retryinterval=15, cmdtimeout=15, timeout=360):
+        '''
+        Description: ps_phemeral_test  Intends to verify the ephemeral storage on a windows instance by executing 
+                     remote powershell cmdlets against a running instance. 
+        
+        :type host: string
+        :param host: The FQDN or IP address of the windows instance to perform remote powershell scripts against
+        
+        :type password: string
+        :param password: The 'Administrator' password for the remote windows instance. 
+        
+        :type retries: integer
+        :param retries: The number of times to retry the powershell cmdlet upon failure
+        
+        :type retryinterval: integer
+        :param retryinterval: The number of seconds to wait between retrying a failed powershell cmdlet
+
+        :type cmdtimeout: integer
+        :param cmdtimeout: The number of seconds to wait for the remote ssh session to return when executing the remote cmdlet. 
+        
+        :rtype: string
+        :returns: The string buffer containing stdout/err of the remote powershell session. 
+        '''
         self.debug('Running command ps_ephemeral_test...')
         host = host or self.win_instance.public_dns_name
         password = password or self.win_password
@@ -213,10 +312,33 @@ class WindowsProxyTests():
                           cmdtimeout=cmdtimeout, 
                           timeout=timeout)
         self.debug('ps_ephemeral_test passed.')
+        return out
     
     
-    def ps_ebs_test(self, host=None, password=None, retries=2, retryinterval=5, cmdtimeout=300, timeout=360):
+    def ps_ebs_test(self, host=None, password=None, retries=1, retryinterval=5, cmdtimeout=300, timeout=360):
+        '''
+        Description: Attempts to validate the attached EBS volume state and format on the remote windows guest.
+        
+        :type host: string
+        :param host: The FQDN or IP address of the windows instance to perform remote powershell scripts against
+        
+        :type password: string
+        :param password: The 'Administrator' password for the remote windows instance. 
+        
+        :type retries: integer
+        :param retries: The number of times to retry the powershell cmdlet upon failure
+        
+        :type retryinterval: integer
+        :param retryinterval: The number of seconds to wait between retrying a failed powershell cmdlet
+
+        :type cmdtimeout: integer
+        :param cmdtimeout: The number of seconds to wait for the remote ssh session to return when executing the remote cmdlet. 
+        
+        :rtype: string
+        :returns: The string buffer containing stdout/err of the remote powershell session. 
+        '''
         self.debug('Running command ps_ebs_test...')
+        self.debug("Warning, ebs_test may not work on a 32bit guest...")
         host = host or self.win_instance.public_dns_name
         password = password or self.win_password
         cmd='Eutester-Test-Euca-EBS'
@@ -228,8 +350,30 @@ class WindowsProxyTests():
                           cmdtimeout=cmdtimeout, 
                           timeout=timeout)
         self.debug('ps_ebs_test passed.')
+        return out
 
-    def ps_get_euca_log(self,host=None, password=None, retries=2, retryinterval=5, cmdtimeout=300, timeout=360):
+    def ps_get_euca_log(self,host=None, password=None, retries=1, retryinterval=5, cmdtimeout=300, timeout=360):
+        '''
+        Description: Execute powershell command to get related Eucalyptus test logs
+        
+        :type host: string
+        :param host: The FQDN or IP address of the windows instance to perform remote powershell scripts against
+        
+        :type password: string
+        :param password: The 'Administrator' password for the remote windows instance. 
+        
+        :type retries: integer
+        :param retries: The number of times to retry the powershell cmdlet upon failure
+        
+        :type retryinterval: integer
+        :param retryinterval: The number of seconds to wait between retrying a failed powershell cmdlet
+
+        :type cmdtimeout: integer
+        :param cmdtimeout: The number of seconds to wait for the remote ssh session to return when executing the remote cmdlet. 
+        
+        :rtype: string
+        :returns: The string buffer containing stdout/err of the remote powershell session. 
+        '''
         self.debug('Running command ps_get_euca_log...')
         host = host or self.win_instance.public_dns_name
         password = password or self.win_password
@@ -242,16 +386,38 @@ class WindowsProxyTests():
                           cmdtimeout=cmdtimeout, 
                           timeout=timeout)
         self.debug('ps_get_euca_log passed.')
+        return out
         
     
-    def ps_hostname_test(self, iname = None, host=None, password=None, retries=2, retryinterval=5, cmdtimeout=300, timeout=360):
+    def ps_hostname_test(self, iname = None, host=None, password=None, retries=1, retryinterval=5, cmdtimeout=300, timeout=360):
+        '''
+        Description: Verify that a hostname on the Windows instance has been set via eucalyptus
+        
+        :type host: string
+        :param host: The FQDN or IP address of the windows instance to perform remote powershell scripts against
+        
+        :type password: string
+        :param password: The 'Administrator' password for the remote windows instance. 
+        
+        :type retries: integer
+        :param retries: The number of times to retry the powershell cmdlet upon failure
+        
+        :type retryinterval: integer
+        :param retryinterval: The number of seconds to wait between retrying a failed powershell cmdlet
+
+        :type cmdtimeout: integer
+        :param cmdtimeout: The number of seconds to wait for the remote ssh session to return when executing the remote cmdlet. 
+        
+        :rtype: string
+        :returns: The string buffer containing stdout/err of the remote powershell session. 
+        '''
         self.debug('Running command ps_hostname_test...')
         host = host or self.win_instance.public_dns_name
         password = password or self.win_password
+        iname = iname or self.win_instance.id
         if iname is not None:
             cmd='Eutester-Test-Euca-Hostname -hostname '+str(iname)
-        else:
-            cmd='Eutester-Test-Euca-Hostname'
+        
         out = self.ps_cmd(host, 
                           password,
                           command=cmd, 
@@ -260,8 +426,31 @@ class WindowsProxyTests():
                           cmdtimeout=cmdtimeout, 
                           timeout=timeout)
         self.debug('ps_hostname_test passed.')
+        return out
     
-    def ps_login_test(self,host=None, password=None, retries=2, retryinterval=5, cmdtimeout=30, timeout=360):
+    def ps_login_test(self,host=None, password=None, retries=1, retryinterval=5, cmdtimeout=30, timeout=360):
+        '''
+        Description: Verify that the windows instance can be logged into using user Administrator and 
+                    the Cloud generated password
+        
+        :type host: string
+        :param host: The FQDN or IP address of the windows instance to perform remote powershell scripts against
+        
+        :type password: string
+        :param password: The 'Administrator' password for the remote windows instance. 
+        
+        :type retries: integer
+        :param retries: The number of times to retry the powershell cmdlet upon failure
+        
+        :type retryinterval: integer
+        :param retryinterval: The number of seconds to wait between retrying a failed powershell cmdlet
+
+        :type cmdtimeout: integer
+        :param cmdtimeout: The number of seconds to wait for the remote ssh session to return when executing the remote cmdlet. 
+        
+        :rtype: string
+        :returns: The string buffer containing stdout/err of the remote powershell session. 
+        '''
         self.debug('Running command ps_login_test...')
         host = host or self.win_instance.public_dns_name
         password = password or self.win_password
@@ -274,9 +463,31 @@ class WindowsProxyTests():
                           cmdtimeout=cmdtimeout, 
                           timeout=timeout)
         self.debug('ps_get_login_test passed.')
+        return out
     
     
-    def ps_virtio_test(self,host=None, password=None, retries=2, retryinterval=5, cmdtimeout=300, timeout=360):
+    def ps_virtio_test(self,host=None, password=None, retries=1, retryinterval=5, cmdtimeout=300, timeout=360):
+        '''
+        Description: Run Powershell Virtio Test on remote Windows instance
+        
+        :type host: string
+        :param host: The FQDN or IP address of the windows instance to perform remote powershell scripts against
+        
+        :type password: string
+        :param password: The 'Administrator' password for the remote windows instance. 
+        
+        :type retries: integer
+        :param retries: The number of times to retry the powershell cmdlet upon failure
+        
+        :type retryinterval: integer
+        :param retryinterval: The number of seconds to wait between retrying a failed powershell cmdlet
+
+        :type cmdtimeout: integer
+        :param cmdtimeout: The number of seconds to wait for the remote ssh session to return when executing the remote cmdlet. 
+        
+        :rtype: string
+        :returns: The string buffer containing stdout/err of the remote powershell session. 
+        '''
         self.debug('Running command ps_virtio_test...')
         host = host or self.win_instance.public_dns_name
         password = password or self.win_password
@@ -289,9 +500,31 @@ class WindowsProxyTests():
                           cmdtimeout=cmdtimeout, 
                           timeout=timeout)
         self.debug('ps_get_virtio_test passed.')
+        return out
         
     
-    def ps_xenpv_test(self,host=None, password=None, retries=2, retryinterval=5, cmdtimeout=300, timeout=360):
+    def ps_xenpv_test(self,host=None, password=None, retries=1, retryinterval=5, cmdtimeout=300, timeout=360):
+        '''
+        Description:Run Xen powershell test on remote Windows instance 
+        
+        :type host: string
+        :param host: The FQDN or IP address of the windows instance to perform remote powershell scripts against
+        
+        :type password: string
+        :param password: The 'Administrator' password for the remote windows instance. 
+        
+        :type retries: integer
+        :param retries: The number of times to retry the powershell cmdlet upon failure
+        
+        :type retryinterval: integer
+        :param retryinterval: The number of seconds to wait between retrying a failed powershell cmdlet
+
+        :type cmdtimeout: integer
+        :param cmdtimeout: The number of seconds to wait for the remote ssh session to return when executing the remote cmdlet. 
+        
+        :rtype: string
+        :returns: The string buffer containing stdout/err of the remote powershell session. 
+        '''
         self.debug('Running command ps_xenpv_test...')
         host = host or self.win_instance.public_dns_name
         password = password or self.win_password
@@ -304,7 +537,114 @@ class WindowsProxyTests():
                           cmdtimeout=cmdtimeout, 
                           timeout=timeout)
         self.debug('ps_get_xenpv_test passed.')
+        return out
         
+    def ps_admembership_test(self,host=None, password=None, retries=1, retryinterval=5, cmdtimeout=300, timeout=360):
+        '''
+        Description:Run Active Dir. Memberhsip powershell test on remote Windows instance 
+        
+        :type host: string
+        :param host: The FQDN or IP address of the windows instance to perform remote powershell scripts against
+        
+        :type password: string
+        :param password: The 'Administrator' password for the remote windows instance. 
+        
+        :type retries: integer
+        :param retries: The number of times to retry the powershell cmdlet upon failure
+        
+        :type retryinterval: integer
+        :param retryinterval: The number of seconds to wait between retrying a failed powershell cmdlet
+
+        :type cmdtimeout: integer
+        :param cmdtimeout: The number of seconds to wait for the remote ssh session to return when executing the remote cmdlet. 
+        
+        :rtype: string
+        :returns: The string buffer containing stdout/err of the remote powershell session. 
+        '''
+        self.debug('Running command Eutester-Test-Euca-ADMembership...')
+        host = host or self.win_instance.public_dns_name
+        password = password or self.win_password
+        cmd='Eutester-Test-Euca-ADMembership'
+        out = self.ps_cmd(host, 
+                          password, 
+                          command=cmd,
+                          retries=retries, 
+                          retryinterval=retryinterval, 
+                          cmdtimeout=cmdtimeout, 
+                          timeout=timeout)
+        self.debug('ps_ADMembership_test passed.')
+        return out
     
     
+    def ps_eucaadkey_test(self,host=None, password=None, retries=1, retryinterval=5, cmdtimeout=300, timeout=360):
+        '''
+        Description:Run Active Dir. Memberhsip powershell test on remote Windows instance 
+        
+        :type host: string
+        :param host: The FQDN or IP address of the windows instance to perform remote powershell scripts against
+        
+        :type password: string
+        :param password: The 'Administrator' password for the remote windows instance. 
+        
+        :type retries: integer
+        :param retries: The number of times to retry the powershell cmdlet upon failure
+        
+        :type retryinterval: integer
+        :param retryinterval: The number of seconds to wait between retrying a failed powershell cmdlet
+
+        :type cmdtimeout: integer
+        :param cmdtimeout: The number of seconds to wait for the remote ssh session to return when executing the remote cmdlet. 
+        
+        :rtype: string
+        :returns: The string buffer containing stdout/err of the remote powershell session. 
+        '''
+        self.debug('Running command Eutester-Test-Euca-ADKey...')
+        host = host or self.win_instance.public_dns_name
+        password = password or self.win_password
+        cmd='Eutester-Test-Euca-ADKey'
+        out = self.ps_cmd(host, 
+                          password, 
+                          command=cmd,
+                          retries=retries, 
+                          retryinterval=retryinterval, 
+                          cmdtimeout=cmdtimeout, 
+                          timeout=timeout)
+        self.debug('ps_EucaADKey_test passed.')
+        return out
     
+    
+    def ps_rdpermission_test(self,host=None, password=None, retries=1, retryinterval=5, cmdtimeout=300, timeout=360):
+        '''
+        Description:Run Remote Desktop Permission powershell test on remote Windows instance 
+        
+        :type host: string
+        :param host: The FQDN or IP address of the windows instance to perform remote powershell scripts against
+        
+        :type password: string
+        :param password: The 'Administrator' password for the remote windows instance. 
+        
+        :type retries: integer
+        :param retries: The number of times to retry the powershell cmdlet upon failure
+        
+        :type retryinterval: integer
+        :param retryinterval: The number of seconds to wait between retrying a failed powershell cmdlet
+
+        :type cmdtimeout: integer
+        :param cmdtimeout: The number of seconds to wait for the remote ssh session to return when executing the remote cmdlet. 
+        
+        :rtype: string
+        :returns: The string buffer containing stdout/err of the remote powershell session. 
+        '''
+        self.debug('Running command Test-Euca-RDPermission...')
+        host = host or self.win_instance.public_dns_name
+        password = password or self.win_password
+        cmd='Eutester-Test-Euca-RDPermission'
+        out = self.ps_cmd(host, 
+                          password, 
+                          command=cmd,
+                          retries=retries, 
+                          retryinterval=retryinterval, 
+                          cmdtimeout=cmdtimeout, 
+                          timeout=timeout)
+        self.debug('ps_RDPermission_test passed.')
+        return out
