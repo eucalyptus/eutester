@@ -17,7 +17,7 @@ import random
 
 class InstanceBasics(EutesterTestCase):
     def __init__(self, credpath=None):
-        EutesterTestCase.__init__(self)
+        self.setuptestcase()
         # Setup basic eutester object
         self.tester = Eucaops( credpath=credpath)
         self.tester.poll_count = 120
@@ -36,18 +36,12 @@ class InstanceBasics(EutesterTestCase):
         self.zone = random.choice(zones).name
         self.reservation = self.tester.run_instance(self.image, keypair=self.keypair.name, group=self.group.name, zone=self.zone)
 
-
     def clean_method(self):
-        if self.reservation is not None:
+        if self.reservation:
             self.assertTrue(self.tester.terminate_instances(self.reservation), "Unable to terminate instance(s)")
         self.tester.delete_group(self.group)
         self.tester.delete_keypair(self.keypair)
         os.remove(self.keypath)
-        self.reservation = None
-        self.group = None
-        self.keypair = None
-        self.tester = None
-        self.ephemeral = None
 
 
     def BasicInstanceChecks(self, zone = None):
@@ -366,7 +360,7 @@ class InstanceBasics(EutesterTestCase):
         for instance in self.reservation.instances:
             address = self.tester.allocate_address()
             self.assertTrue(address,'Unable to allocate address')
-            self.assertTrue(self.tester.associate_address(instance, address))
+            self.tester.associate_address(instance, address)
             self.tester.sleep(30)
             instance.update()
             self.assertTrue( self.tester.ping(instance.public_dns_name), "Could not ping instance with new IP")
