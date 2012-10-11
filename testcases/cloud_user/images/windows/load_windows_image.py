@@ -17,8 +17,8 @@ testcase.parser.add_argument('--url',help='URL containing remote windows image t
 testcase.parser.add_argument('--file',dest='image_file', help='File path to create windows EMI from', default=None)
 testcase.parser.add_argument('--workip',help='The IP of the machine that the operation will be performed on', default=None)
 testcase.parser.add_argument('--destpath',help='The path on the workip, that this operation will be performed on', default='/disk1/storage')
-testcase.parser.add_argument('--urlpass',help='Password needed to retrieve remote url', default=None)
-testcase.parser.add_argument('--urluser',help='Username needed to retrieve remote url', default=None)
+testcase.parser.add_argument('--urlpass', dest='wget_password',help='Password needed to retrieve remote url', default=None)
+testcase.parser.add_argument('--urluser',dest='wget_user', help='Username needed to retrieve remote url', default=None)
 testcase.parser.add_argument('--gigtime',dest='time_per_gig', help='Time allowed per gig size of image to be used', default=300)
 testcase.parser.add_argument('--interbundletime',dest='inter_bundle_timeout', help='Inter-bundle timeout', default=120)
 testcase.parser.add_argument('--bucket',dest='bucketname', help='bucketname', default=None)
@@ -32,7 +32,7 @@ if args.workip:
 
 WinTests = testcase.do_with_args(WindowsTests,work_component=machine)
 
-test = EutesterTestUnit(WinTests.create_windows_emi_from_url, url = args.url,wget_user = args.urluser, wget_password = args.urlpass)
+test = testcase.create_testunit_from_method(WinTests.create_windows_emi_from_url)
 
 testcase.run_test_case_list([test], eof=True, clean_on_exit=False, printresults=True)
 

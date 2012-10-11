@@ -82,6 +82,8 @@ class EbsTestSuite(EutesterTestCase):
     image = None
     
     def __init__(self, 
+                 name=None,
+                 args=None,
                  tester=None, 
                  zone=None, 
                  config_file='../input/2b_tested.lst', 
@@ -91,9 +93,11 @@ class EbsTestSuite(EutesterTestCase):
                  keypair=None, 
                  group=None, 
                  emi=None, 
-                 vmtype=None,
+                 vmtype='c1.medium',
                  eof=1):
         
+        self.args = args
+        self.setupself(name)
         if tester is None:
             self.tester = Eucaops( config_file=config_file,password=password,credpath=credpath)
         else:
@@ -539,38 +543,38 @@ class EbsTestSuite(EutesterTestCase):
     ''' 
                 
         
-    def run_ebs_basic_test_suite(self, run=True):  
+    def ebs_basic_test_suite(self, run=True):  
         testlist = [] 
         #create first round of volumes
-        testlist.append(self.create_testcase_from_method(self.create_vols_per_zone))
+        testlist.append(self.create_testunit_from_method(self.create_vols_per_zone))
         #launch instances to interact with ebs volumes
-        testlist.append(self.create_testcase_from_method(self.create_test_instances_for_zones))
+        testlist.append(self.create_testunit_from_method(self.create_test_instances_for_zones))
         #attach first round of volumes
-        testlist.append(self.create_testcase_from_method(self.attach_all_avail_vols_to_instances_in_zones))
+        testlist.append(self.create_testunit_from_method(self.attach_all_avail_vols_to_instances_in_zones))
         #attempt to delete attached volumes, should not be able to
-        testlist.append(self.create_testcase_from_method(self.negative_delete_attached_volumes_in_zones))
+        testlist.append(self.create_testunit_from_method(self.negative_delete_attached_volumes_in_zones))
         #attempt to attach a volume which is already attached, should not be able to
-        testlist.append(self.create_testcase_from_method(self.negative_attach_in_use_volume_in_zones))
+        testlist.append(self.create_testunit_from_method(self.negative_attach_in_use_volume_in_zones))
         #create second round of volumes
-        testlist.append(self.create_testcase_from_method(self.create_vols_per_zone))
+        testlist.append(self.create_testunit_from_method(self.create_vols_per_zone))
         #attach second round of volumes
-        testlist.append(self.create_testcase_from_method(self.attach_all_avail_vols_to_instances_in_zones))
+        testlist.append(self.create_testunit_from_method(self.attach_all_avail_vols_to_instances_in_zones))
         #reboot instances and confirm volumes remain attached
-        testlist.append(self.create_testcase_from_method(self.reboot_instances_in_zone_verify_volumes))
+        testlist.append(self.create_testunit_from_method(self.reboot_instances_in_zone_verify_volumes))
         #detach 1 volume leave the 2nd attached
-        testlist.append(self.create_testcase_from_method(self.detach_volumes_in_zones))
+        testlist.append(self.create_testunit_from_method(self.detach_volumes_in_zones))
         #attempt to create volumes from snaps, attach and verify md5 in same zone it was created in
-        testlist.append(self.create_testcase_from_method(self.create_snapshots_all_vols_in_zone))
+        testlist.append(self.create_testunit_from_method(self.create_snapshots_all_vols_in_zone))
         #attempt to create volumes of each snap within the same zone they were originally created in
-        testlist.append(self.create_testcase_from_method(self.create_vols_from_snap_in_same_zone))
+        testlist.append(self.create_testunit_from_method(self.create_vols_from_snap_in_same_zone))
         #attempt to verify integrity of the volumes  by attaching to instance and checking md5 against original
-        testlist.append(self.create_testcase_from_method(self.attach_new_vols_from_snap_verify_md5))  
+        testlist.append(self.create_testunit_from_method(self.attach_new_vols_from_snap_verify_md5))  
         if (len(self.zonelist) > 1 ):
             #attempt to create volumes from     s, attach and verify md5 in a different zone than it was created in        
-            testlist.append(self.create_testcase_from_method(self.create_vols_from_snap_in_different_zone))
+            testlist.append(self.create_testunit_from_method(self.create_vols_from_snap_in_different_zone))
             #verify the integrity of the new volumes by attaching to instance and checking md5 against original
-            testlist.append(self.create_testcase_from_method(self.attach_new_vols_from_snap_verify_md5))
-        testlist.append(self.create_testcase_from_method(self.detach_all_volumes_from_stopped_instances_in_zones))
+            testlist.append(self.create_testunit_from_method(self.attach_new_vols_from_snap_verify_md5))
+        testlist.append(self.create_testunit_from_method(self.detach_all_volumes_from_stopped_instances_in_zones))
         if run:
             self.run_test_case_list(testlist)
         else:

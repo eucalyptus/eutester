@@ -280,23 +280,24 @@ class EutesterTestCase(unittest.TestCase):
     def setupself(self, name=None, debugmethod=None, use_default_file=True, default_config='eutester.conf' ):
         self.name = name 
         if not self.name:
-                callerfilename=inspect.getouterframes(inspect.currentframe())[1][1]
-                self.name = os.path.splitext(os.path.basename(callerfilename))[0]  
-                self.debugmethod = debugmethod
-                if not self.debugmethod:
-                    self.setup_debugmethod(name)
-                self.testlist = []
-                self.default_config = default_config 
-                self.configfiles=[]
-                self.use_default_file = use_default_file
-                if use_default_file:
-                    #first add $USERHOME/.eutester/eutester.conf if it exists
-                    self.default_config=self.get_default_userhome_config(fname=default_config)
-                    if self.default_config:
-                        self.configfiles.append(self.default_config)
-                self.args=argparse.Namespace()
-                self.show_self()
-               
+            callerfilename=inspect.getouterframes(inspect.currentframe())[1][1]
+            self.name = os.path.splitext(os.path.basename(callerfilename))[0]  
+        self.debugmethod = debugmethod
+        if not self.debugmethod:
+            self.setup_debugmethod(name)
+        if not hasattr(self,'testlist'): self.testlist = []
+        if not hasattr(self,'configfiles'): self.configfiles=[]
+        self.default_config = default_config 
+        self.use_default_file = use_default_file
+        if use_default_file:
+            #first add $USERHOME/.eutester/eutester.conf if it exists
+            self.default_config=self.get_default_userhome_config(fname=default_config)
+            if self.default_config:
+                self.configfiles.append(self.default_config)
+        if not hasattr(self,'args'): self.args=argparse.Namespace()
+        self.show_self()
+                
+
                                    
     def setup_parser(self,
                    testname=None, 
@@ -446,30 +447,7 @@ class EutesterTestCase(unittest.TestCase):
         for line in msg.split("\n"):
             self.debugmethod("("+str(cur_method)+":"+str(lineno)+"): "+colorprefix+line.strip()+colorreset )
             
-    def create_testcase_from_method(self, method,eof=False, autoarg=True, *args, **kwargs):
-        '''
-        Description: legacy support, see: create_testunit_from_method() Convenience method calling EutesterTestUnit. 
-                     Creates a EutesterTestUnit object from a method and set of arguments to be fed to that method
-        
-        :type method: method
-        :param method: The underlying method for this object to wrap, run and provide information on
-        
-        :type eof: boolean
-        :param eof: Boolean to indicate whether this testunit should cause a test list to end of failure
-        
-        :type autoarg: boolean
-        :param autoarg: Boolean to indicate whether to autopopulate this testunit with values from global testcase.args
-        
-        :type args: list of positional arguments
-        :param args: the positional arguments to be fed to the given testunit 'method'
-        
-        :type kwargs: list of keyword arguements 
-        :param kwargs: list of keyword 
-        
-        :rtype: EutesterTestUnit
-        :returns: EutesterTestUnit object
-        '''   
-        return self.create_testunit_from_method(self,method,eof=eof, autoarg=autoarg, *args, **kwargs)
+   
             
     def create_testunit_from_method(self,method,eof=False, autoarg=True, *args, **kwargs):
         '''
@@ -679,7 +657,7 @@ class EutesterTestCase(unittest.TestCase):
         '''
         obj = obj or self
         meth = getattr(obj,name)
-        return self.run_with_args(meth, *args, **kwargs)
+        return self.do_with_args(meth, *args, **kwargs)
         
         
         
@@ -822,6 +800,8 @@ class EutesterTestCase(unittest.TestCase):
             args.cred_path = args.credpath
         except: pass
         self.args = args
+        #finally add the namespace args to args for populating other testcase objs from this one
+        if not self.has_arg('args'): args.__setattr__('args',copy.copy(args))
         self.show_self()
         return args
     
