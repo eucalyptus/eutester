@@ -437,10 +437,10 @@ class EutesterTestCase(unittest.TestCase):
                 self.setup_debugmethod()
         except:
             self.setup_debugmethod()
-        
-        try: 
-            self.use_color = self.args.use_color
-        except: 
+
+        if self.has_arg("use_color"):
+            self.use_color = bool(self.args.use_color)
+        else:
             self.use_color = False
             
         colorprefix=""
@@ -757,7 +757,7 @@ class EutesterTestCase(unittest.TestCase):
         
         if self.use_default_file and self.default_config:
             try:
-                configfiles.append(EuConfig(filename=self.default_config))
+                configfiles.append(self.default_config)
             except Exception, e:
                 self.debug("Unable to read config from file: " + str(e))
 
@@ -895,7 +895,6 @@ class EutesterTestCase(unittest.TestCase):
     
     def populate_testunit_with_args(self,testunit,namespace=None):
         tc_args = namespace or self.args
-        pargs = testunit.args
     
         tu_args =  copy.copy(testunit.kwargs)
         #Get all the var names of the underlying method the testunit is wrapping
@@ -904,7 +903,7 @@ class EutesterTestCase(unittest.TestCase):
         #Add the var names of the positional args provided in testunit.args to check against later
         #Append to the known keyword arg list
         for x,arg in enumerate(testunit.args):
-            kwargs.append([meth_args[x+1]])
+            tu_args.append([vars[x+1]])
             
         #populate any global args which do not conflict with args already contained within the test case
         #first populate matching method args with our global testcase args taking least precedence
