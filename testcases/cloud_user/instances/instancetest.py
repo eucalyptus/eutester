@@ -8,23 +8,20 @@
 import unittest
 import time
 from eucaops import Eucaops
-from eutester import xmlrunner
+from eutester.eutestcase import EutesterTestCase
 from eutester.euvolume import EuVolume
 import os
 import re
 import random
-import argparse
 
-arg_credpath = None
 
-class InstanceBasics(unittest.TestCase):
-    def setUp(self, credpath=None):
+class InstanceBasics(EutesterTestCase):
+    def __init__(self, credpath=None):
+        self.setuptestcase()
         # Setup basic eutester object
-        if credpath is None:
-            credpath = arg_credpath
         self.tester = Eucaops( credpath=credpath)
         self.tester.poll_count = 120
-        
+
         ### Add and authorize a group for the instance
         self.group = self.tester.add_group(group_name="group-" + str(time.time()))
         self.tester.authorize_group_by_name(group_name=self.group.name )
@@ -37,19 +34,14 @@ class InstanceBasics(unittest.TestCase):
         self.private_addressing = False
         zones = self.tester.ec2.get_all_zones()
         self.zone = random.choice(zones).name
+        self.reservation = self.tester.run_instance(self.image, keypair=self.keypair.name, group=self.group.name, zone=self.zone)
 
-    
-    def tearDown(self):
-        if self.reservation is not None:
+    def clean_method(self):
+        if self.reservation:
             self.assertTrue(self.tester.terminate_instances(self.reservation), "Unable to terminate instance(s)")
         self.tester.delete_group(self.group)
         self.tester.delete_keypair(self.keypair)
         os.remove(self.keypath)
-        self.reservation = None
-        self.group = None
-        self.keypair = None
-        self.tester = None
-        self.ephemeral = None
 
 
     def BasicInstanceChecks(self, zone = None):
@@ -66,7 +58,7 @@ class InstanceBasics(unittest.TestCase):
         """
         if zone is None:
             zone = self.zone
-        if self.reservation is None:
+        if not self.reservation:
             self.reservation = self.tester.run_instance(self.image, keypair=self.keypair.name, group=self.group.name, zone=zone)
         for instance in self.reservation.instances:
             self.assertTrue( self.tester.wait_for_reservation(self.reservation) ,'Instance did not go to running')
@@ -74,7 +66,7 @@ class InstanceBasics(unittest.TestCase):
             self.assertTrue( self.tester.ping(instance.public_dns_name), 'Could not ping instance')
             self.assertFalse( instance.found("ls -1 /dev/" + instance.rootfs_device + "2",  "No such file or directory"),  'Did not find ephemeral storage at ' + instance.rootfs_device + "2")
         return self.reservation
-    
+
     def ElasticIps(self, zone = None):
         """
        This case was developed to test elastic IPs in Eucalyptus. This test case does
@@ -87,7 +79,8 @@ class InstanceBasics(unittest.TestCase):
         """
         if zone is None:
             zone = self.zone
-        self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name,zone=zone)
+        if not self.reservation:
+            self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name,zone=zone)
         for instance in self.reservation.instances:
             address = self.tester.allocate_address()
             self.assertTrue(address,'Unable to allocate address')
@@ -99,7 +92,7 @@ class InstanceBasics(unittest.TestCase):
             instance.update()
             self.assertTrue( self.tester.ping(instance.public_dns_name), "Could not ping after dissassociate")
         return self.reservation
-    
+
     def MaxSmallInstances(self, available_small=None,zone = None):
         """
         This case was developed to test the maximum number of m1.small vm types a configured
@@ -107,6 +100,8 @@ class InstanceBasics(unittest.TestCase):
         tests to see if all the instances reached a running state.  If there is a failure,
         the test case errors out; logging the results.
         """
+        if self.reservation:
+            self.tester.terminate_instances(self.reservation)
         if available_small is None:
             available_small = self.tester.get_available_vms()
         if zone is None:
@@ -114,8 +109,8 @@ class InstanceBasics(unittest.TestCase):
         self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name,min=available_small, max=available_small, zone=zone)
         self.assertTrue( self.tester.wait_for_reservation(self.reservation) ,'Not all instances  went to running')
         return self.reservation
-    
-    def LargestInstance(self, zone = None): 
+
+    def LargestInstance(self, zone = None):
         """
         This case was developed to test the maximum number of c1.xlarge vm types a configured
         cloud can run.  The test runs the maximum number of c1.xlarge vm types allowed, then
@@ -124,10 +119,12 @@ class InstanceBasics(unittest.TestCase):
         """
         if zone is None:
             zone = self.zone
+        if self.reservation:
+            self.tester.terminate_instances(self.reservation)
         self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name,type="c1.xlarge",zone=zone)
         self.assertTrue( self.tester.wait_for_reservation(self.reservation) ,'Not all instances  went to running')
         return self.reservation
-    
+
     def MetaData(self, zone=None):
         """
         This case was developed to test the metadata service of an instance for consistency.
@@ -154,16 +151,17 @@ class InstanceBasics(unittest.TestCase):
         """
         if zone is None:
             zone = self.zone
-        self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name, zone=zone)
+        if not self.reservation:
+            self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name, zone=zone)
         for instance in self.reservation.instances:
             ## Need to verify  the public key (could just be checking for a string of a certain length)
             self.assertTrue(re.match(instance.get_metadata("public-keys/0/openssh-key")[0].split('eucalyptus.')[-1], self.keypair.name), 'Incorrect public key in metadata')
-            self.assertTrue(re.match(instance.get_metadata("security-groups")[0], self.group.name), 'Incorrect security group in metadata') 
+            self.assertTrue(re.match(instance.get_metadata("security-groups")[0], self.group.name), 'Incorrect security group in metadata')
             # Need to validate block device mapping
             #self.assertTrue(re.search(instance_ssh.get_metadata("block-device-mapping/")[0], "")) 
-            self.assertTrue(re.match(instance.get_metadata("instance-id")[0], instance.id), 'Incorrect instance id in metadata')  
+            self.assertTrue(re.match(instance.get_metadata("instance-id")[0], instance.id), 'Incorrect instance id in metadata')
             self.assertTrue(re.match(instance.get_metadata("local-ipv4")[0] , instance.private_ip_address), 'Incorrect private ip in metadata')
-            self.assertTrue(re.match(instance.get_metadata("public-ipv4")[0] , instance.ip_address), 'Incorrect public ip in metadata')          
+            self.assertTrue(re.match(instance.get_metadata("public-ipv4")[0] , instance.ip_address), 'Incorrect public ip in metadata')
             self.assertTrue(re.match(instance.get_metadata("ami-id")[0], instance.image_id), 'Incorrect ami id in metadata')
             self.assertTrue(re.match(instance.get_metadata("ami-launch-index")[0], instance.ami_launch_index), 'Incorrect launch index in metadata')
             self.assertTrue(re.match(instance.get_metadata("reservation-id")[0], self.reservation.id), 'Incorrect reservation in metadata')
@@ -178,7 +176,7 @@ class InstanceBasics(unittest.TestCase):
             for key in BAD_META_DATA_KEYS:
                 self.assertTrue(re.search("Not Found", "".join(instance.get_metadata(key))), 'No fail message on invalid meta-data node')
         return self.reservation
-           
+
     def DNSResolveCheck(self, zone=None):
         """
         This case was developed to test DNS resolution information for public/private DNS
@@ -194,9 +192,10 @@ class InstanceBasics(unittest.TestCase):
         """
         if zone is None:
             zone = self.zone
-        self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name, zone=zone)
+        if not self.reservation:
+            self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name, zone=zone)
         for instance in self.reservation.instances:
-           
+
             # Test to see if Dynamic DNS has been configured # 
             if re.match("internal", instance.private_dns_name.split('eucalyptus.')[-1]):
                 # Per AWS standard, resolution should have private hostname or private IP as a valid response
@@ -212,7 +211,7 @@ class InstanceBasics(unittest.TestCase):
                 # Check to see if nslookup was able to resolve
                 self.assertTrue(re.search('answer\:', instance.sys("nslookup " +  instance.get_metadata("local-ipv4")[0])[3]), "DNS lookup failed for private IP address.")
                 # Since nslookup was able to resolve, now check to see if nslookup on local-ipv4 address returns local-hostname
-                self.assertTrue(re.search(instance.get_metadata("local-hostname")[0], instance.sys("nslookup " +  instance.get_metadata("local-ipv4")[0])[4]), "Incorrect DNS resolution for private IP address")       
+                self.assertTrue(re.search(instance.get_metadata("local-hostname")[0], instance.sys("nslookup " +  instance.get_metadata("local-ipv4")[0])[4]), "Incorrect DNS resolution for private IP address")
                 # Perform DNS resolution against public IP and public DNS name
                 # Check to see if nslookup was able to resolve
                 self.assertTrue(re.search('answer\:', instance.sys("nslookup " +  instance.get_metadata("public-hostname")[0])[3]), "DNS lookup failed for public-hostname.")
@@ -224,7 +223,7 @@ class InstanceBasics(unittest.TestCase):
                 self.assertTrue(re.search(instance.get_metadata("public-hostname")[0], instance.sys("nslookup " +  instance.get_metadata("public-ipv4")[0])[4]), "Incorrect DNS resolution for public IP address")
 
         return self.reservation
-           
+
     def DNSCheck(self, zone=None):
         """
         This case was developed to test to make sure Eucalyptus Dynamic DNS reports correct
@@ -237,13 +236,14 @@ class InstanceBasics(unittest.TestCase):
         """
         if zone is None:
             zone = self.zone
-        self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name, zone=zone)
+        if not self.reservation:
+            self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name, zone=zone)
         for instance in self.reservation.instances:
-           
+
             # Test to see if Dynamic DNS has been configured # 
             if re.match("internal", instance.private_dns_name.split('eucalyptus.')[-1]):
                 # Make sure that private_ip_address is not the same as local-hostname
-                self.assertFalse(re.match(instance.private_ip_address, instance.private_dns_name), 'local-ipv4 and local-hostname are the same with DNS on') 
+                self.assertFalse(re.match(instance.private_ip_address, instance.private_dns_name), 'local-ipv4 and local-hostname are the same with DNS on')
                 # Make sure that ip_address is not the same as public-hostname
                 self.assertFalse(re.match(instance.ip_address, instance.public_dns_name), 'public-ipv4 and public-hostname are the same with DNS on')
 
@@ -263,7 +263,8 @@ class InstanceBasics(unittest.TestCase):
         """
         if zone is None:
             zone = self.zone
-        self.reservation = self.tester.run_instance(self.image, keypair=self.keypair.name, group=self.group.name, zone=zone)
+        if not self.reservation:
+            self.reservation = self.tester.run_instance(self.image, keypair=self.keypair.name, group=self.group.name, zone=zone)
         for instance in self.reservation.instances:
             ### Create 1GB volume in first AZ
             self.volume = self.tester.create_volume(instance.placement, 1)
@@ -273,7 +274,7 @@ class InstanceBasics(unittest.TestCase):
             instance.reboot_instance_and_verify(waitconnect=20)
             instance.detach_euvolume(euvolume)
         return self.reservation
-    
+
     def Churn(self, testcase="BasicInstanceChecks"):
         """
         This case was developed to test robustness of Eucalyptus by starting instances,
@@ -289,12 +290,13 @@ class InstanceBasics(unittest.TestCase):
         from multiprocessing import Queue
         ### Increase time to terminate by step seconds on each iteration
         step = 10
-        
-        ## Run through count iterations of test
+        if self.reservation:
+            self.tester.terminate_instances(self.reservation)
+            ## Run through count iterations of test
         count = self.tester.get_available_vms("m1.small") / 2
         thread_pool = []
         queue_pool = []
-        
+
         ## Start asynchronous activity
         ## Run 5 basic instance check instances 10s apart
         for i in xrange(count):
@@ -313,7 +315,7 @@ class InstanceBasics(unittest.TestCase):
             for instance in self.reservation.instances:
                 instance.terminate()
                 self.assertTrue(self.tester.wait_for_instance(instance, "terminated"), "Instance did not go to terminated")
-        
+
         ### Once the previous test is complete rerun the BasicInstanceChecks test case
         ### Wait for an instance to become available
         count = self.tester.get_available_vms("m1.small")
@@ -325,7 +327,7 @@ class InstanceBasics(unittest.TestCase):
                 self.tester.debug("There is an available VM to use for final test")
                 break
             poll_count -= 1
-        
+
         fail_count = 0
         ### Block until the script returns a result
         for queue in queue_pool:
@@ -335,7 +337,7 @@ class InstanceBasics(unittest.TestCase):
 
         for thread in thread_pool:
             thread.join()
-        
+
         if fail_count > 0:
             raise Exception("Failure detected in one of the " + str(count)  + " Basic Instance tests")
 
@@ -352,11 +354,13 @@ class InstanceBasics(unittest.TestCase):
         """
         if zone is None:
             zone = self.zone
+        if self.reservation:
+            self.tester.terminate_instances(self.reservation)
         self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name, private_addressing=True, zone=zone)
         for instance in self.reservation.instances:
             address = self.tester.allocate_address()
             self.assertTrue(address,'Unable to allocate address')
-            self.assertTrue(self.tester.associate_address(instance, address))
+            self.tester.associate_address(instance, address)
             self.tester.sleep(30)
             instance.update()
             self.assertTrue( self.tester.ping(instance.public_dns_name), "Could not ping instance with new IP")
@@ -368,7 +372,7 @@ class InstanceBasics(unittest.TestCase):
             if instance.public_dns_name != instance.private_dns_name:
                 self.fail("Instance received a new public IP: " + instance.public_dns_name)
         return self.reservation
-    
+
     def ReuseAddresses(self, zone = None):
         """
         This case was developed to test when you run instances in a series, and make sure
@@ -379,7 +383,9 @@ class InstanceBasics(unittest.TestCase):
         prev_address = None
         if zone is None:
             zone = self.zone
-        ### Run the test 5 times in a row
+            ### Run the test 5 times in a row
+        if self.reservation:
+            self.tester.terminate_instances(self.reservation)
         for i in xrange(5):
             self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name, zone=zone)
             for instance in self.reservation.instances:
@@ -387,7 +393,7 @@ class InstanceBasics(unittest.TestCase):
                     self.assertTrue(re.search(str(prev_address) ,str(instance.public_dns_name)), str(prev_address) +" Address did not get reused but rather  " + str(instance.public_dns_name))
                 prev_address = instance.public_dns_name
             self.tester.terminate_instances(self.reservation)
-            
+
     def run_testcase_thread(self, queue,delay = 20, name="MetaData"):
         ### Thread that runs a testcase (function) and returns its pass or fail result
         self.tester.sleep(delay)
@@ -404,37 +410,29 @@ class InstanceBasics(unittest.TestCase):
             self.tester.debug("Failed test: " + name)
             queue.put(1)
             return True
-    
+
 if __name__ == "__main__":
-    ## If given command line arguments, use them as test names to launch
-    parser = argparse.ArgumentParser(prog="instancetest.py",
-                                     version="Test Case [instancetest.py] Version 0.2",
-                                     description="Run interative test of operations to \
-                                                  test instance functionality and features \
-                                                  on a Eucalyptus Cloud.  For more information, \
-                                                  please refer to https://github.com/hspencer77/eutester/wiki/instancetest.",
-                                     usage="%(prog)s --credpath=<path to creds> [--xml] [--tests=test1,..testN]")
-    parser.add_argument('--credpath',
-                        help="path to user credentials", default=".eucarc")
-    parser.add_argument('--xml', 
-                        help="to provide JUnit style XML output", action="store_true", default=False)
-    parser.add_argument('--tests', nargs='+', 
-                        help="test cases to be executed", 
-                        default= ["BasicInstanceChecks","ElasticIps","PrivateIPAddressing","MaxSmallInstances","LargestInstance","MetaData", "DNSResolveCheck", "DNSCheck" "Reboot", "Churn"])
-    args = parser.parse_args()
-    arg_credpath = args.credpath
-    for test in args.tests:
-        if args.xml:
-            try:
-                os.mkdir("results")
-            except OSError:
-                pass
-            file = open("results/test-" + test + "result.xml", "w")
-            result = xmlrunner.XMLTestRunner(file).run(InstanceBasics(test))
-            file.close()
-        else:
-            result = unittest.TextTestRunner(verbosity=2).run(InstanceBasics(test))
-        if result.wasSuccessful():
-            pass
-        else:
-            exit(1)
+    testcase = EutesterTestCase()
+
+    #### Adds argparse to testcase and adds some defaults args
+    testcase.setup_parser()
+
+    ### Get all cli arguments and any config arguments and merge them
+    testcase.get_args()
+
+    ### Instantiate an object of your test suite class using args found from above
+    instance_basics_tests = testcase.do_with_args(InstanceBasics)
+
+    ### Either use the list of tests passed from config/command line to determine what subset of tests to run
+    list = testcase.args.tests or [ "BasicInstanceChecks",  "ElasticIps", "MaxSmallInstances" , "LargestInstance",
+                                    "MetaData", "Reboot","PrivateIPAddressing"]
+
+    ### Convert test suite methods to EutesterUnitTest objects
+    unit_list = [ ]
+    for test in list:
+        unit_list.append( instance_basics_tests.create_testunit_by_name(test) )
+
+    ### Run the EutesterUnitTest objects
+    testcase.run_test_case_list(unit_list)
+    instance_basics_tests.clean_method()
+
