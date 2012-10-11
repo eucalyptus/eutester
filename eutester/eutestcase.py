@@ -180,7 +180,7 @@ class EutesterTestUnit():
         self.description=self.get_test_method_description()
         self.eof=False
         self.error = ""
-        print "Creating testunit:"+str(self.name)+", args:\n"
+        print "Creating testunit:"+str(self.name)+", args:"
         for count, thing in enumerate(args):
             print '{0}. {1}'.format(count, thing)
         for name, value in kwargs.items():
