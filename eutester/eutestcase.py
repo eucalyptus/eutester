@@ -180,6 +180,7 @@ class EutesterTestUnit():
         self.description=self.get_test_method_description()
         self.eof=False
         self.error = ""
+        print "Creating testunit:"+str(self.name)+", args:\n"
         for count, thing in enumerate(args):
             print '{0}. {1}'.format(count, thing)
         for name, value in kwargs.items():
@@ -628,6 +629,24 @@ class EutesterTestCase(unittest.TestCase):
             return getattr(self.args,str(arg))
         return None
     
+    def add_arg(self,arg,value):
+        if self.has_arg(arg):
+            raise Exception("Arg"+str(arg)+'already exists in args')
+        else:
+            self.args.__setattr__(arg,value)
+    
+    def set_arg(self,arg, value):
+        if self.has_arg(arg):
+            new = argparse.Namespace()
+            for val in self.args._get_kwargs():
+                if arg != val[0]:
+                    new.__setattr__(val[0],val[1])
+            new.__setattr__(arg,value)
+            self.args = new
+        else:
+            self.args.__setattr__(arg,value)
+    
+    
     def clean_method(self):
         self.debug("Implement this method")
 
@@ -700,10 +719,10 @@ class EutesterTestCase(unittest.TestCase):
         :type kwargs: keyword arguments
         :param kwargs: None or more keyword arguements to be passed to method to be run
         '''
-        
         obj = obj or self
         meth = getattr(obj,name)
-        testunit = EutesterTestUnit(meth, eof=eof, *args, **kwargs)
+        testunit = EutesterTestUnit(meth, *args, **kwargs)
+        testunit.eof = eof
         #if autoarg, auto populate testunit arguements from local testcase.args namespace values
         if autoarg:
             self.populate_testunit_with_args(testunit)
@@ -924,13 +943,12 @@ class EutesterTestCase(unittest.TestCase):
         cmdargs={}
         f_code = self.get_method_fcode(meth)
         vars = self.get_meth_arg_names(meth)
-        self.debug("Method:"+str(f_code.co_name)+" Vars:"+str(vars))
+        self.debug("Method:"+str(f_code.co_name)+", Vars:"+str(vars))
         
         #first populate matching method args with our global testcase args...
         for val in tc_args._get_kwargs():
             for var in vars:
                 if var == val[0]:
-                    print "Adding var:"+str(var)+" == value:"+str(val[0])
                     cmdargs[var]=val[1]
         #Then overwrite/populate with any given positional local args...
         for count,arg in enumerate(args):
