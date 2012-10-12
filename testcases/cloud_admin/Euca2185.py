@@ -23,13 +23,17 @@ class Euca2185(unittest.TestCase):
     def setUp(self):
         self.conf = "cloud.conf"      
         self.tester  = Eucaops( config_file=self.conf, password="foobar" )
+        self.clc1 = self.tester.service_manager.get_enabled_clc()
         # Enable DNS
-        self.tester.sys("euca-modify-property -p bootstrap.webservices.use_instance_dns=true")
+        self.source  = "source " + self.tester.credpath + "/eucarc && "
+        self.sbin = self.tester.eucapath + "/usr/sbin/"
+        self.cmd = "euca-modify-property -p bootstrap.webservices.use_instance_dns="
+        self.tester.sys(self.source + self.sbin + self.cmd + "true")
         self.doAuth()
 
     def tearDown(self):
         # Restore default dns  
-        self.tester.sys("euca-modify-property -p bootstrap.webservices.use_instance_dns=false")  
+        self.tester.sys(self.source + self.sbin + self.cmd + "false")  
         self.tester.cleanup_artifacts() 
         self.tester.delete_keypair(self.keypair)
         self.tester.local("rm " + self.keypair.name + ".pem") 
@@ -51,7 +55,7 @@ class Euca2185(unittest.TestCase):
                 self.dns = instance.public_dns_name
                 self.instanceid = instance.id
                 
-        self.out = self.tester.sys("euca-describe-instances " + self.instanceid)
+        self.out = self.tester.sys(self.source + "euca-describe-instances " + self.instanceid)
         # Count the number of times the public dns is in the return string
         self.count = str(self.out).count(str(self.dns))
         # The public dns name should only be listed once with the fix not twice
