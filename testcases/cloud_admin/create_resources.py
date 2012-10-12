@@ -40,6 +40,7 @@ import time
 import os
 import string
 from eutester import xmlrunner
+from eutester.euinstance import EuInstance
 from eutester.eutestcase import EutesterTestCase
 from eutester.eutestcase import EutesterTestResult
 from boto.exception import S3ResponseError
@@ -56,32 +57,43 @@ class ResourceGeneration(EutesterTestCase):
     def CreateResources(self):
         users = self.tester.get_all_users() 
         testers = []
+        testers.append(self.tester)
         for user in users:
-            keys = self.tester.create_access_key(user_name=user['user_name'], delegate_account=user['account_name'])
-            testers.append(Eucaops(aws_access_key_id=keys['access_key_id'], aws_secret_access_key=keys['secret_access_key'], ec2_ip=self.tester.ec2.host, s3_ip=self.tester.s3.host))
-            
-        for tester in testers:
+            user_name = user['user_name']
+            user_account = user['account_name']
+            self.tester.debug("Creating access key for " + user_name + " in account " +  user_account)
+            keys = self.tester.create_access_key(user_name=user_name, delegate_account=user_account)
+            access_key = keys['access_key_id']
+            secret_key = keys['secret_access_key']
+            self.tester.debug("Creating Eucaops object with access key " + access_key + " and secret key " +  secret_key)
+            new_tester = Eucaops(aws_access_key_id=access_key, aws_secret_access_key=secret_key, ec2_ip=self.tester.ec2.host, s3_ip=self.tester.s3.host,username=user_name, account=user_account)
+            if not re.search("eucalyptus", user_account ):
+                testers.append(new_tester)
+
+        self.tester.debug("Created a total of " + str(len(testers)) + " testers" )
+
+        for resource_tester in testers:
             import random
-            zone = random.choice(tester.get_zones())
-            keypair = self.tester.add_keypair(self.tester.id_generator())
-            group = self.tester.add_group(self.tester.id_generator())
-            self.tester.authorize_group_by_name(group_name=group.name )
-            self.tester.authorize_group_by_name(group_name=group.name, port=-1, protocol="icmp" )
-            reservation = self.tester.run_instance(keypair=keypair.name,group=group.name,zone=zone)
+            zone = random.choice(resource_tester.get_zones())
+            keypair = resource_tester.add_keypair(resource_tester.id_generator())
+            group = resource_tester.add_group(resource_tester.id_generator())
+            resource_tester.authorize_group_by_name(group_name=group.name )
+            resource_tester.authorize_group_by_name(group_name=group.name, port=-1, protocol="icmp" )
+            reservation = resource_tester.run_instance(keypair=keypair.name,group=group.name,zone=zone)
             instance = reservation.instances[0]
-            address = self.tester.allocate_address()
-            self.tester.associate_address(instance=instance, address=address)
-            self.tester.disassociate_address_from_instance(instance)
-            self.tester.release_address(address)
-            self.tester.terminate_instances(reservation)
-            volume = self.tester.create_volume(size=1, azone=zone)
-            snapshot = self.tester.create_snapshot(volume_id=volume.id)
-            volume_from_snap = self.tester.create_volume(snapshot=snapshot, azone=zone)
-            bucket = self.tester.create_bucket(self.tester.id_generator(12, string.ascii_lowercase  + string.digits))
-            key = self.tester.upload_object(bucket_name= bucket.name, key_name= self.tester.id_generator(12, string.ascii_lowercase  + string.digits), contents= self.tester.id_generator(200))
+            address = resource_tester.allocate_address()
+            resource_tester.associate_address(instance=instance, address=address)
+            resource_tester.disassociate_address_from_instance(instance)
+            resource_tester.release_address(address)
+            volume = resource_tester.create_volume(size=1, azone=zone)
+            if isinstance(instance, EuInstance):
+                instance.attach_volume(volume)
+            snapshot = resource_tester.create_snapshot(volume_id=volume.id)
+            volume_from_snap = resource_tester.create_volume(snapshot=snapshot, azone=zone)
+            bucket = resource_tester.create_bucket(resource_tester.id_generator(12, string.ascii_lowercase  + string.digits))
+            key = resource_tester.upload_object(bucket_name= bucket.name, key_name= resource_tester.id_generator(12, string.ascii_lowercase  + string.digits), contents= resource_tester.id_generator(200))
+            resource_tester.terminate_instances(reservation)
 
-
-    
     def run_suite(self):  
         self.testlist = [] 
         testlist = self.testlist

@@ -1,4 +1,4 @@
-eutester version 0.0.3
+eutester version 0.0.4
 ======================
 
 [Intro to Eutester](http://testingclouds.wordpress.com/2012/03/04/test1/)
