@@ -950,7 +950,7 @@ class EutesterTestCase(unittest.TestCase):
                     #Don't overwrite existing testunit args/kwargs that have already been assigned
                     if apply_val[0] in testunit_obj_args:
                             self.debug("Skipping populate because testunit already has this arg:"+str(methvar))
-                            break
+                            continue
                     #Append cmdargs list to testunits kwargs
                     testunit.set_kwarg(methvar,apply_val[1]) 
                     #testunit.kwargs[methvar]=apply_val[1]
