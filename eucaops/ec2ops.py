@@ -38,6 +38,8 @@ import os
 import base64
 import sys
 from datetime import datetime
+from boto.ec2.image import Image
+from boto.ec2.keypair import KeyPair
 from boto.ec2.blockdevicemapping import BlockDeviceMapping, BlockDeviceType
 from boto.exception import EC2ResponseError
 from eutester.euinstance import EuInstance
@@ -85,6 +87,15 @@ class EC2ops(Eutester):
             # The save method will also chmod the file to protect
             # your private key.
             key.save(self.key_dir)
+            #Add the fingerprint header to file
+            keyfile = open(self.key_dir+key.name+'.pem','r')
+            data = keyfile.read()
+            keyfile.close()
+            keyfile = open(self.key_dir+key.name+'.pem','w')
+            keyfile.write('KEYPAIR '+str(key.name)+' '+str(key.fingerprint)+"\n")
+            keyfile.write(data)
+            keyfile.close()
+            
             self.test_resources["keypairs"].append(key)
             return key
         else:
@@ -104,7 +115,8 @@ class EC2ops(Eutester):
             path = os.getcwd()
         keypath = path + "/" + keyname + exten
         try:
-            os.stat(keypath).st_mode
+            os.stat(keypath)
+            self.debug("Found key at path:"+str(keypath))
         except:
             raise Exception("key:"+keyname+"not found at the provided path:"+str(path))
         return keypath
@@ -121,7 +133,7 @@ class EC2ops(Eutester):
             try:
                 keypath = self.verify_local_keypath(k.name, path, exten)
                 keyfile = open(keypath,'r')
-                for line in keyfile:
+                for line in keyfile.readlines():
                     if re.search('KEYPAIR',line):
                         fingerprint = line.split()[2]
                         break
@@ -278,7 +290,7 @@ class EC2ops(Eutester):
         ### If the instance changes state or goes to the desired state before my poll count is complete
         while( elapsed <  timeout ) and (instance.state != state) and (instance.state != 'terminated'):
             #poll_count -= 1
-            self.debug( "Instance("+instance.id+") State("+instance.state+"), elapsed:"+str(elapsed))
+            self.debug( "Instance("+instance.id+") State("+instance.state+"), elapsed:"+str(elapsed)+"/"+str(timeout))
             time.sleep(10)
             instance.update()
             elapsed = int(time.time()- start)
@@ -388,6 +400,7 @@ class EC2ops(Eutester):
         elapsed = 0  
         volume.update()
         status = ""
+        laststatus=None
         while elapsed < timeout:
             volume.update()
             
@@ -525,7 +538,7 @@ class EC2ops(Eutester):
             else: 
                 poll_count -= 1
             elapsed = int(time.time()-snap_start)
-            self.debug("Snapshot:"+snapshot.id+" Status:"+snapshot.status+" Progress:"+snapshot.progress+"Total Polls:"+str(polls)+" Polls remaining:"+str(poll_count)+" Time Elapsed:"+str(elapsed))    
+            self.debug("Snapshot:"+snapshot.id+" Status:"+snapshot.status+" Progress:"+snapshot.progress+" Total Polls:"+str(polls)+" Polls remaining:"+str(poll_count)+" Time Elapsed:"+str(elapsed))    
             if snapshot.status == 'completed':
                 self.debug("Snapshot created after " + str(elapsed) + " seconds. " + str(polls) + " X ("+str(poll_interval)+" second) polling invervals. Status:"+snapshot.status+", Progress:"+snapshot.progress)
                 self.test_resources["snapshots"].append(snapshot)
@@ -853,9 +866,10 @@ class EC2ops(Eutester):
             for emi in images:
                 if re.match("emi",emi.id):
                     image = emi      
+        if not isinstance(image, Image):
+            image = self.get_emi(emi=str(image))
         if image is None:
             raise Exception("emi is None. run_instance could not auto find an emi?")   
-
         if private_addressing is True:
             addressing_type = "private"
             is_reachable= False
@@ -863,7 +877,7 @@ class EC2ops(Eutester):
             addressing_type = None
         #In the case a keypair object was passed instead of the keypair name
         if keypair:
-            if not isinstance(keypair, basestring):
+            if isinstance(keypair, KeyPair):
                 keypair = keypair.name
         
         start = time.time()
@@ -939,7 +953,7 @@ class EC2ops(Eutester):
                 try:
                     euinstance_list.append( EuInstance.make_euinstance_from_instance( instance, self, keypair=keypair, username = username, password=password, timeout=timeout ))
                 except Exception, e:
-                    self.critical("Unable to create Euinstance from " + str(instance)+str(e))
+                    self.fail("Unable to create Euinstance from " + str(instance)+str(e))
                     euinstance_list.append(instance)
             else:
                 euinstance_list.append(instance)
@@ -1009,7 +1023,7 @@ class EC2ops(Eutester):
         return ilist
     
     
-    def get_connectable_euinstances(self,path=None,connect=True):
+    def get_connectable_euinstances(self,path=None,username='root', password=None, connect=True):
         """
         convenience method returns a list of all running instances, for the current creduser
         for which there are local keys at 'path'
@@ -1025,7 +1039,9 @@ class EC2ops(Eutester):
                         for instance in instances:
                             if not connect:
                                 keypair=None
-                            euinstances.append(EuInstance.make_euinstance_from_instance( instance, self, keypair=keypair))
+                                euinstance.append(instance)
+                            else:
+                                euinstances.append(EuInstance.make_euinstance_from_instance( instance, self, username=username,password=password,keypair=keypair))
                       
             return euinstances
         except Exception, e:

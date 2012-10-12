@@ -189,7 +189,6 @@ class EuInstance(Instance):
         if ( self.verbose is True ):
             self.debugmethod(msg)
             
-
                 
     def sys(self, cmd, verbose=True, timeout=120):
         '''
@@ -225,7 +224,7 @@ class EuInstance(Instance):
         retlist = []
         if match is None:
             match = '^sd\|^vd\|^xd|^xvd'
-        out = self.sys("ls -1 /dev/ | grep '^"+str(match)+"'" )
+        out = self.sys("ls -1 /dev/ | grep '"+str(match)+"'" )
         for line in out:
             retlist.append(line.strip())
         return retlist
@@ -730,6 +729,8 @@ class EuInstance(Instance):
             if self.state == failstate:
                 raise Exception(str(self.id)+" instance went to state:"+str(self.state)+" while stopping")
             elapsed = int(time.time()- start)
+            if elapsed % 10 == 0 :
+                self.debug(str(self.id)+"wait for stop, in state:"+str(self.state)+",time remaining:"+str(elapsed)+"/"+str(timeout) )
         if self.state != state:
             raise Exception(self.id+" state: "+str(self.state)+" expected:"+str(state)+", after elapsed:"+str(elapsed))
         self.debug(self.id+" stop_instance_and_verify Success")
@@ -756,8 +757,9 @@ class EuInstance(Instance):
                 break
             if self.state == failstate:
                 raise Exception(str(self.id)+" instance went to state:"+str(self.state)+" while starting")
-              
             elapsed = int(time.time()- start)
+            if elapsed % 10 == 0 :
+                self.debug(str(self.id)+"wait for start, in state:"+str(self.state)+",time remaining:"+str(elapsed)+"/"+str(timeout) )
         if self.state != state:
             raise Exception(self.id+" not in "+str(state)+" state after elapsed:"+str(elapsed))
         else:

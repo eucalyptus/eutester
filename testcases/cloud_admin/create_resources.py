@@ -50,8 +50,9 @@ import unittest
 
 class ResourceGeneration(EutesterTestCase):
     
-    def __init__(self, credpath):
+    def __init__(self, credpath, cleanup_artifacts=False):
         self.tester = Eucaops(credpath=credpath)
+        self.cleanup_artifacts = cleanup_artifacts
 
 
     def CreateResources(self):
@@ -72,8 +73,10 @@ class ResourceGeneration(EutesterTestCase):
 
         self.tester.debug("Created a total of " + str(len(testers)) + " testers" )
 
+
         for resource_tester in testers:
             import random
+            assert isinstance(resource_tester, Eucaops)
             zone = random.choice(resource_tester.get_zones())
             keypair = resource_tester.add_keypair(resource_tester.id_generator())
             group = resource_tester.add_group(resource_tester.id_generator())
@@ -93,6 +96,8 @@ class ResourceGeneration(EutesterTestCase):
             bucket = resource_tester.create_bucket(resource_tester.id_generator(12, string.ascii_lowercase  + string.digits))
             key = resource_tester.upload_object(bucket_name= bucket.name, key_name= resource_tester.id_generator(12, string.ascii_lowercase  + string.digits), contents= resource_tester.id_generator(200))
             resource_tester.terminate_instances(reservation)
+            if self.cleanup_artifacts:
+                resource_tester.cleanup_artifacts()
 
     def run_suite(self):  
         self.testlist = [] 
@@ -105,8 +110,10 @@ if __name__ == "__main__":
                                      description="Create resources (keypairs,groups, volumes,snapshots, buckets) for each user in the cloud. ")
     parser.add_argument('--credpath', 
                         help="Path to credentials of an admin user", default=None)
+    parser.add_argument('--cleanup',
+                        help="Cleanup artifacts on each run", action='store_true')
     args = parser.parse_args()
-    resource_suite = ResourceGeneration(credpath=args.credpath)
+    resource_suite = ResourceGeneration(credpath=args.credpath, cleanup_artifacts=args.cleanup)
     kbtime=time.time()
     try:
         resource_suite.run_suite()
