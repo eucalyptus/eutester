@@ -1,0 +1,543 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>eutester.machine &mdash; Eutester 0.0.4 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/haiku.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/print.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '0.0.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <script type="text/javascript" src="../../_static/theme_extras.js"></script>
+    <link rel="top" title="Eutester 0.0.4 documentation" href="../../index.html" />
+    <link rel="up" title="eutester" href="../eutester.html" /> 
+  </head>
+  <body>
+      <div class="header"><h1 class="heading"><a href="../../index.html">
+          <span>Eutester 0.0.4 documentation</span></a></h1>
+        <h2 class="heading"><span>eutester.machine</span></h2>
+      </div>
+      <div class="topnav">
+      
+        <p>
+        <a class="uplink" href="../../index.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <h1>Source code for eutester.machine</h1><div class="highlight"><pre>
+<span class="c"># Software License Agreement (BSD License)</span>
+<span class="c">#</span>
+<span class="c"># Copyright (c) 2009-2011, Eucalyptus Systems, Inc.</span>
+<span class="c"># All rights reserved.</span>
+<span class="c">#</span>
+<span class="c"># Redistribution and use of this software in source and binary forms, with or</span>
+<span class="c"># without modification, are permitted provided that the following conditions</span>
+<span class="c"># are met:</span>
+<span class="c">#</span>
+<span class="c">#   Redistributions of source code must retain the above</span>
+<span class="c">#   copyright notice, this list of conditions and the</span>
+<span class="c">#   following disclaimer.</span>
+<span class="c">#</span>
+<span class="c">#   Redistributions in binary form must reproduce the above</span>
+<span class="c">#   copyright notice, this list of conditions and the</span>
+<span class="c">#   following disclaimer in the documentation and/or other</span>
+<span class="c">#   materials provided with the distribution.</span>
+<span class="c">#</span>
+<span class="c"># THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS &quot;AS IS&quot;</span>
+<span class="c"># AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE</span>
+<span class="c"># IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE</span>
+<span class="c"># ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE</span>
+<span class="c"># LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR</span>
+<span class="c"># CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF</span>
+<span class="c"># SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS</span>
+<span class="c"># INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN</span>
+<span class="c"># CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)</span>
+<span class="c"># ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE</span>
+<span class="c"># POSSIBILITY OF SUCH DAMAGE.</span>
+<span class="c">#</span>
+<span class="c"># Author: vic.iglesias@eucalyptus.com</span>
+<span class="kn">import</span> <span class="nn">select</span>
+<span class="kn">import</span> <span class="nn">threading</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">eulogger</span>
+<span class="kn">import</span> <span class="nn">sshconnection</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">from</span> <span class="nn">repoutils</span> <span class="kn">import</span> <span class="n">RepoUtils</span>
+
+<div class="viewcode-block" id="DistroName"><a class="viewcode-back" href="../../eutester.html#eutester.machine.DistroName">[docs]</a><span class="k">class</span> <span class="nc">DistroName</span><span class="p">:</span>
+    <span class="n">ubuntu</span> <span class="o">=</span> <span class="s">&quot;ubuntu&quot;</span>
+    <span class="n">rhel</span> <span class="o">=</span> <span class="s">&quot;rhel&quot;</span>
+    <span class="n">centos</span> <span class="o">=</span> <span class="s">&quot;centos&quot;</span>
+    <span class="n">fedora</span> <span class="o">=</span> <span class="s">&quot;fedora&quot;</span>
+    <span class="n">debian</span> <span class="o">=</span> <span class="s">&quot;debian&quot;</span>
+    <span class="n">vmware</span> <span class="o">=</span> <span class="s">&quot;vmware&quot;</span>
+</div>
+<div class="viewcode-block" id="DistroRelease"><a class="viewcode-back" href="../../eutester.html#eutester.machine.DistroRelease">[docs]</a><span class="k">class</span> <span class="nc">DistroRelease</span><span class="p">:</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">distro_name</span><span class="p">,</span> <span class="n">distro_number</span><span class="p">,</span>  <span class="n">distro_release</span> <span class="o">=</span> <span class="s">&quot;&quot;</span><span class="p">,</span> <span class="n">package_manager</span><span class="o">=</span> <span class="bp">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">distro_name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">number</span> <span class="o">=</span> <span class="n">distro_number</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">release</span> <span class="o">=</span> <span class="n">distro_release</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">package_manager</span> <span class="o">=</span> <span class="n">package_manager</span>
+        </div>
+<div class="viewcode-block" id="Distro"><a class="viewcode-back" href="../../eutester.html#eutester.machine.Distro">[docs]</a><span class="k">class</span> <span class="nc">Distro</span><span class="p">:</span>
+    <span class="n">ubuntu_lucid</span> <span class="o">=</span> <span class="n">DistroRelease</span><span class="p">(</span><span class="n">DistroName</span><span class="o">.</span><span class="n">ubuntu</span><span class="p">,</span><span class="s">&quot;10.04&quot;</span><span class="p">,</span>  <span class="s">&quot;lucid&quot;</span><span class="p">,</span>  <span class="n">package_manager</span><span class="o">=</span><span class="s">&quot;apt&quot;</span><span class="p">)</span>
+    <span class="n">ubuntu_precise</span> <span class="o">=</span> <span class="n">DistroRelease</span><span class="p">(</span><span class="n">DistroName</span><span class="o">.</span><span class="n">ubuntu</span><span class="p">,</span>  <span class="s">&quot;12.04&quot;</span><span class="p">,</span> <span class="s">&quot;precise&quot;</span><span class="p">,</span>  <span class="n">package_manager</span><span class="o">=</span><span class="s">&quot;apt&quot;</span><span class="p">)</span>
+    <span class="n">debian_squeeze</span> <span class="o">=</span> <span class="n">DistroRelease</span><span class="p">(</span><span class="n">DistroName</span><span class="o">.</span><span class="n">debian</span><span class="p">,</span> <span class="s">&quot;6&quot;</span><span class="p">,</span> <span class="s">&quot;squeeze&quot;</span><span class="p">,</span>  <span class="n">package_manager</span><span class="o">=</span><span class="s">&quot;apt&quot;</span><span class="p">)</span>
+    <span class="n">debian_wheezy</span> <span class="o">=</span> <span class="n">DistroRelease</span><span class="p">(</span><span class="n">DistroName</span><span class="o">.</span><span class="n">debian</span><span class="p">,</span> <span class="s">&quot;7&quot;</span><span class="p">,</span> <span class="s">&quot;wheezy&quot;</span><span class="p">,</span>  <span class="n">package_manager</span><span class="o">=</span><span class="s">&quot;apt&quot;</span><span class="p">)</span>
+    <span class="n">rhel_6</span> <span class="o">=</span> <span class="n">DistroRelease</span><span class="p">(</span><span class="n">DistroName</span><span class="o">.</span><span class="n">rhel</span><span class="p">,</span> <span class="s">&quot;6&quot;</span><span class="p">,</span>  <span class="n">package_manager</span><span class="o">=</span><span class="s">&quot;yum&quot;</span><span class="p">)</span>
+    <span class="n">centos_6</span> <span class="o">=</span> <span class="n">DistroRelease</span><span class="p">(</span><span class="n">DistroName</span><span class="o">.</span><span class="n">centos</span><span class="p">,</span> <span class="s">&quot;6&quot;</span><span class="p">,</span>  <span class="n">package_manager</span><span class="o">=</span><span class="s">&quot;yum&quot;</span><span class="p">)</span>
+    <span class="n">rhel_5</span> <span class="o">=</span> <span class="n">DistroRelease</span><span class="p">(</span><span class="n">DistroName</span><span class="o">.</span><span class="n">rhel</span><span class="p">,</span> <span class="s">&quot;5&quot;</span><span class="p">,</span>  <span class="n">package_manager</span><span class="o">=</span><span class="s">&quot;yum&quot;</span><span class="p">)</span>
+    <span class="n">centos_5</span> <span class="o">=</span> <span class="n">DistroRelease</span><span class="p">(</span><span class="n">DistroName</span><span class="o">.</span><span class="n">centos</span><span class="p">,</span> <span class="s">&quot;5&quot;</span><span class="p">,</span>  <span class="n">package_manager</span><span class="o">=</span><span class="s">&quot;yum&quot;</span><span class="p">)</span>
+    <span class="n">fedora_18</span> <span class="o">=</span> <span class="n">DistroRelease</span><span class="p">(</span><span class="n">DistroName</span><span class="o">.</span><span class="n">fedora</span><span class="p">,</span> <span class="s">&quot;18&quot;</span><span class="p">,</span>  <span class="n">package_manager</span><span class="o">=</span><span class="s">&quot;yum&quot;</span><span class="p">)</span>
+    <span class="n">vmware_5</span> <span class="o">=</span> <span class="n">DistroRelease</span><span class="p">(</span><span class="n">DistroName</span><span class="o">.</span><span class="n">vmware</span><span class="p">,</span> <span class="s">&quot;5&quot;</span><span class="p">)</span>
+    <span class="n">vmware_4</span> <span class="o">=</span> <span class="n">DistroRelease</span><span class="p">(</span><span class="n">DistroName</span><span class="o">.</span><span class="n">vmware</span><span class="p">,</span> <span class="s">&quot;4&quot;</span><span class="p">)</span>
+
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="Distro.get_distros"><a class="viewcode-back" href="../../eutester.html#eutester.machine.Distro.get_distros">[docs]</a>    <span class="k">def</span> <span class="nf">get_distros</span><span class="p">(</span><span class="n">Distro</span><span class="p">):</span>
+        <span class="n">distros</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">distro</span> <span class="ow">in</span> <span class="n">Distro</span><span class="o">.</span><span class="n">__dict__</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">Distro</span><span class="o">.</span><span class="n">__dict__</span><span class="p">[</span><span class="n">distro</span><span class="p">],</span> <span class="n">DistroRelease</span><span class="p">):</span>
+                <span class="n">distros</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Distro</span><span class="o">.</span><span class="n">__dict__</span><span class="p">[</span><span class="n">distro</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">distros</span>
+        
+    
+</div></div>
+<div class="viewcode-block" id="Machine"><a class="viewcode-back" href="../../eutester.html#eutester.machine.Machine">[docs]</a><span class="k">class</span> <span class="nc">Machine</span><span class="p">:</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> 
+                 <span class="n">hostname</span><span class="p">,</span> 
+                 <span class="n">distro</span><span class="o">=</span><span class="s">&quot;&quot;</span><span class="p">,</span> 
+                 <span class="n">distro_ver</span><span class="o">=</span><span class="s">&quot;&quot;</span><span class="p">,</span> 
+                 <span class="n">arch</span><span class="o">=</span><span class="s">&quot;&quot;</span><span class="p">,</span> 
+                 <span class="n">source</span><span class="o">=</span><span class="s">&quot;&quot;</span><span class="p">,</span> 
+                 <span class="n">components</span><span class="o">=</span><span class="s">&quot;&quot;</span><span class="p">,</span> 
+                 <span class="n">connect</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> 
+                 <span class="n">password</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> 
+                 <span class="n">keypath</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> 
+                 <span class="n">username</span><span class="o">=</span><span class="s">&quot;root&quot;</span><span class="p">,</span> 
+                 <span class="n">timeout</span><span class="o">=</span><span class="mi">120</span><span class="p">,</span>
+                 <span class="n">retry</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+                 <span class="n">debugmethod</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> 
+                 <span class="n">verbose</span> <span class="o">=</span> <span class="bp">True</span> <span class="p">):</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">hostname</span> <span class="o">=</span> <span class="n">hostname</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">distro_ver</span> <span class="o">=</span> <span class="n">distro_ver</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">distro</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">convert_to_distro</span><span class="p">(</span><span class="n">distro</span><span class="p">,</span> <span class="n">distro_ver</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">distro</span><span class="o">.</span><span class="n">package_manager</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">repo_utils</span> <span class="o">=</span> <span class="n">RepoUtils</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">distro</span><span class="o">.</span><span class="n">package_manager</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">package_manager</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">repo_utils</span><span class="o">.</span><span class="n">package_manager</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">arch</span> <span class="o">=</span> <span class="n">arch</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">source</span> <span class="o">=</span> <span class="n">source</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">components</span> <span class="o">=</span> <span class="n">components</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">connect</span> <span class="o">=</span> <span class="n">connect</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">password</span> <span class="o">=</span> <span class="n">password</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">keypath</span> <span class="o">=</span> <span class="n">keypath</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">username</span> <span class="o">=</span> <span class="n">username</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">timeout</span> <span class="o">=</span> <span class="n">timeout</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">retry</span> <span class="o">=</span> <span class="n">retry</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debugmethod</span> <span class="o">=</span> <span class="n">debugmethod</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">verbose</span> <span class="o">=</span> <span class="n">verbose</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log_threads</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log_buffers</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log_active</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">wget_last_status</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">debugmethod</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">logger</span> <span class="o">=</span> <span class="n">eulogger</span><span class="o">.</span><span class="n">Eulogger</span><span class="p">(</span><span class="n">identifier</span><span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">hostname</span><span class="p">)</span> <span class="o">+</span> <span class="s">&quot;:&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">components</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">debugmethod</span> <span class="o">=</span> <span class="n">logger</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">connect</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ssh</span> <span class="o">=</span> <span class="n">sshconnection</span><span class="o">.</span><span class="n">SshConnection</span><span class="p">(</span> <span class="n">hostname</span><span class="p">,</span> 
+                                                    <span class="n">keypath</span><span class="o">=</span><span class="n">keypath</span><span class="p">,</span>          
+                                                    <span class="n">password</span><span class="o">=</span><span class="n">password</span><span class="p">,</span> 
+                                                    <span class="n">username</span><span class="o">=</span><span class="n">username</span><span class="p">,</span> 
+                                                    <span class="n">timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">,</span> 
+                                                    <span class="n">retry</span><span class="o">=</span><span class="n">retry</span><span class="p">,</span>
+                                                    <span class="n">debugmethod</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">debugmethod</span><span class="p">,</span>
+                                                    <span class="n">verbose</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">sftp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ssh</span><span class="o">.</span><span class="n">connection</span><span class="o">.</span><span class="n">open_sftp</span><span class="p">()</span>
+            
+<div class="viewcode-block" id="Machine.convert_to_distro"><a class="viewcode-back" href="../../eutester.html#eutester.machine.Machine.convert_to_distro">[docs]</a>    <span class="k">def</span> <span class="nf">convert_to_distro</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">distro_name</span><span class="p">,</span> <span class="n">distro_release</span><span class="p">):</span>
+        <span class="n">distro_name</span> <span class="o">=</span> <span class="n">distro_name</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+        <span class="n">distro_release</span> <span class="o">=</span> <span class="n">distro_release</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">distro</span> <span class="ow">in</span> <span class="n">Distro</span><span class="o">.</span><span class="n">get_distros</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span> <span class="n">distro</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">distro_name</span><span class="p">,</span><span class="n">re</span><span class="o">.</span><span class="n">IGNORECASE</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span> <span class="n">distro</span><span class="o">.</span><span class="n">release</span><span class="p">,</span> <span class="n">distro_release</span><span class="p">,</span><span class="n">re</span><span class="o">.</span><span class="n">IGNORECASE</span><span class="p">)</span> <span class="ow">or</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span> <span class="n">distro</span><span class="o">.</span><span class="n">number</span><span class="p">,</span> <span class="n">distro_release</span><span class="p">,</span><span class="n">re</span><span class="o">.</span><span class="n">IGNORECASE</span><span class="p">))</span> <span class="p">:</span>
+                <span class="k">return</span> <span class="n">distro</span>
+        <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;Unable to find distro &quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">distro_name</span><span class="p">)</span> <span class="o">+</span> <span class="s">&quot; and version &quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">distro_release</span><span class="p">)</span> <span class="o">+</span> <span class="s">&quot; for hostname &quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hostname</span><span class="p">))</span>
+    </div>
+<div class="viewcode-block" id="Machine.refresh_ssh"><a class="viewcode-back" href="../../eutester.html#eutester.machine.Machine.refresh_ssh">[docs]</a>    <span class="k">def</span> <span class="nf">refresh_ssh</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ssh</span><span class="o">.</span><span class="n">refresh_connection</span><span class="p">()</span>
+        </div>
+<div class="viewcode-block" id="Machine.debug"><a class="viewcode-back" href="../../eutester.html#eutester.machine.Machine.debug">[docs]</a>    <span class="k">def</span> <span class="nf">debug</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">msg</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Used to print debug, defaults to print() but over ridden by self.debugmethod if not None</span>
+<span class="sd">        msg - mandatory -string, message to be printed</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose</span> <span class="ow">is</span> <span class="bp">True</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">debugmethod</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+                </div>
+<div class="viewcode-block" id="Machine.refresh_connection"><a class="viewcode-back" href="../../eutester.html#eutester.machine.Machine.refresh_connection">[docs]</a>    <span class="k">def</span> <span class="nf">refresh_connection</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ssh</span><span class="o">.</span><span class="n">refresh_connection</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="Machine.reboot"><a class="viewcode-back" href="../../eutester.html#eutester.machine.Machine.reboot">[docs]</a>    <span class="k">def</span> <span class="nf">reboot</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">force</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">sys</span><span class="p">(</span><span class="s">&quot;reboot -f&quot;</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">pass</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">sys</span><span class="p">(</span><span class="s">&quot;reboot&quot;</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">pass</span>
+    </div>
+<div class="viewcode-block" id="Machine.interrupt_network"><a class="viewcode-back" href="../../eutester.html#eutester.machine.Machine.interrupt_network">[docs]</a>    <span class="k">def</span> <span class="nf">interrupt_network</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">time</span> <span class="o">=</span> <span class="mi">120</span><span class="p">,</span> <span class="n">interface</span> <span class="o">=</span> <span class="s">&quot;eth0&quot;</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sys</span><span class="p">(</span><span class="s">&quot;ifdown &quot;</span> <span class="o">+</span> <span class="n">interface</span> <span class="o">+</span> <span class="s">&quot; &amp;&amp; sleep &quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">time</span><span class="p">)</span> <span class="o">+</span> <span class="s">&quot; &amp;&amp; ifup eth0&quot;</span><span class="p">,</span>  <span class="n">timeout</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+        </div>
+<div class="viewcode-block" id="Machine.sys"><a class="viewcode-back" href="../../eutester.html#eutester.machine.Machine.sys">[docs]</a>    <span class="k">def</span> <span class="nf">sys</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cmd</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">120</span><span class="p">,</span> <span class="n">listformat</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">code</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Issues a command against the ssh connection to this instance</span>
+<span class="sd">        Returns a list of the lines from stdout+stderr as a result of the command</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="n">out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">cmd</span><span class="p">(</span><span class="n">cmd</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="n">verbose</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">,</span> <span class="n">listformat</span><span class="o">=</span><span class="n">listformat</span><span class="p">)</span>
+        <span class="n">output</span> <span class="o">=</span> <span class="n">out</span><span class="p">[</span><span class="s">&#39;output&#39;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">code</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">out</span><span class="p">[</span><span class="s">&#39;status&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="n">code</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="n">output</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&#39;Cmd:&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">cmd</span><span class="p">)</span><span class="o">+</span><span class="s">&#39; failed with status code:&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">out</span><span class="p">[</span><span class="s">&#39;status&#39;</span><span class="p">]))</span>
+        <span class="k">return</span> <span class="n">output</span>
+    </div>
+<div class="viewcode-block" id="Machine.cmd"><a class="viewcode-back" href="../../eutester.html#eutester.machine.Machine.cmd">[docs]</a>    <span class="k">def</span> <span class="nf">cmd</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cmd</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">120</span><span class="p">,</span> <span class="n">listformat</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">cb</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">cbargs</span><span class="o">=</span><span class="p">[]):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Issues a command against the ssh connection to this instance</span>
+<span class="sd">        returns dict containing:</span>
+<span class="sd">            [&#39;cmd&#39;] - The command which was executed</span>
+<span class="sd">            [&#39;output&#39;] - The std out/err from the executed command</span>
+<span class="sd">            [&#39;status&#39;] - The exit (exitcode) of the command, in the case a call back fires, this status code is unreliable.</span>
+<span class="sd">            [&#39;cbfired&#39;]  - Boolean to indicate whether or not the provided callback fired (ie returned False)</span>
+<span class="sd">            [&#39;elapsed&#39;] - Time elapsed waiting for command loop to end. </span>
+<span class="sd">        cmd - mandatory - string, the command to be executed </span>
+<span class="sd">        verbose - optional - boolean flag to enable debug</span>
+<span class="sd">        timeout - optional - command timeout in seconds </span>
+<span class="sd">        listformat -optional - specifies returned output in list of lines, or single string buffer</span>
+<span class="sd">        cb - optional - call back function, accepting string buffer, returning true false see sshconnection for more info</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ssh</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">ssh</span><span class="o">.</span><span class="n">cmd</span><span class="p">(</span><span class="n">cmd</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="n">verbose</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">,</span> <span class="n">listformat</span><span class="o">=</span><span class="n">listformat</span><span class="p">,</span> <span class="n">cb</span><span class="o">=</span><span class="n">cb</span><span class="p">,</span> <span class="n">cbargs</span><span class="o">=</span><span class="n">cbargs</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;Euinstance ssh connection is None&quot;</span><span class="p">)</span>
+        </div>
+<div class="viewcode-block" id="Machine.sys_until_found"><a class="viewcode-back" href="../../eutester.html#eutester.machine.Machine.sys_until_found">[docs]</a>    <span class="k">def</span> <span class="nf">sys_until_found</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cmd</span><span class="p">,</span> <span class="n">regex</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">120</span><span class="p">,</span> <span class="n">listformat</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Run a command until output of command satisfies/finds regex or EOF is found. </span>
+<span class="sd">        returns dict containing:</span>
+<span class="sd">            [&#39;cmd&#39;] - The command which was executed</span>
+<span class="sd">            [&#39;output&#39;] - The std out/err from the executed command</span>
+<span class="sd">            [&#39;status&#39;] - The exit (exitcode) of the command, in the case a call back fires, this status code is unreliable.</span>
+<span class="sd">            [&#39;cbfired&#39;]  - Boolean to indicate whether or not the provided callback fired (ie returned False)</span>
+<span class="sd">            [&#39;elapsed&#39;] - Time elapsed waiting for command loop to end.</span>
+<span class="sd">        cmd - mandatory - string, the command to be executed </span>
+<span class="sd">        regex - mandatory - regex to look for</span>
+<span class="sd">        verbose - optional - boolean flag to enable debug</span>
+<span class="sd">        timeout - optional - command timeout in seconds </span>
+<span class="sd">        listformat -optional - specifies returned output in list of lines, or single string buffer </span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">cmd</span><span class="p">(</span><span class="n">cmd</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="n">verbose</span><span class="p">,</span><span class="n">timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">,</span><span class="n">listformat</span><span class="o">=</span><span class="n">listformat</span><span class="p">,</span><span class="n">cb</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">str_found_cb</span><span class="p">,</span> <span class="n">cbargs</span><span class="o">=</span><span class="p">[</span><span class="n">regex</span><span class="p">,</span> <span class="n">verbose</span><span class="p">])</span>
+        
+        </div>
+<div class="viewcode-block" id="Machine.str_found_cb"><a class="viewcode-back" href="../../eutester.html#eutester.machine.Machine.str_found_cb">[docs]</a>    <span class="k">def</span> <span class="nf">str_found_cb</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">buf</span><span class="p">,</span><span class="n">regex</span><span class="p">,</span><span class="n">verbose</span><span class="p">,</span><span class="n">search</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Return sshcbreturn type setting stop to True if given regex matches against given string buf</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">buf</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">sshconnection</span><span class="o">.</span><span class="n">SshCbReturn</span><span class="p">(</span> <span class="n">stop</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">str_found</span><span class="p">(</span><span class="n">buf</span><span class="p">,</span> <span class="n">regex</span><span class="o">=</span><span class="n">regex</span><span class="p">,</span> <span class="n">search</span><span class="o">=</span><span class="n">search</span><span class="p">))</span>
+        
+        </div>
+<div class="viewcode-block" id="Machine.str_found"><a class="viewcode-back" href="../../eutester.html#eutester.machine.Machine.str_found">[docs]</a>    <span class="k">def</span> <span class="nf">str_found</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">buf</span><span class="p">,</span> <span class="n">regex</span><span class="p">,</span> <span class="n">search</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Return True if given regex matches against given string</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="n">search</span><span class="p">:</span>
+            <span class="n">found</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">regex</span><span class="p">,</span><span class="n">buf</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">found</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">regex</span><span class="p">,</span> <span class="n">buf</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">found</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">True</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">False</span>
+    </div>
+<div class="viewcode-block" id="Machine.get_file_stat"><a class="viewcode-back" href="../../eutester.html#eutester.machine.Machine.get_file_stat">[docs]</a>    <span class="k">def</span> <span class="nf">get_file_stat</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">path</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sftp</span><span class="o">.</span><span class="n">lstat</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+        </div>
+<div class="viewcode-block" id="Machine.get_file_size"><a class="viewcode-back" href="../../eutester.html#eutester.machine.Machine.get_file_size">[docs]</a>    <span class="k">def</span> <span class="nf">get_file_size</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sftp</span><span class="o">.</span><span class="n">lstat</span><span class="p">(</span><span class="n">path</span><span class="p">)</span><span class="o">.</span><span class="n">st_size</span>
+    </div>
+<div class="viewcode-block" id="Machine.get_file_perms_flag"><a class="viewcode-back" href="../../eutester.html#eutester.machine.Machine.get_file_perms_flag">[docs]</a>    <span class="k">def</span> <span class="nf">get_file_perms_flag</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">path</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sftp</span><span class="o">.</span><span class="n">lstat</span><span class="p">(</span><span class="n">path</span><span class="p">)</span><span class="o">.</span><span class="n">FLAG_PERMISSIONS</span> 
+    </div>
+<div class="viewcode-block" id="Machine.get_file_groupid"><a class="viewcode-back" href="../../eutester.html#eutester.machine.Machine.get_file_groupid">[docs]</a>    <span class="k">def</span> <span class="nf">get_file_groupid</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sftp</span><span class="o">.</span><span class="n">lstat</span><span class="p">(</span><span class="n">path</span><span class="p">)</span><span class="o">.</span><span class="n">st_gid</span>
+        </div>
+<div class="viewcode-block" id="Machine.get_file_userid"><a class="viewcode-back" href="../../eutester.html#eutester.machine.Machine.get_file_userid">[docs]</a>    <span class="k">def</span> <span class="nf">get_file_userid</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">path</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sftp</span><span class="o">.</span><span class="n">lstat</span><span class="p">(</span><span class="n">path</span><span class="p">)</span><span class="o">.</span><span class="n">st_uid</span>
+    </div>
+<div class="viewcode-block" id="Machine.get_masked_pass"><a class="viewcode-back" href="../../eutester.html#eutester.machine.Machine.get_masked_pass">[docs]</a>    <span class="k">def</span> <span class="nf">get_masked_pass</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pwd</span><span class="p">,</span> <span class="n">firstlast</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">charcount</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">show</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        format password for printing</span>
+<span class="sd">        options:</span>
+<span class="sd">        pwd - string- the text password to format</span>
+<span class="sd">        firstlast -boolean - show the first and last characters in pwd</span>
+<span class="sd">        charcount -boolean - print a &quot;*&quot; for each char in pwd, otherwise return fixed string &#39;**hidden**&#39;</span>
+<span class="sd">        show - boolean - convert pwd to str() and return it in plain text</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="n">ret</span> <span class="o">=</span><span class="s">&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">pwd</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s">&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">show</span> <span class="ow">is</span> <span class="bp">True</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">pwd</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">charcount</span> <span class="ow">is</span> <span class="bp">False</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s">&quot;**hidden**&quot;</span>
+        <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="nb">len</span><span class="p">(</span><span class="n">pwd</span><span class="p">)):</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">x</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">x</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">pwd</span><span class="p">))</span> <span class="ow">and</span> <span class="n">firstlast</span><span class="p">:</span>
+                <span class="n">ret</span> <span class="o">=</span> <span class="n">ret</span><span class="o">+</span><span class="n">pwd</span><span class="p">[</span><span class="n">x</span><span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">ret</span> <span class="o">+=</span> <span class="s">&quot;*&quot;</span>
+</div>
+<div class="viewcode-block" id="Machine.mkfs"><a class="viewcode-back" href="../../eutester.html#eutester.machine.Machine.mkfs">[docs]</a>    <span class="k">def</span> <span class="nf">mkfs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">partition</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;ext3&quot;</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sys</span><span class="p">(</span><span class="s">&quot;mkfs.&quot;</span><span class="o">+</span> <span class="nb">type</span> <span class="o">+</span> <span class="s">&quot; -F &quot;</span> <span class="o">+</span> <span class="n">partition</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Machine.mount"><a class="viewcode-back" href="../../eutester.html#eutester.machine.Machine.mount">[docs]</a>    <span class="k">def</span> <span class="nf">mount</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">path</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sys</span><span class="p">(</span><span class="s">&quot;mount &quot;</span><span class="o">+</span> <span class="n">device</span> <span class="o">+</span> <span class="s">&quot; &quot;</span> <span class="o">+</span> <span class="n">path</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Machine.chown"><a class="viewcode-back" href="../../eutester.html#eutester.machine.Machine.chown">[docs]</a>    <span class="k">def</span> <span class="nf">chown</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">user</span><span class="p">,</span> <span class="n">path</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sys</span><span class="p">(</span><span class="s">&quot;chwon &quot;</span><span class="o">+</span> <span class="n">user</span> <span class="o">+</span> <span class="s">&quot;:&quot;</span> <span class="o">+</span> <span class="n">user</span> <span class="o">+</span> <span class="s">&quot; &quot;</span> <span class="o">+</span> <span class="n">path</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Machine.ping_check"><a class="viewcode-back" href="../../eutester.html#eutester.machine.Machine.ping_check">[docs]</a>    <span class="k">def</span> <span class="nf">ping_check</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">host</span><span class="p">):</span>
+        <span class="n">out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ping_cmd</span><span class="p">(</span><span class="n">host</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Ping attempt to host:&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">host</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;, status code:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">out</span><span class="p">[</span><span class="s">&#39;status&#39;</span><span class="p">]))</span>
+        <span class="k">if</span> <span class="n">out</span><span class="p">[</span><span class="s">&#39;status&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&#39;Ping returned error:&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">out</span><span class="p">[</span><span class="s">&#39;status&#39;</span><span class="p">])</span><span class="o">+</span><span class="s">&#39; to host:&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">host</span><span class="p">))</span>
+    </div>
+<div class="viewcode-block" id="Machine.ping_cmd"><a class="viewcode-back" href="../../eutester.html#eutester.machine.Machine.ping_cmd">[docs]</a>    <span class="k">def</span> <span class="nf">ping_cmd</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">count</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">pingtimeout</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">commandtimeout</span><span class="o">=</span><span class="mi">120</span><span class="p">,</span> <span class="n">listformat</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="n">cmd</span> <span class="o">=</span> <span class="s">&#39;ping -c &#39;</span> <span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">count</span><span class="p">)</span><span class="o">+</span><span class="s">&#39; -t &#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">pingtimeout</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+            <span class="n">cmd</span> <span class="o">+=</span> <span class="s">&#39; -v &#39;</span>
+        <span class="n">cmd</span> <span class="o">=</span> <span class="n">cmd</span> <span class="o">+</span> <span class="s">&#39; &#39;</span><span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">host</span><span class="p">)</span>
+        <span class="n">out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">cmd</span><span class="p">(</span><span class="n">cmd</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="n">verbose</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="n">commandtimeout</span><span class="p">,</span> <span class="n">listformat</span><span class="o">=</span><span class="n">listformat</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+            <span class="c">#print all returned attributes from ping command dict</span>
+            <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">out</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">item</span><span class="p">)</span><span class="o">+</span><span class="s">&quot; = &quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">out</span><span class="p">[</span><span class="n">item</span><span class="p">])</span> <span class="p">)</span>  
+        <span class="k">return</span> <span class="n">out</span>
+        
+        </div>
+<div class="viewcode-block" id="Machine.dump_netfail_info"><a class="viewcode-back" href="../../eutester.html#eutester.machine.Machine.dump_netfail_info">[docs]</a>    <span class="k">def</span> <span class="nf">dump_netfail_info</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">ip</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">mac</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">pass1</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">pass2</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">showpass</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">taillength</span><span class="o">=</span><span class="mi">50</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Debug method to provide potentially helpful info from current machine when debugging connectivity issues.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Attempting to dump network information, args: ip:&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">ip</span><span class="p">)</span><span class="o">+</span><span class="s">&#39; mac:&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">mac</span><span class="p">)</span><span class="o">+</span><span class="s">&#39; pass1:&#39;</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">get_masked_pass</span><span class="p">(</span><span class="n">pass1</span><span class="p">,</span><span class="n">show</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span><span class="o">+</span><span class="s">&#39; pass2:&#39;</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">get_masked_pass</span><span class="p">(</span><span class="n">pass2</span><span class="p">,</span><span class="n">show</span><span class="o">=</span><span class="bp">True</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ping_cmd</span><span class="p">(</span><span class="n">ip</span><span class="p">,</span><span class="n">verbose</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sys</span><span class="p">(</span><span class="s">&#39;arp -a&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sys</span><span class="p">(</span><span class="s">&#39;dmesg | tail -&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">taillength</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sys</span><span class="p">(</span><span class="s">&#39;cat /var/log/messages | tail -&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">taillength</span><span class="p">))</span>
+        </div>
+<div class="viewcode-block" id="Machine.found"><a class="viewcode-back" href="../../eutester.html#eutester.machine.Machine.found">[docs]</a>    <span class="k">def</span> <span class="nf">found</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">command</span><span class="p">,</span> <span class="n">regex</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Returns a Boolean of whether the result of the command contains the regex&quot;&quot;&quot;</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sys</span><span class="p">(</span><span class="n">command</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="n">verbose</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">result</span> <span class="ow">is</span> <span class="bp">None</span> <span class="ow">or</span> <span class="n">result</span> <span class="o">==</span> <span class="p">[]:</span>
+            <span class="k">return</span> <span class="bp">False</span>
+        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">result</span><span class="p">:</span>
+            <span class="n">found</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">regex</span><span class="p">,</span><span class="n">line</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">found</span><span class="p">:</span>
+                <span class="k">return</span> <span class="bp">True</span>
+        <span class="k">return</span> <span class="bp">False</span>   
+    </div>
+<div class="viewcode-block" id="Machine.wget_remote_image"><a class="viewcode-back" href="../../eutester.html#eutester.machine.Machine.wget_remote_image">[docs]</a>    <span class="k">def</span> <span class="nf">wget_remote_image</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">url</span><span class="p">,</span><span class="n">path</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">user</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">password</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">retryconn</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">300</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;wget_remote_image, url:&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">url</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;, path:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="p">))</span>
+        <span class="n">cmd</span> <span class="o">=</span> <span class="s">&#39;wget &#39;</span>
+        <span class="k">if</span> <span class="n">path</span><span class="p">:</span>
+            <span class="n">cmd</span> <span class="o">=</span> <span class="n">cmd</span> <span class="o">+</span> <span class="s">&quot; -P &quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">user</span><span class="p">:</span>
+            <span class="n">cmd</span> <span class="o">=</span> <span class="n">cmd</span> <span class="o">+</span> <span class="s">&quot; --user &quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">user</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">password</span><span class="p">:</span>
+            <span class="n">cmd</span> <span class="o">=</span> <span class="n">cmd</span> <span class="o">+</span> <span class="s">&quot; --password &quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">password</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">retryconn</span><span class="p">:</span>
+            <span class="n">cmd</span> <span class="o">+=</span> <span class="s">&#39; --retry-connrefused &#39;</span>
+        <span class="n">cmd</span> <span class="o">=</span> <span class="n">cmd</span> <span class="o">+</span> <span class="s">&#39; &#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">url</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;wget_remote_image cmd: &#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">cmd</span><span class="p">))</span>
+        <span class="n">ret</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">cmd</span><span class="p">(</span><span class="n">cmd</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">,</span> <span class="n">cb</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">wget_status_cb</span> <span class="p">)</span>
+        <span class="k">if</span> <span class="n">ret</span><span class="p">[</span><span class="s">&#39;status&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&#39;wget_remote_image failed with status:&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">ret</span><span class="p">[</span><span class="s">&#39;status&#39;</span><span class="p">]))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;wget_remote_image succeeded&#39;</span><span class="p">)</span>
+    </div>
+<div class="viewcode-block" id="Machine.wget_status_cb"><a class="viewcode-back" href="../../eutester.html#eutester.machine.Machine.wget_status_cb">[docs]</a>    <span class="k">def</span> <span class="nf">wget_status_cb</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">buf</span><span class="p">):</span>
+        <span class="n">ret</span> <span class="o">=</span> <span class="n">sshconnection</span><span class="o">.</span><span class="n">SshCbReturn</span><span class="p">(</span><span class="n">stop</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">buf</span> <span class="o">=</span> <span class="n">buf</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+            <span class="n">val</span> <span class="o">=</span> <span class="n">buf</span><span class="o">.</span><span class="n">split</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span> 
+            <span class="k">if</span> <span class="n">val</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">wget_last_status</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">re</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="s">&#39;^\d+\%&#39;</span><span class="p">,</span><span class="n">buf</span><span class="p">):</span>
+                    <span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&quot;</span><span class="se">\r\x1b</span><span class="s">[K&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">buf</span><span class="p">))</span>
+                    <span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">wget_last_status</span> <span class="o">=</span> <span class="n">val</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">print</span> <span class="n">buf</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">pass</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">ret</span>
+
+            
+        </div>
+<div class="viewcode-block" id="Machine.get_df_info"><a class="viewcode-back" href="../../eutester.html#eutester.machine.Machine.get_df_info">[docs]</a>    <span class="k">def</span> <span class="nf">get_df_info</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return df&#39;s output in dict format for a given path.</span>
+<span class="sd">        If path is not given will give the df info for the current working dir used in the ssh</span>
+<span class="sd">        session this command is executed in (ie: /home/user or /root).</span>
+<span class="sd">        path - optional -string, used to specifiy path to use in df command. Default is PWD of ssh shelled command</span>
+<span class="sd">        verbose - optional -boolean, used to specify whether or debug is printed during this command.</span>
+<span class="sd">        Example:</span>
+<span class="sd">            dirpath = &#39;/disk1/storage&#39;</span>
+<span class="sd">            dfout = self.get_df_info(path=dirpath)</span>
+<span class="sd">            available_space = dfout[&#39;available&#39;]</span>
+<span class="sd">            mounted_on = dfout[&#39;mounted&#39;]</span>
+<span class="sd">            filesystem = dfout[&#39;filesystem&#39;]</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">ret</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="n">path</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">path</span> <span class="o">=</span> <span class="s">&#39;${PWD}&#39;</span>
+        <span class="n">cmd</span> <span class="o">=</span> <span class="s">&#39;df &#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;get_df_info cmd:&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">cmd</span><span class="p">))</span>
+        <span class="n">out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">cmd</span><span class="p">(</span><span class="n">cmd</span><span class="p">,</span><span class="n">listformat</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">out</span><span class="p">[</span><span class="s">&#39;status&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;df returned err code:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">out</span><span class="p">[</span><span class="s">&#39;status&#39;</span><span class="p">]))</span>
+        <span class="n">output</span> <span class="o">=</span> <span class="n">out</span><span class="p">[</span><span class="s">&#39;output&#39;</span><span class="p">]</span>
+        <span class="c"># Get the presented fields from commands output,</span>
+        <span class="c"># Convert to lowercase, use this as our dict keys</span>
+        <span class="n">fields</span><span class="o">=</span><span class="p">[]</span>
+        <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="nb">str</span><span class="p">(</span><span class="n">output</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">split</span><span class="p">():</span>
+            <span class="n">fields</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">field</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">())</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="mi">0</span> 
+        <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="nb">str</span><span class="p">(</span><span class="n">output</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span><span class="o">.</span><span class="n">split</span><span class="p">():</span>
+                <span class="n">ret</span><span class="p">[</span><span class="n">fields</span><span class="p">[</span><span class="n">x</span><span class="p">]]</span><span class="o">=</span><span class="n">value</span>
+                <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="s">&#39;DF FIELD: &#39;</span><span class="o">+</span><span class="n">fields</span><span class="p">[</span><span class="n">x</span><span class="p">])</span><span class="o">+</span><span class="s">&#39; = &#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">value</span><span class="p">))</span>
+                <span class="n">x</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="k">return</span> <span class="n">ret</span>
+    </div>
+<div class="viewcode-block" id="Machine.upgrade"><a class="viewcode-back" href="../../eutester.html#eutester.machine.Machine.upgrade">[docs]</a>    <span class="k">def</span> <span class="nf">upgrade</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">package</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">repo_utils</span><span class="o">.</span><span class="n">package_manager</span><span class="o">.</span><span class="n">upgrade</span><span class="p">(</span><span class="n">package</span><span class="p">)</span>
+    </div>
+<div class="viewcode-block" id="Machine.add_repo"><a class="viewcode-back" href="../../eutester.html#eutester.machine.Machine.add_repo">[docs]</a>    <span class="k">def</span> <span class="nf">add_repo</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">url</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">repo_utils</span><span class="o">.</span><span class="n">package_manager</span><span class="o">.</span><span class="n">add_repo</span><span class="p">(</span><span class="n">url</span><span class="p">)</span>
+    </div>
+<div class="viewcode-block" id="Machine.install"><a class="viewcode-back" href="../../eutester.html#eutester.machine.Machine.install">[docs]</a>    <span class="k">def</span> <span class="nf">install</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">package</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">repo_utils</span><span class="o">.</span><span class="n">package_manager</span><span class="o">.</span><span class="n">install</span><span class="p">(</span><span class="n">package</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Machine.update_repos"><a class="viewcode-back" href="../../eutester.html#eutester.machine.Machine.update_repos">[docs]</a>    <span class="k">def</span> <span class="nf">update_repos</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">repo_utils</span><span class="o">.</span><span class="n">package_manager</span><span class="o">.</span><span class="n">update_repos</span><span class="p">()</span>
+    </div>
+<div class="viewcode-block" id="Machine.get_package_info"><a class="viewcode-back" href="../../eutester.html#eutester.machine.Machine.get_package_info">[docs]</a>    <span class="k">def</span> <span class="nf">get_package_info</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">repo_utils</span><span class="o">.</span><span class="n">package_manager</span><span class="o">.</span><span class="n">get_package_info</span><span class="p">()</span>
+    </div>
+<div class="viewcode-block" id="Machine.get_installed_packages"><a class="viewcode-back" href="../../eutester.html#eutester.machine.Machine.get_installed_packages">[docs]</a>    <span class="k">def</span> <span class="nf">get_installed_packages</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">repo_utils</span><span class="o">.</span><span class="n">package_manager</span><span class="o">.</span><span class="n">get_installed_packages</span><span class="p">()</span>
+            </div>
+<div class="viewcode-block" id="Machine.get_available"><a class="viewcode-back" href="../../eutester.html#eutester.machine.Machine.get_available">[docs]</a>    <span class="k">def</span> <span class="nf">get_available</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">unit</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return df output&#39;s available field. By default this is KB.</span>
+<span class="sd">        path - optional -string.</span>
+<span class="sd">        unit - optional -integer used to divide return value. Can be used to convert KB to MB, GB, TB, etc..</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">size</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">get_df_info</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="n">path</span><span class="p">)[</span><span class="s">&#39;available&#39;</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">size</span><span class="o">/</span><span class="n">unit</span>
+    </div>
+<div class="viewcode-block" id="Machine.poll_log"><a class="viewcode-back" href="../../eutester.html#eutester.machine.Machine.poll_log">[docs]</a>    <span class="k">def</span> <span class="nf">poll_log</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">log_file</span><span class="o">=</span><span class="s">&quot;/var/log/messages&quot;</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span> <span class="s">&quot;Starting to poll &quot;</span> <span class="o">+</span> <span class="n">log_file</span> <span class="p">)</span>     
+        <span class="bp">self</span><span class="o">.</span><span class="n">log_channel</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ssh</span><span class="o">.</span><span class="n">connection</span><span class="o">.</span><span class="n">invoke_shell</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log_channel</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="s">&quot;tail -f &quot;</span> <span class="o">+</span> <span class="n">log_file</span> <span class="o">+</span> <span class="s">&quot; </span><span class="se">\n</span><span class="s">&quot;</span><span class="p">)</span>
+        <span class="c">### Begin polling channel for any new data</span>
+        <span class="k">while</span> <span class="bp">self</span><span class="o">.</span><span class="n">log_active</span><span class="p">[</span><span class="n">log_file</span><span class="p">]:</span>
+            <span class="c">### CLOUD LOG</span>
+            <span class="n">rl</span><span class="p">,</span> <span class="n">wl</span><span class="p">,</span> <span class="n">xl</span> <span class="o">=</span> <span class="n">select</span><span class="o">.</span><span class="n">select</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">log_channel</span><span class="p">],[],[],</span><span class="mf">0.0</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">rl</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log_buffers</span><span class="p">[</span><span class="n">log_file</span><span class="p">]</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">log_channel</span><span class="o">.</span><span class="n">recv</span><span class="p">(</span><span class="mi">1024</span><span class="p">)</span>
+            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+    </div>
+<div class="viewcode-block" id="Machine.start_log"><a class="viewcode-back" href="../../eutester.html#eutester.machine.Machine.start_log">[docs]</a>    <span class="k">def</span> <span class="nf">start_log</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">log_file</span><span class="o">=</span><span class="s">&quot;/var/log/messages&quot;</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Start thread to poll logs&quot;&quot;&quot;</span>
+        <span class="n">thread</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">poll_log</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="n">log_file</span><span class="p">)</span>
+        <span class="n">thread</span><span class="o">.</span><span class="n">daemon</span> <span class="o">=</span> <span class="bp">True</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log_threads</span><span class="p">[</span><span class="n">log_file</span><span class="p">]</span><span class="o">=</span> <span class="n">thread</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log_active</span><span class="p">[</span><span class="n">log_file</span><span class="p">]</span> <span class="o">=</span> <span class="bp">True</span>
+        </div>
+<div class="viewcode-block" id="Machine.stop_log"><a class="viewcode-back" href="../../eutester.html#eutester.machine.Machine.stop_log">[docs]</a>    <span class="k">def</span> <span class="nf">stop_log</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">log_file</span><span class="o">=</span><span class="s">&quot;/var/log/messages&quot;</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Terminate thread that is polling logs&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log_active</span><span class="p">[</span><span class="n">log_file</span><span class="p">]</span> <span class="o">=</span> <span class="bp">False</span>
+        </div>
+<div class="viewcode-block" id="Machine.save_log"><a class="viewcode-back" href="../../eutester.html#eutester.machine.Machine.save_log">[docs]</a>    <span class="k">def</span> <span class="nf">save_log</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">log_file</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="s">&quot;logs&quot;</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Save log buffer for log_file to the path to a file&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">path</span><span class="p">):</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+        <span class="n">FILE</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span> <span class="n">path</span> <span class="o">+</span> <span class="s">&#39;/&#39;</span> <span class="o">+</span> <span class="n">log_file</span><span class="p">,</span><span class="s">&quot;w&quot;</span><span class="p">)</span>
+        <span class="n">FILE</span><span class="o">.</span><span class="n">writelines</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">log_buffers</span><span class="p">[</span><span class="n">log_file</span><span class="p">])</span>
+        <span class="n">FILE</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+        </div>
+<div class="viewcode-block" id="Machine.save_all_logs"><a class="viewcode-back" href="../../eutester.html#eutester.machine.Machine.save_all_logs">[docs]</a>    <span class="k">def</span> <span class="nf">save_all_logs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="s">&quot;logs&quot;</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Save log buffers to a file&quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">log_file</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">log_buffers</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">save_log</span><span class="p">(</span><span class="n">log_file</span><span class="p">,</span><span class="n">path</span><span class="p">)</span>
+    
+    
+            
+        
+    </div>
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">s</span>  <span class="o">=</span> <span class="s">&quot;+++++++++++++++++++++++++++++++++++++++++++++++++++++</span><span class="se">\n</span><span class="s">&quot;</span>
+        <span class="n">s</span> <span class="o">+=</span> <span class="s">&quot;+&quot;</span> <span class="o">+</span> <span class="s">&quot;Hostname:&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hostname</span><span class="p">)</span> <span class="o">+</span> <span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span>
+        <span class="n">dname</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">distro</span><span class="o">.</span><span class="n">name</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">distro</span> <span class="k">else</span> <span class="s">&quot;&quot;</span>
+        <span class="n">s</span> <span class="o">+=</span> <span class="s">&quot;+&quot;</span> <span class="o">+</span> <span class="s">&quot;Distro: &quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">dname</span><span class="p">)</span> <span class="o">+</span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span>
+        <span class="n">s</span> <span class="o">+=</span> <span class="s">&quot;+&quot;</span> <span class="o">+</span> <span class="s">&quot;Distro Version: &quot;</span> <span class="o">+</span>  <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">distro_ver</span><span class="p">)</span> <span class="o">+</span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span>
+        <span class="n">s</span> <span class="o">+=</span> <span class="s">&quot;+&quot;</span> <span class="o">+</span> <span class="s">&quot;Install Type: &quot;</span> <span class="o">+</span>  <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">source</span><span class="p">)</span> <span class="o">+</span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span>
+        <span class="n">s</span> <span class="o">+=</span> <span class="s">&quot;+&quot;</span> <span class="o">+</span> <span class="s">&quot;Components: &quot;</span> <span class="o">+</span>   <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">components</span><span class="p">)</span> <span class="o">+</span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span>
+        <span class="n">s</span> <span class="o">+=</span> <span class="s">&quot;+++++++++++++++++++++++++++++++++++++++++++++++++++++&quot;</span>
+        <span class="k">return</span> <span class="n">s</span></div>
+</pre></div>
+
+      </div>
+      <div class="bottomnav">
+      
+        <p>
+        <a class="uplink" href="../../index.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer">
+        &copy; Copyright 2012, Vic Iglesias, Matt Clark, Harold Spencer.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

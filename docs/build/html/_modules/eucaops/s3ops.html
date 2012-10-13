@@ -1,0 +1,339 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>eucaops.s3ops &mdash; Eutester 0.0.4 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/haiku.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/print.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '0.0.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <script type="text/javascript" src="../../_static/theme_extras.js"></script>
+    <link rel="top" title="Eutester 0.0.4 documentation" href="../../index.html" />
+    <link rel="up" title="eucaops" href="../eucaops.html" /> 
+  </head>
+  <body>
+      <div class="header"><h1 class="heading"><a href="../../index.html">
+          <span>Eutester 0.0.4 documentation</span></a></h1>
+        <h2 class="heading"><span>eucaops.s3ops</span></h2>
+      </div>
+      <div class="topnav">
+      
+        <p>
+        <a class="uplink" href="../../index.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <h1>Source code for eucaops.s3ops</h1><div class="highlight"><pre>
+<span class="c"># Software License Agreement (BSD License)</span>
+<span class="c">#</span>
+<span class="c"># Copyright (c) 2009-2011, Eucalyptus Systems, Inc.</span>
+<span class="c"># All rights reserved.</span>
+<span class="c">#</span>
+<span class="c"># Redistribution and use of this software in source and binary forms, with or</span>
+<span class="c"># without modification, are permitted provided that the following conditions</span>
+<span class="c"># are met:</span>
+<span class="c">#</span>
+<span class="c">#   Redistributions of source code must retain the above</span>
+<span class="c">#   copyright notice, this list of conditions and the</span>
+<span class="c">#   following disclaimer.</span>
+<span class="c">#</span>
+<span class="c">#   Redistributions in binary form must reproduce the above</span>
+<span class="c">#   copyright notice, this list of conditions and the</span>
+<span class="c">#   following disclaimer in the documentation and/or other</span>
+<span class="c">#   materials provided with the distribution.</span>
+<span class="c">#</span>
+<span class="c"># THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS &quot;AS IS&quot;</span>
+<span class="c"># AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE</span>
+<span class="c"># IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE</span>
+<span class="c"># ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE</span>
+<span class="c"># LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR</span>
+<span class="c"># CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF</span>
+<span class="c"># SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS</span>
+<span class="c"># INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN</span>
+<span class="c"># CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)</span>
+<span class="c"># ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE</span>
+<span class="c"># POSSIBILITY OF SUCH DAMAGE.</span>
+<span class="c">#</span>
+<span class="c"># Author: vic.iglesias@eucalyptus.com</span>
+
+<span class="kn">from</span> <span class="nn">eutester</span> <span class="kn">import</span> <span class="n">Eutester</span>
+
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">hashlib</span>
+
+
+<span class="kn">from</span> <span class="nn">boto.s3.connection</span> <span class="kn">import</span> <span class="n">OrdinaryCallingFormat</span>
+<span class="kn">from</span> <span class="nn">boto.s3.connection</span> <span class="kn">import</span> <span class="n">S3Connection</span>
+<span class="kn">from</span> <span class="nn">boto.s3.bucket</span> <span class="kn">import</span> <span class="n">Bucket</span>
+<span class="kn">from</span> <span class="nn">boto.s3.key</span> <span class="kn">import</span> <span class="n">Key</span>
+<span class="kn">from</span> <span class="nn">boto.s3.acl</span> <span class="kn">import</span> <span class="n">ACL</span><span class="p">,</span> <span class="n">Policy</span><span class="p">,</span> <span class="n">Grant</span>
+<span class="kn">from</span> <span class="nn">boto.exception</span> <span class="kn">import</span> <span class="n">S3ResponseError</span>
+<span class="kn">from</span> <span class="nn">boto.exception</span> <span class="kn">import</span> <span class="n">S3CreateError</span>
+<span class="kn">from</span> <span class="nn">boto.s3.connection</span> <span class="kn">import</span> <span class="n">Location</span>
+<span class="kn">import</span> <span class="nn">boto.s3</span>
+
+<div class="viewcode-block" id="S3opsException"><a class="viewcode-back" href="../../eucaops.html#eucaops.s3ops.S3opsException">[docs]</a><span class="k">class</span> <span class="nc">S3opsException</span><span class="p">(</span><span class="ne">Exception</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Exception raised for errors that occur when running S3 operations.</span>
+
+<span class="sd">    Attributes:</span>
+<span class="sd">        msg  -- explanation of the error</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">msg</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">msg</span> <span class="o">=</span> <span class="n">msg</span>
+    
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">print</span> <span class="bp">self</span><span class="o">.</span><span class="n">msg</span>
+</div>
+<div class="viewcode-block" id="S3ops"><a class="viewcode-back" href="../../eucaops.html#eucaops.s3ops.S3ops">[docs]</a><span class="k">class</span> <span class="nc">S3ops</span><span class="p">(</span><span class="n">Eutester</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">config_file</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">password</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">keypath</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">credpath</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">aws_access_key_id</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">aws_secret_access_key</span> <span class="o">=</span> <span class="bp">None</span><span class="p">,</span><span class="n">account</span><span class="o">=</span><span class="s">&quot;eucalyptus&quot;</span><span class="p">,</span><span class="n">user</span><span class="o">=</span><span class="s">&quot;admin&quot;</span><span class="p">,</span> <span class="n">username</span><span class="o">=</span><span class="s">&quot;root&quot;</span><span class="p">,</span><span class="n">region</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">clc_ip</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">boto_debug</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">S3ops</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">config_file</span><span class="o">=</span><span class="n">config_file</span><span class="p">,</span><span class="n">password</span><span class="o">=</span><span class="n">password</span><span class="p">,</span> <span class="n">keypath</span><span class="o">=</span><span class="n">keypath</span><span class="p">,</span> <span class="n">credpath</span><span class="o">=</span><span class="n">credpath</span><span class="p">,</span> <span class="n">aws_access_key_id</span><span class="o">=</span><span class="n">aws_access_key_id</span><span class="p">,</span> <span class="n">aws_secret_access_key</span><span class="o">=</span><span class="n">aws_secret_access_key</span><span class="p">,</span><span class="n">account</span><span class="o">=</span><span class="n">account</span><span class="p">,</span> <span class="n">user</span><span class="o">=</span><span class="n">user</span><span class="p">,</span> <span class="n">region</span><span class="o">=</span><span class="n">region</span><span class="p">,</span><span class="n">clc_ip</span><span class="o">=</span><span class="n">clc_ip</span><span class="p">,</span> <span class="n">boto_debug</span><span class="o">=</span><span class="n">boto_debug</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">test_resources</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">setup_s3_resource_trackers</span><span class="p">()</span>
+        
+<div class="viewcode-block" id="S3ops.setup_s3_resource_trackers"><a class="viewcode-back" href="../../eucaops.html#eucaops.s3ops.S3ops.setup_s3_resource_trackers">[docs]</a>    <span class="k">def</span> <span class="nf">setup_s3_resource_trackers</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Setup keys in the test_resources hash in order to track artifacts created</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">test_resources</span><span class="p">[</span><span class="s">&quot;keys&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">test_resources</span><span class="p">[</span><span class="s">&quot;buckets&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        </div>
+<div class="viewcode-block" id="S3ops.create_bucket"><a class="viewcode-back" href="../../eucaops.html#eucaops.s3ops.S3ops.create_bucket">[docs]</a>    <span class="k">def</span> <span class="nf">create_bucket</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">bucket_name</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Create a bucket.  If the bucket already exists and you have</span>
+<span class="sd">        access to it, no error will be returned by AWS.</span>
+<span class="sd">        Note that bucket names are global to S3</span>
+<span class="sd">        so you need to choose a unique name.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c"># First let&#39;s see if we already have a bucket of this name.</span>
+        <span class="c"># The lookup method will return a Bucket object if the</span>
+        <span class="c"># bucket exists and we have access to it or None.</span>
+        <span class="n">bucket</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_bucket_by_name</span><span class="p">(</span><span class="n">bucket_name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">bucket</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span> <span class="s">&#39;Bucket (</span><span class="si">%s</span><span class="s">) already exists&#39;</span> <span class="o">%</span> <span class="n">bucket_name</span> <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+                <span class="c"># Let&#39;s try to create the bucket.  This will fail if</span>
+                <span class="c"># the bucket has already been created by someone else.</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">bucket</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">s3</span><span class="o">.</span><span class="n">create_bucket</span><span class="p">(</span><span class="n">bucket_name</span><span class="p">)</span>
+            <span class="k">except</span> <span class="bp">self</span><span class="o">.</span><span class="n">s3</span><span class="o">.</span><span class="n">provider</span><span class="o">.</span><span class="n">storage_create_error</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">S3opsException</span><span class="p">(</span> <span class="s">&#39;Bucket (</span><span class="si">%s</span><span class="s">) is owned by another user&#39;</span> <span class="o">%</span> <span class="n">bucket_name</span> <span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_bucket_by_name</span><span class="p">(</span><span class="n">bucket</span><span class="o">.</span><span class="n">name</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="n">S3opsException</span><span class="p">(</span><span class="s">&quot;Bucket could not be found after creation&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">test_resources</span><span class="p">[</span><span class="s">&quot;buckets&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">bucket</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Created bucket: &quot;</span> <span class="o">+</span> <span class="n">bucket_name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">bucket</span>
+    </div>
+<div class="viewcode-block" id="S3ops.delete_bucket"><a class="viewcode-back" href="../../eucaops.html#eucaops.s3ops.S3ops.delete_bucket">[docs]</a>    <span class="k">def</span> <span class="nf">delete_bucket</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">bucket</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Delete a bucket.</span>
+<span class="sd">        bucket_name  The name of the Walrus Bucket</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c"># First let&#39;s see if we already have a bucket of this name.</span>
+        <span class="c"># The lookup method will return a Bucket object if the</span>
+        <span class="c"># bucket exists and we have access to it or None.</span>
+        <span class="n">bucket_name</span> <span class="o">=</span> <span class="n">bucket</span><span class="o">.</span><span class="n">name</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">bucket</span><span class="o">.</span><span class="n">delete</span><span class="p">()</span>
+        <span class="k">except</span> <span class="bp">self</span><span class="o">.</span><span class="n">s3</span><span class="o">.</span><span class="n">provider</span><span class="o">.</span><span class="n">storage_create_error</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">S3opsException</span><span class="p">(</span> <span class="s">&#39;Bucket (</span><span class="si">%s</span><span class="s">) is owned by another user&#39;</span> <span class="o">%</span> <span class="n">bucket_name</span> <span class="p">)</span>
+        <span class="c">### Check if the bucket still exists</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_bucket_by_name</span><span class="p">(</span><span class="n">bucket_name</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">S3opsException</span><span class="p">(</span><span class="s">&#39;Bucket (</span><span class="si">%s</span><span class="s">) still exists after delete operation&#39;</span>  <span class="o">%</span> <span class="n">bucket_name</span> <span class="p">)</span>
+    </div>
+<div class="viewcode-block" id="S3ops.get_bucket_by_name"><a class="viewcode-back" href="../../eucaops.html#eucaops.s3ops.S3ops.get_bucket_by_name">[docs]</a>    <span class="k">def</span> <span class="nf">get_bucket_by_name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">bucket_name</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Lookup a bucket by name, if it does not exist raise an exception</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">bucket</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">s3</span><span class="o">.</span><span class="n">lookup</span><span class="p">(</span><span class="n">bucket_name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">bucket</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">bucket</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">None</span>
+    </div>
+<div class="viewcode-block" id="S3ops.upload_object"><a class="viewcode-back" href="../../eucaops.html#eucaops.s3ops.S3ops.upload_object">[docs]</a>    <span class="k">def</span> <span class="nf">upload_object</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">bucket_name</span><span class="p">,</span> <span class="n">key_name</span><span class="p">,</span> <span class="n">path_to_file</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">contents</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Write the contents of a local file to walrus</span>
+<span class="sd">        bucket_name   The name of the walrus Bucket.</span>
+<span class="sd">        key_name      The name of the object containing the data in walrus.</span>
+<span class="sd">        path_to_file  Fully qualified path to local file.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">bucket</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_bucket_by_name</span><span class="p">(</span><span class="n">bucket_name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">bucket</span> <span class="o">==</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">S3opsException</span><span class="p">(</span><span class="s">&quot;Could not find bucket &quot;</span> <span class="o">+</span> <span class="n">bucket_name</span> <span class="o">+</span> <span class="s">&quot; to upload file&quot;</span><span class="p">)</span>
+        <span class="c"># Get a new, blank Key object from the bucket.  This Key object only</span>
+        <span class="c"># exists locally until we actually store data in it.</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="n">bucket</span><span class="o">.</span><span class="n">new_key</span><span class="p">(</span><span class="n">key_name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">key</span> <span class="o">==</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">fail</span><span class="p">(</span> <span class="s">&quot;Unable to create key &quot;</span> <span class="o">+</span> <span class="n">key_name</span>  <span class="p">)</span>
+        <span class="k">if</span> <span class="n">path_to_file</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">contents</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="n">contents</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">urandom</span><span class="p">(</span><span class="mi">1024</span><span class="p">)</span>
+            <span class="n">key</span><span class="o">.</span><span class="n">set_contents_from_string</span><span class="p">(</span><span class="n">contents</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">key</span><span class="o">.</span><span class="n">set_contents_from_filename</span><span class="p">(</span><span class="n">path_to_file</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Uploaded key: &quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">key_name</span><span class="p">)</span> <span class="o">+</span> <span class="s">&quot; to bucket:&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">bucket_name</span><span class="p">))</span>    
+        <span class="bp">self</span><span class="o">.</span><span class="n">test_resources</span><span class="p">[</span><span class="s">&quot;keys&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">key</span>
+    </div>
+<div class="viewcode-block" id="S3ops.get_objects_by_prefix"><a class="viewcode-back" href="../../eucaops.html#eucaops.s3ops.S3ops.get_objects_by_prefix">[docs]</a>    <span class="k">def</span> <span class="nf">get_objects_by_prefix</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">bucket_name</span><span class="p">,</span> <span class="n">prefix</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Get keys in the specified bucket that match the prefix if no prefix is passed all objects are returned</span>
+<span class="sd">        as a result set.</span>
+<span class="sd">        If only 1 key matches it will be returned as a Key object. </span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">bucket</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_bucket_by_name</span><span class="p">(</span><span class="n">bucket_name</span><span class="p">)</span>
+        <span class="n">keys</span> <span class="o">=</span> <span class="n">bucket</span><span class="o">.</span><span class="n">get_all_keys</span><span class="p">(</span><span class="n">prefix</span><span class="o">=</span><span class="n">prefix</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">keys</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">fail</span><span class="p">(</span><span class="s">&quot;Unable to find any keys with prefix &quot;</span> <span class="o">+</span> <span class="n">prefix</span> <span class="o">+</span> <span class="s">&quot; in &quot;</span> <span class="o">+</span> <span class="n">bucket</span> <span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">keys</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">keys</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">keys</span>
+        </div>
+<div class="viewcode-block" id="S3ops.delete_object"><a class="viewcode-back" href="../../eucaops.html#eucaops.s3ops.S3ops.delete_object">[docs]</a>    <span class="k">def</span> <span class="nf">delete_object</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">object</span><span class="p">):</span>
+        <span class="n">bucket</span> <span class="o">=</span> <span class="nb">object</span><span class="o">.</span><span class="n">bucket</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="nb">object</span><span class="o">.</span><span class="n">name</span>
+        <span class="nb">object</span><span class="o">.</span><span class="n">delete</span><span class="p">()</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">s3</span><span class="o">.</span><span class="n">get_bucket</span><span class="p">(</span><span class="n">bucket</span><span class="p">)</span><span class="o">.</span><span class="n">get_key</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">S3opsException</span><span class="p">(</span><span class="s">&quot;Walrus object &quot;</span> <span class="o">+</span> <span class="n">name</span> <span class="o">+</span> <span class="s">&quot; in bucket &quot;</span>  <span class="o">+</span>  <span class="n">bucket</span><span class="o">.</span><span class="n">name</span>  <span class="o">+</span> <span class="s">&quot; still exists after delete&quot;</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">return</span>
+        </div>
+<div class="viewcode-block" id="S3ops.clear_bucket"><a class="viewcode-back" href="../../eucaops.html#eucaops.s3ops.S3ops.clear_bucket">[docs]</a>    <span class="k">def</span> <span class="nf">clear_bucket</span><span class="p">(</span><span class="n">bucket</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Deletes the contents of the bucket specified and the bucket itself</span>
+<span class="sd">           bucket       boto.bucket to delete recursively</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">try</span> <span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span> <span class="s">&quot;Getting bucket listing for &quot;</span> <span class="o">+</span> <span class="n">bucket</span><span class="o">.</span><span class="n">name</span> <span class="p">)</span>     
+            <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>  <span class="s">&quot;Iterating throught the bucket&quot;</span> <span class="p">)</span>
+            <span class="n">key_list</span> <span class="o">=</span> <span class="n">bucket</span><span class="o">.</span><span class="n">list</span><span class="p">()</span>        
+            <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>  <span class="s">&quot;Starting loop&quot;</span> <span class="p">)</span>
+            <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">key_list</span><span class="p">:</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">boto</span><span class="o">.</span><span class="n">s3</span><span class="o">.</span><span class="n">prefix</span><span class="o">.</span><span class="n">Prefix</span><span class="p">):</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>  <span class="s">&quot;Skipping prefix&quot;</span> <span class="p">)</span>
+                    <span class="k">continue</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>  <span class="s">&quot;Deleting key: &quot;</span> <span class="o">+</span> <span class="n">k</span><span class="o">.</span><span class="n">name</span> <span class="p">)</span>
+                <span class="n">bucket</span><span class="o">.</span><span class="n">delete_key</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+            <span class="n">bucket</span><span class="o">.</span><span class="n">delete</span><span class="p">()</span>
+        <span class="k">except</span> <span class="n">S3ResponseError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>  <span class="s">&quot;Exception caught doing bucket cleanup.&quot;</span> <span class="p">)</span>
+            <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="mi">409</span><span class="p">:</span>
+                <span class="c">#Do version cleanup</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>  <span class="s">&quot;Cleaning up versioning artifacts&quot;</span> <span class="p">)</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">keys</span> <span class="o">=</span> <span class="n">bucket</span><span class="o">.</span><span class="n">get_all_versions</span><span class="p">()</span>
+                    <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">keys</span><span class="p">:</span>
+                        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">Key</span><span class="p">):</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>  <span class="s">&quot;Got version: &quot;</span> <span class="o">+</span> <span class="n">k</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="s">&quot;--&quot;</span> <span class="o">+</span> <span class="n">k</span><span class="o">.</span><span class="n">version_id</span> <span class="o">+</span> <span class="s">&quot;-- Delete marker? &quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">k</span><span class="o">.</span><span class="n">delete_marker</span><span class="p">)</span> <span class="p">)</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>  <span class="s">&quot;Deleting key: &quot;</span> <span class="o">+</span> <span class="n">k</span><span class="o">.</span><span class="n">name</span> <span class="p">)</span>
+                            <span class="n">bucket</span><span class="o">.</span><span class="n">delete_key</span><span class="p">(</span><span class="n">key_name</span><span class="o">=</span><span class="n">k</span><span class="o">.</span><span class="n">name</span><span class="p">,</span><span class="n">version_id</span><span class="o">=</span><span class="n">k</span><span class="o">.</span><span class="n">version_id</span><span class="p">)</span>
+                        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">DeleteMarker</span><span class="p">):</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>  <span class="s">&quot;Got marker: &quot;</span> <span class="o">+</span> <span class="n">k</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="s">&quot;--&quot;</span> <span class="o">+</span> <span class="n">k</span><span class="o">.</span><span class="n">version_id</span> <span class="o">+</span> <span class="s">&quot;--&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">k</span><span class="o">.</span><span class="n">is_latest</span><span class="p">)</span> <span class="p">)</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>  <span class="s">&quot;Deleting delete marker&quot;</span> <span class="p">)</span>
+                            <span class="n">bucket</span><span class="o">.</span><span class="n">delete_key</span><span class="p">(</span><span class="n">key_name</span><span class="o">=</span><span class="n">k</span><span class="o">.</span><span class="n">name</span><span class="p">,</span><span class="n">version_id</span><span class="o">=</span><span class="n">k</span><span class="o">.</span><span class="n">version_id</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>  <span class="s">&quot;Deleting bucket &quot;</span> <span class="o">+</span> <span class="n">bucket</span><span class="o">.</span><span class="n">name</span> <span class="p">)</span>
+                    <span class="n">bucket</span><span class="o">.</span><span class="n">delete</span><span class="p">()</span>
+                <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>  <span class="s">&quot;Exception deleting versioning artifacts: &quot;</span> <span class="o">+</span> <span class="n">e</span><span class="o">.</span><span class="n">message</span> <span class="p">)</span>
+                    </div>
+<div class="viewcode-block" id="S3ops.clear_keys_with_prefix"><a class="viewcode-back" href="../../eucaops.html#eucaops.s3ops.S3ops.clear_keys_with_prefix">[docs]</a>    <span class="k">def</span> <span class="nf">clear_keys_with_prefix</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">bucket</span><span class="p">,</span> <span class="n">prefix</span><span class="p">):</span>
+        <span class="k">try</span> <span class="p">:</span>
+            <span class="n">listing</span> <span class="o">=</span> <span class="n">BucketTest</span><span class="o">.</span><span class="n">walrus</span><span class="o">.</span><span class="n">get_all_buckets</span><span class="p">()</span>        
+            <span class="k">for</span> <span class="n">bucket</span> <span class="ow">in</span> <span class="n">listing</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">bucket</span><span class="o">.</span><span class="n">name</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">BucketTest</span><span class="o">.</span><span class="n">bucket_prefix</span><span class="p">):</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span> <span class="s">&quot;Getting bucket listing for &quot;</span> <span class="o">+</span> <span class="n">bucket</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+                    <span class="n">key_list</span> <span class="o">=</span> <span class="n">bucket</span><span class="o">.</span><span class="n">list</span><span class="p">()</span>
+                    <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">key_list</span><span class="p">:</span>
+                        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">boto</span><span class="o">.</span><span class="n">s3</span><span class="o">.</span><span class="n">prefix</span><span class="o">.</span><span class="n">Prefix</span><span class="p">):</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span> <span class="s">&quot;Skipping prefix&quot;</span> <span class="p">)</span>
+                            <span class="k">continue</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span> <span class="s">&quot;Deleting key: &quot;</span> <span class="o">+</span> <span class="n">k</span><span class="o">.</span><span class="n">name</span> <span class="p">)</span>
+                        <span class="n">bucket</span><span class="o">.</span><span class="n">delete_key</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+                    <span class="n">bucket</span><span class="o">.</span><span class="n">delete</span><span class="p">()</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span> <span class="s">&quot;skipping bucket: &quot;</span> <span class="o">+</span> <span class="n">bucket</span><span class="o">.</span><span class="n">name</span> <span class="p">)</span>
+        <span class="k">except</span> <span class="n">S3ResponseError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">S3opsException</span><span class="p">(</span> <span class="s">&quot;Exception caught doing bucket cleanup.&quot;</span> <span class="p">)</span>
+                    
+    </div>
+<div class="viewcode-block" id="S3ops.get_canned_acl"><a class="viewcode-back" href="../../eucaops.html#eucaops.s3ops.S3ops.get_canned_acl">[docs]</a>    <span class="k">def</span> <span class="nf">get_canned_acl</span><span class="p">(</span><span class="n">owner_id</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span><span class="n">canned_acl</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span><span class="n">bucket_owner_id</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Returns an acl object that can be applied to a bucket or key</span>
+<span class="sd">        owner_id         Account id of the owner of the bucket. Required</span>
+<span class="sd">        canned_acl       Canned acl to implement. Required. </span>
+<span class="sd">                         Options: [&#39;public-read&#39;, &#39;public-read-write&#39;, &#39;authenticated-read&#39;,  &#39;log-delivery-write&#39;, &#39;bucket-owner-full-control&#39;, &#39;bucket-owner-full-control&#39;]</span>
+<span class="sd">        bucket_owner_id  Required for bucket-owner-full-control and bucket-owner-full-control acls to be created</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="n">owner_id</span> <span class="o">==</span> <span class="bp">None</span> <span class="ow">or</span> <span class="n">canned_acl</span> <span class="o">==</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">S3opsException</span><span class="p">(</span> <span class="s">&quot;No owner_id or canned_acl passed to get_canned_acl()&quot;</span> <span class="p">)</span>
+        
+        <span class="n">owner_fc_grant</span> <span class="o">=</span> <span class="n">Grant</span><span class="p">(</span><span class="n">permission</span><span class="o">=</span><span class="s">&quot;FULL_CONTROL&quot;</span><span class="p">,</span> <span class="nb">id</span><span class="o">=</span><span class="n">owner_id</span><span class="p">)</span>
+        <span class="n">built_acl</span> <span class="o">=</span> <span class="n">ACL</span><span class="p">()</span>
+        <span class="n">built_acl</span><span class="o">.</span><span class="n">add_grant</span><span class="p">(</span><span class="n">owner_fc_grant</span><span class="p">)</span>
+            
+        <span class="k">if</span> <span class="n">canned_acl</span> <span class="o">==</span> <span class="s">&quot;public-read&quot;</span><span class="p">:</span>
+            <span class="n">built_acl</span><span class="o">.</span><span class="n">add_grant</span><span class="p">(</span><span class="n">Grant</span><span class="p">(</span><span class="n">permission</span><span class="o">=</span><span class="s">&quot;READ&quot;</span><span class="p">,</span><span class="n">uri</span><span class="o">=</span><span class="n">s3_groups</span><span class="p">[</span><span class="s">&quot;all_users&quot;</span><span class="p">]))</span>        
+        <span class="k">elif</span> <span class="n">canned_acl</span> <span class="o">==</span> <span class="s">&quot;public-read-write&quot;</span><span class="p">:</span>
+            <span class="n">built_acl</span><span class="o">.</span><span class="n">add_grant</span><span class="p">(</span><span class="n">Grant</span><span class="p">(</span><span class="n">permission</span><span class="o">=</span><span class="s">&quot;READ&quot;</span><span class="p">,</span><span class="n">uri</span><span class="o">=</span><span class="n">s3_groups</span><span class="p">[</span><span class="s">&quot;all_users&quot;</span><span class="p">]))</span>
+            <span class="n">built_acl</span><span class="o">.</span><span class="n">add_grant</span><span class="p">(</span><span class="n">Grant</span><span class="p">(</span><span class="n">permission</span><span class="o">=</span><span class="s">&quot;WRITE&quot;</span><span class="p">,</span><span class="n">uri</span><span class="o">=</span><span class="n">s3_groups</span><span class="p">[</span><span class="s">&quot;all_users&quot;</span><span class="p">]))</span>                
+        <span class="k">elif</span> <span class="n">canned_acl</span> <span class="o">==</span> <span class="s">&quot;authenticated-read&quot;</span><span class="p">:</span>
+            <span class="n">built_acl</span><span class="o">.</span><span class="n">add_grant</span><span class="p">(</span><span class="n">Grant</span><span class="p">(</span><span class="n">permission</span><span class="o">=</span><span class="s">&quot;READ&quot;</span><span class="p">,</span><span class="n">uri</span><span class="o">=</span><span class="n">s3_groups</span><span class="p">[</span><span class="s">&quot;authenticated_users&quot;</span><span class="p">]))</span>        
+        <span class="k">elif</span> <span class="n">canned_acl</span> <span class="o">==</span> <span class="s">&quot;log-delivery-write&quot;</span><span class="p">:</span>
+            <span class="n">built_acl</span><span class="o">.</span><span class="n">add_grant</span><span class="p">(</span><span class="n">Grant</span><span class="p">(</span><span class="n">permission</span><span class="o">=</span><span class="s">&quot;WRITE&quot;</span><span class="p">,</span><span class="n">uri</span><span class="o">=</span><span class="n">s3_groups</span><span class="p">[</span><span class="s">&quot;log_delivery&quot;</span><span class="p">]))</span>        
+        <span class="k">elif</span> <span class="n">canned_acl</span> <span class="o">==</span> <span class="s">&quot;bucket-owner-read&quot;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">bucket_owner_id</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;No bucket_owner_id passed when trying to create bucket-owner-read canned acl &quot;</span><span class="p">)</span>
+            <span class="n">built_acl</span><span class="o">.</span><span class="n">add_grant</span><span class="p">(</span><span class="n">Grant</span><span class="p">(</span><span class="n">permission</span><span class="o">=</span><span class="s">&quot;READ&quot;</span><span class="p">,</span><span class="n">user_id</span><span class="o">=</span><span class="n">bucket_owner_id</span><span class="p">))</span>        
+        <span class="k">elif</span> <span class="n">canned_acl</span> <span class="o">==</span> <span class="s">&quot;bucket-owner-full-control&quot;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">bucket_owner_id</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;No bucket_owner_id passed when trying to create bucket-owner-full-control canned acl &quot;</span><span class="p">)</span>
+            <span class="n">built_acl</span><span class="o">.</span><span class="n">add_grant</span><span class="p">(</span><span class="n">Grant</span><span class="p">(</span><span class="n">permission</span><span class="o">=</span><span class="s">&quot;FULL_CONTROL&quot;</span><span class="p">,</span><span class="n">user_id</span><span class="o">=</span><span class="n">bucket_owner_id</span><span class="p">))</span>        
+        <span class="k">return</span> <span class="n">built_acl</span>
+</div>
+<div class="viewcode-block" id="S3ops.check_md5"><a class="viewcode-back" href="../../eucaops.html#eucaops.s3ops.S3ops.check_md5">[docs]</a>    <span class="k">def</span> <span class="nf">check_md5</span><span class="p">(</span><span class="n">eTag</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="n">hasher</span> <span class="o">=</span> <span class="n">hashlib</span><span class="o">.</span><span class="n">md5</span><span class="p">()</span>
+        <span class="n">hasher</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+        <span class="n">data_hash</span> <span class="o">=</span> <span class="n">hasher</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">data_hash</span> <span class="o">!=</span> <span class="n">eTag</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span> <span class="s">&quot;Hash/eTag mismatch: </span><span class="se">\n</span><span class="s">hash = &quot;</span> <span class="o">+</span> <span class="n">data_hash</span> <span class="o">+</span> <span class="s">&quot;</span><span class="se">\n</span><span class="s">eTag= &quot;</span> <span class="o">+</span> <span class="n">eTag</span> <span class="p">)</span>
+            
+                </div></div>
+</pre></div>
+
+      </div>
+      <div class="bottomnav">
+      
+        <p>
+        <a class="uplink" href="../../index.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer">
+        &copy; Copyright 2012, Vic Iglesias, Matt Clark, Harold Spencer.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

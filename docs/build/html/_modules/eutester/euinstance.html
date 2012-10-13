@@ -1,0 +1,908 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>eutester.euinstance &mdash; Eutester 0.0.4 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/haiku.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/print.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '0.0.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <script type="text/javascript" src="../../_static/theme_extras.js"></script>
+    <link rel="top" title="Eutester 0.0.4 documentation" href="../../index.html" />
+    <link rel="up" title="eutester" href="../eutester.html" /> 
+  </head>
+  <body>
+      <div class="header"><h1 class="heading"><a href="../../index.html">
+          <span>Eutester 0.0.4 documentation</span></a></h1>
+        <h2 class="heading"><span>eutester.euinstance</span></h2>
+      </div>
+      <div class="topnav">
+      
+        <p>
+        <a class="uplink" href="../../index.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <h1>Source code for eutester.euinstance</h1><div class="highlight"><pre>
+<span class="c"># Software License Agreement (BSD License)</span>
+<span class="c">#</span>
+<span class="c"># Copyright (c) 2009-2011, Eucalyptus Systems, Inc.</span>
+<span class="c"># All rights reserved.</span>
+<span class="c">#</span>
+<span class="c"># Redistribution and use of this software in source and binary forms, with or</span>
+<span class="c"># without modification, are permitted provided that the following conditions</span>
+<span class="c"># are met:</span>
+<span class="c">#</span>
+<span class="c">#   Redistributions of source code must retain the above</span>
+<span class="c">#   copyright notice, this list of conditions and the</span>
+<span class="c">#   following disclaimer.</span>
+<span class="c">#</span>
+<span class="c">#   Redistributions in binary form must reproduce the above</span>
+<span class="c">#   copyright notice, this list of conditions and the</span>
+<span class="c">#   following disclaimer in the documentation and/or other</span>
+<span class="c">#   materials provided with the distribution.</span>
+<span class="c">#</span>
+<span class="c"># THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS &quot;AS IS&quot;</span>
+<span class="c"># AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE</span>
+<span class="c"># IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE</span>
+<span class="c"># ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE</span>
+<span class="c"># LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR</span>
+<span class="c"># CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF</span>
+<span class="c"># SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS</span>
+<span class="c"># INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN</span>
+<span class="c"># CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)</span>
+<span class="c"># ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE</span>
+<span class="c"># POSSIBILITY OF SUCH DAMAGE.</span>
+<span class="c">#</span>
+<span class="c"># Author: matt.clark@eucalyptus.com</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">Created on Mar 7, 2012</span>
+<span class="sd">@author: clarkmatthew</span>
+<span class="sd">extension of the boto instance class, with added convenience methods + objects</span>
+<span class="sd">Add common instance test routines to this class</span>
+
+<span class="sd">Sample usage:</span>
+<span class="sd">    testinstance = EuInstance.make_euinstance_from_instance( eutester.run_instances()[0] )</span>
+<span class="sd">    print testinstance.id</span>
+<span class="sd">    output = testinstance.sys(&quot;ls /dev/xd*&quot;) </span>
+<span class="sd">    print output[0]</span>
+<span class="sd">    eutester.sys(&#39;ping &#39;+testinstance.ip_address )</span>
+<span class="sd">    testinstance.sys(&#39;yum install ntpd&#39;)</span>
+<span class="sd">&#39;&#39;&#39;</span>
+
+<span class="kn">from</span> <span class="nn">boto.ec2.volume</span> <span class="kn">import</span> <span class="n">Volume</span>
+<span class="kn">from</span> <span class="nn">boto.ec2.instance</span> <span class="kn">import</span> <span class="n">Instance</span>
+<span class="c">#from eutester import euvolume</span>
+<span class="kn">from</span> <span class="nn">eutester.euvolume</span> <span class="kn">import</span> <span class="n">EuVolume</span>
+<span class="kn">from</span> <span class="nn">eutester</span> <span class="kn">import</span> <span class="n">eulogger</span>
+
+<span class="kn">from</span> <span class="nn">random</span> <span class="kn">import</span> <span class="n">randint</span>
+<span class="kn">import</span> <span class="nn">sshconnection</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">eulogger</span>
+
+
+
+
+<div class="viewcode-block" id="EuInstance"><a class="viewcode-back" href="../../eutester.html#eutester.euinstance.EuInstance">[docs]</a><span class="k">class</span> <span class="nc">EuInstance</span><span class="p">(</span><span class="n">Instance</span><span class="p">):</span>
+    <span class="n">keypair</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">keypath</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">username</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">password</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">rootfs_device</span> <span class="o">=</span> <span class="s">&quot;sda&quot;</span>
+    <span class="n">block_device_prefix</span> <span class="o">=</span> <span class="s">&quot;sd&quot;</span>
+    <span class="n">virtio_blk</span> <span class="o">=</span> <span class="bp">False</span>
+    <span class="n">attached_vols</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">scsidevs</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">ops</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">ssh</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">logger</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">debugmethod</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">timeout</span> <span class="o">=</span>  <span class="mi">60</span>
+    <span class="n">retry</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="n">verbose</span> <span class="o">=</span> <span class="bp">True</span>
+    <span class="n">ssh</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">tester</span> <span class="o">=</span> <span class="bp">None</span>
+
+
+   
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="EuInstance.make_euinstance_from_instance"><a class="viewcode-back" href="../../eutester.html#eutester.euinstance.EuInstance.make_euinstance_from_instance">[docs]</a>    <span class="k">def</span> <span class="nf">make_euinstance_from_instance</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> 
+                                      <span class="n">instance</span><span class="p">,</span> 
+                                      <span class="n">tester</span><span class="p">,</span>
+                                      <span class="n">debugmethod</span> <span class="o">=</span> <span class="bp">None</span><span class="p">,</span> 
+                                      <span class="n">keypair</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> 
+                                      <span class="n">keypath</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> 
+                                      <span class="n">password</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> 
+                                      <span class="n">username</span><span class="o">=</span><span class="s">&quot;root&quot;</span><span class="p">,</span>  
+                                      <span class="n">verbose</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> 
+                                      <span class="n">timeout</span><span class="o">=</span><span class="mi">120</span><span class="p">,</span>
+                                      <span class="n">retry</span><span class="o">=</span><span class="mi">2</span>
+                                      <span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Primary constructor for this class. Note: to avoid an ssh session within this method, provide keys, username/pass later.</span>
+<span class="sd">        Arguments:</span>
+<span class="sd">        instance - mandatory- a Boto instance object used to build this euinstance object</span>
+<span class="sd">        keypair - optional- a boto keypair object used for creating ssh connection to the instance</span>
+<span class="sd">        password - optional- string used to create ssh connection to this instance as an alternative to keypair </span>
+<span class="sd">        username - optional- string used to create ssh connection as an alternative to keypair</span>
+<span class="sd">        timeout - optional- integer used for ssh connection timeout</span>
+<span class="sd">        debugmethod - optional - method, used for debug output </span>
+<span class="sd">        verbose - optional - boolean to determine if debug is to be printed using debug()</span>
+<span class="sd">        retry - optional - integer, ssh connection attempts for non-authentication failures</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="n">newins</span> <span class="o">=</span> <span class="n">EuInstance</span><span class="p">(</span><span class="n">instance</span><span class="o">.</span><span class="n">connection</span><span class="p">)</span>
+        <span class="n">newins</span><span class="o">.</span><span class="n">__dict__</span> <span class="o">=</span> <span class="n">instance</span><span class="o">.</span><span class="n">__dict__</span>
+        <span class="n">newins</span><span class="o">.</span><span class="n">tester</span> <span class="o">=</span> <span class="n">tester</span>
+        
+        <span class="n">newins</span><span class="o">.</span><span class="n">debugmethod</span> <span class="o">=</span> <span class="n">debugmethod</span>
+        <span class="k">if</span> <span class="n">newins</span><span class="o">.</span><span class="n">debugmethod</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">newins</span><span class="o">.</span><span class="n">logger</span> <span class="o">=</span> <span class="n">eulogger</span><span class="o">.</span><span class="n">Eulogger</span><span class="p">(</span><span class="n">identifier</span><span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">instance</span><span class="o">.</span><span class="n">id</span><span class="p">)</span> <span class="o">+</span> <span class="s">&quot;-&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">instance</span><span class="o">.</span><span class="n">ip_address</span><span class="p">))</span>
+            <span class="n">newins</span><span class="o">.</span><span class="n">debugmethod</span><span class="o">=</span> <span class="n">newins</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span>
+            
+        <span class="k">if</span> <span class="p">(</span><span class="n">keypair</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">):</span>
+            <span class="n">keypath</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">getcwd</span><span class="p">()</span> <span class="o">+</span> <span class="s">&quot;/&quot;</span> <span class="o">+</span> <span class="n">keypair</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="s">&quot;.pem&quot;</span> 
+        <span class="n">newins</span><span class="o">.</span><span class="n">keypair</span> <span class="o">=</span> <span class="n">keypair</span>
+        <span class="n">newins</span><span class="o">.</span><span class="n">keypath</span> <span class="o">=</span> <span class="n">keypath</span>
+        <span class="n">newins</span><span class="o">.</span><span class="n">password</span> <span class="o">=</span> <span class="n">password</span>
+        <span class="n">newins</span><span class="o">.</span><span class="n">username</span> <span class="o">=</span> <span class="n">username</span>
+        <span class="n">newins</span><span class="o">.</span><span class="n">verbose</span> <span class="o">=</span> <span class="n">verbose</span>
+        <span class="n">newins</span><span class="o">.</span><span class="n">attached_vols</span><span class="o">=</span><span class="p">[]</span> 
+        <span class="n">newins</span><span class="o">.</span><span class="n">timeout</span> <span class="o">=</span> <span class="n">timeout</span>
+        <span class="n">newins</span><span class="o">.</span><span class="n">retry</span> <span class="o">=</span> <span class="n">retry</span>    
+        <span class="n">newins</span><span class="o">.</span><span class="n">connect_to_instance</span><span class="p">(</span><span class="n">timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">)</span>
+        <span class="c">#newins.set_block_device_prefix()</span>
+        <span class="n">newins</span><span class="o">.</span><span class="n">set_rootfs_device</span><span class="p">()</span>
+        
+        <span class="k">return</span> <span class="n">newins</span>
+    </div>
+<div class="viewcode-block" id="EuInstance.reset_ssh_connection"><a class="viewcode-back" href="../../eutester.html#eutester.euinstance.EuInstance.reset_ssh_connection">[docs]</a>    <span class="k">def</span> <span class="nf">reset_ssh_connection</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">keypath</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">)</span> <span class="ow">or</span> <span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">username</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">)</span><span class="ow">and</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">password</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">))):</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">ssh</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">ssh</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ssh</span> <span class="o">=</span> <span class="n">sshconnection</span><span class="o">.</span><span class="n">SshConnection</span><span class="p">(</span>
+                                                    <span class="bp">self</span><span class="o">.</span><span class="n">public_dns_name</span><span class="p">,</span> 
+                                                    <span class="n">keypair</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">keypair</span><span class="p">,</span> 
+                                                    <span class="n">keypath</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">keypath</span><span class="p">,</span>          
+                                                    <span class="n">password</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">password</span><span class="p">,</span> 
+                                                    <span class="n">username</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">username</span><span class="p">,</span> 
+                                                    <span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">timeout</span><span class="p">,</span> 
+                                                    <span class="n">retry</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">retry</span><span class="p">,</span>
+                                                    <span class="n">debugmethod</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">debugmethod</span><span class="p">,</span>
+                                                    <span class="n">verbose</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">verbose</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;keypath or username/password need to be populated for ssh connection&quot;</span><span class="p">)</span> 
+            
+    </div>
+<div class="viewcode-block" id="EuInstance.connect_to_instance"><a class="viewcode-back" href="../../eutester.html#eutester.euinstance.EuInstance.connect_to_instance">[docs]</a>    <span class="k">def</span> <span class="nf">connect_to_instance</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">60</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Attempts to connect to an instance via ssh.</span>
+<span class="sd">        timeout - optional - time in seconds to wait for connection before failure</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Attempting to reconnect_to_instance:&quot;</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
+        <span class="k">if</span> <span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">keypath</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">)</span> <span class="ow">or</span> <span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">username</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">)</span><span class="ow">and</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">password</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">))):</span>
+            <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+            <span class="n">elapsed</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">ssh</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">ssh</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ssh</span> <span class="o">=</span> <span class="bp">None</span>
+            <span class="k">while</span> <span class="p">(</span><span class="n">elapsed</span> <span class="o">&lt;</span> <span class="n">timeout</span><span class="p">):</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">reset_ssh_connection</span><span class="p">()</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">sys</span><span class="p">(</span><span class="s">&quot;&quot;</span><span class="p">)</span>
+                <span class="k">except</span> <span class="ne">Exception</span><span class="p">,</span> <span class="n">se</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Caught exception attempting to reconnect ssh&#39;</span><span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">se</span><span class="p">))</span>
+                    <span class="n">elapsed</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span><span class="o">-</span><span class="n">start</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;retrying ssh connection, elapsed:&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">elapsed</span><span class="p">))</span>
+                    <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span>
+                    <span class="k">pass</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">break</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">ssh</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;:Failed establishing ssh connection in reconnect&quot;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;keypath or username/password need to be populated for ssh connection&quot;</span><span class="p">)</span> 
+    </div>
+<div class="viewcode-block" id="EuInstance.debug"><a class="viewcode-back" href="../../eutester.html#eutester.euinstance.EuInstance.debug">[docs]</a>    <span class="k">def</span> <span class="nf">debug</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">msg</span><span class="p">,</span><span class="n">traceback</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span><span class="n">method</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span><span class="n">frame</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Used to print debug, defaults to print() but over ridden by self.debugmethod if not None</span>
+<span class="sd">        msg - mandatory -string, message to be printed</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="p">(</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose</span> <span class="ow">is</span> <span class="bp">True</span> <span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">debugmethod</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+            
+                </div>
+<div class="viewcode-block" id="EuInstance.sys"><a class="viewcode-back" href="../../eutester.html#eutester.euinstance.EuInstance.sys">[docs]</a>    <span class="k">def</span> <span class="nf">sys</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cmd</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">120</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Issues a command against the ssh connection to this instance</span>
+<span class="sd">        Returns a list of the lines from stdout+stderr as a result of the command</span>
+<span class="sd">        cmd - mandatory - string, the command to be executed </span>
+<span class="sd">        verbose - optional - boolean flag to enable debug</span>
+<span class="sd">        timeout - optional - command timeout in seconds </span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="n">output</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ssh</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">):</span>
+            <span class="n">output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ssh</span><span class="o">.</span><span class="n">sys</span><span class="p">(</span><span class="n">cmd</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="n">verbose</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">output</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;Euinstance ssh connection is None&quot;</span><span class="p">)</span>
+    </div>
+<div class="viewcode-block" id="EuInstance.found"><a class="viewcode-back" href="../../eutester.html#eutester.euinstance.EuInstance.found">[docs]</a>    <span class="k">def</span> <span class="nf">found</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">command</span><span class="p">,</span> <span class="n">regex</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Returns a Boolean of whether the result of the command contains the regex&quot;&quot;&quot;</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sys</span><span class="p">(</span><span class="n">command</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">result</span><span class="p">:</span>
+            <span class="n">found</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">regex</span><span class="p">,</span><span class="n">line</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">found</span><span class="p">:</span>
+                <span class="k">return</span> <span class="bp">True</span>
+        <span class="k">return</span> <span class="bp">False</span> 
+        </div>
+<div class="viewcode-block" id="EuInstance.get_dev_dir"><a class="viewcode-back" href="../../eutester.html#eutester.euinstance.EuInstance.get_dev_dir">[docs]</a>    <span class="k">def</span> <span class="nf">get_dev_dir</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">match</span><span class="o">=</span><span class="bp">None</span> <span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Attempts to return a list of devices in /dev which match the given grep criteria</span>
+<span class="sd">        By default will attempt to match self.block_device_prefix if populated, otherwise will try to match sd,vd, and xd device prefixes.</span>
+<span class="sd">        returns a list of matching dev names. </span>
+<span class="sd">        match - optional - string used in grep search of /dev dir on instance</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="n">retlist</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="n">match</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">match</span> <span class="o">=</span> <span class="s">&#39;^sd\|^vd\|^xd|^xvd&#39;</span>
+        <span class="n">out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sys</span><span class="p">(</span><span class="s">&quot;ls -1 /dev/ | grep &#39;&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">match</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;&#39;&quot;</span> <span class="p">)</span>
+        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">out</span><span class="p">:</span>
+            <span class="n">retlist</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">line</span><span class="o">.</span><span class="n">strip</span><span class="p">())</span>
+        <span class="k">return</span> <span class="n">retlist</span>
+    </div>
+<div class="viewcode-block" id="EuInstance.assertFilePresent"><a class="viewcode-back" href="../../eutester.html#eutester.euinstance.EuInstance.assertFilePresent">[docs]</a>    <span class="k">def</span> <span class="nf">assertFilePresent</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">filepath</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Method to check for the presence of a file at &#39;filepath&#39; on the instance</span>
+<span class="sd">        filepath - mandatory - string, the filepath to verify</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="n">filepath</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="n">out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ssh</span><span class="o">.</span><span class="n">cmd</span><span class="p">(</span><span class="s">&quot;ls &quot;</span><span class="o">+</span><span class="n">filepath</span><span class="p">)[</span><span class="s">&#39;status&#39;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;exit code:&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">out</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">out</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;File:&quot;</span><span class="o">+</span><span class="n">filepath</span><span class="o">+</span><span class="s">&quot; not found on instance:&quot;</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;File &#39;</span><span class="o">+</span><span class="n">filepath</span><span class="o">+</span><span class="s">&#39; is present on &#39;</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
+        
+    </div>
+<div class="viewcode-block" id="EuInstance.attach_volume"><a class="viewcode-back" href="../../eutester.html#eutester.euinstance.EuInstance.attach_volume">[docs]</a>    <span class="k">def</span> <span class="nf">attach_volume</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">volume</span><span class="p">,</span>  <span class="n">dev</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">60</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">volume</span><span class="p">,</span> <span class="n">EuVolume</span><span class="p">):</span>
+            <span class="n">euvolume</span> <span class="o">=</span> <span class="n">EuVolume</span><span class="o">.</span><span class="n">make_euvol_from_vol</span><span class="p">(</span><span class="n">volume</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">attach_euvolume</span><span class="p">(</span><span class="n">euvolume</span><span class="p">,</span>  <span class="n">dev</span><span class="o">=</span><span class="n">dev</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">)</span>
+    
+        </div>
+<div class="viewcode-block" id="EuInstance.attach_euvolume"><a class="viewcode-back" href="../../eutester.html#eutester.euinstance.EuInstance.attach_euvolume">[docs]</a>    <span class="k">def</span> <span class="nf">attach_euvolume</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">euvolume</span><span class="p">,</span> <span class="n">dev</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">60</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Method used to attach a volume to an instance and track it&#39;s use by that instance</span>
+<span class="sd">        required - euvolume - the euvolume object being attached</span>
+<span class="sd">        required - tester - the eucaops/eutester object/connection for this cloud</span>
+<span class="sd">        optional - dev - string to specify the dev path to &#39;request&#39; when attaching the volume to</span>
+<span class="sd">        &#39;&#39;&#39;</span> 
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">euvolume</span><span class="p">,</span> <span class="n">EuVolume</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;Volume needs to be of type euvolume, try attach_volume() instead?&quot;</span><span class="p">)</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Attempting to attach volume:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">euvolume</span><span class="o">.</span><span class="n">id</span><span class="p">)</span><span class="o">+</span><span class="s">&quot; to instance:&quot;</span> <span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">)</span><span class="o">+</span><span class="s">&quot; to dev:&quot;</span><span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">dev</span><span class="p">))</span>
+        <span class="c">#grab a snapshot of our devices before attach for comparison purposes</span>
+        <span class="n">dev_list_before</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_dev_dir</span><span class="p">()</span>
+        
+        <span class="n">dev_list_after</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">attached_dev</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="n">start</span><span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+        <span class="n">elapsed</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">if</span> <span class="n">dev</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">dev</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_free_scsi_dev</span><span class="p">()</span>
+        <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tester</span><span class="o">.</span><span class="n">attach_volume</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">euvolume</span><span class="p">,</span> <span class="n">dev</span><span class="p">,</span> <span class="n">pause</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span><span class="n">timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">)):</span> 
+            <span class="c">#update our block device prefix, detect if virtio is now in use </span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">set_block_device_prefix</span><span class="p">()</span>     
+            <span class="k">while</span> <span class="p">(</span><span class="n">elapsed</span> <span class="o">&lt;</span> <span class="n">timeout</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Checking for volume attachment on guest, elapsed time(&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">elapsed</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;)&quot;</span><span class="p">)</span>
+                <span class="n">dev_list_after</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_dev_dir</span><span class="p">()</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;dev_list_after:&quot;</span><span class="o">+</span><span class="s">&quot; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">dev_list_after</span><span class="p">))</span>
+                <span class="n">diff</span> <span class="o">=</span><span class="nb">list</span><span class="p">(</span> <span class="nb">set</span><span class="p">(</span><span class="n">dev_list_after</span><span class="p">)</span> <span class="o">-</span> <span class="nb">set</span><span class="p">(</span><span class="n">dev_list_before</span><span class="p">)</span> <span class="p">)</span>
+                <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">diff</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="n">devlist</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">diff</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;/&#39;</span><span class="p">)</span>
+                    <span class="n">attached_dev</span> <span class="o">=</span> <span class="s">&#39;/dev/&#39;</span><span class="o">+</span><span class="n">devlist</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">devlist</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+                    <span class="n">euvolume</span><span class="o">.</span><span class="n">guestdev</span> <span class="o">=</span> <span class="n">attached_dev</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+                    <span class="n">euvolume</span><span class="o">.</span><span class="n">clouddev</span> <span class="o">=</span> <span class="n">dev</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Volume:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">euvolume</span><span class="o">.</span><span class="n">id</span><span class="p">)</span><span class="o">+</span><span class="s">&quot; guest device:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">euvolume</span><span class="o">.</span><span class="n">guestdev</span><span class="p">))</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">attached_vols</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">euvolume</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="n">euvolume</span><span class="o">.</span><span class="n">id</span><span class="o">+</span><span class="s">&quot; Requested dev:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">euvolume</span><span class="o">.</span><span class="n">clouddev</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;, attached to guest device:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">euvolume</span><span class="o">.</span><span class="n">guestdev</span><span class="p">))</span>
+                    <span class="k">break</span>
+                <span class="n">elapsed</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span><span class="p">)</span>
+                <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+            <span class="c">#Check to see if this volume has unique data in the head otherwise write some and md5 it</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">vol_write_random_data_get_md5</span><span class="p">(</span><span class="n">euvolume</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Failed to attach volume:&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">euvolume</span><span class="o">.</span><span class="n">id</span><span class="p">)</span><span class="o">+</span><span class="s">&#39; to instance:&#39;</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&#39;Failed to attach volume:&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">euvolume</span><span class="o">.</span><span class="n">id</span><span class="p">)</span><span class="o">+</span><span class="s">&#39; to instance:&#39;</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">attached_dev</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;List after</span><span class="se">\n</span><span class="s">&quot;</span><span class="o">+</span><span class="s">&quot; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">dev_list_after</span><span class="p">))</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&#39;Volume:&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">euvolume</span><span class="o">.</span><span class="n">id</span><span class="p">)</span><span class="o">+</span><span class="s">&#39; attached, but not found on guest&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">)</span><span class="o">+</span><span class="s">&#39; after &#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">elapsed</span><span class="p">)</span><span class="o">+</span><span class="s">&#39; seconds?&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Success attaching volume:&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">euvolume</span><span class="o">.</span><span class="n">id</span><span class="p">)</span><span class="o">+</span><span class="s">&#39; to instance:&#39;</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="o">+</span><span class="s">&#39;, cloud dev:&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">euvolume</span><span class="o">.</span><span class="n">clouddev</span><span class="p">)</span><span class="o">+</span><span class="s">&#39;, attached dev:&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">attached_dev</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">attached_dev</span>
+    </div>
+<div class="viewcode-block" id="EuInstance.detach_euvolume"><a class="viewcode-back" href="../../eutester.html#eutester.euinstance.EuInstance.detach_euvolume">[docs]</a>    <span class="k">def</span> <span class="nf">detach_euvolume</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">euvolume</span><span class="p">,</span> <span class="n">waitfordev</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">180</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Method used to detach detach a volume to an instance and track it&#39;s use by that instance</span>
+<span class="sd">        required - euvolume - the euvolume object being deattached</span>
+<span class="sd">        optional - timeout - integer seconds to wait before timing out waiting for the volume to detach </span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+        <span class="n">elapsed</span> <span class="o">=</span> <span class="mi">0</span> 
+        <span class="k">for</span> <span class="n">vol</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">attached_vols</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">vol</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="n">euvolume</span><span class="o">.</span><span class="n">id</span><span class="p">:</span>
+                <span class="n">dev</span> <span class="o">=</span> <span class="n">vol</span><span class="o">.</span><span class="n">guestdev</span>
+                <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tester</span><span class="o">.</span><span class="n">detach_volume</span><span class="p">(</span><span class="n">euvolume</span><span class="p">,</span><span class="n">timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">)):</span>
+                    <span class="k">if</span> <span class="n">waitfordev</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Wait for device:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">dev</span><span class="p">)</span><span class="o">+</span><span class="s">&quot; to be removed on guest...&quot;</span><span class="p">)</span>
+                        <span class="k">while</span> <span class="p">(</span><span class="n">elapsed</span> <span class="o">&lt;</span> <span class="n">timeout</span><span class="p">):</span>
+                            <span class="k">try</span><span class="p">:</span>
+                                <span class="c">#check to see if device is still present on guest</span>
+                                <span class="bp">self</span><span class="o">.</span><span class="n">assertFilePresent</span><span class="p">(</span><span class="n">dev</span><span class="p">)</span>
+                            <span class="k">except</span> <span class="ne">Exception</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span>
+                                <span class="c">#if device is not present remove it</span>
+                                <span class="bp">self</span><span class="o">.</span><span class="n">attached_vols</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">vol</span><span class="p">)</span>
+                                <span class="k">return</span> <span class="bp">True</span>
+                            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span> 
+                            <span class="n">elapsed</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span><span class="o">-</span><span class="n">start</span><span class="p">)</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Waiting for device &#39;&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">dev</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;&#39; on guest to be removed.Elapsed:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">elapsed</span><span class="p">))</span>
+                        <span class="c">#one last check, in case dev has changed. </span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Device &quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">dev</span><span class="p">)</span><span class="o">+</span><span class="s">&quot; still present on &quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">)</span><span class="o">+</span><span class="s">&quot; checking sync state...&quot;</span><span class="p">)</span>
+                        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_dev_md5</span><span class="p">(</span><span class="n">dev</span><span class="p">,</span> <span class="n">euvolume</span><span class="o">.</span><span class="n">md5len</span><span class="p">)</span> <span class="o">==</span> <span class="n">euvolume</span><span class="o">.</span><span class="n">md5</span><span class="p">:</span>
+                            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;Volume(&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">vol</span><span class="o">.</span><span class="n">id</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;) detached, but device(&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">dev</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;) still present on (&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;)&quot;</span><span class="p">)</span>
+                        <span class="k">else</span><span class="p">:</span>
+                            <span class="c">#assume the cloud has successfully released the device, guest may have not</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">)</span><span class="o">+</span><span class="s">&#39;previously attached device for vol(&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">euvolume</span><span class="o">.</span><span class="n">id</span><span class="p">)</span><span class="o">+</span><span class="s">&#39;) no longer matches md5&#39;</span><span class="p">)</span>
+                            <span class="k">return</span> <span class="bp">True</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">attached_vols</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">vol</span><span class="p">)</span>
+                        <span class="k">return</span> <span class="bp">True</span>
+                        
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;Volume(&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">vol</span><span class="o">.</span><span class="n">id</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;) failed to detach from device(&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">dev</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;) on (&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;)&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;Detach Volume(&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">euvolume</span><span class="o">.</span><span class="n">id</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;) not found on (&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;)&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">True</span>
+    </div>
+<div class="viewcode-block" id="EuInstance.get_metadata"><a class="viewcode-back" href="../../eutester.html#eutester.euinstance.EuInstance.get_metadata">[docs]</a>    <span class="k">def</span> <span class="nf">get_metadata</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">element_path</span><span class="p">):</span> 
+        <span class="sd">&quot;&quot;&quot;Return the lines of metadata from the element path provided&quot;&quot;&quot;</span>
+        <span class="c">### If i can reach the metadata service ip use it to get metadata otherwise try the clc directly</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">found</span><span class="p">(</span><span class="s">&quot;ping -c 1 169.254.169.254&quot;</span><span class="p">,</span> <span class="s">&quot;1 received&quot;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sys</span><span class="p">(</span><span class="s">&quot;curl http://169.254.169.254/latest/meta-data/&quot;</span> <span class="o">+</span> <span class="n">element_path</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sys</span><span class="p">(</span><span class="s">&quot;curl http://&quot;</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">tester</span><span class="o">.</span><span class="n">get_ec2_ip</span><span class="p">()</span>  <span class="o">+</span> <span class="s">&quot;:8773/latest/meta-data/&quot;</span> <span class="o">+</span> <span class="n">element_path</span><span class="p">)</span>
+        </div>
+<div class="viewcode-block" id="EuInstance.set_block_device_prefix"><a class="viewcode-back" href="../../eutester.html#eutester.euinstance.EuInstance.set_block_device_prefix">[docs]</a>    <span class="k">def</span> <span class="nf">set_block_device_prefix</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">set_rootfs_device</span><span class="p">()</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        if self.found(&quot;dmesg | grep vda&quot;, &quot;vda&quot;):</span>
+<span class="sd">            self.block_device_prefix = &quot;vd&quot;</span>
+<span class="sd">            self.virtio_blk = True</span>
+<span class="sd">            self.rootfs_device = &quot;vda&quot;</span>
+<span class="sd">        elif self.found(&quot;dmesg | grep xvda&quot;, &quot;xvda&quot;):</span>
+<span class="sd">            self.block_device_prefix = &quot;xvd&quot;</span>
+<span class="sd">            self.virtio_blk = False</span>
+<span class="sd">            self.rootfs_device = &quot;xvda&quot;</span>
+<span class="sd">        else:</span>
+<span class="sd">            self.block_device_prefix = &quot;sd&quot;</span>
+<span class="sd">            self.virtio_blk = False</span>
+<span class="sd">            self.rootfs_device = &quot;sda&quot;</span>
+<span class="sd">            </span>
+<span class="sd">        &#39;&#39;&#39;</span></div>
+<div class="viewcode-block" id="EuInstance.set_rootfs_device"><a class="viewcode-back" href="../../eutester.html#eutester.euinstance.EuInstance.set_rootfs_device">[docs]</a>    <span class="k">def</span> <span class="nf">set_rootfs_device</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">found</span><span class="p">(</span><span class="s">&quot;dmesg | grep vda&quot;</span><span class="p">,</span> <span class="s">&quot;vda&quot;</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">rootfs_device</span> <span class="o">=</span> <span class="s">&quot;vda&quot;</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">virtio_blk</span> <span class="o">=</span> <span class="bp">True</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">found</span><span class="p">(</span><span class="s">&quot;dmesg | grep xvda&quot;</span><span class="p">,</span> <span class="s">&quot;xvda&quot;</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">rootfs_device</span> <span class="o">=</span> <span class="s">&quot;xvda&quot;</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">virtio_blk</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">rootfs_device</span> <span class="o">=</span> <span class="s">&quot;sda&quot;</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">virtio_blk</span> <span class="o">=</span> <span class="bp">False</span>
+            
+    </div>
+<div class="viewcode-block" id="EuInstance.get_guestdevs_inuse_by_vols"><a class="viewcode-back" href="../../eutester.html#eutester.euinstance.EuInstance.get_guestdevs_inuse_by_vols">[docs]</a>    <span class="k">def</span> <span class="nf">get_guestdevs_inuse_by_vols</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">retlist</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">vol</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">attached_vols</span><span class="p">:</span>
+            <span class="n">retlist</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">vol</span><span class="o">.</span><span class="n">guestdev</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">retlist</span>
+    
+    </div>
+<div class="viewcode-block" id="EuInstance.get_free_scsi_dev"><a class="viewcode-back" href="../../eutester.html#eutester.euinstance.EuInstance.get_free_scsi_dev">[docs]</a>    <span class="k">def</span> <span class="nf">get_free_scsi_dev</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span><span class="n">maxdevs</span><span class="o">=</span><span class="mi">16</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        The volume attach command requires a cloud level device name that is not currently associated with a volume </span>
+<span class="sd">        Note: This is the device name from the clouds perspective, not necessarily the guest&#39;s </span>
+<span class="sd">        This method attempts to find a free device name to use in the command</span>
+<span class="sd">        optional - prefix - string, pre-pended to the the device search string</span>
+<span class="sd">        optional - maxdevs - number use to specify the max device names to iterate over.Some virt envs have a limit of 16 devs. </span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="n">d</span><span class="o">=</span><span class="s">&#39;e&#39;</span>
+        <span class="n">dev</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="k">if</span> <span class="n">prefix</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">block_device_prefix</span>
+        <span class="n">cloudlist</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">tester</span><span class="o">.</span><span class="n">get_volumes</span><span class="p">(</span><span class="n">attached_instance</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
+        
+        <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="n">maxdevs</span><span class="p">):</span>
+            <span class="n">inuse</span><span class="o">=</span><span class="bp">False</span>
+            <span class="c">#double up the letter identifier to avoid exceeding z</span>
+            <span class="k">if</span> <span class="n">d</span> <span class="o">==</span> <span class="s">&#39;z&#39;</span><span class="p">:</span>
+                <span class="n">prefix</span><span class="o">=</span> <span class="n">prefix</span><span class="o">+</span><span class="s">&#39;e&#39;</span>
+            <span class="n">dev</span> <span class="o">=</span> <span class="s">&quot;/dev/&quot;</span><span class="o">+</span><span class="n">prefix</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">avol</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">attached_vols</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">avol</span><span class="o">.</span><span class="n">clouddev</span> <span class="o">==</span> <span class="n">dev</span><span class="p">:</span>
+                    <span class="n">inuse</span> <span class="o">=</span> <span class="bp">True</span>
+                    <span class="k">continue</span>
+            <span class="c">#Check to see if the cloud has a conflict with this device name...</span>
+            <span class="k">for</span> <span class="n">vol</span> <span class="ow">in</span> <span class="n">cloudlist</span><span class="p">:</span>
+                <span class="k">if</span> <span class="p">(</span><span class="n">vol</span><span class="o">.</span><span class="n">attach_data</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">vol</span><span class="o">.</span><span class="n">attach_data</span><span class="o">.</span><span class="n">device</span> <span class="o">==</span> <span class="n">dev</span><span class="p">):</span>
+                    <span class="n">inuse</span> <span class="o">=</span> <span class="bp">True</span>
+                    <span class="k">continue</span>
+            <span class="k">if</span> <span class="n">inuse</span> <span class="ow">is</span> <span class="bp">False</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Instance:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">)</span><span class="o">+</span><span class="s">&quot; returning available scsi dev:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">dev</span><span class="p">))</span>
+                <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">dev</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">d</span> <span class="o">=</span> <span class="nb">chr</span><span class="p">(</span><span class="nb">ord</span><span class="p">(</span><span class="s">&#39;e&#39;</span><span class="p">)</span> <span class="o">+</span> <span class="n">x</span><span class="p">)</span> <span class="c">#increment the letter we append to the device string prefix</span>
+                <span class="n">dev</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="k">if</span> <span class="n">dev</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;Could not find a free scsi dev on instance:&quot;</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span> <span class="p">)</span>
+        </div>
+<div class="viewcode-block" id="EuInstance.zero_fill_volume"><a class="viewcode-back" href="../../eutester.html#eutester.euinstance.EuInstance.zero_fill_volume">[docs]</a>    <span class="k">def</span> <span class="nf">zero_fill_volume</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">euvolume</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        zero fills the given euvolume with,returns dd&#39;s data/time stat</span>
+<span class="sd">        &#39;&#39;&#39;</span> 
+        <span class="n">voldev</span> <span class="o">=</span> <span class="n">euvolume</span><span class="o">.</span><span class="n">guestdev</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertFilePresent</span><span class="p">(</span><span class="n">voldev</span><span class="p">)</span>
+        <span class="n">fillcmd</span> <span class="o">=</span> <span class="s">&quot;dd if=/dev/zero of=&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">voldev</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;; sync&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">time_dd</span><span class="p">(</span><span class="n">fillcmd</span><span class="p">)</span>
+    </div>
+<div class="viewcode-block" id="EuInstance.random_fill_volume"><a class="viewcode-back" href="../../eutester.html#eutester.euinstance.EuInstance.random_fill_volume">[docs]</a>    <span class="k">def</span> <span class="nf">random_fill_volume</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">euvolume</span><span class="p">,</span><span class="n">srcdev</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">length</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Attempts to fill the entie given euvolume with unique non-zero data.</span>
+<span class="sd">        The srcdev is read from in a set size, and then used to write to the euvolume to populate it. The file </span>
+<span class="sd">        helps with both speed up the copy in the urandom case, and adds both some level of randomness another src device as well as </span>
+<span class="sd">        allows smaller src devs to be used to fill larger euvolumes by repeatedly reading into the copy. </span>
+<span class="sd">        returns dd&#39;s data/time stat</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="n">gb</span> <span class="o">=</span> <span class="mi">1073741824</span> 
+        <span class="n">fsize</span> <span class="o">=</span> <span class="mi">10485760</span> <span class="c">#10mb</span>
+        <span class="n">voldev</span> <span class="o">=</span> <span class="n">euvolume</span><span class="o">.</span><span class="n">guestdev</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertFilePresent</span><span class="p">(</span><span class="n">voldev</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">srcdev</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">found</span><span class="p">(</span><span class="s">&#39;ls /dev/urandom&#39;</span><span class="p">,</span> <span class="s">&#39;urandom&#39;</span><span class="p">):</span>
+                <span class="n">srcdev</span> <span class="o">=</span> <span class="s">&#39;/dev/urandom&#39;</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c">#look for the another large device we can read from in random size increments</span>
+                <span class="n">srcdev</span> <span class="o">=</span> <span class="s">&quot;/dev/&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sys</span><span class="p">(</span><span class="s">&quot;ls -1 /dev | grep &#39;da$&#39;&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+                <span class="n">fsize</span> <span class="o">=</span> <span class="n">randint</span><span class="p">(</span><span class="mi">1048576</span><span class="p">,</span><span class="mi">10485760</span><span class="p">)</span>
+                
+        <span class="k">if</span> <span class="n">length</span> <span class="o">&lt;=</span> <span class="n">fsize</span><span class="p">:</span>
+            <span class="n">fillcmd</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sys</span><span class="p">(</span><span class="s">&quot;head -c &quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">length</span><span class="p">)</span><span class="o">+</span><span class="s">&quot; &quot;</span><span class="o">+</span><span class="n">srcdev</span><span class="o">+</span><span class="s">&quot; &gt; &quot;</span><span class="o">+</span><span class="n">voldev</span><span class="o">+</span><span class="s">&quot;; sync&quot;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">count</span> <span class="o">=</span> <span class="nb">int</span><span class="p">((</span><span class="n">euvolume</span><span class="o">.</span><span class="n">size</span><span class="o">*</span><span class="n">gb</span><span class="p">)</span><span class="o">/</span><span class="n">fsize</span><span class="p">)</span>
+            <span class="n">fillcmd</span><span class="o">=</span><span class="s">&quot;head -c &quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">fsize</span><span class="p">)</span><span class="o">+</span><span class="s">&quot; &quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">srcdev</span><span class="p">)</span><span class="o">+</span><span class="s">&quot; &gt; /tmp/datafile; x=0; while [ $x -lt &quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">count</span><span class="p">)</span><span class="o">+</span><span class="s">&quot; ]; do cat /tmp/datafile; let x=$x+1; done | dd of=&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">voldev</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;; rm /tmp/datafile; sync&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">time_dd</span><span class="p">(</span><span class="n">fillcmd</span><span class="p">)</span>
+    
+    </div>
+<div class="viewcode-block" id="EuInstance.time_dd"><a class="viewcode-back" href="../../eutester.html#eutester.euinstance.EuInstance.time_dd">[docs]</a>    <span class="k">def</span> <span class="nf">time_dd</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">ddcmd</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Executes dd command on instance, parses and returns dd&#39;s data/time stat</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="n">time</span><span class="o">=</span><span class="s">&quot;&quot;</span>
+        <span class="n">out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sys</span><span class="p">(</span><span class="n">ddcmd</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">out</span><span class="p">:</span>
+            <span class="n">line</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="s">&#39;copied&#39;</span><span class="p">,</span><span class="n">line</span><span class="p">):</span>
+                <span class="n">time</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;,&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">pop</span><span class="p">())</span><span class="o">.</span><span class="n">split</span><span class="p">()[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">time</span>
+    </div>
+<div class="viewcode-block" id="EuInstance.vol_write_random_data_get_md5"><a class="viewcode-back" href="../../eutester.html#eutester.euinstance.EuInstance.vol_write_random_data_get_md5">[docs]</a>    <span class="k">def</span> <span class="nf">vol_write_random_data_get_md5</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">euvolume</span><span class="p">,</span> <span class="n">srcdev</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">length</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span> <span class="n">timepergig</span><span class="o">=</span><span class="mi">90</span><span class="p">,</span> <span class="n">overwrite</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Attempts to copy some amount of data into an attached volume, and return the md5sum of that volume</span>
+<span class="sd">        A brief check of the first 32 bytes is performed to see if this volume has pre-existing non-zero filled data. </span>
+<span class="sd">        If pre-existing data is found, and the overwrite flag is not set then the write is not performed. </span>
+<span class="sd">        Returns string with MD5 checksum calculated on &#39;length&#39; bytes from the head of the device. </span>
+<span class="sd">        volume - mandatory - boto volume object of the attached volume </span>
+<span class="sd">        srcdev - optional - string, the file to copy into the volume</span>
+<span class="sd">        timepergig - optional - the time in seconds per gig, used to estimate an adequate timeout period</span>
+<span class="sd">        overwrite - optional - boolean. write to volume regardless of whether existing data is found</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        
+        <span class="n">voldev</span> <span class="o">=</span> <span class="n">euvolume</span><span class="o">.</span><span class="n">guestdev</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>  
+        <span class="c">#check to see if there&#39;s existing data that we should avoid overwriting </span>
+        <span class="k">if</span> <span class="n">overwrite</span> <span class="ow">or</span> <span class="p">(</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sys</span><span class="p">(</span><span class="s">&#39;head -c 32 &#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">voldev</span><span class="p">)</span><span class="o">+</span><span class="s">&#39; | xargs -0 printf </span><span class="si">%s</span><span class="s"> | wc -c&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span> <span class="o">==</span> <span class="mi">0</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">random_fill_volume</span><span class="p">(</span><span class="n">euvolume</span><span class="p">,</span> <span class="n">srcdev</span><span class="o">=</span><span class="n">srcdev</span><span class="p">,</span> <span class="n">length</span><span class="o">=</span><span class="n">length</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Volume has existing data, skipping random data fill&quot;</span><span class="p">)</span>
+        <span class="c">#calculate checksum of euvolume attached device for given length</span>
+        <span class="n">md5</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">md5_attached_euvolume</span><span class="p">(</span><span class="n">euvolume</span><span class="p">,</span> <span class="n">timepergig</span><span class="o">=</span><span class="n">timepergig</span><span class="p">,</span><span class="n">length</span><span class="o">=</span><span class="n">length</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Filled Volume:&quot;</span><span class="o">+</span><span class="n">euvolume</span><span class="o">.</span><span class="n">id</span><span class="o">+</span><span class="s">&quot; dev:&quot;</span><span class="o">+</span><span class="n">voldev</span><span class="o">+</span><span class="s">&quot; md5:&quot;</span><span class="o">+</span><span class="n">md5</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">md5</span>
+    </div>
+<div class="viewcode-block" id="EuInstance.md5_attached_euvolume"><a class="viewcode-back" href="../../eutester.html#eutester.euinstance.EuInstance.md5_attached_euvolume">[docs]</a>    <span class="k">def</span> <span class="nf">md5_attached_euvolume</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">euvolume</span><span class="p">,</span> <span class="n">timepergig</span><span class="o">=</span><span class="mi">90</span><span class="p">,</span><span class="n">length</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span><span class="n">updatevol</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Calculates an md5sum of the first &#39;length&#39; bytes of the dev representing the attached euvolume.</span>
+<span class="sd">        By default will use the md5len stored within the euvolume. The euvolume will be updated with the</span>
+<span class="sd">        resulting checksum and length.</span>
+<span class="sd">        Returns the md5 checksum</span>
+<span class="sd">        euvolume - mandatory - euvolume object used to calc checksum against</span>
+<span class="sd">        timepergig - optional - number of seconds used per gig in volume size used in calcuating timeout </span>
+<span class="sd">        length - optional - number bytes to read from the head of the device file used in md5 calc</span>
+<span class="sd">        updatevol - optional - boolean used to update the euvolume data or not</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="n">length</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">length</span> <span class="o">=</span> <span class="n">euvolume</span><span class="o">.</span><span class="n">md5len</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">voldev</span> <span class="o">=</span> <span class="n">euvolume</span><span class="o">.</span><span class="n">guestdev</span>
+            <span class="n">timeout</span> <span class="o">=</span> <span class="n">euvolume</span><span class="o">.</span><span class="n">size</span> <span class="o">*</span> <span class="n">timepergig</span>
+            <span class="n">md5</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_dev_md5</span><span class="p">(</span><span class="n">voldev</span><span class="p">,</span> <span class="n">length</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Got MD5 for Volume:&quot;</span><span class="o">+</span><span class="n">euvolume</span><span class="o">.</span><span class="n">id</span><span class="o">+</span><span class="s">&quot; dev:&quot;</span><span class="o">+</span><span class="n">voldev</span><span class="o">+</span><span class="s">&quot; md5:&quot;</span><span class="o">+</span><span class="n">md5</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">updatevol</span><span class="p">:</span>
+                <span class="n">euvolume</span><span class="o">.</span><span class="n">md5</span><span class="o">=</span><span class="n">md5</span>
+                <span class="n">euvolume</span><span class="o">.</span><span class="n">md5len</span><span class="o">=</span><span class="n">length</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;Failed to md5 attached volume: &quot;</span> <span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">md5</span>
+    </div>
+<div class="viewcode-block" id="EuInstance.get_dev_md5"><a class="viewcode-back" href="../../eutester.html#eutester.euinstance.EuInstance.get_dev_md5">[docs]</a>    <span class="k">def</span> <span class="nf">get_dev_md5</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">devpath</span><span class="p">,</span> <span class="n">length</span><span class="p">):</span> 
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertFilePresent</span><span class="p">(</span><span class="n">devpath</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">length</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">md5</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sys</span><span class="p">(</span><span class="s">&quot;md5sum &quot;</span><span class="o">+</span><span class="n">voldev</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39; &#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">md5</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sys</span><span class="p">(</span><span class="s">&quot;head -c &quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">length</span><span class="p">)</span><span class="o">+</span><span class="s">&quot; &quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">devpath</span><span class="p">)</span><span class="o">+</span><span class="s">&quot; | md5sum&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39; &#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">md5</span>
+        </div>
+<div class="viewcode-block" id="EuInstance.reboot_instance_and_verify"><a class="viewcode-back" href="../../eutester.html#eutester.euinstance.EuInstance.reboot_instance_and_verify">[docs]</a>    <span class="k">def</span> <span class="nf">reboot_instance_and_verify</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">waitconnect</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">300</span><span class="p">,</span> <span class="n">connect</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">checkvolstatus</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Attempts to reboot an instance and verify it&#39;s state post reboot. </span>
+<span class="sd">        waitconnect-optional-integer representing seconds to wait before attempting to connect to instance after reboot</span>
+<span class="sd">        timeout-optional-integer, seconds. If a connection has failed, this timer is used to determine a retry</span>
+<span class="sd">        onnect- optional - boolean to indicate whether an ssh session should be established once the expected state has been reached</span>
+<span class="sd">        checkvolstatus - optional -boolean to be used to check volume status post start up</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="n">msg</span><span class="o">=</span><span class="s">&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Attempting to reboot instance:&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">checkvolstatus</span><span class="p">:</span>
+            <span class="c">#update the md5sums per volume before reboot</span>
+            <span class="n">bad_vols</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">get_unsynced_volumes</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">bad_vols</span> <span class="o">!=</span> <span class="p">[]:</span>
+                <span class="k">for</span> <span class="n">bv</span> <span class="ow">in</span> <span class="n">bad_vols</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">)</span><span class="o">+</span><span class="s">&#39;Unsynced volume found:&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">bv</span><span class="o">.</span><span class="n">id</span><span class="p">))</span>
+                <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;Could not reboot using checkvolstatus flag due to unsync&#39;d volumes&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">reboot</span><span class="p">()</span>
+        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="n">waitconnect</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">connect_to_instance</span><span class="p">(</span><span class="n">timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">checkvolstatus</span><span class="p">:</span>
+            <span class="n">badvols</span><span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_unsynced_volumes</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">badvols</span> <span class="o">!=</span> <span class="p">[]:</span>
+                <span class="k">for</span> <span class="n">vol</span> <span class="ow">in</span> <span class="n">badvols</span><span class="p">:</span>
+                    <span class="n">msg</span> <span class="o">=</span> <span class="n">msg</span><span class="o">+</span><span class="s">&quot;</span><span class="se">\n</span><span class="s">Volume:&quot;</span><span class="o">+</span><span class="n">vol</span><span class="o">.</span><span class="n">id</span><span class="o">+</span><span class="s">&quot; Local Dev:&quot;</span><span class="o">+</span><span class="n">vol</span><span class="o">.</span><span class="n">guestdev</span>
+                <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;Missing volumes post reboot:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="o">+</span><span class="s">&quot; reboot_instance_and_verify Success&quot;</span><span class="p">)</span>
+        </div>
+<div class="viewcode-block" id="EuInstance.get_unsynced_volumes"><a class="viewcode-back" href="../../eutester.html#eutester.euinstance.EuInstance.get_unsynced_volumes">[docs]</a>    <span class="k">def</span> <span class="nf">get_unsynced_volumes</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">euvol_list</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">md5length</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span> <span class="n">timepervol</span><span class="o">=</span><span class="mi">90</span><span class="p">,</span><span class="n">min_polls</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">check_md5</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Returns list of volumes which are:</span>
+<span class="sd">        -in a state the cloud believes the vol is no longer attached</span>
+<span class="sd">        -the attached device has changed, or is not found.</span>
+<span class="sd">        If all euvols are shown as attached to this instance, and the last known local dev is present and/or a local device is found with matching md5 checksum</span>
+<span class="sd">        then the list will return &#39;None&#39; as all volumes are successfully attached and state is in sync. </span>
+<span class="sd">        By default this method will iterate through all the known euvolumes attached to this euinstance. </span>
+<span class="sd">        A subset can be provided in the list argument &#39;euvol_list&#39;. </span>
+<span class="sd">        Returns a list of euvolumes for which a corresponding guest device could not be found, or the cloud no longer believes is attached. </span>
+<span class="sd">         </span>
+<span class="sd">        euvol_list - optional - euvolume object list. Defaults to all self.attached_vols</span>
+<span class="sd">        md5length - optional - defaults to the length given in each euvolume. Used to calc md5 checksum of devices</span>
+<span class="sd">        timerpervolume -optional - time to wait for device to appear, per volume before failing</span>
+<span class="sd">        min_polls - optional - minimum iterations to check guest devs before failing, despite timeout</span>
+<span class="sd">        check_md5 - optional - find devices by md5 comparision. Default is to only perform this check when virtio_blk is in use.</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="n">bad_list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">vol_list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">checked_vdevs</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">poll_count</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">dev_list</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_dev_dir</span><span class="p">()</span>
+        <span class="n">found</span> <span class="o">=</span> <span class="bp">False</span>
+
+        <span class="k">if</span> <span class="n">euvol_list</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">vol_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">euvol_list</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">vol_list</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">attached_vols</span>
+        
+            
+        <span class="k">for</span> <span class="n">vol</span> <span class="ow">in</span> <span class="n">vol_list</span><span class="p">:</span>
+            <span class="c">#first see if the cloud believes this volume is still attached. </span>
+            <span class="k">try</span><span class="p">:</span> 
+                <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Checking volume:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">vol</span><span class="o">.</span><span class="n">id</span><span class="p">))</span>
+                <span class="k">if</span> <span class="p">(</span><span class="n">vol</span><span class="o">.</span><span class="n">attach_data</span><span class="o">.</span><span class="n">instance_id</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">):</span> <span class="c">#verify the cloud status is still attached to this instance</span>
+                    <span class="n">found</span> <span class="o">=</span> <span class="bp">False</span>
+                    <span class="n">elapsed</span> <span class="o">=</span> <span class="mi">0</span> 
+                    <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+                    <span class="c">#loop here for timepervol in case were waiting for a volume to appear in the guest. ie attaching</span>
+                    <span class="k">while</span> <span class="p">(</span><span class="ow">not</span> <span class="n">found</span><span class="p">)</span> <span class="ow">and</span> <span class="p">((</span><span class="n">elapsed</span> <span class="o">&lt;=</span> <span class="n">timepervol</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="n">poll_count</span> <span class="o">&lt;</span> <span class="n">min_polls</span><span class="p">)):</span>
+                        <span class="k">try</span><span class="p">:</span>
+                            <span class="n">poll_count</span> <span class="o">+=</span> <span class="mi">1</span>
+                            <span class="c">#Ugly... :-(</span>
+                            <span class="c">#handle virtio and non virtio cases differently (KVM case needs improvement here).</span>
+                            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">virtio_blk</span> <span class="ow">or</span> <span class="n">check_md5</span><span class="p">:</span>
+                                <span class="c">#Do some detective work to see what device name the previously attached volume is using</span>
+                                <span class="n">devlist</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_dev_dir</span><span class="p">()</span>
+                                <span class="k">for</span> <span class="n">vdev</span> <span class="ow">in</span> <span class="n">devlist</span><span class="p">:</span>
+                                    <span class="n">vdev</span> <span class="o">=</span> <span class="s">&quot;/dev/&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">vdev</span><span class="p">)</span>
+                                    
+                                    <span class="c">#if we&#39;ve already checked the md5 on this dev no need to re-check it. </span>
+                                    <span class="k">if</span> <span class="ow">not</span> <span class="n">re</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">vdev</span><span class="p">,</span><span class="s">&quot; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">checked_vdevs</span><span class="p">)):</span> 
+                                        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Checking &#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">vdev</span><span class="p">)</span><span class="o">+</span><span class="s">&quot; for match against euvolume:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">vol</span><span class="o">.</span><span class="n">id</span><span class="p">))</span>
+                                        <span class="n">md5</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_dev_md5</span><span class="p">(</span><span class="n">vdev</span><span class="p">,</span> <span class="n">vol</span><span class="o">.</span><span class="n">md5len</span> <span class="p">)</span>
+                                        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;comparing &#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">md5</span><span class="p">)</span><span class="o">+</span><span class="s">&#39; vs &#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">vol</span><span class="o">.</span><span class="n">md5</span><span class="p">))</span>
+                                        <span class="k">if</span> <span class="n">md5</span> <span class="o">==</span> <span class="n">vol</span><span class="o">.</span><span class="n">md5</span><span class="p">:</span>
+                                            <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Found match at dev:&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">vdev</span><span class="p">))</span>
+                                            <span class="n">found</span> <span class="o">=</span> <span class="bp">True</span>
+                                            <span class="k">if</span> <span class="p">(</span><span class="n">vol</span><span class="o">.</span><span class="n">guestdev</span> <span class="o">!=</span> <span class="n">vdev</span> <span class="p">):</span>
+                                                <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;(&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">vol</span><span class="o">.</span><span class="n">id</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;)Guest dev changed! Updating from:&#39;&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">vol</span><span class="o">.</span><span class="n">guestdev</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;&#39; to:&#39;&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">vdev</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;&#39;&quot;</span><span class="p">)</span>
+                                            <span class="k">else</span><span class="p">:</span>
+                                                <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;(&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">vol</span><span class="o">.</span><span class="n">id</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;)Found local match at previous dev:&#39;&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">vol</span><span class="o">.</span><span class="n">guestdev</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;&#39;&quot;</span><span class="p">)</span>
+                                            <span class="n">vol</span><span class="o">.</span><span class="n">guestdev</span> <span class="o">=</span> <span class="n">vdev</span>
+                                        <span class="n">checked_vdevs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">vdev</span><span class="p">)</span> <span class="c"># add to list of devices we&#39;ve already checked.</span>
+                                    <span class="k">if</span> <span class="n">found</span><span class="p">:</span>
+                                        <span class="k">break</span>
+                            <span class="k">else</span><span class="p">:</span>
+                                <span class="c">#Not using virtio_blk assume the device will be the same</span>
+                                <span class="bp">self</span><span class="o">.</span><span class="n">assertFilePresent</span><span class="p">(</span><span class="n">vol</span><span class="o">.</span><span class="n">guestdev</span><span class="o">.</span><span class="n">strip</span><span class="p">())</span>
+                                <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;(&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">vol</span><span class="o">.</span><span class="n">id</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;)Found local/volume match dev:&quot;</span><span class="o">+</span><span class="n">vol</span><span class="o">.</span><span class="n">guestdev</span><span class="o">.</span><span class="n">strip</span><span class="p">())</span>
+                                <span class="n">found</span> <span class="o">=</span> <span class="bp">True</span>
+                        <span class="k">except</span><span class="p">:</span><span class="k">pass</span> 
+                        <span class="k">if</span> <span class="n">found</span><span class="p">:</span>
+                            <span class="k">break</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Not found sleep and check again...&#39;</span><span class="p">)</span>
+                        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
+                        <span class="n">elapsed</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">found</span><span class="p">:</span>
+                        <span class="n">bad_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">vol</span><span class="p">)</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;(&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">vol</span><span class="o">.</span><span class="n">id</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;)volume.guestdev:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">vol</span><span class="o">.</span><span class="n">guestdev</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;, dev not found on guest? Elapsed:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">elapsed</span><span class="p">))</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;(&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">vol</span><span class="o">.</span><span class="n">id</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;)Error, Volume.attach_data.instance_id:(&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">vol</span><span class="o">.</span><span class="n">attach_data</span><span class="o">.</span><span class="n">instance_id</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;) != (&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;)&quot;</span><span class="p">)</span>
+                    <span class="n">bad_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">vol</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Volume:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">vol</span><span class="o">.</span><span class="n">id</span><span class="p">)</span><span class="o">+</span><span class="s">&quot; is no longer attached to this instance:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;, error:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span> <span class="p">)</span>
+                    <span class="n">bad_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">vol</span><span class="p">)</span>
+                    <span class="k">pass</span>
+        <span class="k">return</span> <span class="n">bad_list</span>
+        </div>
+<div class="viewcode-block" id="EuInstance.verify_attached_vol_cloud_status"><a class="viewcode-back" href="../../eutester.html#eutester.euinstance.EuInstance.verify_attached_vol_cloud_status">[docs]</a>    <span class="k">def</span> <span class="nf">verify_attached_vol_cloud_status</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">euvolume</span> <span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Confirm that the cloud is showing the state for this euvolume as attached to this instance</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">euvolume</span> <span class="o">=</span> <span class="n">cloudlist</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">tester</span><span class="o">.</span><span class="n">get_volume</span><span class="p">(</span><span class="n">volume_id</span><span class="o">=</span><span class="n">euvolume</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Error in verify_attached_vol_status, try running init_volume_list first&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;Failed to get volume in get_attached_vol_cloud_status, err:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">euvolume</span><span class="o">.</span><span class="n">attach_data</span><span class="o">.</span><span class="n">instance_id</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Error in verify_attached_vol_status, try running init_volume_list first&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;(&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;)Cloud status for vol(&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">euvolume</span><span class="o">.</span><span class="n">id</span><span class="p">)</span><span class="o">+</span><span class="s">&quot; = not attached to this instance &quot;</span><span class="p">)</span>
+            
+            </div>
+<div class="viewcode-block" id="EuInstance.init_volume_list"><a class="viewcode-back" href="../../eutester.html#eutester.euinstance.EuInstance.init_volume_list">[docs]</a>    <span class="k">def</span> <span class="nf">init_volume_list</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">reattach</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">detach</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">300</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        This should be used when first creating a euinstance from an instance to insure the euinstance volume state is in sync with the cloud, mainly</span>
+<span class="sd">        for the case where a euinstance is made from a pre-existing and in-use instance. </span>
+<span class="sd">        Method to detect volumes which the cloud believes this guest is using, and attempt to match up the cloud dev with the local guest dev.</span>
+<span class="sd">        In the case the local dev can not be found the volume will be detached. If the local device is found a euvolume object is created and appended </span>
+<span class="sd">        the local attached_vols list. To confirm local state with the cloud state, the options &#39;reattach&#39;, or &#39;detach&#39; can be used. </span>
+<span class="sd">        </span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">attached_vols</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">cloudlist</span> <span class="o">=</span> <span class="p">[]</span>
+        
+        <span class="c">#Make sure the volumes we think our attached are in a known good state</span>
+        <span class="n">badvols</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_unsynced_volumes</span><span class="p">()</span>
+        
+        <span class="k">for</span> <span class="n">badvol</span> <span class="ow">in</span> <span class="n">badvols</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">detach_euvolume</span><span class="p">(</span><span class="n">badvol</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span>
+               <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;Error in sync_volume_list attempting to detach badvol:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">badvol</span><span class="o">.</span><span class="n">id</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;. Err:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span>
+                
+        <span class="n">cloudlist</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">tester</span><span class="o">.</span><span class="n">ec2</span><span class="o">.</span><span class="n">get_all_volumes</span><span class="p">()</span>
+        <span class="n">found</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="k">for</span> <span class="n">vol</span> <span class="ow">in</span> <span class="n">cloudlist</span><span class="p">:</span>
+            <span class="c">#check to see if the volume is attached to us, but is not involved with the bdm for this instance</span>
+            <span class="n">found</span> <span class="o">=</span> <span class="bp">False</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">vol</span><span class="o">.</span><span class="n">attach_data</span><span class="o">.</span><span class="n">instance_id</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="p">(</span> <span class="bp">self</span><span class="o">.</span><span class="n">root_device_type</span> <span class="o">==</span> <span class="s">&#39;ebs&#39;</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">block_device_mapping</span><span class="o">.</span><span class="n">current_name</span> <span class="o">!=</span> <span class="n">vol</span><span class="o">.</span><span class="n">attach_data</span><span class="o">.</span><span class="n">device</span><span class="p">):</span>
+                <span class="k">for</span> <span class="n">avol</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">attached_vols</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">avol</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="n">vol</span><span class="o">.</span><span class="n">id</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Volume&quot;</span><span class="o">+</span><span class="n">vol</span><span class="o">.</span><span class="n">id</span><span class="o">+</span><span class="s">&quot; found attached&quot;</span><span class="p">)</span>
+                        <span class="n">found</span> <span class="o">=</span> <span class="bp">True</span>
+                        <span class="k">break</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">found</span><span class="p">:</span> 
+                    <span class="n">dev</span> <span class="o">=</span> <span class="n">vol</span><span class="o">.</span><span class="n">attach_data</span><span class="o">.</span><span class="n">device</span>
+                    <span class="k">try</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">assertFilePresent</span><span class="p">(</span><span class="n">dev</span><span class="p">)</span>
+                        <span class="k">if</span> <span class="ow">not</span> <span class="n">detach</span><span class="p">:</span>
+                            <span class="n">evol</span> <span class="o">=</span> <span class="n">EuVolume</span><span class="o">.</span><span class="n">make_euvol_from_vol</span><span class="p">(</span><span class="n">vol</span><span class="p">)</span>
+                            <span class="n">evol</span><span class="o">.</span><span class="n">guestdev</span> <span class="o">=</span> <span class="n">dev</span>
+                            <span class="n">evol</span><span class="o">.</span><span class="n">clouddev</span> <span class="o">=</span> <span class="n">dev</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">attached_vols</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">evol</span><span class="p">)</span>
+                        <span class="k">else</span><span class="p">:</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">tester</span><span class="o">.</span><span class="n">detach_volume</span><span class="p">(</span><span class="n">vol</span><span class="p">,</span><span class="n">timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">)</span>
+                    <span class="k">except</span> <span class="ne">Exception</span><span class="p">,</span><span class="n">e</span><span class="p">:</span>
+                        <span class="k">if</span> <span class="n">reattach</span> <span class="ow">or</span> <span class="n">detach</span><span class="p">:</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">tester</span><span class="o">.</span><span class="n">detach_volume</span><span class="p">(</span><span class="n">vol</span><span class="p">,</span><span class="n">timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">)</span>
+                        <span class="k">if</span> <span class="n">reattach</span><span class="p">:</span>
+                            <span class="n">dev</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_free_scsi_dev</span><span class="p">()</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">attach_volume</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="p">,</span> <span class="n">vol</span><span class="p">,</span><span class="n">dev</span> <span class="p">)</span>
+                    
+                
+        
+        </div>
+<div class="viewcode-block" id="EuInstance.stop_instance_and_verify"><a class="viewcode-back" href="../../eutester.html#eutester.euinstance.EuInstance.stop_instance_and_verify">[docs]</a>    <span class="k">def</span> <span class="nf">stop_instance_and_verify</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">120</span><span class="p">,</span> <span class="n">state</span><span class="o">=</span><span class="s">&#39;stopped&#39;</span><span class="p">,</span> <span class="n">failstate</span><span class="o">=</span><span class="s">&#39;terminated&#39;</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Attempts to stop instance and verify the state has gone to stopped state</span>
+<span class="sd">        timeout -optional-time to wait on instance to go to state &#39;state&#39; before failing</span>
+<span class="sd">        state -optional-the expected state to signify success, default is stopped</span>
+<span class="sd">        failstate -optional-a state transition that indicates failure, default is terminated</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="o">+</span><span class="s">&quot; Attempting to stop instance...&quot;</span><span class="p">)</span>
+        <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+        <span class="n">elapsed</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">stop</span><span class="p">()</span>
+        <span class="k">while</span> <span class="p">(</span><span class="n">elapsed</span> <span class="o">&lt;</span> <span class="n">timeout</span><span class="p">):</span>
+            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">update</span><span class="p">()</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="n">state</span><span class="p">:</span>
+                <span class="k">break</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="n">failstate</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">)</span><span class="o">+</span><span class="s">&quot; instance went to state:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">state</span><span class="p">)</span><span class="o">+</span><span class="s">&quot; while stopping&quot;</span><span class="p">)</span>
+            <span class="n">elapsed</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span><span class="o">-</span> <span class="n">start</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">elapsed</span> <span class="o">%</span> <span class="mi">10</span> <span class="o">==</span> <span class="mi">0</span> <span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;wait for stop, in state:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">state</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;,time remaining:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">elapsed</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;/&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">timeout</span><span class="p">)</span> <span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">!=</span> <span class="n">state</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="o">+</span><span class="s">&quot; state: &quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">state</span><span class="p">)</span><span class="o">+</span><span class="s">&quot; expected:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">state</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;, after elapsed:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">elapsed</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="o">+</span><span class="s">&quot; stop_instance_and_verify Success&quot;</span><span class="p">)</span>
+        
+    </div>
+<div class="viewcode-block" id="EuInstance.start_instance_and_verify"><a class="viewcode-back" href="../../eutester.html#eutester.euinstance.EuInstance.start_instance_and_verify">[docs]</a>    <span class="k">def</span> <span class="nf">start_instance_and_verify</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">300</span><span class="p">,</span> <span class="n">state</span> <span class="o">=</span> <span class="s">&#39;running&#39;</span><span class="p">,</span> <span class="n">failstate</span><span class="o">=</span><span class="s">&#39;terminated&#39;</span><span class="p">,</span> <span class="n">connect</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">checkvolstatus</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Attempts to start instance and verify state, and reconnects ssh session</span>
+<span class="sd">        timeout -optional-time to wait on instance to go to state &#39;state&#39; before failing</span>
+<span class="sd">        state -optional-the expected state to signify success, default is running</span>
+<span class="sd">        failstate -optional-a state transition that indicates failure, default is terminated</span>
+<span class="sd">        connect- optional - boolean to indicate whether an ssh session should be established once the expected state has been reached</span>
+<span class="sd">        checkvolstatus - optional -boolean to be used to check volume status post start up</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="o">+</span><span class="s">&quot; Attempting to start instance...&quot;</span><span class="p">)</span>
+        <span class="n">msg</span><span class="o">=</span><span class="s">&quot;&quot;</span>
+        <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+        <span class="n">elapsed</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+        <span class="k">while</span> <span class="p">(</span><span class="n">elapsed</span> <span class="o">&lt;</span> <span class="n">timeout</span><span class="p">):</span>
+            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">update</span><span class="p">()</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="n">state</span><span class="p">:</span>
+                <span class="k">break</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="n">failstate</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">)</span><span class="o">+</span><span class="s">&quot; instance went to state:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">state</span><span class="p">)</span><span class="o">+</span><span class="s">&quot; while starting&quot;</span><span class="p">)</span>
+            <span class="n">elapsed</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span><span class="o">-</span> <span class="n">start</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">elapsed</span> <span class="o">%</span> <span class="mi">10</span> <span class="o">==</span> <span class="mi">0</span> <span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;wait for start, in state:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">state</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;,time remaining:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">elapsed</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;/&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">timeout</span><span class="p">)</span> <span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">!=</span> <span class="n">state</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="o">+</span><span class="s">&quot; not in &quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">state</span><span class="p">)</span><span class="o">+</span><span class="s">&quot; state after elapsed:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">elapsed</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="o">+</span><span class="s">&quot; went to state:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">state</span><span class="p">))</span>
+            <span class="k">if</span> <span class="n">connect</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">connect_to_instance</span><span class="p">(</span><span class="n">timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">checkvolstatus</span><span class="p">:</span>
+                <span class="n">badvols</span><span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_unsynced_volumes</span><span class="p">()</span>
+                <span class="k">if</span> <span class="n">badvols</span> <span class="o">!=</span> <span class="p">[]:</span>
+                    <span class="k">for</span> <span class="n">vol</span> <span class="ow">in</span> <span class="n">badvols</span><span class="p">:</span>
+                        <span class="n">msg</span> <span class="o">=</span> <span class="n">msg</span><span class="o">+</span><span class="s">&quot;</span><span class="se">\n</span><span class="s">Volume:&quot;</span><span class="o">+</span><span class="n">vol</span><span class="o">.</span><span class="n">id</span><span class="o">+</span><span class="s">&quot; Local Dev:&quot;</span><span class="o">+</span><span class="n">vol</span><span class="o">.</span><span class="n">guestdev</span>
+                    <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;Missing volumes post reboot:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="o">+</span><span class="s">&quot; start_instance_and_verify Success&quot;</span><span class="p">)</span>
+    
+    </div>
+<div class="viewcode-block" id="EuInstance.get_users"><a class="viewcode-back" href="../../eutester.html#eutester.euinstance.EuInstance.get_users">[docs]</a>    <span class="k">def</span> <span class="nf">get_users</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Attempts to return a list of normal linux users local to this instance.</span>
+<span class="sd">        Returns a list of all non-root users found within the uid_min/max range who are not marked nologin</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="n">users</span> <span class="o">=</span><span class="p">[]</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">uid_min</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sys</span><span class="p">(</span><span class="s">&quot;grep ^UID_MIN /etc/login.defs | awk &#39;{print $2}&#39;&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+            <span class="n">uid_max</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sys</span><span class="p">(</span><span class="s">&quot;grep ^UID_MAX /etc/login.defs | awk &#39;{print $2}&#39;&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">users</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sys</span><span class="p">(</span><span class="s">&quot;cat /etc/passwd | grep -v nologin | awk -F: &#39;{ if ( $3 &gt;= &quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">uid_min</span><span class="p">)</span><span class="o">+</span><span class="s">&quot; &amp;&amp; $3 &lt;= &quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">uid_max</span><span class="p">)</span><span class="o">+</span><span class="s">&quot; ) print $0}&#39; &quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&quot;:&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="k">except</span> <span class="ne">IndexError</span><span class="p">,</span> <span class="n">ie</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;No users found, passing exception:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">ie</span><span class="p">))</span>
+                <span class="k">pass</span>
+            <span class="k">return</span> <span class="n">users</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Failed to get local users. Err:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span>
+            </div>
+<div class="viewcode-block" id="EuInstance.get_user_password"><a class="viewcode-back" href="../../eutester.html#eutester.euinstance.EuInstance.get_user_password">[docs]</a>    <span class="k">def</span> <span class="nf">get_user_password</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">username</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Attempts to verify whether or not a user &#39;username&#39; has a password set or not on this instance. </span>
+<span class="sd">        returns true if a password is detected, else false</span>
+<span class="sd">        </span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="n">password</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="n">out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sys</span><span class="p">(</span><span class="s">&quot;cat /etc/passwd | grep &#39;^&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">username</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;&#39;&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">out</span> <span class="o">!=</span> <span class="p">[]:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;pwd out:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">out</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
+            <span class="k">if</span> <span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">out</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&quot;:&quot;</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="s">&quot;x&quot;</span><span class="p">):</span>
+                <span class="n">out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sys</span><span class="p">(</span><span class="s">&quot;cat /etc/shadow | grep &#39;^&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">username</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;&#39;&quot;</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">out</span> <span class="o">!=</span> <span class="p">[]:</span>
+                    <span class="n">password</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">out</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&quot;:&quot;</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span>
+                    <span class="k">if</span> <span class="n">password</span> <span class="o">==</span> <span class="s">&quot;&quot;</span> <span class="ow">or</span> <span class="n">re</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="s">&quot;^!+$&quot;</span><span class="p">,</span> <span class="n">password</span> <span class="p">):</span>
+                        <span class="n">password</span> <span class="o">=</span> <span class="bp">None</span>         
+        <span class="k">return</span> <span class="n">password</span>
+                                    
+                </div>
+<div class="viewcode-block" id="EuInstance.get_user_group_info"><a class="viewcode-back" href="../../eutester.html#eutester.euinstance.EuInstance.get_user_group_info">[docs]</a>    <span class="k">def</span> <span class="nf">get_user_group_info</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">username</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="mi">3</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Attempts to return a list of groups for a specific user on this instance. </span>
+<span class="sd">        index is set at the grouplist by default [3], but can be adjust to include the username, password, and group id as well in the list. </span>
+<span class="sd">        where the parsed string should be in format &#39;name:password:groupid1:groupid2:groupid3...&#39; </span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="n">groups</span> <span class="o">=</span><span class="p">[]</span>
+        <span class="n">out</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sys</span><span class="p">(</span><span class="s">&quot;cat /etc/group | grep &#39;^&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">username</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;&#39;&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">out</span> <span class="o">!=</span> <span class="p">[]:</span>
+                <span class="n">groups</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span> <span class="n">out</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&quot;:&quot;</span><span class="p">)</span>
+                <span class="c">#return list starting at group index</span>
+                <span class="n">groups</span> <span class="o">=</span> <span class="n">groups</span><span class="p">[</span><span class="n">index</span><span class="p">:</span><span class="nb">len</span><span class="p">(</span><span class="n">groups</span><span class="p">)]</span>
+            <span class="k">return</span> <span class="n">groups</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;No group found for user:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">username</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;, err:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span>
+    
+    
+    
+    
+    
+        
+        
+        
+        
+            
+            
+                </div></div>
+</pre></div>
+
+      </div>
+      <div class="bottomnav">
+      
+        <p>
+        <a class="uplink" href="../../index.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer">
+        &copy; Copyright 2012, Vic Iglesias, Matt Clark, Harold Spencer.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

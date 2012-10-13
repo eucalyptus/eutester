@@ -1,0 +1,441 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>eutester &mdash; Eutester 0.0.4 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/haiku.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/print.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '0.0.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="../_static/theme_extras.js"></script>
+    <link rel="top" title="Eutester 0.0.4 documentation" href="../index.html" />
+    <link rel="up" title="Module code" href="index.html" /> 
+  </head>
+  <body>
+      <div class="header"><h1 class="heading"><a href="../index.html">
+          <span>Eutester 0.0.4 documentation</span></a></h1>
+        <h2 class="heading"><span>eutester</span></h2>
+      </div>
+      <div class="topnav">
+      
+        <p>
+        <a class="uplink" href="../index.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <h1>Source code for eutester</h1><div class="highlight"><pre>
+<span class="c">#!/usr/bin/python</span>
+<span class="c"># -*- coding: utf-8 -*-</span>
+<span class="c"># Software License Agreement (BSD License)</span>
+<span class="c">#</span>
+<span class="c"># Copyright (c) 2009-2011, Eucalyptus Systems, Inc.</span>
+<span class="c"># All rights reserved.</span>
+<span class="c">#</span>
+<span class="c"># Redistribution and use of this software in source and binary forms, with or</span>
+<span class="c"># without modification, are permitted provided that the following conditions</span>
+<span class="c"># are met:</span>
+<span class="c">#</span>
+<span class="c">#   Redistributions of source code must retain the above</span>
+<span class="c">#   copyright notice, this list of conditions and the</span>
+<span class="c">#   following disclaimer.</span>
+<span class="c">#</span>
+<span class="c">#   Redistributions in binary form must reproduce the above</span>
+<span class="c">#   copyright notice, this list of conditions and the</span>
+<span class="c">#   following disclaimer in the documentation and/or other</span>
+<span class="c">#   materials provided with the distribution.</span>
+<span class="c">#</span>
+<span class="c"># THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS &quot;AS IS&quot;</span>
+<span class="c"># AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE</span>
+<span class="c"># IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE</span>
+<span class="c"># ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE</span>
+<span class="c"># LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR</span>
+<span class="c"># CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF</span>
+<span class="c"># SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS</span>
+<span class="c"># INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN</span>
+<span class="c"># CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)</span>
+<span class="c"># ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE</span>
+<span class="c"># POSSIBILITY OF SUCH DAMAGE.</span>
+<span class="c">#</span>
+<span class="c"># Author: vic.iglesias@eucalyptus.com</span>
+
+
+<span class="n">__version__</span> <span class="o">=</span> <span class="s">&#39;0.0.3&#39;</span>
+
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">boto</span>
+<span class="kn">import</span> <span class="nn">random</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">string</span>
+<span class="kn">import</span> <span class="nn">socket</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+
+<span class="kn">from</span> <span class="nn">boto.ec2.regioninfo</span> <span class="kn">import</span> <span class="n">RegionInfo</span>
+<span class="kn">from</span> <span class="nn">boto.s3.connection</span> <span class="kn">import</span> <span class="n">OrdinaryCallingFormat</span>
+
+
+<span class="kn">import</span> <span class="nn">eulogger</span>
+
+
+
+<div class="viewcode-block" id="TimeoutFunctionException"><a class="viewcode-back" href="../eutester.html#eutester.TimeoutFunctionException">[docs]</a><span class="k">class</span> <span class="nc">TimeoutFunctionException</span><span class="p">(</span><span class="ne">Exception</span><span class="p">):</span> 
+    <span class="sd">&quot;&quot;&quot;Exception to raise on a timeout&quot;&quot;&quot;</span> 
+    <span class="k">pass</span> 
+</div>
+<span class="n">EC2RegionData</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s">&#39;us-east-1&#39;</span> <span class="p">:</span> <span class="s">&#39;ec2.us-east-1.amazonaws.com&#39;</span><span class="p">,</span>
+    <span class="s">&#39;us-west-1&#39;</span> <span class="p">:</span> <span class="s">&#39;ec2.us-west-1.amazonaws.com&#39;</span><span class="p">,</span>
+    <span class="s">&#39;eu-west-1&#39;</span> <span class="p">:</span> <span class="s">&#39;ec2.eu-west-1.amazonaws.com&#39;</span><span class="p">,</span>
+    <span class="s">&#39;ap-northeast-1&#39;</span> <span class="p">:</span> <span class="s">&#39;ec2.ap-northeast-1.amazonaws.com&#39;</span><span class="p">,</span>
+    <span class="s">&#39;ap-southeast-1&#39;</span> <span class="p">:</span> <span class="s">&#39;ec2.ap-southeast-1.amazonaws.com&#39;</span><span class="p">}</span>
+
+<div class="viewcode-block" id="Eutester"><a class="viewcode-back" href="../eutester.html#eutester.Eutester">[docs]</a><span class="k">class</span> <span class="nc">Eutester</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">credpath</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">aws_access_key_id</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">aws_secret_access_key</span> <span class="o">=</span> <span class="bp">None</span><span class="p">,</span> <span class="n">region</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">ec2_ip</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">s3_ip</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">boto_debug</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;This class is intended to setup boto connections for the various services that the *ops classes will use.</span>
+
+<span class="sd">        :param credpath: Path to a valid eucarc file.</span>
+<span class="sd">        :param aws_access_key_id: Used in conjuction with aws_secret_access_key allows for creation of connections without needing a credpath.</span>
+<span class="sd">        :param aws_secret_access_key: Used in conjuction with aws_access_key_id allows for creation of connections without needing a credpath.</span>
+<span class="sd">        :param region: When connecting to Amazon EC2 allows you to point to a specific region.</span>
+<span class="sd">        :param ec2_ip: Hostname or IP of the EC2 endpoint to connect to. Can be used in the absence of region.</span>
+<span class="sd">        :param s3_ip: Hostname or IP of the S3 endpoint to connect to.</span>
+<span class="sd">        :param boto_debug: Hostname or IP of the S3 endpoint to connect to.</span>
+<span class="sd">        :rtype: :class:`eutester.Eutester` or ``None``</span>
+<span class="sd">        :returns: A Eutester object with all connections that were able to be created. Currently EC2, S3, IAM, and STS.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c">### Default values for configuration</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">boto_debug</span> <span class="o">=</span> <span class="n">boto_debug</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">credpath</span> <span class="o">=</span> <span class="n">credpath</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">region</span> <span class="o">=</span> <span class="n">RegionInfo</span><span class="p">()</span>
+        
+        <span class="c">### Eutester logs</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">logger</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span> <span class="o">=</span> <span class="n">eulogger</span><span class="o">.</span><span class="n">Eulogger</span><span class="p">(</span><span class="n">identifier</span><span class="o">=</span><span class="s">&quot;EUTESTER&quot;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">debug</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">critical</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">critical</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span>
+        
+        <span class="c">### LOGS to keep for printing later</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fail_log</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">running_log</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">log</span>
+
+        <span class="c">### Pull the access and secret keys from the eucarc or use the ones provided to the constructor</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">credpath</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Extracting keys from &quot;</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">credpath</span><span class="p">)</span>         
+            <span class="bp">self</span><span class="o">.</span><span class="n">aws_access_key_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_access_key</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">aws_secret_access_key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_secret_key</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">aws_access_key_id</span> <span class="o">=</span> <span class="n">aws_access_key_id</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">aws_secret_access_key</span> <span class="o">=</span> <span class="n">aws_secret_access_key</span>
+        
+        <span class="c">### If you have credentials for the boto connections, create them</span>
+        <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">aws_access_key_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">aws_secret_access_key</span> <span class="o">!=</span> <span class="bp">None</span><span class="p">):</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">boto</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">has_section</span><span class="p">(</span><span class="s">&#39;Boto&#39;</span><span class="p">):</span>
+                <span class="n">boto</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">add_section</span><span class="p">(</span><span class="s">&#39;Boto&#39;</span><span class="p">)</span>
+            <span class="n">boto</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;Boto&#39;</span><span class="p">,</span> <span class="s">&#39;num_retries&#39;</span><span class="p">,</span> <span class="s">&#39;2&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">setup_boto_connections</span><span class="p">(</span><span class="n">region</span><span class="o">=</span><span class="n">region</span><span class="p">,</span><span class="n">ec2_ip</span><span class="o">=</span><span class="n">ec2_ip</span><span class="p">,</span><span class="n">s3_ip</span><span class="o">=</span><span class="n">s3_ip</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Eutester.setup_boto_connections"><a class="viewcode-back" href="../eutester.html#eutester.Eutester.setup_boto_connections">[docs]</a>    <span class="k">def</span> <span class="nf">setup_boto_connections</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">region</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">aws_access_key_id</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">aws_secret_access_key</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">ec2_ip</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">s3_ip</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">is_secure</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        
+        <span class="k">if</span> <span class="n">aws_access_key_id</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">aws_access_key_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">aws_access_key_id</span>
+        <span class="k">if</span> <span class="n">aws_secret_access_key</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">aws_secret_access_key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">aws_secret_access_key</span>     
+        <span class="n">port</span> <span class="o">=</span> <span class="mi">443</span>
+        <span class="n">service_path</span> <span class="o">=</span> <span class="s">&quot;/&quot;</span>
+        <span class="n">APIVersion</span> <span class="o">=</span> <span class="s">&#39;2009-11-30&#39;</span>
+
+        <span class="k">if</span> <span class="n">region</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Check region: &quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">region</span><span class="p">))</span>        
+            <span class="k">try</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">region</span><span class="o">.</span><span class="n">endpoint</span> <span class="o">=</span> <span class="n">EC2RegionData</span><span class="p">[</span><span class="n">region</span><span class="p">]</span>
+            <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span> <span class="s">&#39;Unknown region: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">region</span><span class="p">)</span>
+        
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">region</span><span class="o">.</span><span class="n">endpoint</span><span class="p">:</span>
+            <span class="c">#self.get_connection_details()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">region</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="s">&#39;eucalyptus&#39;</span>
+            <span class="k">if</span> <span class="n">ec2_ip</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">region</span><span class="o">.</span><span class="n">endpoint</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_ec2_ip</span><span class="p">()</span>       
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">region</span><span class="o">.</span><span class="n">endpoint</span> <span class="o">=</span> <span class="n">ec2_ip</span>
+            <span class="n">port</span> <span class="o">=</span> <span class="mi">8773</span>
+            <span class="n">service_path</span><span class="o">=</span><span class="s">&quot;/services/Eucalyptus&quot;</span>
+            
+        <span class="k">try</span><span class="p">:</span>    
+            <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Attempting to create ec2 connection to &quot;</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">region</span><span class="o">.</span><span class="n">endpoint</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ec2</span> <span class="o">=</span> <span class="n">boto</span><span class="o">.</span><span class="n">connect_ec2</span><span class="p">(</span><span class="n">aws_access_key_id</span><span class="o">=</span><span class="n">aws_access_key_id</span><span class="p">,</span>
+                                    <span class="n">aws_secret_access_key</span><span class="o">=</span><span class="n">aws_secret_access_key</span><span class="p">,</span>
+                                    <span class="n">is_secure</span><span class="o">=</span><span class="n">is_secure</span><span class="p">,</span>
+                                    <span class="n">debug</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">boto_debug</span><span class="p">,</span>
+                                    <span class="n">region</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">region</span><span class="p">,</span>
+                                    <span class="n">port</span><span class="o">=</span><span class="n">port</span><span class="p">,</span>
+                                    <span class="n">path</span><span class="o">=</span><span class="n">service_path</span><span class="p">,</span>
+                                    <span class="n">api_version</span><span class="o">=</span><span class="n">APIVersion</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">critical</span><span class="p">(</span><span class="s">&quot;Was unable to create ec2 connection because of exception: &quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">s3_ip</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="n">walrus_endpoint</span> <span class="o">=</span> <span class="n">s3_ip</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">walrus_endpoint</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_s3_ip</span><span class="p">()</span>
+                
+            <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Attempting to create S3 connection to &quot;</span> <span class="o">+</span> <span class="n">walrus_endpoint</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">s3</span> <span class="o">=</span> <span class="n">boto</span><span class="o">.</span><span class="n">connect_s3</span><span class="p">(</span><span class="n">aws_access_key_id</span><span class="o">=</span><span class="n">aws_access_key_id</span><span class="p">,</span>
+                                                  <span class="n">aws_secret_access_key</span><span class="o">=</span><span class="n">aws_secret_access_key</span><span class="p">,</span>
+                                                  <span class="n">is_secure</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                                                  <span class="n">host</span><span class="o">=</span> <span class="n">walrus_endpoint</span><span class="p">,</span>
+                                                  <span class="n">port</span><span class="o">=</span><span class="mi">8773</span><span class="p">,</span>
+                                                  <span class="n">path</span><span class="o">=</span><span class="s">&quot;/services/Walrus&quot;</span><span class="p">,</span>
+                                                  <span class="n">calling_format</span><span class="o">=</span><span class="n">OrdinaryCallingFormat</span><span class="p">(),</span>
+                                                  <span class="n">debug</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">boto_debug</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">critical</span><span class="p">(</span><span class="s">&quot;Was unable to create S3 connection because of exception: &quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span>
+        
+        <span class="k">try</span><span class="p">:</span>    
+            <span class="bp">self</span><span class="o">.</span><span class="n">euare</span> <span class="o">=</span> <span class="n">boto</span><span class="o">.</span><span class="n">connect_iam</span><span class="p">(</span><span class="n">aws_access_key_id</span><span class="o">=</span><span class="n">aws_access_key_id</span><span class="p">,</span>
+                                                  <span class="n">aws_secret_access_key</span><span class="o">=</span><span class="n">aws_secret_access_key</span><span class="p">,</span>
+                                                  <span class="n">is_secure</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                                                  <span class="n">host</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">get_ec2_ip</span><span class="p">(),</span>
+                                                  <span class="n">port</span><span class="o">=</span><span class="mi">8773</span><span class="p">,</span> 
+                                                  <span class="n">path</span><span class="o">=</span><span class="s">&quot;/services/Euare&quot;</span><span class="p">,</span>
+                                                  <span class="n">debug</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">boto_debug</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">critical</span><span class="p">(</span><span class="s">&quot;Was unable to create IAM connection because of exception: &quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">tokens</span> <span class="o">=</span> <span class="n">boto</span><span class="o">.</span><span class="n">connect_sts</span><span class="p">(</span>
+                <span class="n">aws_access_key_id</span><span class="o">=</span><span class="n">aws_access_key_id</span><span class="p">,</span>
+                <span class="n">aws_secret_access_key</span><span class="o">=</span><span class="n">aws_secret_access_key</span><span class="p">,</span>
+                <span class="n">region</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">region</span><span class="p">,</span>
+                <span class="n">port</span><span class="o">=</span><span class="mi">8773</span><span class="p">,</span>
+                <span class="n">path</span><span class="o">=</span><span class="s">&quot;/services/Tokens&quot;</span><span class="p">,</span>
+                <span class="n">is_secure</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                <span class="n">debug</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">boto_debug</span><span class="p">)</span>
+
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">critical</span><span class="p">(</span><span class="s">&quot;Was unable to create STS connection because of exception: &quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="Eutester.get_access_key"><a class="viewcode-back" href="../eutester.html#eutester.Eutester.get_access_key">[docs]</a>    <span class="k">def</span> <span class="nf">get_access_key</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Parse the eucarc for the EC2_ACCESS_KEY&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse_eucarc</span><span class="p">(</span><span class="s">&quot;EC2_ACCESS_KEY&quot;</span><span class="p">)</span>   
+    </div>
+<div class="viewcode-block" id="Eutester.get_secret_key"><a class="viewcode-back" href="../eutester.html#eutester.Eutester.get_secret_key">[docs]</a>    <span class="k">def</span> <span class="nf">get_secret_key</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Parse the eucarc for the EC2_SECRET_KEY&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse_eucarc</span><span class="p">(</span><span class="s">&quot;EC2_SECRET_KEY&quot;</span><span class="p">)</span>
+    </div>
+<div class="viewcode-block" id="Eutester.get_account_id"><a class="viewcode-back" href="../eutester.html#eutester.Eutester.get_account_id">[docs]</a>    <span class="k">def</span> <span class="nf">get_account_id</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Parse the eucarc for the EC2_ACCOUNT_NUMBER&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse_eucarc</span><span class="p">(</span><span class="s">&quot;EC2_ACCOUNT_NUMBER&quot;</span><span class="p">)</span>
+    </div>
+<div class="viewcode-block" id="Eutester.get_user_id"><a class="viewcode-back" href="../eutester.html#eutester.Eutester.get_user_id">[docs]</a>    <span class="k">def</span> <span class="nf">get_user_id</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Parse the eucarc for the EC2_ACCOUNT_NUMBER&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse_eucarc</span><span class="p">(</span><span class="s">&quot;EC2_USER_ID&quot;</span><span class="p">)</span>
+        </div>
+<div class="viewcode-block" id="Eutester.parse_eucarc"><a class="viewcode-back" href="../eutester.html#eutester.Eutester.parse_eucarc">[docs]</a>    <span class="k">def</span> <span class="nf">parse_eucarc</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">field</span><span class="p">):</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span> <span class="bp">self</span><span class="o">.</span><span class="n">credpath</span> <span class="o">+</span> <span class="s">&quot;/eucarc&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">eucarc</span><span class="p">:</span> 
+            <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">eucarc</span><span class="o">.</span><span class="n">readlines</span><span class="p">():</span>
+                <span class="k">if</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">field</span><span class="p">,</span> <span class="n">line</span><span class="p">):</span>
+                    <span class="k">return</span> <span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&quot;=&quot;</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s">&quot;&#39;&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;Unable to find &quot;</span> <span class="o">+</span>  <span class="n">field</span> <span class="o">+</span> <span class="s">&quot; id in eucarc&quot;</span><span class="p">)</span>
+    </div>
+<div class="viewcode-block" id="Eutester.get_s3_ip"><a class="viewcode-back" href="../eutester.html#eutester.Eutester.get_s3_ip">[docs]</a>    <span class="k">def</span> <span class="nf">get_s3_ip</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Parse the eucarc for the S3_URL&quot;&quot;&quot;</span>
+        <span class="n">walrus_url</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse_eucarc</span><span class="p">(</span><span class="s">&quot;S3_URL&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">walrus_url</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&quot;/&quot;</span><span class="p">)[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&quot;:&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+    </div>
+<div class="viewcode-block" id="Eutester.get_ec2_ip"><a class="viewcode-back" href="../eutester.html#eutester.Eutester.get_ec2_ip">[docs]</a>    <span class="k">def</span> <span class="nf">get_ec2_ip</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Parse the eucarc for the EC2_URL&quot;&quot;&quot;</span>
+        <span class="n">ec2_url</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse_eucarc</span><span class="p">(</span><span class="s">&quot;EC2_URL&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">ec2_url</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&quot;/&quot;</span><span class="p">)[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&quot;:&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>        
+    </div>
+<div class="viewcode-block" id="Eutester.handle_timeout"><a class="viewcode-back" href="../eutester.html#eutester.Eutester.handle_timeout">[docs]</a>    <span class="k">def</span> <span class="nf">handle_timeout</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">signum</span><span class="p">,</span> <span class="n">frame</span><span class="p">):</span> 
+        <span class="k">raise</span> <span class="n">TimeoutFunctionException</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="Eutester.local"><a class="viewcode-back" href="../eutester.html#eutester.Eutester.local">[docs]</a>    <span class="k">def</span> <span class="nf">local</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cmd</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Run a command locally on the tester&quot;&quot;&quot;</span>
+        <span class="n">std_out_return</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">popen</span><span class="p">(</span><span class="n">cmd</span><span class="p">)</span><span class="o">.</span><span class="n">readlines</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">std_out_return</span>
+    </div>
+<div class="viewcode-block" id="Eutester.found"><a class="viewcode-back" href="../eutester.html#eutester.Eutester.found">[docs]</a>    <span class="k">def</span> <span class="nf">found</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">command</span><span class="p">,</span> <span class="n">regex</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Returns a Boolean of whether the result of the command contains the regex</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">local</span><span class="p">(</span><span class="n">command</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">result</span><span class="p">:</span>
+            <span class="n">found</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">regex</span><span class="p">,</span><span class="n">line</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">found</span><span class="p">:</span>
+                <span class="k">return</span> <span class="bp">True</span>
+        <span class="k">return</span> <span class="bp">False</span>
+    </div>
+<div class="viewcode-block" id="Eutester.ping"><a class="viewcode-back" href="../eutester.html#eutester.Eutester.ping">[docs]</a>    <span class="k">def</span> <span class="nf">ping</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">address</span><span class="p">,</span> <span class="n">poll_count</span> <span class="o">=</span> <span class="mi">10</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Ping an IP and poll_count times (Default = 10)</span>
+<span class="sd">        address      Hostname to ping</span>
+<span class="sd">        poll_count   The amount of times to try to ping the hostname iwth 2 second gaps in between</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="s">&quot;0.0.0.0&quot;</span><span class="p">,</span> <span class="n">address</span><span class="p">):</span> 
+            <span class="bp">self</span><span class="o">.</span><span class="n">critical</span><span class="p">(</span><span class="s">&quot;Address is all 0s and will not be able to ping it&quot;</span><span class="p">)</span> 
+            <span class="k">return</span> <span class="bp">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Attempting to ping &quot;</span> <span class="o">+</span> <span class="n">address</span><span class="p">)</span>
+        <span class="k">while</span> <span class="n">poll_count</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">poll_count</span> <span class="o">-=</span> <span class="mi">1</span> 
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">found</span><span class="p">(</span><span class="s">&quot;ping -c 1 &quot;</span> <span class="o">+</span> <span class="n">address</span><span class="p">,</span> <span class="s">&quot;1.*1.*received&quot;</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Was able to ping address&quot;</span><span class="p">)</span>
+                <span class="k">return</span> <span class="bp">True</span>
+            <span class="k">if</span> <span class="n">poll_count</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">critical</span><span class="p">(</span><span class="s">&quot;Was unable to ping address&quot;</span><span class="p">)</span>
+                <span class="k">return</span> <span class="bp">False</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Ping unsuccessful retrying in 2 seconds &quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">poll_count</span><span class="p">)</span> <span class="o">+</span> <span class="s">&quot; more times&quot;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>    
+    </div>
+<div class="viewcode-block" id="Eutester.scan_port_range"><a class="viewcode-back" href="../eutester.html#eutester.Eutester.scan_port_range">[docs]</a>    <span class="k">def</span> <span class="nf">scan_port_range</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ip</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">stop</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">tcp</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Attempts to connect to ports, returns list of ports which accepted a connection</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="n">ret</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">start</span><span class="p">,</span><span class="n">stop</span><span class="o">+</span><span class="mi">1</span><span class="p">):</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&quot;</span><span class="se">\r\x1b</span><span class="s">[K&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="s">&#39;scanning:&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">x</span><span class="p">)))</span>
+                <span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">test_port_status</span><span class="p">(</span><span class="n">ip</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">,</span><span class="n">tcp</span><span class="o">=</span><span class="n">tcp</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+                <span class="n">ret</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+            <span class="k">except</span> <span class="n">socket</span><span class="o">.</span><span class="n">error</span><span class="p">,</span> <span class="n">se</span><span class="p">:</span>
+                <span class="k">pass</span>
+        <span class="k">return</span> <span class="n">ret</span>
+    </div>
+<div class="viewcode-block" id="Eutester.test_port_status"><a class="viewcode-back" href="../eutester.html#eutester.Eutester.test_port_status">[docs]</a>    <span class="k">def</span> <span class="nf">test_port_status</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ip</span><span class="p">,</span> <span class="n">port</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">tcp</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Attempts to connect to tcp port at ip:port within timeout seconds</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+            <span class="n">debug</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">debug</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">debug</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">msg</span><span class="p">:</span> <span class="bp">None</span>
+        <span class="n">debug</span><span class="p">(</span><span class="s">&#39;test_port_status, ip:&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">ip</span><span class="p">)</span><span class="o">+</span><span class="s">&#39;, port:&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">port</span><span class="p">)</span><span class="o">+</span><span class="s">&#39;, TCP:&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">tcp</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">tcp</span><span class="p">:</span>
+            <span class="n">s</span> <span class="o">=</span> <span class="n">socket</span><span class="o">.</span><span class="n">socket</span><span class="p">(</span><span class="n">socket</span><span class="o">.</span><span class="n">AF_INET</span><span class="p">,</span> <span class="n">socket</span><span class="o">.</span><span class="n">SOCK_STREAM</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">s</span> <span class="o">=</span> <span class="n">socket</span><span class="o">.</span><span class="n">socket</span><span class="p">(</span><span class="n">socket</span><span class="o">.</span><span class="n">AF_INET</span><span class="p">,</span> <span class="n">socket</span><span class="o">.</span><span class="n">SOCK_DGRAM</span><span class="p">,</span><span class="n">socket</span><span class="o">.</span><span class="n">IPPROTO_UDP</span><span class="p">)</span>
+        <span class="n">s</span><span class="o">.</span><span class="n">settimeout</span><span class="p">(</span><span class="n">timeout</span><span class="p">)</span>
+        <span class="n">s</span><span class="o">.</span><span class="n">setsockopt</span><span class="p">(</span><span class="n">socket</span><span class="o">.</span><span class="n">SOL_SOCKET</span><span class="p">,</span> <span class="n">socket</span><span class="o">.</span><span class="n">SO_REUSEADDR</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">tcp</span><span class="p">:</span>
+                <span class="n">s</span><span class="o">.</span><span class="n">connect</span><span class="p">((</span><span class="n">ip</span><span class="p">,</span> <span class="n">port</span><span class="p">))</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">s</span><span class="o">.</span><span class="n">sendto</span><span class="p">(</span><span class="s">&quot;--TEST LINE--&quot;</span><span class="p">,</span> <span class="p">(</span><span class="n">ip</span><span class="p">,</span> <span class="n">port</span><span class="p">))</span>
+                <span class="n">recv</span><span class="p">,</span> <span class="n">svr</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">recvfrom</span><span class="p">(</span><span class="mi">255</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">socket</span><span class="o">.</span><span class="n">error</span><span class="p">,</span> <span class="n">se</span><span class="p">:</span>
+            <span class="n">debug</span><span class="p">(</span><span class="s">&#39;test_port_status failed socket error:&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">se</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
+            <span class="c">#handle specific errors here, for now just for debug...</span>
+            <span class="n">ecode</span><span class="o">=</span><span class="n">se</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">ecode</span> <span class="o">==</span> <span class="n">socket</span><span class="o">.</span><span class="n">errno</span><span class="o">.</span><span class="n">ECONNREFUSED</span><span class="p">:</span>
+                <span class="n">debug</span><span class="p">(</span><span class="s">&quot;test_port_status: Connection Refused&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">ecode</span> <span class="o">==</span> <span class="n">socket</span><span class="o">.</span><span class="n">errno</span><span class="o">.</span><span class="n">ENETUNREACH</span><span class="p">:</span>
+                <span class="n">debug</span><span class="p">(</span><span class="s">&quot;test_port_status: Network unreachable&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">ecode</span> <span class="o">==</span> <span class="n">socket</span><span class="o">.</span><span class="n">errno</span><span class="o">.</span><span class="n">ETIMEDOUT</span> <span class="ow">or</span> <span class="n">ecode</span> <span class="o">==</span> <span class="s">&quot;timed out&quot;</span><span class="p">:</span>
+                <span class="n">debug</span><span class="p">(</span><span class="s">&quot;test_port_status: Connect to &quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">ip</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;:&quot;</span> <span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">port</span><span class="p">)</span><span class="o">+</span> <span class="s">&quot; timed out&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">se</span>
+        <span class="k">except</span> <span class="n">socket</span><span class="o">.</span><span class="n">timeout</span><span class="p">,</span> <span class="n">st</span><span class="p">:</span>
+            <span class="n">debug</span><span class="p">(</span><span class="s">&#39;test_port_status failed socket timeout&#39;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">st</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="n">s</span><span class="o">.</span><span class="n">settimeout</span><span class="p">(</span><span class="bp">None</span><span class="p">)</span>
+            <span class="n">s</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+        <span class="n">debug</span><span class="p">(</span><span class="s">&#39;test_port_status, success&#39;</span><span class="p">)</span>
+    </div>
+<div class="viewcode-block" id="Eutester.grep"><a class="viewcode-back" href="../eutester.html#eutester.Eutester.grep">[docs]</a>    <span class="k">def</span> <span class="nf">grep</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">string</span><span class="p">,</span><span class="nb">list</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Remove the strings from the list that do not match the regex string&quot;&quot;&quot;</span>
+        <span class="n">expr</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">string</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">filter</span><span class="p">(</span><span class="n">expr</span><span class="o">.</span><span class="n">search</span><span class="p">,</span><span class="nb">list</span><span class="p">)</span>
+        </div>
+<div class="viewcode-block" id="Eutester.diff"><a class="viewcode-back" href="../eutester.html#eutester.Eutester.diff">[docs]</a>    <span class="k">def</span> <span class="nf">diff</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">list1</span><span class="p">,</span> <span class="n">list2</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Return the diff of the two lists&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">list1</span><span class="p">)</span><span class="o">-</span><span class="nb">set</span><span class="p">(</span><span class="n">list2</span><span class="p">))</span>
+    </div>
+<div class="viewcode-block" id="Eutester.fail"><a class="viewcode-back" href="../eutester.html#eutester.Eutester.fail">[docs]</a>    <span class="k">def</span> <span class="nf">fail</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">critical</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fail_log</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fail_count</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">exit_on_fail</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;Test step failed: &quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">message</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="mi">0</span> 
+    </div>
+<div class="viewcode-block" id="Eutester.clear_fail_log"><a class="viewcode-back" href="../eutester.html#eutester.Eutester.clear_fail_log">[docs]</a>    <span class="k">def</span> <span class="nf">clear_fail_log</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fail_log</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">return</span>
+    </div>
+<div class="viewcode-block" id="Eutester.get_exectuion_time"><a class="viewcode-back" href="../eutester.html#eutester.Eutester.get_exectuion_time">[docs]</a>    <span class="k">def</span> <span class="nf">get_exectuion_time</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns the total execution time since the instantiation of the Eutester object&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">start_time</span>
+       </div>
+<div class="viewcode-block" id="Eutester.clear_fail_count"><a class="viewcode-back" href="../eutester.html#eutester.Eutester.clear_fail_count">[docs]</a>    <span class="k">def</span> <span class="nf">clear_fail_count</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; The counter for keeping track of all the errors &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fail_count</span> <span class="o">=</span> <span class="mi">0</span>
+        </div>
+<div class="viewcode-block" id="Eutester.sleep"><a class="viewcode-back" href="../eutester.html#eutester.Eutester.sleep">[docs]</a>    <span class="k">def</span> <span class="nf">sleep</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">seconds</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Convinience function for time.sleep()&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Sleeping for &quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">seconds</span><span class="p">)</span> <span class="o">+</span> <span class="s">&quot; seconds&quot;</span><span class="p">)</span>
+        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="n">seconds</span><span class="p">)</span>
+    </div>
+<div class="viewcode-block" id="Eutester.id_generator"><a class="viewcode-back" href="../eutester.html#eutester.Eutester.id_generator">[docs]</a>    <span class="k">def</span> <span class="nf">id_generator</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span> <span class="n">chars</span><span class="o">=</span><span class="n">string</span><span class="o">.</span><span class="n">ascii_uppercase</span> <span class="o">+</span> <span class="n">string</span><span class="o">.</span><span class="n">ascii_lowercase</span>  <span class="o">+</span> <span class="n">string</span><span class="o">.</span><span class="n">digits</span> <span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns a string of size with random charachters from the chars array.</span>
+<span class="sd">             size    Size of string to return</span>
+<span class="sd">             chars   Array of characters to use in generation of the string</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="s">&#39;&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="n">chars</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">size</span><span class="p">))</span>
+        </div>
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Prints informations about configuration of Eucateser as configuration file,</span>
+<span class="sd">        how many errors, the path of the Eucalyptus, and the path of the user credentials</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">s</span>  <span class="o">=</span> <span class="s">&quot;+++++++++++++++++++++++++++++++++++++++++++++++++++++</span><span class="se">\n</span><span class="s">&quot;</span>
+        <span class="n">s</span> <span class="o">+=</span> <span class="s">&quot;+&quot;</span> <span class="o">+</span> <span class="s">&quot;Eucateser Configuration&quot;</span> <span class="o">+</span> <span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span>
+        <span class="n">s</span> <span class="o">+=</span> <span class="s">&quot;+&quot;</span> <span class="o">+</span> <span class="s">&quot;+++++++++++++++++++++++++++++++++++++++++++++++</span><span class="se">\n</span><span class="s">&quot;</span>
+        <span class="n">s</span> <span class="o">+=</span> <span class="s">&quot;+&quot;</span> <span class="o">+</span> <span class="s">&quot;Config File: &quot;</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">config_file</span> <span class="o">+</span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span>
+        <span class="n">s</span> <span class="o">+=</span> <span class="s">&quot;+&quot;</span> <span class="o">+</span> <span class="s">&quot;Fail Count: &quot;</span> <span class="o">+</span>  <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fail_count</span><span class="p">)</span> <span class="o">+</span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span>
+        <span class="n">s</span> <span class="o">+=</span> <span class="s">&quot;+&quot;</span> <span class="o">+</span> <span class="s">&quot;Eucalyptus Path: &quot;</span> <span class="o">+</span>  <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">eucapath</span><span class="p">)</span> <span class="o">+</span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span>
+        <span class="n">s</span> <span class="o">+=</span> <span class="s">&quot;+&quot;</span> <span class="o">+</span> <span class="s">&quot;Credential Path: &quot;</span> <span class="o">+</span>  <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">credpath</span><span class="p">)</span> <span class="o">+</span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span>
+        <span class="n">s</span> <span class="o">+=</span> <span class="s">&quot;+++++++++++++++++++++++++++++++++++++++++++++++++++++</span><span class="se">\n</span><span class="s">&quot;</span>
+        <span class="k">return</span> <span class="n">s</span>
+</pre></div></div>
+
+      </div>
+      <div class="bottomnav">
+      
+        <p>
+        <a class="uplink" href="../index.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer">
+        &copy; Copyright 2012, Vic Iglesias, Matt Clark, Harold Spencer.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,1846 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>eucaops Package &mdash; Eutester 0.0.4 documentation</title>
+    
+    <link rel="stylesheet" href="_static/haiku.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="_static/print.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '',
+        VERSION:     '0.0.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="_static/theme_extras.js"></script>
+    <link rel="top" title="Eutester 0.0.4 documentation" href="index.html" /> 
+  </head>
+  <body>
+      <div class="header"><h1 class="heading"><a href="index.html">
+          <span>Eutester 0.0.4 documentation</span></a></h1>
+        <h2 class="heading"><span>eucaops Package</span></h2>
+      </div>
+      <div class="topnav">
+      
+        <p>
+        <a class="uplink" href="index.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <div class="section" id="eucaops-package">
+<h1>eucaops Package<a class="headerlink" href="#eucaops-package" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="id1">
+<h2><a class="reference internal" href="#module-eucaops" title="eucaops"><tt class="xref py py-mod docutils literal"><span class="pre">eucaops</span></tt></a> Package<a class="headerlink" href="#id1" title="Permalink to this headline">¶</a></h2>
+<span class="target" id="module-eucaops"></span><dl class="class">
+<dt id="eucaops.Eucaops">
+<em class="property">class </em><tt class="descclassname">eucaops.</tt><tt class="descname">Eucaops</tt><big>(</big><em>config_file=None</em>, <em>password=None</em>, <em>keypath=None</em>, <em>credpath=None</em>, <em>aws_access_key_id=None</em>, <em>aws_secret_access_key=None</em>, <em>account='eucalyptus'</em>, <em>user='admin'</em>, <em>username=None</em>, <em>region=None</em>, <em>ec2_ip=None</em>, <em>s3_ip=None</em>, <em>download_creds=True</em>, <em>boto_debug=0</em><big>)</big><a class="reference internal" href="_modules/eucaops.html#Eucaops"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.Eucaops" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#eucaops.ec2ops.EC2ops" title="eucaops.ec2ops.EC2ops"><tt class="xref py py-class docutils literal"><span class="pre">eucaops.ec2ops.EC2ops</span></tt></a>, <a class="reference internal" href="#eucaops.s3ops.S3ops" title="eucaops.s3ops.S3ops"><tt class="xref py py-class docutils literal"><span class="pre">eucaops.s3ops.S3ops</span></tt></a>, <a class="reference internal" href="#eucaops.iamops.IAMops" title="eucaops.iamops.IAMops"><tt class="xref py py-class docutils literal"><span class="pre">eucaops.iamops.IAMops</span></tt></a>, <a class="reference internal" href="#eucaops.stsops.STSops" title="eucaops.stsops.STSops"><tt class="xref py py-class docutils literal"><span class="pre">eucaops.stsops.STSops</span></tt></a></p>
+<dl class="method">
+<dt id="eucaops.Eucaops.cleanup_artifacts">
+<tt class="descname">cleanup_artifacts</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops.html#Eucaops.cleanup_artifacts"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.Eucaops.cleanup_artifacts" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.Eucaops.create_credentials">
+<tt class="descname">create_credentials</tt><big>(</big><em>admin_cred_dir</em>, <em>account</em>, <em>user</em><big>)</big><a class="reference internal" href="_modules/eucaops.html#Eucaops.create_credentials"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.Eucaops.create_credentials" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.Eucaops.download_creds_from_clc">
+<tt class="descname">download_creds_from_clc</tt><big>(</big><em>admin_cred_dir</em><big>)</big><a class="reference internal" href="_modules/eucaops.html#Eucaops.download_creds_from_clc"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.Eucaops.download_creds_from_clc" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.Eucaops.get_available_vms">
+<tt class="descname">get_available_vms</tt><big>(</big><em>type=None</em>, <em>zone=None</em><big>)</big><a class="reference internal" href="_modules/eucaops.html#Eucaops.get_available_vms"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.Eucaops.get_available_vms" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get available VMs of a certain type or return a dictionary with all types and their available vms
+type        VM type to get available vms</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.Eucaops.get_component_ip">
+<tt class="descname">get_component_ip</tt><big>(</big><em>component</em><big>)</big><a class="reference internal" href="_modules/eucaops.html#Eucaops.get_component_ip"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.Eucaops.get_component_ip" title="Permalink to this definition">¶</a></dt>
+<dd><p>Parse the machine list and a bm_machine object for a machine that matches the component passed in</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.Eucaops.get_component_machines">
+<tt class="descname">get_component_machines</tt><big>(</big><em>component</em><big>)</big><a class="reference internal" href="_modules/eucaops.html#Eucaops.get_component_machines"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.Eucaops.get_component_machines" title="Permalink to this definition">¶</a></dt>
+<dd><p>Parse the machine list and a list of bm_machine objects that match the component passed in</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.Eucaops.get_credentials">
+<tt class="descname">get_credentials</tt><big>(</big><em>account='eucalyptus'</em>, <em>user='admin'</em><big>)</big><a class="reference internal" href="_modules/eucaops.html#Eucaops.get_credentials"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.Eucaops.get_credentials" title="Permalink to this definition">¶</a></dt>
+<dd><p>Login to the CLC and download credentials programatically for the user and account passed in
+Defaults to <a class="reference external" href="mailto:admin&#37;&#52;&#48;eucalyptus">admin<span>&#64;</span>eucalyptus</a></p>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.Eucaops.get_current_resources">
+<tt class="descname">get_current_resources</tt><big>(</big><em>verbose=False</em><big>)</big><a class="reference internal" href="_modules/eucaops.html#Eucaops.get_current_resources"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.Eucaops.get_current_resources" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return a dictionary with all known resources the system has. Optional pass the verbose=True flag to print this info to the logs
+Included resources are: addresses, images, instances, key_pairs, security_groups, snapshots, volumes, zones</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.Eucaops.get_machine_by_ip">
+<tt class="descname">get_machine_by_ip</tt><big>(</big><em>hostname</em><big>)</big><a class="reference internal" href="_modules/eucaops.html#Eucaops.get_machine_by_ip"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.Eucaops.get_machine_by_ip" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.Eucaops.get_network_mode">
+<tt class="descname">get_network_mode</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops.html#Eucaops.get_network_mode"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.Eucaops.get_network_mode" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.Eucaops.modify_property">
+<tt class="descname">modify_property</tt><big>(</big><em>property</em>, <em>value</em><big>)</big><a class="reference internal" href="_modules/eucaops.html#Eucaops.modify_property"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.Eucaops.modify_property" title="Permalink to this definition">¶</a></dt>
+<dd><p>Modify a eucalyptus property through the command line euca-modify-property tool
+property        Property to modify
+value           Value to set it too</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.Eucaops.read_config">
+<tt class="descname">read_config</tt><big>(</big><em>filepath</em>, <em>username='root'</em><big>)</big><a class="reference internal" href="_modules/eucaops.html#Eucaops.read_config"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.Eucaops.read_config" title="Permalink to this definition">¶</a></dt>
+<dd><p>Parses the config file at filepath returns a dictionary with the config
+Config file
+&#8212;&#8212;&#8212;-
+The configuration file for (2) private cloud mode has the following structure:</p>
+<blockquote>
+<div>clc.mydomain.com CENTOS 5.7 64 REPO [CC00 CLC SC00 WS]    
+nc1.mydomain.com VMWARE ESX-4.0 64 REPO [NC00]</div></blockquote>
+<blockquote>
+<div>IP or hostname of machine   
+Distro installed on machine - Options are RHEL, CENTOS, UBUNTU additionally VMWARE can be used for NCs 
+Distro version on machine  - RHEL (5.x, 6.x), CentOS (5.x), UBUNTU (LUCID)
+Distro base architecture  - 32 or 64
+System built from packages (REPO) or source (BZR), packages assumes path to eucalyptus is /, bzr assumes path to eucalyptus is /opt/eucalyptus
+List of components installed on this machine encapsulated in brackets []</div></blockquote>
+<p>These components can be:</p>
+<blockquote>
+<div>CLC - Cloud Controller   
+WS - Walrus   
+SC00 - Storage controller for cluster 00   
+CC00 - Cluster controller for cluster 00    
+NC00 - A node controller in cluster 00</div></blockquote>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.Eucaops.send_creds_to_machine">
+<tt class="descname">send_creds_to_machine</tt><big>(</big><em>admin_cred_dir</em>, <em>machine</em><big>)</big><a class="reference internal" href="_modules/eucaops.html#Eucaops.send_creds_to_machine"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.Eucaops.send_creds_to_machine" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.Eucaops.setup_local_creds_dir">
+<tt class="descname">setup_local_creds_dir</tt><big>(</big><em>admin_cred_dir</em><big>)</big><a class="reference internal" href="_modules/eucaops.html#Eucaops.setup_local_creds_dir"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.Eucaops.setup_local_creds_dir" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.Eucaops.setup_remote_creds_dir">
+<tt class="descname">setup_remote_creds_dir</tt><big>(</big><em>admin_cred_dir</em><big>)</big><a class="reference internal" href="_modules/eucaops.html#Eucaops.setup_remote_creds_dir"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.Eucaops.setup_remote_creds_dir" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.Eucaops.swap_clc">
+<tt class="descname">swap_clc</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops.html#Eucaops.swap_clc"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.Eucaops.swap_clc" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.Eucaops.swap_component_hostname">
+<tt class="descname">swap_component_hostname</tt><big>(</big><em>hostname</em><big>)</big><a class="reference internal" href="_modules/eucaops.html#Eucaops.swap_component_hostname"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.Eucaops.swap_component_hostname" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.Eucaops.swap_walrus">
+<tt class="descname">swap_walrus</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops.html#Eucaops.swap_walrus"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.Eucaops.swap_walrus" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.Eucaops.sys">
+<tt class="descname">sys</tt><big>(</big><em>cmd</em>, <em>verbose=True</em>, <em>listformat=True</em>, <em>timeout=120</em>, <em>code=None</em><big>)</big><a class="reference internal" href="_modules/eucaops.html#Eucaops.sys"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.Eucaops.sys" title="Permalink to this definition">¶</a></dt>
+<dd><p>By default will run a command on the CLC machine, the connection used can be changed by passing a different hostname into the constructor
+For example:
+instance = Eutester( hostname=instance.ip_address, keypath=&#8221;my_key.pem&#8221;)
+instance.sys(&#8220;mount&#8221;) # check mount points on instance and return the output as a list</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-eucaops.ec2ops">
+<span id="ec2ops-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">ec2ops</span></tt> Module<a class="headerlink" href="#module-eucaops.ec2ops" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="eucaops.ec2ops.EC2ops">
+<em class="property">class </em><tt class="descclassname">eucaops.ec2ops.</tt><tt class="descname">EC2ops</tt><big>(</big><em>credpath=None</em>, <em>aws_access_key_id=None</em>, <em>aws_secret_access_key=None</em>, <em>username='root'</em>, <em>region=None</em>, <em>ec2_ip=None</em>, <em>s3_ip=None</em>, <em>boto_debug=0</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="eutester.html#eutester.Eutester" title="eutester.Eutester"><tt class="xref py py-class docutils literal"><span class="pre">eutester.Eutester</span></tt></a></p>
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.add_group">
+<tt class="descname">add_group</tt><big>(</big><em>group_name=None</em>, <em>fail_if_exists=False</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.add_group"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.add_group" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add a security group to the system with name group_name, if it exists dont create it</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>group_name</strong> &#8211; Name of the security group to create</li>
+<li><strong>fail_if_exists</strong> &#8211; IF set, will fail if group already exists, otherwise will return the existing group</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">boto group object upon success or None for failure</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.add_keypair">
+<tt class="descname">add_keypair</tt><big>(</big><em>key_name=None</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.add_keypair"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.add_keypair" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add a keypair with name key_name unless it already exists</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>key_name</strong> &#8211; The name of the keypair to add and download.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.allocate_address">
+<tt class="descname">allocate_address</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.allocate_address"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.allocate_address" title="Permalink to this definition">¶</a></dt>
+<dd><p>Allocate an address for the current user</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">boto.ec2.address object allocated</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.associate_address">
+<tt class="descname">associate_address</tt><big>(</big><em>instance</em>, <em>address</em>, <em>timeout=75</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.associate_address"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.associate_address" title="Permalink to this definition">¶</a></dt>
+<dd><p>Associate an address object with an instance</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>instance</strong> &#8211; instance object to associate ip with</li>
+<li><strong>address</strong> &#8211; address to associate to instance</li>
+<li><strong>timeout</strong> &#8211; Time in seconds to wait for operation to complete</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Raise :</th><td class="field-body"><p class="first last">Exception in case of association failure</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.attach_volume">
+<tt class="descname">attach_volume</tt><big>(</big><em>instance</em>, <em>volume</em>, <em>device_path</em>, <em>pause=10</em>, <em>timeout=120</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.attach_volume"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.attach_volume" title="Permalink to this definition">¶</a></dt>
+<dd><p>Attach a volume to an instance</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>instance</strong> &#8211; instance object to attach volume to</li>
+<li><strong>volume</strong> &#8211; volume object to attach</li>
+<li><strong>device_path</strong> &#8211; device name to request on guest</li>
+<li><strong>pause</strong> &#8211; Time in seconds to wait before checking volume state</li>
+<li><strong>timeout</strong> &#8211; Total time in seconds to wait for volume to reach the attached state</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first"></p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Raise :</th><td class="field-body"><p class="first last">Exception of failure to reach proper state or enter previous state</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.authorize_group">
+<tt class="descname">authorize_group</tt><big>(</big><em>group</em>, <em>port=22</em>, <em>protocol='tcp'</em>, <em>cidr_ip='0.0.0.0/0'</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.authorize_group"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.authorize_group" title="Permalink to this definition">¶</a></dt>
+<dd><p>Authorize the boto.group object</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>group</strong> &#8211; boto.group object</li>
+<li><strong>port</strong> &#8211; Port to open, default=22</li>
+<li><strong>protocol</strong> &#8211; Protocol to authorize, default=tcp</li>
+<li><strong>cidr_ip</strong> &#8211; CIDR subnet to authorize, default=&#8221;0.0.0.0/0&#8221; everything</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">True on success</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Raise :</th><td class="field-body"><p class="first last">Exception if operation fails</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.authorize_group_by_name">
+<tt class="descname">authorize_group_by_name</tt><big>(</big><em>group_name='default'</em>, <em>port=22</em>, <em>protocol='tcp'</em>, <em>cidr_ip='0.0.0.0/0'</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.authorize_group_by_name"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.authorize_group_by_name" title="Permalink to this definition">¶</a></dt>
+<dd><p>Authorize the group with group_name</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>group_name</strong> &#8211; Name of the group to authorize, default=&#8221;default&#8221;</li>
+<li><strong>port</strong> &#8211; Port to open, default=22</li>
+<li><strong>protocol</strong> &#8211; Protocol to authorize, default=tcp</li>
+<li><strong>cidr_ip</strong> &#8211; CIDR subnet to authorize, default=&#8221;0.0.0.0/0&#8221; everything</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last"></p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.check_device">
+<tt class="descname">check_device</tt><big>(</big><em>device_path</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.check_device"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.check_device" title="Permalink to this definition">¶</a></dt>
+<dd><p>Used with instance connections. Checks if a device at a certain path exists</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>device_path</strong> &#8211; Path to check</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">bool, if device was found</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.check_group">
+<tt class="descname">check_group</tt><big>(</big><em>group_name</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.check_group"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.check_group" title="Permalink to this definition">¶</a></dt>
+<dd><p>Check if a group with group_name exists in the system</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>group_name</strong> &#8211; Group name to check for existence</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">bool whether operation succeeded</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.convert_reservation_to_euinstance">
+<tt class="descname">convert_reservation_to_euinstance</tt><big>(</big><em>reservation</em>, <em>username='root'</em>, <em>password=None</em>, <em>keyname=None</em>, <em>timeout=120</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.convert_reservation_to_euinstance"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.convert_reservation_to_euinstance" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert all instances in an entire reservation into eutester.euinstance.Euinstance objects.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>reservation</strong> &#8211; reservation object to use in conversion</li>
+<li><strong>username</strong> &#8211; SSH user name of instance</li>
+<li><strong>password</strong> &#8211; SSH password</li>
+<li><strong>keyname</strong> &#8211; Private key file to use when connecting to the instance</li>
+<li><strong>timeout</strong> &#8211; Time in seconds to wait for successful SSH connection</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last"></p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.create_snapshot">
+<tt class="descname">create_snapshot</tt><big>(</big><em>volume_id</em>, <em>waitOnProgress=0</em>, <em>poll_interval=10</em>, <em>timeout=0</em>, <em>description=''</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.create_snapshot"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.create_snapshot" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a new EBS snapshot from an existing volume then wait for it to go to the created state.
+By default will poll for poll_count.  If waitOnProgress is specified than will wait on &#8220;waitOnProgress&#8221;
+overrides # of poll_interval periods, using waitonprogress # of periods of poll_interval length in seconds
+w/o progress before failing</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>volume_id</strong> &#8211; (mandatory string) Volume id of the volume to create snapshot from</li>
+<li><strong>waitOnProgress</strong> &#8211; (optional string) string used to describe the snapshot</li>
+<li><strong>poll_interval</strong> &#8211; (optional integer) # of poll intervals to wait while 0 progress is made before exiting, overrides &#8220;poll_count&#8221; when used</li>
+<li><strong>timeout</strong> &#8211; (optional integer) time to sleep between polling snapshot status</li>
+<li><strong>description</strong> &#8211; (optional integer) over all time to wait before exiting as failure</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">boto.snapshot</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.create_volume">
+<tt class="descname">create_volume</tt><big>(</big><em>azone</em>, <em>size=1</em>, <em>snapshot=None</em>, <em>timeout=0</em>, <em>poll_interval=10</em>, <em>timepergig=120</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.create_volume"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.create_volume" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a new EBS volume then wait for it to go to available state, size or snapshot is mandatory</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>azone</strong> &#8211; Availability zone to create the volume in</li>
+<li><strong>size</strong> &#8211; Size of the volume to be created</li>
+<li><strong>snapshot</strong> &#8211; Snapshot to create the volume from</li>
+<li><strong>timeout</strong> &#8211; Time to wait before failing. timeout of 0 results in size of volume * timepergig seconds</li>
+<li><strong>poll_interval</strong> &#8211; How often in seconds to poll volume state</li>
+<li><strong>timepergig</strong> &#8211; Time to wait per gigabyte size of volume, used when timeout is set to 0</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last"></p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.delete_all_volumes">
+<tt class="descname">delete_all_volumes</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.delete_all_volumes"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.delete_all_volumes" title="Permalink to this definition">¶</a></dt>
+<dd><p>Deletes all volumes on the cloud</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.delete_group">
+<tt class="descname">delete_group</tt><big>(</big><em>group</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.delete_group"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.delete_group" title="Permalink to this definition">¶</a></dt>
+<dd><p>Delete the group object passed in and check that it no longer shows up</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>group</strong> &#8211; Group object to delete and check</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">bool whether operation succeeded</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.delete_keypair">
+<tt class="descname">delete_keypair</tt><big>(</big><em>keypair</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.delete_keypair"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.delete_keypair" title="Permalink to this definition">¶</a></dt>
+<dd><p>Delete the keypair object passed in and check that it no longer shows up</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>keypair</strong> &#8211; Keypair object to delete and check</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">boolean of whether the operation succeeded</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.delete_snapshot">
+<tt class="descname">delete_snapshot</tt><big>(</big><em>snapshot</em>, <em>timeout=60</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.delete_snapshot"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.delete_snapshot" title="Permalink to this definition">¶</a></dt>
+<dd><p>Delete the snapshot object</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>snapshot</strong> &#8211; boto.ec2.snapshot object to delete</li>
+<li><strong>timeout</strong> &#8211; Time in seconds to wait for deletion</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.delete_volume">
+<tt class="descname">delete_volume</tt><big>(</big><em>volume</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.delete_volume"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.delete_volume" title="Permalink to this definition">¶</a></dt>
+<dd><p>Delete the EBS volume then check that it no longer exists</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>volume</strong> &#8211; Volume object to delete</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">bool, success of the operation</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.deregister_image">
+<tt class="descname">deregister_image</tt><big>(</big><em>image</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.deregister_image"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.deregister_image" title="Permalink to this definition">¶</a></dt>
+<dd><p>Deregister an image.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>image</strong> &#8211; boto image object to deregister</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.detach_volume">
+<tt class="descname">detach_volume</tt><big>(</big><em>volume</em>, <em>pause=10</em>, <em>timeout=60</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.detach_volume"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.detach_volume" title="Permalink to this definition">¶</a></dt>
+<dd><p>Detach a volume</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>volume</strong> &#8211; volume to detach</li>
+<li><strong>pause</strong> &#8211; Time in seconds to wait before checking volume state</li>
+<li><strong>timeout</strong> &#8211; Total time in seconds to wait for volume to reach the attached state</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">True on success</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.disassociate_address_from_instance">
+<tt class="descname">disassociate_address_from_instance</tt><big>(</big><em>instance</em>, <em>timeout=75</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.disassociate_address_from_instance"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.disassociate_address_from_instance" title="Permalink to this definition">¶</a></dt>
+<dd><p>Disassociate address from instance and ensure that it no longer holds the IP</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>instance</strong> &#8211; An instance that has an IP allocated</li>
+<li><strong>timeout</strong> &#8211; Time in seconds to wait for address to disassociate</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Raise :</th><td class="field-body"></td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.get_all_allocated_addresses">
+<tt class="descname">get_all_allocated_addresses</tt><big>(</big><em>account_id=None</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.get_all_allocated_addresses"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.get_all_allocated_addresses" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return all allocated addresses for a given account_id as boto.ec2.address objects</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>account_id</strong> &#8211; account number to filter on</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">list of boto.ec2.address objects</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.get_all_attributes">
+<tt class="descname">get_all_attributes</tt><big>(</big><em>obj</em>, <em>verbose=True</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.get_all_attributes"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.get_all_attributes" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get a formatted list of all the key pair values pertaining to the object &#8216;obj&#8217;</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>obj</strong> &#8211; Object to extract information from</li>
+<li><strong>verbose</strong> &#8211; Print key value pairs</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">Buffer of key value pairs</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.get_all_current_local_keys">
+<tt class="descname">get_all_current_local_keys</tt><big>(</big><em>path=None</em>, <em>exten='.pem'</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.get_all_current_local_keys"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.get_all_current_local_keys" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convenience function to provide a list of all keys in the local dir at &#8216;path&#8217; that exist on the server to help
+avoid producing additional keys in test dev.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>path</strong> &#8211; Filesystem path to search in</li>
+<li><strong>exten</strong> &#8211; extension of private key file</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">list of key names</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.get_available_addresses">
+<tt class="descname">get_available_addresses</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.get_available_addresses"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.get_available_addresses" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get all available addresses</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">a list of all available boto.ec2.address</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.get_connectable_euinstances">
+<tt class="descname">get_connectable_euinstances</tt><big>(</big><em>path=None</em>, <em>username='root'</em>, <em>password=None</em>, <em>connect=True</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.get_connectable_euinstances"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.get_connectable_euinstances" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convenience method, returns a list of all running instances, for the current creduser
+for which there are local keys at &#8216;path&#8217;</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>path</strong> &#8211; Path to look for private keys</li>
+<li><strong>username</strong> &#8211; username to use if path is not passed</li>
+<li><strong>password</strong> &#8211; password to use if path is not passed</li>
+<li><strong>connect</strong> &#8211; bool, Whether to create an ssh connection to the instances</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last"></p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.get_datetime_from_resource_string">
+<tt class="descname">get_datetime_from_resource_string</tt><big>(</big><em>timestamp</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.get_datetime_from_resource_string"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.get_datetime_from_resource_string" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert a typical resource timestamp to datetime time_struct.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>timestamp</strong> (<em>string</em>) &#8211; Timestamp held within specific boto resource objects.Example timestamp format: 2012-09-19T21:24:03.864Z</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body">time_struct</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">The time_struct representation of the timestamp provided.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.get_emi">
+<tt class="descname">get_emi</tt><big>(</big><em>emi=None</em>, <em>root_device_type=None</em>, <em>root_device_name=None</em>, <em>location=None</em>, <em>state='available'</em>, <em>arch=None</em>, <em>owner_id=None</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.get_emi"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.get_emi" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get an emi with name emi, or just grab any emi in the system. Additional &#8216;optional&#8217; match criteria can be defined.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>emi</strong> &#8211; Partial ID of the emi to return, defaults to the &#8216;emi-&#8221; prefix to grab any</li>
+<li><strong>root_device_type</strong> &#8211; example: &#8216;instance-store&#8217; or &#8216;ebs&#8217;</li>
+<li><strong>root_device_name</strong> &#8211; example: &#8216;/dev/sdb&#8217;</li>
+<li><strong>location</strong> &#8211; partial on location match example: &#8216;centos&#8217;</li>
+<li><strong>state</strong> &#8211; example: &#8216;available&#8217;</li>
+<li><strong>arch</strong> &#8211; example: &#8216;x86_64&#8217;</li>
+<li><strong>owner_id</strong> &#8211; owners numeric id</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">image id</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Raise :</th><td class="field-body"><p class="first last">Exception if image is not found</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.get_instance_time_launched">
+<tt class="descname">get_instance_time_launched</tt><big>(</big><em>instance</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.get_instance_time_launched"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.get_instance_time_launched" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the seconds elapsed since the volume was attached.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>volume</strong> (<em>boto volume object</em>) &#8211; The volume used to calculate the elapsed time since attached.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body">integer</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">The number of seconds elapsed since this volume was attached.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.get_instances">
+<tt class="descname">get_instances</tt><big>(</big><em>state=None</em>, <em>idstring=None</em>, <em>reservation=None</em>, <em>rootdevtype=None</em>, <em>zone=None</em>, <em>key=None</em>, <em>pubip=None</em>, <em>privip=None</em>, <em>ramdisk=None</em>, <em>kernel=None</em>, <em>image_id=None</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.get_instances"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.get_instances" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return a list of instances matching the filters provided.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>state</strong> &#8211; str of desired state</li>
+<li><strong>idstring</strong> &#8211; instance-id string</li>
+<li><strong>reservation</strong> &#8211; reservation-id</li>
+<li><strong>rootdevtype</strong> &#8211; &#8216;instance-store&#8217; or &#8216;ebs&#8217;</li>
+<li><strong>zone</strong> &#8211; Availablity zone</li>
+<li><strong>key</strong> &#8211; Keypair the instance was launched with</li>
+<li><strong>pubip</strong> &#8211; Instance public IP</li>
+<li><strong>privip</strong> &#8211; Instance private IP</li>
+<li><strong>ramdisk</strong> &#8211; Ramdisk ID string</li>
+<li><strong>kernel</strong> &#8211; Kernel ID string</li>
+<li><strong>image_id</strong> &#8211; Image ID string</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">list of instances</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.get_keypair">
+<tt class="descname">get_keypair</tt><big>(</big><em>name</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.get_keypair"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.get_keypair" title="Permalink to this definition">¶</a></dt>
+<dd><p>Retrieve a boto.ec2.keypair object by its name</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>name</strong> &#8211; Name of keypair on the cloud</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">boto.ec2.keypair object</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Raise :</th><td class="field-body">Exception on failure to find keypair</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.get_volume">
+<tt class="descname">get_volume</tt><big>(</big><em>volume_id='vol-'</em>, <em>status=None</em>, <em>attached_instance=None</em>, <em>attached_dev=None</em>, <em>snapid=None</em>, <em>zone=None</em>, <em>minsize=1</em>, <em>maxsize=None</em>, <em>eof=True</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.get_volume"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.get_volume" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return first volume that matches the criteria.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>volume_id</strong> &#8211; string present within volume id</li>
+<li><strong>status</strong> &#8211; examples: &#8216;in-use&#8217;, &#8216;creating&#8217;, &#8216;available&#8217;</li>
+<li><strong>attached_instance</strong> &#8211; instance id example &#8216;i-1234abcd&#8217;</li>
+<li><strong>attached_dev</strong> &#8211; example &#8216;/dev/sdf&#8217;</li>
+<li><strong>snapid</strong> &#8211; snapshot volume was created from example &#8216;snap-1234abcd&#8217;</li>
+<li><strong>zone</strong> &#8211; zone of volume example &#8216;PARTI00&#8217;</li>
+<li><strong>minsize</strong> &#8211; minimum size of volume to be matched</li>
+<li><strong>maxsize</strong> &#8211; maximum size of volume to be matched</li>
+<li><strong>eof</strong> &#8211; exception on failure to find volume, else returns None</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">List of volumes matching the filters provided</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Raise :</th><td class="field-body"></td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.get_volume_time_attached">
+<tt class="descname">get_volume_time_attached</tt><big>(</big><em>volume</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.get_volume_time_attached"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.get_volume_time_attached" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the seconds elapsed since the volume was attached.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>volume</strong> (<em>boto volume object</em>) &#8211; The volume used to calculate the elapsed time since attached.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body">integer</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">The number of seconds elapsed since this volume was attached.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.get_volumes">
+<tt class="descname">get_volumes</tt><big>(</big><em>volume_id='vol-'</em>, <em>status=None</em>, <em>attached_instance=None</em>, <em>attached_dev=None</em>, <em>snapid=None</em>, <em>zone=None</em>, <em>minsize=1</em>, <em>maxsize=None</em>, <em>eof=False</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.get_volumes"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.get_volumes" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return list of volumes that matches the criteria. Criteria options to be matched:</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>volume_id</strong> &#8211; string present within volume id</li>
+<li><strong>status</strong> &#8211; examples: &#8216;in-use&#8217;, &#8216;creating&#8217;, &#8216;available&#8217;</li>
+<li><strong>attached_instance</strong> &#8211; instance id example &#8216;i-1234abcd&#8217;</li>
+<li><strong>attached_dev</strong> &#8211; example &#8216;/dev/sdf&#8217;</li>
+<li><strong>snapid</strong> &#8211; snapshot volume was created from example &#8216;snap-1234abcd&#8217;</li>
+<li><strong>zone</strong> &#8211; zone of volume example &#8216;PARTI00&#8217;</li>
+<li><strong>minsize</strong> &#8211; minimum size of volume to be matched</li>
+<li><strong>maxsize</strong> &#8211; maximum size of volume to be matched</li>
+<li><strong>eof</strong> &#8211; exception on failure to find volume, else returns empty list</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">List of volumes matching the filters provided</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Raise :</th><td class="field-body"></td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.get_windows_instance_password">
+<tt class="descname">get_windows_instance_password</tt><big>(</big><em>instance</em>, <em>private_key_path=None</em>, <em>key=None</em>, <em>dir=None</em>, <em>exten='.pem'</em>, <em>encoded=True</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.get_windows_instance_password"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.get_windows_instance_password" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get password for a windows instance.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>instance</strong> &#8211; euinstance object</li>
+<li><strong>private_key_path</strong> &#8211; private key file used to decrypt password</li>
+<li><strong>key</strong> &#8211; name of private key</li>
+<li><strong>dir</strong> &#8211; Path to private key</li>
+<li><strong>exten</strong> &#8211; extension of private key</li>
+<li><strong>encoded</strong> &#8211; boolean of whether string returned from server is Base64 encoded</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">decrypted password</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Raise :</th><td class="field-body"><p class="first last">Exception when private key cannot be found on filesystem</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.get_zones">
+<tt class="descname">get_zones</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.get_zones"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.get_zones" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return a list of availability zone names.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">list of zone names</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.register_image">
+<tt class="descname">register_image</tt><big>(</big><em>image_location</em>, <em>rdn=None</em>, <em>description=None</em>, <em>bdmdev=None</em>, <em>name=None</em>, <em>ramdisk=None</em>, <em>kernel=None</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.register_image"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.register_image" title="Permalink to this definition">¶</a></dt>
+<dd><p>Register an image based on the s3 stored manifest location</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>image_location</strong> &#8211; </li>
+<li><strong>rdn</strong> &#8211; root-device-name for image</li>
+<li><strong>description</strong> &#8211; description of image to be registered</li>
+<li><strong>bdmdev</strong> &#8211; block-device-mapping object for image</li>
+<li><strong>name</strong> &#8211; name of image to be registered</li>
+<li><strong>ramdisk</strong> &#8211; ramdisk id</li>
+<li><strong>kernel</strong> &#8211; kernel id (note for windows this name should be &#8220;windows&#8221;)</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">image id string</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.register_snapshot">
+<tt class="descname">register_snapshot</tt><big>(</big><em>snapshot</em>, <em>rdn='/dev/sda1'</em>, <em>description='bfebs'</em>, <em>windows=False</em>, <em>bdmdev=None</em>, <em>name=None</em>, <em>ramdisk=None</em>, <em>kernel=None</em>, <em>dot=True</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.register_snapshot"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.register_snapshot" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convience function for passing a snapshot instead of its id. See register_snapshot_by_id</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.register_snapshot_by_id">
+<tt class="descname">register_snapshot_by_id</tt><big>(</big><em>snap_id</em>, <em>rdn='/dev/sda1'</em>, <em>description='bfebs'</em>, <em>windows=False</em>, <em>bdmdev=None</em>, <em>name=None</em>, <em>ramdisk=None</em>, <em>kernel=None</em>, <em>dot=True</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.register_snapshot_by_id"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.register_snapshot_by_id" title="Permalink to this definition">¶</a></dt>
+<dd><p>Register an image snapshot</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>snap_id</strong> &#8211; snapshot id</li>
+<li><strong>rdn</strong> &#8211; root-device-name for image</li>
+<li><strong>description</strong> &#8211; description of image to be registered</li>
+<li><strong>windows</strong> &#8211; Is windows image boolean</li>
+<li><strong>bdmdev</strong> &#8211; block-device-mapping device for image</li>
+<li><strong>name</strong> &#8211; name of image to be registered</li>
+<li><strong>ramdisk</strong> &#8211; ramdisk id</li>
+<li><strong>kernel</strong> &#8211; kernel id (note for windows this name should be &#8220;windows&#8221;)</li>
+<li><strong>dot</strong> &#8211; Delete On Terminate boolean</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">emi id of registered image</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.release_address">
+<tt class="descname">release_address</tt><big>(</big><em>address</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.release_address"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.release_address" title="Permalink to this definition">¶</a></dt>
+<dd><p>Release all addresses or a particular IP</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>address</strong> &#8211; Address object to release</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Raise :</th><td class="field-body">Exception when the address does not release</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.run_instance">
+<tt class="descname">run_instance</tt><big>(</big><em>image=None</em>, <em>keypair=None</em>, <em>group='default'</em>, <em>type=None</em>, <em>zone=None</em>, <em>min=1</em>, <em>max=1</em>, <em>user_data=None</em>, <em>private_addressing=False</em>, <em>username='root'</em>, <em>password=None</em>, <em>is_reachable=True</em>, <em>timeout=480</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.run_instance"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.run_instance" title="Permalink to this definition">¶</a></dt>
+<dd><p>Run instance/s and wait for them to go to the running state</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>image</strong> &#8211; Image object to use, default is pick the first emi found in the system</li>
+<li><strong>keypair</strong> &#8211; Keypair name to use for the instances, defaults to none</li>
+<li><strong>group</strong> &#8211; Security group name to apply to this set of instnaces, defaults to none</li>
+<li><strong>type</strong> &#8211; VM type to use for these instances, defaults to m1.small</li>
+<li><strong>zone</strong> &#8211; Availability zone to run these instances</li>
+<li><strong>min</strong> &#8211; Minimum instnaces to launch, default 1</li>
+<li><strong>max</strong> &#8211; Maxiumum instances to launch, default 1</li>
+<li><strong>user_data</strong> &#8211; User-data string to pass to instance</li>
+<li><strong>private_addressing</strong> &#8211; Runs an instance with only private IP address</li>
+<li><strong>username</strong> &#8211; username to use when connecting via ssh</li>
+<li><strong>password</strong> &#8211; password to use when connecting via ssh</li>
+<li><strong>is_reachable</strong> &#8211; Instance can be reached on its public IP (Default=True)</li>
+<li><strong>timeout</strong> &#8211; Time in seconds for instance to enter running state</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">Reservation object</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Raise :</th><td class="field-body"></td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.setup_ec2_resource_trackers">
+<tt class="descname">setup_ec2_resource_trackers</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.setup_ec2_resource_trackers"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.setup_ec2_resource_trackers" title="Permalink to this definition">¶</a></dt>
+<dd><p>Setup keys in the test_resources hash in order to track artifacts created</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.start_instances">
+<tt class="descname">start_instances</tt><big>(</big><em>reservation</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.start_instances"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.start_instances" title="Permalink to this definition">¶</a></dt>
+<dd><p>Start all instances in a reservation</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>reservation</strong> &#8211; boto.ec2.reservation object</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Raise :</th><td class="field-body">Exception when instance does not reach running state</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.stop_instances">
+<tt class="descname">stop_instances</tt><big>(</big><em>reservation</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.stop_instances"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.stop_instances" title="Permalink to this definition">¶</a></dt>
+<dd><p>Stop all instances in a reservation</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>reservation</strong> &#8211; boto.ec2.reservation object</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Raise :</th><td class="field-body">Exception when instance does not reach stopped state</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.terminate_instances">
+<tt class="descname">terminate_instances</tt><big>(</big><em>reservation=None</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.terminate_instances"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.terminate_instances" title="Permalink to this definition">¶</a></dt>
+<dd><p>Terminate instances in the system</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>reservation</strong> &#8211; Reservation object to terminate all instances in, default is to terminate all instances</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Raise :</th><td class="field-body">Exception when instance does not reach terminated state</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.terminate_single_instance">
+<tt class="descname">terminate_single_instance</tt><big>(</big><em>instance</em>, <em>timeout=300</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.terminate_single_instance"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.terminate_single_instance" title="Permalink to this definition">¶</a></dt>
+<dd><p>Terminate an instance</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>instance</strong> &#8211; boto.instance object to terminate</li>
+<li><strong>timeout</strong> &#8211; Time in seconds to wait for terminated state</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">True on success</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.verify_local_keypath">
+<tt class="descname">verify_local_keypath</tt><big>(</big><em>keyname</em>, <em>path=None</em>, <em>exten='.pem'</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.verify_local_keypath"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.verify_local_keypath" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convenience function to verify if a given ssh key &#8216;keyname&#8217; exists on the local server at &#8216;path&#8217;</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">the keypath if the key is found.</td>
+</tr>
+</tbody>
+</table>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">instance</span><span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_instances</span><span class="p">(</span><span class="n">state</span><span class="o">=</span><span class="s">&#39;running&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">keypath</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_local_keypath</span><span class="p">(</span><span class="n">instance</span><span class="o">.</span><span class="n">key_name</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.wait_for_instance">
+<tt class="descname">wait_for_instance</tt><big>(</big><em>instance</em>, <em>state='running'</em>, <em>poll_count=None</em>, <em>timeout=480</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.wait_for_instance"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.wait_for_instance" title="Permalink to this definition">¶</a></dt>
+<dd><p>Wait for the instance to enter the state</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>instance</strong> &#8211; Boto instance object to check the state on</li>
+<li><strong>state</strong> &#8211; state that we are looking for</li>
+<li><strong>poll_count</strong> &#8211; Number of 10 second poll intervals to wait before failure (for legacy test script support)</li>
+<li><strong>timeout</strong> &#8211; Time in seconds to wait before failure</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">True on success</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Raise :</th><td class="field-body"><p class="first last">Exception when instance does not enter proper state</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.wait_for_reservation">
+<tt class="descname">wait_for_reservation</tt><big>(</big><em>reservation</em>, <em>state='running'</em>, <em>timeout=480</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.wait_for_reservation"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.wait_for_reservation" title="Permalink to this definition">¶</a></dt>
+<dd><p>Wait for an entire reservation to enter the state</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>reservation</strong> &#8211; Boto reservation object to check the state on</li>
+<li><strong>state</strong> &#8211; state that we are looking for</li>
+<li><strong>timeout</strong> &#8211; How long in seconds to wait for state</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">True on success</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.ec2ops.EC2ops.wait_for_valid_ip">
+<tt class="descname">wait_for_valid_ip</tt><big>(</big><em>instance</em>, <em>timeout=60</em><big>)</big><a class="reference internal" href="_modules/eucaops/ec2ops.html#EC2ops.wait_for_valid_ip"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.ec2ops.EC2ops.wait_for_valid_ip" title="Permalink to this definition">¶</a></dt>
+<dd><p>Wait for instance public DNS name to clear from 0.0.0.0</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>instance</strong> &#8211; instance object to check</li>
+<li><strong>timeout</strong> &#8211; Time in seconds to wait for IP to change</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">True on success</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Raise :</th><td class="field-body"><p class="first last">Exception if IP stays at 0.0.0.0</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-eucaops.eucaops_api">
+<span id="eucaops-api-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">eucaops_api</span></tt> Module<a class="headerlink" href="#module-eucaops.eucaops_api" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="eucaops.eucaops_api.Eucaops_api">
+<em class="property">class </em><tt class="descclassname">eucaops.eucaops_api.</tt><tt class="descname">Eucaops_api</tt><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">object</span></tt></p>
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.add_group">
+<tt class="descname">add_group</tt><big>(</big><em>group_name=None</em><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.add_group"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.add_group" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.add_keypair">
+<tt class="descname">add_keypair</tt><big>(</big><em>key_name=None</em><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.add_keypair"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.add_keypair" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.allocate_address">
+<tt class="descname">allocate_address</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.allocate_address"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.allocate_address" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.attach_volume">
+<tt class="descname">attach_volume</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.attach_volume"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.attach_volume" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.authorize_group">
+<tt class="descname">authorize_group</tt><big>(</big><em>group_name='default'</em>, <em>port=22</em>, <em>protocol='tcp'</em>, <em>cidr_ip='0.0.0.0/0'</em><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.authorize_group"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.authorize_group" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.create_bucket">
+<tt class="descname">create_bucket</tt><big>(</big><em>bucket_name</em><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.create_bucket"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.create_bucket" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.create_snapshot">
+<tt class="descname">create_snapshot</tt><big>(</big><em>volume_id</em>, <em>description=''</em>, <em>waitOnProgress=0</em>, <em>poll_interval=10</em>, <em>timeout=0</em><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.create_snapshot"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.create_snapshot" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.create_volume">
+<tt class="descname">create_volume</tt><big>(</big><em>azone</em>, <em>size=1</em>, <em>snapshot=None</em><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.create_volume"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.create_volume" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.delete_bucket">
+<tt class="descname">delete_bucket</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.delete_bucket"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.delete_bucket" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.delete_group">
+<tt class="descname">delete_group</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.delete_group"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.delete_group" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.delete_keypair">
+<tt class="descname">delete_keypair</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.delete_keypair"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.delete_keypair" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.delete_snapshot">
+<tt class="descname">delete_snapshot</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.delete_snapshot"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.delete_snapshot" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.delete_volume">
+<tt class="descname">delete_volume</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.delete_volume"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.delete_volume" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.deregister_image">
+<tt class="descname">deregister_image</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.deregister_image"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.deregister_image" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.detach_volume">
+<tt class="descname">detach_volume</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.detach_volume"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.detach_volume" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.download_euca_image">
+<tt class="descname">download_euca_image</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.download_euca_image"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.download_euca_image" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.euare_add_certfromfile">
+<tt class="descname">euare_add_certfromfile</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.euare_add_certfromfile"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.euare_add_certfromfile" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.euare_add_userinfo">
+<tt class="descname">euare_add_userinfo</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.euare_add_userinfo"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.euare_add_userinfo" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.euare_add_userkey">
+<tt class="descname">euare_add_userkey</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.euare_add_userkey"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.euare_add_userkey" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.euare_attach_policy_account">
+<tt class="descname">euare_attach_policy_account</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.euare_attach_policy_account"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.euare_attach_policy_account" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.euare_attach_policy_group">
+<tt class="descname">euare_attach_policy_group</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.euare_attach_policy_group"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.euare_attach_policy_group" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.euare_attach_policy_user">
+<tt class="descname">euare_attach_policy_user</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.euare_attach_policy_user"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.euare_attach_policy_user" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.euare_change_username">
+<tt class="descname">euare_change_username</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.euare_change_username"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.euare_change_username" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.euare_clean_accounts">
+<tt class="descname">euare_clean_accounts</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.euare_clean_accounts"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.euare_clean_accounts" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.euare_create_account">
+<tt class="descname">euare_create_account</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.euare_create_account"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.euare_create_account" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.euare_create_cert">
+<tt class="descname">euare_create_cert</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.euare_create_cert"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.euare_create_cert" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.euare_create_group">
+<tt class="descname">euare_create_group</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.euare_create_group"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.euare_create_group" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.euare_create_loginprofile">
+<tt class="descname">euare_create_loginprofile</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.euare_create_loginprofile"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.euare_create_loginprofile" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.euare_create_user">
+<tt class="descname">euare_create_user</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.euare_create_user"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.euare_create_user" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.euare_deactivate_key">
+<tt class="descname">euare_deactivate_key</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.euare_deactivate_key"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.euare_deactivate_key" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.euare_deactviate_cert">
+<tt class="descname">euare_deactviate_cert</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.euare_deactviate_cert"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.euare_deactviate_cert" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.euare_delete_account">
+<tt class="descname">euare_delete_account</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.euare_delete_account"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.euare_delete_account" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.euare_delete_cert">
+<tt class="descname">euare_delete_cert</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.euare_delete_cert"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.euare_delete_cert" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.euare_delete_key">
+<tt class="descname">euare_delete_key</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.euare_delete_key"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.euare_delete_key" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.euare_delete_loginprofile">
+<tt class="descname">euare_delete_loginprofile</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.euare_delete_loginprofile"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.euare_delete_loginprofile" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.euare_delete_user">
+<tt class="descname">euare_delete_user</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.euare_delete_user"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.euare_delete_user" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.euare_detach_policy_account">
+<tt class="descname">euare_detach_policy_account</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.euare_detach_policy_account"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.euare_detach_policy_account" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.euare_detach_policy_user">
+<tt class="descname">euare_detach_policy_user</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.euare_detach_policy_user"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.euare_detach_policy_user" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.euare_group_add_user">
+<tt class="descname">euare_group_add_user</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.euare_group_add_user"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.euare_group_add_user" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.euare_modattr">
+<tt class="descname">euare_modattr</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.euare_modattr"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.euare_modattr" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.euare_parse_arn">
+<tt class="descname">euare_parse_arn</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.euare_parse_arn"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.euare_parse_arn" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.get_currentaccount">
+<tt class="descname">get_currentaccount</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.get_currentaccount"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.get_currentaccount" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.get_emi">
+<tt class="descname">get_emi</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.get_emi"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.get_emi" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.get_keypair">
+<tt class="descname">get_keypair</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.get_keypair"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.get_keypair" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.get_volume">
+<tt class="descname">get_volume</tt><big>(</big><em>volume_id='vol-'</em>, <em>status=None</em>, <em>attached_instance=None</em>, <em>attached_dev=None</em>, <em>snapid=None</em>, <em>zone=None</em>, <em>minsize=1</em>, <em>maxsize=None</em><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.get_volume"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.get_volume" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.modify_property">
+<tt class="descname">modify_property</tt><big>(</big><em>property</em>, <em>value</em><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.modify_property"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.modify_property" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.reboot_instance">
+<tt class="descname">reboot_instance</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.reboot_instance"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.reboot_instance" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.register_image">
+<tt class="descname">register_image</tt><big>(</big><em>snap_id</em>, <em>rdn=None</em>, <em>description=None</em>, <em>image_location=None</em>, <em>windows=False</em>, <em>bdmdev=None</em>, <em>name=None</em>, <em>ramdisk=None</em>, <em>kernel=None</em><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.register_image"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.register_image" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.register_snapshot">
+<tt class="descname">register_snapshot</tt><big>(</big><em>snap_id</em>, <em>rdn='/dev/sda1'</em>, <em>description='bfebs'</em>, <em>windows=False</em>, <em>bdmdev=None</em>, <em>name=None</em>, <em>ramdisk=None</em>, <em>kernel=None</em>, <em>dot=True</em><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.register_snapshot"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.register_snapshot" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.release_address">
+<tt class="descname">release_address</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.release_address"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.release_address" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.run_instance">
+<tt class="descname">run_instance</tt><big>(</big><em>image</em>, <em>keypair=None</em>, <em>group=None</em>, <em>type=None</em>, <em>zone=None</em><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.run_instance"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.run_instance" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.terminate_instances">
+<tt class="descname">terminate_instances</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.terminate_instances"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.terminate_instances" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.upload_euca_image">
+<tt class="descname">upload_euca_image</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.upload_euca_image"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.upload_euca_image" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.upload_object_file">
+<tt class="descname">upload_object_file</tt><big>(</big><em>bucket_name</em>, <em>key_name</em>, <em>path_to_file</em><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.upload_object_file"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.upload_object_file" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.eucaops_api.Eucaops_api.wait_for_instance">
+<tt class="descname">wait_for_instance</tt><big>(</big><em>instance</em><big>)</big><a class="reference internal" href="_modules/eucaops/eucaops_api.html#Eucaops_api.wait_for_instance"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.eucaops_api.Eucaops_api.wait_for_instance" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-eucaops.iamops">
+<span id="iamops-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">iamops</span></tt> Module<a class="headerlink" href="#module-eucaops.iamops" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="eucaops.iamops.IAMops">
+<em class="property">class </em><tt class="descclassname">eucaops.iamops.</tt><tt class="descname">IAMops</tt><big>(</big><em>credpath=None</em>, <em>aws_access_key_id=None</em>, <em>aws_secret_access_key=None</em>, <em>region=None</em>, <em>ec2_ip=None</em>, <em>s3_ip=None</em>, <em>boto_debug=0</em><big>)</big><a class="reference internal" href="_modules/eucaops/iamops.html#IAMops"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.iamops.IAMops" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="eutester.html#eutester.Eutester" title="eutester.Eutester"><tt class="xref py py-class docutils literal"><span class="pre">eutester.Eutester</span></tt></a></p>
+<dl class="method">
+<dt id="eucaops.iamops.IAMops.add_user_to_group">
+<tt class="descname">add_user_to_group</tt><big>(</big><em>group_name</em>, <em>user_name</em>, <em>delegate_account=None</em><big>)</big><a class="reference internal" href="_modules/eucaops/iamops.html#IAMops.add_user_to_group"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.iamops.IAMops.add_user_to_group" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.iamops.IAMops.attach_policy_group">
+<tt class="descname">attach_policy_group</tt><big>(</big><em>group_name</em>, <em>policy_name</em>, <em>policy_json</em>, <em>delegate_account=None</em><big>)</big><a class="reference internal" href="_modules/eucaops/iamops.html#IAMops.attach_policy_group"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.iamops.IAMops.attach_policy_group" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.iamops.IAMops.attach_policy_user">
+<tt class="descname">attach_policy_user</tt><big>(</big><em>user_name</em>, <em>policy_name</em>, <em>policy_json</em>, <em>delegate_account=None</em><big>)</big><a class="reference internal" href="_modules/eucaops/iamops.html#IAMops.attach_policy_user"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.iamops.IAMops.attach_policy_user" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.iamops.IAMops.create_access_key">
+<tt class="descname">create_access_key</tt><big>(</big><em>user_name=None</em>, <em>delegate_account=None</em><big>)</big><a class="reference internal" href="_modules/eucaops/iamops.html#IAMops.create_access_key"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.iamops.IAMops.create_access_key" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.iamops.IAMops.create_account">
+<tt class="descname">create_account</tt><big>(</big><em>account_name</em><big>)</big><a class="reference internal" href="_modules/eucaops/iamops.html#IAMops.create_account"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.iamops.IAMops.create_account" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create an account with the given name</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.iamops.IAMops.create_group">
+<tt class="descname">create_group</tt><big>(</big><em>group_name</em>, <em>path='/'</em>, <em>delegate_account=None</em><big>)</big><a class="reference internal" href="_modules/eucaops/iamops.html#IAMops.create_group"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.iamops.IAMops.create_group" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.iamops.IAMops.create_user">
+<tt class="descname">create_user</tt><big>(</big><em>user_name</em>, <em>path='/'</em>, <em>delegate_account=None</em><big>)</big><a class="reference internal" href="_modules/eucaops/iamops.html#IAMops.create_user"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.iamops.IAMops.create_user" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.iamops.IAMops.delete_account">
+<tt class="descname">delete_account</tt><big>(</big><em>account_name</em>, <em>recursive=False</em><big>)</big><a class="reference internal" href="_modules/eucaops/iamops.html#IAMops.delete_account"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.iamops.IAMops.delete_account" title="Permalink to this definition">¶</a></dt>
+<dd><p>Delete an account with the given name</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.iamops.IAMops.delete_group">
+<tt class="descname">delete_group</tt><big>(</big><em>group_name</em>, <em>delegate_account=None</em><big>)</big><a class="reference internal" href="_modules/eucaops/iamops.html#IAMops.delete_group"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.iamops.IAMops.delete_group" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.iamops.IAMops.delete_user">
+<tt class="descname">delete_user</tt><big>(</big><em>user_name</em>, <em>delegate_account=None</em><big>)</big><a class="reference internal" href="_modules/eucaops/iamops.html#IAMops.delete_user"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.iamops.IAMops.delete_user" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.iamops.IAMops.detach_policy_group">
+<tt class="descname">detach_policy_group</tt><big>(</big><em>group_name</em>, <em>policy_name</em>, <em>delegate_account=None</em><big>)</big><a class="reference internal" href="_modules/eucaops/iamops.html#IAMops.detach_policy_group"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.iamops.IAMops.detach_policy_group" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.iamops.IAMops.detach_policy_user">
+<tt class="descname">detach_policy_user</tt><big>(</big><em>user_name</em>, <em>policy_name</em>, <em>delegate_account=None</em><big>)</big><a class="reference internal" href="_modules/eucaops/iamops.html#IAMops.detach_policy_user"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.iamops.IAMops.detach_policy_user" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.iamops.IAMops.get_all_accounts">
+<tt class="descname">get_all_accounts</tt><big>(</big><em>account_id=None</em>, <em>account_name=None</em>, <em>search=False</em><big>)</big><a class="reference internal" href="_modules/eucaops/iamops.html#IAMops.get_all_accounts"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.iamops.IAMops.get_all_accounts" title="Permalink to this definition">¶</a></dt>
+<dd><p>Request all accounts, return account dicts that match given criteria
+Options:</p>
+<blockquote>
+<div>account_name - regex - to use for account_name
+account_id - regex - to use for 
+search - boolean - specify whether to use match or search when filtering the returned list</div></blockquote>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.iamops.IAMops.get_all_groups">
+<tt class="descname">get_all_groups</tt><big>(</big><em>account_name=None</em>, <em>account_id=None</em>, <em>path=None</em>, <em>group_name=None</em>, <em>group_id=None</em>, <em>search=False</em><big>)</big><a class="reference internal" href="_modules/eucaops/iamops.html#IAMops.get_all_groups"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.iamops.IAMops.get_all_groups" title="Permalink to this definition">¶</a></dt>
+<dd><p>Queries all accounts matching given account criteria, returns all groups found within these accounts which then match the given user criteria. 
+Account info is added to the group dicts
+Options:</p>
+<blockquote>
+<div>path - regex - to match for path
+group_name - regex - to match for group_name
+group_id - regex - to match for group_id
+account_name - regex - to use for account_name
+account_id - regex - to use for 
+search - boolean - specify whether to use match or search when filtering the returned list</div></blockquote>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.iamops.IAMops.get_all_users">
+<tt class="descname">get_all_users</tt><big>(</big><em>account_name=None</em>, <em>account_id=None</em>, <em>path=None</em>, <em>user_name=None</em>, <em>user_id=None</em>, <em>search=False</em><big>)</big><a class="reference internal" href="_modules/eucaops/iamops.html#IAMops.get_all_users"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.iamops.IAMops.get_all_users" title="Permalink to this definition">¶</a></dt>
+<dd><p>Queries all accounts matching given account criteria, returns all users found within these accounts which then match the given user criteria. 
+Account info is added to the user dicts
+Options:</p>
+<blockquote>
+<div>path - regex - to match for path
+user_name - regex - to match for user_name
+user_id - regex - to match for user_id
+account_name - regex - to use for account_name
+account_id - regex - to use for 
+search - boolean - specify whether to use match or search when filtering the returned list</div></blockquote>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.iamops.IAMops.get_euare_accountname">
+<tt class="descname">get_euare_accountname</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/iamops.html#IAMops.get_euare_accountname"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.iamops.IAMops.get_euare_accountname" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.iamops.IAMops.get_euare_username">
+<tt class="descname">get_euare_username</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/iamops.html#IAMops.get_euare_username"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.iamops.IAMops.get_euare_username" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.iamops.IAMops.get_groups_from_account">
+<tt class="descname">get_groups_from_account</tt><big>(</big><em>path=None</em>, <em>group_name=None</em>, <em>group_id=None</em>, <em>delegate_account=None</em>, <em>search=False</em><big>)</big><a class="reference internal" href="_modules/eucaops/iamops.html#IAMops.get_groups_from_account"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.iamops.IAMops.get_groups_from_account" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns groups that match given criteria. By default will return groups from current account. 
+Options:</p>
+<blockquote>
+<div>path - regex - to match for path
+group_name - regex - to match for group_name
+group_id - regex - to match for group_id
+delegate_account - string - to use for delegating account lookup
+search - boolean - specify whether to use match or search when filtering the returned list</div></blockquote>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.iamops.IAMops.get_user_policies">
+<tt class="descname">get_user_policies</tt><big>(</big><em>user_name</em>, <em>policy_name=None</em>, <em>delegate_account=None</em>, <em>doc=None</em>, <em>search=False</em><big>)</big><a class="reference internal" href="_modules/eucaops/iamops.html#IAMops.get_user_policies"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.iamops.IAMops.get_user_policies" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns list of policy dicts associated with a given user, and match given criteria. 
+Options:</p>
+<blockquote>
+<div>username - string - user to get policies for. 
+policy_name - regex - to match/filter returned policies
+delegate_account - string - used for user lookup
+search - boolean - specify whether to use match or search when filtering the returned list</div></blockquote>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.iamops.IAMops.get_user_policy_names">
+<tt class="descname">get_user_policy_names</tt><big>(</big><em>user_name</em>, <em>policy_name=None</em>, <em>delegate_account=None</em>, <em>search=False</em><big>)</big><a class="reference internal" href="_modules/eucaops/iamops.html#IAMops.get_user_policy_names"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.iamops.IAMops.get_user_policy_names" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns list of policy names associated with a given user, and match given criteria. 
+Options:</p>
+<blockquote>
+<div>username - string - user to get policies for. 
+policy_name - regex - to match/filter returned policies
+delegate_account - string - used for user lookup
+search - boolean - specify whether to use match or search when filtering the returned list</div></blockquote>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.iamops.IAMops.get_users_from_account">
+<tt class="descname">get_users_from_account</tt><big>(</big><em>path=None</em>, <em>user_name=None</em>, <em>user_id=None</em>, <em>delegate_account=None</em>, <em>search=False</em><big>)</big><a class="reference internal" href="_modules/eucaops/iamops.html#IAMops.get_users_from_account"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.iamops.IAMops.get_users_from_account" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns users that match given criteria. By default will return current account. 
+Options:</p>
+<blockquote>
+<div>path - regex - to match for path
+user_name - regex - to match for user_name
+user_id - regex - to match for user_id
+delegate_account - string - to use for delegating account lookup
+search - boolean - specify whether to use match or search when filtering the returned list</div></blockquote>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.iamops.IAMops.remove_user_from_group">
+<tt class="descname">remove_user_from_group</tt><big>(</big><em>group_name</em>, <em>user_name</em>, <em>delegate_account=None</em><big>)</big><a class="reference internal" href="_modules/eucaops/iamops.html#IAMops.remove_user_from_group"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.iamops.IAMops.remove_user_from_group" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.iamops.IAMops.show_all_accounts">
+<tt class="descname">show_all_accounts</tt><big>(</big><em>account_name=None</em>, <em>account_id=None</em>, <em>search=False</em><big>)</big><a class="reference internal" href="_modules/eucaops/iamops.html#IAMops.show_all_accounts"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.iamops.IAMops.show_all_accounts" title="Permalink to this definition">¶</a></dt>
+<dd><p>Debug Method to print an account list based on given filter criteria
+Options:</p>
+<blockquote>
+<div>account_name - regex - to use for account_name
+account_id - regex - to use for 
+search - boolean - specify whether to use match or search when filtering the returned list</div></blockquote>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.iamops.IAMops.show_all_groups">
+<tt class="descname">show_all_groups</tt><big>(</big><em>account_name=None</em>, <em>account_id=None</em>, <em>path=None</em>, <em>group_name=None</em>, <em>group_id=None</em>, <em>search=False</em><big>)</big><a class="reference internal" href="_modules/eucaops/iamops.html#IAMops.show_all_groups"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.iamops.IAMops.show_all_groups" title="Permalink to this definition">¶</a></dt>
+<dd><p>Debug Method to print a group list based on given filter criteria
+Options:</p>
+<blockquote>
+<div>path - regex - to match for path
+group_name - regex - to match for user_name
+group_id - regex - to match for user_id
+acount_name - regex - to use for account_name
+account_id - regex - to use for 
+search - boolean - specify whether to use match or search when filtering the returned list</div></blockquote>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.iamops.IAMops.show_all_users">
+<tt class="descname">show_all_users</tt><big>(</big><em>account_name=None</em>, <em>account_id=None</em>, <em>path=None</em>, <em>user_name=None</em>, <em>user_id=None</em>, <em>search=False</em><big>)</big><a class="reference internal" href="_modules/eucaops/iamops.html#IAMops.show_all_users"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.iamops.IAMops.show_all_users" title="Permalink to this definition">¶</a></dt>
+<dd><p>Debug Method to print a user list based on given filter criteria
+Options:</p>
+<blockquote>
+<div>path - regex - to match for path
+user_name - regex - to match for user_name
+user_id - regex - to match for user_id
+account_name - regex - to use for account_name
+account_id - regex - to use for 
+search - boolean - specify whether to use match or search when filtering the returned list</div></blockquote>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.iamops.IAMops.show_euare_whoami">
+<tt class="descname">show_euare_whoami</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/iamops.html#IAMops.show_euare_whoami"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.iamops.IAMops.show_euare_whoami" title="Permalink to this definition">¶</a></dt>
+<dd><p>Debug method used to display the who am I info related to iam/euare.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.iamops.IAMops.show_user_policy_summary">
+<tt class="descname">show_user_policy_summary</tt><big>(</big><em>user_name</em>, <em>policy_name=None</em>, <em>delegate_account=None</em>, <em>doc=None</em>, <em>search=False</em><big>)</big><a class="reference internal" href="_modules/eucaops/iamops.html#IAMops.show_user_policy_summary"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.iamops.IAMops.show_user_policy_summary" title="Permalink to this definition">¶</a></dt>
+<dd><p>Debug method to display policy summary applied to a given user</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.iamops.IAMops.show_user_summary">
+<tt class="descname">show_user_summary</tt><big>(</big><em>user_name</em>, <em>delegate_account=None</em>, <em>account_id=None</em><big>)</big><a class="reference internal" href="_modules/eucaops/iamops.html#IAMops.show_user_summary"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.iamops.IAMops.show_user_summary" title="Permalink to this definition">¶</a></dt>
+<dd><p>Debug method for to display euare/iam info for a specific user.</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-eucaops.s3ops">
+<span id="s3ops-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">s3ops</span></tt> Module<a class="headerlink" href="#module-eucaops.s3ops" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="eucaops.s3ops.S3ops">
+<em class="property">class </em><tt class="descclassname">eucaops.s3ops.</tt><tt class="descname">S3ops</tt><big>(</big><em>config_file=None</em>, <em>password=None</em>, <em>keypath=None</em>, <em>credpath=None</em>, <em>aws_access_key_id=None</em>, <em>aws_secret_access_key=None</em>, <em>account='eucalyptus'</em>, <em>user='admin'</em>, <em>username='root'</em>, <em>region=None</em>, <em>clc_ip=None</em>, <em>boto_debug=0</em><big>)</big><a class="reference internal" href="_modules/eucaops/s3ops.html#S3ops"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.s3ops.S3ops" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="eutester.html#eutester.Eutester" title="eutester.Eutester"><tt class="xref py py-class docutils literal"><span class="pre">eutester.Eutester</span></tt></a></p>
+<dl class="method">
+<dt id="eucaops.s3ops.S3ops.check_md5">
+<tt class="descname">check_md5</tt><big>(</big><em>eTag=None</em>, <em>data=None</em><big>)</big><a class="reference internal" href="_modules/eucaops/s3ops.html#S3ops.check_md5"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.s3ops.S3ops.check_md5" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.s3ops.S3ops.clear_bucket">
+<tt class="descname">clear_bucket</tt><big>(</big><em>bucket</em><big>)</big><a class="reference internal" href="_modules/eucaops/s3ops.html#S3ops.clear_bucket"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.s3ops.S3ops.clear_bucket" title="Permalink to this definition">¶</a></dt>
+<dd><p>Deletes the contents of the bucket specified and the bucket itself
+bucket       boto.bucket to delete recursively</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.s3ops.S3ops.clear_keys_with_prefix">
+<tt class="descname">clear_keys_with_prefix</tt><big>(</big><em>bucket</em>, <em>prefix</em><big>)</big><a class="reference internal" href="_modules/eucaops/s3ops.html#S3ops.clear_keys_with_prefix"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.s3ops.S3ops.clear_keys_with_prefix" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.s3ops.S3ops.create_bucket">
+<tt class="descname">create_bucket</tt><big>(</big><em>bucket_name</em><big>)</big><a class="reference internal" href="_modules/eucaops/s3ops.html#S3ops.create_bucket"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.s3ops.S3ops.create_bucket" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a bucket.  If the bucket already exists and you have
+access to it, no error will be returned by AWS.
+Note that bucket names are global to S3
+so you need to choose a unique name.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.s3ops.S3ops.delete_bucket">
+<tt class="descname">delete_bucket</tt><big>(</big><em>bucket</em><big>)</big><a class="reference internal" href="_modules/eucaops/s3ops.html#S3ops.delete_bucket"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.s3ops.S3ops.delete_bucket" title="Permalink to this definition">¶</a></dt>
+<dd><p>Delete a bucket.
+bucket_name  The name of the Walrus Bucket</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.s3ops.S3ops.delete_object">
+<tt class="descname">delete_object</tt><big>(</big><em>object</em><big>)</big><a class="reference internal" href="_modules/eucaops/s3ops.html#S3ops.delete_object"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.s3ops.S3ops.delete_object" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="eucaops.s3ops.S3ops.get_bucket_by_name">
+<tt class="descname">get_bucket_by_name</tt><big>(</big><em>bucket_name</em><big>)</big><a class="reference internal" href="_modules/eucaops/s3ops.html#S3ops.get_bucket_by_name"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.s3ops.S3ops.get_bucket_by_name" title="Permalink to this definition">¶</a></dt>
+<dd><p>Lookup a bucket by name, if it does not exist raise an exception</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.s3ops.S3ops.get_canned_acl">
+<tt class="descname">get_canned_acl</tt><big>(</big><em>owner_id=None</em>, <em>canned_acl=None</em>, <em>bucket_owner_id=None</em><big>)</big><a class="reference internal" href="_modules/eucaops/s3ops.html#S3ops.get_canned_acl"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.s3ops.S3ops.get_canned_acl" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns an acl object that can be applied to a bucket or key
+owner_id         Account id of the owner of the bucket. Required
+canned_acl       Canned acl to implement. Required.</p>
+<blockquote>
+<div>Options: [&#8216;public-read&#8217;, &#8216;public-read-write&#8217;, &#8216;authenticated-read&#8217;,  &#8216;log-delivery-write&#8217;, &#8216;bucket-owner-full-control&#8217;, &#8216;bucket-owner-full-control&#8217;]</div></blockquote>
+<p>bucket_owner_id  Required for bucket-owner-full-control and bucket-owner-full-control acls to be created</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.s3ops.S3ops.get_objects_by_prefix">
+<tt class="descname">get_objects_by_prefix</tt><big>(</big><em>bucket_name</em>, <em>prefix</em><big>)</big><a class="reference internal" href="_modules/eucaops/s3ops.html#S3ops.get_objects_by_prefix"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.s3ops.S3ops.get_objects_by_prefix" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get keys in the specified bucket that match the prefix if no prefix is passed all objects are returned
+as a result set.
+If only 1 key matches it will be returned as a Key object.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.s3ops.S3ops.setup_s3_resource_trackers">
+<tt class="descname">setup_s3_resource_trackers</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/eucaops/s3ops.html#S3ops.setup_s3_resource_trackers"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.s3ops.S3ops.setup_s3_resource_trackers" title="Permalink to this definition">¶</a></dt>
+<dd><p>Setup keys in the test_resources hash in order to track artifacts created</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.s3ops.S3ops.upload_object">
+<tt class="descname">upload_object</tt><big>(</big><em>bucket_name</em>, <em>key_name</em>, <em>path_to_file=None</em>, <em>contents=None</em><big>)</big><a class="reference internal" href="_modules/eucaops/s3ops.html#S3ops.upload_object"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.s3ops.S3ops.upload_object" title="Permalink to this definition">¶</a></dt>
+<dd><p>Write the contents of a local file to walrus
+bucket_name   The name of the walrus Bucket.
+key_name      The name of the object containing the data in walrus.
+path_to_file  Fully qualified path to local file.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="exception">
+<dt id="eucaops.s3ops.S3opsException">
+<em class="property">exception </em><tt class="descclassname">eucaops.s3ops.</tt><tt class="descname">S3opsException</tt><big>(</big><em>msg</em><big>)</big><a class="reference internal" href="_modules/eucaops/s3ops.html#S3opsException"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.s3ops.S3opsException" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">exceptions.Exception</span></tt></p>
+<p>Exception raised for errors that occur when running S3 operations.</p>
+<dl class="docutils">
+<dt>Attributes:</dt>
+<dd>msg  &#8211; explanation of the error</dd>
+</dl>
+</dd></dl>
+
+</div>
+<div class="section" id="module-eucaops.stsops">
+<span id="stsops-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">stsops</span></tt> Module<a class="headerlink" href="#module-eucaops.stsops" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="eucaops.stsops.STSops">
+<em class="property">class </em><tt class="descclassname">eucaops.stsops.</tt><tt class="descname">STSops</tt><big>(</big><em>credpath=None</em>, <em>aws_access_key_id=None</em>, <em>aws_secret_access_key=None</em>, <em>region=None</em>, <em>ec2_ip=None</em>, <em>s3_ip=None</em>, <em>boto_debug=0</em><big>)</big><a class="reference internal" href="_modules/eucaops/stsops.html#STSops"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.stsops.STSops" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="eutester.html#eutester.Eutester" title="eutester.Eutester"><tt class="xref py py-class docutils literal"><span class="pre">eutester.Eutester</span></tt></a></p>
+<dl class="method">
+<dt id="eucaops.stsops.STSops.get_session_token">
+<tt class="descname">get_session_token</tt><big>(</big><em>duration=None</em><big>)</big><a class="reference internal" href="_modules/eucaops/stsops.html#STSops.get_session_token"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.stsops.STSops.get_session_token" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get a possibly cached session token, if getting a new token request the given duration
+Options:</p>
+<blockquote>
+<div>duration - The desired duration for the token in seconds (if issued, None for default duration)</div></blockquote>
+</dd></dl>
+
+<dl class="method">
+<dt id="eucaops.stsops.STSops.issue_session_token">
+<tt class="descname">issue_session_token</tt><big>(</big><em>duration=None</em><big>)</big><a class="reference internal" href="_modules/eucaops/stsops.html#STSops.issue_session_token"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#eucaops.stsops.STSops.issue_session_token" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get a newly issued session token with the given (or default) duration
+Options:</p>
+<blockquote>
+<div>duration - The desired duration for the token in seconds (None for default duration)</div></blockquote>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+</div>
+
+
+      </div>
+      <div class="bottomnav">
+      
+        <p>
+        <a class="uplink" href="index.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer">
+        &copy; Copyright 2012, Vic Iglesias, Matt Clark, Harold Spencer.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,385 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>eutester.euproperties &mdash; Eutester 0.0.4 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/haiku.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/print.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '0.0.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <script type="text/javascript" src="../../_static/theme_extras.js"></script>
+    <link rel="top" title="Eutester 0.0.4 documentation" href="../../index.html" />
+    <link rel="up" title="eutester" href="../eutester.html" /> 
+  </head>
+  <body>
+      <div class="header"><h1 class="heading"><a href="../../index.html">
+          <span>Eutester 0.0.4 documentation</span></a></h1>
+        <h2 class="heading"><span>eutester.euproperties</span></h2>
+      </div>
+      <div class="topnav">
+      
+        <p>
+        <a class="uplink" href="../../index.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <h1>Source code for eutester.euproperties</h1><div class="highlight"><pre>
+<span class="c"># Software License Agreement (BSD License)</span>
+<span class="c">#</span>
+<span class="c"># Copyright (c) 2009-2011, Eucalyptus Systems, Inc.</span>
+<span class="c"># All rights reserved.</span>
+<span class="c">#</span>
+<span class="c"># Redistribution and use of this software in source and binary forms, with or</span>
+<span class="c"># without modification, are permitted provided that the following conditions</span>
+<span class="c"># are met:</span>
+<span class="c">#</span>
+<span class="c">#   Redistributions of source code must retain the above</span>
+<span class="c">#   copyright notice, this list of conditions and the</span>
+<span class="c">#   following disclaimer.</span>
+<span class="c">#</span>
+<span class="c">#   Redistributions in binary form must reproduce the above</span>
+<span class="c">#   copyright notice, this list of conditions and the</span>
+<span class="c">#   following disclaimer in the documentation and/or other</span>
+<span class="c">#   materials provided with the distribution.</span>
+<span class="c">#</span>
+<span class="c"># THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS &quot;AS IS&quot;</span>
+<span class="c"># AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE</span>
+<span class="c"># IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE</span>
+<span class="c"># ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE</span>
+<span class="c"># LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR</span>
+<span class="c"># CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF</span>
+<span class="c"># SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS</span>
+<span class="c"># INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN</span>
+<span class="c"># CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)</span>
+<span class="c"># ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE</span>
+<span class="c"># POSSIBILITY OF SUCH DAMAGE.</span>
+<span class="c">#</span>
+<span class="c"># Author: matt.clark@eucalyptus.com</span>
+<span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">Created on Mar 7, 2012</span>
+<span class="sd">@author: clarkmatthew</span>
+<span class="sd">Place holder class to provide convenience for testing, modifying, and retrieving Eucalyptus cloud property information</span>
+<span class="sd">Intention is to reduce the time in looking up property names, and values outside of the eutester test lib, etc</span>
+<span class="sd">Note: Debug output for the tester.sys command are controled by the eutester/eucaops object </span>
+
+<span class="sd">Sample:</span>
+<span class="sd">    </span>
+<span class="sd">    props = EucaProperties(myeutesterobject)</span>
+<span class="sd">    #get some property values </span>
+<span class="sd">    mysanhost = props.get_storage_sanhost()[0]</span>
+<span class="sd">    mysanhostp1 = props.get_storage_sanhost(zone=&#39;PARTI01&#39;)[0]</span>
+<span class="sd">    </span>
+<span class="sd">    #use a convenience method to set a property</span>
+<span class="sd">    prop.set_storage_sanhost(&#39;192.168.1.1&#39;,zone=&#39;PARTI01&#39;)</span>
+<span class="sd">    </span>
+<span class="sd">    #get the property string value for a given property</span>
+<span class="sd">    sanhostp1propertystring = props.get_storage_sanhost(zone=PARTI01)[1]</span>
+<span class="sd">    </span>
+<span class="sd">    #reset a cloud property to it&#39;s default value</span>
+<span class="sd">    props.reset_property_to_default(sanhostp1propertystring)</span>
+<span class="sd">    </span>
+<span class="sd">    </span>
+<span class="sd">    </span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+<span class="kn">from</span> <span class="nn">eucaops</span> <span class="kn">import</span> <span class="n">Eucaops</span>
+<span class="kn">from</span> <span class="nn">eutester</span> <span class="kn">import</span> <span class="n">Eutester</span>
+
+
+
+<div class="viewcode-block" id="EucaProperties"><a class="viewcode-back" href="../../eutester.html#eutester.euproperties.EucaProperties">[docs]</a><span class="k">class</span> <span class="nc">EucaProperties</span><span class="p">():</span>
+    <span class="n">tester</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">verbose</span> <span class="o">=</span> <span class="bp">False</span>
+    <span class="n">debugmethod</span> <span class="o">=</span> <span class="bp">None</span>
+    
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tester</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">debugmethod</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tester</span> <span class="o">=</span> <span class="n">tester</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debugmethod</span> <span class="o">=</span> <span class="n">debugmethod</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">verbose</span> <span class="o">=</span> <span class="n">verbose</span>
+        
+<div class="viewcode-block" id="EucaProperties.debug"><a class="viewcode-back" href="../../eutester.html#eutester.euproperties.EucaProperties.debug">[docs]</a>    <span class="k">def</span> <span class="nf">debug</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">msg</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        simple method for printing debug. </span>
+<span class="sd">        msg - mandatory - string to be printed</span>
+<span class="sd">        method - optional - callback to over ride default printing method </span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">verbose</span> <span class="ow">is</span> <span class="bp">True</span><span class="p">):</span>
+            <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">debugmethod</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">):</span>
+                <span class="k">print</span> <span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">msg</span><span class="p">))</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">debugmethod</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+             
+            </div>
+<div class="viewcode-block" id="EucaProperties.get_property"><a class="viewcode-back" href="../../eutester.html#eutester.euproperties.EucaProperties.get_property">[docs]</a>    <span class="k">def</span> <span class="nf">get_property</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">prop</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Returns a tuple containing the current property value plus the property string. </span>
+<span class="sd">        prop - mandatory - string representing the property to fetch. </span>
+<span class="sd">        ecuaops -optional - the eucaops/eutester object to fetch the property from</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Getting property:&quot;</span><span class="o">+</span><span class="n">prop</span><span class="p">)</span>
+        <span class="n">eucaops</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">tester</span>
+        <span class="n">prop_string</span> <span class="o">=</span> <span class="n">eucaops</span><span class="o">.</span><span class="n">sys</span><span class="p">(</span><span class="s">&#39;euca-describe-properties | grep &#39;</span> <span class="o">+</span> <span class="n">prop</span><span class="p">)</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">prop_string</span> <span class="o">!=</span> <span class="p">[]):</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">prop_string</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">split</span><span class="p">()[</span><span class="mi">2</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">EuPropertiesException</span><span class="p">(</span><span class="s">&quot;describe properties returned null for &quot;</span><span class="o">+</span><span class="n">prop</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span><span class="p">,</span><span class="n">prop</span>
+    
+    </div>
+<div class="viewcode-block" id="EucaProperties.set_property"><a class="viewcode-back" href="../../eutester.html#eutester.euproperties.EucaProperties.set_property">[docs]</a>    <span class="k">def</span> <span class="nf">set_property</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>  <span class="n">prop</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Sets the property &#39;prop&#39; at eucaops/eutester object &#39;tester&#39; to &#39;value&#39;    </span>
+<span class="sd">        Returns new value  </span>
+<span class="sd">        prop - mandatory - string representing the property to set</span>
+<span class="sd">        value - mandatory - string representing the value to set the property to</span>
+<span class="sd">        eucaops - optional - the eucaops/eutester object to set the property at</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+        <span class="n">eucaops</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">tester</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Setting property(&#39;</span><span class="o">+</span><span class="n">prop</span><span class="o">+</span><span class="s">&#39;) to value:&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">value</span><span class="p">))</span>
+        <span class="n">ret_string</span> <span class="o">=</span> <span class="n">eucaops</span><span class="o">.</span><span class="n">sys</span><span class="p">(</span><span class="s">&#39;euca-modify-property -p &#39;</span><span class="o">+</span><span class="n">prop</span><span class="o">+</span><span class="s">&#39;=&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">value</span><span class="p">))</span>
+        <span class="k">if</span> <span class="p">(</span> <span class="n">ret_string</span> <span class="o">!=</span> <span class="p">[]</span> <span class="p">):</span>
+            <span class="n">ret_value</span><span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">ret_string</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">split</span><span class="p">()[</span><span class="mi">2</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">EuPropertiesException</span><span class="p">(</span><span class="s">&quot;set_property output from modify was None&quot;</span><span class="p">)</span>
+        
+        <span class="k">if</span> <span class="p">(</span><span class="n">ret_value</span> <span class="o">!=</span> <span class="n">value</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">EuPropertiesException</span><span class="p">(</span><span class="s">&quot;set property(&quot;</span><span class="o">+</span><span class="n">prop</span><span class="o">+</span><span class="s">&quot;) to value(&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">value</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;) failed.Ret Value (&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">ret_value</span><span class="p">)</span><span class="o">+</span><span class="s">&quot;)</span><span class="se">\n</span><span class="s">Ret String</span><span class="se">\n</span><span class="s">&quot;</span><span class="o">+</span><span class="n">ret_string</span><span class="p">)</span>
+        
+        <span class="k">return</span> <span class="n">ret_value</span>
+        </div>
+<div class="viewcode-block" id="EucaProperties.reset_property_to_default"><a class="viewcode-back" href="../../eutester.html#eutester.euproperties.EucaProperties.reset_property_to_default">[docs]</a>    <span class="k">def</span> <span class="nf">reset_property_to_default</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">prop</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Sets a property &#39;prop&#39; at eucaops/eutester object &#39;eucaops&#39; to it&#39;s default value</span>
+<span class="sd">        Returns new value</span>
+<span class="sd">        prop - mandatory - string representing the property to set</span>
+<span class="sd">        ucaops - optional - the eucaops/eutester object to set the property at</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+    
+        <span class="n">eucaops</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">tester</span>
+        <span class="n">ret_string</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">eucaops</span><span class="o">.</span><span class="n">sys</span><span class="p">(</span><span class="s">&#39;euca-modify-property -r &#39;</span><span class="o">+</span><span class="n">prop</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="n">ret_value</span><span class="o">=</span> <span class="n">ret_string</span><span class="o">.</span><span class="n">split</span><span class="p">()[</span><span class="mi">2</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Reset property(&#39;</span><span class="o">+</span><span class="n">prop</span><span class="o">+</span><span class="s">&#39;) to default value(&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">ret_value</span><span class="p">)</span><span class="o">+</span><span class="s">&#39;)&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">ret_value</span>
+        </div>
+<div class="viewcode-block" id="EucaProperties.get_property_default_value"><a class="viewcode-back" href="../../eutester.html#eutester.euproperties.EucaProperties.get_property_default_value">[docs]</a>    <span class="k">def</span> <span class="nf">get_property_default_value</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">prop</span><span class="p">,</span> <span class="n">ireadthewarning</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Note: This hack method is intrusive! It will briefly reset the property</span>
+<span class="sd">        This is a temporary method to get a properties default method</span>
+<span class="sd">        prop - mandatory - string, eucalyptus property</span>
+<span class="sd">        ireadthewarning - mandatory - boolean, to warn user this method is intrusive </span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">ireadthewarning</span> <span class="ow">is</span> <span class="bp">False</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">EuPropertiesException</span><span class="p">(</span><span class="s">&quot;ireadthewarning is set to false in get_property_default_value&quot;</span><span class="p">)</span>
+    
+        <span class="n">original</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_property</span><span class="p">(</span><span class="n">prop</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">default</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">reset_property_to_default</span><span class="p">(</span><span class="n">prop</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">set_property</span><span class="p">(</span><span class="n">prop</span><span class="p">,</span> <span class="n">original</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">default</span>
+    
+        
+        
+        </div>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    ########################################################################</span>
+<span class="sd">    STORAGE RELATED PROPERTY METHODS...</span>
+<span class="sd">    ########################################################################</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+          
+    <span class="c">#PARTI00.storage.maxvolumesizeingb</span>
+<div class="viewcode-block" id="EucaProperties.get_storage_maxvolumesizeingb"><a class="viewcode-back" href="../../eutester.html#eutester.euproperties.EucaProperties.get_storage_maxvolumesizeingb">[docs]</a>    <span class="k">def</span> <span class="nf">get_storage_maxvolumesizeingb</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>  <span class="n">zone</span><span class="o">=</span><span class="s">&#39;PARTI00&#39;</span><span class="p">):</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_property</span><span class="p">(</span>  <span class="n">zone</span><span class="o">+</span><span class="s">&#39;.storage.maxvolumesizeingb&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span>
+    </div>
+<div class="viewcode-block" id="EucaProperties.set_storage_maxvolumesizeingb"><a class="viewcode-back" href="../../eutester.html#eutester.euproperties.EucaProperties.set_storage_maxvolumesizeingb">[docs]</a>    <span class="k">def</span> <span class="nf">set_storage_maxvolumesizeingb</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">zone</span><span class="o">=</span><span class="s">&#39;PARTI00&#39;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">set_property</span><span class="p">(</span>  <span class="n">zone</span><span class="o">+</span><span class="s">&#39;.storage.maxvolumesizeingb&#39;</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+    
+    <span class="c">#PARTI00.storage.maxtotalvolumesizeingb </span></div>
+<div class="viewcode-block" id="EucaProperties.get_storage_maxtotalvolumesizeingb"><a class="viewcode-back" href="../../eutester.html#eutester.euproperties.EucaProperties.get_storage_maxtotalvolumesizeingb">[docs]</a>    <span class="k">def</span> <span class="nf">get_storage_maxtotalvolumesizeingb</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>   <span class="n">zone</span><span class="o">=</span><span class="s">&#39;PARTI00&#39;</span><span class="p">):</span> 
+        <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_property</span><span class="p">(</span>  <span class="n">zone</span><span class="o">+</span><span class="s">&#39;.storage.maxtotalvolumesizeingb&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span>
+    </div>
+<div class="viewcode-block" id="EucaProperties.set_storage_maxtotalvolumesizeingb"><a class="viewcode-back" href="../../eutester.html#eutester.euproperties.EucaProperties.set_storage_maxtotalvolumesizeingb">[docs]</a>    <span class="k">def</span> <span class="nf">set_storage_maxtotalvolumesizeingb</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span>  <span class="n">zone</span><span class="o">=</span><span class="s">&#39;PARTI00&#39;</span><span class="p">):</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">set_property</span><span class="p">(</span>  <span class="n">zone</span><span class="o">+</span><span class="s">&#39;.storage.maxtotalvolumesizeingb&#39;</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span>
+    
+    <span class="c">#PARTI00.storage.zerofillvolumes </span></div>
+<div class="viewcode-block" id="EucaProperties.get_storage_zerofillvolumes"><a class="viewcode-back" href="../../eutester.html#eutester.euproperties.EucaProperties.get_storage_zerofillvolumes">[docs]</a>    <span class="k">def</span> <span class="nf">get_storage_zerofillvolumes</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>   <span class="n">zone</span><span class="o">=</span><span class="s">&#39;PARTI00&#39;</span><span class="p">):</span> 
+        <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_property</span><span class="p">(</span>  <span class="n">zone</span><span class="o">+</span><span class="s">&#39;.storage.zerofillvolumes&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span>
+    </div>
+<div class="viewcode-block" id="EucaProperties.set_storage_zerofillvolumes"><a class="viewcode-back" href="../../eutester.html#eutester.euproperties.EucaProperties.set_storage_zerofillvolumes">[docs]</a>    <span class="k">def</span> <span class="nf">set_storage_zerofillvolumes</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span>  <span class="n">zone</span><span class="o">=</span><span class="s">&#39;PARTI00&#39;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">set_property</span><span class="p">(</span>  <span class="n">zone</span><span class="o">+</span><span class="s">&#39;.storage.zerofillvolumes&#39;</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+        
+    <span class="c">#PARTI00.storage.volumesdir </span></div>
+<div class="viewcode-block" id="EucaProperties.get_storage_volumesdir"><a class="viewcode-back" href="../../eutester.html#eutester.euproperties.EucaProperties.get_storage_volumesdir">[docs]</a>    <span class="k">def</span> <span class="nf">get_storage_volumesdir</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>   <span class="n">zone</span><span class="o">=</span><span class="s">&#39;PARTI00&#39;</span><span class="p">):</span> 
+        <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_property</span><span class="p">(</span>  <span class="n">zone</span><span class="o">+</span><span class="s">&#39;.storage.volumesdir&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span>
+    </div>
+<div class="viewcode-block" id="EucaProperties.set_storage_volumesdir"><a class="viewcode-back" href="../../eutester.html#eutester.euproperties.EucaProperties.set_storage_volumesdir">[docs]</a>    <span class="k">def</span> <span class="nf">set_storage_volumesdir</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span>  <span class="n">zone</span><span class="o">=</span><span class="s">&#39;PARTI00&#39;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">set_property</span><span class="p">(</span>  <span class="n">zone</span><span class="o">+</span><span class="s">&#39;.storage.volumesdir&#39;</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+        
+    <span class="c">#PARTI00.storage.tid</span></div>
+<div class="viewcode-block" id="EucaProperties.get_storage_tid"><a class="viewcode-back" href="../../eutester.html#eutester.euproperties.EucaProperties.get_storage_tid">[docs]</a>    <span class="k">def</span> <span class="nf">get_storage_tid</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>   <span class="n">zone</span><span class="o">=</span><span class="s">&#39;PARTI00&#39;</span><span class="p">):</span> 
+        <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_property</span><span class="p">(</span>  <span class="n">zone</span><span class="o">+</span><span class="s">&#39;.storage.tid&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span>
+    </div>
+<div class="viewcode-block" id="EucaProperties.set_storage_tid"><a class="viewcode-back" href="../../eutester.html#eutester.euproperties.EucaProperties.set_storage_tid">[docs]</a>    <span class="k">def</span> <span class="nf">set_storage_tid</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span>  <span class="n">zone</span><span class="o">=</span><span class="s">&#39;PARTI00&#39;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">set_property</span><span class="p">(</span>  <span class="n">zone</span><span class="o">+</span><span class="s">&#39;.storage.tid&#39;</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+    
+    <span class="c">#PARTI00.storage.storeprefix</span></div>
+<div class="viewcode-block" id="EucaProperties.get_storage_storeprefix"><a class="viewcode-back" href="../../eutester.html#eutester.euproperties.EucaProperties.get_storage_storeprefix">[docs]</a>    <span class="k">def</span> <span class="nf">get_storage_storeprefix</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>   <span class="n">zone</span><span class="o">=</span><span class="s">&#39;PARTI00&#39;</span><span class="p">):</span> 
+        <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_property</span><span class="p">(</span>  <span class="n">zone</span><span class="o">+</span><span class="s">&#39;.storage.storeprefix&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span>
+    </div>
+<div class="viewcode-block" id="EucaProperties.set_storage_storeprefix"><a class="viewcode-back" href="../../eutester.html#eutester.euproperties.EucaProperties.set_storage_storeprefix">[docs]</a>    <span class="k">def</span> <span class="nf">set_storage_storeprefix</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span>  <span class="n">zone</span><span class="o">=</span><span class="s">&#39;PARTI00&#39;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">set_property</span><span class="p">(</span>  <span class="n">zone</span><span class="o">+</span><span class="s">&#39;.storage.storeprefix&#39;</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+    
+    <span class="c">#PARTI00.storage.storageinterface</span></div>
+<div class="viewcode-block" id="EucaProperties.get_storageinterface"><a class="viewcode-back" href="../../eutester.html#eutester.euproperties.EucaProperties.get_storageinterface">[docs]</a>    <span class="k">def</span> <span class="nf">get_storageinterface</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>   <span class="n">zone</span><span class="o">=</span><span class="s">&#39;PARTI00&#39;</span><span class="p">):</span> 
+        <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_property</span><span class="p">(</span>  <span class="n">zone</span><span class="o">+</span><span class="s">&#39;.storage.storageinterface&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span>
+    </div>
+<div class="viewcode-block" id="EucaProperties.set_storageinterface"><a class="viewcode-back" href="../../eutester.html#eutester.euproperties.EucaProperties.set_storageinterface">[docs]</a>    <span class="k">def</span> <span class="nf">set_storageinterface</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span>  <span class="n">zone</span><span class="o">=</span><span class="s">&#39;PARTI00&#39;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">set_property</span><span class="p">(</span>  <span class="n">zone</span><span class="o">+</span><span class="s">&#39;.storage.storageinterface&#39;</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+    
+    <span class="c">#PARTI00.storage.snappercent</span></div>
+<div class="viewcode-block" id="EucaProperties.get_storage_snappercent"><a class="viewcode-back" href="../../eutester.html#eutester.euproperties.EucaProperties.get_storage_snappercent">[docs]</a>    <span class="k">def</span> <span class="nf">get_storage_snappercent</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>   <span class="n">zone</span><span class="o">=</span><span class="s">&#39;PARTI00&#39;</span><span class="p">):</span> 
+        <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_property</span><span class="p">(</span>  <span class="n">zone</span><span class="o">+</span><span class="s">&#39;.storage.snappercent&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span>
+    </div>
+<div class="viewcode-block" id="EucaProperties.set_storage_snappercent"><a class="viewcode-back" href="../../eutester.html#eutester.euproperties.EucaProperties.set_storage_snappercent">[docs]</a>    <span class="k">def</span> <span class="nf">set_storage_snappercent</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span>  <span class="n">zone</span><span class="o">=</span><span class="s">&#39;PARTI00&#39;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">set_property</span><span class="p">(</span>  <span class="n">zone</span><span class="o">+</span><span class="s">&#39;.storage.snappercent&#39;</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+        
+    <span class="c">#PARTI00.storage.shouldtransfersnapshots</span></div>
+<div class="viewcode-block" id="EucaProperties.get_storage_shouldtransfersnapshots"><a class="viewcode-back" href="../../eutester.html#eutester.euproperties.EucaProperties.get_storage_shouldtransfersnapshots">[docs]</a>    <span class="k">def</span> <span class="nf">get_storage_shouldtransfersnapshots</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>   <span class="n">zone</span><span class="o">=</span><span class="s">&#39;PARTI00&#39;</span><span class="p">):</span> 
+        <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_property</span><span class="p">(</span>  <span class="n">zone</span><span class="o">+</span><span class="s">&#39;.storage.shouldtransfersnapshots&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span>
+    </div>
+<div class="viewcode-block" id="EucaProperties.set_storage_shouldtransfersnapshots"><a class="viewcode-back" href="../../eutester.html#eutester.euproperties.EucaProperties.set_storage_shouldtransfersnapshots">[docs]</a>    <span class="k">def</span> <span class="nf">set_storage_shouldtransfersnapshots</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span>  <span class="n">zone</span><span class="o">=</span><span class="s">&#39;PARTI00&#39;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">set_property</span><span class="p">(</span>  <span class="n">zone</span><span class="o">+</span><span class="s">&#39;.storage.shouldtransfersnapshots&#39;</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+        
+    <span class="c">#PARTI00.storage.sanuser</span></div>
+<div class="viewcode-block" id="EucaProperties.get_storage_sanuser"><a class="viewcode-back" href="../../eutester.html#eutester.euproperties.EucaProperties.get_storage_sanuser">[docs]</a>    <span class="k">def</span> <span class="nf">get_storage_sanuser</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>   <span class="n">zone</span><span class="o">=</span><span class="s">&#39;PARTI00&#39;</span><span class="p">):</span> 
+        <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_property</span><span class="p">(</span>  <span class="n">zone</span><span class="o">+</span><span class="s">&#39;.storage.sanuser&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span>
+    </div>
+<div class="viewcode-block" id="EucaProperties.set_storage_sanuser"><a class="viewcode-back" href="../../eutester.html#eutester.euproperties.EucaProperties.set_storage_sanuser">[docs]</a>    <span class="k">def</span> <span class="nf">set_storage_sanuser</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span>  <span class="n">zone</span><span class="o">=</span><span class="s">&#39;PARTI00&#39;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">set_property</span><span class="p">(</span>  <span class="n">zone</span><span class="o">+</span><span class="s">&#39;.storage.sanuser&#39;</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+    
+    <span class="c">#PARTI00.storage.sanpassword</span></div>
+<div class="viewcode-block" id="EucaProperties.get_storage_sanpassword"><a class="viewcode-back" href="../../eutester.html#eutester.euproperties.EucaProperties.get_storage_sanpassword">[docs]</a>    <span class="k">def</span> <span class="nf">get_storage_sanpassword</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>   <span class="n">zone</span><span class="o">=</span><span class="s">&#39;PARTI00&#39;</span><span class="p">):</span> 
+        <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_property</span><span class="p">(</span>  <span class="n">zone</span><span class="o">+</span><span class="s">&#39;.storage.sanpassword&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span>
+    </div>
+<div class="viewcode-block" id="EucaProperties.set_storage_sanpassword"><a class="viewcode-back" href="../../eutester.html#eutester.euproperties.EucaProperties.set_storage_sanpassword">[docs]</a>    <span class="k">def</span> <span class="nf">set_storage_sanpassword</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span>  <span class="n">zone</span><span class="o">=</span><span class="s">&#39;PARTI00&#39;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">set_property</span><span class="p">(</span>  <span class="n">zone</span><span class="o">+</span><span class="s">&#39;.storage.sanpassword&#39;</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+        
+    <span class="c">#PARTI00.storage.sanhost</span></div>
+<div class="viewcode-block" id="EucaProperties.get_storage_sanhost"><a class="viewcode-back" href="../../eutester.html#eutester.euproperties.EucaProperties.get_storage_sanhost">[docs]</a>    <span class="k">def</span> <span class="nf">get_storage_sanhost</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>   <span class="n">zone</span><span class="o">=</span><span class="s">&#39;PARTI00&#39;</span><span class="p">):</span> 
+        <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_property</span><span class="p">(</span>  <span class="n">zone</span><span class="o">+</span><span class="s">&#39;.storage.sanhost&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span>
+    </div>
+<div class="viewcode-block" id="EucaProperties.set_storage_sanhost"><a class="viewcode-back" href="../../eutester.html#eutester.euproperties.EucaProperties.set_storage_sanhost">[docs]</a>    <span class="k">def</span> <span class="nf">set_storage_sanhost</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span>  <span class="n">zone</span><span class="o">=</span><span class="s">&#39;PARTI00&#39;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">set_property</span><span class="p">(</span>  <span class="n">zone</span><span class="o">+</span><span class="s">&#39;.storage.sanhost&#39;</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+        
+    <span class="c">#PARTI00.storage.minornumber</span></div>
+<div class="viewcode-block" id="EucaProperties.get_storage_minornumber"><a class="viewcode-back" href="../../eutester.html#eutester.euproperties.EucaProperties.get_storage_minornumber">[docs]</a>    <span class="k">def</span> <span class="nf">get_storage_minornumber</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>   <span class="n">zone</span><span class="o">=</span><span class="s">&#39;PARTI00&#39;</span><span class="p">):</span> 
+        <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_property</span><span class="p">(</span>  <span class="n">zone</span><span class="o">+</span><span class="s">&#39;.storage.minornumber&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span>
+    </div>
+<div class="viewcode-block" id="EucaProperties.set_storage_minornumber"><a class="viewcode-back" href="../../eutester.html#eutester.euproperties.EucaProperties.set_storage_minornumber">[docs]</a>    <span class="k">def</span> <span class="nf">set_storage_minornumber</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span>  <span class="n">zone</span><span class="o">=</span><span class="s">&#39;PARTI00&#39;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">set_property</span><span class="p">(</span>  <span class="n">zone</span><span class="o">+</span><span class="s">&#39;.storage.minornumber&#39;</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+    
+    <span class="c">#PARTI00.storage.majornumber </span></div>
+<div class="viewcode-block" id="EucaProperties.get_storage_majornumber"><a class="viewcode-back" href="../../eutester.html#eutester.euproperties.EucaProperties.get_storage_majornumber">[docs]</a>    <span class="k">def</span> <span class="nf">get_storage_majornumber</span> <span class="p">(</span><span class="bp">self</span><span class="p">,</span>   <span class="n">zone</span><span class="o">=</span><span class="s">&#39;PARTI00&#39;</span><span class="p">):</span> 
+        <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_property</span><span class="p">(</span>  <span class="n">zone</span><span class="o">+</span><span class="s">&#39;.storage.majornumber &#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span>
+    </div>
+<div class="viewcode-block" id="EucaProperties.set_storage_majornumber"><a class="viewcode-back" href="../../eutester.html#eutester.euproperties.EucaProperties.set_storage_majornumber">[docs]</a>    <span class="k">def</span> <span class="nf">set_storage_majornumber</span> <span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span>  <span class="n">zone</span><span class="o">=</span><span class="s">&#39;PARTI00&#39;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">set_property</span><span class="p">(</span>  <span class="n">zone</span><span class="o">+</span><span class="s">&#39;.storage.majornumber&#39;</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+        
+    <span class="c">#PARTI00.storage.dasdevice </span></div>
+<div class="viewcode-block" id="EucaProperties.get_storage_dasdevice"><a class="viewcode-back" href="../../eutester.html#eutester.euproperties.EucaProperties.get_storage_dasdevice">[docs]</a>    <span class="k">def</span> <span class="nf">get_storage_dasdevice</span> <span class="p">(</span><span class="bp">self</span><span class="p">,</span>   <span class="n">zone</span><span class="o">=</span><span class="s">&#39;PARTI00&#39;</span><span class="p">):</span> 
+        <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_property</span><span class="p">(</span>  <span class="n">zone</span><span class="o">+</span><span class="s">&#39;.storage.dasdevice&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span>
+    </div>
+<div class="viewcode-block" id="EucaProperties.set_storage_dasdevice"><a class="viewcode-back" href="../../eutester.html#eutester.euproperties.EucaProperties.set_storage_dasdevice">[docs]</a>    <span class="k">def</span> <span class="nf">set_storage_dasdevice</span> <span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span>  <span class="n">zone</span><span class="o">=</span><span class="s">&#39;PARTI00&#39;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">set_property</span><span class="p">(</span>  <span class="n">zone</span><span class="o">+</span><span class="s">&#39;.storage.dasdevice &#39;</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+        
+    <span class="c">#PARTI00.storage.aggregate</span></div>
+<div class="viewcode-block" id="EucaProperties.get_storage_aggregate"><a class="viewcode-back" href="../../eutester.html#eutester.euproperties.EucaProperties.get_storage_aggregate">[docs]</a>    <span class="k">def</span> <span class="nf">get_storage_aggregate</span> <span class="p">(</span><span class="bp">self</span><span class="p">,</span>   <span class="n">zone</span><span class="o">=</span><span class="s">&#39;PARTI00&#39;</span><span class="p">):</span> 
+        <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_property</span><span class="p">(</span>  <span class="n">zone</span><span class="o">+</span><span class="s">&#39;.storage.aggregate&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span>
+    </div>
+<div class="viewcode-block" id="EucaProperties.set_storage_aggregate"><a class="viewcode-back" href="../../eutester.html#eutester.euproperties.EucaProperties.set_storage_aggregate">[docs]</a>    <span class="k">def</span> <span class="nf">set_storage_aggregate</span> <span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span>  <span class="n">zone</span><span class="o">=</span><span class="s">&#39;PARTI00&#39;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">set_property</span><span class="p">(</span>  <span class="n">zone</span><span class="o">+</span><span class="s">&#39;.storage.aggregate&#39;</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>  
+    
+        
+        
+        </div>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    ########################################################################</span>
+<span class="sd">    WALRUS RELATED PROPERTY METHODS...</span>
+<span class="sd">    ########################################################################</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="c">#walrus.storagemaxtotalsnapshotsizeingb </span>
+<div class="viewcode-block" id="EucaProperties.get_walrus_storagemaxtotalsnapshotsizeingb"><a class="viewcode-back" href="../../eutester.html#eutester.euproperties.EucaProperties.get_walrus_storagemaxtotalsnapshotsizeingb">[docs]</a>    <span class="k">def</span> <span class="nf">get_walrus_storagemaxtotalsnapshotsizeingb</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tester</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_property</span><span class="p">(</span>  <span class="s">&#39;walrus.storagemaxtotalsnapshotsizeingb&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span></div>
+<div class="viewcode-block" id="EucaProperties.set_walrus_storagemaxtotalsnapshotsizeingb"><a class="viewcode-back" href="../../eutester.html#eutester.euproperties.EucaProperties.set_walrus_storagemaxtotalsnapshotsizeingb">[docs]</a>    <span class="k">def</span> <span class="nf">set_walrus_storagemaxtotalsnapshotsizeingb</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">tester</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">set_property</span><span class="p">(</span>  <span class="s">&#39;walrus.storagemaxtotalsnapshotsizeingb&#39;</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+    
+    
+    
+    
+    
+    
+    
+    </div></div>
+<div class="viewcode-block" id="EuPropertiesException"><a class="viewcode-back" href="../../eutester.html#eutester.euproperties.EuPropertiesException">[docs]</a><span class="k">class</span> <span class="nc">EuPropertiesException</span><span class="p">(</span><span class="ne">Exception</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="n">value</span>
+    <span class="k">def</span> <span class="nf">__str__</span> <span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">repr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
+    
+    </div>
+</pre></div>
+
+      </div>
+      <div class="bottomnav">
+      
+        <p>
+        <a class="uplink" href="../../index.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer">
+        &copy; Copyright 2012, Vic Iglesias, Matt Clark, Harold Spencer.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

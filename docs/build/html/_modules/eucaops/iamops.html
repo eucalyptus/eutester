@@ -1,0 +1,525 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>eucaops.iamops &mdash; Eutester 0.0.4 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/haiku.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/print.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '0.0.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <script type="text/javascript" src="../../_static/theme_extras.js"></script>
+    <link rel="top" title="Eutester 0.0.4 documentation" href="../../index.html" />
+    <link rel="up" title="eucaops" href="../eucaops.html" /> 
+  </head>
+  <body>
+      <div class="header"><h1 class="heading"><a href="../../index.html">
+          <span>Eutester 0.0.4 documentation</span></a></h1>
+        <h2 class="heading"><span>eucaops.iamops</span></h2>
+      </div>
+      <div class="topnav">
+      
+        <p>
+        <a class="uplink" href="../../index.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <h1>Source code for eucaops.iamops</h1><div class="highlight"><pre>
+<span class="c"># Software License Agreement (BSD License)</span>
+<span class="c">#</span>
+<span class="c"># Copyright (c) 2009-2011, Eucalyptus Systems, Inc.</span>
+<span class="c"># All rights reserved.</span>
+<span class="c">#</span>
+<span class="c"># Redistribution and use of this software in source and binary forms, with or</span>
+<span class="c"># without modification, are permitted provided that the following conditions</span>
+<span class="c"># are met:</span>
+<span class="c">#</span>
+<span class="c">#   Redistributions of source code must retain the above</span>
+<span class="c">#   copyright notice, this list of conditions and the</span>
+<span class="c">#   following disclaimer.</span>
+<span class="c">#</span>
+<span class="c">#   Redistributions in binary form must reproduce the above</span>
+<span class="c">#   copyright notice, this list of conditions and the</span>
+<span class="c">#   following disclaimer in the documentation and/or other</span>
+<span class="c">#   materials provided with the distribution.</span>
+<span class="c">#</span>
+<span class="c"># THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS &quot;AS IS&quot;</span>
+<span class="c"># AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE</span>
+<span class="c"># IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE</span>
+<span class="c"># ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE</span>
+<span class="c"># LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR</span>
+<span class="c"># CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF</span>
+<span class="c"># SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS</span>
+<span class="c"># INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN</span>
+<span class="c"># CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)</span>
+<span class="c"># ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE</span>
+<span class="c"># POSSIBILITY OF SUCH DAMAGE.</span>
+<span class="c">#</span>
+<span class="c"># Author: vic.iglesias@eucalyptus.com</span>
+<span class="kn">from</span> <span class="nn">eutester</span> <span class="kn">import</span> <span class="n">Eutester</span>
+<span class="kn">import</span> <span class="nn">re</span>
+
+
+
+
+<div class="viewcode-block" id="IAMops"><a class="viewcode-back" href="../../eucaops.html#eucaops.iamops.IAMops">[docs]</a><span class="k">class</span> <span class="nc">IAMops</span><span class="p">(</span><span class="n">Eutester</span><span class="p">):</span>
+    
+<div class="viewcode-block" id="IAMops.create_account"><a class="viewcode-back" href="../../eucaops.html#eucaops.iamops.IAMops.create_account">[docs]</a>    <span class="k">def</span> <span class="nf">create_account</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">account_name</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;Create an account with the given name&#39;&#39;&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Creating account: &quot;</span> <span class="o">+</span> <span class="n">account_name</span><span class="p">)</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#39;AccountName&#39;</span><span class="p">:</span> <span class="n">account_name</span><span class="p">}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">euare</span><span class="o">.</span><span class="n">get_response</span><span class="p">(</span><span class="s">&#39;CreateAccount&#39;</span><span class="p">,</span> <span class="n">params</span><span class="p">)</span>
+    </div>
+<div class="viewcode-block" id="IAMops.delete_account"><a class="viewcode-back" href="../../eucaops.html#eucaops.iamops.IAMops.delete_account">[docs]</a>    <span class="k">def</span> <span class="nf">delete_account</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">account_name</span><span class="p">,</span><span class="n">recursive</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;Delete an account with the given name&#39;&#39;&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Deleting account: &quot;</span> <span class="o">+</span> <span class="n">account_name</span><span class="p">)</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s">&#39;AccountName&#39;</span><span class="p">:</span> <span class="n">account_name</span><span class="p">,</span>
+            <span class="s">&#39;Recursive&#39;</span><span class="p">:</span> <span class="n">recursive</span>
+        <span class="p">}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">euare</span><span class="o">.</span><span class="n">get_response</span><span class="p">(</span><span class="s">&#39;DeleteAccount&#39;</span><span class="p">,</span> <span class="n">params</span><span class="p">)</span>
+    
+        </div>
+<div class="viewcode-block" id="IAMops.get_all_accounts"><a class="viewcode-back" href="../../eucaops.html#eucaops.iamops.IAMops.get_all_accounts">[docs]</a>    <span class="k">def</span> <span class="nf">get_all_accounts</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">account_id</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">account_name</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">search</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Request all accounts, return account dicts that match given criteria</span>
+<span class="sd">        Options:</span>
+<span class="sd">            account_name - regex - to use for account_name</span>
+<span class="sd">            account_id - regex - to use for </span>
+<span class="sd">            search - boolean - specify whether to use match or search when filtering the returned list</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="n">search</span><span class="p">:</span>
+            <span class="n">re_meth</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">re_meth</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">match</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Attempting to fetch all accounts matching- account_id:&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">account_id</span><span class="p">)</span><span class="o">+</span><span class="s">&#39; account_name:&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">account_name</span><span class="p">))</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">euare</span><span class="o">.</span><span class="n">get_response</span><span class="p">(</span><span class="s">&#39;ListAccounts&#39;</span><span class="p">,{},</span> <span class="n">list_marker</span><span class="o">=</span><span class="s">&#39;Accounts&#39;</span><span class="p">)</span>
+        <span class="n">retlist</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">account</span> <span class="ow">in</span> <span class="n">response</span><span class="p">[</span><span class="s">&#39;list_accounts_response&#39;</span><span class="p">][</span><span class="s">&#39;list_accounts_result&#39;</span><span class="p">][</span><span class="s">&#39;accounts&#39;</span><span class="p">]:</span>
+            <span class="k">if</span> <span class="n">account_name</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">re_meth</span><span class="p">(</span> <span class="n">account_name</span><span class="p">,</span> <span class="n">account</span><span class="p">[</span><span class="s">&#39;account_name&#39;</span><span class="p">]):</span>
+                <span class="k">continue</span>
+            <span class="k">if</span> <span class="n">account_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">re_meth</span><span class="p">(</span><span class="n">account_id</span><span class="p">,</span> <span class="n">account</span><span class="p">[</span><span class="s">&#39;account_id&#39;</span><span class="p">]):</span>
+                <span class="k">continue</span>
+            <span class="n">retlist</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">account</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">retlist</span>
+             </div>
+<div class="viewcode-block" id="IAMops.create_user"><a class="viewcode-back" href="../../eucaops.html#eucaops.iamops.IAMops.create_user">[docs]</a>    <span class="k">def</span> <span class="nf">create_user</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">user_name</span><span class="p">,</span><span class="n">path</span><span class="o">=</span><span class="s">&quot;/&quot;</span><span class="p">,</span> <span class="n">delegate_account</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Attempting to create user: &quot;</span> <span class="o">+</span> <span class="n">user_name</span><span class="p">)</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#39;UserName&#39;</span><span class="p">:</span> <span class="n">user_name</span><span class="p">,</span>
+                  <span class="s">&#39;Path&#39;</span><span class="p">:</span> <span class="n">path</span> <span class="p">}</span>
+        <span class="k">if</span> <span class="n">delegate_account</span><span class="p">:</span>
+            <span class="n">params</span><span class="p">[</span><span class="s">&#39;DelegateAccount&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">delegate_account</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">euare</span><span class="o">.</span><span class="n">get_response</span><span class="p">(</span><span class="s">&#39;CreateUser&#39;</span><span class="p">,</span><span class="n">params</span><span class="p">)</span>
+    </div>
+<div class="viewcode-block" id="IAMops.delete_user"><a class="viewcode-back" href="../../eucaops.html#eucaops.iamops.IAMops.delete_user">[docs]</a>    <span class="k">def</span> <span class="nf">delete_user</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">user_name</span><span class="p">,</span> <span class="n">delegate_account</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Deleting user &quot;</span> <span class="o">+</span> <span class="n">user_name</span><span class="p">)</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#39;UserName&#39;</span><span class="p">:</span> <span class="n">user_name</span><span class="p">}</span>
+        <span class="k">if</span> <span class="n">delegate_account</span><span class="p">:</span>
+            <span class="n">params</span><span class="p">[</span><span class="s">&#39;DelegateAccount&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">delegate_account</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">euare</span><span class="o">.</span><span class="n">get_response</span><span class="p">(</span><span class="s">&#39;DeleteUser&#39;</span><span class="p">,</span> <span class="n">params</span><span class="p">)</span>
+    
+    
+        </div>
+<div class="viewcode-block" id="IAMops.get_users_from_account"><a class="viewcode-back" href="../../eucaops.html#eucaops.iamops.IAMops.get_users_from_account">[docs]</a>    <span class="k">def</span> <span class="nf">get_users_from_account</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">user_name</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">user_id</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">delegate_account</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">search</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Returns users that match given criteria. By default will return current account. </span>
+<span class="sd">        Options:</span>
+<span class="sd">            path - regex - to match for path</span>
+<span class="sd">            user_name - regex - to match for user_name</span>
+<span class="sd">            user_id - regex - to match for user_id</span>
+<span class="sd">            delegate_account - string - to use for delegating account lookup</span>
+<span class="sd">            search - boolean - specify whether to use match or search when filtering the returned list</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Attempting to fetch all users matching- user_id:&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">user_id</span><span class="p">)</span><span class="o">+</span><span class="s">&#39; user_name:&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">user_name</span><span class="p">)</span><span class="o">+</span><span class="s">&quot; acct_name:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">delegate_account</span><span class="p">))</span>
+        <span class="n">retlist</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="n">search</span><span class="p">:</span>
+            <span class="n">re_meth</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">re_meth</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">match</span>
+        <span class="k">if</span> <span class="n">delegate_account</span><span class="p">:</span>
+            <span class="n">params</span><span class="p">[</span><span class="s">&#39;DelegateAccount&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">delegate_account</span>         
+        <span class="n">response</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">euare</span><span class="o">.</span><span class="n">get_response</span><span class="p">(</span><span class="s">&#39;ListUsers&#39;</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">list_marker</span><span class="o">=</span><span class="s">&#39;Users&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">user</span> <span class="ow">in</span> <span class="n">response</span><span class="p">[</span><span class="s">&#39;list_users_response&#39;</span><span class="p">][</span><span class="s">&#39;list_users_result&#39;</span><span class="p">][</span><span class="s">&#39;users&#39;</span><span class="p">]:</span>
+            <span class="k">if</span> <span class="n">path</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">re_meth</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">user</span><span class="p">[</span><span class="s">&#39;path&#39;</span><span class="p">]):</span>
+                <span class="k">continue</span>
+            <span class="k">if</span> <span class="n">user_name</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">re_meth</span><span class="p">(</span><span class="n">user_name</span><span class="p">,</span> <span class="n">user</span><span class="p">[</span><span class="s">&#39;user_name&#39;</span><span class="p">]):</span>
+                <span class="k">continue</span>
+            <span class="k">if</span> <span class="n">user_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">re_meth</span><span class="p">(</span><span class="n">user_id</span><span class="p">,</span> <span class="n">user</span><span class="p">[</span><span class="s">&#39;user_id&#39;</span><span class="p">]):</span>
+                <span class="k">continue</span>
+            <span class="n">retlist</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">user</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">retlist</span>
+    </div>
+<div class="viewcode-block" id="IAMops.show_all_accounts"><a class="viewcode-back" href="../../eucaops.html#eucaops.iamops.IAMops.show_all_accounts">[docs]</a>    <span class="k">def</span> <span class="nf">show_all_accounts</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>
+                          <span class="n">account_name</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> 
+                          <span class="n">account_id</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>  
+                          <span class="n">search</span><span class="o">=</span><span class="bp">False</span> <span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Debug Method to print an account list based on given filter criteria</span>
+<span class="sd">        Options:</span>
+<span class="sd">            account_name - regex - to use for account_name</span>
+<span class="sd">            account_id - regex - to use for </span>
+<span class="sd">            search - boolean - specify whether to use match or search when filtering the returned list</span>
+<span class="sd">        &#39;&#39;&#39;</span> 
+        <span class="nb">list</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_all_accounts</span><span class="p">(</span><span class="n">account_name</span><span class="o">=</span><span class="n">account_name</span><span class="p">,</span> <span class="n">account_id</span><span class="o">=</span><span class="n">account_id</span><span class="p">,</span> <span class="n">search</span><span class="o">=</span><span class="n">search</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;-----------------------------------------------------------------------&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="s">&#39;ACCOUNT_NAME:&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">ljust</span><span class="p">(</span><span class="mi">25</span><span class="p">)</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="s">&#39;ACCT_ID:&#39;</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;-----------------------------------------------------------------------&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">account</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">account</span><span class="p">[</span><span class="s">&#39;account_name&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">ljust</span><span class="p">(</span><span class="mi">25</span><span class="p">)</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">account</span><span class="p">[</span><span class="s">&#39;account_id&#39;</span><span class="p">]))</span>
+            
+    </div>
+<div class="viewcode-block" id="IAMops.show_all_groups"><a class="viewcode-back" href="../../eucaops.html#eucaops.iamops.IAMops.show_all_groups">[docs]</a>    <span class="k">def</span> <span class="nf">show_all_groups</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>
+                        <span class="n">account_name</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> 
+                        <span class="n">account_id</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> 
+                        <span class="n">path</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                        <span class="n">group_name</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> 
+                        <span class="n">group_id</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> 
+                        <span class="n">search</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Debug Method to print a group list based on given filter criteria</span>
+<span class="sd">        Options:</span>
+<span class="sd">            path - regex - to match for path</span>
+<span class="sd">            group_name - regex - to match for user_name</span>
+<span class="sd">            group_id - regex - to match for user_id</span>
+<span class="sd">            acount_name - regex - to use for account_name</span>
+<span class="sd">            account_id - regex - to use for </span>
+<span class="sd">            search - boolean - specify whether to use match or search when filtering the returned list</span>
+<span class="sd">        &#39;&#39;&#39;</span> 
+        <span class="nb">list</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_all_groups</span><span class="p">(</span><span class="n">account_name</span><span class="o">=</span><span class="n">account_name</span><span class="p">,</span> <span class="n">account_id</span><span class="o">=</span><span class="n">account_id</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="n">path</span><span class="p">,</span> <span class="n">group_name</span><span class="o">=</span><span class="n">group_name</span><span class="p">,</span> <span class="n">group_id</span><span class="o">=</span><span class="n">group_id</span><span class="p">,</span> <span class="n">search</span><span class="o">=</span><span class="n">search</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;-----------------------------------------------------------------------&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="s">&#39;ACCOUNT:&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">ljust</span><span class="p">(</span><span class="mi">25</span><span class="p">)</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="s">&#39;GROUPNAME:&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">ljust</span><span class="p">(</span><span class="mi">15</span><span class="p">)</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="s">&#39;GROUP_ID:&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">ljust</span><span class="p">(</span><span class="mi">25</span><span class="p">)</span>  <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;-----------------------------------------------------------------------&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">group</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">group</span><span class="p">[</span><span class="s">&#39;account_name&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">ljust</span><span class="p">(</span><span class="mi">25</span><span class="p">)</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">group</span><span class="p">[</span><span class="s">&#39;group_name&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">ljust</span><span class="p">(</span><span class="mi">15</span><span class="p">)</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">group</span><span class="p">[</span><span class="s">&#39;group_id&#39;</span><span class="p">]))</span>
+            
+       
+    
+    
+    
+    </div>
+<div class="viewcode-block" id="IAMops.show_all_users"><a class="viewcode-back" href="../../eucaops.html#eucaops.iamops.IAMops.show_all_users">[docs]</a>    <span class="k">def</span> <span class="nf">show_all_users</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>
+                       <span class="n">account_name</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> 
+                       <span class="n">account_id</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> 
+                       <span class="n">path</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                       <span class="n">user_name</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> 
+                       <span class="n">user_id</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> 
+                       <span class="n">search</span><span class="o">=</span><span class="bp">False</span> <span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Debug Method to print a user list based on given filter criteria</span>
+<span class="sd">        Options:</span>
+<span class="sd">            path - regex - to match for path</span>
+<span class="sd">            user_name - regex - to match for user_name</span>
+<span class="sd">            user_id - regex - to match for user_id</span>
+<span class="sd">            account_name - regex - to use for account_name</span>
+<span class="sd">            account_id - regex - to use for </span>
+<span class="sd">            search - boolean - specify whether to use match or search when filtering the returned list</span>
+<span class="sd">        &#39;&#39;&#39;</span> 
+        <span class="nb">list</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_all_users</span><span class="p">(</span><span class="n">account_name</span><span class="o">=</span><span class="n">account_name</span><span class="p">,</span> <span class="n">account_id</span><span class="o">=</span><span class="n">account_id</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="n">path</span><span class="p">,</span> <span class="n">user_name</span><span class="o">=</span><span class="n">user_name</span><span class="p">,</span> <span class="n">user_id</span><span class="o">=</span><span class="n">user_id</span><span class="p">,</span> <span class="n">search</span><span class="o">=</span><span class="n">search</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;-----------------------------------------------------------------------&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="s">&#39;ACCOUNT:&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">ljust</span><span class="p">(</span><span class="mi">25</span><span class="p">)</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="s">&#39;USERNAME:&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">ljust</span><span class="p">(</span><span class="mi">15</span><span class="p">)</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="s">&#39;USER_ID&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">ljust</span><span class="p">(</span><span class="mi">25</span><span class="p">)</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="s">&#39;ACCT_ID&#39;</span><span class="p">)</span> <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;-----------------------------------------------------------------------&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">user</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">user</span><span class="p">[</span><span class="s">&#39;account_name&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">ljust</span><span class="p">(</span><span class="mi">25</span><span class="p">)</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">user</span><span class="p">[</span><span class="s">&#39;user_name&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">ljust</span><span class="p">(</span><span class="mi">15</span><span class="p">)</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">user</span><span class="p">[</span><span class="s">&#39;user_id&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">ljust</span><span class="p">(</span><span class="mi">25</span><span class="p">)</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">user</span><span class="p">[</span><span class="s">&#39;account_id&#39;</span><span class="p">]))</span>
+            </div>
+<div class="viewcode-block" id="IAMops.get_euare_username"><a class="viewcode-back" href="../../eucaops.html#eucaops.iamops.IAMops.get_euare_username">[docs]</a>    <span class="k">def</span> <span class="nf">get_euare_username</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_all_users</span><span class="p">(</span><span class="n">account_id</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">get_account_id</span><span class="p">()))[</span><span class="mi">0</span><span class="p">][</span><span class="s">&#39;user_name&#39;</span><span class="p">]</span>
+    </div>
+<div class="viewcode-block" id="IAMops.get_euare_accountname"><a class="viewcode-back" href="../../eucaops.html#eucaops.iamops.IAMops.get_euare_accountname">[docs]</a>    <span class="k">def</span> <span class="nf">get_euare_accountname</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_all_users</span><span class="p">(</span><span class="n">account_id</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">get_account_id</span><span class="p">()))[</span><span class="mi">0</span><span class="p">][</span><span class="s">&#39;account_name&#39;</span><span class="p">]</span>
+            </div>
+<div class="viewcode-block" id="IAMops.get_all_users"><a class="viewcode-back" href="../../eucaops.html#eucaops.iamops.IAMops.get_all_users">[docs]</a>    <span class="k">def</span> <span class="nf">get_all_users</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> 
+                      <span class="n">account_name</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> 
+                      <span class="n">account_id</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> 
+                      <span class="n">path</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                      <span class="n">user_name</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> 
+                      <span class="n">user_id</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> 
+                      <span class="n">search</span><span class="o">=</span><span class="bp">False</span> <span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Queries all accounts matching given account criteria, returns all users found within these accounts which then match the given user criteria. </span>
+<span class="sd">        Account info is added to the user dicts</span>
+<span class="sd">        Options:</span>
+<span class="sd">            path - regex - to match for path</span>
+<span class="sd">            user_name - regex - to match for user_name</span>
+<span class="sd">            user_id - regex - to match for user_id</span>
+<span class="sd">            account_name - regex - to use for account_name</span>
+<span class="sd">            account_id - regex - to use for </span>
+<span class="sd">            search - boolean - specify whether to use match or search when filtering the returned list</span>
+<span class="sd">        &#39;&#39;&#39;</span> 
+        <span class="n">userlist</span><span class="o">=</span><span class="p">[]</span>
+        <span class="n">accounts</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_all_accounts</span><span class="p">(</span><span class="n">account_id</span><span class="o">=</span><span class="n">account_id</span><span class="p">,</span> <span class="n">account_name</span><span class="o">=</span><span class="n">account_name</span><span class="p">,</span> <span class="n">search</span><span class="o">=</span><span class="n">search</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">account</span> <span class="ow">in</span> <span class="n">accounts</span><span class="p">:</span>
+            <span class="n">users</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_users_from_account</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="n">path</span><span class="p">,</span> <span class="n">user_name</span><span class="o">=</span><span class="n">user_name</span><span class="p">,</span> <span class="n">user_id</span><span class="o">=</span><span class="n">user_id</span><span class="p">,</span> <span class="n">delegate_account</span><span class="o">=</span><span class="n">account</span><span class="p">[</span><span class="s">&#39;account_name&#39;</span><span class="p">],</span> <span class="n">search</span><span class="o">=</span><span class="n">search</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">user</span> <span class="ow">in</span> <span class="n">users</span><span class="p">:</span>
+                <span class="n">user</span><span class="p">[</span><span class="s">&#39;account_name&#39;</span><span class="p">]</span><span class="o">=</span><span class="n">account</span><span class="p">[</span><span class="s">&#39;account_name&#39;</span><span class="p">]</span>
+                <span class="n">user</span><span class="p">[</span><span class="s">&#39;account_id&#39;</span><span class="p">]</span><span class="o">=</span><span class="n">account</span><span class="p">[</span><span class="s">&#39;account_id&#39;</span><span class="p">]</span>
+                <span class="n">userlist</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">user</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">userlist</span>
+    </div>
+<div class="viewcode-block" id="IAMops.get_user_policy_names"><a class="viewcode-back" href="../../eucaops.html#eucaops.iamops.IAMops.get_user_policy_names">[docs]</a>    <span class="k">def</span> <span class="nf">get_user_policy_names</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">user_name</span><span class="p">,</span> <span class="n">policy_name</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span><span class="n">delegate_account</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">search</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Returns list of policy names associated with a given user, and match given criteria. </span>
+<span class="sd">        Options:</span>
+<span class="sd">            username - string - user to get policies for. </span>
+<span class="sd">            policy_name - regex - to match/filter returned policies</span>
+<span class="sd">            delegate_account - string - used for user lookup</span>
+<span class="sd">            search - boolean - specify whether to use match or search when filtering the returned list</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="n">retlist</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="n">search</span><span class="p">:</span>
+            <span class="n">re_meth</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">re_meth</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">match</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#39;UserName&#39;</span><span class="p">:</span> <span class="n">user_name</span><span class="p">}</span>
+        <span class="k">if</span> <span class="n">delegate_account</span><span class="p">:</span>
+            <span class="n">params</span><span class="p">[</span><span class="s">&#39;DelegateAccount&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">delegate_account</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">euare</span><span class="o">.</span><span class="n">get_response</span><span class="p">(</span><span class="s">&#39;ListUserPolicies&#39;</span><span class="p">,</span><span class="n">params</span><span class="p">,</span> <span class="n">list_marker</span><span class="o">=</span><span class="s">&#39;PolicyNames&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">response</span><span class="p">[</span><span class="s">&#39;list_user_policies_response&#39;</span><span class="p">][</span><span class="s">&#39;list_user_policies_result&#39;</span><span class="p">][</span><span class="s">&#39;policy_names&#39;</span><span class="p">]:</span>
+            <span class="k">if</span> <span class="n">policy_name</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">re_meth</span><span class="p">(</span><span class="n">policy_name</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+                <span class="k">continue</span>
+            <span class="n">retlist</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">retlist</span>
+    
+    </div>
+<div class="viewcode-block" id="IAMops.get_user_policies"><a class="viewcode-back" href="../../eucaops.html#eucaops.iamops.IAMops.get_user_policies">[docs]</a>    <span class="k">def</span> <span class="nf">get_user_policies</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">user_name</span><span class="p">,</span> <span class="n">policy_name</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span><span class="n">delegate_account</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">doc</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">search</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Returns list of policy dicts associated with a given user, and match given criteria. </span>
+<span class="sd">        Options:</span>
+<span class="sd">            username - string - user to get policies for. </span>
+<span class="sd">            policy_name - regex - to match/filter returned policies</span>
+<span class="sd">            delegate_account - string - used for user lookup</span>
+<span class="sd">            search - boolean - specify whether to use match or search when filtering the returned list</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="n">retlist</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="n">search</span><span class="p">:</span>
+            <span class="n">re_meth</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">re_meth</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">match</span>
+        <span class="n">names</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_user_policy_names</span><span class="p">(</span><span class="n">user_name</span><span class="p">,</span> <span class="n">policy_name</span><span class="o">=</span><span class="n">policy_name</span><span class="p">,</span> <span class="n">delegate_account</span><span class="o">=</span><span class="n">delegate_account</span><span class="p">,</span> <span class="n">search</span><span class="o">=</span><span class="n">search</span><span class="p">)</span>
+        
+        <span class="k">for</span> <span class="n">p_name</span> <span class="ow">in</span> <span class="n">names</span><span class="p">:</span>
+            <span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#39;UserName&#39;</span><span class="p">:</span> <span class="n">user_name</span><span class="p">,</span>
+                      <span class="s">&#39;PolicyName&#39;</span><span class="p">:</span> <span class="n">p_name</span><span class="p">}</span>
+            <span class="k">if</span> <span class="n">delegate_account</span><span class="p">:</span>
+                <span class="n">params</span><span class="p">[</span><span class="s">&#39;DelegateAccount&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">delegate_account</span>
+            <span class="n">policy</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">euare</span><span class="o">.</span><span class="n">get_response</span><span class="p">(</span><span class="s">&#39;GetUserPolicy&#39;</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">verb</span><span class="o">=</span><span class="s">&#39;POST&#39;</span><span class="p">)[</span><span class="s">&#39;get_user_policy_response&#39;</span><span class="p">][</span><span class="s">&#39;get_user_policy_result&#39;</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">doc</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">re_meth</span><span class="p">(</span><span class="n">doc</span><span class="p">,</span> <span class="n">policy</span><span class="p">[</span><span class="s">&#39;policy_document&#39;</span><span class="p">]):</span>
+                <span class="k">continue</span>
+            <span class="n">retlist</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">policy</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">retlist</span>
+        </div>
+<div class="viewcode-block" id="IAMops.show_user_policy_summary"><a class="viewcode-back" href="../../eucaops.html#eucaops.iamops.IAMops.show_user_policy_summary">[docs]</a>    <span class="k">def</span> <span class="nf">show_user_policy_summary</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">user_name</span><span class="p">,</span><span class="n">policy_name</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span><span class="n">delegate_account</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">doc</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">search</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Debug method to display policy summary applied to a given user</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="n">policies</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_user_policies</span><span class="p">(</span><span class="n">user_name</span><span class="p">,</span> <span class="n">policy_name</span><span class="o">=</span><span class="n">policy_name</span><span class="p">,</span> <span class="n">delegate_account</span><span class="o">=</span><span class="n">delegate_account</span><span class="p">,</span> <span class="n">doc</span><span class="o">=</span><span class="n">doc</span><span class="p">,</span> <span class="n">search</span><span class="o">=</span><span class="n">search</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">policy</span> <span class="ow">in</span> <span class="n">policies</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;-------------------------------------&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;</span><span class="se">\t</span><span class="s">POLICY NAME: &quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">policy</span><span class="p">[</span><span class="s">&#39;policy_name&#39;</span><span class="p">])</span>  <span class="p">)</span>   
+            <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;-------------------------------------&#39;</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="nb">str</span><span class="p">(</span><span class="n">policy</span><span class="p">[</span><span class="s">&#39;policy_document&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">splitlines</span><span class="p">():</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot; &quot;</span><span class="o">+</span><span class="n">line</span><span class="p">)</span>
+    </div>
+<div class="viewcode-block" id="IAMops.show_user_summary"><a class="viewcode-back" href="../../eucaops.html#eucaops.iamops.IAMops.show_user_summary">[docs]</a>    <span class="k">def</span> <span class="nf">show_user_summary</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">user_name</span><span class="p">,</span> <span class="n">delegate_account</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">account_id</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Debug method for to display euare/iam info for a specific user.</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="n">user_name</span> <span class="o">=</span> <span class="n">user_name</span>
+        <span class="k">if</span> <span class="n">delegate_account</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">account_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">get_account_id</span><span class="p">()</span>
+            <span class="n">delegate_account</span><span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_all_accounts</span><span class="p">(</span><span class="n">account_id</span><span class="o">=</span><span class="n">account_id</span><span class="p">)[</span><span class="mi">0</span><span class="p">][</span><span class="s">&#39;account_name&#39;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Fetching user summary for: user_name:&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">user_name</span><span class="p">)</span><span class="o">+</span><span class="s">&quot; account:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">delegate_account</span><span class="p">)</span><span class="o">+</span><span class="s">&quot; account_id:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">account_id</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">show_all_users</span><span class="p">(</span><span class="n">account_name</span><span class="o">=</span><span class="n">delegate_account</span><span class="p">,</span> <span class="n">account_id</span><span class="o">=</span><span class="n">account_id</span><span class="p">,</span> <span class="n">user_name</span><span class="o">=</span><span class="n">user_name</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">show_user_policy_summary</span><span class="p">(</span><span class="n">user_name</span><span class="p">,</span> <span class="n">delegate_account</span><span class="o">=</span><span class="n">delegate_account</span><span class="p">)</span>
+        
+        </div>
+<div class="viewcode-block" id="IAMops.show_euare_whoami"><a class="viewcode-back" href="../../eucaops.html#eucaops.iamops.IAMops.show_euare_whoami">[docs]</a>    <span class="k">def</span> <span class="nf">show_euare_whoami</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Debug method used to display the who am I info related to iam/euare.</span>
+<span class="sd">        &#39;&#39;&#39;</span> 
+        <span class="n">user</span><span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">euare</span><span class="o">.</span><span class="n">get_user</span><span class="p">()[</span><span class="s">&#39;get_user_response&#39;</span><span class="p">][</span><span class="s">&#39;get_user_result&#39;</span><span class="p">][</span><span class="s">&#39;user&#39;</span><span class="p">]</span>
+        <span class="n">user_id</span> <span class="o">=</span> <span class="n">user</span><span class="p">[</span><span class="s">&#39;user_id&#39;</span><span class="p">]</span>
+        <span class="n">user_name</span> <span class="o">=</span> <span class="n">user</span><span class="p">[</span><span class="s">&#39;user_name&#39;</span><span class="p">]</span>
+        <span class="n">account_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_account_id</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">show_all_users</span><span class="p">(</span><span class="n">account_id</span><span class="o">=</span><span class="n">account_id</span><span class="p">,</span> <span class="n">user_id</span><span class="o">=</span><span class="n">user_id</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">show_user_policy_summary</span><span class="p">(</span><span class="n">user_name</span><span class="p">)</span>
+        
+    </div>
+<div class="viewcode-block" id="IAMops.attach_policy_user"><a class="viewcode-back" href="../../eucaops.html#eucaops.iamops.IAMops.attach_policy_user">[docs]</a>    <span class="k">def</span> <span class="nf">attach_policy_user</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">user_name</span><span class="p">,</span> <span class="n">policy_name</span><span class="p">,</span> <span class="n">policy_json</span><span class="p">,</span> <span class="n">delegate_account</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Attaching the following policy to &quot;</span> <span class="o">+</span> <span class="n">user_name</span> <span class="o">+</span> <span class="s">&quot;:&quot;</span> <span class="o">+</span> <span class="n">policy_json</span><span class="p">)</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#39;UserName&#39;</span><span class="p">:</span> <span class="n">user_name</span><span class="p">,</span>
+                  <span class="s">&#39;PolicyName&#39;</span><span class="p">:</span> <span class="n">policy_name</span><span class="p">,</span>
+                  <span class="s">&#39;PolicyDocument&#39;</span><span class="p">:</span> <span class="n">policy_json</span><span class="p">}</span>
+        <span class="k">if</span> <span class="n">delegate_account</span><span class="p">:</span>
+            <span class="n">params</span><span class="p">[</span><span class="s">&#39;DelegateAccount&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">delegate_account</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">euare</span><span class="o">.</span><span class="n">get_response</span><span class="p">(</span><span class="s">&#39;PutUserPolicy&#39;</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">verb</span><span class="o">=</span><span class="s">&#39;POST&#39;</span><span class="p">)</span>
+    </div>
+<div class="viewcode-block" id="IAMops.detach_policy_user"><a class="viewcode-back" href="../../eucaops.html#eucaops.iamops.IAMops.detach_policy_user">[docs]</a>    <span class="k">def</span> <span class="nf">detach_policy_user</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">user_name</span><span class="p">,</span> <span class="n">policy_name</span><span class="p">,</span> <span class="n">delegate_account</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Detaching the following policy from &quot;</span> <span class="o">+</span> <span class="n">user_name</span> <span class="o">+</span> <span class="s">&quot;:&quot;</span> <span class="o">+</span> <span class="n">policy_name</span><span class="p">)</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#39;UserName&#39;</span><span class="p">:</span> <span class="n">user_name</span><span class="p">,</span>
+                  <span class="s">&#39;PolicyName&#39;</span><span class="p">:</span> <span class="n">policy_name</span><span class="p">}</span>
+        <span class="k">if</span> <span class="n">delegate_account</span><span class="p">:</span>
+            <span class="n">params</span><span class="p">[</span><span class="s">&#39;DelegateAccount&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">delegate_account</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">euare</span><span class="o">.</span><span class="n">get_response</span><span class="p">(</span><span class="s">&#39;DeleteUserPolicy&#39;</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">verb</span><span class="o">=</span><span class="s">&#39;POST&#39;</span><span class="p">)</span>
+        </div>
+<div class="viewcode-block" id="IAMops.get_all_groups"><a class="viewcode-back" href="../../eucaops.html#eucaops.iamops.IAMops.get_all_groups">[docs]</a>    <span class="k">def</span> <span class="nf">get_all_groups</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> 
+                      <span class="n">account_name</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> 
+                      <span class="n">account_id</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> 
+                      <span class="n">path</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                      <span class="n">group_name</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> 
+                      <span class="n">group_id</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> 
+                      <span class="n">search</span><span class="o">=</span><span class="bp">False</span> <span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Queries all accounts matching given account criteria, returns all groups found within these accounts which then match the given user criteria. </span>
+<span class="sd">        Account info is added to the group dicts</span>
+<span class="sd">        Options:</span>
+<span class="sd">            path - regex - to match for path</span>
+<span class="sd">            group_name - regex - to match for group_name</span>
+<span class="sd">            group_id - regex - to match for group_id</span>
+<span class="sd">            account_name - regex - to use for account_name</span>
+<span class="sd">            account_id - regex - to use for </span>
+<span class="sd">            search - boolean - specify whether to use match or search when filtering the returned list</span>
+<span class="sd">        &#39;&#39;&#39;</span> 
+        <span class="n">grouplist</span><span class="o">=</span><span class="p">[]</span>
+        <span class="n">accounts</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_all_accounts</span><span class="p">(</span><span class="n">account_id</span><span class="o">=</span><span class="n">account_id</span><span class="p">,</span> <span class="n">account_name</span><span class="o">=</span><span class="n">account_name</span><span class="p">,</span> <span class="n">search</span><span class="o">=</span><span class="n">search</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">account</span> <span class="ow">in</span> <span class="n">accounts</span><span class="p">:</span>
+            <span class="n">groups</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_groups_from_account</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="n">path</span><span class="p">,</span> <span class="n">group_name</span><span class="o">=</span><span class="n">group_name</span><span class="p">,</span> <span class="n">group_id</span><span class="o">=</span><span class="n">group_id</span><span class="p">,</span> <span class="n">delegate_account</span><span class="o">=</span><span class="n">account</span><span class="p">[</span><span class="s">&#39;account_name&#39;</span><span class="p">],</span> <span class="n">search</span><span class="o">=</span><span class="n">search</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">group</span> <span class="ow">in</span> <span class="n">groups</span><span class="p">:</span>
+                <span class="n">group</span><span class="p">[</span><span class="s">&#39;account_name&#39;</span><span class="p">]</span><span class="o">=</span><span class="n">account</span><span class="p">[</span><span class="s">&#39;account_name&#39;</span><span class="p">]</span>
+                <span class="n">group</span><span class="p">[</span><span class="s">&#39;account_id&#39;</span><span class="p">]</span><span class="o">=</span><span class="n">account</span><span class="p">[</span><span class="s">&#39;account_id&#39;</span><span class="p">]</span>
+                <span class="n">grouplist</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">group</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">grouplist</span>
+        
+    </div>
+<div class="viewcode-block" id="IAMops.get_groups_from_account"><a class="viewcode-back" href="../../eucaops.html#eucaops.iamops.IAMops.get_groups_from_account">[docs]</a>    <span class="k">def</span> <span class="nf">get_groups_from_account</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">group_name</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">group_id</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">delegate_account</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">search</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Returns groups that match given criteria. By default will return groups from current account. </span>
+<span class="sd">        Options:</span>
+<span class="sd">            path - regex - to match for path</span>
+<span class="sd">            group_name - regex - to match for group_name</span>
+<span class="sd">            group_id - regex - to match for group_id</span>
+<span class="sd">            delegate_account - string - to use for delegating account lookup</span>
+<span class="sd">            search - boolean - specify whether to use match or search when filtering the returned list</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Attempting to fetch all groups matching- group_id:&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">group_id</span><span class="p">)</span><span class="o">+</span><span class="s">&#39; group_name:&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">group_name</span><span class="p">)</span><span class="o">+</span><span class="s">&quot; acct_name:&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">delegate_account</span><span class="p">))</span>
+        <span class="n">retlist</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="n">search</span><span class="p">:</span>
+            <span class="n">re_meth</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">re_meth</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">match</span>
+        <span class="k">if</span> <span class="n">delegate_account</span><span class="p">:</span>
+            <span class="n">params</span><span class="p">[</span><span class="s">&#39;DelegateAccount&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">delegate_account</span>         
+        <span class="n">response</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">euare</span><span class="o">.</span><span class="n">get_response</span><span class="p">(</span><span class="s">&#39;ListGroups&#39;</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">list_marker</span><span class="o">=</span><span class="s">&#39;Groups&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">group</span> <span class="ow">in</span> <span class="n">response</span><span class="p">[</span><span class="s">&#39;list_groups_response&#39;</span><span class="p">][</span><span class="s">&#39;list_groups_result&#39;</span><span class="p">][</span><span class="s">&#39;groups&#39;</span><span class="p">]:</span>
+            <span class="k">if</span> <span class="n">path</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">re_meth</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">group</span><span class="p">[</span><span class="s">&#39;path&#39;</span><span class="p">]):</span>
+                <span class="k">continue</span>
+            <span class="k">if</span> <span class="n">group_name</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">re_meth</span><span class="p">(</span><span class="n">user_name</span><span class="p">,</span> <span class="n">group</span><span class="p">[</span><span class="s">&#39;group_name&#39;</span><span class="p">]):</span>
+                <span class="k">continue</span>
+            <span class="k">if</span> <span class="n">group_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">re_meth</span><span class="p">(</span><span class="n">user_id</span><span class="p">,</span> <span class="n">group</span><span class="p">[</span><span class="s">&#39;group_id&#39;</span><span class="p">]):</span>
+                <span class="k">continue</span>
+            <span class="n">retlist</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">group</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">retlist</span>
+        
+    </div>
+<div class="viewcode-block" id="IAMops.create_group"><a class="viewcode-back" href="../../eucaops.html#eucaops.iamops.IAMops.create_group">[docs]</a>    <span class="k">def</span> <span class="nf">create_group</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">group_name</span><span class="p">,</span><span class="n">path</span><span class="o">=</span><span class="s">&quot;/&quot;</span><span class="p">,</span> <span class="n">delegate_account</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Attempting to create group: &quot;</span> <span class="o">+</span> <span class="n">group_name</span><span class="p">)</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#39;GroupName&#39;</span><span class="p">:</span> <span class="n">group_name</span><span class="p">,</span>
+                  <span class="s">&#39;Path&#39;</span><span class="p">:</span> <span class="n">path</span><span class="p">}</span>
+        <span class="k">if</span> <span class="n">delegate_account</span><span class="p">:</span>
+            <span class="n">params</span><span class="p">[</span><span class="s">&#39;DelegateAccount&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">delegate_account</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">euare</span><span class="o">.</span><span class="n">get_response</span><span class="p">(</span><span class="s">&#39;CreateGroup&#39;</span><span class="p">,</span> <span class="n">params</span><span class="p">)</span>
+    </div>
+<div class="viewcode-block" id="IAMops.delete_group"><a class="viewcode-back" href="../../eucaops.html#eucaops.iamops.IAMops.delete_group">[docs]</a>    <span class="k">def</span> <span class="nf">delete_group</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">group_name</span><span class="p">,</span> <span class="n">delegate_account</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Deleting group &quot;</span> <span class="o">+</span> <span class="n">group_name</span><span class="p">)</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#39;GroupName&#39;</span><span class="p">:</span> <span class="n">group_name</span><span class="p">}</span>
+        <span class="k">if</span> <span class="n">delegate_account</span><span class="p">:</span>
+            <span class="n">params</span><span class="p">[</span><span class="s">&#39;DelegateAccount&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">delegate_account</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">euare</span><span class="o">.</span><span class="n">get_response</span><span class="p">(</span><span class="s">&#39;DeleteGroup&#39;</span><span class="p">,</span> <span class="n">params</span><span class="p">)</span>
+    </div>
+<div class="viewcode-block" id="IAMops.add_user_to_group"><a class="viewcode-back" href="../../eucaops.html#eucaops.iamops.IAMops.add_user_to_group">[docs]</a>    <span class="k">def</span> <span class="nf">add_user_to_group</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">group_name</span><span class="p">,</span> <span class="n">user_name</span><span class="p">,</span> <span class="n">delegate_account</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Adding user &quot;</span>  <span class="o">+</span>  <span class="n">user_name</span> <span class="o">+</span> <span class="s">&quot; to group &quot;</span> <span class="o">+</span> <span class="n">group_name</span><span class="p">)</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#39;GroupName&#39;</span><span class="p">:</span> <span class="n">group_name</span><span class="p">,</span>
+                  <span class="s">&#39;UserName&#39;</span><span class="p">:</span> <span class="n">user_name</span><span class="p">}</span>
+        <span class="k">if</span> <span class="n">delegate_account</span><span class="p">:</span>
+            <span class="n">params</span><span class="p">[</span><span class="s">&#39;DelegateAccount&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">delegate_account</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">euare</span><span class="o">.</span><span class="n">get_response</span><span class="p">(</span><span class="s">&#39;AddUserToGroup&#39;</span><span class="p">,</span> <span class="n">params</span><span class="p">)</span>
+    </div>
+<div class="viewcode-block" id="IAMops.remove_user_from_group"><a class="viewcode-back" href="../../eucaops.html#eucaops.iamops.IAMops.remove_user_from_group">[docs]</a>    <span class="k">def</span> <span class="nf">remove_user_from_group</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">group_name</span><span class="p">,</span> <span class="n">user_name</span><span class="p">,</span> <span class="n">delegate_account</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Removing user &quot;</span>  <span class="o">+</span>  <span class="n">user_name</span> <span class="o">+</span> <span class="s">&quot; to group &quot;</span> <span class="o">+</span> <span class="n">group_name</span><span class="p">)</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#39;GroupName&#39;</span><span class="p">:</span> <span class="n">group_name</span><span class="p">,</span>
+                  <span class="s">&#39;UserName&#39;</span><span class="p">:</span> <span class="n">user_name</span><span class="p">}</span>
+        <span class="k">if</span> <span class="n">delegate_account</span><span class="p">:</span>
+            <span class="n">params</span><span class="p">[</span><span class="s">&#39;DelegateAccount&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">delegate_account</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">euare</span><span class="o">.</span><span class="n">get_response</span><span class="p">(</span><span class="s">&#39;RemoveUserFromGroup&#39;</span><span class="p">,</span> <span class="n">params</span><span class="p">)</span>
+    </div>
+<div class="viewcode-block" id="IAMops.attach_policy_group"><a class="viewcode-back" href="../../eucaops.html#eucaops.iamops.IAMops.attach_policy_group">[docs]</a>    <span class="k">def</span> <span class="nf">attach_policy_group</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">group_name</span><span class="p">,</span> <span class="n">policy_name</span><span class="p">,</span> <span class="n">policy_json</span><span class="p">,</span> <span class="n">delegate_account</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Attaching the following policy to &quot;</span> <span class="o">+</span> <span class="n">group_name</span> <span class="o">+</span> <span class="s">&quot;:&quot;</span> <span class="o">+</span> <span class="n">policy_json</span><span class="p">)</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#39;GroupName&#39;</span><span class="p">:</span> <span class="n">group_name</span><span class="p">,</span>
+                  <span class="s">&#39;PolicyName&#39;</span><span class="p">:</span> <span class="n">policy_name</span><span class="p">,</span>
+                  <span class="s">&#39;PolicyDocument&#39;</span><span class="p">:</span> <span class="n">policy_json</span><span class="p">}</span>
+        <span class="k">if</span> <span class="n">delegate_account</span><span class="p">:</span>
+            <span class="n">params</span><span class="p">[</span><span class="s">&#39;DelegateAccount&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">delegate_account</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">euare</span><span class="o">.</span><span class="n">get_response</span><span class="p">(</span><span class="s">&#39;PutGroupPolicy&#39;</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">verb</span><span class="o">=</span><span class="s">&#39;POST&#39;</span><span class="p">)</span>
+    </div>
+<div class="viewcode-block" id="IAMops.detach_policy_group"><a class="viewcode-back" href="../../eucaops.html#eucaops.iamops.IAMops.detach_policy_group">[docs]</a>    <span class="k">def</span> <span class="nf">detach_policy_group</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">group_name</span><span class="p">,</span> <span class="n">policy_name</span><span class="p">,</span> <span class="n">delegate_account</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Detaching the following policy from &quot;</span> <span class="o">+</span> <span class="n">group_name</span> <span class="o">+</span> <span class="s">&quot;:&quot;</span> <span class="o">+</span> <span class="n">policy_name</span><span class="p">)</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#39;GroupName&#39;</span><span class="p">:</span> <span class="n">group_name</span><span class="p">,</span>
+                  <span class="s">&#39;PolicyName&#39;</span><span class="p">:</span> <span class="n">policy_name</span><span class="p">}</span>
+        <span class="k">if</span> <span class="n">delegate_account</span><span class="p">:</span>
+            <span class="n">params</span><span class="p">[</span><span class="s">&#39;DelegateAccount&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">delegate_account</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">euare</span><span class="o">.</span><span class="n">get_response</span><span class="p">(</span><span class="s">&#39;DeleteGroupPolicy&#39;</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">verb</span><span class="o">=</span><span class="s">&#39;POST&#39;</span><span class="p">)</span>
+    </div>
+<div class="viewcode-block" id="IAMops.create_access_key"><a class="viewcode-back" href="../../eucaops.html#eucaops.iamops.IAMops.create_access_key">[docs]</a>    <span class="k">def</span> <span class="nf">create_access_key</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">user_name</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">delegate_account</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Creating access key for &quot;</span> <span class="o">+</span> <span class="n">user_name</span> <span class="p">)</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#39;UserName&#39;</span><span class="p">:</span> <span class="n">user_name</span><span class="p">}</span>
+        <span class="k">if</span> <span class="n">delegate_account</span><span class="p">:</span>
+            <span class="n">params</span><span class="p">[</span><span class="s">&#39;DelegateAccount&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">delegate_account</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">euare</span><span class="o">.</span><span class="n">get_response</span><span class="p">(</span><span class="s">&#39;CreateAccessKey&#39;</span><span class="p">,</span> <span class="n">params</span><span class="p">)</span>
+        <span class="n">access_tuple</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">access_tuple</span><span class="p">[</span><span class="s">&#39;access_key_id&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">response</span><span class="p">[</span><span class="s">&#39;create_access_key_response&#39;</span><span class="p">][</span><span class="s">&#39;create_access_key_result&#39;</span><span class="p">][</span><span class="s">&#39;access_key&#39;</span><span class="p">][</span><span class="s">&#39;access_key_id&#39;</span><span class="p">]</span>
+        <span class="n">access_tuple</span><span class="p">[</span><span class="s">&#39;secret_access_key&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">response</span><span class="p">[</span><span class="s">&#39;create_access_key_response&#39;</span><span class="p">][</span><span class="s">&#39;create_access_key_result&#39;</span><span class="p">][</span><span class="s">&#39;access_key&#39;</span><span class="p">][</span><span class="s">&#39;secret_access_key&#39;</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">access_tuple</span>
+    
+        
+    </div></div>
+</pre></div>
+
+      </div>
+      <div class="bottomnav">
+      
+        <p>
+        <a class="uplink" href="../../index.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer">
+        &copy; Copyright 2012, Vic Iglesias, Matt Clark, Harold Spencer.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

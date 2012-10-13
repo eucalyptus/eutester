@@ -1,0 +1,449 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>eutester.xmlrunner &mdash; Eutester 0.0.4 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/haiku.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/print.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '0.0.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <script type="text/javascript" src="../../_static/theme_extras.js"></script>
+    <link rel="top" title="Eutester 0.0.4 documentation" href="../../index.html" />
+    <link rel="up" title="eutester" href="../eutester.html" /> 
+  </head>
+  <body>
+      <div class="header"><h1 class="heading"><a href="../../index.html">
+          <span>Eutester 0.0.4 documentation</span></a></h1>
+        <h2 class="heading"><span>eutester.xmlrunner</span></h2>
+      </div>
+      <div class="topnav">
+      
+        <p>
+        <a class="uplink" href="../../index.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <h1>Source code for eutester.xmlrunner</h1><div class="highlight"><pre>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">XML Test Runner for PyUnit</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="c"># Written by Sebastian Rittau &lt;srittau@jroger.in-berlin.de&gt; and placed in</span>
+<span class="c"># the Public Domain. With contributions by Paolo Borelli and others.</span>
+
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">with_statement</span>
+
+<span class="n">__version__</span> <span class="o">=</span> <span class="s">&quot;0.1&quot;</span>
+
+<span class="kn">import</span> <span class="nn">os.path</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">traceback</span>
+<span class="kn">import</span> <span class="nn">unittest</span>
+<span class="kn">from</span> <span class="nn">xml.sax.saxutils</span> <span class="kn">import</span> <span class="n">escape</span>
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">from</span> <span class="nn">StringIO</span> <span class="kn">import</span> <span class="n">StringIO</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+    <span class="kn">from</span> <span class="nn">io</span> <span class="kn">import</span> <span class="n">StringIO</span>
+
+
+<span class="k">class</span> <span class="nc">_TestInfo</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+    <span class="sd">&quot;&quot;&quot;Information about a particular test.</span>
+<span class="sd">    </span>
+<span class="sd">    Used by _XMLTestResult.</span>
+<span class="sd">    </span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">test</span><span class="p">,</span> <span class="n">time</span><span class="p">):</span>
+        <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_class</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_method</span><span class="p">)</span> <span class="o">=</span> <span class="n">test</span><span class="o">.</span><span class="n">id</span><span class="p">()</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s">&quot;.&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_time</span> <span class="o">=</span> <span class="n">time</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_error</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_failure</span> <span class="o">=</span> <span class="bp">None</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">create_success</span><span class="p">(</span><span class="n">test</span><span class="p">,</span> <span class="n">time</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Create a _TestInfo instance for a successful test.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">_TestInfo</span><span class="p">(</span><span class="n">test</span><span class="p">,</span> <span class="n">time</span><span class="p">)</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">create_failure</span><span class="p">(</span><span class="n">test</span><span class="p">,</span> <span class="n">time</span><span class="p">,</span> <span class="n">failure</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Create a _TestInfo instance for a failed test.&quot;&quot;&quot;</span>
+        <span class="n">info</span> <span class="o">=</span> <span class="n">_TestInfo</span><span class="p">(</span><span class="n">test</span><span class="p">,</span> <span class="n">time</span><span class="p">)</span>
+        <span class="n">info</span><span class="o">.</span><span class="n">_failure</span> <span class="o">=</span> <span class="n">failure</span>
+        <span class="k">return</span> <span class="n">info</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">create_error</span><span class="p">(</span><span class="n">test</span><span class="p">,</span> <span class="n">time</span><span class="p">,</span> <span class="n">error</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Create a _TestInfo instance for an erroneous test.&quot;&quot;&quot;</span>
+        <span class="n">info</span> <span class="o">=</span> <span class="n">_TestInfo</span><span class="p">(</span><span class="n">test</span><span class="p">,</span> <span class="n">time</span><span class="p">)</span>
+        <span class="n">info</span><span class="o">.</span><span class="n">_error</span> <span class="o">=</span> <span class="n">error</span>
+        <span class="k">return</span> <span class="n">info</span>
+
+    <span class="k">def</span> <span class="nf">print_report</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">stream</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Print information about this test case in XML format to the</span>
+<span class="sd">        supplied stream.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">stream</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&#39;  &lt;testcase classname=&quot;</span><span class="si">%(class)s</span><span class="s">&quot; name=&quot;</span><span class="si">%(method)s</span><span class="s">&quot; time=&quot;</span><span class="si">%(time).4f</span><span class="s">&quot;&gt;&#39;</span> <span class="o">%</span> \
+            <span class="p">{</span>
+                <span class="s">&quot;class&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_class</span><span class="p">,</span>
+                <span class="s">&quot;method&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_method</span><span class="p">,</span>
+                <span class="s">&quot;time&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_time</span><span class="p">,</span>
+            <span class="p">})</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_failure</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_print_error</span><span class="p">(</span><span class="n">stream</span><span class="p">,</span> <span class="s">&#39;failure&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_failure</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_error</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_print_error</span><span class="p">(</span><span class="n">stream</span><span class="p">,</span> <span class="s">&#39;error&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_error</span><span class="p">)</span>
+        <span class="n">stream</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&#39;&lt;/testcase&gt;</span><span class="se">\n</span><span class="s">&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_print_error</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">stream</span><span class="p">,</span> <span class="n">tagname</span><span class="p">,</span> <span class="n">error</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Print information from a failure or error to the supplied stream.&quot;&quot;&quot;</span>
+        <span class="n">text</span> <span class="o">=</span> <span class="n">escape</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">error</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span>
+        <span class="n">stream</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="p">)</span>
+        <span class="n">stream</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&#39;    &lt;</span><span class="si">%s</span><span class="s"> type=&quot;</span><span class="si">%s</span><span class="s">&quot;&gt;</span><span class="si">%s</span><span class="se">\n</span><span class="s">&#39;</span> \
+            <span class="o">%</span> <span class="p">(</span><span class="n">tagname</span><span class="p">,</span> <span class="n">_clsname</span><span class="p">(</span><span class="n">error</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="n">text</span><span class="p">))</span>
+        <span class="n">tb_stream</span> <span class="o">=</span> <span class="n">StringIO</span><span class="p">()</span>
+        <span class="n">traceback</span><span class="o">.</span><span class="n">print_tb</span><span class="p">(</span><span class="n">error</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="bp">None</span><span class="p">,</span> <span class="n">tb_stream</span><span class="p">)</span>
+        <span class="n">stream</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">escape</span><span class="p">(</span><span class="n">tb_stream</span><span class="o">.</span><span class="n">getvalue</span><span class="p">()))</span>
+        <span class="n">stream</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&#39;    &lt;/</span><span class="si">%s</span><span class="s">&gt;</span><span class="se">\n</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">tagname</span><span class="p">)</span>
+        <span class="n">stream</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&#39;  &#39;</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">_clsname</span><span class="p">(</span><span class="n">cls</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">cls</span><span class="o">.</span><span class="n">__module__</span> <span class="o">+</span> <span class="s">&quot;.&quot;</span> <span class="o">+</span> <span class="n">cls</span><span class="o">.</span><span class="n">__name__</span>
+
+
+<span class="k">class</span> <span class="nc">_XMLTestResult</span><span class="p">(</span><span class="n">unittest</span><span class="o">.</span><span class="n">TestResult</span><span class="p">):</span>
+
+    <span class="sd">&quot;&quot;&quot;A test result class that stores result as XML.</span>
+
+<span class="sd">    Used by XMLTestRunner.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">classname</span><span class="p">):</span>
+        <span class="n">unittest</span><span class="o">.</span><span class="n">TestResult</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_test_name</span> <span class="o">=</span> <span class="n">classname</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_start_time</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_tests</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_error</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_failure</span> <span class="o">=</span> <span class="bp">None</span>
+
+    <span class="k">def</span> <span class="nf">startTest</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">test</span><span class="p">):</span>
+        <span class="n">unittest</span><span class="o">.</span><span class="n">TestResult</span><span class="o">.</span><span class="n">startTest</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">test</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_error</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_failure</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_start_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">stopTest</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">test</span><span class="p">):</span>
+        <span class="n">time_taken</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_start_time</span>
+        <span class="n">unittest</span><span class="o">.</span><span class="n">TestResult</span><span class="o">.</span><span class="n">stopTest</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">test</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_error</span><span class="p">:</span>
+            <span class="n">info</span> <span class="o">=</span> <span class="n">_TestInfo</span><span class="o">.</span><span class="n">create_error</span><span class="p">(</span><span class="n">test</span><span class="p">,</span> <span class="n">time_taken</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_error</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">_failure</span><span class="p">:</span>
+            <span class="n">info</span> <span class="o">=</span> <span class="n">_TestInfo</span><span class="o">.</span><span class="n">create_failure</span><span class="p">(</span><span class="n">test</span><span class="p">,</span> <span class="n">time_taken</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_failure</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">info</span> <span class="o">=</span> <span class="n">_TestInfo</span><span class="o">.</span><span class="n">create_success</span><span class="p">(</span><span class="n">test</span><span class="p">,</span> <span class="n">time_taken</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_tests</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">info</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">addError</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">test</span><span class="p">,</span> <span class="n">err</span><span class="p">):</span>
+        <span class="n">unittest</span><span class="o">.</span><span class="n">TestResult</span><span class="o">.</span><span class="n">addError</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">test</span><span class="p">,</span> <span class="n">err</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_error</span> <span class="o">=</span> <span class="n">err</span>
+
+    <span class="k">def</span> <span class="nf">addFailure</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">test</span><span class="p">,</span> <span class="n">err</span><span class="p">):</span>
+        <span class="n">unittest</span><span class="o">.</span><span class="n">TestResult</span><span class="o">.</span><span class="n">addFailure</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">test</span><span class="p">,</span> <span class="n">err</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_failure</span> <span class="o">=</span> <span class="n">err</span>
+
+    <span class="k">def</span> <span class="nf">print_report</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">stream</span><span class="p">,</span> <span class="n">time_taken</span><span class="p">,</span> <span class="n">out</span><span class="p">,</span> <span class="n">err</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Prints the XML report to the supplied stream.</span>
+<span class="sd">        </span>
+<span class="sd">        The time the tests took to perform as well as the captured standard</span>
+<span class="sd">        output and standard error streams must be passed in.a</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">stream</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&#39;&lt;testsuite errors=&quot;</span><span class="si">%(e)d</span><span class="s">&quot; failures=&quot;</span><span class="si">%(f)d</span><span class="s">&quot; &#39;</span> <span class="o">%</span> \
+            <span class="p">{</span> <span class="s">&quot;e&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">errors</span><span class="p">),</span> <span class="s">&quot;f&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">failures</span><span class="p">)</span> <span class="p">})</span>
+        <span class="n">stream</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&#39;name=&quot;</span><span class="si">%(n)s</span><span class="s">&quot; tests=&quot;</span><span class="si">%(t)d</span><span class="s">&quot; time=&quot;</span><span class="si">%(time).3f</span><span class="s">&quot;&gt;</span><span class="se">\n</span><span class="s">&#39;</span> <span class="o">%</span> \
+            <span class="p">{</span>
+                <span class="s">&quot;n&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_test_name</span><span class="p">,</span>
+                <span class="s">&quot;t&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">testsRun</span><span class="p">,</span>
+                <span class="s">&quot;time&quot;</span><span class="p">:</span> <span class="n">time_taken</span><span class="p">,</span>
+            <span class="p">})</span>
+        <span class="k">for</span> <span class="n">info</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_tests</span><span class="p">:</span>
+            <span class="n">info</span><span class="o">.</span><span class="n">print_report</span><span class="p">(</span><span class="n">stream</span><span class="p">)</span>
+        <span class="n">stream</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&#39;  &lt;system-out&gt;&lt;![CDATA[</span><span class="si">%s</span><span class="s">]]&gt;&lt;/system-out&gt;</span><span class="se">\n</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">out</span><span class="p">)</span>
+        <span class="n">stream</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&#39;  &lt;system-err&gt;&lt;![CDATA[</span><span class="si">%s</span><span class="s">]]&gt;&lt;/system-err&gt;</span><span class="se">\n</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">err</span><span class="p">)</span>
+        <span class="n">stream</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&#39;&lt;/testsuite&gt;</span><span class="se">\n</span><span class="s">&#39;</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="XMLTestRunner"><a class="viewcode-back" href="../../eutester.html#eutester.xmlrunner.XMLTestRunner">[docs]</a><span class="k">class</span> <span class="nc">XMLTestRunner</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+    <span class="sd">&quot;&quot;&quot;A test runner that stores results in XML format compatible with JUnit.</span>
+
+<span class="sd">    XMLTestRunner(stream=None) -&gt; XML test runner</span>
+
+<span class="sd">    The XML file is written to the supplied stream. If stream is None, the</span>
+<span class="sd">    results are stored in a file called TEST-&lt;module&gt;.&lt;class&gt;.xml in the</span>
+<span class="sd">    current working directory (if not overridden with the path property),</span>
+<span class="sd">    where &lt;module&gt; and &lt;class&gt; are the module and class name of the test class.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">stream</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_stream</span> <span class="o">=</span> <span class="n">stream</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_path</span> <span class="o">=</span> <span class="s">&quot;.&quot;</span>
+
+<div class="viewcode-block" id="XMLTestRunner.run"><a class="viewcode-back" href="../../eutester.html#eutester.xmlrunner.XMLTestRunner.run">[docs]</a>    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">test</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Run the given test case or test suite.&quot;&quot;&quot;</span>
+        <span class="n">class_</span> <span class="o">=</span> <span class="n">test</span><span class="o">.</span><span class="n">__class__</span>
+        <span class="n">classname</span> <span class="o">=</span> <span class="n">class_</span><span class="o">.</span><span class="n">__module__</span> <span class="o">+</span> <span class="s">&quot;.&quot;</span> <span class="o">+</span> <span class="n">class_</span><span class="o">.</span><span class="n">__name__</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_stream</span> <span class="o">==</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">filename</span> <span class="o">=</span> <span class="s">&quot;TEST-</span><span class="si">%s</span><span class="s">.xml&quot;</span> <span class="o">%</span> <span class="n">classname</span>
+            <span class="n">stream</span> <span class="o">=</span> <span class="nb">file</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_path</span><span class="p">,</span> <span class="n">filename</span><span class="p">),</span> <span class="s">&quot;w&quot;</span><span class="p">)</span>
+            <span class="n">stream</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&#39;&lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot;?&gt;</span><span class="se">\n</span><span class="s">&#39;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">stream</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_stream</span>
+
+        <span class="n">result</span> <span class="o">=</span> <span class="n">_XMLTestResult</span><span class="p">(</span><span class="n">classname</span><span class="p">)</span>
+        <span class="n">start_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+
+        <span class="k">with</span> <span class="n">_fake_std_streams</span><span class="p">():</span>
+            <span class="n">test</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">out_s</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="o">.</span><span class="n">getvalue</span><span class="p">()</span>
+            <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
+                <span class="n">out_s</span> <span class="o">=</span> <span class="s">&quot;&quot;</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">err_s</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="o">.</span><span class="n">getvalue</span><span class="p">()</span>
+            <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
+                <span class="n">err_s</span> <span class="o">=</span> <span class="s">&quot;&quot;</span>
+
+        <span class="n">time_taken</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start_time</span>
+        <span class="n">result</span><span class="o">.</span><span class="n">print_report</span><span class="p">(</span><span class="n">stream</span><span class="p">,</span> <span class="n">time_taken</span><span class="p">,</span> <span class="n">out_s</span><span class="p">,</span> <span class="n">err_s</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_stream</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">stream</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+        <span class="k">return</span> <span class="n">result</span>
+</div>
+    <span class="k">def</span> <span class="nf">_set_path</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_path</span> <span class="o">=</span> <span class="n">path</span>
+
+    <span class="n">path</span> <span class="o">=</span> <span class="nb">property</span><span class="p">(</span><span class="k">lambda</span> <span class="bp">self</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_path</span><span class="p">,</span> <span class="n">_set_path</span><span class="p">,</span> <span class="bp">None</span><span class="p">,</span>
+            <span class="sd">&quot;&quot;&quot;The path where the XML files are stored.</span>
+<span class="sd">            </span>
+<span class="sd">            This property is ignored when the XML file is written to a file</span>
+<span class="sd">            stream.&quot;&quot;&quot;</span><span class="p">)</span>
+
+</div>
+<span class="k">class</span> <span class="nc">_fake_std_streams</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="nf">__enter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_orig_stdout</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">stdout</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_orig_stderr</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">stderr</span>
+        <span class="n">sys</span><span class="o">.</span><span class="n">stdout</span> <span class="o">=</span> <span class="n">StringIO</span><span class="p">()</span>
+        <span class="n">sys</span><span class="o">.</span><span class="n">stderr</span> <span class="o">=</span> <span class="n">StringIO</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">__exit__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">exc_type</span><span class="p">,</span> <span class="n">exc_val</span><span class="p">,</span> <span class="n">exc_tb</span><span class="p">):</span>
+        <span class="n">sys</span><span class="o">.</span><span class="n">stdout</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_orig_stdout</span>
+        <span class="n">sys</span><span class="o">.</span><span class="n">stderr</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_orig_stderr</span>
+
+
+<div class="viewcode-block" id="XMLTestRunnerTest"><a class="viewcode-back" href="../../eutester.html#eutester.xmlrunner.XMLTestRunnerTest">[docs]</a><span class="k">class</span> <span class="nc">XMLTestRunnerTest</span><span class="p">(</span><span class="n">unittest</span><span class="o">.</span><span class="n">TestCase</span><span class="p">):</span>
+
+<div class="viewcode-block" id="XMLTestRunnerTest.setUp"><a class="viewcode-back" href="../../eutester.html#eutester.xmlrunner.XMLTestRunnerTest.setUp">[docs]</a>    <span class="k">def</span> <span class="nf">setUp</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_stream</span> <span class="o">=</span> <span class="n">StringIO</span><span class="p">()</span>
+</div>
+    <span class="k">def</span> <span class="nf">_try_test_run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">test_class</span><span class="p">,</span> <span class="n">expected</span><span class="p">):</span>
+
+        <span class="sd">&quot;&quot;&quot;Run the test suite against the supplied test class and compare the</span>
+<span class="sd">        XML result against the expected XML string. Fail if the expected</span>
+<span class="sd">        string doesn&#39;t match the actual string. All time attributes in the</span>
+<span class="sd">        expected string should have the value &quot;0.000&quot;. All error and failure</span>
+<span class="sd">        messages are reduced to &quot;Foobar&quot;.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">runner</span> <span class="o">=</span> <span class="n">XMLTestRunner</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_stream</span><span class="p">)</span>
+        <span class="n">runner</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">unittest</span><span class="o">.</span><span class="n">makeSuite</span><span class="p">(</span><span class="n">test_class</span><span class="p">))</span>
+
+        <span class="n">got</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_stream</span><span class="o">.</span><span class="n">getvalue</span><span class="p">()</span>
+        <span class="c"># Replace all time=&quot;X.YYY&quot; attributes by time=&quot;0.000&quot; to enable a</span>
+        <span class="c"># simple string comparison.</span>
+        <span class="n">got</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="s">r&#39;time=&quot;\d+\.\d+&quot;&#39;</span><span class="p">,</span> <span class="s">&#39;time=&quot;0.000&quot;&#39;</span><span class="p">,</span> <span class="n">got</span><span class="p">)</span>
+        <span class="c"># Likewise, replace all failure and error messages by a simple &quot;Foobar&quot;</span>
+        <span class="c"># string.</span>
+        <span class="n">got</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="s">r&#39;(?s)&lt;failure (.*?)&gt;.*?&lt;/failure&gt;&#39;</span><span class="p">,</span> <span class="s">r&#39;&lt;failure \1&gt;Foobar&lt;/failure&gt;&#39;</span><span class="p">,</span> <span class="n">got</span><span class="p">)</span>
+        <span class="n">got</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="s">r&#39;(?s)&lt;error (.*?)&gt;.*?&lt;/error&gt;&#39;</span><span class="p">,</span> <span class="s">r&#39;&lt;error \1&gt;Foobar&lt;/error&gt;&#39;</span><span class="p">,</span> <span class="n">got</span><span class="p">)</span>
+        <span class="c"># And finally Python 3 compatibility.</span>
+        <span class="n">got</span> <span class="o">=</span> <span class="n">got</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s">&#39;type=&quot;builtins.&#39;</span><span class="p">,</span> <span class="s">&#39;type=&quot;exceptions.&#39;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="n">expected</span><span class="p">,</span> <span class="n">got</span><span class="p">)</span>
+
+<div class="viewcode-block" id="XMLTestRunnerTest.test_no_tests"><a class="viewcode-back" href="../../eutester.html#eutester.xmlrunner.XMLTestRunnerTest.test_no_tests">[docs]</a>    <span class="k">def</span> <span class="nf">test_no_tests</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Regression test: Check whether a test run without any tests</span>
+<span class="sd">        matches a previous run.</span>
+<span class="sd">        </span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">class</span> <span class="nc">TestTest</span><span class="p">(</span><span class="n">unittest</span><span class="o">.</span><span class="n">TestCase</span><span class="p">):</span>
+            <span class="k">pass</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_try_test_run</span><span class="p">(</span><span class="n">TestTest</span><span class="p">,</span> <span class="s">&quot;&quot;&quot;&lt;testsuite errors=&quot;0&quot; failures=&quot;0&quot; name=&quot;unittest.TestSuite&quot; tests=&quot;0&quot; time=&quot;0.000&quot;&gt;</span>
+<span class="s">  &lt;system-out&gt;&lt;![CDATA[]]&gt;&lt;/system-out&gt;</span>
+<span class="s">  &lt;system-err&gt;&lt;![CDATA[]]&gt;&lt;/system-err&gt;</span>
+<span class="s">&lt;/testsuite&gt;</span>
+<span class="s">&quot;&quot;&quot;</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="XMLTestRunnerTest.test_success"><a class="viewcode-back" href="../../eutester.html#eutester.xmlrunner.XMLTestRunnerTest.test_success">[docs]</a>    <span class="k">def</span> <span class="nf">test_success</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Regression test: Check whether a test run with a successful test</span>
+<span class="sd">        matches a previous run.</span>
+<span class="sd">        </span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">class</span> <span class="nc">TestTest</span><span class="p">(</span><span class="n">unittest</span><span class="o">.</span><span class="n">TestCase</span><span class="p">):</span>
+            <span class="k">def</span> <span class="nf">test_foo</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+                <span class="k">pass</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_try_test_run</span><span class="p">(</span><span class="n">TestTest</span><span class="p">,</span> <span class="s">&quot;&quot;&quot;&lt;testsuite errors=&quot;0&quot; failures=&quot;0&quot; name=&quot;unittest.TestSuite&quot; tests=&quot;1&quot; time=&quot;0.000&quot;&gt;</span>
+<span class="s">  &lt;testcase classname=&quot;__main__.TestTest&quot; name=&quot;test_foo&quot; time=&quot;0.000&quot;&gt;&lt;/testcase&gt;</span>
+<span class="s">  &lt;system-out&gt;&lt;![CDATA[]]&gt;&lt;/system-out&gt;</span>
+<span class="s">  &lt;system-err&gt;&lt;![CDATA[]]&gt;&lt;/system-err&gt;</span>
+<span class="s">&lt;/testsuite&gt;</span>
+<span class="s">&quot;&quot;&quot;</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="XMLTestRunnerTest.test_failure"><a class="viewcode-back" href="../../eutester.html#eutester.xmlrunner.XMLTestRunnerTest.test_failure">[docs]</a>    <span class="k">def</span> <span class="nf">test_failure</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Regression test: Check whether a test run with a failing test</span>
+<span class="sd">        matches a previous run.</span>
+<span class="sd">        </span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">class</span> <span class="nc">TestTest</span><span class="p">(</span><span class="n">unittest</span><span class="o">.</span><span class="n">TestCase</span><span class="p">):</span>
+            <span class="k">def</span> <span class="nf">test_foo</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">assert_</span><span class="p">(</span><span class="bp">False</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_try_test_run</span><span class="p">(</span><span class="n">TestTest</span><span class="p">,</span> <span class="s">&quot;&quot;&quot;&lt;testsuite errors=&quot;0&quot; failures=&quot;1&quot; name=&quot;unittest.TestSuite&quot; tests=&quot;1&quot; time=&quot;0.000&quot;&gt;</span>
+<span class="s">  &lt;testcase classname=&quot;__main__.TestTest&quot; name=&quot;test_foo&quot; time=&quot;0.000&quot;&gt;</span>
+<span class="s">    &lt;failure type=&quot;exceptions.AssertionError&quot;&gt;Foobar&lt;/failure&gt;</span>
+<span class="s">  &lt;/testcase&gt;</span>
+<span class="s">  &lt;system-out&gt;&lt;![CDATA[]]&gt;&lt;/system-out&gt;</span>
+<span class="s">  &lt;system-err&gt;&lt;![CDATA[]]&gt;&lt;/system-err&gt;</span>
+<span class="s">&lt;/testsuite&gt;</span>
+<span class="s">&quot;&quot;&quot;</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="XMLTestRunnerTest.test_error"><a class="viewcode-back" href="../../eutester.html#eutester.xmlrunner.XMLTestRunnerTest.test_error">[docs]</a>    <span class="k">def</span> <span class="nf">test_error</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Regression test: Check whether a test run with a erroneous test</span>
+<span class="sd">        matches a previous run.</span>
+<span class="sd">        </span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">class</span> <span class="nc">TestTest</span><span class="p">(</span><span class="n">unittest</span><span class="o">.</span><span class="n">TestCase</span><span class="p">):</span>
+            <span class="k">def</span> <span class="nf">test_foo</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">IndexError</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_try_test_run</span><span class="p">(</span><span class="n">TestTest</span><span class="p">,</span> <span class="s">&quot;&quot;&quot;&lt;testsuite errors=&quot;1&quot; failures=&quot;0&quot; name=&quot;unittest.TestSuite&quot; tests=&quot;1&quot; time=&quot;0.000&quot;&gt;</span>
+<span class="s">  &lt;testcase classname=&quot;__main__.TestTest&quot; name=&quot;test_foo&quot; time=&quot;0.000&quot;&gt;</span>
+<span class="s">    &lt;error type=&quot;exceptions.IndexError&quot;&gt;Foobar&lt;/error&gt;</span>
+<span class="s">  &lt;/testcase&gt;</span>
+<span class="s">  &lt;system-out&gt;&lt;![CDATA[]]&gt;&lt;/system-out&gt;</span>
+<span class="s">  &lt;system-err&gt;&lt;![CDATA[]]&gt;&lt;/system-err&gt;</span>
+<span class="s">&lt;/testsuite&gt;</span>
+<span class="s">&quot;&quot;&quot;</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="XMLTestRunnerTest.test_stdout_capture"><a class="viewcode-back" href="../../eutester.html#eutester.xmlrunner.XMLTestRunnerTest.test_stdout_capture">[docs]</a>    <span class="k">def</span> <span class="nf">test_stdout_capture</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Regression test: Check whether a test run with output to stdout</span>
+<span class="sd">        matches a previous run.</span>
+<span class="sd">        </span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">class</span> <span class="nc">TestTest</span><span class="p">(</span><span class="n">unittest</span><span class="o">.</span><span class="n">TestCase</span><span class="p">):</span>
+            <span class="k">def</span> <span class="nf">test_foo</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+                <span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&quot;Test</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_try_test_run</span><span class="p">(</span><span class="n">TestTest</span><span class="p">,</span> <span class="s">&quot;&quot;&quot;&lt;testsuite errors=&quot;0&quot; failures=&quot;0&quot; name=&quot;unittest.TestSuite&quot; tests=&quot;1&quot; time=&quot;0.000&quot;&gt;</span>
+<span class="s">  &lt;testcase classname=&quot;__main__.TestTest&quot; name=&quot;test_foo&quot; time=&quot;0.000&quot;&gt;&lt;/testcase&gt;</span>
+<span class="s">  &lt;system-out&gt;&lt;![CDATA[Test</span>
+<span class="s">]]&gt;&lt;/system-out&gt;</span>
+<span class="s">  &lt;system-err&gt;&lt;![CDATA[]]&gt;&lt;/system-err&gt;</span>
+<span class="s">&lt;/testsuite&gt;</span>
+<span class="s">&quot;&quot;&quot;</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="XMLTestRunnerTest.test_stderr_capture"><a class="viewcode-back" href="../../eutester.html#eutester.xmlrunner.XMLTestRunnerTest.test_stderr_capture">[docs]</a>    <span class="k">def</span> <span class="nf">test_stderr_capture</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Regression test: Check whether a test run with output to stderr</span>
+<span class="sd">        matches a previous run.</span>
+<span class="sd">        </span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">class</span> <span class="nc">TestTest</span><span class="p">(</span><span class="n">unittest</span><span class="o">.</span><span class="n">TestCase</span><span class="p">):</span>
+            <span class="k">def</span> <span class="nf">test_foo</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+                <span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&quot;Test</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_try_test_run</span><span class="p">(</span><span class="n">TestTest</span><span class="p">,</span> <span class="s">&quot;&quot;&quot;&lt;testsuite errors=&quot;0&quot; failures=&quot;0&quot; name=&quot;unittest.TestSuite&quot; tests=&quot;1&quot; time=&quot;0.000&quot;&gt;</span>
+<span class="s">  &lt;testcase classname=&quot;__main__.TestTest&quot; name=&quot;test_foo&quot; time=&quot;0.000&quot;&gt;&lt;/testcase&gt;</span>
+<span class="s">  &lt;system-out&gt;&lt;![CDATA[]]&gt;&lt;/system-out&gt;</span>
+<span class="s">  &lt;system-err&gt;&lt;![CDATA[Test</span>
+<span class="s">]]&gt;&lt;/system-err&gt;</span>
+<span class="s">&lt;/testsuite&gt;</span>
+<span class="s">&quot;&quot;&quot;</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="XMLTestRunnerTest.NullStream"><a class="viewcode-back" href="../../eutester.html#eutester.xmlrunner.XMLTestRunnerTest.NullStream">[docs]</a>    <span class="k">class</span> <span class="nc">NullStream</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;A file-like object that discards everything written to it.&quot;&quot;&quot;</span>
+<div class="viewcode-block" id="XMLTestRunnerTest.NullStream.write"><a class="viewcode-back" href="../../eutester.html#eutester.xmlrunner.XMLTestRunnerTest.NullStream.write">[docs]</a>        <span class="k">def</span> <span class="nf">write</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">buffer</span><span class="p">):</span>
+            <span class="k">pass</span>
+</div></div>
+<div class="viewcode-block" id="XMLTestRunnerTest.test_unittests_changing_stdout"><a class="viewcode-back" href="../../eutester.html#eutester.xmlrunner.XMLTestRunnerTest.test_unittests_changing_stdout">[docs]</a>    <span class="k">def</span> <span class="nf">test_unittests_changing_stdout</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Check whether the XMLTestRunner recovers gracefully from unit tests</span>
+<span class="sd">        that change stdout, but don&#39;t change it back properly.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">class</span> <span class="nc">TestTest</span><span class="p">(</span><span class="n">unittest</span><span class="o">.</span><span class="n">TestCase</span><span class="p">):</span>
+            <span class="k">def</span> <span class="nf">test_foo</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+                <span class="n">sys</span><span class="o">.</span><span class="n">stdout</span> <span class="o">=</span> <span class="n">XMLTestRunnerTest</span><span class="o">.</span><span class="n">NullStream</span><span class="p">()</span>
+
+        <span class="n">runner</span> <span class="o">=</span> <span class="n">XMLTestRunner</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_stream</span><span class="p">)</span>
+        <span class="n">runner</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">unittest</span><span class="o">.</span><span class="n">makeSuite</span><span class="p">(</span><span class="n">TestTest</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="XMLTestRunnerTest.test_unittests_changing_stderr"><a class="viewcode-back" href="../../eutester.html#eutester.xmlrunner.XMLTestRunnerTest.test_unittests_changing_stderr">[docs]</a>    <span class="k">def</span> <span class="nf">test_unittests_changing_stderr</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Check whether the XMLTestRunner recovers gracefully from unit tests</span>
+<span class="sd">        that change stderr, but don&#39;t change it back properly.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">class</span> <span class="nc">TestTest</span><span class="p">(</span><span class="n">unittest</span><span class="o">.</span><span class="n">TestCase</span><span class="p">):</span>
+            <span class="k">def</span> <span class="nf">test_foo</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+                <span class="n">sys</span><span class="o">.</span><span class="n">stderr</span> <span class="o">=</span> <span class="n">XMLTestRunnerTest</span><span class="o">.</span><span class="n">NullStream</span><span class="p">()</span>
+
+        <span class="n">runner</span> <span class="o">=</span> <span class="n">XMLTestRunner</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_stream</span><span class="p">)</span>
+        <span class="n">runner</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">unittest</span><span class="o">.</span><span class="n">makeSuite</span><span class="p">(</span><span class="n">TestTest</span><span class="p">))</span>
+
+</div></div>
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="n">unittest</span><span class="o">.</span><span class="n">main</span><span class="p">()</span>
+</pre></div>
+
+      </div>
+      <div class="bottomnav">
+      
+        <p>
+        <a class="uplink" href="../../index.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer">
+        &copy; Copyright 2012, Vic Iglesias, Matt Clark, Harold Spencer.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

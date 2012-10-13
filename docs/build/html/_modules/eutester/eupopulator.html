@@ -1,0 +1,278 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>eutester.eupopulator &mdash; Eutester 0.0.4 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/haiku.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/print.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '0.0.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <script type="text/javascript" src="../../_static/theme_extras.js"></script>
+    <link rel="top" title="Eutester 0.0.4 documentation" href="../../index.html" />
+    <link rel="up" title="eutester" href="../eutester.html" /> 
+  </head>
+  <body>
+      <div class="header"><h1 class="heading"><a href="../../index.html">
+          <span>Eutester 0.0.4 documentation</span></a></h1>
+        <h2 class="heading"><span>eutester.eupopulator</span></h2>
+      </div>
+      <div class="topnav">
+      
+        <p>
+        <a class="uplink" href="../../index.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <h1>Source code for eutester.eupopulator</h1><div class="highlight"><pre>
+<span class="c"># Software License Agreement (BSD License)</span>
+<span class="c">#</span>
+<span class="c"># Copyright (c) 2009-2011, Eucalyptus Systems, Inc.</span>
+<span class="c"># All rights reserved.</span>
+<span class="c">#</span>
+<span class="c"># Redistribution and use of this software in source and binary forms, with or</span>
+<span class="c"># without modification, are permitted provided that the following conditions</span>
+<span class="c"># are met:</span>
+<span class="c">#</span>
+<span class="c">#   Redistributions of source code must retain the above</span>
+<span class="c">#   copyright notice, this list of conditions and the</span>
+<span class="c">#   following disclaimer.</span>
+<span class="c">#</span>
+<span class="c">#   Redistributions in binary form must reproduce the above</span>
+<span class="c">#   copyright notice, this list of conditions and the</span>
+<span class="c">#   following disclaimer in the documentation and/or other</span>
+<span class="c">#   materials provided with the distribution.</span>
+<span class="c">#</span>
+<span class="c"># THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS &quot;AS IS&quot;</span>
+<span class="c"># AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE</span>
+<span class="c"># IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE</span>
+<span class="c"># ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE</span>
+<span class="c"># LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR</span>
+<span class="c"># CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF</span>
+<span class="c"># SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS</span>
+<span class="c"># INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN</span>
+<span class="c"># CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)</span>
+<span class="c"># ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE</span>
+<span class="c"># POSSIBILITY OF SUCH DAMAGE.</span>
+<span class="c">#</span>
+<span class="c"># Author: vic.iglesias@eucalyptus.com</span>
+<span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">Created on Apr 25, 2012</span>
+<span class="sd">@author: vic.iglesias@eucalyptus.com</span>
+<span class="sd">&#39;&#39;&#39;</span>
+
+<span class="kn">import</span> <span class="nn">pickle</span>
+<span class="kn">import</span> <span class="nn">ConfigParser</span>
+<span class="kn">import</span> <span class="nn">random</span> 
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">string</span>
+<div class="viewcode-block" id="EuPopulator"><a class="viewcode-back" href="../../eutester.html#eutester.eupopulator.EuPopulator">[docs]</a><span class="k">class</span> <span class="nc">EuPopulator</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    This class is intended to read in a config file using ConfigParser, then create resources based on the config file</span>
+<span class="sd">    It is also able to serialize the current resources in a cloud into a file, read in that file and verify that the resources still</span>
+<span class="sd">    exist in the same way. Serialization is done with Pickle. </span>
+<span class="sd">    &#39;&#39;&#39;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">eucaops</span><span class="p">,</span> <span class="n">config_file</span> <span class="o">=</span> <span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Constructor for EuPopulator:</span>
+<span class="sd">            eutester         A eutester object that we can use for connections</span>
+<span class="sd">            config_file      Filename of the config describing what resources to populate</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tester</span> <span class="o">=</span> <span class="n">eucaops</span>
+        <span class="k">if</span> <span class="n">config_file</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span> <span class="o">=</span> <span class="n">ConfigParser</span><span class="o">.</span><span class="n">SafeConfigParser</span><span class="p">()</span>
+            <span class="c">### Global </span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">add_section</span><span class="p">(</span><span class="s">&#39;global&#39;</span><span class="p">)</span>
+            <span class="n">partition</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">tester</span><span class="o">.</span><span class="n">ec2</span><span class="o">.</span><span class="n">get_all_zones</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">name</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;global&#39;</span><span class="p">,</span> <span class="s">&#39;partition&#39;</span><span class="p">,</span> <span class="n">partition</span><span class="p">)</span>
+            <span class="c">### Volume </span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">add_section</span><span class="p">(</span><span class="s">&#39;volumes&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;volumes&#39;</span><span class="p">,</span> <span class="s">&#39;count&#39;</span><span class="p">,</span> <span class="s">&#39;2&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;volumes&#39;</span><span class="p">,</span> <span class="s">&#39;min_size&#39;</span><span class="p">,</span> <span class="s">&#39;1&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;volumes&#39;</span><span class="p">,</span> <span class="s">&#39;max_size&#39;</span><span class="p">,</span> <span class="s">&#39;3&#39;</span><span class="p">)</span>
+            
+            <span class="c">### Addresses</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">add_section</span><span class="p">(</span><span class="s">&#39;addresses&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;addresses&#39;</span><span class="p">,</span> <span class="s">&#39;count&#39;</span><span class="p">,</span> <span class="s">&#39;2&#39;</span><span class="p">)</span>
+            
+            <span class="c">### Snapshot </span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">add_section</span><span class="p">(</span><span class="s">&#39;snapshots&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;snapshots&#39;</span><span class="p">,</span> <span class="s">&#39;count&#39;</span><span class="p">,</span> <span class="s">&#39;2&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;snapshots&#39;</span><span class="p">,</span> <span class="s">&#39;min_size&#39;</span><span class="p">,</span> <span class="s">&#39;1&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;snapshots&#39;</span><span class="p">,</span> <span class="s">&#39;max_size&#39;</span><span class="p">,</span> <span class="s">&#39;3&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;snapshots&#39;</span><span class="p">,</span> <span class="s">&#39;delete_volumes&#39;</span><span class="p">,</span> <span class="s">&#39;false&#39;</span><span class="p">)</span>
+            
+            <span class="c">### Keypair </span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">add_section</span><span class="p">(</span><span class="s">&#39;keypairs&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;keypairs&#39;</span><span class="p">,</span> <span class="s">&#39;count&#39;</span><span class="p">,</span> <span class="s">&#39;2&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;keypairs&#39;</span><span class="p">,</span> <span class="s">&#39;prefix&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">prefix_generator</span><span class="p">())</span>
+            
+            <span class="c">### Groups </span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">add_section</span><span class="p">(</span><span class="s">&#39;security_groups&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;security_groups&#39;</span><span class="p">,</span> <span class="s">&#39;count&#39;</span><span class="p">,</span> <span class="s">&#39;2&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;security_groups&#39;</span><span class="p">,</span> <span class="s">&#39;prefix&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">prefix_generator</span><span class="p">())</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;security_groups&#39;</span><span class="p">,</span> <span class="s">&#39;port_min&#39;</span><span class="p">,</span> <span class="s">&#39;22&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;security_groups&#39;</span><span class="p">,</span> <span class="s">&#39;port_max&#39;</span><span class="p">,</span> <span class="s">&#39;80&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;security_groups&#39;</span><span class="p">,</span> <span class="s">&#39;protocol&#39;</span><span class="p">,</span> <span class="s">&#39;tcp&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;security_groups&#39;</span><span class="p">,</span> <span class="s">&#39;cidr&#39;</span><span class="p">,</span> <span class="s">&#39;0.0.0.0/0&#39;</span><span class="p">)</span>
+            
+            <span class="c">### Buckets</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">add_section</span><span class="p">(</span><span class="s">&#39;buckets&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;buckets&#39;</span><span class="p">,</span> <span class="s">&#39;count&#39;</span><span class="p">,</span> <span class="s">&#39;2&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;buckets&#39;</span><span class="p">,</span> <span class="s">&#39;prefix&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">prefix_generator</span><span class="p">())</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;buckets&#39;</span><span class="p">,</span> <span class="s">&#39;add_keys&#39;</span><span class="p">,</span> <span class="s">&#39;true&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;buckets&#39;</span><span class="p">,</span> <span class="s">&#39;key_count&#39;</span><span class="p">,</span> <span class="s">&#39;2&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;buckets&#39;</span><span class="p">,</span> <span class="s">&#39;key_prefix&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">prefix_generator</span><span class="p">())</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">config</span> <span class="o">=</span> <span class="n">ConfigParser</span><span class="o">.</span><span class="n">SafeConfigParser</span><span class="p">()</span>
+            <span class="n">config</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">config_file</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">config</span> <span class="o">=</span> <span class="n">config</span>
+        
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">:</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s">&#39;populate.cfg&#39;</span><span class="p">,</span> <span class="s">&#39;wb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">configfile</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">configfile</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;Do not have a valid config file to use&quot;</span><span class="p">)</span>
+        
+<div class="viewcode-block" id="EuPopulator.populate"><a class="viewcode-back" href="../../eutester.html#eutester.eupopulator.EuPopulator.populate">[docs]</a>    <span class="k">def</span> <span class="nf">populate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Takes the config and creates each of the resources based on their parameters</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="k">for</span> <span class="n">section</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">sections</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">section</span> <span class="ow">is</span> <span class="ow">not</span> <span class="s">&quot;global&quot;</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">creation_method</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">EuPopulator</span><span class="p">,</span> <span class="n">section</span><span class="p">)</span>
+                    <span class="n">creation_method</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+                    <span class="k">print</span> <span class="s">&quot;Successfully created: &quot;</span> <span class="o">+</span> <span class="n">section</span>
+                <span class="k">except</span> <span class="ne">Exception</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span>
+                    <span class="k">print</span> <span class="s">&quot;Unable to bind to resource creation method for: &quot;</span> <span class="o">+</span> <span class="n">section</span> <span class="o">+</span> <span class="s">&quot;</span><span class="se">\n</span><span class="s"> Because of &quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+                </div>
+<div class="viewcode-block" id="EuPopulator.volumes"><a class="viewcode-back" href="../../eutester.html#eutester.eupopulator.EuPopulator.volumes">[docs]</a>    <span class="k">def</span> <span class="nf">volumes</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">print</span> <span class="s">&quot;Creating volumes&quot;</span>
+        <span class="n">partition</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&quot;global&quot;</span><span class="p">,</span><span class="s">&quot;partition&quot;</span><span class="p">)</span>
+        <span class="n">vol_count</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">getint</span><span class="p">(</span><span class="s">&quot;volumes&quot;</span><span class="p">,</span> <span class="s">&quot;count&quot;</span><span class="p">)</span>
+        <span class="n">min_size</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">getint</span><span class="p">(</span><span class="s">&quot;volumes&quot;</span><span class="p">,</span> <span class="s">&quot;min_size&quot;</span><span class="p">)</span>
+        <span class="n">max_size</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">getint</span><span class="p">(</span><span class="s">&quot;volumes&quot;</span><span class="p">,</span> <span class="s">&quot;max_size&quot;</span><span class="p">)</span>
+        
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">vol_count</span><span class="p">):</span>
+            <span class="n">size</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="n">min_size</span><span class="p">,</span> <span class="n">max_size</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">tester</span><span class="o">.</span><span class="n">create_volume</span><span class="p">(</span><span class="n">partition</span><span class="p">,</span> <span class="n">size</span><span class="p">)</span>
+        </div>
+<div class="viewcode-block" id="EuPopulator.addresses"><a class="viewcode-back" href="../../eutester.html#eutester.eupopulator.EuPopulator.addresses">[docs]</a>    <span class="k">def</span> <span class="nf">addresses</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">print</span> <span class="s">&quot;Allocating addreses&quot;</span>
+        <span class="n">addr_count</span> <span class="o">=</span>  <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">getint</span><span class="p">(</span><span class="s">&quot;addresses&quot;</span><span class="p">,</span> <span class="s">&quot;count&quot;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">vol_count</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">tester</span><span class="o">.</span><span class="n">allocate_address</span><span class="p">()</span>
+        </div>
+<div class="viewcode-block" id="EuPopulator.snapshots"><a class="viewcode-back" href="../../eutester.html#eutester.eupopulator.EuPopulator.snapshots">[docs]</a>    <span class="k">def</span> <span class="nf">snapshots</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">print</span> <span class="s">&quot;Creating snapshots&quot;</span>
+        <span class="n">partition</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&quot;global&quot;</span><span class="p">,</span><span class="s">&quot;partition&quot;</span><span class="p">)</span>
+        <span class="n">snap_count</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">getint</span><span class="p">(</span><span class="s">&quot;snapshots&quot;</span><span class="p">,</span> <span class="s">&quot;count&quot;</span><span class="p">)</span>
+        <span class="n">min_size</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">getint</span><span class="p">(</span><span class="s">&quot;snapshots&quot;</span><span class="p">,</span> <span class="s">&quot;min_size&quot;</span><span class="p">)</span>
+        <span class="n">max_size</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">getint</span><span class="p">(</span><span class="s">&quot;snapshots&quot;</span><span class="p">,</span> <span class="s">&quot;max_size&quot;</span><span class="p">)</span>
+        <span class="n">delete_volumes</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">getboolean</span><span class="p">(</span><span class="s">&#39;snapshots&#39;</span><span class="p">,</span> <span class="s">&#39;delete_volumes&#39;</span><span class="p">)</span>
+        
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">snap_count</span><span class="p">):</span>
+            <span class="n">size</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="n">min_size</span><span class="p">,</span> <span class="n">max_size</span><span class="p">)</span>
+            <span class="n">volume</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">tester</span><span class="o">.</span><span class="n">create_volume</span><span class="p">(</span><span class="n">partition</span><span class="p">,</span> <span class="n">size</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">tester</span><span class="o">.</span><span class="n">create_snapshot</span><span class="p">(</span><span class="n">volume</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">delete_volumes</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">tester</span><span class="o">.</span><span class="n">delete_volume</span><span class="p">(</span><span class="n">volume</span><span class="p">)</span>
+    </div>
+<div class="viewcode-block" id="EuPopulator.keypairs"><a class="viewcode-back" href="../../eutester.html#eutester.eupopulator.EuPopulator.keypairs">[docs]</a>    <span class="k">def</span> <span class="nf">keypairs</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">print</span> <span class="s">&quot;Creating keypairs&quot;</span>
+        <span class="n">key_count</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">getint</span><span class="p">(</span><span class="s">&quot;keypairs&quot;</span><span class="p">,</span> <span class="s">&quot;count&quot;</span><span class="p">)</span>
+        <span class="n">prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&quot;keypairs&quot;</span><span class="p">,</span> <span class="s">&quot;prefix&quot;</span><span class="p">)</span>
+        
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">key_count</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">tester</span><span class="o">.</span><span class="n">add_keypair</span><span class="p">(</span><span class="n">prefix</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">))</span>
+        </div>
+<div class="viewcode-block" id="EuPopulator.security_groups"><a class="viewcode-back" href="../../eutester.html#eutester.eupopulator.EuPopulator.security_groups">[docs]</a>    <span class="k">def</span> <span class="nf">security_groups</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">print</span> <span class="s">&quot;Creating security_groups&quot;</span>
+        <span class="n">sg_count</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">getint</span><span class="p">(</span><span class="s">&quot;security_groups&quot;</span><span class="p">,</span> <span class="s">&quot;count&quot;</span><span class="p">)</span>
+        <span class="n">prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&quot;security_groups&quot;</span><span class="p">,</span> <span class="s">&quot;prefix&quot;</span><span class="p">)</span>
+        <span class="n">port_min</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">getint</span><span class="p">(</span><span class="s">&quot;security_groups&quot;</span><span class="p">,</span> <span class="s">&quot;port_min&quot;</span><span class="p">)</span>
+        <span class="n">port_max</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">getint</span><span class="p">(</span><span class="s">&quot;security_groups&quot;</span><span class="p">,</span> <span class="s">&quot;port_max&quot;</span><span class="p">)</span>
+        <span class="n">cidr</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&quot;security_groups&quot;</span><span class="p">,</span> <span class="s">&quot;cidr&quot;</span><span class="p">)</span>
+        <span class="n">protocol</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&quot;security_groups&quot;</span><span class="p">,</span> <span class="s">&quot;protocol&quot;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">sg_count</span><span class="p">):</span>
+            <span class="n">group</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">tester</span><span class="o">.</span><span class="n">add_group</span><span class="p">(</span><span class="n">prefix</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">tester</span><span class="o">.</span><span class="n">authorize_group</span><span class="p">(</span><span class="n">group</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="n">port_min</span><span class="p">,</span> <span class="n">port_max</span><span class="p">),</span> <span class="n">protocol</span><span class="o">=</span><span class="n">protocol</span><span class="p">,</span> <span class="n">cidr_ip</span><span class="o">=</span><span class="n">cidr</span><span class="p">)</span>
+    </div>
+<div class="viewcode-block" id="EuPopulator.buckets"><a class="viewcode-back" href="../../eutester.html#eutester.eupopulator.EuPopulator.buckets">[docs]</a>    <span class="k">def</span> <span class="nf">buckets</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">print</span> <span class="s">&quot;Creating buckets&quot;</span>
+        <span class="n">bucket_count</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">getint</span><span class="p">(</span><span class="s">&#39;buckets&#39;</span><span class="p">,</span> <span class="s">&#39;count&#39;</span><span class="p">)</span>
+        <span class="n">bucket_prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;buckets&#39;</span><span class="p">,</span> <span class="s">&#39;prefix&#39;</span><span class="p">)</span>
+        <span class="n">add_keys</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">getboolean</span><span class="p">(</span><span class="s">&#39;buckets&#39;</span><span class="p">,</span> <span class="s">&#39;add_keys&#39;</span><span class="p">)</span>
+        <span class="n">key_count</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">getint</span><span class="p">(</span><span class="s">&#39;buckets&#39;</span><span class="p">,</span> <span class="s">&#39;key_count&#39;</span><span class="p">)</span>
+        <span class="n">key_prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;buckets&#39;</span><span class="p">,</span> <span class="s">&#39;key_prefix&#39;</span><span class="p">)</span>
+        
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">bucket_count</span><span class="p">):</span>
+            <span class="n">bucket</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">tester</span><span class="o">.</span><span class="n">create_bucket</span><span class="p">(</span><span class="n">bucket_prefix</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">))</span>
+            <span class="k">if</span> <span class="n">add_keys</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">key_count</span><span class="p">):</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">tester</span><span class="o">.</span><span class="n">upload_object</span><span class="p">(</span><span class="n">bucket</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">key_prefix</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">))</span>
+        </div>
+<div class="viewcode-block" id="EuPopulator.depopulate"><a class="viewcode-back" href="../../eutester.html#eutester.eupopulator.EuPopulator.depopulate">[docs]</a>    <span class="k">def</span> <span class="nf">depopulate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tester</span><span class="o">.</span><span class="n">cleanup_artifacts</span><span class="p">()</span>  
+    </div>
+<div class="viewcode-block" id="EuPopulator.prefix_generator"><a class="viewcode-back" href="../../eutester.html#eutester.eupopulator.EuPopulator.prefix_generator">[docs]</a>    <span class="k">def</span> <span class="nf">prefix_generator</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span> <span class="n">chars</span><span class="o">=</span><span class="n">string</span><span class="o">.</span><span class="n">ascii_lowercase</span> <span class="o">+</span> <span class="n">string</span><span class="o">.</span><span class="n">digits</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s">&#39;&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="n">chars</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">size</span><span class="p">))</span>
+    </div>
+<div class="viewcode-block" id="EuPopulator.serialize_resources"><a class="viewcode-back" href="../../eutester.html#eutester.eupopulator.EuPopulator.serialize_resources">[docs]</a>    <span class="k">def</span> <span class="nf">serialize_resources</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">output_file</span><span class="o">=</span><span class="s">&quot;cloud_objects.dat&quot;</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Takes a snapshot of the current resources in the system and puts them into a data structure, then pickles this struct into a file.</span>
+<span class="sd">            output_file    Filename to use when outputing the serialized data, if this is None then the byte stream will be returned</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tester</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Serializing current resources&quot;</span><span class="p">)</span>
+        <span class="n">serialized</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">output_file</span><span class="p">,</span> <span class="s">&#39;wb&#39;</span><span class="p">)</span>
+        <span class="n">all_resources</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">tester</span><span class="o">.</span><span class="n">get_current_resources</span><span class="p">()</span>
+        <span class="k">for</span> <span class="nb">type</span> <span class="ow">in</span> <span class="n">all_resources</span><span class="p">:</span>
+            <span class="k">for</span> <span class="nb">object</span> <span class="ow">in</span> <span class="n">all_resources</span><span class="p">[</span><span class="nb">type</span><span class="p">]:</span>
+                <span class="k">print</span> <span class="o">&gt;&gt;</span><span class="n">serialized</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">tester</span><span class="o">.</span><span class="n">get_all_attributes</span><span class="p">(</span><span class="nb">object</span><span class="p">)</span>
+            
+         
+        <span class="n">serialized</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tester</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Serialized resources can be found at: &quot;</span> <span class="o">+</span> <span class="n">output_file</span><span class="p">)</span>
+        </div></div>
+</pre></div>
+
+      </div>
+      <div class="bottomnav">
+      
+        <p>
+        <a class="uplink" href="../../index.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer">
+        &copy; Copyright 2012, Vic Iglesias, Matt Clark, Harold Spencer.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>
