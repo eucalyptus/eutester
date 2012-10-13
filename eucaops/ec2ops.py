@@ -39,6 +39,7 @@ import base64
 import sys
 from datetime import datetime
 from boto.ec2.image import Image
+from boto.ec2.keypair import KeyPair
 from boto.ec2.blockdevicemapping import BlockDeviceMapping, BlockDeviceType
 from boto.exception import EC2ResponseError
 from eutester.euinstance import EuInstance
@@ -1023,7 +1024,7 @@ class EC2ops(Eutester):
             addressing_type = None
         #In the case a keypair object was passed instead of the keypair name
         if keypair:
-            if not isinstance(keypair, basestring):
+            if isinstance(keypair, KeyPair):
                 keypair = keypair.name
         
         start = time.time()
