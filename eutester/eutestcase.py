@@ -172,8 +172,9 @@ class EutesterTestUnit():
     '''
     def __init__(self,method, *args, **kwargs):
         self.method = method
+        self.method_possible_args = EutesterTestCase.get_meth_arg_names(self.method)
         self.args = args
-        self.kwargs = kwargs
+        self.kwargs = kwargs 
         self.name = str(method.__name__)
         self.result=EutesterTestResult.not_run
         self.time_to_run=0
@@ -281,13 +282,15 @@ class EutesterTestCase(unittest.TestCase):
         return self.setuptestcase(name=name, debugmethod=debugmethod, use_default_file=use_default_file, default_config=default_config)
         
     def setuptestcase(self, name=None, debugmethod=None, use_default_file=True, default_config='eutester.conf' ):
-        self.name = name 
+        self.name = self._testMethodName = name 
         if not self.name:
             callerfilename=inspect.getouterframes(inspect.currentframe())[1][1]
             self.name = os.path.splitext(os.path.basename(callerfilename))[0]  
+            self._testMethodName = self.name
+            print "setuptestname:"+str(name)
         self.debugmethod = debugmethod
         if not self.debugmethod:
-            self.setup_debugmethod(name)
+            self.setup_debugmethod()
         if not hasattr(self,'testlist'): self.testlist = []
         if not hasattr(self,'configfiles'): self.configfiles=[]
         self.default_config = default_config 
@@ -415,11 +418,28 @@ class EutesterTestCase(unittest.TestCase):
         self.use_color = True
         
         
-    def setup_debugmethod(self,name=None):
-            name = name if name else self.name if hasattr(self,'name') else self.__class__.__name__
-            print "Setting up debug method using name:"+str(name)
-            logger = Eulogger(identifier=str(name))
-            self.debugmethod = logger.log.debug
+    def setup_debugmethod(self, testcasename=None):
+        name = testcasename
+        print "Starting setup_debugmethod"+str(name)
+        if not name:
+            print "1"
+            if hasattr(self,'name'):
+                print "2"
+                if isinstance(self.name, types.StringType):
+                    print "3"
+                    name = self.name
+                    print "4"
+                    print 'got name!'+str(self.name)
+                    print "5"
+            else:
+                print "6"
+                name = 'EutesterTestCase'
+                print "7"
+        print "Setting up debug method using name:"+str(name)
+        print "8"
+        logger = Eulogger(identifier=str(name))
+        print "9"
+        self.debugmethod = logger.log.debug
 
     def debug(self,msg,traceback=1,color=None, linebyline=True):
         '''
@@ -476,7 +496,7 @@ class EutesterTestCase(unittest.TestCase):
             
    
             
-    def create_testunit_from_method(self,method,eof=False, autoarg=True, *args, **kwargs):
+    def create_testunit_from_method(self,method, *args, **kwargs):
         '''
         Description: Convenience method calling EutesterTestUnit. 
                      Creates a EutesterTestUnit object from a method and set of arguments to be fed to that method
@@ -499,6 +519,21 @@ class EutesterTestCase(unittest.TestCase):
         :rtype: EutesterTestUnit
         :returns: EutesterTestUnit object
         '''   
+        eof=False
+        autoarg=True
+        methvars = self.get_meth_arg_names(method)
+        #Pull out value relative to this method, leave in any that are intended to be passed through
+        if 'autoarg' in kwargs:
+            if 'autoarg' in methvars:
+                autoarg = kwargs['autoarg']
+            else:
+                autoarg = kwargs.pop('autoarg')
+        if 'eof' in kwargs:
+            if 'eof' in methvars:
+                eof = kwargs['eof']
+            else:
+                eof = kwargs.pop('eof')
+        
         testunit = EutesterTestUnit(method, *args, **kwargs)
         testunit.eof = eof
         #if autoarg, auto populate testunit arguements from local testcase.args namespace values
@@ -749,8 +784,25 @@ class EutesterTestCase(unittest.TestCase):
         :type kwargs: keyword arguments
         :param kwargs: None or more keyword arguements to be passed to method to be run
         '''
+        eof=False
+        autoarg=True
         obj = obj or self
         meth = getattr(obj,name)
+        methvars = self.get_meth_arg_names(meth)
+        
+        #Pull out value relative to this method, leave in any that are intended to be passed through
+        if 'autoarg' in kwargs:
+            if 'autoarg' in methvars:
+                autoarg = kwargs['autoarg']
+            else:
+                autoarg = kwargs.pop('autoarg')
+        if 'eof' in kwargs:
+            if 'eof' in methvars:
+                eof = kwargs['eof']
+            else:
+                eof = kwargs.pop('eof')
+                
+                
         testunit = EutesterTestUnit(meth, *args, **kwargs)
         testunit.eof = eof
         #if autoarg, auto populate testunit arguements from local testcase.args namespace values
@@ -940,7 +992,7 @@ class EutesterTestCase(unittest.TestCase):
         for x,arg in enumerate(testunit.args):
             testunit_obj_args.append([method_args[x+1]])
         
-        self.debug("test unit toal args:"+str(testunit_obj_args))
+        self.debug("test unit total args:"+str(testunit_obj_args))
         #populate any global args which do not conflict with args already contained within the test case
         #first populate matching method args with our global testcase args taking least precedence
         for apply_val in args_to_apply._get_kwargs():
@@ -1000,8 +1052,8 @@ class EutesterTestCase(unittest.TestCase):
         self.debug('create_with_args: running '+str(f_code.co_name)+"("+str(cmdargs).replace(':','=')+")")
         return meth(**cmdargs)            
         
-        
-    def get_method_fcode(self, meth):
+    @classmethod
+    def get_method_fcode(cls, meth):
         f_code = None
         #Find the args for the method passed in...
         #Check for object/class init...
@@ -1023,8 +1075,9 @@ class EutesterTestCase(unittest.TestCase):
             raise Exception("get_method_fcode: Could not find function_code for passed method of type:"+str(type(meth)))
         return f_code
     
-    def get_meth_arg_names(self,meth):
-        fcode = self.get_method_fcode(meth)
+    @classmethod
+    def get_meth_arg_names(cls,meth):
+        fcode = cls.get_method_fcode(meth)
         varnames = fcode.co_varnames[0:fcode.co_argcount]
         return varnames
     
