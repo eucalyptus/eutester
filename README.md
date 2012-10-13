@@ -9,6 +9,8 @@ eutester version 0.0.4
 
 [Guidelines for Contributing Testcases](https://github.com/eucalyptus/eutester/wiki/Guidelines-for-Contributing-Test-Cases)
 
+[Creating a Eucalyptus Test Harness: Jenkins, Testlink, and Eutester](http://testingclouds.wordpress.com/2012/10/01/creating-a-eucalyptus-test-harness-jenkinstestlink-and-eutester/)
+
 eutester is an attempt to leverage existing test code to make test writing faster and standardized.  
 
 Installation
