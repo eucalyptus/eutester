@@ -16,6 +16,7 @@ from eutester.eutestcase import EutesterTestCase
 from boto.exception import S3ResponseError
 from boto.exception import S3CreateError
 import boto
+import re
 
 class BucketTestSuite(EutesterTestCase):
     
@@ -125,6 +126,19 @@ class BucketTestSuite(EutesterTestCase):
                 self.fail("Should have caught exception for bad bucket name: " + bad_bucket)
         except:
             self.tester.debug( "Correctly caught the exception" )
+
+        """
+        Test creating bucket with null name
+        """
+        try:
+            null_bucket_name = ""
+            bucket_obj = self.tester.create_bucket(null_bucket_name)
+            self.tester.sleep(10)
+            if bucket_obj:
+                self.fail("Should have caught exception for creating bucket with null name.")
+        except S3ResponseError as e:
+            self.assertEqual(e.status, 405, 'Expected response status code to be 405, actual status code is ' + str(e.status))
+            self.assertTrue(re.search("MethodNotAllowed", e.code), "Incorrect exception returned when creating bucket with null name.")
 
     def test_bucket_acl(self):
         test_bucket = self.bucket_prefix + "acl_bucket_test"
