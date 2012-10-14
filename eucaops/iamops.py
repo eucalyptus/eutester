@@ -32,9 +32,6 @@
 from eutester import Eutester
 import re
 
-
-
-
 class IAMops(Eutester):
     
     def create_account(self,account_name):
@@ -61,13 +58,6 @@ class IAMops(Eutester):
         }
         self.euare.get_response('DeleteAccount', params)
 
-        '''
-
-        Options:
-            account_name -
-            account_id -
-            search - boolean - specify whether to use match or search when filtering the returned list
-        '''
     def get_all_accounts(self, account_id=None, account_name=None, search=False):
         """
         Request all accounts, return account dicts that match given criteria
