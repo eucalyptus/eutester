@@ -60,7 +60,7 @@ class InstanceRestore(EutesterTestCase):
         while len(self.tester.get_instances(reservation=self.reservation)) > 0:
             self.tester.sleep(30)
 
-        self.tester.deregister_image(self.image)
+        self.tester.deregister_image(self.image, clear=True)
 
         for nc in ncs:
             nc.sys("service eucalyptus-nc start")
