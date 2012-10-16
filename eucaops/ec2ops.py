@@ -692,7 +692,7 @@ class EC2ops(Eutester):
         self.test_resources["images"].append(image_id)
         return image_id
 
-    def deregister_image(self, image):
+    def deregister_image(self, image, clear=False):
         """
         Deregister an image.
 
@@ -703,7 +703,8 @@ class EC2ops(Eutester):
         if image.state is not "deregistered":
             raise Exception("Image " + image.id +  " did not enter deregistered state after deregistration was sent to server")
         else:
-            self.ec2.deregister_image(image.id)
+            if clear:
+                self.ec2.deregister_image(image.id)
 
     def get_emi(self, emi=None, root_device_type=None, root_device_name=None, location=None, state="available", arch=None, owner_id=None):
         """
