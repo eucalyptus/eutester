@@ -4,7 +4,7 @@
 # Description:  This script encompasses test cases/modules concerning instance specific behavior and
 #               features for Eucalyptus.  The test cases/modules that are executed can be 
 #               found in the script under the "tests" list.
-
+import re
 
 import time
 from eucaops import Eucaops
@@ -37,7 +37,8 @@ class ReportingBasics(EutesterTestCase):
         self.zone = random.choice(zones).name
 
         self.cur_time = str(int(time.time()))
-
+        date_fields = time.localtime()
+        self.date = str(date_fields.tm_year) + "-" + str(date_fields.tm_mon) + "-31"
         clcs = self.tester.get_component_machines("clc")
         if len(clcs) is 0:
             raise Exception("No CLC found")
@@ -83,7 +84,7 @@ class ReportingBasics(EutesterTestCase):
             instance.sys("dd if=/dev/zero of=/mnt/test.img count=" + str(file_size_in_mb) + " bs=1M")
 
         self.tester.sleep(120)
-        report_output = self.generate_report("instance","csv")
+        report_output = self.generate_report("instance","csv", self.date)
 
     def s3(self):
         self.bucket = self.tester.create_bucket(bucket_name="reporting-bucket-" + self.cur_time)
@@ -92,11 +93,15 @@ class ReportingBasics(EutesterTestCase):
         rand_string = self.tester.id_generator(size=1024*1024*10)
         self.tester.upload_object(self.bucket.name, "reporting-key" ,contents=rand_string)
         self.tester.sleep(120)
-        report_output = self.generate_report("s3", "csv")
+        report_output = self.generate_report("s3", "csv",self.date)
+        bucket_lines = self.tester.grep(self.bucket.name, report_output)
+        for line in bucket_lines:
+            if not re.search(self.bucket.name + ",1,10,17", line):
+                raise Exception("Failed to find proper output for " + str(self.bucket) + "reporting")
 
-
-    def generate_report(self, type, format):
-        return self.clc.sys("source " + self.tester.credpath + "/eucarc && eureport-generate-report -t " + str(type) +" -f " + str(format))
+    def generate_report(self, type, format, end_date):
+        return self.clc.sys("source " + self.tester.credpath + "/eucarc && eureport-generate-report -t " +
+                    str(type) +" -f " + str(format) + " -e " + str(end_date) )
 
     def modify_property(self, property, value):
         """
@@ -124,7 +129,7 @@ if __name__ == "__main__":
     instance_basics_tests = testcase.do_with_args(ReportingBasics)
 
     ### Either use the list of tests passed from config/command line to determine what subset of tests to run
-    list = testcase.args.tests or [ "s3"]
+    list = testcase.args.tests or ["instance"]
 
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
