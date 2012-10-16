@@ -704,16 +704,6 @@ class EC2ops(Eutester):
             raise Exception("Image " + image.id +  " did not enter deregistered state after deregistration was sent to server")
         else:
             self.ec2.deregister_image(image.id)
-    """
-
-        emi              (mandatory)
-        root_device_type (optional string)
-        root_device_name (optional string)
-        location         (optional string)
-        state            (optional string)
-        arch             (optional string)
-        owner_id         (optional string)
-        """
 
     def get_emi(self, emi=None, root_device_type=None, root_device_name=None, location=None, state="available", arch=None, owner_id=None):
         """
