@@ -824,7 +824,7 @@ class EC2ops(Eutester):
 
         poll_count = 15
         ### Ensure instance gets correct address
-        while instance.public_dns_name not in address.public_ip:
+        while instance.ip_address not in address.public_ip:
             if elapsed > timeout:
                 raise Exception('Address ' + str(address) + ' did not associate with instance after:'+str(elapsed)+" seconds")
             self.debug('Instance {0} has IP {1} attached instead of {2}'.format(instance.id, instance.public_dns_name, address.public_ip) )
