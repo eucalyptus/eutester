@@ -398,7 +398,7 @@ class InstanceBasics(EutesterTestCase):
         ### Thread that runs a testcase (function) and returns its pass or fail result
         self.tester.sleep(delay)
         try:
-            result = unittest.TextTestRunner(verbosity=2).run(InstanceBasics(name))
+            result = self.run_method_by_name(name)
         except Exception, e:
             queue.put(1)
             raise e
