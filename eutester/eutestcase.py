@@ -732,7 +732,7 @@ class EutesterTestCase(unittest.TestCase):
         
         
     
-    def create_testunit_by_name(self, name, obj=None, eof=False, autoarg=True, *args,**kwargs ):
+    def create_testunit_by_name(self, name, obj=None, eof=True, autoarg=True, *args,**kwargs ):
         '''
         Description: Attempts to match a method name contained with object 'obj', and create a EutesterTestUnit object from that method and the provided
         positional as well as keyword arguments provided. 
