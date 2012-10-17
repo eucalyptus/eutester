@@ -300,7 +300,9 @@ class EutesterTestCase(unittest.TestCase):
         if not hasattr(self,'args'): self.args=argparse.Namespace()
         self.show_self()
                 
-
+    def compile_all_args(self):
+        self.setup_parser()
+        self.get_args()
                                    
     def setup_parser(self,
                    testname=None, 
