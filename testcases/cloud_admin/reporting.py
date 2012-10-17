@@ -12,7 +12,7 @@ from eutester.euinstance import EuInstance
 from eutester.eutestcase import EutesterTestCase
 import os
 import random
-
+from collections import namedtuple
 
 class ReportingBasics(EutesterTestCase):
     def __init__(self, config_file=None, password=None):
@@ -70,7 +70,6 @@ class ReportingBasics(EutesterTestCase):
 
     def instance(self):
         self.reservation = self.tester.run_instance(self.image, keypair=self.keypair.name, group=self.group.name, zone=self.zone)
-        self.tester.sleep(120)
         file_size_in_mb = 500
         for instance in self.reservation.instances:
             assert isinstance(instance, EuInstance)
@@ -83,8 +82,32 @@ class ReportingBasics(EutesterTestCase):
             ### Write to volume
             instance.sys("dd if=/dev/zero of=/mnt/test.img count=" + str(file_size_in_mb) + " bs=1M")
 
-        self.tester.sleep(120)
-        report_output = self.generate_report("instance","csv", self.date)
+        self.tester.sleep(180)
+        for instance in self.reservation.instances:
+            report_output = self.generate_report("instance","csv", self.date)
+            instance_lines = self.tester.grep(instance.id, report_output)
+            for line in instance_lines:
+                instance_data = self.parse_instance_line(line)
+                #if not re.search( instance.id +",m1.small,1,9,0.2,0,0,0,0,93,200,0.2,0.0,0,1", line):
+                if not re.match(instance_data.type, "m1.small"):
+                    raise Exception("Failed to find proper output for " + str(instance) + " type. Received: " + instance_data.type )
+                if not int(instance_data.number)  == 1:
+                    raise Exception("Failed to find proper output for " + str(instance) + " number. Received: " + instance_data.number )
+                if not int(instance_data.unit_time)  > 2 :
+                    raise Exception("Failed to find proper output for " + str(instance) + " unit_time. Received: " + instance_data.unit_time )
+                if not int(instance_data.disk_write)  > 1000:
+                    raise Exception("Failed to find proper output for " + str(instance) + " disk_write. Received: " + instance_data.disk_write )
+                if not int(instance_data.disk_time_write)  > 200:
+                    raise Exception("Failed to find proper output for " + str(instance) + " disk_time_write. Received: " + instance_data.disk_time_write )
+
+
+    def parse_instance_line(self, line):
+        InstanceData = namedtuple('InstanceData', 'id type number unit_time cpu net_total_in net_total_out '
+                                                'net_extern_in net_extern_out disk_read disk_write disk_iops_read '
+                                                'disk_iops_write disk_time_read disk_time_write')
+        values = line.split(",")
+        return InstanceData(values[0],values[1],values[2],values[3],values[4],values[5],values[6],values[7],
+                            values[8],values[9],values[10],values[11],values[12],values[13],values[14])
 
     def s3(self):
         self.bucket = self.tester.create_bucket(bucket_name="reporting-bucket-" + self.cur_time)
@@ -96,8 +119,18 @@ class ReportingBasics(EutesterTestCase):
         report_output = self.generate_report("s3", "csv",self.date)
         bucket_lines = self.tester.grep(self.bucket.name, report_output)
         for line in bucket_lines:
-            if not re.search(self.bucket.name + ",1,10,17", line):
-                raise Exception("Failed to find proper output for " + str(self.bucket) + "reporting")
+            bucket_data = self.parse_bucket_line(line)
+            if not int(bucket_data.size) == 10:
+                raise Exception('Failed to find proper size for %s' % str(self.bucket))
+            if not int(bucket_data.keys) == 1:
+                raise Exception('Failed to find proper number of keys for %s' % str(self.bucket))
+            if not int(bucket_data.unit_time) > 16:
+                raise Exception('Failed to find proper amount of usage for %s' % str(self.bucket))
+
+    def parse_bucket_line(self, line):
+        BucketData = namedtuple('BucketData', 'name keys size unit_time')
+        values = line.split(",")
+        return BucketData(values[0],values[1],values[2],values[3] )
 
     def generate_report(self, type, format, end_date):
         return self.clc.sys("source " + self.tester.credpath + "/eucarc && eureport-generate-report -t " +
