@@ -631,10 +631,10 @@ class EutesterTestCase(unittest.TestCase):
                     self.print_test_list_results(list=list)
                 except:pass
             try:
-                 if clean_on_exit:
+                if clean_on_exit:
                     self.clean_method()
-            except: pass
-            
+            except:
+                pass
         return exitcode
     
     def has_arg(self,arg):
@@ -1030,11 +1030,7 @@ class EutesterTestCase(unittest.TestCase):
     
     def get_meth_kwarg_names(self,meth):
         return self.get_meth_arg_names(meth)
-        '''
-        fcode = self.get_method_fcode(meth)
-        varnames = fcode.co_varnames[fcode.co_argcount:len(fcode.co_varnames)]
-        return varnames
-        '''
+
     def get_meth_varnames(self,meth):
         fcode = self.get_method_fcode(meth)
         return fcode.co_varnames
