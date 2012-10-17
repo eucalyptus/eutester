@@ -473,9 +473,15 @@ class EutesterTestCase(unittest.TestCase):
                 self.debugmethod("("+str(cur_method)+":"+str(lineno)+"): "+colorprefix+line.strip()+colorreset )
         else:
             self.debugmethod("("+str(cur_method)+":"+str(lineno)+"): "+colorprefix+str(msg)+colorreset )
-            
-   
-            
+
+    def run_test_list_by_name(self, list):
+        unit_list = []
+        for test in list:
+            unit_list.append( self.create_testunit_by_name(test) )
+
+        ### Run the EutesterUnitTest objects
+        return self.run_test_case_list(unit_list)
+
     def create_testunit_from_method(self,method,eof=False, autoarg=True, *args, **kwargs):
         '''
         Description: Convenience method calling EutesterTestUnit. 
