@@ -151,7 +151,7 @@ class SshConnection():
         raise CommandTimeoutException("SSH Command timer fired after "+str(int(elapsed))+" seconds. Cmd:'"+str(cmd)+"'")   
     
      
-    def sys(self, cmd, verbose=None, timeout=120, listformat=True, code=None):
+    def sys(self, cmd, verbose=False, timeout=120, listformat=True, code=None):
         '''
         Issue a command cmd and return output in list format
         cmd - mandatory - string representing the command to be run  against the remote ssh session
