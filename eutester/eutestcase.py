@@ -978,19 +978,22 @@ class EutesterTestCase(unittest.TestCase):
     def populate_testunit_with_args(self,testunit,namespace=None):
         self.debug("Attempting to populate testunit:"+str(testunit.name)+", with testcase.args...")
         args_to_apply = namespace or self.args
-    
-        testunit_obj_args =  copy.copy(testunit.kwargs)
+        testunit_obj_args = {}
+        
+        #copy the test units key word args
+        testunit_obj_args.update(copy.copy(testunit.kwargs))
         self.debug("Testunit keyword args:"+str(testunit_obj_args))
         
         #Get all the var names of the underlying method the testunit is wrapping
         method_args = self.get_meth_arg_names(testunit.method)
+        offset = 0 if isinstance(testunit.method,types.FunctionType) else 1
         self.debug("Got method args:"+str(method_args))
        
             
         #Add the var names of the positional args provided in testunit.args to check against later
         #Append to the known keyword arg list
         for x,arg in enumerate(testunit.args):
-            testunit_obj_args.append([method_args[x+1]])
+            testunit_obj_args[method_args[x+offset]] = arg
         
         self.debug("test unit total args:"+str(testunit_obj_args))
         #populate any global args which do not conflict with args already contained within the test case
@@ -1077,7 +1080,7 @@ class EutesterTestCase(unittest.TestCase):
     
     @classmethod
     def get_meth_arg_names(cls,meth):
-        fcode = cls.get_method_fcode(meth)
+        fcode = cls.get_method_fcode(meth) 
         varnames = fcode.co_varnames[0:fcode.co_argcount]
         return varnames
     
