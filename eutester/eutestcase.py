@@ -678,12 +678,21 @@ class EutesterTestCase(unittest.TestCase):
             
             if printresults:
                 try:
+                    self.debug("Printing pre-cleanup results:")
                     msgout += self.print_test_list_results(list=list)
+                    self.status(msgout)
                 except:pass
-            self.status(msgout)
             try:
                  if clean_on_exit:
-                    self.clean_method() 
+                    cleanunit = self.create_testunit_from_method(self.clean_method)
+                    self.testlist.append(cleanunit)
+                    try:
+                        cleanunit.run()
+                    except:
+                        exitcode = 1 
+                    if printresults:
+                        msgout += self.print_test_list_results(list=list)
+                        self.status(msgout)
             except: pass
             
         return exitcode
@@ -759,7 +768,7 @@ class EutesterTestCase(unittest.TestCase):
     
     
     def clean_method(self):
-        self.debug("Implement this method")
+        raise Exception("Clean_method needs not implemented. Was run_list using clean_on_exit?")
 
     def print_test_list_results(self,list=None, printout=True, printmethod=None):
         '''
