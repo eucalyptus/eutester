@@ -371,7 +371,10 @@ class EbsTestSuite(EutesterTestCase):
                 badvols = instance.get_unsynced_volumes() 
                 if (badvols is not None) and (badvols != []):
                     self.debug("failed")
-                    raise Exception("Unsync volumes found on:"+str(instance.id)+"\n"+" ".join(badvols))
+                    errlist=[]
+                    for badvol in badvols:
+                        errlist.append(str(badvol.id))
+                    raise Exception("Unsync volumes found on:"+str(instance.id)+"\n"+" ".join(errlist))
                 for volume in instance.attached_vols:
                     #detach number of volumes equal to volcount
                     if vc >= volcount:
