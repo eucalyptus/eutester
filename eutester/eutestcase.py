@@ -304,7 +304,9 @@ class EutesterTestCase(unittest.TestCase):
         if not hasattr(self,'args'): self.args=argparse.Namespace()
         self.show_self()
                 
-
+    def compile_all_args(self):
+        self.setup_parser()
+        self.get_args()
                                    
     def setup_parser(self,
                    testname=None, 
@@ -485,9 +487,15 @@ class EutesterTestCase(unittest.TestCase):
                 self.debugmethod("("+str(cur_method)+":"+str(lineno)+"): "+colorprefix+line.strip()+colorreset )
         else:
             self.debugmethod("("+str(cur_method)+":"+str(lineno)+"): "+colorprefix+str(msg)+colorreset )
-            
-   
-            
+
+    def run_test_list_by_name(self, list):
+        unit_list = []
+        for test in list:
+            unit_list.append( self.create_testunit_by_name(test) )
+
+        ### Run the EutesterUnitTest objects
+        return self.run_test_case_list(unit_list)
+
     def create_testunit_from_method(self,method, *args, **kwargs):
         '''
         Description: Convenience method calling EutesterTestUnit. 
@@ -683,6 +691,7 @@ class EutesterTestCase(unittest.TestCase):
                     self.status(msgout)
                 except:pass
             try:
+<<<<<<< HEAD
                  if clean_on_exit:
                     cleanunit = self.create_testunit_from_method(self.clean_method)
                     self.testlist.append(cleanunit)
@@ -695,6 +704,12 @@ class EutesterTestCase(unittest.TestCase):
                         self.status(msgout)
             except: pass
             
+=======
+                if clean_on_exit:
+                    self.clean_method()
+            except:
+                pass
+>>>>>>> 8ee7f63ee3956260581889ceee02fa2db552e490
         return exitcode
     
     def has_arg(self,arg):
@@ -904,7 +919,7 @@ class EutesterTestCase(unittest.TestCase):
         
         
     
-    def create_testunit_by_name(self, name, obj=None, eof=False, autoarg=True, *args,**kwargs ):
+    def create_testunit_by_name(self, name, obj=None, eof=True, autoarg=True, *args,**kwargs ):
         '''
         Description: Attempts to match a method name contained with object 'obj', and create a EutesterTestUnit object from that method and the provided
         positional as well as keyword arguments provided. 
@@ -1244,10 +1259,24 @@ class EutesterTestCase(unittest.TestCase):
             raise Exception("get_method_fcode: Could not find function_code for passed method of type:"+str(type(meth)))
         return f_code
     
+<<<<<<< HEAD
     @classmethod
     def get_meth_arg_names(cls,meth):
         '''
         Description: Return varnames within argcount
+=======
+    def get_meth_arg_names(self,meth):
+        fcode = self.get_method_fcode(meth)
+        varnames = fcode.co_varnames[0:fcode.co_argcount]
+        return varnames
+    
+    def get_meth_kwarg_names(self,meth):
+        return self.get_meth_arg_names(meth)
+
+    def get_meth_varnames(self,meth):
+        fcode = self.get_method_fcode(meth)
+        return fcode.co_varnames
+>>>>>>> 8ee7f63ee3956260581889ceee02fa2db552e490
         
         :type:meth: method
         :param: meth: method to fetch arg names for
