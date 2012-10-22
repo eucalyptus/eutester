@@ -59,10 +59,10 @@ emi = None
 if __name__ == "__main__":
     ## If given command line arguments, use them as test names to launch
 
-    testcase= EutesterTestCase()    
-    testcase.setup_parser(description="Attempts to tests and provide info on focused areas related to Eucalyptus EBS related functionality.", 
+    testcase= EutesterTestCase(name='ebs_basic_test')    
+    testcase.setup_parser(description="Attempts to test and provide info on focused areas related to Eucalyptus EBS related functionality.", 
                           testlist=False)
-    
+    testcase.get_args()
     ebstestsuite= testcase.do_with_args(EbsTestSuite)
     testcase.clean_method = ebstestsuite.clean_created_resources
     testlist = ebstestsuite.ebs_basic_test_suite(run=False)
