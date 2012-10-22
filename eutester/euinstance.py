@@ -605,7 +605,7 @@ class EuInstance(Instance):
                                     vdev = "/dev/"+str(vdev)
                                     
                                     #if we've already checked the md5 on this dev no need to re-check it. 
-                                    if not re.match(vdev," ".join(checked_vdevs)): 
+                                    if not vdev in checked_vdevs: 
                                         self.debug('Checking '+str(vdev)+" for match against euvolume:"+str(vol.id))
                                         md5 = self.get_dev_md5(vdev, vol.md5len )
                                         self.debug('comparing '+str(md5)+' vs '+str(vol.md5))
@@ -613,9 +613,9 @@ class EuInstance(Instance):
                                             self.debug('Found match at dev:'+str(vdev))
                                             found = True
                                             if (vol.guestdev != vdev ):
-                                                self.debug("("+str(vol.id)+")Guest dev changed! Updating from:'"+str(vol.guestdev)+"' to:'"+str(vdev)+"'")
+                                                self.debug("("+str(vol.id)+")Found dev match. Guest dev changed! Updating from previous:'"+str(vol.guestdev)+"' to:'"+str(vdev)+"'")
                                             else:
-                                                self.debug("("+str(vol.id)+")Found local match at previous dev:'"+str(vol.guestdev)+"'")
+                                                self.debug("("+str(vol.id)+")Found dev match. Previous dev:'"+str(vol.guestdev)+"', Current dev:'"+str(vdev)+"'")
                                             vol.guestdev = vdev
                                         checked_vdevs.append(vdev) # add to list of devices we've already checked.
                                     if found:
@@ -628,7 +628,7 @@ class EuInstance(Instance):
                         except:pass 
                         if found:
                             break
-                        self.debug('Not found sleep and check again...')
+                        self.debug('Local device for volume not found. Sleeping and checking again...')
                         time.sleep(10)
                         elapsed = int(time.time() - start)
                     if not found:
