@@ -930,9 +930,7 @@ class EutesterTestCase(unittest.TestCase):
         '''
         eof=False
         autoarg=True
-        obj = obj or self
-        meth = getattr(obj,name)
-        methvars = self.get_meth_arg_names(meth)
+
         
         #Pull out value relative to this method, leave in any that are intended to be passed through
         if 'autoarg' in kwargs:
@@ -945,8 +943,15 @@ class EutesterTestCase(unittest.TestCase):
                 eof = kwargs['eof']
             else:
                 eof = kwargs.pop('eof')
+        if 'obj' in kwargs:
+            if 'obj' in methvars:
+                obj = kwargs['obj']
+            else:
+                obj = kwargs.pop('obj')
                 
-                
+        obj = obj or self
+        meth = getattr(obj,name)
+        methvars = self.get_meth_arg_names(meth)       
         testunit = EutesterTestUnit(meth, *args, **kwargs)
         testunit.eof = eof
         #if autoarg, auto populate testunit arguements from local testcase.args namespace values
