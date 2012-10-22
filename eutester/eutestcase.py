@@ -387,7 +387,7 @@ class EutesterTestCase(unittest.TestCase):
                                 help="password to use for machine root ssh access", default='foobar')
         if config:
             parser.add_argument('--config',
-                                help='path to config file', default='../input/2btested.lst')   
+                                help='path to config file', default='../input/2b_tested.lst')   
         if configblocks:
             parser.add_argument('--configblocks', nargs='+',
                                 help="Config sections/blocks in config file to read in", default=[])
@@ -422,23 +422,12 @@ class EutesterTestCase(unittest.TestCase):
         name = testcasename
         print "Starting setup_debugmethod"+str(name)
         if not name:
-            print "1"
             if hasattr(self,'name'):
-                print "2"
                 if isinstance(self.name, types.StringType):
-                    print "3"
                     name = self.name
-                    print "4"
-                    print 'got name!'+str(self.name)
-                    print "5"
             else:
-                print "6"
                 name = 'EutesterTestCase'
-                print "7"
-        print "Setting up debug method using name:"+str(name)
-        print "8"
         logger = Eulogger(identifier=str(name))
-        print "9"
         self.debugmethod = logger.log.debug
 
     def debug(self,msg,traceback=1,color=None, linebyline=True):
