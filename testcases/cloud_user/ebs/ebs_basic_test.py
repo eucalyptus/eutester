@@ -62,21 +62,12 @@ if __name__ == "__main__":
     testcase= EutesterTestCase()    
     testcase.setup_parser(description="Attempts to tests and provide info on focused areas related to Eucalyptus EBS related functionality.", 
                           testlist=False)
-    testcase.parser.add_argument('--zone', 
-                        help="zone to use in this test, defaults to testing all zones", default=None)
-    testcase.parser.add_argument('--keypair', 
-                        help="keypair to use when launching instances within the test", default=None)
-    testcase.parser.add_argument('--group', 
-                        help="group to use when launching instances within the test", default=None) 
-    testcase.parser.add_argument('--vmtype',
-                       help='vmtype to run this test with', default=None) 
-    testcase.get_args()
-
     
     ebstestsuite= testcase.do_with_args(EbsTestSuite)
     testcase.clean_method = ebstestsuite.clean_created_resources
     testlist = ebstestsuite.ebs_basic_test_suite(run=False)
     ret = testcase.run_test_case_list(testlist)
+    testcase.print_test_list_results()
     exit(ret)
 
     
