@@ -204,7 +204,7 @@ class EutesterTestUnit():
        
     def set_kwarg(self,kwarg,val):
         self.kwargs[kwarg]=val
-    
+         
     def get_test_method_description(self):
         '''
         Attempts to derive test unit description for the registered test method
@@ -292,6 +292,7 @@ class EutesterTestCase(unittest.TestCase):
         if not self.debugmethod:
             self.setup_debugmethod()
         if not hasattr(self,'testlist'): self.testlist = []
+        self.list = None
         if not hasattr(self,'configfiles'): self.configfiles=[]
         self.default_config = default_config 
         self.use_default_file = use_default_file
@@ -412,9 +413,11 @@ class EutesterTestCase(unittest.TestCase):
         return parser
     
     def disable_color(self):
+        self.set_arg('use_color', False)
         self.use_color = False
     
     def enable_color(self):
+        self.set_arg('use_color', True)
         self.use_color = True
         
         
@@ -574,19 +577,29 @@ class EutesterTestCase(unittest.TestCase):
     def resultdefault(self,msg,printout=True,color='blueongrey'):
         if printout:
             self.debug(msg,traceback=2,color=TestColor.get_canned_color('blueongrey'),linebyline=False)
-        msg = TestColor.get_canned_color(color)+str(msg)+TestColor.reset
+        msg = self.format_line_for_color(msg, color)
         return msg
     
     def resultfail(self,msg,printout=True, color='redongrey'):
         if printout:
             self.debug(msg,traceback=2, color=TestColor.get_canned_color('redongrey'),linebyline=False)
-        msg = TestColor.get_canned_color(color)+str(msg)+TestColor.reset
+        msg = self.format_line_for_color(msg, color)
         return msg
         
     def resulterr(self,msg,printout=True,color='failred'):
         if printout:
             self.debug(msg,traceback=2, color=TestColor.get_canned_color(color),linebyline=False)
-        msg = TestColor.get_canned_color(color)+str(msg)+TestColor.reset
+        msg = self.format_line_for_color(msg, color)
+        return msg
+    
+    def format_line_for_color(self,msg,color):
+        if not self.use_color:
+            return msg
+        end=""
+        if msg.endswith('\n'):
+            msg = msg.rstrip()
+            end="\n"
+        msg = TestColor.get_canned_color(color)+str(msg)+TestColor.reset+end
         return msg
     
     def get_pretty_args(self,testunit):
@@ -644,7 +657,7 @@ class EutesterTestCase(unittest.TestCase):
                 startbuf = ""
                 argbuf =self.get_pretty_args(test)
                 startbuf += str(test.description)+str(argbuf)
-                startbuf += 'Running list method: "'+str(test.name)+'"'
+                startbuf += 'Running list method: "'+str(self.print_testunit_method_arg_values(test))+'"'
                 self.startmsg(startbuf)
                 try:
                     test.run()
@@ -670,7 +683,7 @@ class EutesterTestCase(unittest.TestCase):
             self.status(msgout)
             try:
                  if clean_on_exit:
-                    self.clean_method()
+                    self.clean_method() 
             except: pass
             
         return exitcode
@@ -755,28 +768,31 @@ class EutesterTestCase(unittest.TestCase):
         :type list: list
         :param list: list of EutesterTestUnits
         
+        :type printout: boolean
+        :param printout: boolean to flag whether to print using printmethod or self.debug, 
+                         or to return a string buffer representing the results output 
+        
         :type printmethod: method
         :param printmethod: method to use for printing test result output. Default is self.debug
         '''
-        
+        buf =  "TESTUNIT LIST SUMMARY FOR '"+str(self.name)+"'\n"
         if list is None:
             list=self.testlist
+        if not list:
+            raise Exception("print_test_list_results, error: No Test list provided")
         if printmethod is None:
             printmethod = lambda msg: self.debug(msg,linebyline=False)
-        
-        printmethod = self.resultdefault
-        printfailure = self.resultfail
-        printerr = self.resulterr
-        
-        for testcase in list:
-            buf =  ""
-            buf += "\n"+ self.getline(80)+"\n"
-            pmethod = printfailure if not testcase.result == EutesterTestResult.passed else printmethod
-            buf +=  pmethod(str("TEST: "+str(testcase.name)).ljust(50)+str(" RESULT:"+testcase.result).ljust(10)+str(' Time:'+str(testcase.time_to_run)).ljust(0),printout=False)
-            if testcase.result == EutesterTestResult.failed:
-                    buf += "\n"+str(printerr('ERROR('+str(testcase.name)+'): '+str(testcase.error), printout=False))
-        buf += "\n"+ self.getline(80)+"\n"
-        buf += self.print_test_list_short_stats(list)
+        printmethod("Test list results for testcase:"+str(self.name))
+
+        for testunit in list:
+            buf += self.resultdefault("\n"+ self.getline(80)+"\n", printout=False)
+            pmethod = self.resultfail if not testunit.result == EutesterTestResult.passed else self.resultdefault
+            buf += pmethod(str("TEST: "+str(testunit.name)).ljust(50)+str(" RESULT:"+testunit.result).ljust(10)+str(' Time:'+str(testunit.time_to_run)).ljust(0),printout=False)
+            buf += pmethod("\nRAN AS: "+str(self.print_testunit_method_arg_values(testunit)), printout=False) 
+            if testunit.result == EutesterTestResult.failed:
+                    buf += "\n"+str(self.resulterr('ERROR('+str(testunit.name)+'): '+str(testunit.error), printout=False))
+        buf += self.resultdefault("\n"+ self.getline(80)+"\n", printout=False)
+        buf += str(self.print_test_list_short_stats(list))
         if printout:
             printmethod(buf)
         else:
@@ -795,10 +811,10 @@ class EutesterTestCase(unittest.TestCase):
         for fieldname in fields[2:len(fields)]:
             results[fieldname]=0
         #increment values in results dict based upon result of each testunit in list
-        for testcase in list:
+        for testunit in list:
             total += 1
-            elapsed += testcase.time_to_run
-            results[testcase.result] += 1
+            elapsed += testunit.time_to_run
+            results[testunit.result] += 1
         fieldsbuf += str('| TOTAL').ljust(10)
         resultsbuf += str('| ' + str(total)).ljust(10)
         for field in results:
@@ -814,6 +830,40 @@ class EutesterTestCase(unittest.TestCase):
         if printmethod:
             printmethod(mainbuf)
         return mainbuf
+    
+    @classmethod  
+    def get_testunit_method_arg_dict(cls,testunit):
+        argdict={}
+        spec = inspect.getargspec(testunit.method)
+        if isinstance(testunit.method,types.FunctionType):
+            argnames = spec.args
+        else:
+            argnames = spec.args[1:len(spec.args)]
+        defaults = spec.defaults
+        #Initialize the return dict
+        for argname in argnames:
+            argdict[argname]='<!None!>'
+        #Set the default values of the testunits method
+        for x in xrange(0,len(defaults)):
+            argdict[argnames.pop()]=defaults[len(defaults)-x-1]
+        #Then overwrite those with the testunits kwargs values
+        for kwarg in testunit.kwargs:
+            argdict[kwarg]=testunit.kwargs[kwarg]
+        #then add the positional args in if they apply...
+        for count, value in enumerate(testunit.args):
+            argdict[argnames[count]]=value
+        return argdict
+    
+    @classmethod
+    def print_testunit_method_arg_values(cls,testunit):
+        buf = testunit.name+"("
+        argdict = EutesterTestCase.get_testunit_method_arg_dict(testunit)
+        for arg in argdict:
+            buf += str(arg)+":"+str(argdict[arg])+","
+        buf = buf.rstrip(',')
+        buf += ")"
+        return buf
+        
         
     def getline(self,len):
         buf = ''
