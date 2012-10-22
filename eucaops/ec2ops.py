@@ -342,7 +342,7 @@ class EC2ops(Eutester):
         self.debug( "Polling for volume to become available")
         
         while volume.status != 'available' and (elapsed < timeout):
-            self.debug("Volume ("+volume.id+") State("+volume.status+") sleeping " + str(poll_interval) + "s")
+            self.debug("Volume ("+volume.id+") State("+volume.status+"), seconds elapsed: " + str(elapsed)+'/'+str(timeout))
             time.sleep(poll_interval)
             elapsed = int(time.time()-start)
             volume.update()
@@ -351,7 +351,7 @@ class EC2ops(Eutester):
                 self.fail(str(volume) + " went to: " + volume.status)
                 return None  
         if volume.status != 'available':
-            self.fail(str(volume) + " never went to available and stayed in " + volume.status)
+            self.fail(str(volume) + " never went to available and stayed in " + volume.status+", after "+str(elapsed)+" seconds")
             self.debug( "Deleting volume that never became available")
             volume.delete()
             return None
