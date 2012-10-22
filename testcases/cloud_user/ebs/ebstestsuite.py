@@ -284,7 +284,7 @@ class EbsTestSuite(EutesterTestCase):
                 raise Exception('attach_all_avail_vols_to_instances_in_zones: Zone.volumes is empty')
             if not zone.instances:
                 raise Exception('attach_all_avail_vols_to_instances_in_zones: Instance list is empty')
-            instance in zone.instances[0]
+            instance = zone.instances[0]
             for volume in zone.volumes:
                 volume.update()
                 if (volume.status == "available"):
