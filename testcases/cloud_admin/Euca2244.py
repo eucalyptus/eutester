@@ -2,6 +2,8 @@
 Created on Oct 18, 2012
 @author: mmunn
 Unit test          : EUCA-2244 Default launch permission for user image (account resource)
+                     The fix for this issue changes the database so euca_conf --initialize
+                     must have been run with the fix present for this test to pass.
 setUp              : Install Credentials, sat variables
 test               : Create and register an image and make sure the default visibility is Private not Public
 tearDown           : Removes Credential, removes image
@@ -30,7 +32,7 @@ class Euca2244(unittest.TestCase):
 
     def tearDown(self):
         self.tester.sys(self.source + "euca-deregister " + self.emi)
-        self.tester.sys(self.source + "euca-delete-bundle -b " + self.imgName + "test4")
+        self.tester.sys(self.source + "euca-delete-bundle -b " + self.imgName + "test0")
         self.tester.delete_keypair(self.keypair)
         self.tester.local("rm " + self.keypair.name + ".pem") 
         shutil.rmtree(self.tester.credpath)  
