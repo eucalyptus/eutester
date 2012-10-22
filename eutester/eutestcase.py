@@ -679,7 +679,7 @@ class EutesterTestCase(unittest.TestCase):
             if printresults:
                 try:
                     self.debug("Printing pre-cleanup results:")
-                    msgout += self.print_test_list_results(list=list)
+                    msgout += self.print_test_list_results(list=list,printout=False)
                     self.status(msgout)
                 except:pass
             try:
@@ -691,7 +691,7 @@ class EutesterTestCase(unittest.TestCase):
                     except:
                         exitcode = 1 
                     if printresults:
-                        msgout += self.print_test_list_results(list=list)
+                        msgout = self.print_test_list_results(list=list,printout=False)
                         self.status(msgout)
             except: pass
             
