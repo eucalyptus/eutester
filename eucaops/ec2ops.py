@@ -866,13 +866,14 @@ class EC2ops(Eutester):
         
         start = time.time()
         ### Ensure instance gets correct address
-        while address.public_ip and re.search( instance.public_dns_name,address.public_ip):
+        while re.search( instance.ip_address,address.public_ip):
             self.debug('Instance {0} has IP "{1}" still using address "{2}" after {3} seconds'.format(instance.id, instance.public_dns_name, address.public_ip, str(elapsed)) )
             if elapsed > timeout:
                 raise Exception('Address ' + str(address) + ' never disassociated with instance after '+str(elapsed)+' seconds')
             instance.update()
             self.sleep(5)
             elapsed = int(time.time()-start)
+            address = self.ec2.get_all_addresses(addresses=[address.public_ip])[0]
         self.debug("Disassociated IP successfully")    
 
     def release_address(self, address):
