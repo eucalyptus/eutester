@@ -80,6 +80,7 @@ class SshConnection():
     
     def __init__(self, 
                  host, 
+                 proxy=None,
                  keypair= None, 
                  keypath=None, 
                  password=None, 
@@ -101,6 +102,7 @@ class SshConnection():
         '''
         
         self.host = host
+        self.proxy = proxy
         self.keypair = keypair
         self.keypath = keypath
         self.password = password
@@ -306,7 +308,9 @@ class SshConnection():
     def get_ssh_connection(self, hostname, username="root", password=None, keypath=None, timeout= 60, retry=1):
         '''
         Create a paramiko ssh session to hostname. Will attempt to authenticate first with a keypath if provided, 
-        if the sshkey file path is not provided.  username and password will be used to authenticate. 
+        if the sshkey file path is not provided.  username and password will be used to authenticate. This leaves out the case
+        where a password is passed as the password needed to unlock the key file. This 3rd case may need to be added but
+        may mask failures in tests for key inseration when using tests who's images have baked in passwords for login access(tbd). 
         Upon success returns a paramiko sshclient with an established connection. 
         hostname - mandatory - hostname or ip to establish ssh connection with
         username - optional - username used to authenticate ssh session
@@ -319,7 +323,6 @@ class SshConnection():
             raise Exception("ssh_connect: both password and keypath were set to None")
         
         #self.debug("ssh_connect args:\nhostname:"+hostname+"\nusername:"+username+"\npassword:"+str(password)+"\nkeypath:"+str(keypath)+"\ntimeout:"+str(timeout)+"\nretry:"+str(retry))
-
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     

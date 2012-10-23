@@ -284,7 +284,7 @@ class EbsTestSuite(EutesterTestCase):
                 raise Exception('attach_all_avail_vols_to_instances_in_zones: Zone.volumes is empty')
             if not zone.instances:
                 raise Exception('attach_all_avail_vols_to_instances_in_zones: Instance list is empty')
-            instance in zone.instances[0]
+            instance = zone.instances[0]
             for volume in zone.volumes:
                 volume.update()
                 if (volume.status == "available"):
@@ -371,7 +371,10 @@ class EbsTestSuite(EutesterTestCase):
                 badvols = instance.get_unsynced_volumes() 
                 if (badvols is not None) and (badvols != []):
                     self.debug("failed")
-                    raise Exception("Unsync volumes found on:"+str(instance.id)+"\n"+" ".join(badvols))
+                    errlist=[]
+                    for badvol in badvols:
+                        errlist.append(str(badvol.id))
+                    raise Exception("Unsync volumes found on:"+str(instance.id)+"\n"+" ".join(errlist))
                 for volume in instance.attached_vols:
                     #detach number of volumes equal to volcount
                     if vc >= volcount:
