@@ -436,8 +436,8 @@ if __name__ == "__main__":
     unit_list = [ ]
     for test in list:
         unit_list.append( instance_basics_tests.create_testunit_by_name(test) )
-
+    testcase.clean_method = InstanceBasics.clean_method
     ### Run the EutesterUnitTest objects
-    exit(testcase.run_test_case_list(unit_list))
+    exit(testcase.run_test_case_list(unit_list,clean_on_exit=True))
 
 
