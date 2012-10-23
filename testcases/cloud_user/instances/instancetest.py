@@ -35,8 +35,9 @@ class InstanceBasics(EutesterTestCase):
         zones = self.tester.ec2.get_all_zones()
         self.zone = random.choice(zones).name
         self.reservation = self.tester.run_instance(self.image, keypair=self.keypair.name, group=self.group.name, zone=self.zone)
+        self.clean_method = self.cleanup
 
-    def clean_method(self):
+    def cleanup(self):
         if self.reservation:
             self.assertTrue(self.tester.terminate_instances(self.reservation), "Unable to terminate instance(s)")
         self.tester.delete_group(self.group)
