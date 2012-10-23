@@ -417,16 +417,7 @@ class InstanceBasics(EutesterTestCase):
             return True
 
 if __name__ == "__main__":
-    testcase = EutesterTestCase()
-
-    #### Adds argparse to testcase and adds some defaults args
-    testcase.setup_parser()
-
-    ### Get all cli arguments and any config arguments and merge them
-    testcase.get_args()
-
-    ### Instantiate an object of your test suite class using args found from above
-    instance_basics_tests = testcase.do_with_args(InstanceBasics)
+    testcase = InstanceBasics()
 
     ### Either use the list of tests passed from config/command line to determine what subset of tests to run
     list = testcase.args.tests or [ "BasicInstanceChecks",  "ElasticIps", "MaxSmallInstances" , "LargestInstance",
@@ -435,9 +426,10 @@ if __name__ == "__main__":
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
     for test in list:
-        unit_list.append( instance_basics_tests.create_testunit_by_name(test) )
-    testcase.clean_method = InstanceBasics.clean_method
+        unit_list.append( testcase.create_testunit_by_name(test) )
     ### Run the EutesterUnitTest objects
-    exit(testcase.run_test_case_list(unit_list,clean_on_exit=True))
+
+    result = testcase.run_test_case_list(unit_list,clean_on_exit=True)
+    exit(result)
 
 
