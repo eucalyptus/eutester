@@ -439,6 +439,6 @@ if __name__ == "__main__":
         unit_list.append( instance_basics_tests.create_testunit_by_name(test) )
 
     ### Run the EutesterUnitTest objects
-    testcase.run_test_case_list(unit_list)
-    instance_basics_tests.clean_method()
+    exit(testcase.run_test_case_list(unit_list))
+
 
