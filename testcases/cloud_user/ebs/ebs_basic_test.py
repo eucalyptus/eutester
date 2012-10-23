@@ -67,7 +67,6 @@ if __name__ == "__main__":
     testcase.clean_method = ebstestsuite.clean_created_resources
     testlist = ebstestsuite.ebs_basic_test_suite(run=False)
     ret = testcase.run_test_case_list(testlist)
-    testcase.print_test_list_results()
     print "ebs_basic_test exiting:("+str(ret)+")"
     exit(ret)
 
