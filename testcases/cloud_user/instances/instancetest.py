@@ -19,6 +19,8 @@ import random
 class InstanceBasics(EutesterTestCase):
     def __init__(self):
         self.setuptestcase()
+        self.setup_parser()
+        self.get_args()
         # Setup basic eutester object
         self.tester = Eucaops( credpath=self.args.credpath)
         self.tester.poll_count = 120
