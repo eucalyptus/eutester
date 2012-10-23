@@ -7,6 +7,7 @@
 
 import unittest
 import time
+from boto.ec2.address import Address
 from eucaops import Eucaops
 from eutester.eutestcase import EutesterTestCase
 from eutester.euvolume import EuVolume
@@ -30,7 +31,7 @@ class InstanceBasics(EutesterTestCase):
         self.keypair = self.tester.add_keypair( "keypair-" + str(time.time()))
         self.keypath = '%s/%s.pem' % (os.curdir, self.keypair.name)
         self.image = self.tester.get_emi(root_device_type="instance-store")
-        self.reservation = None
+        self.address = None
         self.private_addressing = False
         zones = self.tester.ec2.get_all_zones()
         self.zone = random.choice(zones).name
@@ -40,6 +41,9 @@ class InstanceBasics(EutesterTestCase):
     def cleanup(self):
         if self.reservation:
             self.assertTrue(self.tester.terminate_instances(self.reservation), "Unable to terminate instance(s)")
+        if self.address:
+            assert isinstance(self.address,Address)
+            self.tester.release_address(self.address)
         self.tester.delete_group(self.group)
         self.tester.delete_keypair(self.keypair)
         os.remove(self.keypath)
@@ -83,13 +87,14 @@ class InstanceBasics(EutesterTestCase):
         if not self.reservation:
             self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name,zone=zone)
         for instance in self.reservation.instances:
-            address = self.tester.allocate_address()
-            self.assertTrue(address,'Unable to allocate address')
-            self.tester.associate_address(instance, address)
+            self.address = self.tester.allocate_address()
+            self.assertTrue(self.address,'Unable to allocate address')
+            self.tester.associate_address(instance, self.address)
             instance.update()
             self.assertTrue( self.tester.ping(instance.public_dns_name), "Could not ping instance with new IP")
             self.tester.disassociate_address_from_instance(instance)
-            self.tester.release_address(address)
+            self.tester.release_address(self.address)
+            self.address = None
             instance.update()
             self.assertTrue( self.tester.ping(instance.public_dns_name), "Could not ping after dissassociate")
         return self.reservation
