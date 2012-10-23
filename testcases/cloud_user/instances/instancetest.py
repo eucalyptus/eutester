@@ -45,6 +45,8 @@ class InstanceBasics(EutesterTestCase):
         if self.address:
             assert isinstance(self.address,Address)
             self.tester.release_address(self.address)
+        if self.volume:
+            self.tester.delete_volume(self.volume)
         self.tester.delete_group(self.group)
         self.tester.delete_keypair(self.keypair)
         os.remove(self.keypath)
@@ -275,14 +277,19 @@ class InstanceBasics(EutesterTestCase):
         for instance in self.reservation.instances:
             ### Create 1GB volume in first AZ
             self.volume = self.tester.create_volume(instance.placement, 1)
-            euvolume = EuVolume.make_euvol_from_vol(self.volume)
-            self.volume_device = instance.attach_euvolume(euvolume)
+            self.volume_device = instance.attach_volume(self.volume)
             ### Reboot instance
             instance.reboot_instance_and_verify(waitconnect=20)
-            instance.detach_euvolume(euvolume)
+            instance.detach_euvolume(self.volume)
+            self.tester.delete_volume(self.volume)
+            self.volume = None
         return self.reservation
 
-    def Churn(self, testcase="BasicInstanceChecks"):
+    def run_terminate(self):
+        reservation = self.tester.run_instance(image=self.image,zone=self.zone, keypair=self.keypair.name, group=self.group.name)
+        self.tester.terminate_instances(reservation)
+
+    def Churn(self, testcase="run_terminate"):
         """
         This case was developed to test robustness of Eucalyptus by starting instances,
         stopping them before they are running, and increase the time to terminate on each
@@ -423,7 +430,6 @@ if __name__ == "__main__":
     ### Either use the list of tests passed from config/command line to determine what subset of tests to run
     list = testcase.args.tests or [ "BasicInstanceChecks",  "ElasticIps", "MaxSmallInstances" , "LargestInstance",
                                     "MetaData", "Reboot","PrivateIPAddressing"]
-
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
     for test in list:
