@@ -654,7 +654,6 @@ class EutesterTestCase(unittest.TestCase):
         :rtype: integer
         :returns: integer exit code to represent pass/fail of the list executed. 
         '''
-        exitcode = 0
         self.testlist = list 
         start = time.time()
         tests_ran=0
@@ -671,7 +670,6 @@ class EutesterTestCase(unittest.TestCase):
                     test.run()
                     self.endsuccess(str(test.name))
                 except Exception, e:
-                    exitcode = 1
                     self.debug('Testcase:'+ str(test.name)+' error:'+str(e))
                     if eof or (not eof and test.eof):
                         self.endfailure(str(test.name))
@@ -693,17 +691,27 @@ class EutesterTestCase(unittest.TestCase):
             try:
                  if clean_on_exit:
                     cleanunit = self.create_testunit_from_method(self.clean_method)
-                    self.testlist.append(cleanunit)
+                    self.testlist = list.append(cleanunit)
                     try:
                         cleanunit.run()
                     except:
-                        exitcode = 1 
+                        pass
                     if printresults:
                         msgout = self.print_test_list_results(list=list,printout=False)
                         self.status(msgout)
-            except: pass
-            return exitcode
-        return exitcode
+            except: 
+                pass
+            total = 0
+            passed = 0
+            for test in list:
+                total += 1
+                if test.result == EutesterTestResult.passed:
+                    passed += 1
+            print "passed:"+str(passed)+" out of total:"+str(total)
+            if total != passed:
+                return(1)
+            else:
+                return(0)
     
     def has_arg(self,arg):
         '''
