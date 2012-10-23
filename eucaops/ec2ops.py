@@ -852,8 +852,8 @@ class EC2ops(Eutester):
       
         address = self.ec2.get_all_addresses(addresses=[address.public_ip])[0]
         ### Ensure address object hold correct instance value
-        while address.instance_id and not re.search(instance.id,str(address.instance_id)):
-            self.debug('Address {0} not attached to "{1}" but rather "{2}" after {3} seconds'.format(str(address), instance.id, address.instance_id, str(elapsed)) )
+        while address.instance_id and not re.match(instance.id, str(address.instance_id)):
+            self.debug('Address {0} not attached to Instance "{1}" but rather Instance "{2}" after {3} seconds'.format(str(address), instance.id, address.instance_id, str(elapsed)) )
             if elapsed > timeout:
                 raise Exception('Address ' + str(address) + ' never associated with instance after '+str(elapsed)+' seconds')
             address = self.ec2.get_all_addresses(addresses=[address.public_ip])[0]
