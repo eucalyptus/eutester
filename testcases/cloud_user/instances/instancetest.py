@@ -17,10 +17,10 @@ import random
 
 
 class InstanceBasics(EutesterTestCase):
-    def __init__(self, credpath=None):
+    def __init__(self):
         self.setuptestcase()
         # Setup basic eutester object
-        self.tester = Eucaops( credpath=credpath)
+        self.tester = Eucaops( credpath=self.args.credpath)
         self.tester.poll_count = 120
 
         ### Add and authorize a group for the instance
@@ -418,9 +418,6 @@ class InstanceBasics(EutesterTestCase):
 
 if __name__ == "__main__":
     testcase = InstanceBasics()
-    testcase.setup_parser()
-    ### Get all cli arguments and any config arguments and merge them
-    testcase.get_args()
     ### Either use the list of tests passed from config/command line to determine what subset of tests to run
     list = testcase.args.tests or [ "BasicInstanceChecks",  "ElasticIps", "MaxSmallInstances" , "LargestInstance",
                                     "MetaData", "Reboot","PrivateIPAddressing"]
