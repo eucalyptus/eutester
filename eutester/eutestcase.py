@@ -703,7 +703,7 @@ class EutesterTestCase(unittest.TestCase):
                         self.status(msgout)
             except: pass
             return exitcode
-         return exitcode
+        return exitcode
     
     def has_arg(self,arg):
         '''
