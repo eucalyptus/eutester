@@ -418,7 +418,9 @@ class InstanceBasics(EutesterTestCase):
 
 if __name__ == "__main__":
     testcase = InstanceBasics()
-
+    testcase.setup_parser()
+    ### Get all cli arguments and any config arguments and merge them
+    testcase.get_args()
     ### Either use the list of tests passed from config/command line to determine what subset of tests to run
     list = testcase.args.tests or [ "BasicInstanceChecks",  "ElasticIps", "MaxSmallInstances" , "LargestInstance",
                                     "MetaData", "Reboot","PrivateIPAddressing"]
