@@ -287,8 +287,15 @@ class InstanceBasics(EutesterTestCase):
         return self.reservation
 
     def run_terminate(self):
-        reservation = self.tester.run_instance(image=self.image,zone=self.zone, keypair=self.keypair.name, group=self.group.name)
-        self.tester.terminate_instances(reservation)
+        reservation = None
+        try:
+            reservation = self.tester.run_instance(image=self.image,zone=self.zone, keypair=self.keypair.name, group=self.group.name)
+            self.tester.terminate_instances(reservation)
+            return 0
+        except Exception, e:
+            if reservation:
+                self.tester.terminate_instances(reservation)
+            return 1
 
     def Churn(self, testcase="run_terminate"):
         """
@@ -417,7 +424,7 @@ class InstanceBasics(EutesterTestCase):
         except Exception, e:
             queue.put(1)
             raise e
-        if result.wasSuccessful():
+        if not result:
             self.tester.debug("Passed test: " + name)
             queue.put(0)
             return False
