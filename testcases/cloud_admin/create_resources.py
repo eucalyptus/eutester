@@ -50,7 +50,8 @@ import unittest
 
 class ResourceGeneration(EutesterTestCase):
     
-    def __init__(self, credpath, cleanup_artifacts=False):
+    def __init__(self, credpath=None, cleanup_artifacts=False):
+        self.setuptestcase()
         self.tester = Eucaops(credpath=credpath)
         self.cleanup_artifacts = cleanup_artifacts
 
@@ -99,33 +100,26 @@ class ResourceGeneration(EutesterTestCase):
             if self.cleanup_artifacts:
                 resource_tester.cleanup_artifacts()
 
-    def run_suite(self):  
-        self.testlist = [] 
-        testlist = self.testlist
-        testlist.append(self.create_testcase_from_method(self.CreateResources))
-        self.run_test_case_list(testlist)
-    
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(prog="create_resources.py",
-                                     description="Create resources (keypairs,groups, volumes,snapshots, buckets) for each user in the cloud. ")
-    parser.add_argument('--credpath', 
-                        help="Path to credentials of an admin user", default=None)
-    parser.add_argument('--cleanup',
-                        help="Cleanup artifacts on each run", action='store_true')
-    args = parser.parse_args()
-    resource_suite = ResourceGeneration(credpath=args.credpath, cleanup_artifacts=args.cleanup)
-    kbtime=time.time()
-    try:
-        resource_suite.run_suite()
-    except KeyboardInterrupt:
-        resource_suite.debug("Caught keyboard interrupt...")
-        if ((time.time()-kbtime) < 2):
-            resource_suite.clean_created_resources()
-            resource_suite.debug("Caught 2 keyboard interupts within 2 seconds, exiting test")
-            resource_suite.clean_created_resources()
-            raise
-        else:          
-            resource_suite.print_test_list_results()
-            kbtime=time.time()
-            pass
-    exit(0)    
+    testcase = EutesterTestCase()
+
+    #### Adds argparse to testcase and adds some defaults args
+    testcase.setup_parser()
+
+    ### Get all cli arguments and any config arguments and merge them
+    testcase.get_args()
+
+    ### Instantiate an object of your test suite class using args found from above
+    instance_basics_tests = testcase.do_with_args(ResourceGeneration)
+
+    ### Either use the list of tests passed from config/command line to determine what subset of tests to run
+    list = testcase.args.tests or [ "CreateResources" ]
+
+    ### Convert test suite methods to EutesterUnitTest objects
+    unit_list = [ ]
+    for test in list:
+        unit_list.append( instance_basics_tests.create_testunit_by_name(test) )
+
+    ### Run the EutesterUnitTest objects
+    testcase.run_test_case_list(unit_list)
+    instance_basics_tests.clean_method()

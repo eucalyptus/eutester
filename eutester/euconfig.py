@@ -154,6 +154,8 @@ class EuConfig():
         for line in lines:
             if re.match("^MEMO\s+", line):
                 line = '['+str(line).strip()+']\n'
+            if re.match("^END_MEMO", line):
+                continue
             #read file until first section  header
             if not start:
                 if re.match("^\[", line):

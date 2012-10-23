@@ -172,8 +172,9 @@ class EutesterTestUnit():
     '''
     def __init__(self,method, *args, **kwargs):
         self.method = method
+        self.method_possible_args = EutesterTestCase.get_meth_arg_names(self.method)
         self.args = args
-        self.kwargs = kwargs
+        self.kwargs = kwargs 
         self.name = str(method.__name__)
         self.result=EutesterTestResult.not_run
         self.time_to_run=0
@@ -201,7 +202,9 @@ class EutesterTestUnit():
         testunit.eof = eof
         return testunit
        
-    
+    def set_kwarg(self,kwarg,val):
+        self.kwargs[kwarg]=val
+         
     def get_test_method_description(self):
         '''
         Attempts to derive test unit description for the registered test method
@@ -244,13 +247,13 @@ class EutesterTestUnit():
         Description: Wrapper which attempts to run self.method and handle failures, record time.
         '''
         for count, thing in enumerate(self.args):
-            print '{0}. {1}'.format(count, thing)
+            print 'ARG:{0}. {1}'.format(count, thing)
         for name, value in self.kwargs.items():
-            print '{0} = {1}'.format(name, value)
+            print 'KWARG:{0} = {1}'.format(name, value)
         
         try:
             start = time.time()
-            if not self.args:
+            if not self.args and not self.kwargs:
                 ret = self.method()
             else:
                 ret = self.method(*self.args, **self.kwargs)
@@ -279,14 +282,17 @@ class EutesterTestCase(unittest.TestCase):
         return self.setuptestcase(name=name, debugmethod=debugmethod, use_default_file=use_default_file, default_config=default_config)
         
     def setuptestcase(self, name=None, debugmethod=None, use_default_file=True, default_config='eutester.conf' ):
-        self.name = name 
+        self.name = self._testMethodName = name 
         if not self.name:
             callerfilename=inspect.getouterframes(inspect.currentframe())[1][1]
             self.name = os.path.splitext(os.path.basename(callerfilename))[0]  
+            self._testMethodName = self.name
+            print "setuptestname:"+str(name)
         self.debugmethod = debugmethod
         if not self.debugmethod:
-            self.setup_debugmethod(name)
+            self.setup_debugmethod()
         if not hasattr(self,'testlist'): self.testlist = []
+        self.list = None
         if not hasattr(self,'configfiles'): self.configfiles=[]
         self.default_config = default_config 
         self.use_default_file = use_default_file
@@ -298,7 +304,9 @@ class EutesterTestCase(unittest.TestCase):
         if not hasattr(self,'args'): self.args=argparse.Namespace()
         self.show_self()
                 
-
+    def compile_all_args(self):
+        self.setup_parser()
+        self.get_args()
                                    
     def setup_parser(self,
                    testname=None, 
@@ -382,7 +390,7 @@ class EutesterTestCase(unittest.TestCase):
                                 help="password to use for machine root ssh access", default='foobar')
         if config:
             parser.add_argument('--config',
-                                help='path to config file', default='../input/2btested.lst')   
+                                help='path to config file', default='../input/2b_tested.lst')   
         if configblocks:
             parser.add_argument('--configblocks', nargs='+',
                                 help="Config sections/blocks in config file to read in", default=[])
@@ -407,19 +415,27 @@ class EutesterTestCase(unittest.TestCase):
         return parser
     
     def disable_color(self):
+        self.set_arg('use_color', False)
         self.use_color = False
     
     def enable_color(self):
+        self.set_arg('use_color', True)
         self.use_color = True
         
         
-    def setup_debugmethod(self,name=None):
-            name = name if name else self.name if hasattr(self,'name') else self.__class__.__name__
-            print "Setting up debug method using name:"+str(name)
-            logger = Eulogger(identifier=str(name))
-            self.debugmethod = logger.log.debug
+    def setup_debugmethod(self, testcasename=None):
+        name = testcasename
+        print "Starting setup_debugmethod"+str(name)
+        if not name:
+            if hasattr(self,'name'):
+                if isinstance(self.name, types.StringType):
+                    name = self.name
+            else:
+                name = 'EutesterTestCase'
+        logger = Eulogger(identifier=str(name))
+        self.debugmethod = logger.log.debug
 
-    def debug(self,msg,traceback=1,color=None):
+    def debug(self,msg,traceback=1,color=None, linebyline=True):
         '''
         Description: Method for printing debug
         
@@ -466,12 +482,21 @@ class EutesterTestCase(unittest.TestCase):
                         if len(funcs) > 1:
                             return None
             cur_method= funcs[0].func_name if funcs else ""
-        for line in msg.split("\n"):
-            self.debugmethod("("+str(cur_method)+":"+str(lineno)+"): "+colorprefix+line.strip()+colorreset )
-            
-   
-            
-    def create_testunit_from_method(self,method,eof=False, autoarg=True, *args, **kwargs):
+        if linebyline:
+            for line in msg.split("\n"):
+                self.debugmethod("("+str(cur_method)+":"+str(lineno)+"): "+colorprefix+line.strip()+colorreset )
+        else:
+            self.debugmethod("("+str(cur_method)+":"+str(lineno)+"): "+colorprefix+str(msg)+colorreset )
+
+    def run_test_list_by_name(self, list):
+        unit_list = []
+        for test in list:
+            unit_list.append( self.create_testunit_by_name(test) )
+
+        ### Run the EutesterUnitTest objects
+        return self.run_test_case_list(unit_list)
+
+    def create_testunit_from_method(self,method, *args, **kwargs):
         '''
         Description: Convenience method calling EutesterTestUnit. 
                      Creates a EutesterTestUnit object from a method and set of arguments to be fed to that method
@@ -494,6 +519,21 @@ class EutesterTestCase(unittest.TestCase):
         :rtype: EutesterTestUnit
         :returns: EutesterTestUnit object
         '''   
+        eof=False
+        autoarg=True
+        methvars = self.get_meth_arg_names(method)
+        #Pull out value relative to this method, leave in any that are intended to be passed through
+        if 'autoarg' in kwargs:
+            if 'autoarg' in methvars:
+                autoarg = kwargs['autoarg']
+            else:
+                autoarg = kwargs.pop('autoarg')
+        if 'eof' in kwargs:
+            if 'eof' in methvars:
+                eof = kwargs['eof']
+            else:
+                eof = kwargs.pop('eof')
+        
         testunit = EutesterTestUnit(method, *args, **kwargs)
         testunit.eof = eof
         #if autoarg, auto populate testunit arguements from local testcase.args namespace values
@@ -501,7 +541,7 @@ class EutesterTestCase(unittest.TestCase):
             self.populate_testunit_with_args(testunit)
         return testunit 
     
-    def status(self,msg,traceback=2, b=0,a=0 ,testcolor=None):
+    def status(self,msg,traceback=2, b=1,a=0 ,testcolor=None):
         '''
         Description: Convenience method to format debug output
         
@@ -528,34 +568,70 @@ class EutesterTestCase(unittest.TestCase):
             alines=alines+"\n"
         line = "-------------------------------------------------------------------------"
         out = blines+line+"\n"+msg+"\n"+line+alines
-        self.debug(out, traceback=traceback, color=testcolor)  
+        self.debug(out, traceback=traceback, color=testcolor,linebyline=False)  
         
     def startmsg(self,msg=""):
-        msg = "- STARTING - " + msg
+        msg = "- STARTING TESTUNIT:  - " + msg
         self.status(msg, traceback=3,testcolor=TestColor.get_canned_color('whiteonblue'))
         
     def endsuccess(self,msg=""):
         msg = "- SUCCESS ENDED - " + msg
-        self.status(msg, traceback=2,a=3, testcolor=TestColor.get_canned_color('whiteonblue'))
+        self.status(msg, traceback=2,a=1, testcolor=TestColor.get_canned_color('whiteonblue'))
       
-    def endfailure(self,msg=""):
+    def endfailure(self,msg="" ):
         msg = "- FAILED - " + msg
-        self.status(msg, traceback=2,a=3,testcolor=TestColor.get_canned_color('failred'))
+        self.status(msg, traceback=2,a=1,testcolor=TestColor.get_canned_color('failred'))
     
-    def resultdefault(self,msg):
-        self.debug(msg,traceback=2,color=TestColor.get_canned_color('blueongrey'))
+    def resultdefault(self,msg,printout=True,color='blueongrey'):
+        if printout:
+            self.debug(msg,traceback=2,color=TestColor.get_canned_color('blueongrey'),linebyline=False)
+        msg = self.format_line_for_color(msg, color)
+        return msg
     
-    def resultfail(self,msg):
-        self.debug(msg,traceback=2, color=TestColor.get_canned_color('redongrey'))
+    def resultfail(self,msg,printout=True, color='redongrey'):
+        if printout:
+            self.debug(msg,traceback=2, color=TestColor.get_canned_color('redongrey'),linebyline=False)
+        msg = self.format_line_for_color(msg, color)
+        return msg
         
-    def resulterr(self,msg):
-        self.debug(msg,traceback=2, color=TestColor.get_canned_color('failred'))
+    def resulterr(self,msg,printout=True,color='failred'):
+        if printout:
+            self.debug(msg,traceback=2, color=TestColor.get_canned_color(color),linebyline=False)
+        msg = self.format_line_for_color(msg, color)
+        return msg
+    
+    def format_line_for_color(self,msg,color):
+        if not self.use_color:
+            return msg
+        end=""
+        if msg.endswith('\n'):
+            msg = msg.rstrip()
+            end="\n"
+        msg = TestColor.get_canned_color(color)+str(msg)+TestColor.reset+end
+        return msg
     
     def get_pretty_args(self,testunit):
-        buf = "End on Failure :" +str(testunit.eof)
+        '''
+        Description: Returns a string buf containing formated arg:value for printing later
+        
+        :type: testunit: Eutestcase.eutestertestunit object
+        :param: testunit: A testunit object for which the namespace args will be used
+        
+        :rtype: string
+        :returns: formated string containing args and their values.  
+        '''
+        
+        buf =  "End on Failure :" +str(testunit.eof)
+        buf += "\nPassing ARGS:\n"
+        buf += "---------------------\n"
+        varnames = self.get_meth_arg_names(testunit.method)
         if testunit.args:
-            for key in testunit.args:
-                buf += "\n"+str(key)+" : "+str(testunit.args[key])
+            for count,arg in enumerate(testunit.args):
+                buf += str(varnames[count+1])+" : "+str(arg)+"\n"
+        if testunit.kwargs:
+            for key in testunit.kwargs:
+                buf += str(key)+" : "+str(testunit.kwargs[key])+"\n"
+            buf += "---------------------\n"
         return buf
     
     def run_test_case_list(self, list, eof=True, clean_on_exit=True, printresults=True):
@@ -578,7 +654,6 @@ class EutesterTestCase(unittest.TestCase):
         :rtype: integer
         :returns: integer exit code to represent pass/fail of the list executed. 
         '''
-        exitcode = 0
         self.testlist = list 
         start = time.time()
         tests_ran=0
@@ -586,14 +661,15 @@ class EutesterTestCase(unittest.TestCase):
         try:
             for test in list:
                 tests_ran += 1
+                startbuf = ""
                 argbuf =self.get_pretty_args(test)
-                self.startmsg(str(test.description)+argbuf)
-                self.debug('Running list method:'+str(test.name))
+                startbuf += str(test.description)+str(argbuf)
+                startbuf += 'Running list method: "'+str(self.print_testunit_method_arg_values(test))+'"'
+                self.startmsg(startbuf)
                 try:
                     test.run()
                     self.endsuccess(str(test.name))
                 except Exception, e:
-                    exitcode = 1
                     self.debug('Testcase:'+ str(test.name)+' error:'+str(e))
                     if eof or (not eof and test.eof):
                         self.endfailure(str(test.name))
@@ -605,37 +681,97 @@ class EutesterTestCase(unittest.TestCase):
             elapsed = int(time.time()-start)
             msgout =  "RUN TEST CASE LIST DONE:\n"
             msgout += "Ran "+str(tests_ran)+"/"+str(test_count)+" tests in "+str(elapsed)+" seconds\n"
-            self.status(msgout)
+            
             if printresults:
                 try:
-                    self.print_test_list_results(list=list)
+                    self.debug("Printing pre-cleanup results:")
+                    msgout += self.print_test_list_results(list=list,printout=False)
+                    self.status(msgout)
                 except:pass
             try:
                  if clean_on_exit:
-                    self.clean_method()
-            except: pass
-            
-        return exitcode
+                    cleanunit = self.create_testunit_from_method(self.clean_method)
+                    self.testlist = list.append(cleanunit)
+                    try:
+                        cleanunit.run()
+                    except:
+                        pass
+                    if printresults:
+                        msgout = self.print_test_list_results(list=list,printout=False)
+                        self.status(msgout)
+            except: 
+                pass
+            total = 0
+            passed = 0
+            for test in list:
+                total += 1
+                if test.result == EutesterTestResult.passed:
+                    passed += 1
+            print "passed:"+str(passed)+" out of total:"+str(total)
+            if total != passed:
+                return(1)
+            else:
+                return(0)
     
     def has_arg(self,arg):
+        '''
+        Description: If arg is present in local testcase args namespace, will return True, else False
+        
+        :type arg: string
+        :param arg: string name of arg to check for.
+
+        :rtype: boolean
+        :returns: True if arg is present, false if not
+        '''
         arg = str(arg)
         if hasattr(self,'args'):
-            if arg in self.args:
+            if self.args and (arg in self.args):
                 return True
         return False
          
     def get_arg(self,arg):
+        '''
+        Description: Fetchs the value of an arg within the local testcase args namespace. If the arg
+        does not exist, None will be returned. 
+        
+        :type arg: string
+        :param arg: string name of arg to get.
+        
+        :rtype: value
+        :returns: Value of arguement given, or None if not found
+        '''
         if self.has_arg(arg):
             return getattr(self.args,str(arg))
         return None
     
     def add_arg(self,arg,value):
+        '''
+        Description: Adds an arg 'arg'  within the local testcase args namespace and assigns it 'value'. 
+        If arg exists already in testcase.args, then an exception will be raised. 
+        
+        :type arg: string
+        :param arg: string name of arg to set. 
+        
+        :type value: value
+        :param value: value to set arg to
+        '''
         if self.has_arg(arg):
             raise Exception("Arg"+str(arg)+'already exists in args')
         else:
             self.args.__setattr__(arg,value)
     
     def set_arg(self,arg, value):
+        '''
+        Description: Sets an arg 'arg'  within the local testcase args namespace to 'value'. 
+        If arg does not exist in testcase.args, then it will be created. 
+        
+        :type arg: string
+        :param arg: string name of arg to set. 
+        
+        :type value: value
+        :param value: value to set arg to
+        '''
+        
         if self.has_arg(arg):
             new = argparse.Namespace()
             for val in self.args._get_kwargs():
@@ -648,35 +784,117 @@ class EutesterTestCase(unittest.TestCase):
     
     
     def clean_method(self):
-        self.debug("Implement this method")
+        raise Exception("Clean_method needs not implemented. Was run_list using clean_on_exit?")
 
-    def print_test_list_results(self,list=None,printmethod=None):
+    def print_test_list_results(self,list=None, printout=True, printmethod=None):
         '''
         Description: Prints a formated list of results for a list of EutesterTestUnits
         
         :type list: list
         :param list: list of EutesterTestUnits
         
+        :type printout: boolean
+        :param printout: boolean to flag whether to print using printmethod or self.debug, 
+                         or to return a string buffer representing the results output 
+        
         :type printmethod: method
         :param printmethod: method to use for printing test result output. Default is self.debug
         '''
+        buf =  "TESTUNIT LIST SUMMARY FOR '"+str(self.name)+"'\n"
         if list is None:
             list=self.testlist
-            
-        if not printmethod:
-            printmethod = self.resultdefault
-            printfailure = self.resultfail
-            printerr = self.resulterr
+        if not list:
+            raise Exception("print_test_list_results, error: No Test list provided")
+        if printmethod is None:
+            printmethod = lambda msg: self.debug(msg,linebyline=False)
+        printmethod("Test list results for testcase:"+str(self.name))
+
+        for testunit in list:
+            buf += self.resultdefault("\n"+ self.getline(80)+"\n", printout=False)
+            pmethod = self.resultfail if not testunit.result == EutesterTestResult.passed else self.resultdefault
+            buf += pmethod(str("TEST: "+str(testunit.name)).ljust(50)+str(" RESULT:"+testunit.result).ljust(10)+str(' Time:'+str(testunit.time_to_run)).ljust(0),printout=False)
+            buf += pmethod("\nRAN AS: "+str(self.print_testunit_method_arg_values(testunit)), printout=False) 
+            if testunit.result == EutesterTestResult.failed:
+                    buf += "\n"+str(self.resulterr('ERROR('+str(testunit.name)+'): '+str(testunit.error), printout=False))
+        buf += self.resultdefault("\n"+ self.getline(80)+"\n", printout=False)
+        buf += str(self.print_test_list_short_stats(list))
+        if printout:
+            printmethod(buf)
         else:
-            printfailure = printerr = printmethod
-           
-        for testcase in list:           
-            printmethod('-----------------------------------------------')
-            pmethod = printfailure if not testcase.result == EutesterTestResult.passed else printmethod
-            pmethod(str("TEST:"+str(testcase.name)).ljust(50)+str(" RESULT:"+testcase.result).ljust(10)+str(' Time:'+str(testcase.time_to_run)).ljust(0))
-            if testcase.result == EutesterTestResult.failed:
-                printerr('Error:'+str(testcase.error))
+            return buf
+
+        
+    def print_test_list_short_stats(self,list,printmethod=None):
+        results={}
+        mainbuf = "RESULTS SUMMARY FOR '"+str(self.name)+"':\n"
+        fieldsbuf = ""
+        resultsbuf= ""
+        total = 0 
+        elapsed = 0
+        #initialize a dict containing all the possible defined test results
+        fields = dir(EutesterTestResult)
+        for fieldname in fields[2:len(fields)]:
+            results[fieldname]=0
+        #increment values in results dict based upon result of each testunit in list
+        for testunit in list:
+            total += 1
+            elapsed += testunit.time_to_run
+            results[testunit.result] += 1
+        fieldsbuf += str('| TOTAL').ljust(10)
+        resultsbuf += str('| ' + str(total)).ljust(10)
+        for field in results:
+            fieldsbuf += str('| ' + field.upper()).ljust(10)
+            resultsbuf += str('| ' + str(results[field])).ljust(10)
+        fieldsbuf += str('| TIME_ELAPSED').ljust(10)
+        resultsbuf += str('| '+str(elapsed)).ljust(10)
+        mainbuf += "\n"+self.getline(len(fieldsbuf))+"\n"
+        mainbuf += fieldsbuf
+        mainbuf += "\n"+self.getline(len(fieldsbuf))+"\n"
+        mainbuf += resultsbuf
+        mainbuf += "\n"+self.getline(len(fieldsbuf))+"\n"
+        if printmethod:
+            printmethod(mainbuf)
+        return mainbuf
     
+    @classmethod  
+    def get_testunit_method_arg_dict(cls,testunit):
+        argdict={}
+        spec = inspect.getargspec(testunit.method)
+        if isinstance(testunit.method,types.FunctionType):
+            argnames = spec.args
+        else:
+            argnames = spec.args[1:len(spec.args)]
+        defaults = spec.defaults
+        #Initialize the return dict
+        for argname in argnames:
+            argdict[argname]='<!None!>'
+        #Set the default values of the testunits method
+        for x in xrange(0,len(defaults)):
+            argdict[argnames.pop()]=defaults[len(defaults)-x-1]
+        #Then overwrite those with the testunits kwargs values
+        for kwarg in testunit.kwargs:
+            argdict[kwarg]=testunit.kwargs[kwarg]
+        #then add the positional args in if they apply...
+        for count, value in enumerate(testunit.args):
+            argdict[argnames[count]]=value
+        return argdict
+    
+    @classmethod
+    def print_testunit_method_arg_values(cls,testunit):
+        buf = testunit.name+"("
+        argdict = EutesterTestCase.get_testunit_method_arg_dict(testunit)
+        for arg in argdict:
+            buf += str(arg)+":"+str(argdict[arg])+","
+        buf = buf.rstrip(',')
+        buf += ")"
+        return buf
+        
+        
+    def getline(self,len):
+        buf = ''
+        for x in xrange(0,len):
+            buf += '-'
+        return buf
     
     def run_method_by_name(self,name, obj=None, *args, **kwargs):
         '''
@@ -702,7 +920,7 @@ class EutesterTestCase(unittest.TestCase):
         
         
     
-    def create_testunit_by_name(self, name, obj=None, eof=False, autoarg=True, *args,**kwargs ):
+    def create_testunit_by_name(self, name, obj=None, eof=True, autoarg=True, *args,**kwargs ):
         '''
         Description: Attempts to match a method name contained with object 'obj', and create a EutesterTestUnit object from that method and the provided
         positional as well as keyword arguments provided. 
@@ -719,8 +937,30 @@ class EutesterTestCase(unittest.TestCase):
         :type kwargs: keyword arguments
         :param kwargs: None or more keyword arguements to be passed to method to be run
         '''
+        eof=False
+        autoarg=True
+
+        
+        #Pull out value relative to this method, leave in any that are intended to be passed through
+        if 'autoarg' in kwargs:
+            if 'autoarg' in methvars:
+                autoarg = kwargs['autoarg']
+            else:
+                autoarg = kwargs.pop('autoarg')
+        if 'eof' in kwargs:
+            if 'eof' in methvars:
+                eof = kwargs['eof']
+            else:
+                eof = kwargs.pop('eof')
+        if 'obj' in kwargs:
+            if 'obj' in methvars:
+                obj = kwargs['obj']
+            else:
+                obj = kwargs.pop('obj')
+                
         obj = obj or self
         meth = getattr(obj,name)
+        methvars = self.get_meth_arg_names(meth)       
         testunit = EutesterTestUnit(meth, *args, **kwargs)
         testunit.eof = eof
         #if autoarg, auto populate testunit arguements from local testcase.args namespace values
@@ -855,6 +1095,9 @@ class EutesterTestCase(unittest.TestCase):
         :type fname: string
         :param fname: the eutester default config file name
         
+        :rtype: string
+        :returns: string representing the path to 'fname', the default eutester conf file. 
+        
         '''
         try:
             def_path = os.getenv('HOME')+'/.eutester/'+str(fname)
@@ -884,6 +1127,15 @@ class EutesterTestCase(unittest.TestCase):
         
         
     def show_args(self,args=None):
+        '''
+        Description: Prints args names and values for debug purposes. 
+                     By default will use the local testcase.args, else args can be provided. 
+        
+        :type args: namespace object
+        :param args: namespace object to be printed,by default None will print local testcase's args.
+                    
+        
+        '''
         args= args or self.args if hasattr(self,'args') else None
         argbuf = str("TEST ARGS:").ljust(25)+"        "+str("VALUE:")
         argbuf += str("\n----------").ljust(25)+"        "+str("------")
@@ -894,27 +1146,56 @@ class EutesterTestCase(unittest.TestCase):
             
     
     def populate_testunit_with_args(self,testunit,namespace=None):
-        tc_args = namespace or self.args
-    
-        tu_args =  copy.copy(testunit.kwargs)
+        '''
+        Description: Checks a given test unit's available positional and key word args lists for matching
+                     values contained with the given namespace, by default will use local testcase.args. 
+                     If testunit's underlying method has arguments matching the namespace provided, then those
+                     args will be applied to the testunits args referenced when running the testunit. 
+                     Namespace values will not be applied/overwrite testunits, if the testunit already has conflicting
+                     values in it's args(positional) list or kwargs(keyword args) dict.
+        :type: testunit: Eutestcase.eutestertestunit object
+        :param: testunit: A testunit object for which the namespace values will be applied 
+        
+        :type: namespace: namespace obj
+        :param: namespace: namespace obj containing args/values to be applied to testunit. None by default will use local
+                            testunit args. 
+        
+        '''
+        self.debug("Attempting to populate testunit:"+str(testunit.name)+", with testcase.args...")
+        args_to_apply = namespace or self.args
+        if not args_to_apply:
+            return
+        testunit_obj_args = {}
+        
+        #copy the test units key word args
+        testunit_obj_args.update(copy.copy(testunit.kwargs))
+        self.debug("Testunit keyword args:"+str(testunit_obj_args))
+        
         #Get all the var names of the underlying method the testunit is wrapping
-        vars = self.get_meth_arg_names(testunit.method)
-    
+        method_args = self.get_meth_arg_names(testunit.method)
+        offset = 0 if isinstance(testunit.method,types.FunctionType) else 1
+        self.debug("Got method args:"+str(method_args))
+       
+            
         #Add the var names of the positional args provided in testunit.args to check against later
         #Append to the known keyword arg list
         for x,arg in enumerate(testunit.args):
-            tu_args.append([vars[x+1]])
-            
+            testunit_obj_args[method_args[x+offset]] = arg
+        
+        self.debug("test unit total args:"+str(testunit_obj_args))
         #populate any global args which do not conflict with args already contained within the test case
         #first populate matching method args with our global testcase args taking least precedence
-        for val in tc_args._get_kwargs():
-            for var in vars:
-                if var == val[0]:
+        for apply_val in args_to_apply._get_kwargs():
+            for methvar in method_args:
+                if methvar == apply_val[0]:
+                    self.debug("Found matching arg for:"+str(methvar))
                     #Don't overwrite existing testunit args/kwargs that have already been assigned
-                    if val[0] in tu_args:
-                            break
-                    #Append cmdargs list to testunits kwargs 
-                    testunit.kwargs[var]=val[1]
+                    if apply_val[0] in testunit_obj_args:
+                            self.debug("Skipping populate because testunit already has this arg:"+str(methvar))
+                            continue
+                    #Append cmdargs list to testunits kwargs
+                    testunit.set_kwarg(methvar,apply_val[1]) 
+                    #testunit.kwargs[methvar]=apply_val[1]
        
        
         
@@ -936,13 +1217,14 @@ class EutesterTestCase(unittest.TestCase):
         :param kwargs: None or more values reprsenting keyword arguments to be passed to 'meth' when executed. These will
                      take precedence over local testcase obj namespace args and positional args
         '''
+        
         if not hasattr(self,'args'):
             raise Exception('TestCase object does not have args yet, see: get_args and setup_parser options')
         tc_args = self.args
         cmdargs={}
         f_code = self.get_method_fcode(meth)
         vars = self.get_meth_arg_names(meth)
-        self.debug("Method:"+str(f_code.co_name)+", Vars:"+str(vars))
+        self.debug("do_with_args: Method:"+str(f_code.co_name)+", Vars:"+str(vars))
         
         #first populate matching method args with our global testcase args...
         for val in tc_args._get_kwargs():
@@ -960,8 +1242,8 @@ class EutesterTestCase(unittest.TestCase):
         self.debug('create_with_args: running '+str(f_code.co_name)+"("+str(cmdargs).replace(':','=')+")")
         return meth(**cmdargs)            
         
-        
-    def get_method_fcode(self, meth):
+    @classmethod
+    def get_method_fcode(cls, meth):
         f_code = None
         #Find the args for the method passed in...
         #Check for object/class init...
@@ -983,22 +1265,21 @@ class EutesterTestCase(unittest.TestCase):
             raise Exception("get_method_fcode: Could not find function_code for passed method of type:"+str(type(meth)))
         return f_code
     
-    def get_meth_arg_names(self,meth):
-        fcode = self.get_method_fcode(meth)
+    @classmethod
+    def get_meth_arg_names(cls,meth):
+        '''
+        Description: Return varnames within argcount        
+        :type:meth: method
+        :param: meth: method to fetch arg names for
+        
+        :rtype: list
+        :returns: list of strings representing the varnames within argcount for this method
+        '''
+        fcode = cls.get_method_fcode(meth) 
         varnames = fcode.co_varnames[0:fcode.co_argcount]
         return varnames
-    
-    def get_meth_kwarg_names(self,meth):
-        return self.get_meth_arg_names(meth)
-        '''
-        fcode = self.get_method_fcode(meth)
-        varnames = fcode.co_varnames[fcode.co_argcount:len(fcode.co_varnames)]
-        return varnames
-        '''
-    def get_meth_varnames(self,meth):
-        fcode = self.get_method_fcode(meth)
-        return fcode.co_varnames
-        
+       
+
 
         
             

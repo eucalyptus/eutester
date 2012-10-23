@@ -7,6 +7,7 @@
 
 import unittest
 import time
+from boto.ec2.address import Address
 from eucaops import Eucaops
 from eutester.eutestcase import EutesterTestCase
 from eutester.euvolume import EuVolume
@@ -16,10 +17,12 @@ import random
 
 
 class InstanceBasics(EutesterTestCase):
-    def __init__(self, credpath=None):
+    def __init__(self):
         self.setuptestcase()
+        self.setup_parser()
+        self.get_args()
         # Setup basic eutester object
-        self.tester = Eucaops( credpath=credpath)
+        self.tester = Eucaops( credpath=self.args.credpath)
         self.tester.poll_count = 120
 
         ### Add and authorize a group for the instance
@@ -30,7 +33,8 @@ class InstanceBasics(EutesterTestCase):
         self.keypair = self.tester.add_keypair( "keypair-" + str(time.time()))
         self.keypath = '%s/%s.pem' % (os.curdir, self.keypair.name)
         self.image = self.tester.get_emi(root_device_type="instance-store")
-        self.reservation = None
+        self.address = None
+        self.volume = None
         self.private_addressing = False
         zones = self.tester.ec2.get_all_zones()
         self.zone = random.choice(zones).name
@@ -39,6 +43,11 @@ class InstanceBasics(EutesterTestCase):
     def clean_method(self):
         if self.reservation:
             self.assertTrue(self.tester.terminate_instances(self.reservation), "Unable to terminate instance(s)")
+        if self.address:
+            assert isinstance(self.address,Address)
+            self.tester.release_address(self.address)
+        if self.volume:
+            self.tester.delete_volume(self.volume)
         self.tester.delete_group(self.group)
         self.tester.delete_keypair(self.keypair)
         os.remove(self.keypath)
@@ -82,13 +91,14 @@ class InstanceBasics(EutesterTestCase):
         if not self.reservation:
             self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name,zone=zone)
         for instance in self.reservation.instances:
-            address = self.tester.allocate_address()
-            self.assertTrue(address,'Unable to allocate address')
-            self.tester.associate_address(instance, address)
+            self.address = self.tester.allocate_address()
+            self.assertTrue(self.address,'Unable to allocate address')
+            self.tester.associate_address(instance, self.address)
             instance.update()
             self.assertTrue( self.tester.ping(instance.public_dns_name), "Could not ping instance with new IP")
             self.tester.disassociate_address_from_instance(instance)
-            self.tester.release_address(address)
+            self.tester.release_address(self.address)
+            self.address = None
             instance.update()
             self.assertTrue( self.tester.ping(instance.public_dns_name), "Could not ping after dissassociate")
         return self.reservation
@@ -268,14 +278,19 @@ class InstanceBasics(EutesterTestCase):
         for instance in self.reservation.instances:
             ### Create 1GB volume in first AZ
             self.volume = self.tester.create_volume(instance.placement, 1)
-            euvolume = EuVolume.make_euvol_from_vol(self.volume)
-            self.volume_device = instance.attach_euvolume(euvolume)
+            self.volume_device = instance.attach_volume(self.volume)
             ### Reboot instance
             instance.reboot_instance_and_verify(waitconnect=20)
-            instance.detach_euvolume(euvolume)
+            instance.detach_euvolume(self.volume)
+            self.tester.delete_volume(self.volume)
+            self.volume = None
         return self.reservation
 
-    def Churn(self, testcase="BasicInstanceChecks"):
+    def run_terminate(self):
+        reservation = self.tester.run_instance(image=self.image,zone=self.zone, keypair=self.keypair.name, group=self.group.name)
+        self.tester.terminate_instances(reservation)
+
+    def Churn(self, testcase="run_terminate"):
         """
         This case was developed to test robustness of Eucalyptus by starting instances,
         stopping them before they are running, and increase the time to terminate on each
@@ -398,7 +413,7 @@ class InstanceBasics(EutesterTestCase):
         ### Thread that runs a testcase (function) and returns its pass or fail result
         self.tester.sleep(delay)
         try:
-            result = unittest.TextTestRunner(verbosity=2).run(InstanceBasics(name))
+            result = self.run_method_by_name(name)
         except Exception, e:
             queue.put(1)
             raise e
@@ -412,27 +427,17 @@ class InstanceBasics(EutesterTestCase):
             return True
 
 if __name__ == "__main__":
-    testcase = EutesterTestCase()
-
-    #### Adds argparse to testcase and adds some defaults args
-    testcase.setup_parser()
-
-    ### Get all cli arguments and any config arguments and merge them
-    testcase.get_args()
-
-    ### Instantiate an object of your test suite class using args found from above
-    instance_basics_tests = testcase.do_with_args(InstanceBasics)
-
+    testcase = InstanceBasics()
     ### Either use the list of tests passed from config/command line to determine what subset of tests to run
     list = testcase.args.tests or [ "BasicInstanceChecks",  "ElasticIps", "MaxSmallInstances" , "LargestInstance",
                                     "MetaData", "Reboot","PrivateIPAddressing"]
-
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
     for test in list:
-        unit_list.append( instance_basics_tests.create_testunit_by_name(test) )
-
+        unit_list.append( testcase.create_testunit_by_name(test) )
     ### Run the EutesterUnitTest objects
-    testcase.run_test_case_list(unit_list)
-    instance_basics_tests.clean_method()
+
+    result = testcase.run_test_case_list(unit_list,clean_on_exit=True)
+    exit(result)
+
 
