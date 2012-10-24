@@ -864,7 +864,7 @@ class EutesterTestCase(unittest.TestCase):
             argnames = spec.args
         else:
             argnames = spec.args[1:len(spec.args)]
-        defaults = spec.defaults
+        defaults = spec.defaults or []
         #Initialize the return dict
         for argname in argnames:
             argdict[argname]='<!None!>'
@@ -1275,7 +1275,7 @@ class EutesterTestCase(unittest.TestCase):
         :rtype: list
         :returns: list of strings representing the varnames within argcount for this method
         '''
-        fcode = cls.get_method_fcode(meth) 
+        fcode = cls.get_method_fcode(meth)
         varnames = fcode.co_varnames[0:fcode.co_argcount]
         return varnames
        
