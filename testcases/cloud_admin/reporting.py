@@ -35,7 +35,7 @@ class ReportingBasics(EutesterTestCase):
         self.private_addressing = False
         zones = self.tester.ec2.get_all_zones()
         self.zone = random.choice(zones).name
-
+        self.clean_method = self.cleanup
         self.cur_time = str(int(time.time()))
         date_fields = time.localtime()
         self.date = str(date_fields.tm_year) + "-" + str(date_fields.tm_mon) + "-31"
@@ -57,7 +57,7 @@ class ReportingBasics(EutesterTestCase):
         self.modify_property(property="reporting.default_size_unit",value=size_unit)
         self.modify_property(property="reporting.default_time_unit",value=time_unit)
 
-    def clean_method(self):
+    def cleanup(self):
         if self.reservation:
             self.assertTrue(self.tester.terminate_instances(self.reservation), "Unable to terminate instance(s)")
         if self.volume:
@@ -171,5 +171,5 @@ if __name__ == "__main__":
 
     ### Run the EutesterUnitTest objects
     testcase.run_test_case_list(unit_list)
-    instance_basics_tests.clean_method()
+
 

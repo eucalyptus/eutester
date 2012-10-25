@@ -852,8 +852,8 @@ class EC2ops(Eutester):
       
         address = self.ec2.get_all_addresses(addresses=[address.public_ip])[0]
         ### Ensure address object hold correct instance value
-        while address.instance_id and not re.search(instance.id,str(address.instance_id)):
-            self.debug('Address {0} not attached to "{1}" but rather "{2}" after {3} seconds'.format(str(address), instance.id, address.instance_id, str(elapsed)) )
+        while address.instance_id and not re.match(instance.id, str(address.instance_id)):
+            self.debug('Address {0} not attached to Instance "{1}" but rather Instance "{2}" after {3} seconds'.format(str(address), instance.id, address.instance_id, str(elapsed)) )
             if elapsed > timeout:
                 raise Exception('Address ' + str(address) + ' never associated with instance after '+str(elapsed)+' seconds')
             address = self.ec2.get_all_addresses(addresses=[address.public_ip])[0]
@@ -866,13 +866,14 @@ class EC2ops(Eutester):
         
         start = time.time()
         ### Ensure instance gets correct address
-        while address.public_ip and re.search( instance.public_dns_name,address.public_ip):
+        while re.search( instance.ip_address,address.public_ip):
             self.debug('Instance {0} has IP "{1}" still using address "{2}" after {3} seconds'.format(instance.id, instance.public_dns_name, address.public_ip, str(elapsed)) )
             if elapsed > timeout:
                 raise Exception('Address ' + str(address) + ' never disassociated with instance after '+str(elapsed)+' seconds')
             instance.update()
             self.sleep(5)
             elapsed = int(time.time()-start)
+            address = self.ec2.get_all_addresses(addresses=[address.public_ip])[0]
         self.debug("Disassociated IP successfully")    
 
     def release_address(self, address):

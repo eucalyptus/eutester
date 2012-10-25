@@ -1276,7 +1276,7 @@ class EutesterTestCase(unittest.TestCase):
         :rtype: list
         :returns: list of strings representing the varnames within argcount for this method
         '''
-        fcode = cls.get_method_fcode(meth) 
+        fcode = cls.get_method_fcode(meth)
         varnames = fcode.co_varnames[0:fcode.co_argcount]
         return varnames
        
