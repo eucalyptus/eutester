@@ -691,7 +691,7 @@ class EutesterTestCase(unittest.TestCase):
             try:
                  if clean_on_exit:
                     cleanunit = self.create_testunit_from_method(self.clean_method)
-                    self.testlist = list.append(cleanunit)
+                    list.append(cleanunit)
                     try:
                         cleanunit.run()
                     except:
@@ -701,6 +701,7 @@ class EutesterTestCase(unittest.TestCase):
                         self.status(msgout)
             except: 
                 pass
+            self.testlist = copy.copy(list)
             total = 0
             passed = 0
             for test in list:
@@ -864,7 +865,7 @@ class EutesterTestCase(unittest.TestCase):
             argnames = spec.args
         else:
             argnames = spec.args[1:len(spec.args)]
-        defaults = spec.defaults
+        defaults = spec.defaults or []
         #Initialize the return dict
         for argname in argnames:
             argdict[argname]='<!None!>'
