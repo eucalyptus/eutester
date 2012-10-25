@@ -313,7 +313,7 @@ class InstanceBasics(EutesterTestCase):
         from multiprocessing import Process
         from multiprocessing import Queue
         ### Increase time to terminate by step seconds on each iteration
-        step = 10
+        step = 1
         if self.reservation:
             self.tester.terminate_instances(self.reservation)
             ## Run through count iterations of test
