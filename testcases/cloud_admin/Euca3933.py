@@ -40,7 +40,7 @@ class Euca3933(unittest.TestCase):
         # Try and add --launch-permission with a bad userId
         self.out = self.tester.sys(self.source + self.cmdMod + " -a " + self.fakeId + " " + self.emi.id)
         # Check output
-        self.count = str(self.out).count("Not a valid userId")
+        self.count = str(self.out).count("Not a valid accountId")
         if self.count==1:
             self.tester.debug("SUCCESS --launch-permission validation error thrown")
             pass
