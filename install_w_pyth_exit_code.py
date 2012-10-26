@@ -1,10 +1,9 @@
 #!/usr/bin/python
-#This code prepares eutester environment and outputs install log info and exit code inlogo into two files.
-#Writing of the log info and exit code info is executed through python (not shell) calls
+#This code prepares eutester environment and outputs install log inlogo and exit code inlogo into two logiles.
+#Writing olog the log inlogo and exit code inlogo is executed through python (not shell) calls
 
-import sys
 import subprocess
-
+import sys
 
 def print_command(shell_command):
 
@@ -16,19 +15,22 @@ def print_command(shell_command):
     execute_shell_command = subprocess.Popen(shell_command, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, close_fds=True)
     output =  execute_shell_command.stdout.read()
     exit_code = str( execute_shell_command.wait())
+    print "Exit code: "+exit_code
     log.write(command_string + output)
     log_short.write(command_string+ 'Exitcode: '+exit_code )
+
 
 log = open("install_log.txt", "w")
 log_short = open("install_exit_code.txt", "w")
 
+
+
 def main():
 
-subprocess.call('rm -f install_log.txt', shell=True)
-subprocess.call('rm -f install_exit_code.txt', shell=True)
+    subprocess.call('rm -f install_log.txt', shell=True)
+    subprocess.call('rm -f install_exit_code.txt', shell=True)
 
-workmain = "/root/" #main working directory
-
+    workmain = "/root/" #main working directory
 
 
     if (sys.version_info < (2, 6)):
@@ -94,4 +96,3 @@ workmain = "/root/" #main working directory
 
 if __name__ == '__main__':
     main()
-
