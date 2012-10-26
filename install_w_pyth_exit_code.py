@@ -1,6 +1,6 @@
 #!/usr/bin/python
-#This code prepares eutester environment and outputs install log inlogo and exit code inlogo into two logiles.
-#Writing olog the log inlogo and exit code inlogo is executed through python (not shell) calls
+#This code prepares eutester environment and outputs install log info and exit code inlogo into two files.
+#Writing of the log info and exit code info is executed through python (not shell) calls
 
 import sys
 import subprocess
@@ -18,16 +18,16 @@ def print_command(shell_command):
     exit_code = str( execute_shell_command.wait())
     log.write(command_string + output)
     log_short.write(command_string+ 'Exitcode: '+exit_code )
-subprocess.call('rm -f install_log.txt', shell=True)
-subprocess.call('rm -f install_exit_code.txt', shell=True)
-
-workmain = "/root/" #main working directory
 
 log = open("install_log.txt", "w")
 log_short = open("install_exit_code.txt", "w")
 
-
 def main():
+
+subprocess.call('rm -f install_log.txt', shell=True)
+subprocess.call('rm -f install_exit_code.txt', shell=True)
+
+workmain = "/root/" #main working directory
 
 
 
@@ -84,6 +84,10 @@ def main():
 
     shell_command="ntpdate -u 0.centos.pool.ntp.org"
     print_command(shell_command)
+
+    shell_command="easy_install ipython"
+    print_command(shell_command)
+
 
     log.close()
     log_short.close()
