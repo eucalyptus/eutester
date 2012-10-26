@@ -185,7 +185,7 @@ class SshConnection():
         timeout - optional - integer used to timeout the overall cmd() operation in case of remote blocking
         listformat - optional - boolean, if set returns output as list of lines, else a single buffer/string
         cb - optional - callback, method that can be used to handle output as it's rx'd instead of...  
-                        waiting for the cmd to finish and returned buffer. 
+                        waiting for the cmd to finish and return buffer. 
                         Must accept string buffer, and return an integer to be used as cmd status. 
                         Must return type 'sshconnection.SshCbReturn'
                         If cb returns stop, recv loop will end, and channel will be closed.
@@ -204,7 +204,6 @@ class SshConnection():
         cmd = str(cmd)
         self.lastcmd = cmd
         self.lastexitcode = SshConnection.cmd_not_executed_code
-        t = None #used for timer 
         start = time.time()
         output = []
         cbnextargs = []
@@ -216,18 +215,20 @@ class SshConnection():
             chan = tran.open_session()
             chan.get_pty()
             f = chan.makefile()
-            t = Timer(timeout, self.ssh_sys_timeout,[chan, start,cmd] )
-            t.start()
             chan.exec_command(cmd) 
             output = ""
             fd = chan.fileno()
             chan.setblocking(0)
+            cmdstart = start = time.time()
             while True and chan.closed == 0:
-                time.sleep(0.05)
                 try:
-                    rl, wl, xl = select.select([fd],[],[],0.0)
+                    rl, wl, xl = select.select([fd],[],[],0)
                 except select.error:
                     break
+                elapsed = int(time.time()-start)
+                if elapsed >= timeout:
+                    raise CommandTimeoutException("SSH Command timer fired after "+str(int(elapsed))+" seconds. Cmd:'"+str(cmd)+"'")
+                time.sleep(0.05)
                 if len(rl) > 0:
                     while chan.recv_ready():
                         new = chan.recv(1024)
@@ -253,10 +254,9 @@ class SshConnection():
                                     #Let the callback update its calling args if needed
                                     cbargs = cbreturn.nextargs or cbargs
                                     #Let the callback update/reset the timeout if needed
-                                    if cbreturn.settimer > 0: 
-                                        t.cancel()
-                                        t = Timer(cbreturn.settimer, self.ssh_sys_timeout,[chan, time.time(),cmd] )
-                                        t.start()
+                                    if cbreturn.settimer > 0:
+                                        start = time.time()
+                                        timeout=cbreturn.settimer 
                                     if cbreturn.buf:
                                         output += cbreturn.buf
                             else:
@@ -268,7 +268,6 @@ class SshConnection():
                         else:
                             status = self.lastexitcode = chan.recv_exit_status()
                             chan.close()
-                            t.cancel()
                             break
                 
             if (listformat):
@@ -283,17 +282,14 @@ class SshConnection():
             ret['output'] = output
             ret['status'] = status
             ret['cbfired'] = cbfired
-            ret['elapsed'] = elapsed = int(time.time()-start)
+            ret['elapsed'] = elapsed = int(time.time()-cmdstart)
             if verbose:
                 self.debug("done with exec")
         except CommandTimeoutException, cte: 
             self.lastexitcode = SshConnection.cmd_timeout_err_code
             elapsed = str(int(time.time()-start))
             self.debug("Command ("+cmd+") timeout exception after " + str(elapsed) + " seconds\nException")     
-            raise cte
-        finally:
-            if (t is not None):
-                t.cancel()          
+            raise cte        
         if verbose:
             if (listformat is True):
                 self.debug("".join(output))
