@@ -173,7 +173,7 @@ class Eutester(object):
             euare_connection_args = copy.copy(connection_args)
             euare_connection_args['path'] = "/services/Euare"
             euare_connection_args['host'] = self.get_ec2_ip()
-            self.debug("Attempting to create IAM connection to " + walrus_endpoint)
+            self.debug("Attempting to create IAM connection to " + self.get_ec2_ip())
             self.euare = boto.connect_iam(**euare_connection_args)
         except Exception, e:
             self.critical("Was unable to create IAM connection because of exception: " + str(e))
@@ -181,7 +181,8 @@ class Eutester(object):
         try:
             sts_connection_args = copy.copy(connection_args)
             sts_connection_args['path'] = "/services/Tokens"
-            self.debug("Attempting to create STS connection to " + walrus_endpoint)
+            sts_connection_args['host'] = self.get_ec2_ip()
+            self.debug("Attempting to create STS connection to " + self.get_ec2_ip())
             self.tokens = boto.connect_sts(**sts_connection_args)
         except Exception, e:
             self.critical("Was unable to create STS connection because of exception: " + str(e))
