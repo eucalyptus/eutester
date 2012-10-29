@@ -145,7 +145,8 @@ class Eutester(object):
                                     region=self.region,
                                     port=port,
                                     path=service_path,
-                                    api_version=APIVersion)
+                                    api_version=APIVersion,
+                                    validate_certs=False)
         except Exception, e:
             self.critical("Was unable to create ec2 connection because of exception: " + str(e))
 
@@ -163,7 +164,8 @@ class Eutester(object):
                                                   port=8773,
                                                   path="/services/Walrus",
                                                   calling_format=OrdinaryCallingFormat(),
-                                                  debug=self.boto_debug)
+                                                  debug=self.boto_debug,
+                                                  validate_certs=False)
         except Exception, e:
             self.critical("Was unable to create S3 connection because of exception: " + str(e))
         
@@ -174,7 +176,8 @@ class Eutester(object):
                                                   host=self.get_ec2_ip(),
                                                   port=8773, 
                                                   path="/services/Euare",
-                                                  debug=self.boto_debug)
+                                                  debug=self.boto_debug,
+                                                  validate_certs=False)
         except Exception, e:
             self.critical("Was unable to create IAM connection because of exception: " + str(e))
 
