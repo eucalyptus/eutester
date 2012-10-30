@@ -109,3 +109,9 @@ class ProcessManager():
         self.remove_process(id)
         return return_value
 
+    def get_all_results(self):
+        result_list = []
+        for process in self.process_pool:
+                result_list.append(self.wait_for_process(process))
+        return result_list
+
