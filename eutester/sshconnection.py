@@ -222,7 +222,7 @@ class SshConnection():
             cmdstart = start = time.time()
             while True and chan.closed == 0:
                 try:
-                    rl, wl, xl = select.select([fd],[],[],0)
+                    rl, wl, xl = select.select([fd],[],[])
                 except select.error:
                     break
                 elapsed = int(time.time()-start)
