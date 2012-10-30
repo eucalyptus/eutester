@@ -248,8 +248,6 @@ class EbsTestSuite(EutesterTestCase):
         zonelist = zonelist or self.zonelist
         if not zonelist:
             raise Exception("Zone list was empty")
-        if zonelist is None:
-            zonelist = self.zonelist
         for zone in zonelist:
             for instance in zone.instances:
                 instance.terminate_and_verify(verify_vols=True,timeout=timeout)
