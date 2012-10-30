@@ -37,6 +37,7 @@ import re
 import os
 import base64
 import sys
+import copy
 from datetime import datetime
 from boto.ec2.image import Image
 from boto.ec2.keypair import KeyPair
@@ -359,49 +360,95 @@ class EC2ops(Eutester):
             if not self.wait_for_instance(instance, state, timeout=timeout):
                 aggregate_result = False
         return aggregate_result
-
-    def create_volume(self, azone, size=1, snapshot=None, timeout=0, poll_interval=10,timepergig=120):
+    
+    def create_volume(self, azone, size=1, eof=True, snapshot=None, timeout=0, poll_interval=10,timepergig=120):
         """
         Create a new EBS volume then wait for it to go to available state, size or snapshot is mandatory
 
         :param azone: Availability zone to create the volume in
         :param size: Size of the volume to be created
+        :param count: Number of volumes to be created
+        :param eof: Boolean, indicates whether to end on first instance of failure
         :param snapshot: Snapshot to create the volume from
         :param timeout: Time to wait before failing. timeout of 0 results in size of volume * timepergig seconds
         :param poll_interval: How often in seconds to poll volume state
         :param timepergig: Time to wait per gigabyte size of volume, used when timeout is set to 0
         :return:
         """
-        elapsed = 0
+        return self.create_volumes(azone, size=size, count=1, mincount=1, eof=eof, snapshot=snapshot, timeout=timeout, poll_interval=poll_interval,timepergig=timepergig)[0]
+
+    def create_volumes(self, azone, size=1, count=1, mincount=None, eof=True, snapshot=None, timeout=0, poll_interval=10,timepergig=120):
+        """
+        Create a multiple new EBS volumes then wait for them to go to available state, size or snapshot is mandatory
+
+        :param azone: Availability zone to create the volume in
+        :param size: Size of the volume to be created
+        :param count: Number of volumes to be created
+        :param mincount: Minimum number of volumes to be created to be considered a success.Default = 'count'
+        :param eof: Boolean, indicates whether to end on first instance of failure
+        :param snapshot: Snapshot to create the volume from
+        :param timeout: Time to wait before failing. timeout of 0 results in size of volume * timepergig seconds
+        :param poll_interval: How often in seconds to poll volume state
+        :param timepergig: Time to wait per gigabyte size of volume, used when timeout is set to 0
+        :return:
+        """
+        
         start = time.time()
+        elapsed = 0
+        volumes = retlist = failed = []
+        mincount = mincount or count
         #if timeout is set to 0, use size to create a reasonable timeout for this volume creation
         if timeout == 0:
             if snapshot is not None:
                 timeout = timepergig * int(snapshot.volume_size)
             else:
                 timeout = timepergig * size
-        self.debug( "Sending create volume request" )
-        volume = self.ec2.create_volume(size, azone, snapshot)
-        # Wait for the volume to be created.
-        self.debug( "Polling for volume to become available")
-        
-        while volume.status != 'available' and (elapsed < timeout):
-            self.debug("Volume ("+volume.id+") State("+volume.status+"), seconds elapsed: " + str(elapsed)+'/'+str(timeout))
-            time.sleep(poll_interval)
-            elapsed = int(time.time()-start)
-            volume.update()
-            self.debug( str(volume) + " in " + volume.status +" state") 
-            if volume.status == 'failed':
-                self.fail(str(volume) + " went to: " + volume.status)
-                return None  
-        if volume.status != 'available':
-            self.fail(str(volume) + " never went to available and stayed in " + volume.status+", after "+str(elapsed)+" seconds")
-            self.debug( "Deleting volume that never became available")
-            volume.delete()
-            return None
-        self.debug( "Done. Waited a total of " + str(elapsed) + " seconds" )
-        self.test_resources["volumes"].append(volume)
-        return volume
+        self.debug( "Sending create volume request, count:"+str(count) )
+        for x in xrange(0,count):
+            vol = None
+            try:
+                vol = self.ec2.create_volume(size, azone, snapshot)
+                if vol:
+                    volumes.append(vol)
+            except Exception, e:
+                if eof:
+                    raise e
+                else:
+                    self.debug("Caught exception creating volume,eof is False, continuing. Error:"+str(e))
+        retlist = copy.copy(volumes)
+        if len(volumes) >= mincount:            
+            # Wait for the volume to be created.
+            self.debug( "Polling "+str(len(volumes))+" volumes for available status...")
+            while volumes and (elapsed < timeout):
+                time.sleep(poll_interval)
+                for volume in volumes:
+                    volume.update()
+                    self.debug("Volume ("+volume.id+") State("+volume.status+"), seconds elapsed: " + str(elapsed)+'/'+str(timeout))
+                    if volume.status == 'failed':
+                        if eof:
+                            raise Exception(str(volume) + " went to: " + volume.status)
+                        else:
+                            self.debug(str(volume) + " went to: " + volume.status)
+                            failed.append(volume)
+                            volumes.remove(volume)
+                    if volume.status =='available':
+                        volumes.remove(volume)
+                elapsed = int(time.time()-start)
+                
+            if failed:
+                buf = str(len(failed))+'/'+str(count)+ " Failed volumes after " +str(elapsed)+" seconds:"
+                for failedvol in failed:
+                    retlist.remove(failedvol)
+                    buf += str(failedvol.id)+"-state:"+str(failedvol.status)+","
+                raise Exception(buf)
+                self.debug( "Deleting volumes that never became available")
+                for volume in failed:
+                    volume.delete()
+        if len(retlist) < mincount:
+            raise Exception("Created "+str(len(retlist))+"/"+str(count)+' volumes. Less than minimum specified:'+str(mincount))
+        self.debug( "Done. Waited a total of " + str(elapsed) + " seconds for "+str(len(retlist))+" to become available" )
+        self.test_resources["volumes"].extend(retlist)
+        return retlist
 
     def delete_volume(self, volume):
         """
