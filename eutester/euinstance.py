@@ -394,6 +394,7 @@ class EuInstance(Instance):
         :param timeout: timeout in seconds when waiting for an instance to go to terminated state. 
         '''
         bad_vols = []
+        bad_vol_ids = []
         if verify_vols:
             for vol in self.attached_vols:
                 try:
@@ -401,6 +402,7 @@ class EuInstance(Instance):
                 except Exception, e: 
                     self.debug('Caught exception verifying attached status for:'+str(vol.id)+", adding to list for post terminate info. Error:"+str(e))
                     bad_vols.append(vol)
+                    bad_vol_ids.append(vol.id)
         self.tester.terminate_single_instance(self, timeout=timeout)
         if verify_vols:
             for vol in self.attached_vols:
@@ -415,7 +417,7 @@ class EuInstance(Instance):
                 if vol.status != 'available':
                     raise Exception("volume:"+str(vol.id)+", did not enter available state after terminating:"+str(self.id))
             if bad_vols:
-                raise Exception("Check test code. Unsync'd volumes found before terminating:"+",".join(bad_vols))
+                raise Exception("Check test code. Unsync'd volumes found before terminating:"+",".join(bad_vol_ids))
                 
         
     def get_guestdevs_inuse_by_vols(self):
