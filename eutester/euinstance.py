@@ -223,7 +223,7 @@ class EuInstance(Instance):
         '''
         retlist = []
         if match is None:
-            match = '^sd\|^vd\|^xd|^xvd'
+            match = '^sd\|^vd\|^xd\|^xvd'
         out = self.sys("ls -1 /dev/ | grep '"+str(match)+"'" )
         for line in out:
             retlist.append(line.strip())
@@ -287,6 +287,8 @@ class EuInstance(Instance):
                     break
                 elapsed = int(time.time() - start)
                 time.sleep(2)
+            if not euvolume.guestdev:
+                raise Exception('Device not found on guest after '+str(elapsed)+' seconds')
             #Check to see if this volume has unique data in the head otherwise write some and md5 it
             self.vol_write_random_data_get_md5(euvolume)
         else:
@@ -302,6 +304,7 @@ class EuInstance(Instance):
         '''
         Method used to detach detach a volume to an instance and track it's use by that instance
         required - euvolume - the euvolume object being deattached
+        waitfordev - boolean to indicate whether or no to poll guest instance for local device to be removed
         optional - timeout - integer seconds to wait before timing out waiting for the volume to detach 
         '''
         start = time.time()
@@ -375,8 +378,46 @@ class EuInstance(Instance):
         else:
             self.rootfs_device = "sda"
             self.virtio_blk = False
-            
     
+    def terminate_and_verify(self,verify_vols=True,volto=30, timeout=300):
+        '''
+        Attempts to terminate the instance and if flagged will attempt to verify the correct
+        state of any volumes attached during the terminate operation. 
+        
+        :type verify_vols: boolean
+        :param verify_vols: boolean used to flag whether or not to check for correct volume state after terminate
+        
+        :type volto: integer
+        :param volto: timeout used for time in seconds to wait for volumes to detach and become available after terminating the instnace
+        
+        :type timeout: integer
+        :param timeout: timeout in seconds when waiting for an instance to go to terminated state. 
+        '''
+        bad_vols = []
+        if verify_vols:
+            for vol in self.attached_vols:
+                try:
+                    self.verify_attached_vol_cloud_status(vol)
+                except Exception, e: 
+                    self.debug('Caught exception verifying attached status for:'+str(vol.id)+", adding to list for post terminate info. Error:"+str(e))
+                    bad_vols.append(vol)
+        self.tester.terminate_single_instance(self, timeout=timeout)
+        if verify_vols:
+            for vol in self.attached_vols:
+                if vol in bad_vols:
+                    continue
+                start = time.time()
+                elapsed = 0 
+                while elapsed < timeout:
+                    vol.update()
+                    if vol.status == 'available':
+                        continue
+                if vol.status != 'available':
+                    raise Exception("volume:"+str(vol.id)+", did not enter available state after terminating:"+str(self.id))
+            if bad_vols:
+                raise Exception("Check test code. Unsync'd volumes found before terminating:"+",".join(bad_vols))
+                
+        
     def get_guestdevs_inuse_by_vols(self):
         retlist = []
         for vol in self.attached_vols:
