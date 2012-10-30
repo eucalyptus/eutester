@@ -193,8 +193,9 @@ class EbsTestSuite(EutesterTestCase):
         testmsg = testmsg + "variables provided:\nzonelist:"+str(zonelist)+"\nvolsperzone:"+str(volsperzone)+"\nsize:"+str(size)+"\nsnapshot:"+str(snapshot)
         
         self.startmsg(testmsg)
-        if zonelist is None:
-            zonelist = self.zonelist
+        zonelist = zonelist or self.zonelist
+        if not zonelist:
+            raise Exception("Zone list was empty")
         for testzone in zonelist:
             zone = testzone.name
             for x in xrange(0,volsperzone):
@@ -202,7 +203,7 @@ class EbsTestSuite(EutesterTestCase):
                 testzone.volumes.append(vol)
                 self.debug('create_vols_per_zone created  vol('+str(x)+') zone:'+str(zone)+' vol:'+str(vol.id))
             
-        #self.endsuccess()      
+           
             
           
     def create_test_instances_for_zones(self, zonelist=None, image=None, keypair=None, username='root', inst_pass=None, group=None, vmtype=None):
@@ -212,6 +213,9 @@ class EbsTestSuite(EutesterTestCase):
         testmsg = testmsg+"\nVariables provided:\nzonelist:"+str(zonelist)+"\nimage:"+str(image)+"\nkeypair:"+str(keypair)+"\ngroup:"+str(group)+"\nvmtype:"+str(vmtype)
         
         self.startmsg(testmsg)
+        zonelist = zonelist or self.zonelist
+        if not zonelist:
+            raise Exception("Zone list was empty")
         if image is None:
             image = self.tester.get_emi(emi=self.image)
         else:
@@ -222,8 +226,6 @@ class EbsTestSuite(EutesterTestCase):
             keypair = self.keypair
         inst_pass = inst_pass or self.inst_pass
                 
-        if zonelist is None:
-            zonelist = self.zonelist
         vmtype = vmtype or self.vmtype
             
         for testzone in zonelist:
@@ -240,6 +242,23 @@ class EbsTestSuite(EutesterTestCase):
             for instance in zone.instances:
                 self.tester.terminate_single_instance(instance, timeout)
                 zone.instances.remove(instance)
+                
+    def terminate_instances_in_zones_verify_volume_detach(self,zonelist=None,timeout=360):
+        instance = euinstance.EuInstance()
+        zonelist = zonelist or self.zonelist
+        if not zonelist:
+            raise Exception("Zone list was empty")
+        if zonelist is None:
+            zonelist = self.zonelist
+        for zone in zonelist:
+            for instance in zone.instances:
+                instance.terminate_and_verify(verify_vols=True,timeout=timeout)
+                zone.instances.remove(instance)
+                
+               
+                
+                
+        
     
     def negative_attach_in_use_volume_in_zones(self,zonelist=None,timeout=360):
         testmsg =   """
@@ -247,13 +266,16 @@ class EbsTestSuite(EutesterTestCase):
                     """
         testmsg = testmsg+"\nVariables provided:\nzonelist"+str(zonelist)+"\ntimeout:"+str(timeout)
         self.startmsg(testmsg)
-        if zonelist is None:
-            zonelist = self.zonelist
+        zonelist = zonelist or self.zonelist
+        if not zonelist:
+            raise Exception("Zone list was empty")
         instance = euinstance.EuInstance()
         for zone in zonelist:
+            tested = 0
             for volume in zone.volumes:
                 volume.update()
                 if (volume.status == "in-use"):
+                    tested += 1
                     for instance in zone.instances:
                         try:
                             #This should fail
@@ -266,7 +288,8 @@ class EbsTestSuite(EutesterTestCase):
                         else:
                             #The operation did fail, but this test did
                             raise Exception("negative_attach_in_use_volume_in_zones failed volume attached")
-        
+            if not tested:
+                raise Exception("No attached volumes found to test against")
                 
     
     def attach_all_avail_vols_to_instances_in_zones(self, zonelist=None, timeout=360):
@@ -275,10 +298,9 @@ class EbsTestSuite(EutesterTestCase):
                     """
         testmsg = testmsg+"\nVariables provided:\nzonelist"+str(zonelist)+"\ntimeout:"+str(timeout)
         self.startmsg(testmsg)
-        if zonelist is None:
-            zonelist = self.zonelist
+        zonelist = zonelist or self.zonelist
         if not zonelist:
-             raise Exception("attach_all_avail_vols_to_instances_in_zones: Zonelist is empty")
+            raise Exception("attach_all_avail_vols_to_instances_in_zones: Zonelist is empty")
         for zone in zonelist:
             if not zone.volumes:
                 raise Exception('attach_all_avail_vols_to_instances_in_zones: Zone.volumes is empty')
@@ -309,10 +331,13 @@ class EbsTestSuite(EutesterTestCase):
         #instance = euinstance.EuInstance()
         #volume = euvolume.EuVolume()
       
-        if zonelist is None:
-            zonelist = self.zonelist
+        zonelist = zonelist or self.zonelist
+        if not zonelist:
+            raise Exception("Zone list was empty")
         
         for zone in zonelist:
+            if not zone.instances:
+                raise Exception("No Instances in zone:"+str(zone.name))
             for instance in zone.instances:
                 #resync instance volume state first
                 self.debug('syncing volumes for instance:'+str(instance.id))
@@ -326,6 +351,8 @@ class EbsTestSuite(EutesterTestCase):
                     except:pass
                     raise Exception("("+str(instance.id)+") Unsync'd volumes found:"+errmsg)
                 #Attempt to delete volumes, confirm this operation does not succeed
+                if not instance.attached_vols:
+                    raise Exception("No attached volumes found for test")
                 for volume in instance.attached_vols:
                     try:
                         volume.delete()
@@ -345,10 +372,13 @@ class EbsTestSuite(EutesterTestCase):
                     """
         testmsg = testmsg + "\nVariables Provided:\nzonelist:"+str(zonelist)+"\nwaitconnect:"+str(waitconnect)+"\ntimeout:"+str(timeout)
         self.startmsg(testmsg)
-        if zonelist is None:
-            zonelist = self.zonelist
+        zonelist = zonelist or self.zonelist
+        if not zonelist:
+            raise Exception("Zone list was empty")
         instance = euinstance.EuInstance()
         for zone in zonelist:
+            if not zone.instances:
+                raise Exception("No instances in zone:"+str(zone.name))
             for instance in zone.instances:
                 instance.reboot_instance_and_verify(waitconnect=waitconnect, timeout=timeout, checkvolstatus=True)
         #self.endsuccess()
@@ -362,10 +392,13 @@ class EbsTestSuite(EutesterTestCase):
         testmsg = testmsg + "\nVariables provided:\nzonelist:"+str(zonelist)+"\ntimeout:"+str(timeout)+"\nvolcount:"+str(volcount)
                     
         self.startmsg(testmsg)
-        if zonelist is None:
-            zonelist = self.zonelist
+        zonelist = zonelist or self.zonelist
+        if not zonelist:
+            raise Exception("Zone list was empty")
         #instance = euinstance.EuInstance()
         for zone in zonelist:
+            if not zone.instances:
+                raise Exception("No instances in zone:"+str(zone.name))
             for instance in zone.instances:
                 vc=0
                 badvols = instance.get_unsynced_volumes() 
@@ -395,8 +428,12 @@ class EbsTestSuite(EutesterTestCase):
                 and cloud states are correct.
                 """
         self.startmsg(testmsg)
+        zonelist = zonelist or self.zonelist
+        if not zonelist:
+            raise Exception("Zone list was empty")
         for zone in zonelist:
-            instance = euinstance.EuInstance()
+            if not zone.instances:
+                raise Exception("No instances in zone:"+str(zone.name))
             for instance in zone.instances:
                 if instance.block_device_mapping != 'ebs':
                     continue
@@ -410,8 +447,9 @@ class EbsTestSuite(EutesterTestCase):
     
     def delete_volumes_in_zones(self, zonelist=None, timeout=60):
         self.startmsg()
-        if zonelist is None:
-            zonelist = self.zonelist
+        zonelist = zonelist or self.zonelist
+        if not zonelist:
+            raise Exception("Zone list was empty")
         for zone in zonelist:
             for volume in zone.volumes:
                 start = time.time()
@@ -434,8 +472,9 @@ class EbsTestSuite(EutesterTestCase):
                     """
         testmsg = testmsg +"\nVariables provided:\nzonelist:"+str(zonelist)+"\nsnaplist:"+str(snaplist)+"\ntimeout:"+str(timeout)
         self.startmsg(testmsg)
-        if zonelist is None:
-            zonelist = self.zonelist
+        zonelist = zonelist or self.zonelist
+        if not zonelist:
+            raise Exception("Zone list was empty")
         if snaplist is None:
             snaplist = self.snaps
         for zone in zonelist:
@@ -455,9 +494,12 @@ class EbsTestSuite(EutesterTestCase):
                     """
         testmsg = testmsg +"\nVariables provided:\nzonelist:"+str(zonelist)+"\nvolstate:"+str(volstate)
         self.startmsg(testmsg)
-        if zonelist is None:
-            zonelist = self.zonelist
+        zonelist = zonelist or self.zonelist
+        if not zonelist:
+            raise Exception("Zone list was empty")
         for zone in zonelist:
+            if not zone.volumes:
+                raise Exception("No volumes in zone:"+str(zone.name))
             for volume in zone.volumes:
                 volume.update()
                 if volstate == "all" or volume.status == volstate:
@@ -474,9 +516,12 @@ class EbsTestSuite(EutesterTestCase):
         testmsg = testmsg+"\nVariables provided:\nzonelist:"+str(zonelist)
         self.startmsg(testmsg)
         
-        if zonelist is None:
-            zonelist = self.zonelist
+        zonelist = zonelist or self.zonelist
+        if not zonelist:
+            raise Exception("Zone list was empty")
         for zone in zonelist:
+            if not self.snaps:
+                raise Exception("Create_Vols_from_snap_in_same_zone error: No snapshots available for test")
             for snap in self.snaps:
                 if snap.zone == zone:
                     self.debug("Creating volume from snap:"+str(snap.id))
@@ -496,10 +541,9 @@ class EbsTestSuite(EutesterTestCase):
                     """
         testmsg = testmsg + "\nVariables provided:\nzonelist:"+str(zonelist)+"\ntimeout:"+str(timeout)+"\ntimepergig:"+str(timepergig)
         self.startmsg(testmsg)
-        if zonelist is None:
-            zonelist = self.zonelist
+        zonelist = zonelist or self.zonelist
         if not zonelist:
-             raise Exception("attach_new_vols_from_snap_verify_md5: Zonelist is empty")
+            raise Exception("attach_new_vols_from_snap_verify_md5: Zonelist is empty")
         for zone in zonelist:
             self.debug("checking zone:"+zone.name)
             #use a single instance per zone for this test
@@ -530,8 +574,9 @@ class EbsTestSuite(EutesterTestCase):
                     """
         testmsg = testmsg+"\nVariables provided:\nzonelist:"+str(zonelist)
         self.startmsg()
-        if zonelist is None:
-            zonelist = self.zonelist
+        zonelist = zonelist or self.zonelist
+        if not zonelist:
+            raise Exception("Zone list was empty")
         for zone in zonelist:
             for snap in self.snaps:
                 if snap.zone != zone:
@@ -553,11 +598,11 @@ class EbsTestSuite(EutesterTestCase):
     def ebs_basic_test_suite(self, run=True):  
         testlist = [] 
         #create first round of volumes
-        testlist.append(self.create_testunit_from_method(self.create_vols_per_zone))
+        testlist.append(self.create_testunit_from_method(self.create_vols_per_zone, eof=True))
         #launch instances to interact with ebs volumes
-        testlist.append(self.create_testunit_from_method(self.create_test_instances_for_zones))
+        testlist.append(self.create_testunit_from_method(self.create_test_instances_for_zones, eof=True))
         #attach first round of volumes
-        testlist.append(self.create_testunit_from_method(self.attach_all_avail_vols_to_instances_in_zones))
+        testlist.append(self.create_testunit_from_method(self.attach_all_avail_vols_to_instances_in_zones, eof=True))
         #attempt to delete attached volumes, should not be able to
         testlist.append(self.create_testunit_from_method(self.negative_delete_attached_volumes_in_zones))
         #attempt to attach a volume which is already attached, should not be able to
@@ -582,6 +627,7 @@ class EbsTestSuite(EutesterTestCase):
             #verify the integrity of the new volumes by attaching to instance and checking md5 against original
             testlist.append(self.create_testunit_from_method(self.attach_new_vols_from_snap_verify_md5))
         testlist.append(self.create_testunit_from_method(self.detach_all_volumes_from_stopped_instances_in_zones))
+        testlist.append(self.create_testunit_from_method(self.terminate_instances_in_zones_verify_volume_detach))
         if run:
             self.run_test_case_list(testlist)
         else:
