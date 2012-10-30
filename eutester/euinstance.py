@@ -396,6 +396,7 @@ class EuInstance(Instance):
         bad_vols = []
         bad_vol_ids = []
         if verify_vols:
+            self.debug('Checking euinstance attached volume state is in sync with clouds...')
             for vol in self.attached_vols:
                 try:
                     self.verify_attached_vol_cloud_status(vol)
@@ -410,12 +411,13 @@ class EuInstance(Instance):
                     continue
                 start = time.time()
                 elapsed = 0 
-                while elapsed < timeout:
+                while (vol.status != 'available') and (elapsed < timeout):
+                    time.sleep(5)
                     vol.update()
-                    if vol.status == 'available':
-                        continue
+                    elapsed = int(time.time()-start)
                 if vol.status != 'available':
                     raise Exception("volume:"+str(vol.id)+", did not enter available state after terminating:"+str(self.id))
+                self.debug('Previously attached volume:'+str(vol.id)+" has gone to status:"+str(vol.status))
             if bad_vols:
                 raise Exception("Check test code. Unsync'd volumes found before terminating:"+",".join(bad_vol_ids))
                 
