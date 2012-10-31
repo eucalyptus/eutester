@@ -635,7 +635,7 @@ class EC2ops(Eutester):
         :param description: (optional integer) over all time to wait before exiting as failure
         :return: boto.snapshot
         """
-        return self.create_snapshots(self, volume_id, count=1, mincount=1, eof=True, waitOnProgress=waitOnProgress, poll_interval=poll_interval, timeout=timeout, description=description)[0]
+        return self.create_snapshots(volume_id, count=1, mincount=1, eof=True, waitOnProgress=waitOnProgress, poll_interval=poll_interval, timeout=timeout, description=description)[0]
         
 
     def create_snapshots(self, volume_id, count=1, mincount=None, eof=True, waitOnProgress=15, poll_interval=10, timeout=0, description=""):
