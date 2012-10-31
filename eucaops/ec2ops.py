@@ -397,6 +397,8 @@ class EC2ops(Eutester):
         elapsed = 0
         volumes = retlist = failed = []
         mincount = mincount or count
+        if mincount > count:
+            raise Exception('Mincount can not be greater than count')
         #if timeout is set to 0, use size to create a reasonable timeout for this volume creation
         if timeout == 0:
             if snapshot is not None:
@@ -605,7 +607,7 @@ class EC2ops(Eutester):
         t.pop()
         #create a time_struct out of our list
         return datetime.strptime(" ".join(t), "%Y %m %d %H %M %S")
-
+    
     def create_snapshot(self, volume_id, waitOnProgress=0, poll_interval=10, timeout=0, description=""):
         """
         Create a new EBS snapshot from an existing volume then wait for it to go to the created state.
@@ -620,6 +622,30 @@ class EC2ops(Eutester):
         :param description: (optional integer) over all time to wait before exiting as failure
         :return: boto.snapshot
         """
+        return self.create_snapshots(self, volume_id, count=1, mincount=1, eof=True, waitOnProgress=waitOnProgress, poll_interval=poll_interval, timeout=timeout, description=description)[0]
+        
+
+    def create_snapshots(self, volume_id, count=1, mincount=None, eof=True, waitOnProgress=0, poll_interval=10, timeout=0, description=""):
+        """
+        Create a new EBS snapshot from an existing volume then wait for it to go to the created state.
+        By default will poll for poll_count.  If waitOnProgress is specified than will wait on "waitOnProgress"
+        overrides # of poll_interval periods, using waitonprogress # of periods of poll_interval length in seconds
+        w/o progress before failing
+
+        :param volume_id: (mandatory string) Volume id of the volume to create snapshot from
+        :parram count: (optional Integer) Specify how many snapshots to attempt to create
+        :param mincount: (optional Integer) Specify the min success count, defaults to 'count'
+        :param eof: (optional boolean) End on failure.If true will end on first failure, otherwise will continue to try and fufill mincount
+        :param waitOnProgress: (optional string) string used to describe the snapshot
+        :param poll_interval: (optional integer) # of poll intervals to wait while 0 progress is made before exiting, overrides "poll_count" when used
+        :param timeout: (optional integer) time to sleep between polling snapshot status
+        :param description: (optional integer) over all time to wait before exiting as failure
+        :return: boto.snapshot
+        """
+        snapshots = retlist = failed = []
+        mincount = mincount or count
+        if mincount > count:
+            raise Exception('Mincount can not be greater than count')
         if waitOnProgress > 0:
             poll_count = waitOnProgress
         else:
@@ -628,34 +654,99 @@ class EC2ops(Eutester):
         elapsed = 0
         polls = 0
         snap_start = time.time()
+        self.debug('Create_snapshots count:'+str(count)+", mincount:"+str(mincount)+', waitOnProgress:'+str(waitOnProgress)+",eof:"+str(eof))
+        for x in xrange(0,count):
+            try:
+                snapshot = self.ec2.create_snapshot( volume_id )
+                self.debug("Attempting to create snapshot #"+str(x)+ ", id:"+str(snapshot.id))
+                snapshot.__setattr__('polls',0)
+                snapshot.__setattr__('poll_count',poll_count)
+                snapshot.__setattr__('last_progress',0)
+                snapshot.__setattr__('failmsg',"FAILED")
+                snapshot.__setattr__('laststatus',None)
+                snapshot.__setattr__('timeintest',0)
+                snapshot.__setattr__('createorder',x)
+                if snapshot:
+                    snapshots.append(snapshot)
+            except Exception, e:
+                if eof:
+                    raise e
+                else:
+                    self.debug("Caught exception creating snapshot,eof is False, continuing. Error:"+str(e))
+        retlist = copy.copy(snapshots)
 
-        snapshot = self.ec2.create_snapshot( volume_id )
-        self.debug("Waiting for snapshot (" + snapshot.id + ") creation to complete")
-        while (poll_count > 0) and (timeout == 0 or elapsed <= timeout):
-            time.sleep(poll_interval)
-            polls += 1
-            snapshot.update()
-            if snapshot.status == 'failed':
-                self.fail(str(snapshot) + " failed after Polling("+str(polls)+") ,Waited("+str(elapsed)+" sec), last reported (status:" + snapshot.status+" progress:"+snapshot.progress+")")
-                return None
-            curr_progress = int(snapshot.progress.replace('%',''))
-            #if progress was made, then reset timer 
-            if (waitOnProgress > 0) and (curr_progress > last_progress):
-                poll_count = waitOnProgress
-            else: 
-                poll_count -= 1
-            elapsed = int(time.time()-snap_start)
-            self.debug("Snapshot:"+snapshot.id+" Status:"+snapshot.status+" Progress:"+snapshot.progress+" Total Polls:"+str(polls)+" Polls remaining:"+str(poll_count)+" Time Elapsed:"+str(elapsed))    
-            if snapshot.status == 'completed':
-                self.debug("Snapshot created after " + str(elapsed) + " seconds. " + str(polls) + " X ("+str(poll_interval)+" second) polling invervals. Status:"+snapshot.status+", Progress:"+snapshot.progress)
-                self.test_resources["snapshots"].append(snapshot)
-                return snapshot
-        #At least one of our timers has been exceeded, fail and exit 
-        self.fail(str(snapshot) + " failed after Polling("+str(polls)+") ,Waited("+str(elapsed)+" sec), last reported (status:" + snapshot.status+" progress:"+snapshot.progress+")")
-        self.debug("Deleting snapshot("+snapshot.id+"), never progressed to 'created' state")
-        snapshot.delete()
-        return None
         
+        self.debug('Waiting for '+str(len(snapshots))+" snapshots to go to completed state...")
+        while (timeout == 0 or elapsed <= timeout) and snapshots:
+            time.sleep(poll_interval)
+            for snapshot in snapshots:
+                self.debug("Waiting for snapshot (" + snapshot.id + ") creation to complete")
+                try:
+                    snapshot.polls += 1
+                    snapshot.update()
+                    snapshot.laststatus = snapshot.status
+                    if snapshot.status == 'failed':
+                        raise Exception(str(snapshot) + " failed after Polling("+str(polls)+") ,Waited("+str(elapsed)+" sec), last reported (status:" + snapshot.status+" progress:"+snapshot.progress+")")
+                    curr_progress = int(snapshot.progress.replace('%',''))
+                    #if progress was made, then reset timer 
+                    if (waitOnProgress > 0) and (curr_progress > snapshot.last_progress):
+                        snapshot.poll_count = waitOnProgress
+                    else: 
+                        snapshot.poll_count -= 1
+                    elapsed = int(time.time()-snap_start)
+                    if snapshot.poll_count <= 0:
+                        raise Exception("Snapshot did not make progress for "+str(waitOnProgress)+" polls, after "+str(elapsed)+" seconds")
+                    self.debug("Snapshot:"+snapshot.id+" Status:"+snapshot.status+" Progress:"+snapshot.progress+" Total Polls:"+str(snapshot.polls)+" Polls remaining:"+str(snapshot.poll_count)+" Time Elapsed:"+str(elapsed))    
+                    if snapshot.status == 'completed':
+                        self.debug("Snapshot created after " + str(elapsed) + " seconds. " + str(snapshot.polls) + " X ("+str(poll_interval)+" second) polling invervals. Status:"+snapshot.status+", Progress:"+snapshot.progress)
+                        self.test_resources["snapshots"].append(snapshot)
+                        snapshot.timeintest = elapsed
+                        snapshot.failmsg ='SUCCESS'
+                        retlist.append(snapshot)
+                        snapshots.remove(snapshot)
+                except Exception, e:
+                    if eof:
+                        raise e
+                    else:
+                        self.debug("Exception caught in snapshot creation, snapshot:"+str(snapshot.id)+".Err:"+str(e))
+                        snapshot.failmsg = str(e)
+                        snapshot.timeintest = elapsed
+                        failed.append(snapshot)
+                        snapshots.remove(snapshot)
+        elapsed = int(time.time()-snap_start)
+        for snap in snapshots:
+            snapshot.failmsg = "Snapshot timed out in creation after "+str(elapsed)+" seconds"
+            snapshot.timeintest = elapsed
+            failed.append(snapshot)
+            snapshots.remove(snapshot)
+            
+        for snap in failed:
+            try:
+                snap.delete()
+                self.debug("Removed failed snapshot:"+str(snap.id))
+            except: pass
+            
+        #join the lists again for debug purposes
+        snapshots = retlist
+        snapshots.extend(failed)
+        buf = "\n"
+        buf += str('ID').ljust(15)+'|'+str('ORDER').ljust(6)+'|'+str('ELAPSED').ljust(8)+'|'+str('STATUS').ljust(10)+'|'+str('INFO MSG')+"\n"
+        buf += '----------------------------------------------------------------------\n'
+        for snap in snapshots:
+            buf += str(snap.id).ljust(15)+'|'+str(snap.createorder).ljust(6)+'|'+str(snap.timeintest).ljust(8)+'|'+str(snap.laststatus).ljust(15)+'|'+str(snap.failmsg)+"\n"
+        buf += '----------------------------------------------------------------------\n'
+        self.debug(buf)
+        #Check for failure and failure criteria and return 
+        #self.fail(str(snapshot) + " failed after Polling("+str(polls)+") ,Waited("+str(elapsed)+" sec), last reported (status:" + snapshot.status+" progress:"+snapshot.progress+")")
+        if failed and eof:
+            raise(str(len(failed))+' snapshots failed in create, see debug output for more info')
+        if len(retlist) < mincount:
+            raise('Created '+str(len(retlist))+'/'+str(count)+' snapshots is less than provided mincount, see debug output for more info')
+        return retlist
+    
+        
+        
+    
     
     def delete_snapshot(self,snapshot,timeout=60):
         """
