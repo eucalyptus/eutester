@@ -747,21 +747,15 @@ class EC2ops(Eutester):
                 self.debug("Removed failed snapshot:"+str(snap.id))
             except: pass
             
-        print "retlist"
-        print retlist
-        print 'failed'
-        print failed 
-        print 'snapshots'
-        print snapshots
         #join the lists again for debug purposes
         snapshots = copy.copy(retlist)
         snapshots.extend(failed)
         #Print the results in a formated table
         buf = "\n"
-        buf += str('ID').ljust(15)+'|'+str('ORDER').ljust(5)+'|'+str('CMDTIME').ljust(8)+'|'+str('ELAPSED').ljust(8)+'|'+str('%').ljust(4)+'|'+str('STATUS').ljust(12)+'|'+str('INFO-MSG')+"\n"
+        buf += str('ID').center(15)+'|'+str('ORDER').center(5)+'|'+str('CMDTIME').center(8)+'|'+str('ELAPSED').center(8)+'|'+str('%').center(4)+'|'+str('STATUS').center(12)+'|'+str('INFO-MSG')+"\n"
         buf += '----------------------------------------------------------------------\n'
         for snap in snapshots:
-            buf += str(snap.id).ljust(15)+'|'+str(snap.createorder).ljust(5)+'|'+str(snap.cmdtime).ljust(8)+'|'+str(snap.timeintest).ljust(8)+'|'+str(snap.last_progress).ljust(4)+'|'+str(snap.laststatus).ljust(12)+'|'+str(snap.failmsg)+"\n"
+            buf += str(snap.id).center(15)+'|'+str(snap.createorder).center(5)+'|'+str(snap.cmdtime).center(8)+'|'+str(snap.timeintest).center(8)+'|'+str(snap.last_progress).center(4)+'|'+str(snap.laststatus).center(12)+'|'+str(snap.failmsg)+"\n"
         buf += '----------------------------------------------------------------------\n'
         self.debug(buf)
         #Check for failure and failure criteria and return 
