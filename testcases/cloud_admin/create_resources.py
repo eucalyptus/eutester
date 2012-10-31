@@ -52,9 +52,12 @@ class ResourceGeneration(EutesterTestCase):
     
     def __init__(self, credpath=None, cleanup_artifacts=False):
         self.setuptestcase()
+        self.setup_parser()
+        self.get_args()
         self.tester = Eucaops(credpath=credpath)
-        self.cleanup_artifacts = cleanup_artifacts
 
+    def clean_method(self):
+        pass
 
     def CreateResources(self):
         users = self.tester.get_all_users() 
@@ -101,25 +104,15 @@ class ResourceGeneration(EutesterTestCase):
                 resource_tester.cleanup_artifacts()
 
 if __name__ == "__main__":
-    testcase = EutesterTestCase()
-
-    #### Adds argparse to testcase and adds some defaults args
-    testcase.setup_parser()
-
-    ### Get all cli arguments and any config arguments and merge them
-    testcase.get_args()
-
-    ### Instantiate an object of your test suite class using args found from above
-    instance_basics_tests = testcase.do_with_args(ResourceGeneration)
-
+    testcase = ResourceGeneration()
     ### Either use the list of tests passed from config/command line to determine what subset of tests to run
     list = testcase.args.tests or [ "CreateResources" ]
 
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
     for test in list:
-        unit_list.append( instance_basics_tests.create_testunit_by_name(test) )
+        unit_list.append( testcase.create_testunit_by_name(test) )
+        ### Run the EutesterUnitTest objects
 
-    ### Run the EutesterUnitTest objects
-    testcase.run_test_case_list(unit_list)
-    instance_basics_tests.clean_method()
+    result = testcase.run_test_case_list(unit_list,clean_on_exit=True,eof=False)
+    exit(result)
