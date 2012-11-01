@@ -599,6 +599,29 @@ class EuInstance(Instance):
                 raise Exception("Missing volumes post reboot:"+str(msg)+"\n")
         self.debug(self.id+" reboot_instance_and_verify Success")
         
+        
+    def attach_euvolume_list(self,list,intervoldelay=0, timepervol=90, md5len=32):
+        for euvol in list:
+            if not isinstance(euvol, EuVolume) or not euvol.md5:
+                raise Exception("Volumes in list must be of type EuVolume containing an accurate populated md5sum")
+        for euvol in list:
+            dev = self.get_free_scsi_dev()
+            if (self.tester.attach_volume(self, euvolume, dev, pause=10,timeout=timeout)):
+                self.attached_vols.append(euvol)
+            else:
+                raise Exception('attach_euvolume_list: Test Failed to attach volume:'+str(euvolume.id))
+            if delay:
+                time.sleep(intervoldelay)
+        start = time.time()
+        elapsed = 0 
+        badvols = self.get_unsynced_volumes(euvol_list, md5length=md5length, timepervol=timepervol, check_md5=True)
+        if badvols:
+            buf = ""
+            for bv in badvols:
+                buf += str(bv.id)+","
+            raise Exception("Volume(s) were not found on guest:"+str(buf))
+        
+        
     def get_unsynced_volumes(self,euvol_list=None, md5length=32, timepervol=90,min_polls=2, check_md5=False):
         '''
         Returns list of volumes which are:
