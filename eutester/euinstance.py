@@ -242,18 +242,28 @@ class EuInstance(Instance):
         self.debug('File '+filepath+' is present on '+self.id)
         
     
-    def attach_volume(self, volume,  dev=None, timeout=60):
-        if not isinstance(volume, EuVolume):
-            euvolume = EuVolume.make_euvol_from_vol(volume)
-        return self.attach_euvolume(euvolume,  dev=dev, timeout=timeout)
-    
-        
-    def attach_euvolume(self, euvolume, dev=None, timeout=60):
+    def attach_volume(self, volume,  dev=None, timeout=60, overwrite=False):
         '''
         Method used to attach a volume to an instance and track it's use by that instance
         required - euvolume - the euvolume object being attached
         required - tester - the eucaops/eutester object/connection for this cloud
         optional - dev - string to specify the dev path to 'request' when attaching the volume to
+        optional - timeout - integer- time allowed before failing
+        optional - overwrite - flag to indicate whether to overwrite head data of a non-zero filled volume upon attach for md5
+        ''' 
+        if not isinstance(volume, EuVolume):
+            euvolume = EuVolume.make_euvol_from_vol(volume)
+        return self.attach_euvolume(euvolume,  dev=dev, timeout=timeout, overwrite=overwrite)
+    
+        
+    def attach_euvolume(self, euvolume, dev=None, timeout=60, overwrite=False):
+        '''
+        Method used to attach a volume to an instance and track it's use by that instance
+        required - euvolume - the euvolume object being attached
+        required - tester - the eucaops/eutester object/connection for this cloud
+        optional - dev - string to specify the dev path to 'request' when attaching the volume to
+        optional - timeout - integer- time allowed before failing
+        optional - overwrite - flag to indicate whether to overwrite head data of a non-zero filled volume upon attach for md5
         ''' 
         if not isinstance(euvolume, EuVolume):
             raise Exception("Volume needs to be of type euvolume, try attach_volume() instead?")
@@ -290,7 +300,7 @@ class EuInstance(Instance):
             if not euvolume.guestdev:
                 raise Exception('Device not found on guest after '+str(elapsed)+' seconds')
             #Check to see if this volume has unique data in the head otherwise write some and md5 it
-            self.vol_write_random_data_get_md5(euvolume)
+            self.vol_write_random_data_get_md5(euvolume,overwrite=overwrite)
         else:
             self.debug('Failed to attach volume:'+str(euvolume.id)+' to instance:'+self.id)
             raise Exception('Failed to attach volume:'+str(euvolume.id)+' to instance:'+self.id)
