@@ -621,16 +621,19 @@ class EutesterTestCase(unittest.TestCase):
         :returns: formated string containing args and their values.  
         '''
         
-        buf =  "End on Failure :" +str(testunit.eof)
-        buf += "\nPassing ARGS:\n"
-        buf += "---------------------\n"
-        varnames = self.get_meth_arg_names(testunit.method)
-        if testunit.args:
-            for count,arg in enumerate(testunit.args):
-                buf += str(varnames[count+1])+" : "+str(arg)+"\n"
-        if testunit.kwargs:
-            for key in testunit.kwargs:
-                buf += str(key)+" : "+str(testunit.kwargs[key])+"\n"
+        buf =  "End on Failure:" +str(testunit.eof)
+        buf += "\nPassing ARGS:"
+        if not testunit.args and not testunit.kwargs:
+            buf += '\"\"\n'
+        else:
+            buf += "\n---------------------\n"
+            varnames = self.get_meth_arg_names(testunit.method)
+            if testunit.args:
+                for count,arg in enumerate(testunit.args):
+                    buf += str(varnames[count+1])+" : "+str(arg)+"\n"
+            if testunit.kwargs:
+                for key in testunit.kwargs:
+                    buf += str(key)+" : "+str(testunit.kwargs[key])+"\n"
             buf += "---------------------\n"
         return buf
     
