@@ -460,7 +460,7 @@ class EC2ops(Eutester):
                 
         if len(retlist) < mincount:
              #Clean up any volumes from this operation and raise exception
-            for vol in volumes():
+            for vol in volumes:
                 vol.delete()
             raise Exception("Created "+str(len(retlist))+"/"+str(count)+' volumes. Less than minimum specified:'+str(mincount))
         self.debug( "Done. Waited a total of " + str(elapsed) + " seconds for "+str(len(retlist))+" to become available" )
