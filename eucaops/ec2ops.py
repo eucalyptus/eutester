@@ -377,7 +377,7 @@ class EC2ops(Eutester):
         """
         return self.create_volumes(azone, size=size, count=1, mincount=1, eof=eof, snapshot=snapshot, timeout=timeout, poll_interval=poll_interval,timepergig=timepergig)[0]
 
-    def create_volumes(self, azone, size=1, count=1, mincount=None, eof=True, snapshot=None, timeout=0, poll_interval=10,timepergig=120):
+    def create_volumes(self, azone, size=1, count=1, mincount=None, eof=True, delay=0, snapshot=None, timeout=0, poll_interval=10,timepergig=120):
         """
         Create a multiple new EBS volumes then wait for them to go to available state, size or snapshot is mandatory
 
@@ -419,6 +419,8 @@ class EC2ops(Eutester):
                     raise e
                 else:
                     self.debug("Caught exception creating volume,eof is False, continuing. Error:"+str(e))
+            if delay:
+                time.sleep(delay)
         retlist = copy.copy(volumes)
         if len(volumes) >= mincount:            
             # Wait for the volume to be created.
@@ -638,7 +640,7 @@ class EC2ops(Eutester):
         return self.create_snapshots(volume_id, count=1, mincount=1, eof=True, waitOnProgress=waitOnProgress, poll_interval=poll_interval, timeout=timeout, description=description)[0]
         
 
-    def create_snapshots(self, volume_id, count=1, mincount=None, eof=True, waitOnProgress=15, poll_interval=10, timeout=0, description=""):
+    def create_snapshots(self, volume_id, count=1, mincount=None, eof=True, delay=0, waitOnProgress=15, poll_interval=10, timeout=0, description=""):
         """
         Create a new EBS snapshot from an existing volume then wait for it to go to the created state.
         By default will poll for poll_count.  If waitOnProgress is specified than will wait on "waitOnProgress"
@@ -676,6 +678,8 @@ class EC2ops(Eutester):
                 snapshot = self.ec2.create_snapshot( volume_id )
                 cmdtime = time.time()-start
                 self.debug("Attempting to create snapshot #"+str(x)+ ", id:"+str(snapshot.id))
+                #Append some attributes for tracking snapshot through creation lifecycle.
+                #Might be better to do this within a test class?
                 snapshot.__setattr__('polls',0)
                 snapshot.__setattr__('poll_count',poll_count)
                 snapshot.__setattr__('last_progress',0)
@@ -692,6 +696,8 @@ class EC2ops(Eutester):
                     raise e
                 else:
                     self.debug("Caught exception creating snapshot,eof is False, continuing. Error:"+str(e)) 
+            if delay:
+                time.sleep(delay)
               
         self.debug('Waiting for '+str(len(snapshots))+" snapshots to go to completed state...")
         while (timeout == 0 or elapsed <= timeout) and snapshots:
@@ -901,7 +907,7 @@ class EC2ops(Eutester):
                 continue                
             if (owner_id is not None) and (image.owner_id != owner_id):
                 continue
-            
+            self.debug("Returning image:"+str(image.id))
             return image
         raise Exception("Unable to find an EMI")
         return None
