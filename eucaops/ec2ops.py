@@ -443,11 +443,12 @@ class EC2ops(Eutester):
                     if volume.status =='available':
                         volumes.remove(volume)
                 elapsed = int(time.time()-start)
-                
-            self.debug( "Deleting volumes that never became available")
-            for volume in failed:
-                    volume.delete()
+             
+            
             if failed:
+                self.debug( "Deleting volumes that never became available...")
+                for volume in failed:
+                    volume.delete()
                 buf = str(len(failed))+'/'+str(count)+ " Failed volumes after " +str(elapsed)+" seconds:"
                 for failedvol in failed:
                     retlist.remove(failedvol)
