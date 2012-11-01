@@ -454,7 +454,7 @@ class EC2ops(Eutester):
                     buf += str(failedvol.id)+"-state:"+str(failedvol.status)+","
                 if eof:
                     #Clean up any volumes from this operation and raise exception
-                    for vol in volumes():
+                    for vol in volumes:
                         vol.delete()
                     raise Exception(buf)
                 
