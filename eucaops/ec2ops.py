@@ -44,6 +44,8 @@ from boto.ec2.keypair import KeyPair
 from boto.ec2.blockdevicemapping import BlockDeviceMapping, BlockDeviceType
 from boto.exception import EC2ResponseError
 from eutester.euinstance import EuInstance
+from eutester.euvolume import EuVolume
+
 
 class EC2ops(Eutester):
     def __init__(self, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, username="root",region=None, ec2_ip=None, s3_ip=None, boto_debug=0):
@@ -377,24 +379,39 @@ class EC2ops(Eutester):
         """
         return self.create_volumes(azone, size=size, count=1, mincount=1, eof=eof, snapshot=snapshot, timeout=timeout, poll_interval=poll_interval,timepergig=timepergig)[0]
 
-    def create_volumes(self, azone, size=1, count=1, mincount=None, eof=True, delay=0, snapshot=None, timeout=0, poll_interval=10,timepergig=120):
+    def create_volumes(self, 
+                       azone, 
+                       size = 1, 
+                       count = 1, 
+                       mincount = None, 
+                       eof = True, 
+                       monitor_to_state = 'available',
+                       delay = 0, 
+                       snapshot = None, 
+                       timeout=0, 
+                       poll_interval = 10,
+                       timepergig = 120 ):
         """
-        Create a multiple new EBS volumes then wait for them to go to available state, size or snapshot is mandatory
+        Definition:
+                    Create a multiple new EBS volumes then wait for them to go to available state, 
+                    size or snapshot is mandatory
 
         :param azone: Availability zone to create the volume in
         :param size: Size of the volume to be created
         :param count: Number of volumes to be created
         :param mincount: Minimum number of volumes to be created to be considered a success.Default = 'count'
         :param eof: Boolean, indicates whether to end on first instance of failure
+        :param monitor_to_state: String, if not 'None' will monitor created volumes to the provided state
         :param snapshot: Snapshot to create the volume from
         :param timeout: Time to wait before failing. timeout of 0 results in size of volume * timepergig seconds
         :param poll_interval: How often in seconds to poll volume state
         :param timepergig: Time to wait per gigabyte size of volume, used when timeout is set to 0
-        :return:
+        :return: list of volumes
         """
         start = time.time()
         elapsed = 0
-        volumes = retlist = failed = []
+        volumes = []
+        
         mincount = mincount or count
         if mincount > count:
             raise Exception('Mincount can not be greater than count')
@@ -408,8 +425,14 @@ class EC2ops(Eutester):
         for x in xrange(0,count):
             vol = None
             try:
+                cmdstart = time.time()
                 vol = self.ec2.create_volume(size, azone, snapshot)
+                cmdtime =  time.time() - cmdstart 
                 if vol:
+                    vol = EuVolume.make_euvol_from_vol(vol, cmdstart=cmdstart)
+                    vol.eutest_cmdstart = cmdstart
+                    vol.eutest_createorder = x
+                    vol.eutest_cmdtime = "{0:.2f}".format(cmdtime)
                     volumes.append(vol)
             except Exception, e:
                 if eof:
@@ -421,52 +444,128 @@ class EC2ops(Eutester):
                     self.debug("Caught exception creating volume,eof is False, continuing. Error:"+str(e))
             if delay:
                 time.sleep(delay)
-        retlist = copy.copy(volumes)
-        if len(volumes) >= mincount:            
-            # Wait for the volume to be created.
-            self.debug( "Polling "+str(len(volumes))+" volumes for available status...")
-            while volumes and (elapsed < timeout):
-                time.sleep(poll_interval)
-                for volume in volumes:
-                    volume.update()
-                    self.debug("Volume ("+volume.id+") State("+volume.status+"), seconds elapsed: " + str(elapsed)+'/'+str(timeout))
-                    if volume.status == 'failed':
-                        if eof:
-                            #Clean up any volumes from this operation and raise exception
-                            for vol in volumes:
-                                vol.delete()
-                            raise Exception(str(volume) + " went to: " + volume.status)
-                        else:
-                            self.debug(str(volume) + " went to: " + volume.status)
-                            failed.append(volume)
-                            volumes.remove(volume)
-                    if volume.status =='available':
-                        volumes.remove(volume)
-                elapsed = int(time.time()-start)
-             
-            
-            if failed:
-                self.debug( "Deleting volumes that never became available...")
-                for volume in failed:
-                    volume.delete()
-                buf = str(len(failed))+'/'+str(count)+ " Failed volumes after " +str(elapsed)+" seconds:"
-                for failedvol in failed:
-                    retlist.remove(failedvol)
-                    buf += str(failedvol.id)+"-state:"+str(failedvol.status)+","
-                if eof:
-                    #Clean up any volumes from this operation and raise exception
-                    for vol in volumes:
-                        vol.delete()
-                    raise Exception(buf)
-                
-        if len(retlist) < mincount:
+        if len(volumes) < mincount:
              #Clean up any volumes from this operation and raise exception
             for vol in volumes:
                 vol.delete()
             raise Exception("Created "+str(len(retlist))+"/"+str(count)+' volumes. Less than minimum specified:'+str(mincount))
-        self.debug( "Done. Waited a total of " + str(elapsed) + " seconds for "+str(len(retlist))+" to become available" )
+        self.debug( str(len(volumes))+"/"+str(count)+" requests for volume creation succeeded." )
+        
+        if not monitor_to_state:
+            self.test_resources["volumes"].extend(volumes)
+            return volumes
+        #If we begain the creation of the min volumes, monitor till completion, otherwise cleanup and fail out
+        retlist = self.monitor_created_euvolumes_to_state(volumes,eof=eof, mincount=mincount, state=monitor_to_state, poll_interval=poll_interval, timepergig=timepergig)
         self.test_resources["volumes"].extend(retlist)
         return retlist
+    
+
+    def monitor_created_euvolumes_to_state(self, volumes, eof=True, mincount=None, state='available', poll_interval=10, deletefailed=True, timepergig=120):
+        '''
+        Description:
+                    Monitors a list of created volumes until 'state' or failure. Allows for a variety of volumes, using differnt
+                     types and creation methods to be monitored by a central method. 
+        :param volumes: list of created volumes
+        :param eof: boolean, if True will end on first failure
+        :param mincount: minimum number of successful volumes, else fail
+        :param state: string indicating the expected state to monitor to 
+        :param deletefailed: delete all failed volumes, in eof case deletes 'volumes' list. In non-eof, if mincount is met, will delete any failed volumes. 
+        :param timepergig: integer, time allowed per gig before failing.
+        '''
+        
+        retlist = []
+        failed = []
+        if not volumes:
+            raise Exception("Volumes list empty in monitor_created_volumes_to_state")
+        count = len(volumes)
+        mincount = mincount or count 
+        origlist = copy.copy(volumes)
+        for volume in volumes:
+            if not isinstance(volume, EuVolume):
+                raise Exception("object not of type EuVolume. Found type:"+str(type(volume)))
+        volume = EuVolume()
+        # Wait for the volume to be created.
+        self.debug( "Polling "+str(len(volumes))+" volumes for status:\""+str(state)+"\"...")
+        start = time.time()
+        while volumes:
+            for volume in volumes:
+                volume.update()
+                voltimeout = timepergig*volume.size
+                elapsed = time.time()-start
+                self.debug("Volume #"+str(volume.eutest_createorder)+" ("+volume.id+") State("+volume.status+"), seconds elapsed: " + str(int(elapsed))+'/'+str(voltimeout))
+                if volume.status == state:
+                    #add to return list and remove from volumes list
+                    retlist.append(volumes.pop(volumes.index(volume)))
+                else:
+                    if elapsed > voltimeout:
+                        volume.status = 'timed-out'
+                    if volume.status == 'failed' or volume.status == 'timed-out':
+                        if eof:
+                            #Clean up any volumes from this operation and raise exception
+                            if deletefailed:
+                                for vol in origlist:
+                                    self.debug('Failure caught in monitor volumes, attempting to delete all volumes...')
+                                    try:
+                                        self.delete_volume(vol)
+                                    except Exception, e:
+                                        self.debug('Could not delete volume:'+str(vol.id)+", err:"+str(e))
+                            raise Exception(str(volume) + ", failed to reach state:"+str(state)+", vol status:"+str(volume.eutest_laststatus)+", test status:"+str(vol.status))
+                        else:
+                            #End on failure is not set, so record this failure and move on
+                            msg = str(volume) + " went to: " + volume.status
+                            self.debug(msg)
+                            volume.eutest_failmsg = msg
+                            failed.append(volumes.pop(volumes.index(volume)))
+                    #Fail fast if we know we've exceeded our mincount already
+                    if (count - len(failed)) < mincount:
+                        if deletefailed:
+                            for failedvol in failed:
+                                retlist.remove(failedvol)
+                                buf += str(failedvol.id)+"-state:"+str(failedvol.status)+","
+                                self.debug(buf)
+                            for vol in origlist:
+                                self.debug('Failure caught in monitor volumes, attempting to delete all volumes...')
+                                try:
+                                    self.delete_volume(vol)
+                                except Exception, e:
+                                    self.debug('Could not delete volume:'+str(vol.id)+", err:"+str(e))
+                        raise Exception("Mincount of volumes did not enter state:"+str(state)+" due to faults")
+            self.debug("----Time Elapsed:"+str(int(elapsed))+", Waiting on "+str(len(volumes))+" volumes to enter state:"+str(state)+"-----")
+            if volumes:
+                time.sleep(poll_interval)
+            else:
+                break
+            
+        #We have at least mincount of volumes, delete any failed volumes
+        if failed and deletefailed:
+            self.debug( "Deleting volumes that never became available...")
+            for volume in failed:
+                self.debug('Failure caught in monitor volumes, attempting to delete all volumes...')
+                try:
+                    self.delete_volume(vol)
+                except Exception, e:
+                    self.debug('Could not delete volume:'+str(vol.id)+", err:"+str(e))
+            buf = str(len(failed))+'/'+str(count)+ " Failed volumes after " +str(elapsed)+" seconds:"
+            for failedvol in failed:
+                retlist.remove(failedvol)
+                buf += str(failedvol.id)+"-state:"+str(failedvol.status)+","
+                self.debug(buf)
+        self.print_euvolume_list(origlist)
+        return retlist
+                
+    def print_euvolume_list(self,euvolumes):
+        buf=""
+        if not euvolumes:
+            raise Exception('print_euvolume_list: Euvolume list to print is empty')
+        for volume in euvolumes:
+            if not isinstance(volume, EuVolume):
+                raise Exception("object not of type EuVolume. Found type:"+str(type(volume)))
+        volume = euvolumes.pop()
+        buf = volume.printself()
+        for volume in euvolumes:
+            buf += volume.printself(title=False)
+        self.debug("\n"+str(buf)+"\n")
+        
 
     def delete_volume(self, volume):
         """
@@ -524,19 +623,18 @@ class EC2ops(Eutester):
         laststatus=None
         while elapsed < timeout:
             volume.update()
-            
+            astatus=None
             if volume.attach_data is not None:
                 if re.search("attached",str(volume.attach_data.status)):
                     self.debug(str(volume) + ", Attached: " +  volume.status+ " - " + str(volume.attach_data.status) + ", elapsed:"+str(elapsed))
                     return True
                 else:
-                    status = volume.attach_data.status
-                    if status:
-                        laststatus = status
-                    elif laststatus and not status:
+                    astatus = volume.attach_data.status
+                    if astatus:
+                        laststatus = astatus
+                    elif laststatus and not astatus:
                         raise Exception('Volume status reverted from '+str(laststatus)+' to None, attach failed')
-                    self.debug(str(volume)+" not 'attached', attach_data.status="+str(status))
-            self.debug( str(volume) + " state:" + volume.status + " pause:"+str(pause)+" elapsed:"+str(elapsed))
+            self.debug( str(volume) + ", state:" + volume.status+', attached status:'+str(astatus) + ", elapsed:"+str(elapsed)+'/'+str(timeout))
             self.sleep(pause)
             elapsed = int(time.time()-start)
 
@@ -624,35 +722,35 @@ class EC2ops(Eutester):
         #create a time_struct out of our list
         return datetime.strptime(" ".join(t), "%Y %m %d %H %M %S")
     
-    def create_snapshot(self, volume_id, waitOnProgress=0, poll_interval=10, timeout=0, description=""):
+    def create_snapshot(self, volume_id, wait_on_progress=0, poll_interval=10, timeout=0, description=""):
         """
         Create a new EBS snapshot from an existing volume then wait for it to go to the created state.
-        By default will poll for poll_count.  If waitOnProgress is specified than will wait on "waitOnProgress"
-        overrides # of poll_interval periods, using waitonprogress # of periods of poll_interval length in seconds
+        By default will poll for poll_count.  If wait_on_progress is specified than will wait on "wait_on_progress"
+        overrides # of poll_interval periods, using wait_on_progress # of periods of poll_interval length in seconds
         w/o progress before failing
 
         :param volume_id: (mandatory string) Volume id of the volume to create snapshot from
-        :param waitOnProgress: (optional string) string used to describe the snapshot
+        :param wait_on_progress: (optional string) string used to describe the snapshot
         :param poll_interval: (optional integer) # of poll intervals to wait while 0 progress is made before exiting, overrides "poll_count" when used
         :param timeout: (optional integer) time to sleep between polling snapshot status
         :param description: (optional integer) over all time to wait before exiting as failure
         :return: boto.snapshot
         """
-        return self.create_snapshots(volume_id, count=1, mincount=1, eof=True, waitOnProgress=waitOnProgress, poll_interval=poll_interval, timeout=timeout, description=description)[0]
+        return self.create_snapshots(volume_id, count=1, mincount=1, eof=True, wait_on_progress=wait_on_progress, poll_interval=poll_interval, timeout=timeout, description=description)[0]
         
 
-    def create_snapshots(self, volume_id, count=1, mincount=None, eof=True, delay=0, waitOnProgress=15, poll_interval=10, timeout=0, description=""):
+    def create_snapshots(self, volume_id, count=1, mincount=None, eof=True, delay=0, wait_on_progress=20, poll_interval=10, timeout=0, description=""):
         """
         Create a new EBS snapshot from an existing volume then wait for it to go to the created state.
-        By default will poll for poll_count.  If waitOnProgress is specified than will wait on "waitOnProgress"
-        overrides # of poll_interval periods, using waitonprogress # of periods of poll_interval length in seconds
+        By default will poll for poll_count.  If wait_on_progress is specified than will wait on "wait_on_progress"
+        overrides # of poll_interval periods, using wait_on_progress # of periods of poll_interval length in seconds
         w/o progress before failing
 
         :param volume_id: (mandatory string) Volume id of the volume to create snapshot from
         :parram count: (optional Integer) Specify how many snapshots to attempt to create
         :param mincount: (optional Integer) Specify the min success count, defaults to 'count'
         :param eof: (optional boolean) End on failure.If true will end on first failure, otherwise will continue to try and fufill mincount
-        :param waitOnProgress: (optional string) string used to describe the snapshot
+        :param wait_on_progress: (optional string) string used to describe the snapshot
         :param poll_interval: (optional integer) # of poll intervals to wait while 0 progress is made before exiting, overrides "poll_count" when used
         :param timeout: (optional integer) time to sleep between polling snapshot status
         :param description: (optional integer) over all time to wait before exiting as failure
@@ -664,15 +762,15 @@ class EC2ops(Eutester):
         mincount = mincount or count
         if mincount > count:
             raise Exception('Mincount can not be greater than count')
-        if waitOnProgress > 0:
-            poll_count = waitOnProgress
+        if wait_on_progress > 0:
+            poll_count = wait_on_progress
         else:
             poll_count = self.poll_count
         last_progress = 0
         elapsed = 0
         polls = 0
         snap_start = time.time()
-        self.debug('Create_snapshots count:'+str(count)+", mincount:"+str(mincount)+', waitOnProgress:'+str(waitOnProgress)+",eof:"+str(eof))
+        self.debug('Create_snapshots count:'+str(count)+", mincount:"+str(mincount)+', wait_on_progress:'+str(wait_on_progress)+",eof:"+str(eof))
         for x in xrange(0,count):
             try:
                 start = time.time()
@@ -681,14 +779,14 @@ class EC2ops(Eutester):
                 self.debug("Attempting to create snapshot #"+str(x)+ ", id:"+str(snapshot.id))
                 #Append some attributes for tracking snapshot through creation lifecycle.
                 #Might be better to do this within a test class?
-                snapshot.__setattr__('polls',0)
-                snapshot.__setattr__('poll_count',poll_count)
-                snapshot.__setattr__('last_progress',0)
-                snapshot.__setattr__('failmsg',"FAILED")
-                snapshot.__setattr__('laststatus',None)
-                snapshot.__setattr__('timeintest',0)
-                snapshot.__setattr__('createorder',x)
-                snapshot.__setattr__('cmdtime',"{0:.2f}".format(cmdtime))
+                snapshot.__setattr__('eutest_polls',0)
+                snapshot.__setattr__('eutest_poll_count',poll_count)
+                snapshot.__setattr__('eutest_last_progress',0)
+                snapshot.__setattr__('eutest_failmsg',"FAILED")
+                snapshot.__setattr__('eutest_laststatus',None)
+                snapshot.__setattr__('eutest_timeintest',0)
+                snapshot.__setattr__('eutest_createorder',x)
+                snapshot.__setattr__('eutest_cmdtime',"{0:.2f}".format(cmdtime))
                 
                 if snapshot:
                     snapshots.append(snapshot)
@@ -703,30 +801,30 @@ class EC2ops(Eutester):
         self.debug('Waiting for '+str(len(snapshots))+" snapshots to go to completed state...")
         while (timeout == 0 or elapsed <= timeout) and snapshots:
             time.sleep(poll_interval)
+            self.debug("Waiting for "+str(len(snapshots))+" snapshots to complete creation")
             for snapshot in snapshots:
-                self.debug("Waiting for snapshot (" + snapshot.id + ") creation to complete")
                 try:
-                    snapshot.polls += 1
+                    snapshot.eutest_polls += 1
                     snapshot.update()
-                    snapshot.laststatus = snapshot.status
+                    snapshot.eutest_laststatus = snapshot.status
                     if snapshot.status == 'failed':
-                        raise Exception(str(snapshot) + " failed after Polling("+str(polls)+") ,Waited("+str(elapsed)+" sec), last reported (status:" + snapshot.status+" progress:"+snapshot.progress+")")
+                        raise Exception(str(snapshot) + " failed after Polling("+str(snapshot.eutest_polls)+") ,Waited("+str(elapsed)+" sec), last reported (status:" + snapshot.status+" progress:"+snapshot.progress+")")
                     curr_progress = int(snapshot.progress.replace('%',''))
                     #if progress was made, then reset timer 
-                    if (waitOnProgress > 0) and (curr_progress > snapshot.last_progress):
-                        snapshot.poll_count = waitOnProgress
+                    if (wait_on_progress > 0) and (curr_progress > snapshot.eutest_last_progress):
+                        snapshot.eutest_poll_count = wait_on_progress
                     else: 
-                        snapshot.poll_count -= 1
-                    snapshot.last_progress = curr_progress
+                        snapshot.eutest_poll_count -= 1
+                    snapshot.eutest_last_progress = curr_progress
                     elapsed = int(time.time()-snap_start)
-                    if snapshot.poll_count <= 0:
-                        raise Exception("Snapshot did not make progress for "+str(waitOnProgress)+" polls, after "+str(elapsed)+" seconds")
-                    self.debug("Snapshot:"+snapshot.id+" Status:"+snapshot.status+" Progress:"+snapshot.progress+" Total Polls:"+str(snapshot.polls)+" Polls remaining:"+str(snapshot.poll_count)+" Time Elapsed:"+str(elapsed))    
+                    if snapshot.eutest_poll_count <= 0:
+                        raise Exception("Snapshot did not make progress for "+str(wait_on_progress)+" polls, after "+str(elapsed)+" seconds")
+                    self.debug(str(snapshot.id)+", Status:"+snapshot.status+", Progress:"+snapshot.progress+", Polls:"+str(snapshot.eutest_polls)+", Polls till fail:"+str(snapshot.eutest_poll_count)+", Time Elapsed:"+str(elapsed))    
                     if snapshot.status == 'completed':
-                        self.debug("Snapshot created after " + str(elapsed) + " seconds. " + str(snapshot.polls) + " X ("+str(poll_interval)+" second) polling invervals. Status:"+snapshot.status+", Progress:"+snapshot.progress)
+                        self.debug(str(snapshot.id)+" created after " + str(elapsed) + " seconds. Status:"+snapshot.status+", Progress:"+snapshot.progress)
                         self.test_resources["snapshots"].append(snapshot)
-                        snapshot.timeintest = elapsed
-                        snapshot.failmsg ='SUCCESS'
+                        snapshot.eutest_timeintest = elapsed
+                        snapshot.eutest_failmsg ='SUCCESS'
                         retlist.append(snapshot)
                         snapshots.remove(snapshot)
                 except Exception, e:
@@ -737,14 +835,14 @@ class EC2ops(Eutester):
                         raise e
                     else:
                         self.debug("Exception caught in snapshot creation, snapshot:"+str(snapshot.id)+".Err:"+str(e))
-                        snapshot.failmsg = str(e)
-                        snapshot.timeintest = elapsed
+                        snapshot.eutest_failmsg = str(e)
+                        snapshot.eutest_timeintest = elapsed
                         failed.append(snapshot)
                         snapshots.remove(snapshot)
         elapsed = int(time.time()-snap_start)
         for snap in snapshots:
-            snapshot.failmsg = "Snapshot timed out in creation after "+str(elapsed)+" seconds"
-            snapshot.timeintest = elapsed
+            snapshot.eutest_failmsg = "Snapshot timed out in creation after "+str(elapsed)+" seconds"
+            snapshot.eutest_timeintest = elapsed
             failed.append(snapshot)
             snapshots.remove(snapshot)
             
@@ -758,11 +856,11 @@ class EC2ops(Eutester):
         snapshots = copy.copy(retlist)
         snapshots.extend(failed)
         #Print the results in a formated table
-        buf = "\n"
+        buf = "\n----------------------------------------------------------------------\n"
         buf += str('ID').center(15)+'|'+str('ORDER').center(5)+'|'+str('CMDTIME').center(8)+'|'+str('ELAPSED').center(8)+'|'+str('%').center(4)+'|'+str('STATUS').center(12)+'|'+str('INFO-MSG')+"\n"
         buf += '----------------------------------------------------------------------\n'
         for snap in snapshots:
-            buf += str(snap.id).center(15)+'|'+str(snap.createorder).center(5)+'|'+str(snap.cmdtime).center(8)+'|'+str(snap.timeintest).center(8)+'|'+str(snap.last_progress).center(4)+'|'+str(snap.laststatus).center(12)+'|'+str(snap.failmsg)+"\n"
+            buf += str(snap.id).center(15)+'|'+str(snap.eutest_createorder).center(5)+'|'+str(snap.eutest_cmdtime).center(8)+'|'+str(snap.eutest_timeintest).center(8)+'|'+str(snap.eutest_last_progress).center(4)+'|'+str(snap.eutest_laststatus).center(12)+'|'+str(snap.eutest_failmsg)+"\n"
         buf += '----------------------------------------------------------------------\n'
         self.debug(buf)
         #Check for failure and failure criteria and return 

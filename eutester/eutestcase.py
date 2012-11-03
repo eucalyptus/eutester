@@ -79,6 +79,7 @@ class TestColor():
     #list of canned color schemes, for now add em as you need 'em?
     canned_colors ={'reset' : '\033[0m', #self.TestColor.get_color(fg=0)
                     'whiteonblue' : '\33[1;37;44m', #get_color(fmt=bold, fg=37,bg=44)
+                    'whiteongreen' : '\33[1;37;42m',
                     'red' : '\33[31m', #TestColor.get_color(fg=31)
                     'failred' : '\033[101m', #TestColor.get_color(fg=101) 
                     'blueongrey' : '\33[1;34;47m', #TestColor.get_color(fmt=bold, fg=34, bg=47)#'\33[1;34;47m'
@@ -576,7 +577,7 @@ class EutesterTestCase(unittest.TestCase):
         
     def endsuccess(self,msg=""):
         msg = "- SUCCESS ENDED - " + msg
-        self.status(msg, traceback=2,a=1, testcolor=TestColor.get_canned_color('whiteonblue'))
+        self.status(msg, traceback=2,a=1, testcolor=TestColor.get_canned_color('whiteongreen'))
       
     def endfailure(self,msg="" ):
         msg = "- FAILED - " + msg
@@ -671,7 +672,6 @@ class EutesterTestCase(unittest.TestCase):
                 self.startmsg(startbuf)
                 try:
                     test.run()
-                    self.endsuccess(str(test.name))
                 except Exception, e:
                     self.debug('Testcase:'+ str(test.name)+' error:'+str(e))
                     if eof or (not eof and test.eof):
@@ -679,6 +679,8 @@ class EutesterTestCase(unittest.TestCase):
                         raise e
                     else:
                         self.endfailure(str(test.name))
+                else:
+                    self.endsuccess(str(test.name))
                         
         finally:
             elapsed = int(time.time()-start)

@@ -47,11 +47,18 @@ if __name__ == "__main__":
                           testlist=False)
     testcase.parser.add_argument('--snap_count', type=int, help='Number of snapshots to create per zone',default=5)
     testcase.parser.add_argument('--snap_delay', type=int, help='Delay in seconds between each snapshot created',default=0)
-    testcase.parser.add_argument('--snap_progress', type=int, help='# of 10second polls to allow without % increase in snapshot progress',default=60)
+    testcase.parser.add_argument('--snap_progress', type=int, help='Number of 10 second polls to allow without increase in snapshot progress',default=60)
+    testcase.parser.add_argument('--timepergig', type=int, help='Time allowed per gig size of volume during volume creation',default=300)
+    testcase.parser.add_argument('--snap_attached', dest='snap_attached', action='store_true', default=False)
     testcase.get_args()
     ebstestsuite= testcase.do_with_args(EbsTestSuite)
     testcase.clean_method = ebstestsuite.clean_created_resources
-    testlist = ebstestsuite.ebs_extended_test_suite(run=False, count=int(testcase.args.snap_count),delay=testcase.args.snap_delay,poll_progress=testcase.args.snap_progress)
+    testlist = ebstestsuite.test_consecutive_snapshots(run=False, 
+                                                    count=int(testcase.args.snap_count),
+                                                    delay=testcase.args.snap_delay,
+                                                    tpg=testcase.args.timepergig,
+                                                    snap_attached = testcase.args.snap_attached,
+                                                    poll_progress=testcase.args.snap_progress)
     ret = testcase.run_test_case_list(testlist)
     print "ebs_extended_test exiting:("+str(ret)+")"
     exit(ret)

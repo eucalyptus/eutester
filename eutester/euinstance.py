@@ -252,8 +252,8 @@ class EuInstance(Instance):
         optional - overwrite - flag to indicate whether to overwrite head data of a non-zero filled volume upon attach for md5
         ''' 
         if not isinstance(volume, EuVolume):
-            euvolume = EuVolume.make_euvol_from_vol(volume)
-        return self.attach_euvolume(euvolume,  dev=dev, timeout=timeout, overwrite=overwrite)
+            volume = EuVolume.make_euvol_from_vol(volume)
+        return self.attach_euvolume(volume,  dev=dev, timeout=timeout, overwrite=overwrite)
     
         
     def attach_euvolume(self, euvolume, dev=None, timeout=60, overwrite=False):
