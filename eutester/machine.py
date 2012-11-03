@@ -95,11 +95,12 @@ class Machine:
                  verbose = True ):
         
         self.hostname = hostname
+        self.distro_ver = distro_ver
         self.distro = self.convert_to_distro(distro, distro_ver)
         if self.distro.package_manager is not None:
             self.repo_utils = RepoUtils(self, self.distro.package_manager)
+            self.package_manager = self.repo_utils.package_manager
         self.arch = arch
-        self.package_manager = self.repo_utils.package_manager
         self.source = source
         self.components = components
         self.connect = connect
@@ -467,10 +468,11 @@ class Machine:
     
     def __str__(self):
         s  = "+++++++++++++++++++++++++++++++++++++++++++++++++++++\n"
-        s += "+" + "Hostname:" + self.hostname + "\n"
-        s += "+" + "Distro: " + self.distro +"\n"
-        s += "+" + "Distro Version: " +  self.distro_ver +"\n"
-        s += "+" + "Install Type: " +  self.source +"\n"
+        s += "+" + "Hostname:" + str(self.hostname) + "\n"
+        dname = self.distro.name if self.distro else ""
+        s += "+" + "Distro: " + str(dname) +"\n"
+        s += "+" + "Distro Version: " +  str(self.distro_ver) +"\n"
+        s += "+" + "Install Type: " +  str(self.source) +"\n"
         s += "+" + "Components: " +   str(self.components) +"\n"
         s += "+++++++++++++++++++++++++++++++++++++++++++++++++++++"
         return s

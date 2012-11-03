@@ -10,6 +10,7 @@
 #
 
 from eucaops import Eucaops
+from eutester.euinstance import EuInstance
 from optparse import OptionParser
 import os, re
 import time
@@ -173,7 +174,7 @@ if __name__ == '__main__':
                     pmsg('looking for instances using keypair:'+keypair.name)
                     instances = tester.get_instances(state='running',key=keypair.name)
                     if instances != []:
-                        instance = instances[0]
+                        instance = EuInstance(instances[0])
                         pmsg('Found usable instance:'+instance.id+'using key:'+keypair.name)
                         break
         except Exception, e:
@@ -284,7 +285,8 @@ if __name__ == '__main__':
         tester.detach_volume(volume, timeout=timeout)
         
         pmsg("Creating snapshot from our splatted volume...")
-        snapshot = tester.create_snapshot(volume.id, waitOnProgress=15, timeout=timeout)
+        wait_on_progress = volume.size*20
+        snapshot = tester.create_snapshot(volume.id, wait_on_progress=wait_on_progress, timeout=timeout)
         
         pmsg("Snapshot complete, register it as an emi with name:"+name+"...")
         bfebs_emi = tester.register_snapshot(snapshot, windows=windows, name=name, dot=dot)
