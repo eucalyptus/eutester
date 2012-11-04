@@ -31,7 +31,7 @@ For development purposes you can then clone the code from github and then reinst
 
 Main Classes
 ------
-eutester contains the framework pieces like parsing config/creds, setting up connections and providing test primatives  
+eutester contains the framework pieces like parsing config/creds, setting up connections and providing test primitives  
 eucaops uses the framework provided by eutester to provide validated higher order operations on those cloud connections
 
 ![class-diagram](https://s3.amazonaws.com/vic-bucket/eutester-class-diagram.jpg)
