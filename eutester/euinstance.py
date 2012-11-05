@@ -171,7 +171,7 @@ class EuInstance(Instance):
                 except Exception, se:
                     self.debug('Caught exception attempting to reconnect ssh'+ str(se))
                     elapsed = int(time.time()-start)
-                    self.debug('retrying ssh connection, elapsed:'+str(elapsed))
+                    self.debug('retrying ssh connection, elapsed:'+str(elapsed)+'/'+str(timeout))
                     time.sleep(5)
                     pass
                 else:
@@ -546,6 +546,7 @@ class EuInstance(Instance):
         #calculate checksum of euvolume attached device for given length
         md5 = self.md5_attached_euvolume(euvolume, timepergig=timepergig,length=length)
         self.debug("Filled Volume:"+euvolume.id+" dev:"+voldev+" md5:"+md5)
+        euvolume.md5 = md5
         return md5
     
     def md5_attached_euvolume(self, euvolume, timepergig=90,length=None,updatevol=True):

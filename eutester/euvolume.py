@@ -36,6 +36,7 @@ Place holder for volume test specific convenience methods+objects to extend boto
 
 '''
 from boto.ec2.volume import Volume
+import eucaops
 import time
 
 
@@ -66,7 +67,7 @@ class EuVolume(Volume):
         newvol.eutest_failmsg = None
         newvol.eutest_laststatus = newvol.status
         newvol.eutest_ageatstatus = 0 
-        newvol.eutest_cmdstart = cmdstart or time.time()
+        newvol.eutest_cmdstart = cmdstart or eucaops.EC2ops.get_volume_time_created(volume)
         newvol.eutest_createorder = None
         newvol.eutest_cmdtime = None
         return newvol
@@ -84,11 +85,11 @@ class EuVolume(Volume):
         buf = "\n"
         if title:
             buf += str("------------------------------------------------------------------------------------------------------------------------------\n")
-            buf += str('ID').center(15)+'|'+str('ORDER').center(5)+'|'+str('LASTSTATUS').center(10)+'|'+str('TESTSTATUS').center(10)+'|'+str('AGE@STATUS').center(10)+'|'+str('SIZE').center(4)+'|'+str('FROM_SNAP').center(15)+'|'+str('MD5_SUM').center(33)+'|'+str('MD5LEN').center(6)+'|'+str('INFO_MSG')+'\n'
+            buf += str('VOL_ID').center(15)+'|'+str('ORDER').center(5)+'|'+str('LASTSTATUS').center(10)+'|'+str('TESTSTATUS').center(10)+'|'+str('AGE@STATUS').center(10)+'|'+str('SIZE').center(4)+'|'+str('FROM_SNAP').center(15)+'|'+str('MD5_SUM').center(33)+'|'+str('MD5LEN').center(6)+'|'+str('INFO_MSG')+'\n'
             buf += str("------------------------------------------------------------------------------------------------------------------------------\n")
-        buf += str(self.id).center(15)+'|'+str(self.eutest_createorder).center(5)+'|'+str(self.eutest_laststatus).center(10)+'|'+str(self.status).center(10)+'|'+str(self.eutest_ageatstatus).center(10)+'|'+str(self.size).center(4)+'|'+str(self.snapshot_id).center(15)+'|'+str(self.md5).center(33)+'|'+str(self.md5len).center(6)+'|'+str(self.eutest_failmsg).rstrip()
+        buf += str(self.id).center(15)+'|'+str(self.eutest_createorder).center(5)+'|'+str(self.eutest_laststatus).center(10)+'|'+str(self.status).center(10)+'|'+str(self.eutest_ageatstatus).center(10)+'|'+str(self.size).center(4)+'|'+str(self.snapshot_id).center(15)+'|'+str(self.md5).center(33)+'|'+str(self.md5len).center(6)+'|'+str(self.eutest_failmsg).rstrip()+"\n"
         if footer:
-            buf += str("------------------------------------------------------------------------------------------------------------------------------\n")
+            buf += str("------------------------------------------------------------------------------------------------------------------------------")
         if printmethod:
             printmethod(buf)
         return buf

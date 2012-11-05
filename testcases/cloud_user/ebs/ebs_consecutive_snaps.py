@@ -50,6 +50,7 @@ if __name__ == "__main__":
     testcase.parser.add_argument('--snap_progress', type=int, help='Number of 10 second polls to allow without increase in snapshot progress',default=60)
     testcase.parser.add_argument('--timepergig', type=int, help='Time allowed per gig size of volume during volume creation',default=300)
     testcase.parser.add_argument('--snap_attached', dest='snap_attached', action='store_true', default=False)
+    testcase.parser.add_argument('--delete_to', type=int, help="Timeout for volume deletion",  default=120)
     testcase.get_args()
     ebstestsuite= testcase.do_with_args(EbsTestSuite)
     testcase.clean_method = ebstestsuite.clean_created_resources
@@ -58,6 +59,7 @@ if __name__ == "__main__":
                                                     delay=testcase.args.snap_delay,
                                                     tpg=testcase.args.timepergig,
                                                     snap_attached = testcase.args.snap_attached,
+                                                    delete_to = testcase.args.delete_to,
                                                     poll_progress=testcase.args.snap_progress)
     ret = testcase.run_test_case_list(testlist)
     print "ebs_extended_test exiting:("+str(ret)+")"

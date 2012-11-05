@@ -622,7 +622,7 @@ class EutesterTestCase(unittest.TestCase):
         :returns: formated string containing args and their values.  
         '''
         
-        buf =  "End on Failure:" +str(testunit.eof)
+        buf =  "\nEnd on Failure:" +str(testunit.eof)
         buf += "\nPassing ARGS:"
         if not testunit.args and not testunit.kwargs:
             buf += '\"\"\n'
@@ -819,7 +819,7 @@ class EutesterTestCase(unittest.TestCase):
             buf += self.resultdefault("\n"+ self.getline(80)+"\n", printout=False)
             pmethod = self.resultfail if not testunit.result == EutesterTestResult.passed else self.resultdefault
             buf += pmethod(str("TEST: "+str(testunit.name)).ljust(50)+str(" RESULT:"+testunit.result).ljust(10)+str(' Time:'+str(testunit.time_to_run)).ljust(0),printout=False)
-            buf += pmethod("\nRAN AS: "+str(self.print_testunit_method_arg_values(testunit)), printout=False) 
+            buf += pmethod("\nVALUES: "+str(self.print_testunit_method_arg_values(testunit)), printout=False) 
             if testunit.result == EutesterTestResult.failed:
                     buf += "\n"+str(self.resulterr('ERROR('+str(testunit.name)+'): '+str(testunit.error), printout=False))
         buf += self.resultdefault("\n"+ self.getline(80)+"\n", printout=False)
@@ -1139,8 +1139,6 @@ class EutesterTestCase(unittest.TestCase):
         
         :type args: namespace object
         :param args: namespace object to be printed,by default None will print local testcase's args.
-                    
-        
         '''
         args= args or self.args if hasattr(self,'args') else None
         argbuf = str("TEST ARGS:").ljust(25)+"        "+str("VALUE:")
@@ -1165,7 +1163,6 @@ class EutesterTestCase(unittest.TestCase):
         :type: namespace: namespace obj
         :param: namespace: namespace obj containing args/values to be applied to testunit. None by default will use local
                             testunit args. 
-        
         '''
         self.debug("Attempting to populate testunit:"+str(testunit.name)+", with testcase.args...")
         args_to_apply = namespace or self.args
