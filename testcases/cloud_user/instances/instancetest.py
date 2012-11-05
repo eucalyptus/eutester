@@ -17,9 +17,11 @@ import random
 
 
 class InstanceBasics(EutesterTestCase):
-    def __init__(self):
+    def __init__(self, extra_args= None):
         self.setuptestcase()
         self.setup_parser()
+        for arg in extra_args:
+            self.parser.add_argument(arg)
         self.get_args()
         # Setup basic eutester object
         self.tester = Eucaops( credpath=self.args.credpath)
