@@ -2,15 +2,22 @@
 from Queue import Queue
 import unittest
 import re
-from eutester.euinstance import EuInstance
-from eutester.eutestcase import EutesterTestCase
 from instancetest import InstanceBasics
 
 class BFEBSBasics(InstanceBasics):
-    def __init__(self, extra_args = []):
+    def __init__(self, extra_args = None):
         args = ['--imgurl']
-        args.append(extra_args)
+        if extra_args:
+            args.append(extra_args)
         super(BFEBSBasics, self).__init__(args)
+
+    def clean_method(self):
+        if self.reservation:
+            self.tester.terminate_instances(self.reservation)
+            self.reservation = None
+        self.tester.sleep(10)
+        super(BFEBSBasics, self).clean_method()
+
 
     def RegisterImage(self, zone= None):
         '''Register a BFEBS snapshot'''
@@ -21,7 +28,6 @@ class BFEBSBasics(InstanceBasics):
         if not self.reservation:
             self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name, zone=zone)
         for instance in self.reservation.instances:
-            assert isinstance(instance, EuInstance)
             self.volume = self.tester.create_volume(azone=self.zone, size=2)
             self.volume_device = instance.attach_volume(self.volume)
             instance.sys("curl " +  self.args.imgurl + " > " + self.volume_device, timeout=800)
@@ -87,19 +93,6 @@ class BFEBSBasics(InstanceBasics):
         self.assertEqual(self.failure, 0, str(self.failure) + " Tests failed out of " + str(total))
         self.failure = 0
 
-    def AddressIssue(self, zone = None):
-        if zone is None:
-            zone = self.zone
-        if not self.reservation:
-            self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name, zone=zone)
-        original_ip = ""
-        for instance in self.reservation.instances:
-            original_ip = instance.ip_address
-            self.tester.debug("Terminating instance " + str(instance))
-            instance.terminate()
-        self.tester.sleep(1)
-        self.BasicInstanceChecks()
-
     def run_testcase(self, queue,delay = 20, testcase="LaunchImage"):
         self.tester.sleep(delay)
         try:
@@ -117,7 +110,7 @@ class BFEBSBasics(InstanceBasics):
 if __name__ == "__main__":
     testcase = BFEBSBasics()
     ### Either use the list of tests passed from config/command line to determine what subset of tests to run
-    list = testcase.args.tests or [ "RegisterImage",  "LaunchImage", "StopStart" ]
+    list = testcase.args.tests or [ "RegisterImage",  "LaunchImage", "StopStart", "MultipleBFEBSInstances" ]
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
     for test in list:
