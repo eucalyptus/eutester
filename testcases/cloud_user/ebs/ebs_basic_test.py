@@ -27,6 +27,8 @@
 #        -create snapshot of attached volume
 #        -attempt to create a volume of each snapshot, if within a multi-cluster env do 1 in each cluster 
 #        -attempt to attach each volume created from the previous snaps to an instance verify md5s
+#        -'if' a bfebs instance was used, attempt to stop and detach volumes while in stopped state
+#        -terminate all instances used in this test, verify any attached volumes return to available state
 #        
 #        Properties tests:
 #        -create a volume of greater than prop size, should fail

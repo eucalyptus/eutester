@@ -159,7 +159,7 @@ class EuserviceManager(object):
         if partition is None:
             partition = ""
         try:
-            out = self.tester.clc.sys(self.eucaprefix + "/usr/sbin/euca-describe-services " + str(type), timeout=15)
+            out = self.tester.clc.sys(self.eucaprefix + "/usr/sbin/euca-describe-services " + str(type), code=0,timeout=15)
             for line in out:
                 if re.search(r"SERVICE.+"+str(partition), line):
                     describe_services.append(line)

@@ -79,6 +79,7 @@ class TestColor():
     #list of canned color schemes, for now add em as you need 'em?
     canned_colors ={'reset' : '\033[0m', #self.TestColor.get_color(fg=0)
                     'whiteonblue' : '\33[1;37;44m', #get_color(fmt=bold, fg=37,bg=44)
+                    'whiteongreen' : '\33[1;37;42m',
                     'red' : '\33[31m', #TestColor.get_color(fg=31)
                     'failred' : '\033[101m', #TestColor.get_color(fg=101) 
                     'blueongrey' : '\33[1;34;47m', #TestColor.get_color(fmt=bold, fg=34, bg=47)#'\33[1;34;47m'
@@ -207,7 +208,11 @@ class EutesterTestUnit():
          
     def get_test_method_description(self):
         '''
-        Attempts to derive test unit description for the registered test method
+        Description:
+        Attempts to derive test unit description for the registered test method.
+        Keys off the string "Description:" preceded by any amount of white space and ending with either
+        a blank line or the string "EndDescription". This is used in debug output when providing info to the
+        user as to the method being run as a testunit's intention/description.  
         '''
         desc = "\nMETHOD:"+str(self.name)+", TEST DESCRIPTION:\n"
         ret = []
@@ -576,7 +581,7 @@ class EutesterTestCase(unittest.TestCase):
         
     def endsuccess(self,msg=""):
         msg = "- SUCCESS ENDED - " + msg
-        self.status(msg, traceback=2,a=1, testcolor=TestColor.get_canned_color('whiteonblue'))
+        self.status(msg, traceback=2,a=1, testcolor=TestColor.get_canned_color('whiteongreen'))
       
     def endfailure(self,msg="" ):
         msg = "- FAILED - " + msg
@@ -621,16 +626,19 @@ class EutesterTestCase(unittest.TestCase):
         :returns: formated string containing args and their values.  
         '''
         
-        buf =  "End on Failure :" +str(testunit.eof)
-        buf += "\nPassing ARGS:\n"
-        buf += "---------------------\n"
-        varnames = self.get_meth_arg_names(testunit.method)
-        if testunit.args:
-            for count,arg in enumerate(testunit.args):
-                buf += str(varnames[count+1])+" : "+str(arg)+"\n"
-        if testunit.kwargs:
-            for key in testunit.kwargs:
-                buf += str(key)+" : "+str(testunit.kwargs[key])+"\n"
+        buf =  "\nEnd on Failure:" +str(testunit.eof)
+        buf += "\nPassing ARGS:"
+        if not testunit.args and not testunit.kwargs:
+            buf += '\"\"\n'
+        else:
+            buf += "\n---------------------\n"
+            varnames = self.get_meth_arg_names(testunit.method)
+            if testunit.args:
+                for count,arg in enumerate(testunit.args):
+                    buf += str(varnames[count+1])+" : "+str(arg)+"\n"
+            if testunit.kwargs:
+                for key in testunit.kwargs:
+                    buf += str(key)+" : "+str(testunit.kwargs[key])+"\n"
             buf += "---------------------\n"
         return buf
     
@@ -668,7 +676,6 @@ class EutesterTestCase(unittest.TestCase):
                 self.startmsg(startbuf)
                 try:
                     test.run()
-                    self.endsuccess(str(test.name))
                 except Exception, e:
                     self.debug('Testcase:'+ str(test.name)+' error:'+str(e))
                     if eof or (not eof and test.eof):
@@ -676,6 +683,8 @@ class EutesterTestCase(unittest.TestCase):
                         raise e
                     else:
                         self.endfailure(str(test.name))
+                else:
+                    self.endsuccess(str(test.name))
                         
         finally:
             elapsed = int(time.time()-start)
@@ -691,7 +700,7 @@ class EutesterTestCase(unittest.TestCase):
             try:
                  if clean_on_exit:
                     cleanunit = self.create_testunit_from_method(self.clean_method)
-                    self.testlist = list.append(cleanunit)
+                    list.append(cleanunit)
                     try:
                         cleanunit.run()
                     except:
@@ -701,6 +710,7 @@ class EutesterTestCase(unittest.TestCase):
                         self.status(msgout)
             except: 
                 pass
+            self.testlist = copy.copy(list)
             total = 0
             passed = 0
             for test in list:
@@ -813,7 +823,7 @@ class EutesterTestCase(unittest.TestCase):
             buf += self.resultdefault("\n"+ self.getline(80)+"\n", printout=False)
             pmethod = self.resultfail if not testunit.result == EutesterTestResult.passed else self.resultdefault
             buf += pmethod(str("TEST: "+str(testunit.name)).ljust(50)+str(" RESULT:"+testunit.result).ljust(10)+str(' Time:'+str(testunit.time_to_run)).ljust(0),printout=False)
-            buf += pmethod("\nRAN AS: "+str(self.print_testunit_method_arg_values(testunit)), printout=False) 
+            buf += pmethod("\nVALUES: "+str(self.print_testunit_method_arg_values(testunit)), printout=False) 
             if testunit.result == EutesterTestResult.failed:
                     buf += "\n"+str(self.resulterr('ERROR('+str(testunit.name)+'): '+str(testunit.error), printout=False))
         buf += self.resultdefault("\n"+ self.getline(80)+"\n", printout=False)
@@ -1133,8 +1143,6 @@ class EutesterTestCase(unittest.TestCase):
         
         :type args: namespace object
         :param args: namespace object to be printed,by default None will print local testcase's args.
-                    
-        
         '''
         args= args or self.args if hasattr(self,'args') else None
         argbuf = str("TEST ARGS:").ljust(25)+"        "+str("VALUE:")
@@ -1159,7 +1167,6 @@ class EutesterTestCase(unittest.TestCase):
         :type: namespace: namespace obj
         :param: namespace: namespace obj containing args/values to be applied to testunit. None by default will use local
                             testunit args. 
-        
         '''
         self.debug("Attempting to populate testunit:"+str(testunit.name)+", with testcase.args...")
         args_to_apply = namespace or self.args
