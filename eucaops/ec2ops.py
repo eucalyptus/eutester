@@ -836,8 +836,9 @@ class EC2ops(Eutester):
         if isinstance(volume_id, Volume):
             raise Exception('Expected volume.id got Volume, try create_snapshots or create_snapshot_from_volume methods instead')
         volume = EuVolume.make_euvol_from_vol(self.get_volume(volume_id))
-        return self.create_snapshots_from_string(volume, count=count, mincount=mincount, eof=eof, delay=delay, wait_on_progress=wait_on_progress, poll_interval=poll_interval, timeout=timeout, description=description) 
-            
+        return self.create_snapshots(volume, count=count, mincount=mincount, eof=eof, delay=delay, wait_on_progress=wait_on_progress, poll_interval=poll_interval, timeout=timeout, description=description)
+
+
     def create_snapshots(self, volume, count=1, mincount=None, eof=True, delay=0, wait_on_progress=20, poll_interval=10, timeout=0, description=""):
         """
         Create a new EBS snapshot from an existing volume then wait for it to go to the created state.
