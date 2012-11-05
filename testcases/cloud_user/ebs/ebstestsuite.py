@@ -735,7 +735,7 @@ class EbsTestSuite(EutesterTestCase):
             
         
     
-    def test_consecutive_snapshots(self,run=True, count=5, delay=0, tpg=300, poll_progress=60, delete_to=120, snap_attached=False):
+    def test_consecutive_concurrent(self,run=True, count=5, delay=0, tpg=300, poll_progress=60, delete_to=120, snap_attached=False):
         testlist = [] 
         #create 1 volume per zone
         testlist.append(self.create_testunit_from_method(self.create_vols_per_zone, volsperzone=1, eof=True))

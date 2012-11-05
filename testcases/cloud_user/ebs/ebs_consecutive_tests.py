@@ -54,7 +54,7 @@ if __name__ == "__main__":
     testcase.get_args()
     ebstestsuite= testcase.do_with_args(EbsTestSuite)
     testcase.clean_method = ebstestsuite.clean_created_resources
-    testlist = ebstestsuite.test_consecutive_snapshots(run=False, 
+    testlist = ebstestsuite.test_consecutive_concurrent(run=False, 
                                                     count=int(testcase.args.snap_count),
                                                     delay=testcase.args.snap_delay,
                                                     tpg=testcase.args.timepergig,
