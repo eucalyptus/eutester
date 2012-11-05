@@ -208,7 +208,11 @@ class EutesterTestUnit():
          
     def get_test_method_description(self):
         '''
-        Attempts to derive test unit description for the registered test method
+        Description:
+        Attempts to derive test unit description for the registered test method.
+        Keys off the string "Description:" preceded by any amount of white space and ending with either
+        a blank line or the string "EndDescription". This is used in debug output when providing info to the
+        user as to the method being run as a testunit's intention/description.  
         '''
         desc = "\nMETHOD:"+str(self.name)+", TEST DESCRIPTION:\n"
         ret = []
