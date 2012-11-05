@@ -31,8 +31,11 @@ class BFEBSBasics(InstanceBasics):
             self.volume = self.tester.create_volume(azone=self.zone, size=2)
             self.volume_device = instance.attach_volume(self.volume)
             instance.sys("curl " +  self.args.imgurl + " > " + self.volume_device, timeout=800)
-            snapshot = self.tester.create_snapshot(self.volume.id, waitOnProgress=10)
-            self.assertTrue( re.search("completed", snapshot.status), "Snapshot did not complete"  )
+            snapshots = self.tester.create_snapshot(self.volume.id)
+            if len(snapshots) == 1:
+                snapshot = snapshots[0]
+            else:
+                Exception("Instead of getting 1 snapshot back we got " + len(snapshots) )
             image_id = self.tester.register_snapshot(snapshot)
         self.image = self.tester.get_emi(image_id)
 
