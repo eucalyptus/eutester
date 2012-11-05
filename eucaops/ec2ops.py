@@ -552,9 +552,9 @@ class EC2ops(Eutester):
             for volume in failed:
                 self.debug('Failure caught in monitor volumes, attempting to delete all volumes...')
                 try:
-                    self.delete_volume(vol)
+                    self.delete_volume(volume)
                 except Exception, e:
-                    self.debug('Could not delete volume:'+str(vol.id)+", err:"+str(e))
+                    self.debug('Could not delete volume:'+str(volume.id)+", err:"+str(e))
             buf = str(len(failed))+'/'+str(count)+ " Failed volumes after " +str(elapsed)+" seconds:"
             for failedvol in failed:
                 retlist.remove(failedvol)
