@@ -95,8 +95,6 @@ class ResourceGeneration(EutesterTestCase):
             bucket = resource_tester.create_bucket(resource_tester.id_generator(12, string.ascii_lowercase  + string.digits))
             key = resource_tester.upload_object(bucket_name= bucket.name, key_name= resource_tester.id_generator(12, string.ascii_lowercase  + string.digits), contents= resource_tester.id_generator(200))
             resource_tester.terminate_instances(reservation)
-            if self.cleanup_artifacts:
-                resource_tester.cleanup_artifacts()
 
 if __name__ == "__main__":
     testcase = ResourceGeneration()
