@@ -61,13 +61,13 @@ class ResourceGeneration(EutesterTestCase):
         for user in users:
             user_name = user['user_name']
             user_account = user['account_name']
-            self.tester.debug("Creating access key for " + user_name + " in account " +  user_account)
-            keys = self.tester.create_access_key(user_name=user_name, delegate_account=user_account)
-            access_key = keys['access_key_id']
-            secret_key = keys['secret_access_key']
-            self.tester.debug("Creating Eucaops object with access key " + access_key + " and secret key " +  secret_key)
-            new_tester = Eucaops(aws_access_key_id=access_key, aws_secret_access_key=secret_key, ec2_ip=self.tester.ec2.host, s3_ip=self.tester.s3.host,username=user_name, account=user_account)
             if not re.search("eucalyptus", user_account ):
+                self.tester.debug("Creating access key for " + user_name + " in account " +  user_account)
+                keys = self.tester.create_access_key(user_name=user_name, delegate_account=user_account)
+                access_key = keys['access_key_id']
+                secret_key = keys['secret_access_key']
+                self.tester.debug("Creating Eucaops object with access key " + access_key + " and secret key " +  secret_key)
+                new_tester = Eucaops(aws_access_key_id=access_key, aws_secret_access_key=secret_key, ec2_ip=self.tester.ec2.host, s3_ip=self.tester.s3.host,username=user_name, account=user_account)
                 testers.append(new_tester)
 
         self.tester.debug("Created a total of " + str(len(testers)) + " testers" )
