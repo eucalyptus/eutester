@@ -34,23 +34,14 @@
 Create resources (keypairs,groups, volumes,snapshots, buckets) for each user in the cloud. 
 '''
 from eucaops import Eucaops
-import argparse
 import re
-import time
-import os
 import string
-from eutester import xmlrunner
 from eutester.euinstance import EuInstance
 from eutester.eutestcase import EutesterTestCase
-from eutester.eutestcase import EutesterTestResult
-from boto.exception import S3ResponseError
-from boto.exception import S3CreateError
-import boto
-import unittest
 
 class ResourceGeneration(EutesterTestCase):
     
-    def __init__(self, credpath=None, cleanup_artifacts=False):
+    def __init__(self, credpath=None):
         self.setuptestcase()
         self.setup_parser()
         self.get_args()
@@ -106,13 +97,12 @@ class ResourceGeneration(EutesterTestCase):
 if __name__ == "__main__":
     testcase = ResourceGeneration()
     ### Either use the list of tests passed from config/command line to determine what subset of tests to run
-    list = testcase.args.tests or [ "CreateResources" ]
-
+    list = testcase.args.tests or [ "CreateResources"]
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
     for test in list:
         unit_list.append( testcase.create_testunit_by_name(test) )
         ### Run the EutesterUnitTest objects
 
-    result = testcase.run_test_case_list(unit_list,clean_on_exit=True,eof=False)
+    result = testcase.run_test_case_list(unit_list,clean_on_exit=True)
     exit(result)
