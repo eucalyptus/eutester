@@ -302,7 +302,7 @@ class InstanceBasics(EutesterTestCase):
                 self.tester.terminate_instances(reservation)
             return 1
 
-    def Churn(self):
+    def Churn(self,image_id=None):
         """
         This case was developed to test robustness of Eucalyptus by starting instances,
         stopping them before they are running, and increase the time to terminate on each
@@ -313,6 +313,8 @@ class InstanceBasics(EutesterTestCase):
             - When a test finishes, rerun BasicInstanceChecks test case.
         If any of these tests fail, the test case will error out; logging the results.
         """
+        if not image_id:
+            image_id = self.image
         from eutester.process_manager import ProcessManager
         process_manager = ProcessManager()
         ### Increase time to terminate by step seconds on each iteration
@@ -329,7 +331,7 @@ class InstanceBasics(EutesterTestCase):
             self.tester.debug("Starting Thread " + str(i) +" in " + str(step))
             self.tester.sleep(step)
             tester = Eucaops( credpath=self.args.credpath)
-            process_ids.append(process_manager.run_method_as_process(tester.run_instance, is_reachable=False))
+            process_ids.append(process_manager.run_method_as_process(tester.run_instance,image=image_id, is_reachable=False))
 
         ### While the other tests are running, run and terminate count instances with a 10s sleep in between
         for i in xrange(count):

@@ -73,47 +73,12 @@ class BFEBSBasics(InstanceBasics):
         if self.reservation:
             self.tester.terminate_instances(self.reservation)
         self.image = self.tester.get_emi(root_device_type="ebs")
-        self.Churn()
-
-    def StaggeredInstances(self):
-        '''Run a few instances concurrently'''
-        if self.reservation:
-            self.tester.terminate_instances(self.reservation)
-        from multiprocessing import Process
-        self.failure = 0
-        thread_pool = []
-        queue_pool = []
-        total = self.tester.get_available_vms() / 2
-        for i in xrange(total):
-            q = Queue()
-            p = Process(target=self.run_testcase, args=(q))
-            thread_pool.append(p)
-            self.tester.debug("Starting Thread " + str(i))
-            p.start()
-            self.tester.sleep(2)
-        for thread in thread_pool:
-            thread.join()
-        self.assertEqual(self.failure, 0, str(self.failure) + " Tests failed out of " + str(total))
-        self.failure = 0
-
-    def run_testcase(self, queue,delay = 20, testcase="LaunchImage"):
-        self.tester.sleep(delay)
-        try:
-            result = unittest.TextTestRunner(verbosity=2).run(BFEBSBasics(testcase))
-        except Exception, e:
-            queue.put(1)
-            raise e
-        if result.wasSuccessful():
-            self.tester.debug("Passed test: " + testcase)
-            queue.put(0)
-        else:
-            self.tester.debug("Failed test: " + testcase)
-            queue.put(1)
+        self.Churn(self.image.id)
 
 if __name__ == "__main__":
     testcase = BFEBSBasics()
     ### Either use the list of tests passed from config/command line to determine what subset of tests to run
-    list = testcase.args.tests or [ "RegisterImage",  "LaunchImage", "StopStart", "MultipleBFEBSInstances" ]
+    list = testcase.args.tests or [ "RegisterImage",  "LaunchImage", "StopStart", "MultipleBFEBSInstances", "ChurnBFEBS" ]
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
     for test in list:
