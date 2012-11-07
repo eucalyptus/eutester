@@ -41,11 +41,15 @@ from eutester.eutestcase import EutesterTestCase
 
 class ResourceGeneration(EutesterTestCase):
     
-    def __init__(self, credpath=None):
+    def __init__(self,extra_args = None):
         self.setuptestcase()
         self.setup_parser()
+        if extra_args:
+            for arg in extra_args:
+                self.parser.add_argument(arg)
         self.get_args()
-        self.tester = Eucaops(credpath=credpath)
+        # Setup basic eutester object
+        self.tester = Eucaops( credpath=self.args.credpath)
 
     def clean_method(self):
         pass
