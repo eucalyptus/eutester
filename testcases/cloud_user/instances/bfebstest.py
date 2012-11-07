@@ -59,7 +59,7 @@ class BFEBSBasics(InstanceBasics):
         self.assertTrue(self.tester.start_instances(self.reservation))
         self.tester.debug("Waiting 20s for instance to boot") 
         self.tester.sleep(20)
-        self.assertTrue( self.tester.ping(self.reservation.instances[0].public_dns_name,  poll_count=2), 'Could not ping instance')
+        self.assertTrue( self.tester.ping(self.reservation.instances[0].public_dns_name), 'Could not ping instance')
 
     def MultipleBFEBSInstances(self):
         """Run half of the available m1.small instances with a BFEBS image"""
