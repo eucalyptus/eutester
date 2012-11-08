@@ -17,9 +17,12 @@ import random
 
 
 class InstanceBasics(EutesterTestCase):
-    def __init__(self):
+    def __init__(self, extra_args= None):
         self.setuptestcase()
         self.setup_parser()
+        if extra_args:
+            for arg in extra_args:
+                self.parser.add_argument(arg)
         self.get_args()
         # Setup basic eutester object
         self.tester = Eucaops( credpath=self.args.credpath)
@@ -40,7 +43,7 @@ class InstanceBasics(EutesterTestCase):
         self.private_addressing = False
         zones = self.tester.ec2.get_all_zones()
         self.zone = random.choice(zones).name
-        self.reservation = self.tester.run_instance(self.image, keypair=self.keypair.name, group=self.group.name, zone=self.zone)
+        self.reservation = None
 
     def clean_method(self):
         if self.reservation:
@@ -299,7 +302,7 @@ class InstanceBasics(EutesterTestCase):
                 self.tester.terminate_instances(reservation)
             return 1
 
-    def Churn(self, testcase="run_terminate"):
+    def Churn(self,image_id=None):
         """
         This case was developed to test robustness of Eucalyptus by starting instances,
         stopping them before they are running, and increase the time to terminate on each
@@ -310,62 +313,49 @@ class InstanceBasics(EutesterTestCase):
             - When a test finishes, rerun BasicInstanceChecks test case.
         If any of these tests fail, the test case will error out; logging the results.
         """
-        from multiprocessing import Process
-        from multiprocessing import Queue
+        if not image_id:
+            image_id = self.image
+        from eutester.process_manager import ProcessManager
+        process_manager = ProcessManager()
         ### Increase time to terminate by step seconds on each iteration
         step = 1
         if self.reservation:
             self.tester.terminate_instances(self.reservation)
             ## Run through count iterations of test
         count = self.tester.get_available_vms("m1.small") / 2
-        thread_pool = []
-        queue_pool = []
 
         ## Start asynchronous activity
         ## Run 5 basic instance check instances 10s apart
+        process_ids =[]
         for i in xrange(count):
-            q = Queue()
-            queue_pool.append(q)
-            p = Process(target=self.run_testcase_thread, args=(q, step * i,testcase))
-            thread_pool.append(p)
-            self.tester.debug("Starting Thread " + str(i) +" in " + str(step * i))
-            p.start()
+            self.tester.debug("Starting Thread " + str(i) +" in " + str(step))
+            self.tester.sleep(step)
+            tester = Eucaops( credpath=self.args.credpath)
+            process_ids.append(process_manager.run_method_as_process(tester.run_instance,image=image_id, is_reachable=False))
 
         ### While the other tests are running, run and terminate count instances with a 10s sleep in between
         for i in xrange(count):
             self.reservation = self.image.run()
             self.tester.debug("Sleeping for " + str(step) + " seconds before terminating instances")
-            self.tester.sleep(step )
+            self.tester.sleep(step)
             for instance in self.reservation.instances:
                 instance.terminate()
                 self.assertTrue(self.tester.wait_for_instance(instance, "terminated"), "Instance did not go to terminated")
 
-        ### Once the previous test is complete rerun the BasicInstanceChecks test case
-        ### Wait for an instance to become available
-        count = self.tester.get_available_vms("m1.small")
-        poll_count = 30
-        while poll_count > 0:
-            self.tester.sleep(5)
-            count = self.tester.get_available_vms("m1.small")
-            if count > 0:
-                self.tester.debug("There is an available VM to use for final test")
-                break
-            poll_count -= 1
-
-        fail_count = 0
+        results = []
         ### Block until the script returns a result
-        for queue in queue_pool:
-            test_result = queue.get(True)
-            self.tester.debug("Got Result: " + str(test_result) )
-            fail_count += test_result
+        for id in process_ids:
+            results.append(process_manager.wait_for_process(id))
 
-        for thread in thread_pool:
-            thread.join()
+        process_ids =[]
+        for return_value in results:
+            if isinstance(return_value, Exception):
+                raise result
+            else:
+                process_ids.append(process_manager.run_method_as_process(self.tester.terminate_instances,return_value))
 
-        if fail_count > 0:
-            raise Exception("Failure detected in one of the " + str(count)  + " Basic Instance tests")
-
-        self.tester.debug("Successfully completed churn test")
+        for id in process_ids:
+            results.append(process_manager.wait_for_process(id))
 
     def PrivateIPAddressing(self, zone = None):
         """
@@ -417,23 +407,6 @@ class InstanceBasics(EutesterTestCase):
                     self.assertTrue(re.search(str(prev_address) ,str(instance.public_dns_name)), str(prev_address) +" Address did not get reused but rather  " + str(instance.public_dns_name))
                 prev_address = instance.public_dns_name
             self.tester.terminate_instances(self.reservation)
-
-    def run_testcase_thread(self, queue,delay = 20, name="MetaData"):
-        ### Thread that runs a testcase (function) and returns its pass or fail result
-        self.tester.sleep(delay)
-        try:
-            result = self.run_method_by_name(name)
-        except Exception, e:
-            queue.put(1)
-            raise e
-        if not result:
-            self.tester.debug("Passed test: " + name)
-            queue.put(0)
-            return False
-        else:
-            self.tester.debug("Failed test: " + name)
-            queue.put(1)
-            return True
 
 if __name__ == "__main__":
     testcase = InstanceBasics()

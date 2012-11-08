@@ -34,27 +34,25 @@
 Create resources (keypairs,groups, volumes,snapshots, buckets) for each user in the cloud. 
 '''
 from eucaops import Eucaops
-import argparse
 import re
-import time
-import os
 import string
-from eutester import xmlrunner
 from eutester.euinstance import EuInstance
 from eutester.eutestcase import EutesterTestCase
-from eutester.eutestcase import EutesterTestResult
-from boto.exception import S3ResponseError
-from boto.exception import S3CreateError
-import boto
-import unittest
 
 class ResourceGeneration(EutesterTestCase):
     
-    def __init__(self, credpath=None, cleanup_artifacts=False):
+    def __init__(self,extra_args = None):
         self.setuptestcase()
-        self.tester = Eucaops(credpath=credpath)
-        self.cleanup_artifacts = cleanup_artifacts
+        self.setup_parser()
+        if extra_args:
+            for arg in extra_args:
+                self.parser.add_argument(arg)
+        self.get_args()
+        # Setup basic eutester object
+        self.tester = Eucaops( credpath=self.args.credpath)
 
+    def clean_method(self):
+        pass
 
     def CreateResources(self):
         users = self.tester.get_all_users() 
@@ -63,13 +61,13 @@ class ResourceGeneration(EutesterTestCase):
         for user in users:
             user_name = user['user_name']
             user_account = user['account_name']
-            self.tester.debug("Creating access key for " + user_name + " in account " +  user_account)
-            keys = self.tester.create_access_key(user_name=user_name, delegate_account=user_account)
-            access_key = keys['access_key_id']
-            secret_key = keys['secret_access_key']
-            self.tester.debug("Creating Eucaops object with access key " + access_key + " and secret key " +  secret_key)
-            new_tester = Eucaops(aws_access_key_id=access_key, aws_secret_access_key=secret_key, ec2_ip=self.tester.ec2.host, s3_ip=self.tester.s3.host,username=user_name, account=user_account)
             if not re.search("eucalyptus", user_account ):
+                self.tester.debug("Creating access key for " + user_name + " in account " +  user_account)
+                keys = self.tester.create_access_key(user_name=user_name, delegate_account=user_account)
+                access_key = keys['access_key_id']
+                secret_key = keys['secret_access_key']
+                self.tester.debug("Creating Eucaops object with access key " + access_key + " and secret key " +  secret_key)
+                new_tester = Eucaops(aws_access_key_id=access_key, aws_secret_access_key=secret_key, ec2_ip=self.tester.ec2.host, s3_ip=self.tester.s3.host,username=user_name, account=user_account)
                 testers.append(new_tester)
 
         self.tester.debug("Created a total of " + str(len(testers)) + " testers" )
@@ -97,29 +95,16 @@ class ResourceGeneration(EutesterTestCase):
             bucket = resource_tester.create_bucket(resource_tester.id_generator(12, string.ascii_lowercase  + string.digits))
             key = resource_tester.upload_object(bucket_name= bucket.name, key_name= resource_tester.id_generator(12, string.ascii_lowercase  + string.digits), contents= resource_tester.id_generator(200))
             resource_tester.terminate_instances(reservation)
-            if self.cleanup_artifacts:
-                resource_tester.cleanup_artifacts()
 
 if __name__ == "__main__":
-    testcase = EutesterTestCase()
-
-    #### Adds argparse to testcase and adds some defaults args
-    testcase.setup_parser()
-
-    ### Get all cli arguments and any config arguments and merge them
-    testcase.get_args()
-
-    ### Instantiate an object of your test suite class using args found from above
-    instance_basics_tests = testcase.do_with_args(ResourceGeneration)
-
+    testcase = ResourceGeneration()
     ### Either use the list of tests passed from config/command line to determine what subset of tests to run
-    list = testcase.args.tests or [ "CreateResources" ]
-
+    list = testcase.args.tests or [ "CreateResources"]
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
     for test in list:
-        unit_list.append( instance_basics_tests.create_testunit_by_name(test) )
+        unit_list.append( testcase.create_testunit_by_name(test) )
+        ### Run the EutesterUnitTest objects
 
-    ### Run the EutesterUnitTest objects
-    testcase.run_test_case_list(unit_list)
-    instance_basics_tests.clean_method()
+    result = testcase.run_test_case_list(unit_list,clean_on_exit=True)
+    exit(result)
