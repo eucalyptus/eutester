@@ -813,7 +813,7 @@ class EC2ops(Eutester):
         :param description: (optional integer) over all time to wait before exiting as failure
         :return: EuSnapshot
         """
-        return self.create_snapshots_from_vol_id(volume_id, count=1, mincount=1, eof=True, wait_on_progress=wait_on_progress, poll_interval=poll_interval, timeout=timeout, description=description)
+        return self.create_snapshots_from_vol_id(volume_id, count=1, mincount=1, eof=True, wait_on_progress=wait_on_progress, poll_interval=poll_interval, timeout=timeout, description=description)[0]
         
     
     def create_snapshots_from_vol_id(self,volume_id, count=1, mincount=None, eof=True, delay=0, wait_on_progress=20, poll_interval=10, timeout=0, description=""):
