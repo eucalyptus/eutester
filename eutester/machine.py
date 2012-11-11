@@ -400,22 +400,22 @@ class Machine:
         return ret
     
     def upgrade(self, package=None):
-        self.repo_utils.package_manager.upgrade(package)
+        self.package_manager.upgrade(package)
     
-    def add_repo(self, url):
-        self.repo_utils.package_manager.add_repo(url)
+    def add_repo(self, url, name="test-repo"):
+        self.package_manager.add_repo(url,name)
     
     def install(self, package):
-        self.repo_utils.package_manager.install(package)
+        self.package_manager.install(package)
 
     def update_repos(self):
-        self.repo_utils.package_manager.update_repos()
+        self.package_manager.update_repos()
     
     def get_package_info(self):
-        self.repo_utils.package_manager.get_package_info()
+        self.package_manager.get_package_info()
     
     def get_installed_packages(self):
-        self.repo_utils.package_manager.get_installed_packages()
+        self.package_manager.get_installed_packages()
             
     def get_available(self, path, unit=1):
         """
