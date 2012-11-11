@@ -76,7 +76,9 @@ class Yum(PackageManager):
         self.machine.sys("yum install -y " + package)
     
     def upgrade(self, package = None):
-        self.package_manager.upgrade(package)
+        if not package:
+            package = ""
+        self.machine.sys("yum upgrade -y " + package)
     
     def add_repo(self, url, name= None):
         if name is None:
