@@ -62,7 +62,8 @@ class Upgrade(EutesterTestCase):
 
     def start_components(self):
         for machine in self.tester.config["machines"]:
-            if re.search("clc", " ".join(machine.components)) or re.search("ws", " ".join(machine.components)) or re.search("sc", " ".join(machine.components)):
+            if re.search("clc", " ".join(machine.components)) or re.search("ws", " ".join(machine.components)) \
+            or re.search("sc", " ".join(machine.components)) or re.search("vb", " ".join(machine.components)):
                 machine.sys("service eucalyptus-cloud start")
             if re.search("nc", " ".join(machine.components)):
                 machine.sys("service eucalyptus-nc start")
@@ -72,7 +73,17 @@ class Upgrade(EutesterTestCase):
     def set_block_storage_manager(self):
         enabled_clc = self.tester.service_manager.wait_for_service(self.clc_service)
         for zone in self.tester.get_zones():
-            enabled_clc.machine.sys("source " + self.tester.credpath + "/eucarc && euca-modify-property -p " + zone + ".storage.blockstoragemanager=overlay",code=0)
+            if re.search("DASManager" ,self.args.ebs_storage_manager):
+                ebs_manager = "das"
+            if re.search("SANManager" ,self.args.ebs_storage_manager):
+                if re.search("EquallogicProvider", self.args.san_provider):
+                    ebs_manager = "equallogic"
+                if re.search("NetappProvider", self.args.san_provider):
+                    ebs_manager = "netapp"
+                if re.search("EmcVnxProvider", self.args.san_provider):
+                    ebs_manager = "emc-fastsnap"
+            enabled_clc.machine.sys("source " + self.tester.credpath + "/eucarc && euca-modify-property -p " + zone + ".storage.blockstoragemanager" + ebs_manager,code=0)
+
 
     def UpgradeAll(self):
         self.add_euca_repo()
