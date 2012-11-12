@@ -4,6 +4,7 @@
 # Description:  This script upgrades a Eucalyptus cloud
 import re
 from eucaops import Eucaops
+from eutester.euservice import Euservice
 from eutester.eutestcase import EutesterTestCase
 
 class Upgrade(EutesterTestCase):
@@ -18,7 +19,7 @@ class Upgrade(EutesterTestCase):
                 self.parser.add_argument(arg)
         self.get_args()
         # Setup basic eutester object
-        self.tester = Eucaops( config_file=self.args.config_file, password=self.args.password, download_creds=False)
+        self.tester = Eucaops( config_file=self.args.config_file, password=self.args.password)
 
         if not self.args.branch and not self.args.euca_url and not self.args.enterprise_url:
             self.args.branch = self.args.upgrade_to_branch
@@ -70,12 +71,20 @@ class Upgrade(EutesterTestCase):
             if re.search("cc", " ".join(machine.components)):
                 machine.sys("service eucalyptus-cc start")
 
+    def set_block_storage_manager(self):
+        clc_service = Euservice("eucalyptus", self.tester)
+        enabled_clc = self.tester.service_manager.wait_for_service(clc_service)
+        for zone in self.tester.get_zones():
+            enabled_clc.machine.sys("source " + self.credpath + "/eucarc && euca-modify-property -p " + zone + "storage.blockstoragemanager=overlay")
+
     def UpgradeAll(self):
         self.add_euca_repo()
         if self.args.enterprise_url:
             self.add_enterprise_repo()
         self.upgrade_packages()
         self.start_components()
+        if re.search("^3.1", self.old_version):
+            self.set_block_storage_manager()
 
 
 if __name__ == "__main__":
