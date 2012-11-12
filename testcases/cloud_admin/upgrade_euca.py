@@ -59,7 +59,7 @@ class Upgrade(EutesterTestCase):
         for machine in self.tester.config["machines"]:
             machine.upgrade()
             new_version = machine.sys("cat /etc/eucalyptus/eucalyptus-version")[0]
-            if re.match( self.old_version, self.new_version):
+            if re.match( self.old_version, new_version):
                 raise Exception("Version before (" + self.old_version +") and version after (" + new_version + ") are not the same")
 
     def start_components(self):
