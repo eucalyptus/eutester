@@ -20,7 +20,7 @@ class Upgrade(EutesterTestCase):
         self.get_args()
         # Setup basic eutester object
         self.tester = Eucaops( config_file=self.args.config_file, password=self.args.password)
-
+        self.clc_service = self.tester.service_manager.get("eucalyptus")[0]
         if not self.args.branch and not self.args.euca_url and not self.args.enterprise_url:
             self.args.branch = self.args.upgrade_to_branch
         machine = self.tester.get_component_machines("clc")[0]
@@ -70,8 +70,7 @@ class Upgrade(EutesterTestCase):
                 machine.sys("service eucalyptus-cc start")
 
     def set_block_storage_manager(self):
-        clc_service = self.tester.service_manager.get("eucalyptus")[0]
-        enabled_clc = self.tester.service_manager.wait_for_service(clc_service)
+        enabled_clc = self.tester.service_manager.wait_for_service(self.clc_service)
         for zone in self.tester.get_zones():
             enabled_clc.machine.sys("source " + self.tester.credpath + "/eucarc && euca-modify-property -p " + zone + ".storage.blockstoragemanager=overlay",code=0)
 
