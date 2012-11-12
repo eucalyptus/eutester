@@ -74,6 +74,7 @@ class Upgrade(EutesterTestCase):
 
     def set_block_storage_manager(self):
         enabled_clc = self.tester.service_manager.wait_for_service(self.clc_service)
+        self.tester.sleep(60)
         for zone in self.zones:
             ebs_manager = "overlay"
             if hasattr(self.args, 'ebs_storage_manager'):
@@ -87,7 +88,7 @@ class Upgrade(EutesterTestCase):
                             ebs_manager = "netapp"
                         if re.search("EmcVnxProvider", self.args.san_provider):
                             ebs_manager = "emc-fastsnap"
-            enabled_clc.machine.sys("source " + self.tester.credpath + "/eucarc && euca-modify-property -p " + zone + ".storage.blockstoragemanager=" + ebs_manager,code=0)
+            enabled_clc.machine.sys("source " + self.tester.credpath + "/eucarc && euca-modify-property -p " + zone + ".storage.blockstoragemanager=    " + ebs_manager,code=0)
 
 
     def UpgradeAll(self):
