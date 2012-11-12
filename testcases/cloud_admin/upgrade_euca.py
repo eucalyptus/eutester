@@ -30,8 +30,6 @@ class Upgrade(EutesterTestCase):
             self.args.euca_url = self.get_repo_url("eucalyptus", self.args.branch)
             self.args.enterprise_url =self.get_repo_url("internal", self.args.branch)
 
-
-
     def clean_method(self):
         pass
 
@@ -60,7 +58,7 @@ class Upgrade(EutesterTestCase):
             machine.upgrade()
             new_version = machine.sys("cat /etc/eucalyptus/eucalyptus-version")[0]
             if re.match( self.old_version, new_version):
-                raise Exception("Version before (" + self.old_version +") and version after (" + new_version + ") are not the same")
+                raise Exception("Version before (" + self.old_version +") and version after (" + new_version + ") are the same")
 
     def start_components(self):
         for machine in self.tester.config["machines"]:
@@ -72,10 +70,10 @@ class Upgrade(EutesterTestCase):
                 machine.sys("service eucalyptus-cc start")
 
     def set_block_storage_manager(self):
-        clc_service = Euservice("eucalyptus", self.tester)
+        clc_service = self.tester.service_manager.get("eucalyptus")[0]
         enabled_clc = self.tester.service_manager.wait_for_service(clc_service)
         for zone in self.tester.get_zones():
-            enabled_clc.machine.sys("source " + self.credpath + "/eucarc && euca-modify-property -p " + zone + "storage.blockstoragemanager=overlay")
+            enabled_clc.machine.sys("source " + self.tester.credpath + "/eucarc && euca-modify-property -p " + zone + ".storage.blockstoragemanager=overlay",code=0)
 
     def UpgradeAll(self):
         self.add_euca_repo()
