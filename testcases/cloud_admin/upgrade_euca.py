@@ -73,6 +73,7 @@ class Upgrade(EutesterTestCase):
     def set_block_storage_manager(self):
         enabled_clc = self.tester.service_manager.wait_for_service(self.clc_service)
         for zone in self.tester.get_zones():
+            ebs_manager = "overlay"
             if re.search("DASManager" ,self.args.ebs_storage_manager):
                 ebs_manager = "das"
             if re.search("SANManager" ,self.args.ebs_storage_manager):
