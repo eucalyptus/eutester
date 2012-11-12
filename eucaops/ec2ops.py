@@ -35,16 +35,12 @@ from eutester import Eutester
 import time
 import re
 import os
-import base64
-import sys
 import copy
-import types
 from datetime import datetime
 from boto.ec2.image import Image
 from boto.ec2.keypair import KeyPair
 from boto.ec2.blockdevicemapping import BlockDeviceMapping, BlockDeviceType
 from boto.ec2.volume import Volume
-from boto.ec2.snapshot import Snapshot
 from boto.exception import EC2ResponseError
 from eutester.euinstance import EuInstance
 from eutester.euvolume import EuVolume
@@ -710,7 +706,7 @@ class EC2ops(Eutester):
         if volume.attach_data is None:
             raise Exception('get_time_since_vol_attached: Volume '+str(volume.id)+" not attached")
         #get timestamp from attach_data
-        attached_time = cls.get_datetime_from_resource_string(volume.attach_data.attach_time)
+        attached_time = self.get_datetime_from_resource_string(volume.attach_data.attach_time)
         #return the elapsed time in seconds
         return time.mktime(datetime.utcnow().utctimetuple()) - time.mktime(attached_time.utctimetuple())
     
@@ -1379,20 +1375,6 @@ class EC2ops(Eutester):
                 raise e
         return vol
 
-    """
-
-    image
-    keypair
-    group
-    type
-    zone
-    min
-    max
-    private_addressing
-    is_reachable
-    """
-
-
     def run_instance(self, image=None, keypair=None, group="default", type=None, zone=None, min=1, max=1, user_data=None,private_addressing=False, username="root", password=None, is_reachable=True, timeout=480):
         """
         Run instance/s and wait for them to go to the running state
@@ -1523,8 +1505,8 @@ class EC2ops(Eutester):
                 try:
                     euinstance_list.append( EuInstance.make_euinstance_from_instance( instance, self, keypair=keypair, username = username, password=password, timeout=timeout ))
                 except Exception, e:
-                    self.fail("Unable to create Euinstance from " + str(instance)+str(e))
                     euinstance_list.append(instance)
+                    self.fail("Unable to create Euinstance from " + str(instance)+str(e))
             else:
                 euinstance_list.append(instance)
         reservation.instances = euinstance_list
