@@ -21,6 +21,7 @@ class Upgrade(EutesterTestCase):
         # Setup basic eutester object
         self.tester = Eucaops( config_file=self.args.config_file, password=self.args.password)
         self.clc_service = self.tester.service_manager.get("eucalyptus")[0]
+        self.zones = self.tester.get_zones()
         if not self.args.branch and not self.args.euca_url and not self.args.enterprise_url:
             self.args.branch = self.args.upgrade_to_branch
         machine = self.tester.get_component_machines("clc")[0]
@@ -62,17 +63,18 @@ class Upgrade(EutesterTestCase):
 
     def start_components(self):
         for machine in self.tester.config["machines"]:
-            if re.search("clc", " ".join(machine.components)) or re.search("ws", " ".join(machine.components)) \
-            or re.search("sc", " ".join(machine.components)) or re.search("vb", " ".join(machine.components)):
-                machine.sys("service eucalyptus-cloud start")
-            if re.search("nc", " ".join(machine.components)):
-                machine.sys("service eucalyptus-nc start")
             if re.search("cc", " ".join(machine.components)):
                 machine.sys("service eucalyptus-cc start")
+            if re.search("nc", " ".join(machine.components)):
+                machine.sys("service eucalyptus-nc start")
+            if re.search("clc", " ".join(machine.components)) or re.search("ws", " ".join(machine.components))\
+               or re.search("sc", " ".join(machine.components)) or re.search("vb", " ".join(machine.components)):
+                machine.sys("service eucalyptus-cloud start")
+
 
     def set_block_storage_manager(self):
         enabled_clc = self.tester.service_manager.wait_for_service(self.clc_service)
-        for zone in self.tester.get_zones():
+        for zone in self.zones:
             ebs_manager = "overlay"
             if re.search("DASManager" ,self.args.ebs_storage_manager):
                 ebs_manager = "das"
