@@ -76,11 +76,11 @@ class Upgrade(EutesterTestCase):
         enabled_clc = self.tester.service_manager.wait_for_service(self.clc_service)
         for zone in self.zones:
             ebs_manager = "overlay"
-            if self.args.ebs_storage_manager:
+            if hasattr(self.args, 'ebs_storage_manager'):
                 if re.search("DASManager" ,self.args.ebs_storage_manager):
                     ebs_manager = "das"
                 if re.search("SANManager" ,self.args.ebs_storage_manager):
-                    if self.args.san_provider:
+                    if hasattr(self.args, 'san_provider'):
                         if re.search("EquallogicProvider", self.args.san_provider):
                             ebs_manager = "equallogic"
                         if re.search("NetappProvider", self.args.san_provider):
