@@ -2,6 +2,7 @@
 #
 #
 # Description:  This script upgrades a Eucalyptus cloud
+import re
 from eucaops import Eucaops
 from eutester.eutestcase import EutesterTestCase
 
@@ -21,7 +22,8 @@ class Upgrade(EutesterTestCase):
 
         if not self.args.branch and not self.args.euca_url and not self.args.enterprise_url:
             self.args.branch = self.args.upgrade_to_branch
-
+        machine = self.tester.get_component_machines("clc")[0]
+        self.old_version = machine.sys("cat /etc/eucalyptus/eucalyptus-version")[0]
         ### IF we were passed a branch, fetch the correct repo urls from the repo API
         if self.args.branch:
             self.args.euca_url = self.get_repo_url("eucalyptus", self.args.branch)
@@ -55,6 +57,9 @@ class Upgrade(EutesterTestCase):
     def upgrade_packages(self):
         for machine in self.tester.config["machines"]:
             machine.upgrade()
+            new_version = machine.sys("cat /etc/eucalyptus/eucalyptus-version")[0]
+            if re.match( self.old_version, self.new_version):
+                raise Exception("Version before (" + self.old_version +") and version after (" + new_version + ") are not the same")
 
     def start_components(self):
         for machine in self.tester.config["machines"]:
@@ -71,6 +76,7 @@ class Upgrade(EutesterTestCase):
             self.add_enterprise_repo()
         self.upgrade_packages()
         self.start_components()
+
 
 if __name__ == "__main__":
     testcase = Upgrade()
