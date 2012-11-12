@@ -63,11 +63,11 @@ class Upgrade(EutesterTestCase):
 
     def start_components(self):
         for machine in self.tester.config["machines"]:
-            if "clc" in machine.components or "ws" in machine.components or "sc" in machine.components:
+            if re.search("clc", " ".join(machine.components)) or re.search("ws", " ".join(machine.components)) or re.search("sc", " ".join(machine.components)):
                 machine.sys("service eucalyptus-cloud start")
-            if "nc" in machine.components:
+            if re.search("nc", " ".join(machine.components)):
                 machine.sys("service eucalyptus-nc start")
-            if "cc" in machine.components:
+            if re.search("cc", " ".join(machine.components)):
                 machine.sys("service eucalyptus-cc start")
 
     def UpgradeAll(self):
