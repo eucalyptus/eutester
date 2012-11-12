@@ -76,15 +76,16 @@ class Upgrade(EutesterTestCase):
         enabled_clc = self.tester.service_manager.wait_for_service(self.clc_service)
         for zone in self.zones:
             ebs_manager = "overlay"
-            if re.search("DASManager" ,self.args.ebs_storage_manager):
-                ebs_manager = "das"
-            if re.search("SANManager" ,self.args.ebs_storage_manager):
-                if re.search("EquallogicProvider", self.args.san_provider):
-                    ebs_manager = "equallogic"
-                if re.search("NetappProvider", self.args.san_provider):
-                    ebs_manager = "netapp"
-                if re.search("EmcVnxProvider", self.args.san_provider):
-                    ebs_manager = "emc-fastsnap"
+            if self.args.ebs_storage_manager:
+                if re.search("DASManager" ,self.args.ebs_storage_manager):
+                    ebs_manager = "das"
+                if re.search("SANManager" ,self.args.ebs_storage_manager):
+                    if re.search("EquallogicProvider", self.args.san_provider):
+                        ebs_manager = "equallogic"
+                    if re.search("NetappProvider", self.args.san_provider):
+                        ebs_manager = "netapp"
+                    if re.search("EmcVnxProvider", self.args.san_provider):
+                        ebs_manager = "emc-fastsnap"
             enabled_clc.machine.sys("source " + self.tester.credpath + "/eucarc && euca-modify-property -p " + zone + ".storage.blockstoragemanager" + ebs_manager,code=0)
 
 
