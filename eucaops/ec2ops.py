@@ -813,7 +813,7 @@ class EC2ops(Eutester):
         if len(snapshots) == 1:
             return snapshots[0]
         else:
-            raise Exception("When creating a single snapshot, multiple or none were returned")
+            raise Exception("create_snapshot: Expected 1 snapshot, got '"+str(len(snapshots))+"' snapshots")
     
     def create_snapshots_from_vol_id(self,volume_id, count=1, mincount=None, eof=True, delay=0, wait_on_progress=20, poll_interval=10, timeout=0, description=""):
         """
