@@ -57,6 +57,26 @@ class Upgrade(EutesterTestCase):
     def upgrade_packages(self):
         for machine in self.tester.config["machines"]:
             machine.upgrade()
+            ## IF its a CLC and we have a SAN we need to install the san package after upgrade before service start
+            if re.search("^3.1", self.old_version):
+                if hasattr(self.args, 'ebs_storage_manager'):
+                    if re.search("SANManager" ,self.args.ebs_storage_manager):
+                        if re.search("clc", " ".join(machine.components)):
+                            if hasattr(self.args, 'san_provider'):
+                                if re.search("EquallogicProvider", self.args.san_provider):
+                                    pass # Nothing to install on CLC for this case
+                                if re.search("NetappProvider", self.args.san_provider):
+                                    machine.install("eucalyptus-enterprise-storage-san-netapp-libs")
+                                if re.search("EmcVnxProvider", self.args.san_provider):
+                                    machine.install("eucalyptus-enterprise-storage-san-emc-libs")
+                        if re.search("sc", " ".join(machine.components)):
+                            if hasattr(self.args, 'san_provider'):
+                                if re.search("EquallogicProvider", self.args.san_provider):
+                                    machine.install("eucalyptus-enterprise-storage-san-equallogic")
+                                if re.search("NetappProvider", self.args.san_provider):
+                                    machine.install("eucalyptus-enterprise-storage-san-netapp")
+                                if re.search("EmcVnxProvider", self.args.san_provider):
+                                    machine.install("eucalyptus-enterprise-storage-san-emc")
             new_version = machine.sys("cat /etc/eucalyptus/eucalyptus-version")[0]
             if re.match( self.old_version, new_version):
                 raise Exception("Version before (" + self.old_version +") and version after (" + new_version + ") are the same")
