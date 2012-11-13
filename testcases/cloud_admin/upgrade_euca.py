@@ -25,7 +25,7 @@ class Upgrade(EutesterTestCase):
         if not self.args.branch and not self.args.euca_url and not self.args.enterprise_url:
             self.args.branch = self.args.upgrade_to_branch
         machine = self.tester.get_component_machines("clc")[0]
-        self.old_version = "3.1.1"#machine.sys("cat /etc/eucalyptus/eucalyptus-version")[0]
+        self.old_version = machine.sys("cat /etc/eucalyptus/eucalyptus-version")[0]
         ### IF we were passed a branch, fetch the correct repo urls from the repo API
         if self.args.branch:
             self.args.euca_url = self.get_repo_url("eucalyptus", self.args.branch)
