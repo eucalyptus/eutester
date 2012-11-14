@@ -213,6 +213,7 @@ class SshConnection():
         try:
             tran = self.connection.get_transport()
             chan = tran.open_session()
+            chan.settimeout(timeout)
             chan.get_pty()
             f = chan.makefile()
             chan.exec_command(cmd) 
@@ -222,7 +223,7 @@ class SshConnection():
             cmdstart = start = time.time()
             while True and chan.closed == 0:
                 try:
-                    rl, wl, xl = select.select([fd],[],[])
+                    rl, wl, xl = select.select([fd],[],[], timeout)
                 except select.error:
                     break
                 elapsed = int(time.time()-start)
