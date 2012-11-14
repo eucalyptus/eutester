@@ -33,7 +33,7 @@ class HAtests(InstanceBasics, BucketTestSuite):
         self.zone = random.choice(zones).name
 
         self.tester.clc = self.tester.service_manager.get_enabled_clc().machine
-        self.old_version = self.tester.clc.sys("cat /etc/eucalyptus/eucalyptus-version")[0]
+        self.old_version = self.tester.clc.sys("cat " + self.tester.eucapath + "/etc/eucalyptus/eucalyptus-version")[0]
         ### Create standing resources that will be checked after all failures
         ### Instance, volume, buckets
         ### 
