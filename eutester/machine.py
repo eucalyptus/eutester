@@ -164,8 +164,11 @@ class Machine:
                 pass
     
     def interrupt_network(self, time = 120, interface = "eth0"):
-        self.sys("ifdown " + interface + " && sleep " + str(time) + " && ifup eth0",  timeout=3)
-        
+        try:
+            self.sys("ifdown " + interface + " && sleep " + str(time) + " && ifup eth0",  timeout=3)
+        except Exception,e:
+            pass
+
     def sys(self, cmd, verbose=True, timeout=120, listformat=True, code=None):
         '''
         Issues a command against the ssh connection to this instance
