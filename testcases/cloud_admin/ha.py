@@ -143,7 +143,7 @@ class HAtests(InstanceBasics, BucketTestSuite):
         primary_service = service_aquisition_callback()
         secondary_service = self.tester.service_manager.wait_for_service(primary_service, state="DISABLED")
         self.tester.debug("Primary Service: " + primary_service.machine.hostname + " Secondary Service: " + secondary_service.machine.hostname)
-        primary_service.machine.interrupt_network(300)
+        primary_service.machine.interrupt_network(120)
         
         if "clc" in primary_service.machine.components:
             self.tester.debug("Switching ec2 connection to host: " +  secondary_service.machine.hostname)
@@ -196,11 +196,11 @@ class HAtests(InstanceBasics, BucketTestSuite):
         self.post_run_checks()
     
     def failoverWalrus(self):
-        self.failoverService(self.servman.get_enabled_walrus, self.test_bucket_get_put_delete)
+        self.failoverService(self.servman.get_enabled_walrus, self.test_bucket_key_list_delim_prefix)
         self.post_run_checks()
-        self.failoverReboot(self.servman.get_enabled_walrus,self.test_bucket_get_put_delete)
+        self.failoverReboot(self.servman.get_enabled_walrus,self.test_bucket_key_list_delim_prefix)
         self.post_run_checks()
-        self.failoverNetwork(self.servman.get_enabled_walrus, self.test_bucket_get_put_delete)
+        self.failoverNetwork(self.servman.get_enabled_walrus, self.test_bucket_key_list_delim_prefix)
         self.post_run_checks()
     
     def failoverCC(self):
