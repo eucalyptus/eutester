@@ -221,6 +221,7 @@ class SshConnection():
             fd = chan.fileno()
             chan.setblocking(0)
             cmdstart = start = time.time()
+            newdebug="\n"
             while True and chan.closed == 0:
                 try:
                     rl, wl, xl = select.select([fd],[],[], timeout)
@@ -265,11 +266,16 @@ class SshConnection():
                                 output += new
                                 if verbose:
                                     #Dont print line by line output if cb is used, let cb handle that 
-                                    self.debug(str(new))
+                                    newdebug += new
+                                    
                         else:
                             status = self.lastexitcode = chan.recv_exit_status()
                             chan.close()
                             break
+                    if newdebug:
+                        self.debug(str(newdebug))
+                        newdebug = ''
+                        
                 
             if (listformat):
                 #return output as list of lines
@@ -290,13 +296,7 @@ class SshConnection():
             self.lastexitcode = SshConnection.cmd_timeout_err_code
             elapsed = str(int(time.time()-start))
             self.debug("Command ("+cmd+") timeout exception after " + str(elapsed) + " seconds\nException")     
-            raise cte        
-        if verbose:
-            if (listformat is True):
-                self.debug("".join(output))
-            else:
-                self.debug(output)
-                
+            raise cte 
         return ret
         
     def refresh_connection(self):
