@@ -1,5 +1,6 @@
 #!/usr/bin/python
 import time
+import re
 
 from testcases.cloud_user.instances.instancetest import InstanceBasics
 from testcases.cloud_user.s3.bucket_tests import BucketTestSuite
@@ -30,8 +31,9 @@ class HAtests(InstanceBasics, BucketTestSuite):
         self.test_user_id = self.tester.s3.get_canonical_user_id()
         zones = self.tester.ec2.get_all_zones()
         self.zone = random.choice(zones).name
-        
-        
+
+        self.tester.clc = self.tester.service_manager.get_enabled_clc().machine
+        self.old_version = self.tester.clc.sys("cat /etc/eucalyptus/eucalyptus-version")[0]
         ### Create standing resources that will be checked after all failures
         ### Instance, volume, buckets
         ### 
@@ -90,7 +92,10 @@ class HAtests(InstanceBasics, BucketTestSuite):
           
         if primary_service.hostname is after_failover.hostname:
             self.fail("The enabled CLC was the same before and after the failover")     
-        
+
+        ### REMOVE DISABLED LOCK FILE FROM NON ACTIVE CLC AFTER 3.1
+        if not re.search("^3.1", self.old_version):
+            primary_service.machine.sys("rm -rf " + self.tester.eucapath + "/var/lib/eucalyptus/db/data/disabled.lock")
         primary_service.start()
         
         try:
@@ -123,7 +128,7 @@ class HAtests(InstanceBasics, BucketTestSuite):
         self.run_testcase(testcase_callback, **kwargs)
 
         after_failover =  self.tester.service_manager.wait_for_service(primary_service, state="ENABLED")
-               
+
         if primary_service.hostname is after_failover.hostname:
             self.fail("The enabled CLC was the same before and after the failover")     
              
@@ -185,10 +190,10 @@ class HAtests(InstanceBasics, BucketTestSuite):
     def failoverCLC(self):
         self.failoverService(self.servman.get_enabled_clc, self.MetaData)
         self.post_run_checks()
-        self.failoverReboot(self.servman.get_enabled_clc, self.MetaData)
-        self.post_run_checks()
-        self.failoverNetwork(self.servman.get_enabled_clc, self.MetaData)
-        self.post_run_checks()
+        #self.failoverReboot(self.servman.get_enabled_clc, self.MetaData)
+        #self.post_run_checks()
+        #self.failoverNetwork(self.servman.get_enabled_clc, self.MetaData)
+        #self.post_run_checks()
     
     def failoverWalrus(self):
         self.failoverService(self.servman.get_enabled_walrus, self.test_bucket_get_put_delete)
