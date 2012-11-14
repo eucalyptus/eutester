@@ -8,8 +8,11 @@ import os
 import random
 
 class HAtests(InstanceBasics, BucketTestSuite):
-    def __init__(self, config_file="cloud.conf", password="foobar"):
-        self.tester = Eucaops( config_file=config_file, password=password)
+    def __init__(self):
+        self.setuptestcase()
+        self.setup_parser()
+        self.get_args()
+        self.tester = Eucaops( config_file=self.args.config_file, password=self.args.password)
         self.servman = self.tester.service_manager
         self.tester.poll_count = 120
         ### Add and authorize a group for the instance
