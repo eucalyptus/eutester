@@ -181,7 +181,8 @@ class Eutester(object):
         try:
             sts_connection_args = copy.copy(connection_args)
             sts_connection_args['path'] = "/services/Tokens"
-            sts_connection_args['host'] = self.get_ec2_ip()
+            sts_connection_args['region'] = self.region
+            ec2_connection_args['api_version'] = APIVersion
             self.debug("Attempting to create STS connection to " + self.get_ec2_ip())
             self.tokens = boto.connect_sts(**sts_connection_args)
         except Exception, e:
