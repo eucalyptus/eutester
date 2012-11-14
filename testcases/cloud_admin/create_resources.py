@@ -34,25 +34,25 @@
 Create resources (keypairs,groups, volumes,snapshots, buckets) for each user in the cloud. 
 '''
 from eucaops import Eucaops
-import argparse
 import re
-import time
-import os
 import string
-from eutester import xmlrunner
 from eutester.euinstance import EuInstance
 from eutester.eutestcase import EutesterTestCase
-from eutester.eutestcase import EutesterTestResult
-from boto.exception import S3ResponseError
-from boto.exception import S3CreateError
-import boto
-import unittest
 
 class ResourceGeneration(EutesterTestCase):
     
-    def __init__(self, credpath):
-        self.tester = Eucaops(credpath=credpath)
+    def __init__(self,extra_args = None):
+        self.setuptestcase()
+        self.setup_parser()
+        if extra_args:
+            for arg in extra_args:
+                self.parser.add_argument(arg)
+        self.get_args()
+        # Setup basic eutester object
+        self.tester = Eucaops( credpath=self.args.credpath)
 
+    def clean_method(self):
+        pass
 
     def CreateResources(self):
         users = self.tester.get_all_users() 
@@ -61,19 +61,21 @@ class ResourceGeneration(EutesterTestCase):
         for user in users:
             user_name = user['user_name']
             user_account = user['account_name']
-            self.tester.debug("Creating access key for " + user_name + " in account " +  user_account)
-            keys = self.tester.create_access_key(user_name=user_name, delegate_account=user_account)
-            access_key = keys['access_key_id']
-            secret_key = keys['secret_access_key']
-            self.tester.debug("Creating Eucaops object with access key " + access_key + " and secret key " +  secret_key)
-            new_tester = Eucaops(aws_access_key_id=access_key, aws_secret_access_key=secret_key, ec2_ip=self.tester.ec2.host, s3_ip=self.tester.s3.host,username=user_name, account=user_account)
             if not re.search("eucalyptus", user_account ):
+                self.tester.debug("Creating access key for " + user_name + " in account " +  user_account)
+                keys = self.tester.create_access_key(user_name=user_name, delegate_account=user_account)
+                access_key = keys['access_key_id']
+                secret_key = keys['secret_access_key']
+                self.tester.debug("Creating Eucaops object with access key " + access_key + " and secret key " +  secret_key)
+                new_tester = Eucaops(aws_access_key_id=access_key, aws_secret_access_key=secret_key, ec2_ip=self.tester.ec2.host, s3_ip=self.tester.s3.host,username=user_name, account=user_account)
                 testers.append(new_tester)
 
         self.tester.debug("Created a total of " + str(len(testers)) + " testers" )
 
+
         for resource_tester in testers:
             import random
+            assert isinstance(resource_tester, Eucaops)
             zone = random.choice(resource_tester.get_zones())
             keypair = resource_tester.add_keypair(resource_tester.id_generator())
             group = resource_tester.add_group(resource_tester.id_generator())
@@ -94,31 +96,15 @@ class ResourceGeneration(EutesterTestCase):
             key = resource_tester.upload_object(bucket_name= bucket.name, key_name= resource_tester.id_generator(12, string.ascii_lowercase  + string.digits), contents= resource_tester.id_generator(200))
             resource_tester.terminate_instances(reservation)
 
-    def run_suite(self):  
-        self.testlist = [] 
-        testlist = self.testlist
-        testlist.append(self.create_testcase_from_method(self.CreateResources))
-        self.run_test_case_list(testlist)
-    
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(prog="create_resources.py",
-                                     description="Create resources (keypairs,groups, volumes,snapshots, buckets) for each user in the cloud. ")
-    parser.add_argument('--credpath', 
-                        help="Path to credentials of an admin user", default=None)
-    args = parser.parse_args()
-    resource_suite = ResourceGeneration(credpath=args.credpath)
-    kbtime=time.time()
-    try:
-        resource_suite.run_suite()
-    except KeyboardInterrupt:
-        resource_suite.debug("Caught keyboard interrupt...")
-        if ((time.time()-kbtime) < 2):
-            resource_suite.clean_created_resources()
-            resource_suite.debug("Caught 2 keyboard interupts within 2 seconds, exiting test")
-            resource_suite.clean_created_resources()
-            raise
-        else:          
-            resource_suite.print_test_list_results()
-            kbtime=time.time()
-            pass
-    exit(0)    
+    testcase = ResourceGeneration()
+    ### Either use the list of tests passed from config/command line to determine what subset of tests to run
+    list = testcase.args.tests or [ "CreateResources"]
+    ### Convert test suite methods to EutesterUnitTest objects
+    unit_list = [ ]
+    for test in list:
+        unit_list.append( testcase.create_testunit_by_name(test) )
+        ### Run the EutesterUnitTest objects
+
+    result = testcase.run_test_case_list(unit_list,clean_on_exit=True)
+    exit(result)

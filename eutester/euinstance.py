@@ -171,7 +171,7 @@ class EuInstance(Instance):
                 except Exception, se:
                     self.debug('Caught exception attempting to reconnect ssh'+ str(se))
                     elapsed = int(time.time()-start)
-                    self.debug('retrying ssh connection, elapsed:'+str(elapsed))
+                    self.debug('retrying ssh connection, elapsed:'+str(elapsed)+'/'+str(timeout))
                     time.sleep(5)
                     pass
                 else:
@@ -189,7 +189,6 @@ class EuInstance(Instance):
         if ( self.verbose is True ):
             self.debugmethod(msg)
             
-
                 
     def sys(self, cmd, verbose=True, timeout=120):
         '''
@@ -224,8 +223,8 @@ class EuInstance(Instance):
         '''
         retlist = []
         if match is None:
-            match = '^sd\|^vd\|^xd|^xvd'
-        out = self.sys("ls -1 /dev/ | grep '^"+str(match)+"'" )
+            match = '^sd\|^vd\|^xd\|^xvd'
+        out = self.sys("ls -1 /dev/ | grep '"+str(match)+"'" )
         for line in out:
             retlist.append(line.strip())
         return retlist
@@ -243,18 +242,28 @@ class EuInstance(Instance):
         self.debug('File '+filepath+' is present on '+self.id)
         
     
-    def attach_volume(self, volume,  dev=None, timeout=60):
-        if not isinstance(volume, EuVolume):
-            euvolume = EuVolume.make_euvol_from_vol(volume)
-        return self.attach_euvolume(euvolume,  dev=dev, timeout=timeout)
-    
-        
-    def attach_euvolume(self, euvolume, dev=None, timeout=60):
+    def attach_volume(self, volume,  dev=None, timeout=60, overwrite=False):
         '''
         Method used to attach a volume to an instance and track it's use by that instance
         required - euvolume - the euvolume object being attached
         required - tester - the eucaops/eutester object/connection for this cloud
         optional - dev - string to specify the dev path to 'request' when attaching the volume to
+        optional - timeout - integer- time allowed before failing
+        optional - overwrite - flag to indicate whether to overwrite head data of a non-zero filled volume upon attach for md5
+        ''' 
+        if not isinstance(volume, EuVolume):
+            volume = EuVolume.make_euvol_from_vol(volume)
+        return self.attach_euvolume(volume,  dev=dev, timeout=timeout, overwrite=overwrite)
+    
+        
+    def attach_euvolume(self, euvolume, dev=None, timeout=60, overwrite=False):
+        '''
+        Method used to attach a volume to an instance and track it's use by that instance
+        required - euvolume - the euvolume object being attached
+        required - tester - the eucaops/eutester object/connection for this cloud
+        optional - dev - string to specify the dev path to 'request' when attaching the volume to
+        optional - timeout - integer- time allowed before failing
+        optional - overwrite - flag to indicate whether to overwrite head data of a non-zero filled volume upon attach for md5
         ''' 
         if not isinstance(euvolume, EuVolume):
             raise Exception("Volume needs to be of type euvolume, try attach_volume() instead?")
@@ -288,8 +297,10 @@ class EuInstance(Instance):
                     break
                 elapsed = int(time.time() - start)
                 time.sleep(2)
+            if not euvolume.guestdev:
+                raise Exception('Device not found on guest after '+str(elapsed)+' seconds')
             #Check to see if this volume has unique data in the head otherwise write some and md5 it
-            self.vol_write_random_data_get_md5(euvolume)
+            self.vol_write_random_data_get_md5(euvolume,overwrite=overwrite)
         else:
             self.debug('Failed to attach volume:'+str(euvolume.id)+' to instance:'+self.id)
             raise Exception('Failed to attach volume:'+str(euvolume.id)+' to instance:'+self.id)
@@ -303,6 +314,7 @@ class EuInstance(Instance):
         '''
         Method used to detach detach a volume to an instance and track it's use by that instance
         required - euvolume - the euvolume object being deattached
+        waitfordev - boolean to indicate whether or no to poll guest instance for local device to be removed
         optional - timeout - integer seconds to wait before timing out waiting for the volume to detach 
         '''
         start = time.time()
@@ -376,8 +388,50 @@ class EuInstance(Instance):
         else:
             self.rootfs_device = "sda"
             self.virtio_blk = False
-            
     
+    def terminate_and_verify(self,verify_vols=True,volto=30, timeout=300):
+        '''
+        Attempts to terminate the instance and if flagged will attempt to verify the correct
+        state of any volumes attached during the terminate operation. 
+        
+        :type verify_vols: boolean
+        :param verify_vols: boolean used to flag whether or not to check for correct volume state after terminate
+        
+        :type volto: integer
+        :param volto: timeout used for time in seconds to wait for volumes to detach and become available after terminating the instnace
+        
+        :type timeout: integer
+        :param timeout: timeout in seconds when waiting for an instance to go to terminated state. 
+        '''
+        bad_vols = []
+        bad_vol_ids = []
+        if verify_vols:
+            self.debug('Checking euinstance attached volume state is in sync with clouds...')
+            for vol in self.attached_vols:
+                try:
+                    self.verify_attached_vol_cloud_status(vol)
+                except Exception, e: 
+                    self.debug('Caught exception verifying attached status for:'+str(vol.id)+", adding to list for post terminate info. Error:"+str(e))
+                    bad_vols.append(vol)
+                    bad_vol_ids.append(vol.id)
+        self.tester.terminate_single_instance(self, timeout=timeout)
+        if verify_vols:
+            for vol in self.attached_vols:
+                if vol in bad_vols:
+                    continue
+                start = time.time()
+                elapsed = 0 
+                while (vol.status != 'available') and (elapsed < timeout):
+                    time.sleep(5)
+                    vol.update()
+                    elapsed = int(time.time()-start)
+                if vol.status != 'available':
+                    raise Exception("volume:"+str(vol.id)+", did not enter available state after terminating:"+str(self.id))
+                self.debug('Previously attached volume:'+str(vol.id)+" has gone to status:"+str(vol.status))
+            if bad_vols:
+                raise Exception("Check test code. Unsync'd volumes found before terminating:"+",".join(bad_vol_ids))
+                
+        
     def get_guestdevs_inuse_by_vols(self):
         retlist = []
         for vol in self.attached_vols:
@@ -492,6 +546,7 @@ class EuInstance(Instance):
         #calculate checksum of euvolume attached device for given length
         md5 = self.md5_attached_euvolume(euvolume, timepergig=timepergig,length=length)
         self.debug("Filled Volume:"+euvolume.id+" dev:"+voldev+" md5:"+md5)
+        euvolume.md5 = md5
         return md5
     
     def md5_attached_euvolume(self, euvolume, timepergig=90,length=None,updatevol=True):
@@ -555,6 +610,29 @@ class EuInstance(Instance):
                 raise Exception("Missing volumes post reboot:"+str(msg)+"\n")
         self.debug(self.id+" reboot_instance_and_verify Success")
         
+        
+    def attach_euvolume_list(self,list,intervoldelay=0, timepervol=90, md5len=32):
+        for euvol in list:
+            if not isinstance(euvol, EuVolume) or not euvol.md5:
+                raise Exception("Volumes in list must be of type EuVolume containing an accurate populated md5sum")
+        for euvol in list:
+            dev = self.get_free_scsi_dev()
+            if (self.tester.attach_volume(self, euvolume, dev, pause=10,timeout=timeout)):
+                self.attached_vols.append(euvol)
+            else:
+                raise Exception('attach_euvolume_list: Test Failed to attach volume:'+str(euvolume.id))
+            if delay:
+                time.sleep(intervoldelay)
+        start = time.time()
+        elapsed = 0 
+        badvols = self.get_unsynced_volumes(euvol_list, md5length=md5length, timepervol=timepervol, check_md5=True)
+        if badvols:
+            buf = ""
+            for bv in badvols:
+                buf += str(bv.id)+","
+            raise Exception("Volume(s) were not found on guest:"+str(buf))
+        
+        
     def get_unsynced_volumes(self,euvol_list=None, md5length=32, timepervol=90,min_polls=2, check_md5=False):
         '''
         Returns list of volumes which are:
@@ -606,7 +684,7 @@ class EuInstance(Instance):
                                     vdev = "/dev/"+str(vdev)
                                     
                                     #if we've already checked the md5 on this dev no need to re-check it. 
-                                    if not re.match(vdev," ".join(checked_vdevs)): 
+                                    if not vdev in checked_vdevs: 
                                         self.debug('Checking '+str(vdev)+" for match against euvolume:"+str(vol.id))
                                         md5 = self.get_dev_md5(vdev, vol.md5len )
                                         self.debug('comparing '+str(md5)+' vs '+str(vol.md5))
@@ -614,9 +692,9 @@ class EuInstance(Instance):
                                             self.debug('Found match at dev:'+str(vdev))
                                             found = True
                                             if (vol.guestdev != vdev ):
-                                                self.debug("("+str(vol.id)+")Guest dev changed! Updating from:'"+str(vol.guestdev)+"' to:'"+str(vdev)+"'")
+                                                self.debug("("+str(vol.id)+")Found dev match. Guest dev changed! Updating from previous:'"+str(vol.guestdev)+"' to:'"+str(vdev)+"'")
                                             else:
-                                                self.debug("("+str(vol.id)+")Found local match at previous dev:'"+str(vol.guestdev)+"'")
+                                                self.debug("("+str(vol.id)+")Found dev match. Previous dev:'"+str(vol.guestdev)+"', Current dev:'"+str(vdev)+"'")
                                             vol.guestdev = vdev
                                         checked_vdevs.append(vdev) # add to list of devices we've already checked.
                                     if found:
@@ -629,7 +707,7 @@ class EuInstance(Instance):
                         except:pass 
                         if found:
                             break
-                        self.debug('Not found sleep and check again...')
+                        self.debug('Local device for volume not found. Sleeping and checking again...')
                         time.sleep(10)
                         elapsed = int(time.time() - start)
                     if not found:
@@ -730,6 +808,8 @@ class EuInstance(Instance):
             if self.state == failstate:
                 raise Exception(str(self.id)+" instance went to state:"+str(self.state)+" while stopping")
             elapsed = int(time.time()- start)
+            if elapsed % 10 == 0 :
+                self.debug(str(self.id)+"wait for stop, in state:"+str(self.state)+",time remaining:"+str(elapsed)+"/"+str(timeout) )
         if self.state != state:
             raise Exception(self.id+" state: "+str(self.state)+" expected:"+str(state)+", after elapsed:"+str(elapsed))
         self.debug(self.id+" stop_instance_and_verify Success")
@@ -756,8 +836,9 @@ class EuInstance(Instance):
                 break
             if self.state == failstate:
                 raise Exception(str(self.id)+" instance went to state:"+str(self.state)+" while starting")
-              
             elapsed = int(time.time()- start)
+            if elapsed % 10 == 0 :
+                self.debug(str(self.id)+"wait for start, in state:"+str(self.state)+",time remaining:"+str(elapsed)+"/"+str(timeout) )
         if self.state != state:
             raise Exception(self.id+" not in "+str(state)+" state after elapsed:"+str(elapsed))
         else:
