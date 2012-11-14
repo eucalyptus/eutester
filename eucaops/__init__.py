@@ -107,7 +107,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops):
                             raise Exception("Could not get credentials from first CLC and no other to try")
                         self.swap_clc()
                         self.sftp = self.clc.ssh.connection.open_sftp()
-                        self.credpath = self.get_credentials(account,user)
+                        self.get_credentials(account,user)
                         
                 self.service_manager = EuserviceManager(self)
                 self.clc = self.service_manager.get_enabled_clc().machine
@@ -376,8 +376,10 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops):
           
             ### DOWNLOAD creds from clc
             self.download_creds_from_clc(admin_cred_dir)
+
+            ### SET CREDPATH ONCE WE HAVE DOWNLOADED IT LOCALLY
+            self.credpath = admin_cred_dir
             ### IF there are 2 clcs make sure to sync credentials across them
-          
         ### sync the credentials  to all CLCs
         for clc in clcs:
             self.send_creds_to_machine(admin_cred_dir, clc)
@@ -411,7 +413,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops):
             machine.sys("mkdir " + admin_cred_dir)
             machine.sftp.put( admin_cred_dir + "/creds.zip" , admin_cred_dir + "/creds.zip")
             machine.sys("unzip -o " + admin_cred_dir + "/creds.zip -d " + admin_cred_dir )
-            machine.sys("sed -i 's/" + self.clc.hostname + "/" + machine.hostname  +"/g' " + admin_cred_dir + "/eucarc")
+            machine.sys("sed -i 's/" + self.get_ec2_ip() + "/" + machine.hostname  +"/g' " + admin_cred_dir + "/eucarc")
             
         
     def setup_local_creds_dir(self, admin_cred_dir):

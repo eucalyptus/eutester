@@ -31,9 +31,10 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 # Author: vic.iglesias@eucalyptus.com
+import copy
 
 
-__version__ = '0.0.3'
+__version__ = '0.0.5'
 
 import re
 import os
@@ -103,7 +104,7 @@ class Eutester(object):
             self.aws_secret_access_key = aws_secret_access_key
         
         ### If you have credentials for the boto connections, create them
-        if (self.aws_access_key_id is not None) and (self.aws_secret_access_key != None):
+        if (self.aws_access_key_id is not None) and (self.aws_secret_access_key is not None):
             if not boto.config.has_section('Boto'):
                 boto.config.add_section('Boto')
             boto.config.set('Boto', 'num_retries', '2')
@@ -116,7 +117,7 @@ class Eutester(object):
         if aws_secret_access_key is None:
             aws_secret_access_key = self.aws_secret_access_key     
         port = 443
-        service_path = "/"
+        ec2_service_path = "/"
         APIVersion = '2009-11-30'
 
         if region is not None:
@@ -127,25 +128,29 @@ class Eutester(object):
                 raise Exception( 'Unknown region: %s' % region)
         
         if not self.region.endpoint:
-            #self.get_connection_details()
             self.region.name = 'eucalyptus'
             if ec2_ip is None:
                 self.region.endpoint = self.get_ec2_ip()       
             else:
                 self.region.endpoint = ec2_ip
             port = 8773
-            service_path="/services/Eucalyptus"
-            
-        try:    
+            ec2_service_path="/services/Eucalyptus"
+        connection_args = { 'aws_access_key_id' :aws_access_key_id,
+                            'aws_secret_access_key': aws_secret_access_key,
+                            'is_secure': is_secure,
+                            'debug': self.boto_debug,
+                            'port' : port }
+
+        if re.search('2.6', boto.__version__):
+            connection_args['validate_certs'] = False
+
+        try:
+            ec2_connection_args = copy.copy(connection_args)
+            ec2_connection_args['path'] = ec2_service_path
+            ec2_connection_args['api_version'] = APIVersion
+            ec2_connection_args['region'] = self.region
             self.debug("Attempting to create ec2 connection to " + self.region.endpoint)
-            self.ec2 = boto.connect_ec2(aws_access_key_id=aws_access_key_id,
-                                    aws_secret_access_key=aws_secret_access_key,
-                                    is_secure=is_secure,
-                                    debug=self.boto_debug,
-                                    region=self.region,
-                                    port=port,
-                                    path=service_path,
-                                    api_version=APIVersion)
+            self.ec2 = boto.connect_ec2(**ec2_connection_args)
         except Exception, e:
             self.critical("Was unable to create ec2 connection because of exception: " + str(e))
 
@@ -154,40 +159,32 @@ class Eutester(object):
                 walrus_endpoint = s3_ip
             else:
                 walrus_endpoint = self.get_s3_ip()
-                
+            walrus_path = "/services/Walrus"
+            s3_connection_args = copy.copy(connection_args)
+            s3_connection_args['path'] = walrus_path
+            s3_connection_args['host'] = walrus_endpoint
+            s3_connection_args['calling_format'] = OrdinaryCallingFormat()
             self.debug("Attempting to create S3 connection to " + walrus_endpoint)
-            self.s3 = boto.connect_s3(aws_access_key_id=aws_access_key_id,
-                                                  aws_secret_access_key=aws_secret_access_key,
-                                                  is_secure=False,
-                                                  host= walrus_endpoint,
-                                                  port=8773,
-                                                  path="/services/Walrus",
-                                                  calling_format=OrdinaryCallingFormat(),
-                                                  debug=self.boto_debug)
+            self.s3 = boto.connect_s3(**s3_connection_args)
         except Exception, e:
             self.critical("Was unable to create S3 connection because of exception: " + str(e))
         
-        try:    
-            self.euare = boto.connect_iam(aws_access_key_id=aws_access_key_id,
-                                                  aws_secret_access_key=aws_secret_access_key,
-                                                  is_secure=False,
-                                                  host=self.get_ec2_ip(),
-                                                  port=8773, 
-                                                  path="/services/Euare",
-                                                  debug=self.boto_debug)
+        try:
+            euare_connection_args = copy.copy(connection_args)
+            euare_connection_args['path'] = "/services/Euare"
+            euare_connection_args['host'] = self.get_ec2_ip()
+            self.debug("Attempting to create IAM connection to " + self.get_ec2_ip())
+            self.euare = boto.connect_iam(**euare_connection_args)
         except Exception, e:
             self.critical("Was unable to create IAM connection because of exception: " + str(e))
 
         try:
-            self.tokens = boto.connect_sts(
-                aws_access_key_id=aws_access_key_id,
-                aws_secret_access_key=aws_secret_access_key,
-                region=self.region,
-                port=8773,
-                path="/services/Tokens",
-                is_secure=False,
-                debug=self.boto_debug)
-
+            sts_connection_args = copy.copy(connection_args)
+            sts_connection_args['path'] = "/services/Tokens"
+            sts_connection_args['region'] = self.region
+            ec2_connection_args['api_version'] = APIVersion
+            self.debug("Attempting to create STS connection to " + self.get_ec2_ip())
+            self.tokens = boto.connect_sts(**sts_connection_args)
         except Exception, e:
             self.critical("Was unable to create STS connection because of exception: " + str(e))
 

@@ -1,19 +1,19 @@
 #!/usr/bin/python
-import unittest
 import time
-import sys
+import re
 
 from testcases.cloud_user.instances.instancetest import InstanceBasics
 from testcases.cloud_user.s3.bucket_tests import BucketTestSuite
-from eutester.eutestcase import EutesterTestCase
-from eucaops import Eucaops 
+from eucaops import Eucaops
 import os
-import re
 import random
 
 class HAtests(InstanceBasics, BucketTestSuite):
-    def __init__(self, config_file="cloud.conf", password="foobar"):
-        self.tester = Eucaops( config_file=config_file, password=password)
+    def __init__(self):
+        self.setuptestcase()
+        self.setup_parser()
+        self.get_args()
+        self.tester = Eucaops( config_file=self.args.config_file, password=self.args.password)
         self.servman = self.tester.service_manager
         self.tester.poll_count = 120
         ### Add and authorize a group for the instance
@@ -31,8 +31,9 @@ class HAtests(InstanceBasics, BucketTestSuite):
         self.test_user_id = self.tester.s3.get_canonical_user_id()
         zones = self.tester.ec2.get_all_zones()
         self.zone = random.choice(zones).name
-        
-        
+
+        self.tester.clc = self.tester.service_manager.get_enabled_clc().machine
+        self.old_version = self.tester.clc.sys("cat " + self.tester.eucapath + "/etc/eucalyptus/eucalyptus-version")[0]
         ### Create standing resources that will be checked after all failures
         ### Instance, volume, buckets
         ### 
@@ -44,10 +45,14 @@ class HAtests(InstanceBasics, BucketTestSuite):
         self.standing_key_name = "failover-key-" + self.start_time
         self.standing_key = self.tester.upload_object(self.standing_bucket_name, self.standing_key_name)
         self.standing_key = self.tester.get_objects_by_prefix(self.standing_bucket_name, self.standing_key_name)
-        
 
-        
-            
+    def clean_method(self):
+        try:
+            self.tester.terminate_instances()
+        except Exception, e:
+            self.tester.critical("Unable to terminate all instances")
+        self.servman.start_all()
+
     def run_testcase(self, testcase_callback, **kwargs):
         poll_count = 20
         poll_interval = 20       
@@ -87,7 +92,10 @@ class HAtests(InstanceBasics, BucketTestSuite):
           
         if primary_service.hostname is after_failover.hostname:
             self.fail("The enabled CLC was the same before and after the failover")     
-        
+
+        ### REMOVE DISABLED LOCK FILE FROM NON ACTIVE CLC AFTER 3.1
+        if not re.search("^3.1", self.old_version):
+            primary_service.machine.sys("rm -rf " + self.tester.eucapath + "/var/lib/eucalyptus/db/data/disabled.lock")
         primary_service.start()
         
         try:
@@ -120,7 +128,7 @@ class HAtests(InstanceBasics, BucketTestSuite):
         self.run_testcase(testcase_callback, **kwargs)
 
         after_failover =  self.tester.service_manager.wait_for_service(primary_service, state="ENABLED")
-               
+
         if primary_service.hostname is after_failover.hostname:
             self.fail("The enabled CLC was the same before and after the failover")     
              
@@ -135,7 +143,7 @@ class HAtests(InstanceBasics, BucketTestSuite):
         primary_service = service_aquisition_callback()
         secondary_service = self.tester.service_manager.wait_for_service(primary_service, state="DISABLED")
         self.tester.debug("Primary Service: " + primary_service.machine.hostname + " Secondary Service: " + secondary_service.machine.hostname)
-        primary_service.machine.interrupt_network(600)    
+        primary_service.machine.interrupt_network(300)
         
         if "clc" in primary_service.machine.components:
             self.tester.debug("Switching ec2 connection to host: " +  secondary_service.machine.hostname)
@@ -212,26 +220,18 @@ class HAtests(InstanceBasics, BucketTestSuite):
         zone = self.servman.partitions.keys()[0]
         if len(self.servman.partitions[zone].vbs) > 1:
             self.failoverService(self.servman.partitions[zone].get_enabled_vb, self.MetaData ,self.zone)
-    
-    def cleanup(self):
-        try:
-            self.tester.terminate_instances()
-        except Exception, e: 
-            self.tester.critical("Unable to terminate all instances")
-        self.servman.start_all()
-    
-    def run_suite(self):  
-        self.testlist = [] 
-        testlist = self.testlist
-        testlist.append(self.create_testcase_from_method(self.failoverCLC))
-        testlist.append(self.create_testcase_from_method(self.failoverWalrus))
-        testlist.append(self.create_testcase_from_method(self.failoverCC))       
-        self.run_test_case_list(testlist)
-        self.cleanup() 
+
 
 if __name__ == "__main__":
-    parser = HAtests.get_parser()       
-    args = parser.parse_args()
-    hasuite = HAtests(config_file=args.config, password = args.password)
-    hasuite.run_suite()
+    testcase = HAtests()
+    ### Either use the list of tests passed from config/command line to determine what subset of tests to run
+    list = testcase.args.tests or [ "failoverCLC", "failoverWalrus", "failoverCC", "failoverSC", "failoverVB"]
+    ### Convert test suite methods to EutesterUnitTest objects
+    unit_list = [ ]
+    for test in list:
+        unit_list.append( testcase.create_testunit_by_name(test) )
+        ### Run the EutesterUnitTest objects
+
+    result = testcase.run_test_case_list(unit_list,clean_on_exit=True)
+    exit(result)
    
