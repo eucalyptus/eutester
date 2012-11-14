@@ -1,14 +1,10 @@
 #!/usr/bin/python
-import unittest
 import time
-import sys
 
 from testcases.cloud_user.instances.instancetest import InstanceBasics
 from testcases.cloud_user.s3.bucket_tests import BucketTestSuite
-from eutester.eutestcase import EutesterTestCase
-from eucaops import Eucaops 
+from eucaops import Eucaops
 import os
-import re
 import random
 
 class HAtests(InstanceBasics, BucketTestSuite):
@@ -44,10 +40,14 @@ class HAtests(InstanceBasics, BucketTestSuite):
         self.standing_key_name = "failover-key-" + self.start_time
         self.standing_key = self.tester.upload_object(self.standing_bucket_name, self.standing_key_name)
         self.standing_key = self.tester.get_objects_by_prefix(self.standing_bucket_name, self.standing_key_name)
-        
 
-        
-            
+    def clean_method(self):
+        try:
+            self.tester.terminate_instances()
+        except Exception, e:
+            self.tester.critical("Unable to terminate all instances")
+        self.servman.start_all()
+
     def run_testcase(self, testcase_callback, **kwargs):
         poll_count = 20
         poll_interval = 20       
@@ -212,26 +212,18 @@ class HAtests(InstanceBasics, BucketTestSuite):
         zone = self.servman.partitions.keys()[0]
         if len(self.servman.partitions[zone].vbs) > 1:
             self.failoverService(self.servman.partitions[zone].get_enabled_vb, self.MetaData ,self.zone)
-    
-    def cleanup(self):
-        try:
-            self.tester.terminate_instances()
-        except Exception, e: 
-            self.tester.critical("Unable to terminate all instances")
-        self.servman.start_all()
-    
-    def run_suite(self):  
-        self.testlist = [] 
-        testlist = self.testlist
-        testlist.append(self.create_testcase_from_method(self.failoverCLC))
-        testlist.append(self.create_testcase_from_method(self.failoverWalrus))
-        testlist.append(self.create_testcase_from_method(self.failoverCC))       
-        self.run_test_case_list(testlist)
-        self.cleanup() 
+
 
 if __name__ == "__main__":
-    parser = HAtests.get_parser()       
-    args = parser.parse_args()
-    hasuite = HAtests(config_file=args.config, password = args.password)
-    hasuite.run_suite()
+    testcase = HAtests()
+    ### Either use the list of tests passed from config/command line to determine what subset of tests to run
+    list = testcase.args.tests or [ "failoverCLC", "failoverWalrus", "failoverCC", "failoverSC", "failoverVB"]
+    ### Convert test suite methods to EutesterUnitTest objects
+    unit_list = [ ]
+    for test in list:
+        unit_list.append( testcase.create_testunit_by_name(test) )
+        ### Run the EutesterUnitTest objects
+
+    result = testcase.run_test_case_list(unit_list,clean_on_exit=True)
+    exit(result)
    
