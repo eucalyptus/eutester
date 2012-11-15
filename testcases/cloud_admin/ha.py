@@ -47,10 +47,9 @@ class HAtests(InstanceBasics, BucketTestSuite):
         self.standing_key = self.tester.get_objects_by_prefix(self.standing_bucket_name, self.standing_key_name)
 
     def clean_method(self):
-        try:
-            self.tester.terminate_instances()
-        except Exception, e:
-            self.tester.critical("Unable to terminate all instances")
+        self.tester.terminate_instances(self.standing_reservation)
+        self.tester.terminate_instances(self.reservation)
+        self.tester.delete_volume(self.volume)
         self.servman.start_all()
 
     def run_testcase(self, testcase_callback, **kwargs):
