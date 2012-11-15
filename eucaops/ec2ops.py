@@ -197,6 +197,7 @@ class EC2ops(Eutester):
         except ImportError:
             raise ImportError("Unable to load M2Crypto. Please install by using your package manager to install "
                               "python-m2crypto or 'easy_install M2crypto'")
+        key = key or self.get_keypair(instance.key_name)
         if private_key_path is None and key is not None:
             private_key_path = str(self.verify_local_keypath( key.name , dir, exten))
         if not private_key_path:
@@ -455,9 +456,13 @@ class EC2ops(Eutester):
             raise Exception("Created "+str(len(retlist))+"/"+str(count)+' volumes. Less than minimum specified:'+str(mincount))
         self.debug( str(len(volumes))+"/"+str(count)+" requests for volume creation succeeded." )
         
+        if volumes:
+            self.print_euvolume_list(volumes)
+        
         if not monitor_to_state:
             self.test_resources["volumes"].extend(volumes)
-            snapshot.eutest_volumes.extend(retlist)
+            if snapshot:
+                snapshot.eutest_volumes.extend(volumes)
             return volumes
         #If we begain the creation of the min volumes, monitor till completion, otherwise cleanup and fail out
         retlist = self.monitor_created_euvolumes_to_state(volumes,eof=eof, mincount=mincount, state=monitor_to_state, poll_interval=poll_interval, timepergig=timepergig)
@@ -482,15 +487,19 @@ class EC2ops(Eutester):
         
         retlist = []
         failed = []
+        
         if not volumes:
             raise Exception("Volumes list empty in monitor_created_volumes_to_state")
+        self.print_euvolume_list(volumes)
         count = len(volumes)
         mincount = mincount or count 
+        self.debug("Monitoring "+str(count)+" volumes for at least "+str(mincount)+" to reach state:"+str(state))
         origlist = copy.copy(volumes)
+        self.debug("Monitoring "+str(count)+" volumes for at least "+str(mincount)+" to reach state:"+str(state))
         for volume in volumes:
             if not isinstance(volume, EuVolume):
                 raise Exception("object not of type EuVolume. Found type:"+str(type(volume)))
-        volume = EuVolume()
+        #volume = EuVolume()
         # Wait for the volume to be created.
         self.debug( "Polling "+str(len(volumes))+" volumes for status:\""+str(state)+"\"...")
         start = time.time()
@@ -559,8 +568,9 @@ class EC2ops(Eutester):
         self.print_euvolume_list(origlist)
         return retlist
                 
-    def print_euvolume_list(self,euvolumes):
+    def print_euvolume_list(self,euvolumelist):
         buf=""
+        euvolumes = copy.copy(euvolumelist)
         if not euvolumes:
             raise Exception('print_euvolume_list: Euvolume list to print is empty')
         for volume in euvolumes:

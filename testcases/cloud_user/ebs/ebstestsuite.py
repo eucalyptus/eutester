@@ -650,6 +650,7 @@ class EbsTestSuite(EutesterTestCase):
                 for avol in instance.attached_vols:
                     if avol in vols:
                         instance.detach_euvolume(avol, waitfordev=False)
+                delfail = None  
                 for vol in vols:
                     try:
                         self.tester.delete_volume(vol,timeout=delete_to)
@@ -711,7 +712,7 @@ class EbsTestSuite(EutesterTestCase):
                     if newvol.zone == zone.name:
                         instance.attach_volume(newvol)
                         #Compare MD5 sum to original volume
-                        if str(vol.md5).rstrip().lstrip() != str(newvol.md5).rstrip().lstrip():
+                        if str(origmd5).rstrip().lstrip() != str(newvol.md5).rstrip().lstrip():
                             raise Exception("New volume's md5:'"+str(newvol.md5)+"' !=  original volume md5:'"+str(origmd5)+"'")
                         else:
                             self.debug("Success. New volume:"+str(newvol.id)+"'s md5:"+str(newvol.md5)+" ==  original volume:"+str(snap.volume_id)+"'s md5:"+str(origmd5))
@@ -724,6 +725,7 @@ class EbsTestSuite(EutesterTestCase):
                     if avol in vols:
                         instance.detach_euvolume(avol)
             self.tester.print_euvolume_list(vols)
+            delfail = None
             for vol in vols:
                 try:
                     self.tester.delete_volume(vol,timeout=delete_to)
