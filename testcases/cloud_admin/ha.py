@@ -195,6 +195,11 @@ class HAtests(InstanceBasics, BucketTestSuite):
         self.post_run_checks()
     
     def failoverWalrus(self):
+        enabled_walrus = self.servman.get_enabled_walrus()
+        try:
+            enabled_walrus.machine.sys("ls " + self.tester.eucapath + "/var/lib/eucalyptus/bukkits/" + self.standing_bucket_name, code=0)
+        except Exception, e:
+            raise Exception("Unable to find bucket before failovers")
         self.failoverService(self.servman.get_enabled_walrus, self.test_bucket_key_list_delim_prefix)
         self.post_run_checks()
         self.failoverReboot(self.servman.get_enabled_walrus,self.test_bucket_key_list_delim_prefix)
