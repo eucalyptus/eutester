@@ -1111,7 +1111,7 @@ class EC2ops(Eutester):
             if clear:
                 self.ec2.deregister_image(image.id)
 
-    def get_emi(self, emi=None, root_device_type=None, root_device_name=None, location=None, state="available", arch=None, owner_id=None):
+    def get_emi(self, emi=None, root_device_type=None, root_device_name=None, location=None, state="available", arch=None, owner_id=None, not_location=None):
         """
         Get an emi with name emi, or just grab any emi in the system. Additional 'optional' match criteria can be defined.
 
@@ -1122,6 +1122,7 @@ class EC2ops(Eutester):
         :param state: example: 'available'
         :param arch: example: 'x86_64'
         :param owner_id: owners numeric id
+        :param not_location: skip if location string matches this string. Example: not_location='windows'
         :return: image id
         :raise: Exception if image is not found
         """
@@ -1145,6 +1146,8 @@ class EC2ops(Eutester):
             if (arch is not None) and (image.architecture != arch):
                 continue                
             if (owner_id is not None) and (image.owner_id != owner_id):
+                continue
+            if (not_location is not None) and (re.search( not_location, image.location)):
                 continue
             self.debug("Returning image:"+str(image.id))
             return image

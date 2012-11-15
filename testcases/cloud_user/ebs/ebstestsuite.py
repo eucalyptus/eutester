@@ -34,6 +34,7 @@ from eucaops import Eucaops
 from eutester import euinstance, euvolume, xmlrunner, euconfig
 from boto.ec2.snapshot import Snapshot
 import argparse
+import types
 import re
 import time
 import os
@@ -108,7 +109,11 @@ class EbsTestSuite(EutesterTestCase):
     
         self.testlist =[]
         self.inst_pass=inst_pass
-        self.image = emi
+        if emi:
+            self.image = self.tester.get_emi(emi=emi)
+        else:
+            self.image = self.tester.get_emi(not_location='windows')
+        
         self.vmtype = vmtype
         self.zone = None    
         self.zonelist = []
@@ -213,10 +218,11 @@ class EbsTestSuite(EutesterTestCase):
         zonelist = zonelist or self.zonelist
         if not zonelist:
             raise Exception("Zone list was empty")
-        if image is None:
-            image = self.tester.get_emi(emi=self.image)
+        if image is not None:
+            if isinstance(image,types.StringTypes):
+                image = self.tester.get_emi(emi=image)    
         else:
-            image = self.tester.get_emi(emi=image)
+            image = self.image
         if group is None:
             group = self.group
         if keypair is None:
