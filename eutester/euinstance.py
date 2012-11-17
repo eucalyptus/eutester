@@ -507,7 +507,7 @@ class EuInstance(Instance):
                 fsize = randint(1048576,10485760)
                 
         if length <= fsize:
-            fillcmd = self.sys("head -c "+str(length)+" "+srcdev+" > "+voldev+"; sync")
+            fillcmd = "head -c "+str(length)+" "+srcdev+" > "+voldev+"; sync"
         else:
             count = int((euvolume.size*gb)/fsize)
             fillcmd="head -c "+str(fsize)+" "+str(srcdev)+" > /tmp/datafile; x=0; while [ $x -lt "+str(count)+" ]; do cat /tmp/datafile; let x=$x+1; done | dd of="+str(voldev)+"; rm /tmp/datafile; sync"
@@ -575,10 +575,10 @@ class EuInstance(Instance):
             raise Exception("Failed to md5 attached volume: " +str(e))
         return md5
     
-    def get_dev_md5(self, devpath, length): 
+    def get_dev_md5(self, devpath, length, timeout=60): 
         self.assertFilePresent(devpath)
         if length == 0:
-            md5 = str(self.sys("md5sum "+voldev, timeout=timeout)[0]).split(' ')[0].strip()
+            md5 = str(self.sys("md5sum "+devpath, timeout=timeout)[0]).split(' ')[0].strip()
         else:
             md5 = str(self.sys("head -c "+str(length)+" "+str(devpath)+" | md5sum")[0]).split(' ')[0].strip()
         return md5
