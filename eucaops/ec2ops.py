@@ -490,7 +490,6 @@ class EC2ops(Eutester):
         
         if not volumes:
             raise Exception("Volumes list empty in monitor_created_volumes_to_state")
-        self.print_euvolume_list(volumes)
         count = len(volumes)
         mincount = mincount or count 
         self.debug("Monitoring "+str(count)+" volumes for at least "+str(mincount)+" to reach state:"+str(state))
@@ -621,6 +620,41 @@ class EC2ops(Eutester):
             return False
         return True
     
+    def delete_volumes(self, volume_list, poll_interval=10, timeout=120):
+        """
+        Deletes a list of EBS volumes then checks for proper state transition
+
+        :param volume_list: List of volume objects to be deleted
+        :param poll_interval: integer, seconds between polls on volumes' state
+        :param timeout: integer time allowed before this method fails
+        """
+        if volume_list:
+            vollist = copy.copy(volume_list)
+        else:
+            raise Exception("delete_volumes: volume_list was empty")
+        for volume in vollist:
+            self.ec2.delete_volume(volume.id)
+            self.debug( "Sent delete for volume: " +  str(volume.id)  )
+        start = time.time()
+        elapsed = 0
+        while vollist and elapsed < timeout:
+            for volume in vollist:
+                volume.update()
+                self.debug( str(volume) + " in " + volume.status)
+                volume.update()
+                if volume.status == "deleted":
+                    vollist.remove(volume)
+                elapsed = int(time.time()-start)
+                self.debug("---Sleeping:"+str(poll_interval)+", elapsed:"+str(elapsed)+"---")
+                time.sleep(poll_interval)
+        if vollist:
+            errmsg =""
+            for volume in vollist:
+                errmsg += "ERROR:"+str(volume) + " left in " +  volume.status + ',elapsed:'+str(elapsed)
+            raise Exception(errmsg)
+        
+        
+        
     def delete_all_volumes(self):
         """
         Deletes all volumes on the cloud
