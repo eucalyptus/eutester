@@ -44,7 +44,7 @@ if __name__ == "__main__":
     testcase.get_args()
     ebstestsuite= testcase.do_with_args(EbsTestSuite)
     if testcase.args.fof:
-        testcaes.clean_method = lambda: testcase.status("Freeze on fail flag is set, not cleaning!")
+        testcase.clean_method = lambda: testcase.status("Freeze on fail flag is set, not cleaning!")
     else:
         testcase.clean_method = ebstestsuite.clean_created_resources
     testlist = ebstestsuite.test_multi_node(run=False, 

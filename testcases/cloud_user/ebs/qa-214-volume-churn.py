@@ -1,4 +1,25 @@
 #!/usr/bin/env python
+#
+##########################
+#                        #
+#       Test Cases       #
+#                        #
+##########################
+#
+#        Attempts basic EBS related churn tests. Starting from basic to more involved churn tests as defined in testcase QA214:
+#        Script repetitive runs stressing the following flows in concurrent use (Test script can be run concurrently via Jenkins, etc)
+#        Each sub test can be called with --test testX or a list of tests, otherwise all tests will be run
+#
+#        test1) repeat: (create volume X -> delete volume X)
+#        test2) create volume Y, then  repeat ( attach volume Y-> detach volume Y)
+#        test3) repeat : ( create volume Z -> attach volume Z -> detach volume Z)
+#        test4) repeat: (create volume V -> Create snapshot S from volume V, create volume SV from snapshot S, delete volume V, delete snapshot S, delete volume SV)
+#        
+#       
+#        Cleanup:
+#        --if 'fof' flag is not set, will remove all volumes, instance, and snapshots created during this test
+#
+#    @author: clarkmatthew
 
 
 
