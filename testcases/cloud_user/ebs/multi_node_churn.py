@@ -12,9 +12,13 @@
 #        Test Summary: 
 #        
 #        Usage Tests: 
-#
+#        - create 2 x nodes in zone volumes per zone
+#        - launch instances to interact with ebs volumes per zone
+#        - repeat for testcount -> attach volumes alternating nodes, then detach all volumes from all nodes
+#        - terminate each instance and verify that any attached volumes return to available state
+#       
 #        Cleanup:
-#        --remove all volumes, instance, and snapshots created during this test
+#        --if 'fof' flag is not set, will remove all volumes, instance, and snapshots created during this test
 #
 #    @author: clarkmatthew
 
@@ -35,10 +39,14 @@ if __name__ == "__main__":
                           testlist=False)
     testcase.parser.add_argument('--count', type=int, help='Number of times to run attach/detach churn',default=10)
     testcase.parser.add_argument('--nodecount', type=int, help='Number of nodes in env',default=2)
+    testcase.parser.add_argument('--fof', dest='fof', help="Freeze test on fail, do not remove or tear down test items",action='store_true', default=False)
 
     testcase.get_args()
     ebstestsuite= testcase.do_with_args(EbsTestSuite)
-    #testcase.clean_method = ebstestsuite.clean_created_resources
+    if testcase.args.fof:
+        testcaes.clean_method = lambda: testcase.status("Freeze on fail flag is set, not cleaning!")
+    else:
+        testcase.clean_method = ebstestsuite.clean_created_resources
     testlist = ebstestsuite.test_multi_node(run=False, 
                                             count=int(testcase.args.count),
                                             nodecount=int(testcase.args.nodecount))
