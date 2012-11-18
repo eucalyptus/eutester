@@ -117,7 +117,7 @@ class EuProperties():
         value = str(value)
         eucaops = self.tester
         self.debug('Setting property('+prop+') to value:'+str(value))
-        ret_string = self.clc.sys('euca-modify-property -p '+prop+'='+str(value), code=0)
+        ret_string = self.clc.sys(self.cmdpath+'euca-modify-property -U '+str(self.service_url)+' -I '+str(self.access_key)+' -S '+ str(self.secret_key) +' -p '+prop+'='+str(value), code=0)
         if ( ret_string != [] ):
             ret_value= str(ret_string[0]).split()[2]
         else:
@@ -137,7 +137,7 @@ class EuProperties():
         '''
     
         eucaops = self.tester
-        ret_string = str(clc.sys('euca-modify-property -r '+prop,code=0)[0])
+        ret_string = str(self.clc.sys(self.cmdpath+'euca-modify-property -U '+str(self.service_url)+' -I '+str(self.access_key)+' -S '+ str(self.secret_key) +' -r '+prop,code=0)[0])
         ret_value= ret_string.split()[2]
         self.debug('Reset property('+prop+') to default value('+str(ret_value)+')')
         return ret_value
