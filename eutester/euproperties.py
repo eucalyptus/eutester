@@ -58,7 +58,7 @@ Sample:
 '''
 import types
 
-class EucaProperties():
+class EuProperties():
     tester = None
     verbose = False
     debugmethod = None
@@ -68,6 +68,10 @@ class EucaProperties():
         self.debugmethod = debugmethod
         self.verbose = verbose
         self.clc = self.get_clc()
+        self.access_key = self.tester.aws_access_key_id
+        self.secret_key = self.tester.aws_secret_access_key
+        self.service_url = 'http://'+str(self.tester.get_ec2_ip())+':8773/services/Eucalytpus'
+        
         
     def get_clc(self):
         return self.tester.service_manager.get_enabled_clc().machine   
@@ -93,7 +97,7 @@ class EucaProperties():
         '''
         self.debug("Getting property:"+prop)
         eucaops = self.tester
-        prop_string = clc.sys('euca-describe-properties | grep ' + prop, code=0)
+        prop_string = self.clc.sys('euca-describe-properties -U '+str(self.service_url)+' -I '+str(self.access_key)+' -S '+ str(self.secret_key) +' | grep ' + prop, code=0)
         if (prop_string != []):
             value = str(prop_string[0]).split()[2]
         else:
@@ -112,7 +116,7 @@ class EucaProperties():
         value = str(value)
         eucaops = self.tester
         self.debug('Setting property('+prop+') to value:'+str(value))
-        ret_string = clc.sys('euca-modify-property -p '+prop+'='+str(value), code=0)
+        ret_string = self.clc.sys('euca-modify-property -p '+prop+'='+str(value), code=0)
         if ( ret_string != [] ):
             ret_value= str(ret_string[0]).split()[2]
         else:
@@ -210,7 +214,7 @@ class EucaProperties():
     def set_storage_storeprefix(self, value,  zone='PARTI00'):
         return self.set_property(  zone+'.storage.storeprefix', value)
     
-    #PARTI00.storage.storageinterface
+    #PARTI00.storageinterface
     def get_storageinterface(self,   zone='PARTI00'): 
         value = self.get_property(  zone+'.storage.storageinterface')
         return value
@@ -309,7 +313,7 @@ class EucaProperties():
         return self.set_property(  zone+'.storage.blockstoragemanager')
     
     def get_storage_clipath(self, zone='PARTI00'):
-        return self.get_property(  zone+'.storage.storage.clipath')
+        return self.get_property(  zone+'.storage.clipath')
     
     def set_storage_clipath(self, path,  zone='PARTI00'):    #/opt/Navisphere/bin/naviseccli
         if not isinstance(path, types.StringTypes):
@@ -317,7 +321,7 @@ class EucaProperties():
         return self.set_property(  zone+'.storage.clipath')
         
     def get_storage_clonestoragegroup(self, zone='PARTI00'):
-        return self.get_property(  zone+'.storage.storage.clonestoragegroup')
+        return self.get_property(  zone+'.storage.clonestoragegroup')
    
     def set_storage_clonestoragegroup(self, string,  zone='PARTI00'):    #eucalyptus_clonelungroup
         if not isinstance(string, types.StringTypes):
@@ -325,7 +329,7 @@ class EucaProperties():
         return self.set_property(  zone+'.storage.clonestoragegroup')
         
     def get_storage_loginscope(self, zone='PARTI00'):
-        return self.get_property(  zone+'.storage.storage.loginscope')
+        return self.get_property(  zone+'.storage.loginscope')
     
     def set_storage_loginscope(self, int,  zone='PARTI00'):    #0
         if not isinstance(int, types.IntType):
@@ -333,7 +337,7 @@ class EucaProperties():
         return self.set_property(  zone+'.storage.loginscope')
         
     def get_storage_lunspallocator(self, zone='PARTI00'):
-        return self.get_property(  zone+'.storage.storage.lunspallocator')
+        return self.get_property(  zone+'.storage.lunspallocator')
     
     def set_storage_lunspallocator(self, string,  zone='PARTI00'):    #EmcVnxLunSpAllocatorByVolIdHash
         if not isinstance(string, types.StringTypes):
@@ -341,7 +345,7 @@ class EucaProperties():
         return self.set_property(  zone+'.storage.lunspallocator')
         
     def get_storage_ncpaths(self, zone='PARTI00'):
-        return self.get_property(  zone+'.storage.storage.ncpaths')
+        return self.get_property(  zone+'.storage.ncpaths')
     
     def set_storage_ncpaths(self, string,  zone='PARTI00'):    #iface0:192.168.25.182,iface1:10.109.25.186
         if not isinstance(string, types.StringTypes):
@@ -349,7 +353,7 @@ class EucaProperties():
         return self.set_property(  zone+'.storage.ncpaths')
         
     def get_storage_quiescetimeseconds(self, zone='PARTI00'):
-        return self.get_property(  zone+'.storage.storage.quiescetimeseconds')
+        return self.get_property(  zone+'.storage.quiescetimeseconds')
     
     def set_storage_quiescetimeseconds(self, int,  zone='PARTI00'):    #10
         if not isinstance(int, types.IntType):
@@ -357,7 +361,7 @@ class EucaProperties():
         return self.set_property(  zone+'.storage.quiescetimeseconds')
         
     def get_storage_scpaths(self, zone='PARTI00'):
-        return self.get_property(  zone+'.storage.storage.scpaths')
+        return self.get_property(  zone+'.storage.scpaths')
     
     def set_storage_scpaths(self, string,  zone='PARTI00'):    #iface0:192.168.25.182,iface1:10.109.25.186
         if not isinstance(string, types.StringTypes):
@@ -365,7 +369,7 @@ class EucaProperties():
         return self.set_property(  zone+'.storage.scpaths')
         
     def get_storage_storagepool(self, zone='PARTI00'):
-        return self.get_property(  zone+'.storage.storage.storagepool')
+        return self.get_property(  zone+'.storage.storagepool')
     
     def set_storage_storagepool(self, int,  zone='PARTI00'):    #0
         if not isinstance(int, types.IntType):
@@ -373,7 +377,7 @@ class EucaProperties():
         return self.set_property(  zone+'.storage.storagepool')
         
     def get_storage_syncrate(self, zone='PARTI00'):
-        return self.get_property(  zone+'.storage.storage.syncrate')
+        return self.get_property(  zone+'.storage.syncrate')
     
     def set_storage_syncrate(self, string,  zone='PARTI00'):    #high
         if not isinstance(string, types.StringTypes):
@@ -381,7 +385,7 @@ class EucaProperties():
         return self.set_property(  zone+'.storage.syncrate')
         
     def get_storage_timeoutinmillis(self, zone='PARTI00'):
-        return self.get_property(  zone+'.storage.storage.timeoutinmillis')
+        return self.get_property(  zone+'.storage.timeoutinmillis')
    
     def set_storage_timeoutinmillis(self, int,  zone='PARTI00'):    #<unset
         if not isinstance(int, types.IntType):
