@@ -486,16 +486,23 @@ class EuInstance(Instance):
         fillcmd = "dd if=/dev/zero of="+str(voldev)+"; sync"
         return self.time_dd(fillcmd)
     
-    def random_fill_volume(self,euvolume,srcdev=None, length=0):
+    def random_fill_volume(self,euvolume,srcdev=None, length=None):
         '''
         Attempts to fill the entie given euvolume with unique non-zero data.
         The srcdev is read from in a set size, and then used to write to the euvolume to populate it. The file 
         helps with both speed up the copy in the urandom case, and adds both some level of randomness another src device as well as 
         allows smaller src devs to be used to fill larger euvolumes by repeatedly reading into the copy. 
-        returns dd's data/time stat
+        :param euvolume: the attached euvolume object to write data to
+        :param srcdev: the source device to copy data from 
+        :param length: the number of bytes to copy into the euvolume
+        :returns dd's data/time stat
         '''
         gb = 1073741824 
         fsize = 10485760 #10mb
+        if not euvolume in self.attached_vols:
+            raise Exception(self.id+" Did not find this in instance's attached list. Can not write to this euvolume")
+        if not length:
+            length = euvolume.size * gb
         voldev = euvolume.guestdev.strip()
         self.assertFilePresent(voldev)
         if srcdev is None:
@@ -523,7 +530,7 @@ class EuInstance(Instance):
         for line in out:
             line = str(line)
             if re.search('copied',line):
-                time=int(str(line.split(',').pop()).split()[0])
+                time=float(str(line.split(',').pop()).split()[0])
         return time
     
     def vol_write_random_data_get_md5(self, euvolume, srcdev=None, length=32, timepergig=90, overwrite=False):
