@@ -71,6 +71,7 @@ class EuProperties():
         self.access_key = self.tester.aws_access_key_id
         self.secret_key = self.tester.aws_secret_access_key
         self.service_url = 'http://'+str(self.tester.get_ec2_ip())+':8773/services/Eucalytpus'
+        self.cmdpath = self.tester.eucapath+'/usr/sbin/'
         
         
     def get_clc(self):
@@ -97,7 +98,7 @@ class EuProperties():
         '''
         self.debug("Getting property:"+prop)
         eucaops = self.tester
-        prop_string = self.clc.sys('euca-describe-properties -U '+str(self.service_url)+' -I '+str(self.access_key)+' -S '+ str(self.secret_key) +' | grep ' + prop, code=0)
+        prop_string = self.clc.sys(self.cmdpath+'euca-describe-properties -U '+str(self.service_url)+' -I '+str(self.access_key)+' -S '+ str(self.secret_key) +' | grep ' + prop, code=0)
         if (prop_string != []):
             value = str(prop_string[0]).split()[2]
         else:
