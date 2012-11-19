@@ -4,7 +4,6 @@
 # Description:  This script upgrades a Eucalyptus cloud
 import re
 from eucaops import Eucaops
-from eutester.euservice import Euservice
 from eutester.eutestcase import EutesterTestCase
 
 class Upgrade(EutesterTestCase):
@@ -14,6 +13,8 @@ class Upgrade(EutesterTestCase):
         self.parser.add_argument("--euca-url",)
         self.parser.add_argument("--enterprise-url")
         self.parser.add_argument("--branch")
+        self.parser.add_argument("--nogpg",action='store_true')
+        self.parser.add_argument("--nightly",action='store_true')
         if extra_args:
             for arg in extra_args:
                 self.parser.add_argument(arg)
@@ -56,7 +57,10 @@ class Upgrade(EutesterTestCase):
 
     def upgrade_packages(self):
         for machine in self.tester.config["machines"]:
-            machine.upgrade()
+            if self.args.nogpg:
+                machine.upgrade(nogpg=True)
+            else:
+                machine.upgrade()
             ## IF its a CLC and we have a SAN we need to install the san package after upgrade before service start
             if re.search("^3.1", self.old_version):
                 if hasattr(self.args, 'ebs_storage_manager'):
@@ -78,7 +82,7 @@ class Upgrade(EutesterTestCase):
                                 if re.search("EmcVnxProvider", self.args.san_provider):
                                     machine.install("eucalyptus-enterprise-storage-san-emc")
             new_version = machine.sys("cat /etc/eucalyptus/eucalyptus-version")[0]
-            if re.match( self.old_version, new_version):
+            if not self.args.nightly and re.match( self.old_version, new_version):
                 raise Exception("Version before (" + self.old_version +") and version after (" + new_version + ") are the same")
 
     def start_components(self):
