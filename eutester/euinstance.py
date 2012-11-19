@@ -486,16 +486,23 @@ class EuInstance(Instance):
         fillcmd = "dd if=/dev/zero of="+str(voldev)+"; sync"
         return self.time_dd(fillcmd)
     
-    def random_fill_volume(self,euvolume,srcdev=None, length=0):
+    def random_fill_volume(self,euvolume,srcdev=None, length=None):
         '''
         Attempts to fill the entie given euvolume with unique non-zero data.
         The srcdev is read from in a set size, and then used to write to the euvolume to populate it. The file 
         helps with both speed up the copy in the urandom case, and adds both some level of randomness another src device as well as 
         allows smaller src devs to be used to fill larger euvolumes by repeatedly reading into the copy. 
-        returns dd's data/time stat
+        :param euvolume: the attached euvolume object to write data to
+        :param srcdev: the source device to copy data from 
+        :param length: the number of bytes to copy into the euvolume
+        :returns dd's data/time stat
         '''
         gb = 1073741824 
         fsize = 10485760 #10mb
+        if not euvolume in self.attached_vols:
+            raise Exception(self.id+" Did not find this in instance's attached list. Can not write to this euvolume")
+        if not length:
+            length = euvolume.size * gb
         voldev = euvolume.guestdev.strip()
         self.assertFilePresent(voldev)
         if srcdev is None:
@@ -507,7 +514,7 @@ class EuInstance(Instance):
                 fsize = randint(1048576,10485760)
                 
         if length <= fsize:
-            fillcmd = self.sys("head -c "+str(length)+" "+srcdev+" > "+voldev+"; sync")
+            fillcmd = "head -c "+str(length)+" "+srcdev+" > "+voldev+"; sync"
         else:
             count = int((euvolume.size*gb)/fsize)
             fillcmd="head -c "+str(fsize)+" "+str(srcdev)+" > /tmp/datafile; x=0; while [ $x -lt "+str(count)+" ]; do cat /tmp/datafile; let x=$x+1; done | dd of="+str(voldev)+"; rm /tmp/datafile; sync"
@@ -523,7 +530,7 @@ class EuInstance(Instance):
         for line in out:
             line = str(line)
             if re.search('copied',line):
-                time=int(str(line.split(',').pop()).split()[0])
+                time=float(str(line.split(',').pop()).split()[0])
         return time
     
     def vol_write_random_data_get_md5(self, euvolume, srcdev=None, length=32, timepergig=90, overwrite=False):
@@ -542,7 +549,8 @@ class EuInstance(Instance):
         #check to see if there's existing data that we should avoid overwriting 
         if overwrite or ( int(self.sys('head -c 32 '+str(voldev)+' | xargs -0 printf %s | wc -c')[0]) == 0):
             self.random_fill_volume(euvolume, srcdev=srcdev, length=length)
-        self.debug("Volume has existing data, skipping random data fill")
+        else:
+            self.debug("Volume has existing data, skipping random data fill")
         #calculate checksum of euvolume attached device for given length
         md5 = self.md5_attached_euvolume(euvolume, timepergig=timepergig,length=length)
         self.debug("Filled Volume:"+euvolume.id+" dev:"+voldev+" md5:"+md5)
@@ -574,10 +582,10 @@ class EuInstance(Instance):
             raise Exception("Failed to md5 attached volume: " +str(e))
         return md5
     
-    def get_dev_md5(self, devpath, length): 
+    def get_dev_md5(self, devpath, length, timeout=60): 
         self.assertFilePresent(devpath)
         if length == 0:
-            md5 = str(self.sys("md5sum "+voldev, timeout=timeout)[0]).split(' ')[0].strip()
+            md5 = str(self.sys("md5sum "+devpath, timeout=timeout)[0]).split(' ')[0].strip()
         else:
             md5 = str(self.sys("head -c "+str(length)+" "+str(devpath)+" | md5sum")[0]).split(' ')[0].strip()
         return md5
@@ -635,7 +643,7 @@ class EuInstance(Instance):
         
     def get_unsynced_volumes(self,euvol_list=None, md5length=32, timepervol=90,min_polls=2, check_md5=False):
         '''
-        Returns list of volumes which are:
+        Description: Returns list of volumes which are:
         -in a state the cloud believes the vol is no longer attached
         -the attached device has changed, or is not found.
         If all euvols are shown as attached to this instance, and the last known local dev is present and/or a local device is found with matching md5 checksum
@@ -644,11 +652,11 @@ class EuInstance(Instance):
         A subset can be provided in the list argument 'euvol_list'. 
         Returns a list of euvolumes for which a corresponding guest device could not be found, or the cloud no longer believes is attached. 
          
-        euvol_list - optional - euvolume object list. Defaults to all self.attached_vols
-        md5length - optional - defaults to the length given in each euvolume. Used to calc md5 checksum of devices
-        timerpervolume -optional - time to wait for device to appear, per volume before failing
-        min_polls - optional - minimum iterations to check guest devs before failing, despite timeout
-        check_md5 - optional - find devices by md5 comparision. Default is to only perform this check when virtio_blk is in use.
+        :param euvol_list: - optional - euvolume object list. Defaults to all self.attached_vols
+        :param md5length: - optional - defaults to the length given in each euvolume. Used to calc md5 checksum of devices
+        :param timerpervolume: -optional - time to wait for device to appear, per volume before failing
+        :param min_polls: - optional - minimum iterations to check guest devs before failing, despite timeout
+        :param check_md5: - optional - find devices by md5 comparision. Default is to only perform this check when virtio_blk is in use.
         '''
         bad_list = []
         vol_list = []
@@ -661,16 +669,17 @@ class EuInstance(Instance):
             vol_list.append(euvol_list)
         else:
             vol_list = self.attached_vols
-        
-            
+        self.debug("Checking for volumes whos state is not in sync with our instance's test state...")
         for vol in vol_list:
             #first see if the cloud believes this volume is still attached. 
             try: 
                 self.debug("Checking volume:"+str(vol.id))
                 if (vol.attach_data.instance_id == self.id): #verify the cloud status is still attached to this instance
+                    self.debug("Cloud beleives volume:"+str(vol.id)+" is attached to:"+str(self.id)+", check for guest dev...")
                     found = False
                     elapsed = 0 
                     start = time.time()
+                    checked_vdevs = []
                     #loop here for timepervol in case were waiting for a volume to appear in the guest. ie attaching
                     while (not found) and ((elapsed <= timepervol) or (poll_count < min_polls)):
                         try:
@@ -678,6 +687,7 @@ class EuInstance(Instance):
                             #Ugly... :-(
                             #handle virtio and non virtio cases differently (KVM case needs improvement here).
                             if self.virtio_blk or check_md5:
+                                self.debug('Checking any new devs for md5:'+str(vol.md5))
                                 #Do some detective work to see what device name the previously attached volume is using
                                 devlist = self.get_dev_dir()
                                 for vdev in devlist:
