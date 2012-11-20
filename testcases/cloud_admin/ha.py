@@ -58,6 +58,11 @@ class HAtests(InstanceBasics, BucketTestSuite):
             self.tester.delete_volume(self.volume)
         self.servman.start_all()
 
+    def clean_testcase(self):
+        if self.reservation:
+            self.tester.terminate_instances(self.reservation)
+        self.reservation = None
+
     def run_testcase(self, testcase_callback, **kwargs):
         poll_count = 20
         poll_interval = 20       
@@ -67,7 +72,9 @@ class HAtests(InstanceBasics, BucketTestSuite):
                 break
             except Exception, e:
                 self.tester.debug("Attempt failed due to: " + str(e)  + "\nRetrying testcase in " + str(poll_interval) )
-            self.tester.sleep(poll_interval)     
+            finally:
+                self.clean_testcase()
+            self.tester.sleep(poll_interval)
             poll_count = poll_count - 1  
         if poll_count is 0:
             self.fail("Could not run an instance after " + str(poll_count) +" tries with " + str(poll_interval) + "s sleep in between")
@@ -89,7 +96,7 @@ class HAtests(InstanceBasics, BucketTestSuite):
             self.tester.walrus = secondary_service.machine
             self.tester.s3.host = secondary_service.machine.hostname
             
-        self.tester.sleep(30)
+        self.tester.service_manager.wait_for_service(primary_service, state="NOTREADY")
             
         self.run_testcase(testcase_callback, **kwargs)
 
@@ -143,7 +150,6 @@ class HAtests(InstanceBasics, BucketTestSuite):
             self.fail("The secondary service never went to disabled")
             
     def failoverNetwork(self, service_aquisition_callback, testcase_callback, **kwargs):
-        
         ### Reboot the current enabled component
         primary_service = service_aquisition_callback()
         secondary_service = self.tester.service_manager.wait_for_service(primary_service, state="DISABLED")
@@ -159,8 +165,8 @@ class HAtests(InstanceBasics, BucketTestSuite):
             self.tester.debug("Switching walrus connection to host: " +  secondary_service.machine.hostname)
             self.tester.walrus = secondary_service.machine
             self.tester.s3.host = secondary_service.machine.hostname
-            
-        self.tester.sleep(30)
+
+        self.tester.sleep(60)
             
         self.run_testcase(testcase_callback, **kwargs)
 
