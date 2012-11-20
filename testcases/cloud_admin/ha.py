@@ -39,8 +39,8 @@ class HAtests(InstanceBasics, BucketTestSuite):
             ### Instance, volume, buckets
             ###
             self.standing_reservation = self.tester.run_instance(keypair=self.keypair.name,group=self.group.name, zone=self.zone)
-            #self.volume = self.tester.create_volume(self.zone)
-            #self.device = self.standing_reservation.instances[0].attach_volume(self.volume)
+            self.volume = self.tester.create_volume(self.zone)
+            self.device = self.standing_reservation.instances[0].attach_volume(self.volume)
             self.standing_bucket_name = "failover-bucket-" + self.start_time
             self.standing_bucket = self.tester.create_bucket(self.standing_bucket_name)
             self.standing_key_name = "failover-key-" + self.start_time
