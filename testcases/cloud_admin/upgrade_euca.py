@@ -49,14 +49,20 @@ class Upgrade(EutesterTestCase):
 
     def add_euca_repo(self):
         for machine in self.tester.config["machines"]:
+            if machine.distro.name is "vmware":
+                continue
             machine.add_repo(self.args.euca_url,"euca-upgrade")
 
     def add_enterprise_repo(self):
         for machine in self.tester.config["machines"]:
+            if machine.distro.name is "vmware":
+                continue
             machine.add_repo(self.args.enterprise_url, "ent-upgrade")
 
     def upgrade_packages(self):
         for machine in self.tester.config["machines"]:
+            if machine.distro.name is "vmware":
+                continue
             if self.args.nogpg:
                 machine.upgrade(nogpg=True)
             else:
@@ -87,6 +93,8 @@ class Upgrade(EutesterTestCase):
 
     def start_components(self):
         for machine in self.tester.config["machines"]:
+            if machine.distro.name is "vmware":
+                continue
             if re.search("cc", " ".join(machine.components)):
                 machine.sys("service eucalyptus-cc start")
             if re.search("nc", " ".join(machine.components)):
