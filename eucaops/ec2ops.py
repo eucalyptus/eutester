@@ -1681,7 +1681,7 @@ class EC2ops(Eutester):
             buf += str(item)+" = "+str(obj.__dict__[item])+"\n"
         return buf
 
-    def terminate_instances(self, reservation=None):
+    def terminate_instances(self, reservation=None, timeout=480):
         """
         Terminate instances in the system
 
@@ -1696,18 +1696,18 @@ class EC2ops(Eutester):
                 for instance in res.instances:
                     self.debug( "Sending terminate for " + str(instance) )
                     instance.terminate()
-                if self.wait_for_reservation(res, state="terminated") is False:
+                if self.wait_for_reservation(res, state="terminated", ttimeout=timeout) is False:
                     aggregate_result = False
         ### Otherwise just kill this reservation
         else:
             for instance in reservation.instances:
                     self.debug( "Sending terminate for " + str(instance) )
                     instance.terminate()
-            if self.wait_for_reservation(reservation, state="terminated") is False:
+            if self.wait_for_reservation(reservation, state="terminated", timeout=timeout) is False:
                 aggregate_result = False
         return aggregate_result
     
-    def stop_instances(self,reservation):
+    def stop_instances(self,reservation, timeout=480):
         """
         Stop all instances in a reservation
 
@@ -1717,7 +1717,7 @@ class EC2ops(Eutester):
         for instance in reservation.instances:
             self.debug( "Sending stop for " + str(instance) )
             instance.stop()
-        if self.wait_for_reservation(reservation, state="stopped") is False:
+        if self.wait_for_reservation(reservation, state="stopped", timeout=timeout) is False:
             return False
         return True
     
@@ -1731,7 +1731,7 @@ class EC2ops(Eutester):
         for instance in reservation.instances:
             self.debug( "Sending start for " + str(instance) )
             instance.start()
-        if self.wait_for_reservation(reservation, state="running") is False:
+        if self.wait_for_reservation(reservation, state="running", timeout=timeout) is False:
             return False
         return True
     
