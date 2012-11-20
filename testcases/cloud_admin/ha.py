@@ -18,38 +18,44 @@ class HAtests(InstanceBasics, BucketTestSuite):
         self.tester.poll_count = 120
         ### Add and authorize a group for the instance
         self.start_time = str(int(time.time()))
-        self.group = self.tester.add_group(group_name="group-" + self.start_time )
-        self.tester.authorize_group_by_name(group_name=self.group.name )
-        self.tester.authorize_group_by_name(group_name=self.group.name, port=-1, protocol="icmp" )
-        ### Generate a keypair for the instance
-        self.keypair = self.tester.add_keypair( "keypair-" + self.start_time)
-        self.keypath = os.curdir + "/" + self.keypair.name + ".pem"
-        self.image = self.tester.get_emi(root_device_type="instance-store")
-        self.reservation = None
-        self.private_addressing = False
-        self.bucket_prefix = "buckettestsuite-" + self.start_time + "-"
-        self.test_user_id = self.tester.s3.get_canonical_user_id()
-        zones = self.tester.ec2.get_all_zones()
-        self.zone = random.choice(zones).name
+        try:
+            self.group = self.tester.add_group(group_name="group-" + self.start_time )
+            self.tester.authorize_group_by_name(group_name=self.group.name )
+            self.tester.authorize_group_by_name(group_name=self.group.name, port=-1, protocol="icmp" )
+            ### Generate a keypair for the instance
+            self.keypair = self.tester.add_keypair( "keypair-" + self.start_time)
+            self.keypath = os.curdir + "/" + self.keypair.name + ".pem"
+            self.image = self.tester.get_emi(root_device_type="instance-store")
+            self.reservation = None
+            self.private_addressing = False
+            self.bucket_prefix = "buckettestsuite-" + self.start_time + "-"
+            self.test_user_id = self.tester.s3.get_canonical_user_id()
+            zones = self.tester.ec2.get_all_zones()
+            self.zone = random.choice(zones).name
 
-        self.tester.clc = self.tester.service_manager.get_enabled_clc().machine
-        self.old_version = self.tester.clc.sys("cat " + self.tester.eucapath + "/etc/eucalyptus/eucalyptus-version")[0]
-        ### Create standing resources that will be checked after all failures
-        ### Instance, volume, buckets
-        ### 
-        self.standing_reservation = self.tester.run_instance(keypair=self.keypair.name,group=self.group.name, zone=self.zone)
-        self.volume = self.tester.create_volume(self.zone)
-        self.device = self.standing_reservation.instances[0].attach_volume(self.volume)
-        self.standing_bucket_name = "failover-bucket-" + self.start_time
-        self.standing_bucket = self.tester.create_bucket(self.standing_bucket_name)
-        self.standing_key_name = "failover-key-" + self.start_time
-        self.standing_key = self.tester.upload_object(self.standing_bucket_name, self.standing_key_name)
-        self.standing_key = self.tester.get_objects_by_prefix(self.standing_bucket_name, self.standing_key_name)
+            self.tester.clc = self.tester.service_manager.get_enabled_clc().machine
+            self.version = self.tester.clc.sys("cat " + self.tester.eucapath + "/etc/eucalyptus/eucalyptus-version")[0]
+            ### Create standing resources that will be checked after all failures
+            ### Instance, volume, buckets
+            ###
+            self.standing_reservation = self.tester.run_instance(keypair=self.keypair.name,group=self.group.name, zone=self.zone)
+            #self.volume = self.tester.create_volume(self.zone)
+            #self.device = self.standing_reservation.instances[0].attach_volume(self.volume)
+            self.standing_bucket_name = "failover-bucket-" + self.start_time
+            self.standing_bucket = self.tester.create_bucket(self.standing_bucket_name)
+            self.standing_key_name = "failover-key-" + self.start_time
+            self.standing_key = self.tester.upload_object(self.standing_bucket_name, self.standing_key_name)
+            self.standing_key = self.tester.get_objects_by_prefix(self.standing_bucket_name, self.standing_key_name)
+        except Exception, e:
+            self.clean_method()
 
     def clean_method(self):
-        self.tester.terminate_instances(self.standing_reservation)
-        self.tester.terminate_instances(self.reservation)
-        self.tester.delete_volume(self.volume)
+        if hasattr(self,"standing_reservation"):
+            self.tester.terminate_instances(self.standing_reservation)
+        if hasattr(self,"reservation"):
+            self.tester.terminate_instances(self.reservation)
+        if hasattr(self,"volume"):
+            self.tester.delete_volume(self.volume)
         self.servman.start_all()
 
     def run_testcase(self, testcase_callback, **kwargs):
@@ -93,7 +99,7 @@ class HAtests(InstanceBasics, BucketTestSuite):
             self.fail("The enabled CLC was the same before and after the failover")     
 
         ### REMOVE DISABLED LOCK FILE FROM NON ACTIVE CLC AFTER 3.1
-        if not re.search("^3.1", self.old_version):
+        if not re.search("^3.1", self.version):
             primary_service.machine.sys("rm -rf " + self.tester.eucapath + "/var/lib/eucalyptus/db/data/disabled.lock")
         primary_service.start()
         
@@ -169,7 +175,7 @@ class HAtests(InstanceBasics, BucketTestSuite):
             self.fail("The secondary service never went to disabled")
     
     def post_run_checks(self):
-        
+
         ## Refresh all SSH connections to machines
         for service in self.servman.get_all_services():
             service.machine.refresh_ssh()
@@ -179,10 +185,7 @@ class HAtests(InstanceBasics, BucketTestSuite):
             instance.ssh.refresh_connection()
             instance.assertFilePresent(self.device)
         
-        #key = self.tester.get_objects_by_prefix(self.standing_bucket_name, self.standing_key_name)
-        #if key.etag is not self.standing_key.etag:
-        #    raise Exception("Key no longer has same etag as before failover. Before: " + str(self.standing_key.etag) + " After:" + str(key.etag))
-        
+        key = self.tester.get_objects_by_prefix(self.standing_bucket_name, self.standing_key_name)
         
         self.servman.all_services_operational()
         
@@ -216,14 +219,24 @@ class HAtests(InstanceBasics, BucketTestSuite):
         self.failoverNetwork(self.servman.partitions[zone].get_enabled_cc, self.MetaData, zone=self.zone)
         self.post_run_checks()
     
-    def failoverSC(self):    
+    def failoverSC(self):
         zone = self.servman.partitions.keys()[0]
-        self.failoverService(self.servman.partitions[zone].get_enabled_sc, self.Reboot, self.zone)
+        self.failoverService(self.servman.partitions[zone].get_enabled_sc, self.Reboot, zone=self.zone)
+        self.post_run_checks()
+        self.failoverReboot(self.servman.partitions[zone].get_enabled_sc, self.Reboot, zone=self.zone)
+        self.post_run_checks()
+        self.failoverNetwork(self.servman.partitions[zone].get_enabled_sc, self.Reboot, zone=self.zone)
+        self.post_run_checks()
     
     def failoverVB(self):
         zone = self.servman.partitions.keys()[0]
         if len(self.servman.partitions[zone].vbs) > 1:
-            self.failoverService(self.servman.partitions[zone].get_enabled_vb, self.MetaData ,self.zone)
+            self.failoverService(self.servman.partitions[zone].get_enabled_vb, self.Reboot, zone=self.zone)
+            self.post_run_checks()
+            self.failoverReboot(self.servman.partitions[zone].get_enabled_vb, self.Reboot, zone=self.zone)
+            self.post_run_checks()
+            self.failoverNetwork(self.servman.partitions[zone].get_enabled_vb, self.Reboot, zone=self.zone)
+            self.post_run_checks()
 
 
 if __name__ == "__main__":
