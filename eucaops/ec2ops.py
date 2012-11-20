@@ -1696,7 +1696,7 @@ class EC2ops(Eutester):
                 for instance in res.instances:
                     self.debug( "Sending terminate for " + str(instance) )
                     instance.terminate()
-                if self.wait_for_reservation(res, state="terminated", ttimeout=timeout) is False:
+                if self.wait_for_reservation(res, state="terminated", timeout=timeout) is False:
                     aggregate_result = False
         ### Otherwise just kill this reservation
         else:
