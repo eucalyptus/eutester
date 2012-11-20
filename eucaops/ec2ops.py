@@ -1721,7 +1721,7 @@ class EC2ops(Eutester):
             return False
         return True
     
-    def start_instances(self,reservation):
+    def start_instances(self,reservation, timeout=480):
         """
         Start all instances in a reservation
 
