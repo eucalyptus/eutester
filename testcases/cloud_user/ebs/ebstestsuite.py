@@ -585,7 +585,7 @@ class EbsTestSuite(EutesterTestCase):
                 for vol in snap.eutest_volumes:
                     self.debug("Checking volume:"+vol.id+" status:"+vol.status)
                     if (vol.zone == zone.name) and (vol.status == "available"):
-                        if i > len(instance = zone.instances)-1:
+                        if i > len(zone.instances)-1:
                             i = 0
                         instance = zone.instances[i]
                         instance.attach_euvolume(vol, timeout=timeout)
