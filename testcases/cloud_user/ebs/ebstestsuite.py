@@ -34,6 +34,7 @@ from eucaops import Eucaops
 from eutester import euinstance, euvolume, xmlrunner, euconfig
 from boto.ec2.snapshot import Snapshot
 import argparse
+import types
 import re
 import time
 import os
@@ -108,7 +109,11 @@ class EbsTestSuite(EutesterTestCase):
     
         self.testlist =[]
         self.inst_pass=inst_pass
-        self.image = emi
+        if emi:
+            self.image = self.tester.get_emi(emi=emi)
+        else:
+            self.image = self.tester.get_emi(not_location='windows')
+        
         self.vmtype = vmtype
         self.zone = None    
         self.zonelist = []
@@ -197,15 +202,14 @@ class EbsTestSuite(EutesterTestCase):
             raise Exception("Zone list was empty")
         for testzone in zonelist:
             zone = testzone.name
-            for x in xrange(0,volsperzone):
-                vol = self.tester.create_volume(zone, size=size, snapshot=snapshot,timepergig=timepergig)
-                testzone.volumes.append(vol)
-                self.debug('create_vols_per_zone created  vol('+str(x)+') zone:'+str(zone)+' vol:'+str(vol.id))
+            vols = self.tester.create_volumes(zone, size=size, count=volsperzone, snapshot=snapshot,timepergig=timepergig)
+            testzone.volumes.extend(vols)
+            self.debug('create_vols_per_zone created vols('+str(len(vols))+') zone:'+str(zone))
             
            
             
           
-    def create_test_instances_for_zones(self, zonelist=None, image=None, keypair=None, username='root', inst_pass=None, group=None, vmtype=None):
+    def create_test_instances_for_zones(self, zonelist=None, image=None, keypair=None, username='root', inst_pass=None, group=None, vmtype=None,count=1):
         """
         Description:
                     Create an instance within each TestZone object in zonelist to help test ebs functionality.
@@ -213,10 +217,11 @@ class EbsTestSuite(EutesterTestCase):
         zonelist = zonelist or self.zonelist
         if not zonelist:
             raise Exception("Zone list was empty")
-        if image is None:
-            image = self.tester.get_emi(emi=self.image)
+        if image is not None:
+            if isinstance(image,types.StringTypes):
+                image = self.tester.get_emi(emi=image)    
         else:
-            image = self.tester.get_emi(emi=image)
+            image = self.image
         if group is None:
             group = self.group
         if keypair is None:
@@ -227,8 +232,9 @@ class EbsTestSuite(EutesterTestCase):
             
         for testzone in zonelist:
             zone = testzone.name
-            inst = self.tester.run_instance(image=image, keypair=keypair.name, group=group, username=username, password=inst_pass, type=vmtype, zone=zone).instances[0]
-            testzone.instances.append(inst)
+            res = self.tester.run_instance(image=image, keypair=keypair.name, group=group, username=username, password=inst_pass, type=vmtype, zone=zone, min=count, max=count)
+            for inst in res.instances:
+                testzone.instances.append(inst)
             self.debug('Created instance: ' + str(inst.id)+" in zone:"+str(zone))
         #self.endsuccess()
     
@@ -310,17 +316,21 @@ class EbsTestSuite(EutesterTestCase):
                 raise Exception('attach_all_avail_vols_to_instances_in_zones: Zone.volumes is empty')
             if not zone.instances:
                 raise Exception('attach_all_avail_vols_to_instances_in_zones: Instance list is empty')
-            instance = zone.instances[0]
+            i=0
             for volume in zone.volumes:
                 volume.update()
                 if (volume.status == "available"):
+                        if i > (len(zone.instances)-1):
+                            i = 0
+                        self.debug("Attempting to attach to "+str(i)+"/"+str(len(zone.instances))+" instances in zone:"+str(zone))
+                        instance = zone.instances[i]
                         try:
                             instance.attach_euvolume(volume,timeout=timeout, overwrite=overwrite)
                         except Exception, e:
                             self.debug("attach_all_vols_to_instances_in_zones failed to attach volume")
                             raise e
-                    #instance.vol_write_random_data_get_md5(volume,timepergig=120)
-        #self.endsuccess()
+                        i += 1
+            
                     
                         
     def negative_delete_attached_volumes_in_zones(self,zonelist=None, timeout=60):
@@ -383,10 +393,11 @@ class EbsTestSuite(EutesterTestCase):
                 instance.reboot_instance_and_verify(waitconnect=waitconnect, timeout=timeout, checkvolstatus=True)
         #self.endsuccess()
         
-    def detach_volumes_in_zones(self,zonelist=None, timeout=360, volcount=1):
+    def detach_volumes_in_zones(self,zonelist=None, timeout=360, volcount=1, eof=False):
         """
         Description:
                     Attempts to detach volcount volumes from each instance in the provided zonelist. 
+                    If volcount is None or 0, will attempt to detach all volumes from all instances. 
                     Attempts to verify detached volume state on both the cloud and the guest
                     by default will attempt to detach a single volume from each instance
         """
@@ -406,9 +417,10 @@ class EbsTestSuite(EutesterTestCase):
                     for badvol in badvols:
                         errlist.append(str(badvol.id))
                     raise Exception("Unsync volumes found on:"+str(instance.id)+"\n"+" ".join(errlist))
+                errmsg=""
                 for volume in instance.attached_vols:
                     #detach number of volumes equal to volcount
-                    if vc >= volcount:
+                    if volcount and vc >= volcount:
                         break
                     else:
                         vc += 1
@@ -416,8 +428,13 @@ class EbsTestSuite(EutesterTestCase):
                             instance.detach_euvolume(volume, timeout=timeout)
                         except Exception, e: 
                             self.debug("fail. Could not detach Volume:"+str(volume.id)+"from instance:"+str(instance.id))
-                            raise e
-        #self.endsuccess()
+                            if eof:
+                                raise e
+                            else:
+                                errmsg += "\nCould not detach Volume:"+str(volume.id)+"from instance:"+str(instance.id)+",err:"+str(e)
+                            
+        if errmsg:
+            raise Exception(errmsg)
         
     def detach_all_volumes_from_stopped_instances_in_zones(self,zonelist=None, timeout=360):
         """
@@ -544,6 +561,7 @@ class EbsTestSuite(EutesterTestCase):
         """
         Description:
                     Attempts to attach volumes which were created from snapshots and are not in use. 
+                    Iterates over test instances in zones for attaching the test volumes. 
                     After verifying the volume is attached and reported as so by cloud and guest, 
                     this test will attempt to compare the md5 sum of the volume to the md5 contained in 
                     the snapshot which represents the md5 of the original volume. 
@@ -556,17 +574,20 @@ class EbsTestSuite(EutesterTestCase):
             raise Exception("attach_new_vols_from_snap_verify_md5: Zonelist is empty")
         for zone in zonelist:
             self.debug("checking zone:"+zone.name)
-            #use a single instance per zone for this test
-            instance = zone.instances[0]
+            
             if not self.snaps:
                 raise Exception('attach_new_vols_from_snap_verify_md5: self.snaps is None')
             for snap in self.snaps:
                 self.debug("Checking volumes associated with snap:"+snap.id)
                 if not snap.eutest_volumes:
                     raise Exception('attach_new_vols_from_snap_verify_md5: snap '+str(snap.id)+" eutest_volumes is None")
+                i = 0
                 for vol in snap.eutest_volumes:
                     self.debug("Checking volume:"+vol.id+" status:"+vol.status)
                     if (vol.zone == zone.name) and (vol.status == "available"):
+                        if i > len(instance = zone.instances)-1:
+                            i = 0
+                        instance = zone.instances[i]
                         instance.attach_euvolume(vol, timeout=timeout)
                         instance.md5_attached_euvolume(vol, timepergig=timepergig)
                         if vol.md5 != snap.eutest_volume_md5:
@@ -574,6 +595,7 @@ class EbsTestSuite(EutesterTestCase):
                             self.debug("Volume:"+str(vol.id)+" MD5:"+str(vol.md5)+" != Snap:"+str(snap.id)+" MD5:"+str(snap.eutest_volume_md5))
                             raise Exception("Volume:"+str(vol.id)+" MD5:"+str(vol.md5)+" != Snap:"+str(snap.id)+" MD5:"+str(snap.eutest_volume_md5))
                         self.debug("Successfully verified volume:"+str(vol.id)+" to snapshot:"+str(snap.id))
+                        i += 1
         #self.endsuccess()
         
     def create_vols_from_snap_in_different_zone(self,zonelist=None, timepergig=300):
@@ -619,6 +641,7 @@ class EbsTestSuite(EutesterTestCase):
         for zone in zonelist:
             snaps =[]
             vols = []
+            createdvols = []
             self.status('STARTING ZONE:'+str(zone.name))
             if not zone.instances or not zone.volumes:
                 raise Exception("Zone "+str(zone.name)+", did not have at least 1 volume and 1 instance to run test")
@@ -633,7 +656,8 @@ class EbsTestSuite(EutesterTestCase):
             self.debug('Finished creating '+str(count)+' snapshots in zone:'+str(zone.name)+', now creating vols from them')
             try:
                 for snap in snaps:
-                    vols.append(self.tester.create_volume(zone,snapshot=snap,timepergig=tpg))
+                    createdvols.append(self.tester.create_volumes(zone,snapshot=snap,timepergig=tpg, monitor_to_state=False))
+                vols.append(self.tester.monitor_created_euvolumes_to_state(createdvols, timepergig=tpg))
                 self.tester.print_euvolume_list(vols)
                 self.status("Attempting to attach new vols from new snapshots to instance:"+str(instance.id)+" to verify md5s...")
                 for newvol in vols:
@@ -650,6 +674,7 @@ class EbsTestSuite(EutesterTestCase):
                 for avol in instance.attached_vols:
                     if avol in vols:
                         instance.detach_euvolume(avol, waitfordev=False)
+                delfail = None  
                 for vol in vols:
                     try:
                         self.tester.delete_volume(vol,timeout=delete_to)
@@ -711,7 +736,7 @@ class EbsTestSuite(EutesterTestCase):
                     if newvol.zone == zone.name:
                         instance.attach_volume(newvol)
                         #Compare MD5 sum to original volume
-                        if str(vol.md5).rstrip().lstrip() != str(newvol.md5).rstrip().lstrip():
+                        if str(origmd5).rstrip().lstrip() != str(newvol.md5).rstrip().lstrip():
                             raise Exception("New volume's md5:'"+str(newvol.md5)+"' !=  original volume md5:'"+str(origmd5)+"'")
                         else:
                             self.debug("Success. New volume:"+str(newvol.id)+"'s md5:"+str(newvol.md5)+" ==  original volume:"+str(snap.volume_id)+"'s md5:"+str(origmd5))
@@ -724,6 +749,7 @@ class EbsTestSuite(EutesterTestCase):
                     if avol in vols:
                         instance.detach_euvolume(avol)
             self.tester.print_euvolume_list(vols)
+            delfail = None
             for vol in vols:
                 try:
                     self.tester.delete_volume(vol,timeout=delete_to)
@@ -731,9 +757,31 @@ class EbsTestSuite(EutesterTestCase):
                     delfail = str(vol.id)+" failed to delete, err:"+str(e)
             if delfail:
                 raise Exception(delfail)
-                   
             
+                   
+    def test_multi_node(self,run=True, count=10, nodecount=2):
+        testlist = [] 
+        #create 4 volumes per zone
+        testlist.append(self.create_testunit_from_method(self.create_vols_per_zone, volsperzone=(2*nodecount), eof=True))
+        #launch instances to interact with ebs volumes per zone
+        testlist.append(self.create_testunit_from_method(self.create_test_instances_for_zones, count=nodecount, eof=True))
         
+        for x in xrange(0,count):
+            #attach first round of volumes
+            testlist.append(self.create_testunit_from_method(self.attach_all_avail_vols_to_instances_in_zones, 
+                                                             overwrite=True, 
+                                                             eof=True))
+            #detach 1 volume leave the 2nd attached
+            testlist.append(self.create_testunit_from_method(self.detach_volumes_in_zones))
+        
+            
+        #terminate each instance and verify that any attached volumes return to available state
+        testlist.append(self.create_testunit_from_method(self.terminate_instances_in_zones_verify_volume_detach))
+        
+        if run:
+            self.run_test_case_list(testlist)
+        else:
+            return testlist
     
     def test_consecutive_concurrent(self,run=True, count=5, delay=0, tpg=300, poll_progress=60, delete_to=120, snap_attached=False):
         testlist = [] 

@@ -402,14 +402,14 @@ class Machine:
                 x += 1
         return ret
     
-    def upgrade(self, package=None):
-        self.package_manager.upgrade(package)
+    def upgrade(self, package=None, nogpg=False):
+        self.package_manager.upgrade(package, nogpg=nogpg)
     
     def add_repo(self, url, name="test-repo"):
         self.package_manager.add_repo(url,name)
     
-    def install(self, package):
-        self.package_manager.install(package)
+    def install(self, package, nogpg=False):
+        self.package_manager.install(package,nogpg=nogpg)
 
     def update_repos(self):
         self.package_manager.update_repos()

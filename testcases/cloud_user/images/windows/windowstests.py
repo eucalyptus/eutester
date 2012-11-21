@@ -224,7 +224,7 @@ class WindowsTests(EutesterTestCase):
         
     def test_get_windows_instance_password(self, instance=None, privkeypath=None):
         instance =instance or self.instance
-        privkeypath = privkeypath or self.tester.verify_local_keypath(self.keypair.name)
+        privkeypath = privkeypath or self.tester.verify_local_keypath(instance.key_name) 
         password = self.tester.get_windows_instance_password(instance, private_key_path = privkeypath)
         self.instance_password = password
         return password
@@ -401,6 +401,8 @@ class WindowsTests(EutesterTestCase):
 
     def test_poll_for_rdp_port_status(self, instance=None,interval=10,socktimeout=5,timeout=180, waitforboot=120):
         instance = instance or self.instance
+        if not instance:
+            raise Exception("No instance available to test with, please add to windowstests or provide to method")
         #Make sure some time has passed before we test on the guest side before running guest test...
         attached_seconds = self.tester.get_instance_time_launched(instance)
         sleeptime =  0 if attached_seconds > waitforboot else (waitforboot - attached_seconds)

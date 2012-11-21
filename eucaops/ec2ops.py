@@ -197,6 +197,7 @@ class EC2ops(Eutester):
         except ImportError:
             raise ImportError("Unable to load M2Crypto. Please install by using your package manager to install "
                               "python-m2crypto or 'easy_install M2crypto'")
+        key = key or self.get_keypair(instance.key_name)
         if private_key_path is None and key is not None:
             private_key_path = str(self.verify_local_keypath( key.name , dir, exten))
         if not private_key_path:
@@ -455,9 +456,13 @@ class EC2ops(Eutester):
             raise Exception("Created "+str(len(retlist))+"/"+str(count)+' volumes. Less than minimum specified:'+str(mincount))
         self.debug( str(len(volumes))+"/"+str(count)+" requests for volume creation succeeded." )
         
+        if volumes:
+            self.print_euvolume_list(volumes)
+        
         if not monitor_to_state:
             self.test_resources["volumes"].extend(volumes)
-            snapshot.eutest_volumes.extend(retlist)
+            if snapshot:
+                snapshot.eutest_volumes.extend(volumes)
             return volumes
         #If we begain the creation of the min volumes, monitor till completion, otherwise cleanup and fail out
         retlist = self.monitor_created_euvolumes_to_state(volumes,eof=eof, mincount=mincount, state=monitor_to_state, poll_interval=poll_interval, timepergig=timepergig)
@@ -482,15 +487,18 @@ class EC2ops(Eutester):
         
         retlist = []
         failed = []
+        
         if not volumes:
             raise Exception("Volumes list empty in monitor_created_volumes_to_state")
         count = len(volumes)
         mincount = mincount or count 
+        self.debug("Monitoring "+str(count)+" volumes for at least "+str(mincount)+" to reach state:"+str(state))
         origlist = copy.copy(volumes)
+        self.debug("Monitoring "+str(count)+" volumes for at least "+str(mincount)+" to reach state:"+str(state))
         for volume in volumes:
             if not isinstance(volume, EuVolume):
                 raise Exception("object not of type EuVolume. Found type:"+str(type(volume)))
-        volume = EuVolume()
+        #volume = EuVolume()
         # Wait for the volume to be created.
         self.debug( "Polling "+str(len(volumes))+" volumes for status:\""+str(state)+"\"...")
         start = time.time()
@@ -559,8 +567,9 @@ class EC2ops(Eutester):
         self.print_euvolume_list(origlist)
         return retlist
                 
-    def print_euvolume_list(self,euvolumes):
+    def print_euvolume_list(self,euvolumelist):
         buf=""
+        euvolumes = copy.copy(euvolumelist)
         if not euvolumes:
             raise Exception('print_euvolume_list: Euvolume list to print is empty')
         for volume in euvolumes:
@@ -611,6 +620,41 @@ class EC2ops(Eutester):
             return False
         return True
     
+    def delete_volumes(self, volume_list, poll_interval=10, timeout=120):
+        """
+        Deletes a list of EBS volumes then checks for proper state transition
+
+        :param volume_list: List of volume objects to be deleted
+        :param poll_interval: integer, seconds between polls on volumes' state
+        :param timeout: integer time allowed before this method fails
+        """
+        if volume_list:
+            vollist = copy.copy(volume_list)
+        else:
+            raise Exception("delete_volumes: volume_list was empty")
+        for volume in vollist:
+            self.ec2.delete_volume(volume.id)
+            self.debug( "Sent delete for volume: " +  str(volume.id)  )
+        start = time.time()
+        elapsed = 0
+        while vollist and elapsed < timeout:
+            for volume in vollist:
+                volume.update()
+                self.debug( str(volume) + " in " + volume.status)
+                volume.update()
+                if volume.status == "deleted":
+                    vollist.remove(volume)
+                elapsed = int(time.time()-start)
+                self.debug("---Sleeping:"+str(poll_interval)+", elapsed:"+str(elapsed)+"---")
+                time.sleep(poll_interval)
+        if vollist:
+            errmsg =""
+            for volume in vollist:
+                errmsg += "ERROR:"+str(volume) + " left in " +  volume.status + ',elapsed:'+str(elapsed)
+            raise Exception(errmsg)
+        
+        
+        
     def delete_all_volumes(self):
         """
         Deletes all volumes on the cloud
@@ -1101,7 +1145,7 @@ class EC2ops(Eutester):
             if clear:
                 self.ec2.deregister_image(image.id)
 
-    def get_emi(self, emi=None, root_device_type=None, root_device_name=None, location=None, state="available", arch=None, owner_id=None):
+    def get_emi(self, emi=None, root_device_type=None, root_device_name=None, location=None, state="available", arch=None, owner_id=None, not_location=None):
         """
         Get an emi with name emi, or just grab any emi in the system. Additional 'optional' match criteria can be defined.
 
@@ -1112,6 +1156,7 @@ class EC2ops(Eutester):
         :param state: example: 'available'
         :param arch: example: 'x86_64'
         :param owner_id: owners numeric id
+        :param not_location: skip if location string matches this string. Example: not_location='windows'
         :return: image id
         :raise: Exception if image is not found
         """
@@ -1135,6 +1180,8 @@ class EC2ops(Eutester):
             if (arch is not None) and (image.architecture != arch):
                 continue                
             if (owner_id is not None) and (image.owner_id != owner_id):
+                continue
+            if (not_location is not None) and (re.search( not_location, image.location)):
                 continue
             self.debug("Returning image:"+str(image.id))
             return image
@@ -1634,7 +1681,7 @@ class EC2ops(Eutester):
             buf += str(item)+" = "+str(obj.__dict__[item])+"\n"
         return buf
 
-    def terminate_instances(self, reservation=None):
+    def terminate_instances(self, reservation=None, timeout=480):
         """
         Terminate instances in the system
 
@@ -1649,18 +1696,18 @@ class EC2ops(Eutester):
                 for instance in res.instances:
                     self.debug( "Sending terminate for " + str(instance) )
                     instance.terminate()
-                if self.wait_for_reservation(res, state="terminated") is False:
+                if self.wait_for_reservation(res, state="terminated", timeout=timeout) is False:
                     aggregate_result = False
         ### Otherwise just kill this reservation
         else:
             for instance in reservation.instances:
                     self.debug( "Sending terminate for " + str(instance) )
                     instance.terminate()
-            if self.wait_for_reservation(reservation, state="terminated") is False:
+            if self.wait_for_reservation(reservation, state="terminated", timeout=timeout) is False:
                 aggregate_result = False
         return aggregate_result
     
-    def stop_instances(self,reservation):
+    def stop_instances(self,reservation, timeout=480):
         """
         Stop all instances in a reservation
 
@@ -1670,11 +1717,11 @@ class EC2ops(Eutester):
         for instance in reservation.instances:
             self.debug( "Sending stop for " + str(instance) )
             instance.stop()
-        if self.wait_for_reservation(reservation, state="stopped") is False:
+        if self.wait_for_reservation(reservation, state="stopped", timeout=timeout) is False:
             return False
         return True
     
-    def start_instances(self,reservation):
+    def start_instances(self,reservation, timeout=480):
         """
         Start all instances in a reservation
 
@@ -1684,7 +1731,7 @@ class EC2ops(Eutester):
         for instance in reservation.instances:
             self.debug( "Sending start for " + str(instance) )
             instance.start()
-        if self.wait_for_reservation(reservation, state="running") is False:
+        if self.wait_for_reservation(reservation, state="running", timeout=timeout) is False:
             return False
         return True
     
