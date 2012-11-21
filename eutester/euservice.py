@@ -99,14 +99,14 @@ class Partition:
         for service in list:
             if service.isEnabled():
                 return service
-        return None
+        raise Exception("Unable to find an enabled service in: " + str(list))
     
     def get_disabled(self, list):
         self.service_manager.update()
         for service in list:
             if not service.isEnabled():
                 return service
-        return None
+        raise Exception("Unable to find an disabled service in: " + str(list))
     
     def get_enabled_cc(self):
         return self.get_enabled(self.ccs)
@@ -145,7 +145,6 @@ class EuserviceManager(object):
         self.eucaprefix = ". " + self.tester.credpath + "/eucarc && " + self.tester.eucapath
         if self.tester.clc is None:
             raise AttributeError("Tester object does not have CLC machine to use for SSH")
-        
         self.update()
 
     
@@ -161,7 +160,7 @@ class EuserviceManager(object):
         try:
             out = self.tester.clc.sys(self.eucaprefix + "/usr/sbin/euca-describe-services " + str(type), code=0,timeout=15)
             for line in out:
-                if re.search(r"SERVICE.+"+str(partition), line):
+                if re.search("SERVICE.+"+str(partition), line):
                     describe_services.append(line)
             if not describe_services:
                 raise IndexError("Did not receive proper response from describe services when looking for " + str(type))
