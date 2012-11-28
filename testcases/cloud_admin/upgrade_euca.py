@@ -16,6 +16,7 @@ class Upgrade(Install):
     def upgrade_packages(self):
         for machine in self.tester.config["machines"]:
             if machine.distro.name is "vmware":
+                self.add_enterprise_repo()
                 continue
             if self.args.nogpg:
                 machine.upgrade(nogpg=True)
@@ -47,7 +48,7 @@ class Upgrade(Install):
 
     def UpgradeAll(self):
         self.add_euca_repo()
-        if self.args.enterprise_url:
+        if hasattr(self.args, 'ebs_storage_manager'):
             self.add_enterprise_repo()
         self.upgrade_packages()
         self.start_components()
