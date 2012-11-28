@@ -110,15 +110,6 @@ class Install(EutesterTestCase):
             machine.sys("lvextend " + logical_volume + " -l" + extents )
             machine.sys("resize2fs -f " + logical_volume)
 
-    def start_components(self):
-        for machine in self.tester.config["machines"]:
-            if re.search("clc", " ".join(machine.components)) or re.search("ws", " ".join(machine.components)) or re.search("sc", " ".join(machine.components)):
-                machine.sys("service eucalyptus-cloud start")
-            if re.search("nc", " ".join(machine.components)):
-                machine.sys("service eucalyptus-nc start")
-            if re.search("cc", " ".join(machine.components)):
-                machine.sys("service eucalyptus-cc start")
-
     def wait_for_creds(self, timeout=300):
         while timeout > 0:
             try:
@@ -177,9 +168,9 @@ class Install(EutesterTestCase):
                 registered_nodes[cluster_number-1].append(node)
                 for cluster in registered_clusters[cluster_number-1]:
                     cluster.sys("euca_conf --register-nodes " + node.hostname)
+        self.clc_service = self.tester.service_manager.get_enabled_clc()
 
     def set_block_storage_manager(self):
-        self.clc_service = self.tester.service_manager.get("eucalyptus")[0]
         enabled_clc = self.tester.service_manager.wait_for_service(self.clc_service)
         self.zones = self.tester.get_zones()
         for zone in self.zones:

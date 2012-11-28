@@ -8,7 +8,7 @@ from testcases.cloud_admin.install_euca import Install
 class Upgrade(Install):
     def __init__(self):
         super(Upgrade, self).__init__(download_creds=True)
-        self.clc_service = self.tester.service_manager.get("eucalyptus")[0]
+        self.clc_service = self.tester.service_manager.get_enabled_clc()
         self.zones = self.tester.get_zones()
         machine = self.tester.get_component_machines("clc")[0]
         self.old_version = machine.sys("cat /etc/eucalyptus/eucalyptus-version")[0]
