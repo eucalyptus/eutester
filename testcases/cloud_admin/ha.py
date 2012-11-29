@@ -54,7 +54,7 @@ class HAtests(InstanceBasics, BucketTestSuite):
             self.tester.terminate_instances(self.standing_reservation)
         if hasattr(self,"reservation") and self.reservation:
             self.tester.terminate_instances(self.reservation)
-        if self.volume:
+        if hasattr(self,"volume") and self.volume:
             self.tester.delete_volume(self.volume)
         self.servman.start_all()
 
