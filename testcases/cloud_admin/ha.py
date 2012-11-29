@@ -50,11 +50,11 @@ class HAtests(InstanceBasics, BucketTestSuite):
             self.clean_method()
 
     def clean_method(self):
-        if hasattr(self,"standing_reservation"):
+        if hasattr(self,"standing_reservation") and self.standing_reservation:
             self.tester.terminate_instances(self.standing_reservation)
-        if hasattr(self,"reservation"):
+        if hasattr(self,"reservation") and self.reservation:
             self.tester.terminate_instances(self.reservation)
-        if hasattr(self,"volume"):
+        if self.volume:
             self.tester.delete_volume(self.volume)
         self.servman.start_all()
 
