@@ -17,6 +17,7 @@ testcase.parser.add_argument('--win_proxy_username', help='powershell proxy ssh 
 testcase.parser.add_argument('--win_proxy_password', help='powershell proxy ssh password', default=None) 
 testcase.parser.add_argument('--win_proxy_keypath',  help='powershell proxy ssh keypath', default=None)
 testcase.parser.add_argument('--fof',  help='freeze on failure, will not clean up test if set', default=False)
+testcase.parser.add_argument('--instance_id', dest='instance', help='Instance id. Must be a running instance and keyfile is local to this script', default=None)
 testcase.parser.add_argument('--recycle',  help="re-use an instance who's keyfile is local to this test script",dest='recycle', action='store_true', default=False)
 
 args = testcase.get_args()
@@ -35,7 +36,7 @@ WinTests = testcase.do_with_args(WindowsTests,work_component=machine)
 emi = WinTests.tester.get_emi(args.emi)
 tests = []
 
-if args.recycle:
+if args.recycle or args.instance:
    tests.append(testcase.create_testunit_from_method(WinTests.get_windows_instance, eof=True)) 
 else:
     tests.append(testcase.create_testunit_from_method(WinTests.test_run_windows_emi, eof=True))
