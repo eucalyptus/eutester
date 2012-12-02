@@ -49,4 +49,6 @@ tests.append(testcase.create_testunit_from_method(WinTests.proxy.ps_ephemeral_te
 tests.append(testcase.create_testunit_from_method(WinTests.proxy.ps_hostname_test))
 tests.append(testcase.create_testunit_from_method(WinTests.proxy.ps_virtio_test))
 
-testcase.run_test_case_list(tests, clean_on_exit=args.fof, printresults=True)
+ret = testcase.run_test_case_list(tests, clean_on_exit=args.fof, printresults=True)
+print "Windows basic test exiting:"+str(ret)
+exit(ret)
