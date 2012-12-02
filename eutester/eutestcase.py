@@ -580,7 +580,7 @@ class EutesterTestCase(unittest.TestCase):
         self.status(msg, traceback=3,testcolor=TestColor.get_canned_color('whiteonblue'))
         
     def endsuccess(self,msg=""):
-        msg = "- SUCCESS ENDED - " + msg
+        msg = "- UNIT ENDED - " + msg
         self.status(msg, traceback=2,a=1, testcolor=TestColor.get_canned_color('whiteongreen'))
       
     def endfailure(self,msg="" ):
@@ -685,6 +685,7 @@ class EutesterTestCase(unittest.TestCase):
                         self.endfailure(str(test.name))
                 else:
                     self.endsuccess(str(test.name))
+                self.debug(self.print_test_list_short_stats(list))
                         
         finally:
             elapsed = int(time.time()-start)
