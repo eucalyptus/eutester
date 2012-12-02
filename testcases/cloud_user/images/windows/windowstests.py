@@ -154,6 +154,16 @@ class WindowsTests(EutesterTestCase):
         self.proxy.win_password = self.instance_password
         self.proxy.win_keypath = self.instance_keypath
         return proxy
+    
+    def update_proxy_info(self):
+        if not self.proxy:
+            raise Exception("Proxy needs to be setup before it can be updated")
+        self.proxy.win_instance = self.instance
+        try:
+            self.test_get_windows_instance_password()
+        except: pass
+        self.proxy.win_password = self.instance_password
+        self.proxy.win_keypath = self.instance_keypath
 
     def setup_test_env(self):
         self.setupWindowsKeypair()
