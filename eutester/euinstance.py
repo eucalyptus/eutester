@@ -317,6 +317,7 @@ class EuInstance(Instance):
         waitfordev - boolean to indicate whether or no to poll guest instance for local device to be removed
         optional - timeout - integer seconds to wait before timing out waiting for the volume to detach 
         '''
+
         start = time.time()
         elapsed = 0 
         for vol in self.attached_vols:
@@ -448,6 +449,8 @@ class EuInstance(Instance):
         optional - maxdevs - number use to specify the max device names to iterate over.Some virt envs have a limit of 16 devs. 
         '''
         d='e'
+        in_use_cloud = ""
+        in_use_guest = ""
         dev = None
         if prefix is None:
             prefix = self.block_device_prefix
@@ -462,11 +465,14 @@ class EuInstance(Instance):
             for avol in self.attached_vols:
                 if avol.clouddev == dev:
                     inuse = True
+                    in_use_guest += str(avol.id)+", "
                     continue
             #Check to see if the cloud has a conflict with this device name...
             for vol in cloudlist:
+                vol.update()
                 if (vol.attach_data is not None) and (vol.attach_data.device == dev):
                     inuse = True
+                    in_use_cloud += str(vol.id)+", "
                     continue
             if inuse is False:
                 self.debug("Instance:"+str(self.id)+" returning available scsi dev:"+str(dev))
@@ -475,7 +481,7 @@ class EuInstance(Instance):
                 d = chr(ord('e') + x) #increment the letter we append to the device string prefix
                 dev = None
         if dev is None:
-            raise Exception("Could not find a free scsi dev on instance:"+self.id )
+            raise Exception("Could not find a free scsi dev on instance:"+self.id+", maxdevs:"+str(maxdevs)+"\nCloud_devs:"+str(in_use_cloud)+"\nGuest_devs:"+str(in_use_guest))
         
     def zero_fill_volume(self,euvolume):
         '''
