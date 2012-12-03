@@ -10,6 +10,7 @@
 #
 
 from eucaops import Eucaops
+from eutester.euinstance import EuInstance
 from optparse import OptionParser
 import os, re
 import time
@@ -31,6 +32,9 @@ if __name__ == '__main__':
     
     parser.add_option("-i", "--i", dest="img", type="string",
                       help="Instance store image id to run initial instance from", default="emi-")
+
+    parser.add_option("-v", "--vmtype", dest="vmtype", type="string",
+                      help="Vmtype to run initial instance with", default="c1.medium")
     
     parser.add_option("-u", "--user", type="string", dest="user",
                       help="User to run script against", default="admin")
@@ -39,7 +43,7 @@ if __name__ == '__main__':
                       help="AZ to run script against", default="PARTI00")
     
     parser.add_option("-c", "--config", type="string", dest="config",
-                      help="Config file to use. Default: ../input/2b_tested.lst", default="../input/2b_tested.lst")
+                      help="Config file to use", default=None)
     
     parser.add_option("-a", "--account", type="string", dest="account",
                       help="Account to run script against", default="eucalyptus")
@@ -73,12 +77,16 @@ if __name__ == '__main__':
     
     parser.add_option("-p", dest="password", type="string",
                       help="Password", default=None) 
+    
+    parser.add_option("--credpath", dest="credpath", type="string", 
+                      help="path to local creds", default=None)
 
     (options, args) = parser.parse_args()
      
     config = options.config
-    if (config is None):
-        pmsg ("Missing config file path in args")
+    credpath = options.credpath
+    if (config is None) and (credpath is None):
+        pmsg ("Missing config file or cred path in args")
         parser.print_help()
         exit(1)
         
@@ -89,6 +97,7 @@ if __name__ == '__main__':
         exit(1)
     
     img = options.img
+    vmtype = options.vmtype
     user = options.user
     account = options.account
     zone = options.zone
@@ -102,6 +111,7 @@ if __name__ == '__main__':
     eof = options.eof
     clean = options.clean
     password = options.password
+    credpath = options.credpath
     instance = None
     volume = None
     keypair=None
@@ -122,7 +132,7 @@ if __name__ == '__main__':
     #Number of ping attempts used to test instance state, before giving up on a running instance 
     ping_retry=100
     #The eutester cloud tester object 
-    tester = Eucaops( password=password, config_file=config)
+    tester = Eucaops( password=password, config_file=config, credpath=credpath)
     
     #sets tester to throw exception upon failure
     if (options.eof):
@@ -158,27 +168,15 @@ if __name__ == '__main__':
         except Exception, e:
             pmsg("Failed to get remote file size...")
             raise e
-        try:
-            instance = None    
-            keys = tester.get_all_current_local_keys()
-            
-            if keys != []:
-                pmsg("Looks like we had some local keys looking through them now...")
-                for keypair in keys:
-                    pmsg('looking for instances using keypair:'+keypair.name)
-                    instances = tester.get_instances(state='running',key=keypair.name)
-                    if instances != []:
-                        instance = instances[0]
-                        pmsg('Found usable instance:'+instance.id+'using key:'+keypair.name)
-                        break
-        except Exception, e:
-            pmsg("Failed to find a pre-existing isntance we can connect to:"+str(e))
-            pass
-        
+    
+         
+        keys = tester.get_all_current_local_keys()
+        if keys:
+            keypair = keys[0]
                 
         if instance is None:   
             #Create a new keypair to use for this test if we didn't find one
-            if keypair is None:
+            if not keypair:
                 try:
                     keypair = tester.add_keypair(prefix + "-" + str(time.time()))
                 except Exception, e:
@@ -192,7 +190,7 @@ if __name__ == '__main__':
             
                 #Launch an instance from the emi we've retrieved, instance is returned in the running state
                 tester.poll_count = 96 
-                reservation=tester.run_instance(image, keypair=keypair.name, group=group_name,zone=zone, )
+                reservation=tester.run_instance(image, keypair=keypair.name, type=vmtype, group=group_name,zone=zone, )
                 if (reservation is not None):
                     instance = reservation.instances[0]
                     pmsg("Launched instance:"+instance.id)
@@ -204,31 +202,8 @@ if __name__ == '__main__':
             
         try:
             keypath = os.getcwd() + "/" + keypair.name + ".pem" 
-            
-            #Attempt to ping the instance before logging into it...
-            retry=0
-            while (retry <= ping_retry):
-                time.sleep(2)
-                retry += 1
-                instance.update()
-                if (instance.ip_address == "0.0.0.0"):
-                    pmsg("instance ip is 0.0.0.0")
-                else:
-                    out=tester.sys('if `ping '+instance.ip_address + ' -w 5 -c 1 > /dev/null`; then echo -n true; else echo -n false; fi')[0]
-                    out = str(out)
-                    pmsg("Attempts("+str(retry)+" of "+str(ping_retry)+") ping result:"+out)
-                    if ( re.match( out, 'true')):
-                        pmsg("\npinged instance:"+instance.id+" at "+instance.ip_address+" after "+str(retry)+" attempts\n\n")
-                        break
-            if (retry == ping_retry):
-                raise Exception("Could not ping instance after"+str(retry)+"attempts")
-            
-            #give the instance a few more seconds before trying to ssh
-            pmsg("\n\nAttempting to connect to instance\n\n")
-            time.sleep(10)
-            inst_conn = euinstance.EuInstance.make_euinstance_from_instance(instance, tester, keypair=keypair,debugmethod=pmsg)
-            pmsg("created euinstance object")
-            before_attach = inst_conn.get_dev_dir()
+            pmsg('Getting contents from /dev...')
+            before_attach = instance.get_dev_dir()
                 
         except Exception, ie:
             raise Exception("Failed to retrieve contents of /dev dir from instance, Error:"+str(ie))
@@ -247,8 +222,8 @@ if __name__ == '__main__':
         pmsg("Sleeping and waiting for volume to attach fully to instance")
         tester.sleep(20)
         for x in range(0,10):
-            #after_attach = inst_conn.sys('ls -1 /dev/| grep "sd\|vd"')
-            after_attach = inst_conn.get_dev_dir()
+            #after_attach = instance.sys('ls -1 /dev/| grep "sd\|vd"')
+            after_attach = instance.get_dev_dir()
             #The attached device should be the difference in our /dev snapshots
             new_devices = tester.diff(after_attach, before_attach)
             if new_devices == []:
@@ -264,11 +239,11 @@ if __name__ == '__main__':
         pmsg("Attached to guest dev:"+attached_block_dev+"\nSplat our remote image into volume")
         
         #Get the md5 of the remote image before writing it to the volume for comparison purposes
-        timeout=rfsize*time_per_gig
+        timeout=rfsize*time_per_gig+200
         if ( md5sum is None ):
             pmsg("MD5sum not provided, getting it now...")
             cmd="curl -s "+url+" | md5sum "  
-            md5sum=inst_conn.sys(cmd ,  timeout=timeout)[0]
+            md5sum=instance.sys(cmd ,  timeout=timeout)[0]
             md5sum=md5sum.split(' ')[0]
             pmsg("The md5sum of the remote image: "+str(md5sum))
             
@@ -276,7 +251,7 @@ if __name__ == '__main__':
         cmd="curl "+url+" > "+attached_block_dev+" && echo 'GOOD' && sync"
         try:
             pmsg("Issuing cmd:"+cmd+" , timeout:"+str(timeout))
-            output=inst_conn.sys(cmd,  timeout=timeout)
+            output=instance.sys(cmd,  timeout=timeout)
             pmsg("Curl output:"+"".join(output))
             result = output[len(output)-1]
             result = result.split(' ')[0]
@@ -291,7 +266,7 @@ if __name__ == '__main__':
       
         #Get the md5sum of the volume to compare to our previous md5         
         cmd="head -c "+str(fbytes)+" "+attached_block_dev+" | md5sum "
-        md5sum2=inst_conn.sys(cmd ,  timeout=timeout)[0]
+        md5sum2=instance.sys(cmd ,  timeout=timeout)[0]
         md5sum2 = md5sum2.split(' ')[0]
         if ( md5sum != md5sum2  ):
             pmsg ("md5sum failed ms5sum1:"+md5sum+" vs md5sum2:"+md5sum2)
@@ -299,10 +274,11 @@ if __name__ == '__main__':
         else:
             pmsg("Md5sum is good. Done splatting image, detaching volume...")
         time.sleep(5)
-        tester.detach_volume(volume)
+        tester.detach_volume(volume, timeout=timeout)
         
         pmsg("Creating snapshot from our splatted volume...")
-        snapshot = tester.create_snapshot(volume.id, waitOnProgress=15, timeout=timeout)
+        wait_on_progress = volume.size*20
+        snapshot = tester.create_snapshot(volume.id, wait_on_progress=wait_on_progress, timeout=timeout)
         
         pmsg("Snapshot complete, register it as an emi with name:"+name+"...")
         bfebs_emi = tester.register_snapshot(snapshot, windows=windows, name=name, dot=dot)
@@ -326,5 +302,5 @@ if __name__ == '__main__':
                 volume.delete()
         else:
             pmsg("script complete. --no-clean is set, leaving test state intact post execution")
-        tester.do_exit()
+        
         

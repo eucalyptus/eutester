@@ -1,7 +1,9 @@
-eutester version 0.0.1
+eutester version 0.0.5
 ======================
 
 [Intro to Eutester](http://testingclouds.wordpress.com/2012/03/04/test1/)
+
+[Video - Eutester Overview: An Introduction to the Functional Testing Framework for Eucalyptus](http://vimeo.com/51627165)
 
 [Getting Setup](http://testingclouds.wordpress.com/2012/03/29/eutester-basics-part-ii-setting-up-a-development-environment/)
 
@@ -9,12 +11,37 @@ eutester version 0.0.1
 
 [Guidelines for Contributing Testcases](https://github.com/eucalyptus/eutester/wiki/Guidelines-for-Contributing-Test-Cases)
 
+[Creating a Eucalyptus Test Harness: Jenkins, Testlink, and Eutester](http://testingclouds.wordpress.com/2012/10/01/creating-a-eucalyptus-test-harness-jenkinstestlink-and-eutester/)
+
+[Eutester Documentation on packages.python.org](http://packages.python.org/eutester/)
+
 eutester is an attempt to leverage existing test code to make test writing faster and standardized.  
+
+Installation
+------
+If easy_install is not available in your environment use your package manager to install python-setuptools
+    
+    yum install python-setuptools gcc python-devel
+    apt-get install python-setuptools gcc python-dev
+
+Installing eutester and its dependencies is as easy as:
+
+    easy_install eutester
+
+For development purposes you can then clone the code from github and then reinstall with your changes
+
+    git clone https://github.com/eucalyptus/eutester.git
+    cd eutester
+    [CHANGE CODE]
+    python setup.py install
 
 Main Classes
 ------
-eutester contains the framework pieces like parsing config/creds, setting up connections and providing test primatives  
-eucaops uses the framework provided by eutester to provide validated higher order operations on those cloud connections
+eutester contains the framework pieces like parsing config/creds, setting up connections and providing test primitives.
+eucaops uses the framework provided by eutester to provide validated higher order operations on those cloud connections.
+For more information regarding the module structure of eutester, please refer to the [Eutester Python Module Documentation Index](http://packages.python.org/eutester/py-modindex.html).
+
+![class-diagram](https://s3.amazonaws.com/vic-bucket/eutester-class-diagram.jpg)
 
 Example test cases written with this library can be found in the testcases/unstable directory of the source tree
 

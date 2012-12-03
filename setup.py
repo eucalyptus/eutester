@@ -36,17 +36,18 @@ try:
 except ImportError:
     from distutils.core import setup
 
-from eutester import __version__
-
 setup(name = "eutester",
-      version = __version__,
+      version = "0.0.5",
       description = "Test Framework for AWS compatible clouds",
       long_description="Test Framework for AWS compatible clouds",
       author = "Victor Iglesias",
       author_email = "vic.iglesias@eucalyptus.com",
       url = "http://open.eucalyptus.com",
-      requires = ['paramiko','boto (>=2.1)'],
-      packages = ["eutester","eucaops", "eucaweb"],
+      install_requires = ['paramiko >= 1.7','boto == 2.5.2', 'argparse'],
+      packages = ["eutester","eucaops", "eucaweb", "testcases", "testcases.cloud_admin", "testcases.cloud_user",
+                  "testcases.cloud_user.instances", "testcases.cloud_user.s3",  "testcases.cloud_user.load",  
+                  "testcases.cloud_user.images", "testcases.cloud_user.images.eustore", "testcases.cloud_user.images.windows",
+                  "testcases.cloud_user.ebs"],
       license = 'BSD (Simplified)',
       platforms = 'Posix; MacOS X; Windows',
       classifiers = [ 'Development Status :: 3 - Alpha',
