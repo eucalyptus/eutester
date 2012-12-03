@@ -80,6 +80,7 @@ class SshConnection():
     
     def __init__(self, 
                  host, 
+                 proxy=None,
                  keypair= None, 
                  keypath=None, 
                  password=None, 
@@ -101,6 +102,7 @@ class SshConnection():
         '''
         
         self.host = host
+        self.proxy = proxy
         self.keypair = keypair
         self.keypath = keypath
         self.password = password
@@ -151,7 +153,7 @@ class SshConnection():
         raise CommandTimeoutException("SSH Command timer fired after "+str(int(elapsed))+" seconds. Cmd:'"+str(cmd)+"'")   
     
      
-    def sys(self, cmd, verbose=None, timeout=120, listformat=True, code=None):
+    def sys(self, cmd, verbose=False, timeout=120, listformat=True, code=None):
         '''
         Issue a command cmd and return output in list format
         cmd - mandatory - string representing the command to be run  against the remote ssh session
@@ -183,7 +185,7 @@ class SshConnection():
         timeout - optional - integer used to timeout the overall cmd() operation in case of remote blocking
         listformat - optional - boolean, if set returns output as list of lines, else a single buffer/string
         cb - optional - callback, method that can be used to handle output as it's rx'd instead of...  
-                        waiting for the cmd to finish and returned buffer. 
+                        waiting for the cmd to finish and return buffer. 
                         Must accept string buffer, and return an integer to be used as cmd status. 
                         Must return type 'sshconnection.SshCbReturn'
                         If cb returns stop, recv loop will end, and channel will be closed.
@@ -202,7 +204,6 @@ class SshConnection():
         cmd = str(cmd)
         self.lastcmd = cmd
         self.lastexitcode = SshConnection.cmd_not_executed_code
-        t = None #used for timer 
         start = time.time()
         output = []
         cbnextargs = []
@@ -212,20 +213,24 @@ class SshConnection():
         try:
             tran = self.connection.get_transport()
             chan = tran.open_session()
+            chan.settimeout(timeout)
             chan.get_pty()
             f = chan.makefile()
-            t = Timer(timeout, self.ssh_sys_timeout,[chan, start,cmd] )
-            t.start()
             chan.exec_command(cmd) 
             output = ""
             fd = chan.fileno()
             chan.setblocking(0)
+            cmdstart = start = time.time()
+            newdebug="\n"
             while True and chan.closed == 0:
-                time.sleep(0.05)
                 try:
-                    rl, wl, xl = select.select([fd],[],[],0.0)
+                    rl, wl, xl = select.select([fd],[],[], timeout)
                 except select.error:
                     break
+                elapsed = int(time.time()-start)
+                if elapsed >= timeout:
+                    raise CommandTimeoutException("SSH Command timer fired after "+str(int(elapsed))+" seconds. Cmd:'"+str(cmd)+"'")
+                time.sleep(0.05)
                 if len(rl) > 0:
                     while chan.recv_ready():
                         new = chan.recv(1024)
@@ -251,10 +256,9 @@ class SshConnection():
                                     #Let the callback update its calling args if needed
                                     cbargs = cbreturn.nextargs or cbargs
                                     #Let the callback update/reset the timeout if needed
-                                    if cbreturn.settimer > 0: 
-                                        t.cancel()
-                                        t = Timer(cbreturn.settimer, self.ssh_sys_timeout,[chan, time.time(),cmd] )
-                                        t.start()
+                                    if cbreturn.settimer > 0:
+                                        start = time.time()
+                                        timeout=cbreturn.settimer 
                                     if cbreturn.buf:
                                         output += cbreturn.buf
                             else:
@@ -262,12 +266,16 @@ class SshConnection():
                                 output += new
                                 if verbose:
                                     #Dont print line by line output if cb is used, let cb handle that 
-                                    self.debug(str(new))
+                                    newdebug += new
+                                    
                         else:
                             status = self.lastexitcode = chan.recv_exit_status()
                             chan.close()
-                            t.cancel()
                             break
+                    if newdebug:
+                        self.debug(str(newdebug))
+                        newdebug = ''
+                        
                 
             if (listformat):
                 #return output as list of lines
@@ -281,23 +289,14 @@ class SshConnection():
             ret['output'] = output
             ret['status'] = status
             ret['cbfired'] = cbfired
-            ret['elapsed'] = elapsed = int(time.time()-start)
+            ret['elapsed'] = elapsed = int(time.time()-cmdstart)
             if verbose:
                 self.debug("done with exec")
         except CommandTimeoutException, cte: 
             self.lastexitcode = SshConnection.cmd_timeout_err_code
             elapsed = str(int(time.time()-start))
             self.debug("Command ("+cmd+") timeout exception after " + str(elapsed) + " seconds\nException")     
-            raise cte
-        finally:
-            if (t is not None):
-                t.cancel()          
-        if verbose:
-            if (listformat is True):
-                self.debug("".join(output))
-            else:
-                self.debug(output)
-                
+            raise cte 
         return ret
         
     def refresh_connection(self):
@@ -306,7 +305,9 @@ class SshConnection():
     def get_ssh_connection(self, hostname, username="root", password=None, keypath=None, timeout= 60, retry=1):
         '''
         Create a paramiko ssh session to hostname. Will attempt to authenticate first with a keypath if provided, 
-        if the sshkey file path is not provided.  username and password will be used to authenticate. 
+        if the sshkey file path is not provided.  username and password will be used to authenticate. This leaves out the case
+        where a password is passed as the password needed to unlock the key file. This 3rd case may need to be added but
+        may mask failures in tests for key inseration when using tests who's images have baked in passwords for login access(tbd). 
         Upon success returns a paramiko sshclient with an established connection. 
         hostname - mandatory - hostname or ip to establish ssh connection with
         username - optional - username used to authenticate ssh session
@@ -319,7 +320,6 @@ class SshConnection():
             raise Exception("ssh_connect: both password and keypath were set to None")
         
         #self.debug("ssh_connect args:\nhostname:"+hostname+"\nusername:"+username+"\npassword:"+str(password)+"\nkeypath:"+str(keypath)+"\ntimeout:"+str(timeout)+"\nretry:"+str(retry))
-
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     

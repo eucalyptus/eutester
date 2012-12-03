@@ -31,19 +31,12 @@
 # Author: vic.iglesias@eucalyptus.com
 
 from eutester import Eutester
-
 import os
 import hashlib
-
-
 from boto.s3.connection import OrdinaryCallingFormat
-from boto.s3.connection import S3Connection
-from boto.s3.bucket import Bucket
 from boto.s3.key import Key
-from boto.s3.acl import ACL, Policy, Grant
+from boto.s3.acl import ACL, Grant
 from boto.exception import S3ResponseError
-from boto.exception import S3CreateError
-from boto.s3.connection import Location
 import boto.s3
 
 class S3opsException(Exception):
@@ -173,7 +166,7 @@ class S3ops(Eutester):
         except Exception, e:
             return
         
-    def clear_bucket(bucket):
+    def clear_bucket(self, bucket):
         """Deletes the contents of the bucket specified and the bucket itself
            bucket       boto.bucket to delete recursively
         """

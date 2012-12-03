@@ -1,157 +1,147 @@
-#!/usr/bin/python
-from eucaops import Eucaops
+#!/usr/bin/env python
+#
+#
+# Description:  This script upgrades a Eucalyptus cloud
 import re
-import httplib
-from optparse import OptionParser
+from eucaops import Eucaops
+from eutester.eutestcase import EutesterTestCase
 
-def upgrade_nc(machine):
-    upgrade_euca(machine)
-    machine.sys("service eucalyptus-nc start", timeout = 300)
+class Upgrade(EutesterTestCase):
+    def __init__(self, extra_args= None):
+        self.setuptestcase()
+        self.setup_parser()
+        self.parser.add_argument("--euca-url",)
+        self.parser.add_argument("--enterprise-url")
+        self.parser.add_argument("--branch")
+        self.parser.add_argument("--nogpg",action='store_true')
+        self.parser.add_argument("--nightly",action='store_true')
+        if extra_args:
+            for arg in extra_args:
+                self.parser.add_argument(arg)
+        self.get_args()
+        # Setup basic eutester object
+        self.tester = Eucaops( config_file=self.args.config_file, password=self.args.password)
+        self.clc_service = self.tester.service_manager.get("eucalyptus")[0]
+        self.zones = self.tester.get_zones()
+        if not self.args.branch and not self.args.euca_url and not self.args.enterprise_url:
+            self.args.branch = self.args.upgrade_to_branch
+        machine = self.tester.get_component_machines("clc")[0]
+        self.old_version = machine.sys("cat /etc/eucalyptus/eucalyptus-version")[0]
+        ### IF we were passed a branch, fetch the correct repo urls from the repo API
+        if self.args.branch:
+            self.args.euca_url = self.get_repo_url("eucalyptus", self.args.branch)
+            self.args.enterprise_url =self.get_repo_url("internal", self.args.branch)
 
-def upgrade_vb(machine):
-    upgrade_euca(machine)
-    machine.sys("service eucalyptus-cloud start", timeout = 300)
+    def clean_method(self):
+        pass
 
-def upgrade_cc(machine):
-    upgrade_euca(machine)
-    machine.sys("service eucalyptus-cc start", timeout = 300)
+    def get_repo_url(self, repo = "eucalyptus", branch = "testing"):
+        import httplib
+        api_host = "packages.release.eucalyptus-systems.com"
+        machine = self.tester.get_component_machines("clc")[0]
+        path="/api/1/genrepo/?distro="+str(machine.distro.name)+"&releasever=6&arch=x86_64&url=repo-euca@git.eucalyptus-systems.com:"+str(repo)+"&ref="+str(branch) + "&allow-old"
+        conn=httplib.HTTPConnection(api_host)
+        conn.request("GET", path)
+        res=conn.getresponse()
+        repo_url = res.read().strip()
+        self.tester.debug("Setting " + repo + " URL to: " + repo_url)
+        return repo_url
 
-def upgrade_clc(machine):
-    upgrade_euca(machine)
-    machine.sys("service eucalyptus-cloud start", timeout = 300)
+    def add_euca_repo(self):
+        for machine in self.tester.config["machines"]:
+            if machine.distro.name is "vmware":
+                continue
+            machine.add_repo(self.args.euca_url,"euca-upgrade")
 
-def upgrade_sc(machine):
-    upgrade_euca(machine)
-    machine.sys("service eucalyptus-cloud start", timeout = 300)
-    
-def upgrade_ws(machine):
-    upgrade_euca(machine)
-    machine.sys("service eucalyptus-cloud start", timeout = 300)
+    def add_enterprise_repo(self):
+        for machine in self.tester.config["machines"]:
+            if machine.distro.name is "vmware":
+                continue
+            machine.add_repo(self.args.enterprise_url, "ent-upgrade")
 
-def upgrade_euca(machine):
-    ubuntu = re.compile("ubuntu", re.IGNORECASE)
-    if ubuntu.search(machine.distro):
-         machine.sys("apt-get update ", timeout = 300)
-         machine.sys("apt-get dist-upgrade -y --force-yes", timeout = 300)
-    else:
-        update_yum_repos(machine)
-        machine.sys("yum update -y --nogpgcheck", timeout = 300)
-        
-        
+    def upgrade_packages(self):
+        for machine in self.tester.config["machines"]:
+            if machine.distro.name is "vmware":
+                continue
+            if self.args.nogpg:
+                machine.upgrade(nogpg=True)
+            else:
+                machine.upgrade()
+            ## IF its a CLC and we have a SAN we need to install the san package after upgrade before service start
+            if re.search("^3.1", self.old_version):
+                if hasattr(self.args, 'ebs_storage_manager'):
+                    if re.search("SANManager" ,self.args.ebs_storage_manager):
+                        if re.search("clc", " ".join(machine.components)):
+                            if hasattr(self.args, 'san_provider'):
+                                if re.search("EquallogicProvider", self.args.san_provider):
+                                    pass # Nothing to install on CLC for this case
+                                if re.search("NetappProvider", self.args.san_provider):
+                                    machine.install("eucalyptus-enterprise-storage-san-netapp-libs")
+                                if re.search("EmcVnxProvider", self.args.san_provider):
+                                    machine.install("eucalyptus-enterprise-storage-san-emc-libs")
+                        if re.search("sc", " ".join(machine.components)):
+                            if hasattr(self.args, 'san_provider'):
+                                if re.search("EquallogicProvider", self.args.san_provider):
+                                    machine.install("eucalyptus-enterprise-storage-san-equallogic")
+                                if re.search("NetappProvider", self.args.san_provider):
+                                    machine.install("eucalyptus-enterprise-storage-san-netapp")
+                                if re.search("EmcVnxProvider", self.args.san_provider):
+                                    machine.install("eucalyptus-enterprise-storage-san-emc")
+            new_version = machine.sys("cat /etc/eucalyptus/eucalyptus-version")[0]
+            if not self.args.nightly and re.match( self.old_version, new_version):
+                raise Exception("Version before (" + self.old_version +") and version after (" + new_version + ") are the same")
 
-def get_repo_url(host='192.168.51.243:5000',
-                 repo='repo-euca@git.eucalyptus-systems.com:internal',
-                 distro='centos',
-                 releasever='5',
-                 arch='x86_64',
-                 ref='master'
-                 ):
-    
-    path="/genrepo/?distro="+str(distro)+"&releasever="+str(releasever)+"&arch="+str(arch)+"&url="+str(repo)+"&ref="+str(ref)
-    url="http://"+str(host)+str(path)
-    print "Using:\n\t Host:"+str(host)+"\n\t path:"+str(path)+"\n\t url:"+str(url)
-
-    conn=httplib.HTTPConnection(host)
-    conn.request("GET", path)
-    res=conn.getresponse()
-    newurl=res.read().strip()
-    print "Got newurl: "+str(newurl)
-    conn.close()
-    return newurl
-
-def update_yum_repos(machine,url= None, euca2ools=False, euca=True, enterprise=True, replace=True):
-    if url is None:
-        url = get_repo_url()
-    if enterprise:
-        update_enterprise_repo_yum(machine, url, replace=replace)
-    if euca:
-        update_euca_repo_yum(machine,url, replace=replace)
-    if euca2ools:
-        update_euca2ools_repo_yum(machine, replace=replace)
-    
-    
-def update_enterprise_repo_yum(machine, url=None, replace=True):
-    repos = []
-    if url is None:
-        url = get_repo_url()
-    if replace:
-        #repace any existing euca enterprise repos to replace with new info
-        repos = machine.sys('grep "\[eucalyptus-enterprise\]" /etc/yum.repos.d/* -l')
-        if repos != []:
-            for repo in repos:
-                machine.sys('rm '+str(repo.strip()))
-    repo = "/etc/yum.repos.d/eucalyptus-enterprise.repo"
-    text='[eucalyptus-enterprise]\nname=eucalyptus-enterprise\nbaseurl='+str(url)+'\nenabled=1'
-    machine.sys('echo -e "'+text+'" > '+ str(repo) )
+    def start_components(self):
+        for machine in self.tester.config["machines"]:
+            if machine.distro.name is "vmware":
+                continue
+            if re.search("cc", " ".join(machine.components)):
+                machine.sys("service eucalyptus-cc start")
+            if re.search("nc", " ".join(machine.components)):
+                machine.sys("service eucalyptus-nc start")
+            if re.search("clc", " ".join(machine.components)) or re.search("ws", " ".join(machine.components))\
+               or re.search("sc", " ".join(machine.components)) or re.search("vb", " ".join(machine.components)):
+                machine.sys("service eucalyptus-cloud start")
 
 
-def update_euca_repo_yum(machine,url=None, replace=True):
-    repos = []
-    if url is None:
-        url = get_repo_url()
-    if replace:
-        #remove any existing repos with eucalyptus to replace with new info
-        repos = machine.sys('grep "\[eucalyptus\]" /etc/yum.repos.d/* -l')
-        if repos != []:
-            for repo in repos:
-                machine.sys('rm '+str(repo.strip()))
-    repo = "/etc/yum.repos.d/euca.repo"
-    text= '[eucalyptus]\nname=eucalyptus\nbaseurl='+str(url)+'\nenabled=1'
-    machine.sys('echo -e "'+str(text)+'" > '+ str(repo) )
+    def set_block_storage_manager(self):
+        enabled_clc = self.tester.service_manager.wait_for_service(self.clc_service)
+        self.tester.sleep(60)
+        for zone in self.zones:
+            ebs_manager = "overlay"
+            if hasattr(self.args, 'ebs_storage_manager'):
+                if re.search("DASManager" ,self.args.ebs_storage_manager):
+                    ebs_manager = "das"
+                if re.search("SANManager" ,self.args.ebs_storage_manager):
+                    if hasattr(self.args, 'san_provider'):
+                        if re.search("EquallogicProvider", self.args.san_provider):
+                            ebs_manager = "equallogic"
+                        if re.search("NetappProvider", self.args.san_provider):
+                            ebs_manager = "netapp"
+                        if re.search("EmcVnxProvider", self.args.san_provider):
+                            ebs_manager = "emc-fastsnap"
+            enabled_clc.machine.sys("source " + self.tester.credpath + "/eucarc && euca-modify-property -p " + zone + ".storage.blockstoragemanager=" + ebs_manager,code=0)
 
-    
-def update_euca2ools_repo_yum(machine,url="http://mirror.eucalyptus/qa-pkg-storage/qa-euca2ools-pkgbuild/latest-success/phase3/centos/5/x86_64", replace=True):
-    if replace:
-        #remove any preexisting euca2ools repos to replace with new info
-        repos = machine.sys('grep "\[euca2ools\]" /etc/yum.repos.d/* -l')
-        if repos != []:
-            for repo in repos:
-                machine.sys('rm '+str(repo.strip()))
-    repo = "/etc/yum.repos.d/euca2ools.repo"
-    text='[euca2ools]\nname=euca2ools\nbaseurl='+str(url)+'\nenabled=1'
-    machine.sys('echo -e "'+str(text)+'" > '+ str(repo) )
+
+    def UpgradeAll(self):
+        self.add_euca_repo()
+        if self.args.enterprise_url:
+            self.add_enterprise_repo()
+        self.upgrade_packages()
+        self.start_components()
+        if re.search("^3.1", self.old_version):
+            self.set_block_storage_manager()
 
 
 if __name__ == "__main__":
-    parser = OptionParser()
-    parser.add_option("--url", dest="url", type="string",
-                      help="Url to be used for eucalyptus baseurl", default=None)   
-    
-    parser.add_option("--config", dest="config", type="string",
-                      help="Eutester config file to be used", default=None) 
-    
-    
-    (options, args) = parser.parse_args()
-     
-    if options.config is not None:
-        config = options.config
-    else:
-        config = "2b_tested.lst"
-    tester = Eucaops(config_file=config, password="foobar")
-    
-    
-    for machine in tester.get_component_machines("nc"):
-        vmware = re.compile("vmware", re.IGNORECASE)
-        if not vmware.search(machine.distro):
-            upgrade_nc(machine)
-        else:
-            for machine in tester.get_component_machines("cc"):
-                upgrade_vb(machine)
-                
-    for machine in tester.get_component_machines("sc"):
-        upgrade_sc(machine)
+    testcase = Upgrade()
+    ### Either use the list of tests passed from config/command line to determine what subset of tests to run
+    list = testcase.args.tests or [ "UpgradeAll"]
+    ### Convert test suite methods to EutesterUnitTest objects
+    unit_list = [ ]
+    for test in list:
+        unit_list.append( testcase.create_testunit_by_name(test) )
+        ### Run the EutesterUnitTest objects
 
-    for machine in tester.get_component_machines("cc"):
-        upgrade_cc(machine)
-   
-    for machine in tester.get_component_machines("clc"):
-        upgrade_clc(machine)
-        
-    for machine in tester.get_component_machines("ws"):
-        upgrade_ws(machine)
-    
-       
-        
-        
-        
-        
+    result = testcase.run_test_case_list(unit_list,clean_on_exit=True)
+    exit(result)

@@ -72,11 +72,20 @@ class Yum(PackageManager):
         self.machine = machine
         self.name = "yum"
         
-    def install(self, package):
-        self.machine.sys("yum install -y " + package)
+    def install(self, package, nogpg=False):
+        gpg_flag = ""
+        if nogpg:
+            gpg_flag = "--nogpg"
+
+        self.machine.sys("yum install -y " + gpg_flag +  " " + package)
     
-    def upgrade(self, package = None):
-        self.package_manager.upgrade(package)
+    def upgrade(self, package = None, nogpg=False):
+        gpg_flag = ""
+        if nogpg:
+            gpg_flag = "--nogpg"
+        if not package:
+            package = ""
+        self.machine.sys("yum upgrade -y " + gpg_flag +  " " + package, timeout=480)
     
     def add_repo(self, url, name= None):
         if name is None:

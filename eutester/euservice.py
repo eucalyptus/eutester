@@ -99,14 +99,14 @@ class Partition:
         for service in list:
             if service.isEnabled():
                 return service
-        return None
+        raise Exception("Unable to find an enabled service in: " + str(list))
     
     def get_disabled(self, list):
         self.service_manager.update()
         for service in list:
             if not service.isEnabled():
                 return service
-        return None
+        raise Exception("Unable to find an disabled service in: " + str(list))
     
     def get_enabled_cc(self):
         return self.get_enabled(self.ccs)
@@ -145,7 +145,6 @@ class EuserviceManager(object):
         self.eucaprefix = ". " + self.tester.credpath + "/eucarc && " + self.tester.eucapath
         if self.tester.clc is None:
             raise AttributeError("Tester object does not have CLC machine to use for SSH")
-        
         self.update()
 
     
@@ -159,9 +158,9 @@ class EuserviceManager(object):
         if partition is None:
             partition = ""
         try:
-            out = self.tester.clc.sys(self.eucaprefix + "/usr/sbin/euca-describe-services " + str(type), timeout=15)
+            out = self.tester.clc.sys(self.eucaprefix + "/usr/sbin/euca-describe-services " + str(type), code=0,timeout=15)
             for line in out:
-                if re.search(r"SERVICE.+"+str(partition), line):
+                if re.search("SERVICE.+"+str(partition), line):
                     describe_services.append(line)
             if not describe_services:
                 raise IndexError("Did not receive proper response from describe services when looking for " + str(type))
@@ -170,7 +169,7 @@ class EuserviceManager(object):
                 raise Exception("Unable to get service information from the only clc: " + self.tester.clc.hostname+", err:" +str(e))
             if attempt_both:
                 self.tester.swap_clc()
-                describe_services = self.tester.clc.sys(self.eucaprefix + "/usr/sbin/euca-describe-services " + str(type)  + " | grep SERVICE "  + str(partition)  , timeout=15)
+                describe_services = self.tester.clc.sys(self.eucaprefix + "/usr/sbin/euca-describe-services " + str(type)  + " | grep SERVICE | grep "  + str(partition)  , timeout=15)
                 if len(describe_services) < 1:                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
                     raise IndexError("Did not receive proper response from describe services when looking for " + str(type))
             raise e

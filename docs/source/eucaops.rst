@@ -17,14 +17,6 @@ eucaops Package
     :undoc-members:
     :show-inheritance:
 
-:mod:`eucaops_api` Module
--------------------------
-
-.. automodule:: eucaops.eucaops_api
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
 :mod:`iamops` Module
 --------------------
 
