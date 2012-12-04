@@ -47,7 +47,12 @@ class BFEBSBasics(InstanceBasics):
         '''Launch a BFEBS instance, stop it then start it again'''
         if zone is None:
             zone = self.zone
-        self.image = self.tester.get_emi(root_device_type="ebs")
+        try:
+            self.image = self.tester.get_emi(root_device_type="ebs")
+        except Exception,e:
+            self.RegisterImage()
+            self.image = self.tester.get_emi(root_device_type="ebs")
+
         if not self.reservation:
             self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name, zone=zone)
         self.assertTrue(self.tester.stop_instances(self.reservation))
