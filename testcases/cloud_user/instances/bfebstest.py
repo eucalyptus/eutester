@@ -52,9 +52,9 @@ class BFEBSBasics(InstanceBasics):
         except Exception,e:
             self.RegisterImage()
             self.image = self.tester.get_emi(root_device_type="ebs")
-
-        if not self.reservation:
-            self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name, zone=zone)
+        if self.reservation:
+            self.tester.terminate_instances(self.reservation)
+        self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name, zone=zone)
         self.assertTrue(self.tester.stop_instances(self.reservation))
         self.assertFalse( self.tester.ping(self.reservation.instances[0].public_dns_name, poll_count=2), 'Was able to ping stopped instance')
         self.assertTrue(self.tester.start_instances(self.reservation))
