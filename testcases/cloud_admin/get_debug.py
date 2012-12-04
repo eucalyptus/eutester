@@ -28,6 +28,28 @@ class GatherDebug(InstanceBasics, BucketTestSuite):
                     'euca-describe-snapshots verbose',
                     'euca-describe-keypairs verbose',
                     'euca-describe-groups verbose']
+    
+    sc_commands = ['ls -l /dev/',
+                   'losetup -a',
+                   'service tgtd status'
+                   'tgtadm --lld iscsi --mode target --op show',
+                   'service iscsid status'
+                   'iscsiadm -m session -P 3',
+                   'pvdisplay',
+                   'lvdisplay',
+                   'vgdisplay',
+                   'mpathconf',
+                   'multipath -ll']
+    
+    nc_commands = ['service iscsid status',
+                   'iscsiadm -m session -P 3',                   
+                   'mpathconf',
+                   'multipath -ll',
+                   'virsh list',
+                   'losetup -a',
+                   'dmsetup status',
+                   'll /var/lib/eucalyptus/instances/**/**/**']
+                   
 
     def __init__(self, config_file="cloud.conf", password="foobar"):
         self.tester = Eucaops( config_file=config_file, password=password)
@@ -54,12 +76,12 @@ class GatherDebug(InstanceBasics, BucketTestSuite):
             self.run_command_list(machine,cc_commands)
 
     def debug_sc(self, **kwargs):
-        sc_commands = self.basic_commands + self.network_commands + self.euca_commands
+        sc_commands = self.basic_commands + self.network_commands + self.euca_commands + self.sc_commands
         for machine in self.tester.get_component_machines("sc"):
             self.run_command_list(machine,sc_commands)
 
     def debug_nc(self, **kwargs):
-        nc_commands = self.basic_commands + self.network_commands + self.euca_commands
+        nc_commands = self.basic_commands + self.network_commands + self.euca_commands + self.nc_commands
         for machine in self.tester.get_component_machines("nc"):
             self.run_command_list(machine,nc_commands)
 

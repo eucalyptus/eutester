@@ -32,6 +32,9 @@ if __name__ == '__main__':
     
     parser.add_option("-i", "--i", dest="img", type="string",
                       help="Instance store image id to run initial instance from", default="emi-")
+
+    parser.add_option("-v", "--vmtype", dest="vmtype", type="string",
+                      help="Vmtype to run initial instance with", default="c1.medium")
     
     parser.add_option("-u", "--user", type="string", dest="user",
                       help="User to run script against", default="admin")
@@ -94,6 +97,7 @@ if __name__ == '__main__':
         exit(1)
     
     img = options.img
+    vmtype = options.vmtype
     user = options.user
     account = options.account
     zone = options.zone
@@ -164,27 +168,15 @@ if __name__ == '__main__':
         except Exception, e:
             pmsg("Failed to get remote file size...")
             raise e
-        try:
-            instance = None    
-            keys = tester.get_all_current_local_keys()
-            
-            if keys != []:
-                pmsg("Looks like we had some local keys looking through them now...")
-                for keypair in keys:
-                    pmsg('looking for instances using keypair:'+keypair.name)
-                    instances = tester.get_instances(state='running',key=keypair.name)
-                    if instances != []:
-                        instance = EuInstance(instances[0])
-                        pmsg('Found usable instance:'+instance.id+'using key:'+keypair.name)
-                        break
-        except Exception, e:
-            pmsg("Failed to find a pre-existing isntance we can connect to:"+str(e))
-            pass
-        
+    
+         
+        keys = tester.get_all_current_local_keys()
+        if keys:
+            keypair = keys[0]
                 
         if instance is None:   
             #Create a new keypair to use for this test if we didn't find one
-            if keypair is None:
+            if not keypair:
                 try:
                     keypair = tester.add_keypair(prefix + "-" + str(time.time()))
                 except Exception, e:
@@ -198,7 +190,7 @@ if __name__ == '__main__':
             
                 #Launch an instance from the emi we've retrieved, instance is returned in the running state
                 tester.poll_count = 96 
-                reservation=tester.run_instance(image, keypair=keypair.name, group=group_name,zone=zone, )
+                reservation=tester.run_instance(image, keypair=keypair.name, type=vmtype, group=group_name,zone=zone, )
                 if (reservation is not None):
                     instance = reservation.instances[0]
                     pmsg("Launched instance:"+instance.id)
