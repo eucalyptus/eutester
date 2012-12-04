@@ -6,7 +6,7 @@ import os
 import select
 
 parser = argparse.ArgumentParser( prog='write_volume.py', description='write data to file to verify data integrity')
-parser.add_argument('-f', dest='testfile', help="file to read", default="/root/matt/testfile")
+parser.add_argument('-f', dest='testfile', help="file to read", default="/root/testfile")
 parser.add_argument('-b', dest='bytes', help="bytes to write", default=1000)
 
 args = parser.parse_args()

@@ -402,8 +402,5 @@ class EuserviceManager(object):
             if service.isDisabled():
                 return service
         return None
-    
-    
 
-    
-    
+
