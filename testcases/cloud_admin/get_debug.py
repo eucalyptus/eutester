@@ -44,7 +44,11 @@ class GatherDebug(InstanceBasics, BucketTestSuite):
     nc_commands = ['service iscsid status',
                    'iscsiadm -m session -P 3',                   
                    'mpathconf',
-                   'multipath -ll']
+                   'multipath -ll',
+                   'virsh list',
+                   'losetup -a',
+                   'dmsetup status',
+                   'll /var/lib/eucalyptus/instances/**/**/**']
                    
 
     def __init__(self, config_file="cloud.conf", password="foobar"):
