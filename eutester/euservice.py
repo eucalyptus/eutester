@@ -360,7 +360,6 @@ class EuserviceManager(object):
         all_services = self.get_all_services()
         for service in all_services:
             self.wait_for_service(service,"ENABLED")
-        for service in all_services:
             self.wait_for_service(service,"DISABLED")
     
     def get_enabled_clc(self):
