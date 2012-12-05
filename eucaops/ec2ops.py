@@ -1289,8 +1289,8 @@ class EC2ops(Eutester):
         
         
         start = time.time()
-        elapsed = 0
-      
+	elapsed = 0
+	
         address = self.ec2.get_all_addresses(addresses=[address.public_ip])[0]
         ### Ensure address object hold correct instance value
         while address.instance_id and not re.match(instance.id, str(address.instance_id)):
