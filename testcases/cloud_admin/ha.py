@@ -25,7 +25,10 @@ class HAtests(InstanceBasics, BucketTestSuite):
             ### Generate a keypair for the instance
             self.keypair = self.tester.add_keypair( "keypair-" + self.start_time)
             self.keypath = os.curdir + "/" + self.keypair.name + ".pem"
-            self.image = self.tester.get_emi(root_device_type="instance-store")
+            if self.args.emi:
+                self.image = self.tester.get_emi(self.args.emi)
+            else:
+                self.image = self.tester.get_emi(root_device_type="instance-store")
             self.reservation = None
             self.private_addressing = False
             self.bucket_prefix = "buckettestsuite-" + self.start_time + "-"
@@ -38,7 +41,7 @@ class HAtests(InstanceBasics, BucketTestSuite):
             ### Create standing resources that will be checked after all failures
             ### Instance, volume, buckets
             ###
-            self.standing_reservation = self.tester.run_instance(keypair=self.keypair.name,group=self.group.name, zone=self.zone)
+            self.standing_reservation = self.tester.run_instance(image=self.image ,keypair=self.keypair.name,group=self.group.name, zone=self.zone)
             self.volume = self.tester.create_volume(self.zone)
             self.device = self.standing_reservation.instances[0].attach_volume(self.volume)
             self.standing_bucket_name = "failover-bucket-" + self.start_time
@@ -48,6 +51,7 @@ class HAtests(InstanceBasics, BucketTestSuite):
             self.standing_key = self.tester.get_objects_by_prefix(self.standing_bucket_name, self.standing_key_name)
         except Exception, e:
             self.clean_method()
+            raise Exception("Init for testcase failed. Reason: " + str(e))
 
     def clean_method(self):
         if hasattr(self,"standing_reservation") and self.standing_reservation:
@@ -82,10 +86,12 @@ class HAtests(InstanceBasics, BucketTestSuite):
         
     def failoverService(self, service_aquisition_callback, testcase_callback, **kwargs):
         ### Process Take down
+
         primary_service = service_aquisition_callback()
         secondary_service = self.tester.service_manager.wait_for_service(primary_service, state="DISABLED")
         self.tester.debug("Primary Service: " + primary_service.machine.hostname + " Secondary Service: " + secondary_service.machine.hostname)
-        primary_service.stop()    
+        self.status("Failing over via service stop: " + str(primary_service.machine.hostname))
+        primary_service.stop()
         
         if "clc" in primary_service.machine.components:
             self.tester.debug("Switching ec2 connection to host: " +  secondary_service.machine.hostname)
@@ -123,7 +129,7 @@ class HAtests(InstanceBasics, BucketTestSuite):
         primary_service = service_aquisition_callback()
         secondary_service = self.tester.service_manager.wait_for_service(primary_service, state="DISABLED")
         self.tester.debug("Primary Service: " + primary_service.machine.hostname + " Secondary Service: " + secondary_service.machine.hostname)
-        
+        self.status("Failing over via reboot: " + str(primary_service.machine.hostname))
         primary_service.machine.reboot()    
         
         if "clc" in primary_service.machine.components:
@@ -155,6 +161,7 @@ class HAtests(InstanceBasics, BucketTestSuite):
         primary_service = service_aquisition_callback()
         secondary_service = self.tester.service_manager.wait_for_service(primary_service, state="DISABLED")
         self.tester.debug("Primary Service: " + primary_service.machine.hostname + " Secondary Service: " + secondary_service.machine.hostname)
+        self.status("Failing over via network outage: " + str(primary_service.machine.hostname))
         primary_service.machine.interrupt_network(120)
         
         if "clc" in primary_service.machine.components:
