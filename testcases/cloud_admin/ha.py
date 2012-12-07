@@ -162,7 +162,7 @@ class HAtests(InstanceBasics, BucketTestSuite):
         secondary_service = self.tester.service_manager.wait_for_service(primary_service, state="DISABLED")
         self.tester.debug("Primary Service: " + primary_service.machine.hostname + " Secondary Service: " + secondary_service.machine.hostname)
         self.status("Failing over via network outage: " + str(primary_service.machine.hostname))
-        primary_service.machine.interrupt_network(120)
+        primary_service.machine.interrupt_network(240)
         
         if "clc" in primary_service.machine.components:
             self.tester.debug("Switching ec2 connection to host: " +  secondary_service.machine.hostname)
@@ -174,15 +174,16 @@ class HAtests(InstanceBasics, BucketTestSuite):
             self.tester.walrus = secondary_service.machine
             self.tester.s3.host = secondary_service.machine.hostname
 
-        self.tester.sleep(60)
-            
+        after_failover =  self.tester.service_manager.wait_for_service(primary_service, state="ENABLED")
+
         self.run_testcase(testcase_callback, **kwargs)
 
-        after_failover =  self.tester.service_manager.wait_for_service(primary_service, state="ENABLED")
-                     
+        self.status("Sleeping wating for interfaces to come back up")
+        self.tester.sleep(240)
+
         if primary_service.hostname is after_failover.hostname:
-            self.fail("The enabled CLC was the same before and after the failover")     
-             
+            self.fail("The enabled CLC was the same before and after the failover")
+
         try:
             self.servman.wait_for_service(primary_service, state ="DISABLED")
         except Exception, e:
