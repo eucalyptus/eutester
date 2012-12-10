@@ -15,7 +15,7 @@ class HAtests(InstanceBasics, BucketTestSuite):
         self.get_args()
         self.tester = Eucaops( config_file=self.args.config_file, password=self.args.password)
         self.servman = self.tester.service_manager
-        self.tester.poll_count = 120
+        self.instance_timeout = 120
         ### Add and authorize a group for the instance
         self.start_time = str(int(time.time()))
         try:
@@ -70,7 +70,7 @@ class HAtests(InstanceBasics, BucketTestSuite):
 
     def run_testcase(self, testcase_callback, **kwargs):
         poll_count = 20
-        poll_interval = 20       
+        poll_interval = 20
         while (poll_count > 0):
             try:
                 testcase_callback(**kwargs)
@@ -102,19 +102,16 @@ class HAtests(InstanceBasics, BucketTestSuite):
             self.tester.debug("Switching walrus connection to host: " +  secondary_service.machine.hostname)
             self.tester.walrus = secondary_service.machine
             self.tester.s3.host = secondary_service.machine.hostname
-            
-        self.tester.service_manager.wait_for_service(primary_service, state="NOTREADY")
-            
+
         self.run_testcase(testcase_callback, **kwargs)
 
         after_failover = self.tester.service_manager.wait_for_service(primary_service, state="ENABLED")
-          
         if primary_service.hostname is after_failover.hostname:
             self.fail("The enabled CLC was the same before and after the failover")     
 
         ### REMOVE DISABLED LOCK FILE FROM NON ACTIVE CLC AFTER 3.1
-        if not re.search("^3.1", self.version):
-            primary_service.machine.sys("rm -rf " + self.tester.eucapath + "/var/lib/eucalyptus/db/data/disabled.lock")
+        #if not re.search("^3.1", self.version):
+        #    primary_service.machine.sys("rm -rf " + self.tester.eucapath + "/var/lib/eucalyptus/db/data/disabled.lock")
         primary_service.start()
         
         try:
@@ -142,8 +139,6 @@ class HAtests(InstanceBasics, BucketTestSuite):
             self.tester.walrus = secondary_service.machine
             self.tester.s3.host = secondary_service.machine.hostname
             
-        self.tester.sleep(30)
-            
         self.run_testcase(testcase_callback, **kwargs)
 
         after_failover =  self.tester.service_manager.wait_for_service(primary_service, state="ENABLED")
@@ -162,7 +157,10 @@ class HAtests(InstanceBasics, BucketTestSuite):
         secondary_service = self.tester.service_manager.wait_for_service(primary_service, state="DISABLED")
         self.tester.debug("Primary Service: " + primary_service.machine.hostname + " Secondary Service: " + secondary_service.machine.hostname)
         self.status("Failing over via network outage: " + str(primary_service.machine.hostname))
-        primary_service.machine.interrupt_network(240)
+
+        interrupt_length = 480
+        interrupt_start = int(time.time())
+        primary_service.machine.interrupt_network(interrupt_length)
         
         if "clc" in primary_service.machine.components:
             self.tester.debug("Switching ec2 connection to host: " +  secondary_service.machine.hostname)
@@ -174,15 +172,18 @@ class HAtests(InstanceBasics, BucketTestSuite):
             self.tester.walrus = secondary_service.machine
             self.tester.s3.host = secondary_service.machine.hostname
 
-        after_failover =  self.tester.service_manager.wait_for_service(primary_service, state="ENABLED")
-
         self.run_testcase(testcase_callback, **kwargs)
 
-        self.status("Sleeping wating for interfaces to come back up")
-        self.tester.sleep(240)
+        testcase_finish = int(time.time()) - interrupt_start
 
+        after_failover = self.servman.wait_for_service(primary_service, state ="ENABLED")
         if primary_service.hostname is after_failover.hostname:
             self.fail("The enabled CLC was the same before and after the failover")
+
+        outage_window_left = interrupt_length - testcase_finish
+        if outage_window_left > 0:
+            self.status("Sleeping wating for interfaces to come back up")
+            self.tester.sleep(interrupt_length - testcase_finish)
 
         try:
             self.servman.wait_for_service(primary_service, state ="DISABLED")
