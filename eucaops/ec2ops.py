@@ -1532,7 +1532,7 @@ class EC2ops(Eutester):
                 
             
 
-    def convert_reservation_to_euinstance(self, reservation, username="root", password=None, keyname=None, timeout=120):
+    def convert_reservation_to_euinstance(self, reservation, username="root", password=None, keyname=None, timeout=60):
         """
         Convert all instances in an entire reservation into eutester.euinstance.Euinstance objects.
 
