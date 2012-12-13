@@ -190,7 +190,7 @@ class EuInstance(Instance):
             self.debugmethod(msg)
             
                 
-    def sys(self, cmd, verbose=True, timeout=120):
+    def sys(self, cmd, verbose=True, code=None, timeout=120):
         '''
         Issues a command against the ssh connection to this instance
         Returns a list of the lines from stdout+stderr as a result of the command
@@ -200,7 +200,7 @@ class EuInstance(Instance):
         '''
         output = []
         if (self.ssh is not None):
-            output = self.ssh.sys(cmd, verbose=verbose, timeout=timeout)
+            output = self.ssh.sys(cmd, verbose=verbose, code=code, timeout=timeout)
             return output
         else:
             raise Exception("Euinstance ssh connection is None")
