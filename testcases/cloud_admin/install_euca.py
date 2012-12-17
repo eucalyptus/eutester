@@ -86,12 +86,12 @@ class Install(EutesterTestCase):
             if machine.distro.name is "vmware":
                 continue
             if re.search("cc", " ".join(machine.components)):
-                machine.sys("service eucalyptus-cc start")
+                machine.sys("service eucalyptus-cc start", timeout=480)
             if re.search("nc", " ".join(machine.components)):
-                machine.sys("service eucalyptus-nc start")
+                machine.sys("service eucalyptus-nc start", timeout=480)
             if re.search("clc", " ".join(machine.components)) or re.search("ws", " ".join(machine.components))\
                or re.search("sc", " ".join(machine.components)) or re.search("vb", " ".join(machine.components)):
-                machine.sys("service eucalyptus-cloud start")
+                machine.sys("service eucalyptus-cloud start", timeout=480)
 
     def initialize_db(self):
         first_clc = self.tester.get_component_machines("clc")[0]
