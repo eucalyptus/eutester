@@ -1579,22 +1579,34 @@ class EC2ops(Eutester):
                 self.terminate_instances(reservation=reservation)
             raise e 
     
-    def verify_instance_ssh_rule(self, instance):
+    def does_instance_sec_group_allow(self, instance, src_addr=None, protocol='tcp',port=22):
         s = None
         try:
-            if not self.ec2_source_ip:
-                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM,socket.IPPROTO_UDP)
-                s.connect((instance.public_dns_name,1))
-                self.ec2_source_ip = s.getsockname()[0]
+            if not src_addr:
+                #Use the local test machine's addr
+                if not self.ec2_source_ip:
+                    #Try to get the outgoing addr used to connect to this instance
+                    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM,socket.IPPROTO_UDP)
+                    s.connect((instance.public_dns_name,1))
+                    #set the tester's global source_ip, assuming it can re-used (at least until another method sets it to None again)
+                    self.ec2_source_ip = s.getsockname()[0]
+                if self.ec2_source_ip == "0.0.0.0":
+                    raise Exception('Test machine source ip detected:'+str(self.ec2_source_ip)+', tester may need ec2_source_ip set manually')
+                src_addr = self.ec2_source_ip
                 groups = self.get_instance_security_groups(instance)
                 for group in groups:
-                    if
-                    
+                    if self.does_sec_group_allow(group, src_addr, protocol=protocol, port=port):
+                        return True
+            return False
         finally:
             if s:
                 s.close()
     
     def does_sec_group_allow(self, group, src, protocol='tcp', port=22):
+        '''
+        Test whether a security group will allow traffic from a specific 'src' ip address to
+        a specific 'port' using a specific 'protocol'
+        '''
         for rule in group.rules:
             if rule.ip_protocol == protocal:
                 if (rule.to_port == 0 ) or (rule.to_port == -1) or (rule.to_port == port):
