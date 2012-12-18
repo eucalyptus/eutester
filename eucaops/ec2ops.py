@@ -1617,11 +1617,11 @@ class EC2ops(Eutester):
                     
     
     def is_address_in_network(ip_addr, network):
-       ipaddr = int(''.join([ '%02x' % int(x) for x in ip.split('.') ]), 16)
-       netstr, bits = net.split('/')
-       netaddr = int(''.join([ '%02x' % int(x) for x in netstr.split('.') ]), 16)
-       mask = (0xffffffff << (32 - int(bits))) & 0xffffffff
-       return (ipaddr & mask) == (netaddr & mask)
+        ipaddr = int(''.join([ '%02x' % int(x) for x in ip.split('.') ]), 16)
+        netstr, bits = net.split('/')
+        netaddr = int(''.join([ '%02x' % int(x) for x in netstr.split('.') ]), 16)
+        mask = (0xffffffff << (32 - int(bits))) & 0xffffffff
+        return (ipaddr & mask) == (netaddr & mask)
     
     def get_instance_security_groups(self,instance):
         secgroups = []
