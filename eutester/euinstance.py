@@ -70,6 +70,8 @@ class EuInstance(Instance):
     rootfs_device = "sda"
     block_device_prefix = "sd"
     virtio_blk = False
+    bdm_vol = None
+    reservation_id = None
     attached_vols = []
     scsidevs = []
     ops = None
@@ -81,7 +83,10 @@ class EuInstance(Instance):
     verbose = True
     ssh = None
     tester = None
-
+    laststate = None
+    laststatetime = None
+    ageatstate = None
+    cmdstart = 0
 
    
     @classmethod
@@ -93,8 +98,11 @@ class EuInstance(Instance):
                                       keypath=None, 
                                       password=None, 
                                       username="root",  
+                                      connectssh = True,
                                       verbose=True, 
                                       timeout=120,
+                                      reservation_id = None, 
+                                      cmdstart=None, 
                                       retry=2
                                       ):
         '''
@@ -128,11 +136,44 @@ class EuInstance(Instance):
         newins.attached_vols=[] 
         newins.timeout = timeout
         newins.retry = retry    
-        newins.connect_to_instance(timeout=timeout)
+        newins.reservation_id = reservation_id or newins.tester.get_reservation_id_for_instance(self.id)
+        newins.laststate = newins.state
+        newins.cmdstart = cmdstart or newins.tester.get_instance_time_launched(newins)
+        newins.ageatstate = cmdstart
         #newins.set_block_device_prefix()
-        newins.set_rootfs_device()
-        
+        if self.root_device_type == 'ebs':
+            newins.bdm_vol = newins.tester.get_volume(volume_id = newins.block_device_mapping.current_value.volume_id)
+        if connectssh:
+            newins.connect_to_instance(timeout=timeout)
+        if self.ssh:
+            newins.set_rootfs_device()
         return newins
+    
+    def update(self):
+        super(EuInstance, self).update()
+        self.set_last_status()
+    
+    def set_last_status(self,status=None):
+        self.eutest_laststate = self.status
+        self.eutest_laststatetime = time.time()
+        self.eutest_ageatstate = "{0:.2f}".format(time.time() - self.cmdstart)
+    
+    def printself(self,title=True, footer=True, printmethod=None):
+        buf = "\n"
+        if title:
+            buf += str("------------------------------------------------------------------------------------------------------------------------------\n")
+            buf += str('INST_ID').center(15)+'|'+str('RES_ID').center(5)+'|'+str('LASTSTATUS').center(10)+'|'+str('TESTSTATUS').center(10)+'|'+str('AGE@STATUS').center(10)+'|'+str('SIZE').center(4)+'|'+str('FROM_SNAP').center(15)+'|'+str('MD5_SUM').center(33)+'|'+str('MD5LEN').center(6)+'|'+str('INFO_MSG')+'\n'
+            buf += str("------------------------------------------------------------------------------------------------------------------------------\n")
+        buf += str(self.id).center(15)+'|'+str(self.reservation_id).center(5)+'|'+str(self.laststatus).center(10)+'|'+str(self.status).center(10)+'|'+str(self.eutest_ageatstatus).center(10)+'|'+str(self.size).center(4)+'|'+str(self.snapshot_id).center(15)+'|'+str(self.md5).center(33)+'|'+str(self.md5len).center(6)+'|'+str(self.eutest_failmsg).rstrip()+"\n"
+        if footer:
+            buf += str("------------------------------------------------------------------------------------------------------------------------------")
+        if printmethod:
+            printmethod(buf)
+        return buf
+        
+        
+        
+        
     
     def reset_ssh_connection(self):
         if ((self.keypath is not None) or ((self.username is not None)and(self.password is not None))):
@@ -151,6 +192,7 @@ class EuInstance(Instance):
         else:
             self.debug("keypath or username/password need to be populated for ssh connection") 
             
+    
     
     def connect_to_instance(self, timeout=60):
         '''
@@ -519,11 +561,8 @@ class EuInstance(Instance):
                 srcdev = "/dev/"+str(self.sys("ls -1 /dev | grep 'da$'")[0]).strip()
                 fsize = randint(1048576,10485760)
                 
-        if length <= fsize:
-            fillcmd = "head -c "+str(length)+" "+srcdev+" > "+voldev+"; sync"
-        else:
-            count = int((euvolume.size*gb)/fsize)
-            fillcmd="head -c "+str(fsize)+" "+str(srcdev)+" > /tmp/datafile; x=0; while [ $x -lt "+str(count)+" ]; do cat /tmp/datafile; let x=$x+1; done | dd of="+str(voldev)+"; rm /tmp/datafile; sync"
+        fillcmd = "head -c "+str(length)+" "+srcdev+" > "+voldev+"; echo "+str(euvolume.id)+" > " + str(voldev)+"; sync"
+
         return self.time_dd(fillcmd)
     
     
@@ -596,7 +635,7 @@ class EuInstance(Instance):
             md5 = str(self.sys("head -c "+str(length)+" "+str(devpath)+" | md5sum")[0]).split(' ')[0].strip()
         return md5
         
-    def reboot_instance_and_verify(self,waitconnect=30, timeout=300, connect=True, checkvolstatus=False):
+    def reboot_instance_and_verify(self,waitconnect=30, timeout=300, connect=True, checkvolstatus=False, pad=5):
         '''
         Attempts to reboot an instance and verify it's state post reboot. 
         waitconnect-optional-integer representing seconds to wait before attempting to connect to instance after reboot
@@ -606,6 +645,9 @@ class EuInstance(Instance):
         '''
         msg=""
         self.debug('Attempting to reboot instance:'+str(self.id))
+        uptime = int(self.sys('cat /proc/uptime')[0].split()[1].split('.')[0])
+        elapsed = 0
+        start = time.time()
         if checkvolstatus:
             #update the md5sums per volume before reboot
             bad_vols=self.get_unsynced_volumes()
@@ -616,6 +658,11 @@ class EuInstance(Instance):
         self.reboot()
         time.sleep(waitconnect)
         self.connect_to_instance(timeout=timeout)
+        elapsed = int(time.time()-start)
+        newuptime = int(self.sys('cat /proc/uptime')[0].split()[1].split('.')[0])
+        #Check to see if new uptime is at least 'pad' less than before, allowing for some pad 
+        if (newuptime - (uptime+elapsed)) > pad:
+            raise Exception("Instance uptime does not represent a reboot. Orig:"+str(uptime)+", New:"+str(newuptime)+", elapsed:"+str(elapsed))
         if checkvolstatus:
             badvols= self.get_unsynced_volumes()
             if badvols != []:
@@ -778,7 +825,7 @@ class EuInstance(Instance):
         for vol in cloudlist:
             #check to see if the volume is attached to us, but is not involved with the bdm for this instance
             found = False
-            if (vol.attach_data.instance_id == self.id) and not ( self.root_device_type == 'ebs' and self.block_device_mapping.current_name != vol.attach_data.device):
+            if (vol.attach_data.instance_id == self.id) and not ( self.root_device_type == 'ebs' and self.bdm_vol.id != vol.id):
                 for avol in self.attached_vols:
                     if avol.id == vol.id:
                         self.debug("Volume"+vol.id+" found attached")
@@ -801,6 +848,7 @@ class EuInstance(Instance):
                         if reattach:
                             dev = self.get_free_scsi_dev()
                             self.attach_volume(self, self, vol,dev )
+            
                     
                 
         
