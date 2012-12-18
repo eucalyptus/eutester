@@ -159,12 +159,15 @@ class EuInstance(Instance):
         self.eutest_ageatstate = "{0:.2f}".format(time.time() - self.cmdstart)
     
     def printself(self,title=True, footer=True, printmethod=None):
+        if self.bdm_vol:
+            bdmvol = self.bdm_vol.id
+            
         buf = "\n"
         if title:
             buf += str("------------------------------------------------------------------------------------------------------------------------------\n")
-            buf += str('INST_ID').center(15)+'|'+str('RES_ID').center(5)+'|'+str('LASTSTATUS').center(10)+'|'+str('TESTSTATUS').center(10)+'|'+str('AGE@STATUS').center(10)+'|'+str('SIZE').center(4)+'|'+str('FROM_SNAP').center(15)+'|'+str('MD5_SUM').center(33)+'|'+str('MD5LEN').center(6)+'|'+str('INFO_MSG')+'\n'
+            buf += str('INST_ID').center(15)+'|'+str('RES_ID').center(23)+'|'+str('LASTSTATUS').center(10)+'|'+str('STATUS').center(10)+'|'+str('AGE@STATUS').center(10)+'|'+str('VMTYPE').center(12)+'|'+str('BDM_VOL').center(15)+'|'+str('CLUSTER').center(25)+'|'+str('PUB_IP').center(20)+'|'+str('PRIV_IP')+'\n'
             buf += str("------------------------------------------------------------------------------------------------------------------------------\n")
-        buf += str(self.id).center(15)+'|'+str(self.reservation_id).center(5)+'|'+str(self.laststatus).center(10)+'|'+str(self.status).center(10)+'|'+str(self.eutest_ageatstatus).center(10)+'|'+str(self.size).center(4)+'|'+str(self.snapshot_id).center(15)+'|'+str(self.md5).center(33)+'|'+str(self.md5len).center(6)+'|'+str(self.eutest_failmsg).rstrip()+"\n"
+        buf += str(self.id).center(15)+'|'+str(self.reservation_id).center(23)+'|'+str(self.laststatus).center(10)+'|'+str(self.status).center(10)+'|'+str(self.eutest_ageatstatus).center(10)+'|'+str(self.instance_type).center(12)+'|'+str(bdmvol).center(15)+'|'+str(self.region).center(25)+'|'+str(self.public_dns_name).center(20)+'|'+str(self.private_ip_address).rstrip()+"\n"
         if footer:
             buf += str("------------------------------------------------------------------------------------------------------------------------------")
         if printmethod:

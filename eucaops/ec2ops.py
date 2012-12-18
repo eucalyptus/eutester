@@ -1569,6 +1569,10 @@ class EC2ops(Eutester):
                 except Exception, e:
                     raise Exception("Unable to create Euinstance from " + str(instance)+", err:\n"+str(e))
             self.monitor_instances_to_state(instances,timeout=timeout)
+            
+            
+            
+            
             if connectssh:
                 for instance in instances:
                     instance.connect_to_instance()
@@ -1578,6 +1582,20 @@ class EC2ops(Eutester):
             if reservation:
                 self.terminate_instances(reservation=reservation)
             raise e 
+    
+    
+    def monitor_instances_for_ip(self, instances):
+        try:
+            self.wait_for_valid_ip(instance)
+        except Exception:
+            raise Exception("Reservation " +  str(reservation) + " has been terminated because instance " + str(instance) + " did not receive a valid IP")
+    
+        if (instance.ip_address is instance.private_ip_address) and (instance.public_dns_name is instance.private_dns_name) and ( private_addressing is False ):
+            self.debug(str(instance) + " got Public IP: " + str(instance.ip_address)  + " Private IP: " + str(instance.private_ip_address) + " Public DNS Name: " + str(instance.public_dns_name) + " Private DNS Name: " + str(instance.private_dns_name))
+            self.critical("Instance " + instance.id + " has he same public and private IPs of " + str(instance.ip_address))
+        else:
+            self.debug(str(instance) + " got Public IP: " + str(instance.ip_address)  + " Private IP: " + str(instance.private_ip_address) + " Public DNS Name: " + str(instance.public_dns_name) + " Private DNS Name: " + str(instance.private_dns_name))
+            
     
     def does_instance_sec_group_allow(self, instance, src_addr=None, protocol='tcp',port=22):
         s = None
@@ -1617,8 +1635,8 @@ class EC2ops(Eutester):
                     
     
     def is_address_in_network(ip_addr, network):
-        ipaddr = int(''.join([ '%02x' % int(x) for x in ip.split('.') ]), 16)
-        netstr, bits = net.split('/')
+        ipaddr = int(''.join([ '%02x' % int(x) for x in ip_addr.split('.') ]), 16)
+        netstr, bits = network.split('/')
         netaddr = int(''.join([ '%02x' % int(x) for x in netstr.split('.') ]), 16)
         mask = (0xffffffff << (32 - int(bits))) & 0xffffffff
         return (ipaddr & mask) == (netaddr & mask)
