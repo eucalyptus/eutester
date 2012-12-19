@@ -1519,21 +1519,22 @@ class EC2ops(Eutester):
             return reservation
         
     
-    def run_instances(self, 
-                      image=None, 
-                      keypair=None, 
-                      group="default", 
-                      type=None, 
-                      zone=None, 
-                      min=1, 
-                      max=1, 
-                      user_data=None,
-                      private_addressing=False, 
-                      username="root", 
-                      password=None, 
-                      connect=True,
-                      clean_on_fail=True,
-                      timeout=480):
+    def run_image(self, 
+                  image=None, 
+                  keypair=None, 
+                  group="default", 
+                  type=None, 
+                  zone=None, 
+                  min=1, 
+                  max=1, 
+                  user_data=None,
+                  private_addressing=False, 
+                  username="root", 
+                  password=None, 
+                  connect=True,
+                  clean_on_fail=True,
+                  monitor_to_running = True,
+                  timeout=480):
         try:
             instances = []
             if image is None:
@@ -1570,12 +1571,16 @@ class EC2ops(Eutester):
                     instances.append(eu_instance)
                 except Exception, e:
                     raise Exception("Unable to create Euinstance from " + str(instance)+", err:\n"+str(e))
-            return self.monitor_euinstances_to_running(instances, connect=connect, timeout=timeout)
+            if monitor_to_running:
+                return self.monitor_euinstances_to_running(instances, connect=connect, timeout=timeout)
+            else:
+                return instances
         except Exception, e:
             self.debug('Run_instance failed, terminating reservation. Error:'+str(e))
             if reservation:
                 self.terminate_instances(reservation=reservation)
             raise e 
+    
     
     def monitor_euinstances_to_running(self,instances, timeout=480):
         self.debug("Monitor_instances_to_running starting...")
@@ -1665,7 +1670,7 @@ class EC2ops(Eutester):
                     return res
         raise Exception('No reservation found for instance:'+str(instance.id))
         
-    def monitor_euinstances_to_state(self, instance_list, state='running', timeout=120):   
+    def monitor_euinstances_to_state(self, instance_list, state='running', poll_interval=10, timeout=120):   
         self.debug("monitor_instances_to_state "+str(state)+" starting....") 
         monitor = copy.copy(instance_list)
         for instance in monitor:
@@ -1677,24 +1682,29 @@ class EC2ops(Eutester):
         failmsg = None
         pollinterval = 10
         while monitor and elapsed < timeout:
-            bdm_vol_status
-            if (emi.root_device_type == ebs) and (not instance.bdm_vol):
-                try:
-                    instance.bdm_vol = self.get_volume(volume_id = instance.block_device_mapping.current_value.volume_id)
-                except: pass
-            else:
-                bdm_vol_status = instance.bdm_vol.status
-            if instance.state == state:
-                #This instance is in the correct state, remove from monitor list
-                self.debug('Success to state:'+str(instance.id)+':'+str(instance.state)+', backing volume:status'+str(instance.bdm_vol.id)+':'+str(bdm_vol.status))
-                good.append(monitor.pop(monitor.index(instance)))
-            dbgstr = 'Waiting for '+str(len(monitor))+" to go to state:"+str(state)+', elapsed:'+str(elapsed)+'/'+str(timeout)+"\n"
             for instance in monitor:
                 bdm_vol_status = None
-                if instance.bdm_vol:
-                    bdm_vol_status = instance.bdm_vol.status
-                dbgstr += 'Waiting for state:'+str(instance.id)+':'+str(instance.state)+', backing volume:status'+str(instance.bdm_vol)+':'+str(bdm_vol.status)
+                bdm_vol_id = None
+                if emi.root_device_type == ebs:
+                    if not instance.bdm_vol:
+                        try:
+                            instance.bdm_vol = self.get_volume(volume_id = instance.block_device_mapping.current_value.volume_id)
+                            bdm_vol_id = instance.bdm_vol.id
+                            bdm_vol_status = instance.bdm_vol.status
+                        except: pass
+                    else:
+                        bdm_vol_id = instance.bdm_vol.id
+                        bdm_vol_status = instance.bdm_vol.status
+                dbgmsg = ('to state:'+str(instance.id)+':'+str(instance.state)+', backing volume:status'+str(bdm_vol_id)+':'+str(bdm_vol_status))
+                if instance.state == state:
+                    self.debug("SUCCESS "+dbgmsg)
+                    #This instance is in the correct state, remove from monitor list
+                    good.append(monitor.pop(monitor.index(instance)))
+                else:
+                    self.debug("WAITING "+dbgmsg)
+            dbgstr = 'Waiting for '+str(len(monitor))+"/"+str(len(instance_list))+" instances to go to state:"+str(state)+', elapsed:'+str(elapsed)+'/'+str(timeout)+"\n"
             elapsed = int(time.time() - start)
+            time.sleep(poll_interval)
         self.show_instance_list(instance_list)
         if monitor:
             failmsg = "Some instances did not go to state:"+str(state)+' within timeout:'+str(timeout)+"\nFailed:"
@@ -1702,7 +1712,7 @@ class EC2ops(Eutester):
                 failmsg += str(instance.id)+","
             self.show_instance_list(monitor)
             raise Exception(failmsg)
-        self.wait_for_valid_ip(instances_list)
+        
         
     
         
