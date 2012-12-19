@@ -99,7 +99,7 @@ class EuInstance(Instance):
                                       keypath=None, 
                                       password=None, 
                                       username="root",  
-                                      connectssh = True,
+                                      connect = True,
                                       verbose=True, 
                                       timeout=120,
                                       private_addresssing = False,
@@ -146,7 +146,7 @@ class EuInstance(Instance):
         #newins.set_block_device_prefix()
         if self.root_device_type == 'ebs':
             newins.bdm_vol = newins.tester.get_volume(volume_id = newins.block_device_mapping.current_value.volume_id)
-        if connectssh:
+        if connect:
             newins.connect_to_instance(timeout=timeout)
         if self.ssh:
             newins.set_rootfs_device()

@@ -1531,7 +1531,7 @@ class EC2ops(Eutester):
                       private_addressing=False, 
                       username="root", 
                       password=None, 
-                      connectssh=True,
+                      connect=True,
                       clean_on_fail=True,
                       timeout=480):
         try:
@@ -1547,7 +1547,7 @@ class EC2ops(Eutester):
                 raise Exception("emi is None. run_instance could not auto find an emi?")   
             if private_addressing is True:
                 addressing_type = "private"
-                connectssh = False
+                connect = False
             else:
                 addressing_type = None
             #In the case a keypair object was passed instead of the keypair name
@@ -1564,25 +1564,48 @@ class EC2ops(Eutester):
             for instance in reservation:
                 try:
                     #convert to euinstances, connect ssh later...
-                    eu_instance =  EuInstance.make_euinstance_from_instance( instance, self, keypair=keypair, username = username, password=password, reservation_id = reservation.id, private_addressing=private_addressing, timeout=timeout,connectssh=False )
+                    eu_instance =  EuInstance.make_euinstance_from_instance( instance, self, keypair=keypair, username = username, password=password, reservation_id = reservation.id, private_addressing=private_addressing, timeout=timeout,connect=False )
+                    #set the connect flag in the euinstance object for future use
+                    eu_instance.connect = connect
                     instances.append(eu_instance)
                 except Exception, e:
                     raise Exception("Unable to create Euinstance from " + str(instance)+", err:\n"+str(e))
-            self.monitor_instances_to_state(instances,timeout=timeout)
-            
-            
-            
-            
-            if connectssh:
-                for instance in instances:
-                    instance.connect_to_instance()
-            return instances
+            return self.monitor_euinstances_to_running(instances, connect=connect, timeout=timeout)
         except Exception, e:
             self.debug('Run_instance failed, terminating reservation. Error:'+str(e))
             if reservation:
                 self.terminate_instances(reservation=reservation)
             raise e 
     
+    def monitor_euinstances_to_running(self,instances, timeout=480):
+        self.debug("Monitor_instances_to_running starting...")
+        #Wait for instances to go to running state...
+        self.monitor_euinstances_to_state(instances,timeout=timeout)
+        #Wait for instances in list to get valid ips, check for duplicates, etc...
+        self.wait_for_valid_ip(instances, timeout)
+        #Now attempt to connect to instances if connect flag is set in the instance...
+        waiting = copy.copy(instances)
+        while waiting and (elapsed < timeout):
+            for instance in waiting:
+                if instance.connect:
+                    try:
+                        #First try ping
+                        self.debug('Security group rules allow ping from this test machine:'+str(self.does_instance_sec_group_allow(instance, protocol='icmp', port=0)))
+                        self.ping(instance.public_dns_name, 2)
+                        #now try to connect ssh
+                        self.debug('Security group rules allow ssh from this test machine:'+str(self.does_instance_sec_group_allow(instance, protocol='tcp', port=22)))
+                        for instance in instances:
+                            instance.connect_to_instance(timeout=2)
+                            good.append(waiting.pop(index(instance)))
+                    except:pass
+                else:
+                    good.append(waiting.pop(index(instance)))
+        if waiting:
+            buf += "Timed out waiting to connect to the following instances:\n"
+            for instance in waiting:
+                buf += str(instance.id)+":"+str(instance.public_dns_name)+","
+            raise 
+        self.print_euinstance_list(instances)
     
     def does_instance_sec_group_allow(self, instance, src_addr=None, protocol='tcp',port=22):
         s = None
@@ -1642,11 +1665,12 @@ class EC2ops(Eutester):
                     return res
         raise Exception('No reservation found for instance:'+str(instance.id))
         
-    def monitor_instances_to_state(self, instance_list, state='running', timeout=120):    
+    def monitor_euinstances_to_state(self, instance_list, state='running', timeout=120):   
+        self.debug("monitor_instances_to_state "+str(state)+" starting....") 
         monitor = copy.copy(instance_list)
         for instance in monitor:
             if not isinstance(instance, EuInstance):
-                instance = EuInstance.make_euinstance_from_instance( instance, self, connectssh=False)
+                instance = EuInstance.make_euinstance_from_instance( instance, self, connect=False)
         good = []
         elapsed = 0
         start = time.time()
@@ -1671,14 +1695,14 @@ class EC2ops(Eutester):
                     bdm_vol_status = instance.bdm_vol.status
                 dbgstr += 'Waiting for state:'+str(instance.id)+':'+str(instance.state)+', backing volume:status'+str(instance.bdm_vol)+':'+str(bdm_vol.status)
             elapsed = int(time.time() - start)
-        if good:
-            self.show_instance_list(good)
-        if instances:
+        self.show_instance_list(instance_list)
+        if monitor:
             failmsg = "Some instances did not go to state:"+str(state)+' within timeout:'+str(timeout)+"\nFailed:"
             for instance in monitor:
                 failmsg += str(instance.id)+","
             self.show_instance_list(monitor)
             raise Exception(failmsg)
+        self.wait_for_valid_ip(instances_list)
         
     
         
@@ -1702,6 +1726,7 @@ class EC2ops(Eutester):
         :return: True on success
         :raise: Exception if IP stays at 0.0.0.0
         """
+        self.debug("Monitoring instances for valid ips...")
         if not isinstance(instances, List):
             monitoring = [instances]
         else:
@@ -1719,15 +1744,16 @@ class EC2ops(Eutester):
                     if (instance.ip_address is instance.private_ip_address) and (instance.public_dns_name is instance.private_dns_name) and not instance.private_addressing:
                         self.debug("ERROR:"+str(instance.id) + " got Public IP: " + str(instance.ip_address)  + " Private IP: " + str(instance.private_ip_address) + " Public DNS Name: " + str(instance.public_dns_name) + " Private DNS Name: " + str(instance.private_dns_name))
                     else:
-                        monitoring.remove(instance)
+                        good.append(monitoring.pop(index(instance)))
                 elapsed = int(time.time()- start)
-        if instances:
+        if monitoring:
             buf = "Instances timed out waiting for a valid IP, elapsed:"+str(elapsed)+"/"+str(timeout)+"\n"
             for instance in instances:
                 buf += "Instance: "+str(instance.id)+", public ip: "+str(instance.public_dns_name)+"\n"
             raise Exception(buf)
+        self.check_system_for_dup_ip(instances=good)
                 
-    def check_system_for_dup_ip(self, inst=None):
+    def check_system_for_dup_ip(self, instances=None):
         '''
         Check system for instances with conflicting duplicate IPs. Will raise exception at end of iterating through all running, pending, or starting instances with info 
         as to which instances and IPs conflict. 
@@ -1743,14 +1769,14 @@ class EC2ops(Eutester):
                     if instance.public_dns_name != '0.0.0.0':
                         if instance.public_dns_name in publist:
                             errbuf += "PUBLIC:"+str(instance.id)+"/"+str(instance.state)+"="+str(instance.public_dns_name)+" vs: "+str(publist[instance_public_dns_name])+"\n"
-                            if inst and (inst.id == instance.id):
+                            if instances and (instance in instances):
                                 raise Exception("PUBLIC:"+str(instance.id)+"/"+str(instance.state)+"="+str(instance.public_dns_name)+" vs: "+str(publist[instance_public_dns_name]))    
                         else:
                             publist[instance.public_dns_name] = str(instance.id+"/"+instance.state)
                     if instance.private_dns_name != '0.0.0.0':
                         if instance.private_dns_name in privlist:
                             errbuf += "PRIVATE:"+str(instance.id)+"/"+str(instance.state)+"="+str(instance.private_dns_name)+" vs: "+str(privlist[instance_private_dns_name])+"\n"
-                            if inst and (inst.id == instance.id):
+                            if instances and (instance in instances):
                                 raise Exception("PRIVATE:"+str(instance.id)+"/"+str(instance.state)+"="+str(instance.private_dns_name)+" vs: "+str(privlist[instance_private_dns_name]))
                         else:
                             privlist[instance.private_dns_name] = str(instance.id+"/"+instance.state)
