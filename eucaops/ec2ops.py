@@ -1564,7 +1564,7 @@ class EC2ops(Eutester):
             for instance in reservation:
                 try:
                     #convert to euinstances, connect ssh later...
-                    eu_instance =  EuInstance.make_euinstance_from_instance( instance, self, keypair=keypair, username = username, password=password, reservation_id = reservation.id, timeout=timeout,connectssh=False )
+                    eu_instance =  EuInstance.make_euinstance_from_instance( instance, self, keypair=keypair, username = username, password=password, reservation_id = reservation.id, private_addressing=private_addressing, timeout=timeout,connectssh=False )
                     instances.append(eu_instance)
                 except Exception, e:
                     raise Exception("Unable to create Euinstance from " + str(instance)+", err:\n"+str(e))
@@ -1583,19 +1583,6 @@ class EC2ops(Eutester):
                 self.terminate_instances(reservation=reservation)
             raise e 
     
-    
-    def monitor_instances_for_ip(self, instances):
-        try:
-            self.wait_for_valid_ip(instance)
-        except Exception:
-            raise Exception("Reservation " +  str(reservation) + " has been terminated because instance " + str(instance) + " did not receive a valid IP")
-    
-        if (instance.ip_address is instance.private_ip_address) and (instance.public_dns_name is instance.private_dns_name) and ( private_addressing is False ):
-            self.debug(str(instance) + " got Public IP: " + str(instance.ip_address)  + " Private IP: " + str(instance.private_ip_address) + " Public DNS Name: " + str(instance.public_dns_name) + " Private DNS Name: " + str(instance.private_dns_name))
-            self.critical("Instance " + instance.id + " has he same public and private IPs of " + str(instance.ip_address))
-        else:
-            self.debug(str(instance) + " got Public IP: " + str(instance.ip_address)  + " Private IP: " + str(instance.private_ip_address) + " Public DNS Name: " + str(instance.public_dns_name) + " Private DNS Name: " + str(instance.private_dns_name))
-            
     
     def does_instance_sec_group_allow(self, instance, src_addr=None, protocol='tcp',port=22):
         s = None
@@ -1695,16 +1682,18 @@ class EC2ops(Eutester):
         
     
         
-    def print_instance_list(self, list):
-        self.debug("")
-            
-        
-            
-                
-                
+    def print_euinstance_list(self, list):
+        first = list.pop(0)
+        for instance in list:
+            if not isinstance(instance,EuInstance):
+                raise Exception("print_euinstance list passed non-EuInstnace type")
+        buf = first.printself(title=True, footer=False)
+        for instance in list:
+            buf += instance.printself(title=False, footer=False)
+        self.debug("\n"+str(buf)+"\n")
     
 
-    def wait_for_valid_ip(self, instance, timeout = 60):
+    def wait_for_valid_ip(self, instances, timeout = 60):
         """
         Wait for instance public DNS name to clear from 0.0.0.0
 
@@ -1713,18 +1702,61 @@ class EC2ops(Eutester):
         :return: True on success
         :raise: Exception if IP stays at 0.0.0.0
         """
+        if not isinstance(instances, List):
+            monitoring = [instances]
+        else:
+            monitoring = copy.copy(instances)
         elapsed = 0
+        start = time.time()
         zeros = re.compile("0.0.0.0")
-        while elapsed <= timeout:
-            if zeros.search(instance.public_dns_name):
-                self.sleep(1)
+        while monitoring and (elapsed <= timeout):
+            for instance in monitoring:
                 instance.update()
-                elapsed += 1
-            else:
-                return True
-        raise Exception("Timed out waiting for a valid IP (ie anything other than 0.0.0.0.)")
+                if zeros.search(instance.public_dns_name):
+                    self.debug(str(instance.id)+": WAITING for public ip. Current:"+str(instance.public_dns_name)+", elapsed:"+str(elapsed)+"/"+str(timeout))
+                else:
+                    self.debug(str(instance.id)+": FOUND public ip. Current:"+str(instance.public_dns_name)+", elapsed:"+str(elapsed)+"/"+str(timeout))
+                    if (instance.ip_address is instance.private_ip_address) and (instance.public_dns_name is instance.private_dns_name) and not instance.private_addressing:
+                        self.debug("ERROR:"+str(instance.id) + " got Public IP: " + str(instance.ip_address)  + " Private IP: " + str(instance.private_ip_address) + " Public DNS Name: " + str(instance.public_dns_name) + " Private DNS Name: " + str(instance.private_dns_name))
+                    else:
+                        monitoring.remove(instance)
+                elapsed = int(time.time()- start)
+        if instances:
+            buf = "Instances timed out waiting for a valid IP, elapsed:"+str(elapsed)+"/"+str(timeout)+"\n"
+            for instance in instances:
+                buf += "Instance: "+str(instance.id)+", public ip: "+str(instance.public_dns_name)+"\n"
+            raise Exception(buf)
                 
-            
+    def check_system_for_dup_ip(self, inst=None):
+        '''
+        Check system for instances with conflicting duplicate IPs. Will raise exception at end of iterating through all running, pending, or starting instances with info 
+        as to which instances and IPs conflict. 
+        If a single isntance 'inst' is provided, all other conflicting IPS will be ignored and will only raise an exception for conflicts with the provided instance 'inst'
+        '''
+        errbuf = ""
+        publist = {}
+        privlist = {}
+        reslist = self.ec2.get_all_instances()
+        for res in reslist:
+            for instance in res.instances:
+                if instance.state == 'running' or instance.state == 'pending' or instance.state == 'starting':
+                    if instance.public_dns_name != '0.0.0.0':
+                        if instance.public_dns_name in publist:
+                            errbuf += "PUBLIC:"+str(instance.id)+"/"+str(instance.state)+"="+str(instance.public_dns_name)+" vs: "+str(publist[instance_public_dns_name])+"\n"
+                            if inst and (inst.id == instance.id):
+                                raise Exception("PUBLIC:"+str(instance.id)+"/"+str(instance.state)+"="+str(instance.public_dns_name)+" vs: "+str(publist[instance_public_dns_name]))    
+                        else:
+                            publist[instance.public_dns_name] = str(instance.id+"/"+instance.state)
+                    if instance.private_dns_name != '0.0.0.0':
+                        if instance.private_dns_name in privlist:
+                            errbuf += "PRIVATE:"+str(instance.id)+"/"+str(instance.state)+"="+str(instance.private_dns_name)+" vs: "+str(privlist[instance_private_dns_name])+"\n"
+                            if inst and (inst.id == instance.id):
+                                raise Exception("PRIVATE:"+str(instance.id)+"/"+str(instance.state)+"="+str(instance.private_dns_name)+" vs: "+str(privlist[instance_private_dns_name]))
+                        else:
+                            privlist[instance.private_dns_name] = str(instance.id+"/"+instance.state)
+        if not inst and errbuf:
+            raise Exception("DUPLICATE IPs FOUND:"+errbuf)
+        
 
     def convert_reservation_to_euinstance(self, reservation, username="root", password=None, keyname=None, timeout=120):
         """

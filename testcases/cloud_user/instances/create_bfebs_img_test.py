@@ -185,7 +185,7 @@ if __name__ == '__main__':
             pmsg("Attempting to launch initial instance now...")
             try:
                 #Grab an emi based on our given criteria
-                image=tester.get_emi(emi=img, root_device_type=itype)
+                image=tester.get_emi(emi=img, root_device_type=itype,not_location='windows')
                 pmsg("Got emi to use:"+image.id)
             
                 #Launch an instance from the emi we've retrieved, instance is returned in the running state

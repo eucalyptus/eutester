@@ -82,6 +82,7 @@ class EuInstance(Instance):
     retry = 1
     verbose = True
     ssh = None
+    private_addressing = False
     tester = None
     laststate = None
     laststatetime = None
@@ -101,6 +102,7 @@ class EuInstance(Instance):
                                       connectssh = True,
                                       verbose=True, 
                                       timeout=120,
+                                      private_addresssing = False,
                                       reservation_id = None, 
                                       cmdstart=None, 
                                       retry=2
@@ -136,6 +138,7 @@ class EuInstance(Instance):
         newins.attached_vols=[] 
         newins.timeout = timeout
         newins.retry = retry    
+        newins.private_addressing = private_addressing
         newins.reservation_id = reservation_id or newins.tester.get_reservation_id_for_instance(self.id)
         newins.laststate = newins.state
         newins.cmdstart = cmdstart or newins.tester.get_instance_time_launched(newins)
@@ -165,9 +168,9 @@ class EuInstance(Instance):
         buf = "\n"
         if title:
             buf += str("------------------------------------------------------------------------------------------------------------------------------\n")
-            buf += str('INST_ID').center(15)+'|'+str('RES_ID').center(23)+'|'+str('LASTSTATUS').center(10)+'|'+str('STATUS').center(10)+'|'+str('AGE@STATUS').center(10)+'|'+str('VMTYPE').center(12)+'|'+str('BDM_VOL').center(15)+'|'+str('CLUSTER').center(25)+'|'+str('PUB_IP').center(20)+'|'+str('PRIV_IP')+'\n'
+            buf += str('INST_ID').center(15)+'|'+str('RES_ID').center(23)+'|'+str('LASTSTATUS').center(10)+'|'+str('PRIV_ADDR').center(10)+'|'+str('AGE@STATUS').center(10)+'|'+str('VMTYPE').center(12)+'|'+str('BDM_VOL').center(15)+'|'+str('CLUSTER').center(25)+'|'+str('PUB_IP').center(20)+'|'+str('PRIV_IP')+'\n'
             buf += str("------------------------------------------------------------------------------------------------------------------------------\n")
-        buf += str(self.id).center(15)+'|'+str(self.reservation_id).center(23)+'|'+str(self.laststatus).center(10)+'|'+str(self.status).center(10)+'|'+str(self.eutest_ageatstatus).center(10)+'|'+str(self.instance_type).center(12)+'|'+str(bdmvol).center(15)+'|'+str(self.region).center(25)+'|'+str(self.public_dns_name).center(20)+'|'+str(self.private_ip_address).rstrip()+"\n"
+        buf += str(self.id).center(15)+'|'+str(self.reservation_id).center(23)+'|'+str(self.laststatus).center(10)+'|'+str(self.private_addressing).center(10)+'|'+str(self.eutest_ageatstatus).center(10)+'|'+str(self.instance_type).center(12)+'|'+str(bdmvol).center(15)+'|'+str(self.region).center(25)+'|'+str(self.public_dns_name).center(20)+'|'+str(self.private_ip_address).rstrip()+"\n"
         if footer:
             buf += str("------------------------------------------------------------------------------------------------------------------------------")
         if printmethod:
