@@ -38,17 +38,11 @@ __version__ = '0.0.5'
 
 import re
 import os
-import boto
 import random
 import time
 import string
 import socket
 import sys
-
-from boto.ec2.regioninfo import RegionInfo
-from boto.s3.connection import OrdinaryCallingFormat
-
-
 import eulogger
 
 
@@ -57,38 +51,24 @@ class TimeoutFunctionException(Exception):
     """Exception to raise on a timeout""" 
     pass 
 
-EC2RegionData = {
-    'us-east-1' : 'ec2.us-east-1.amazonaws.com',
-    'us-west-1' : 'ec2.us-west-1.amazonaws.com',
-    'eu-west-1' : 'ec2.eu-west-1.amazonaws.com',
-    'ap-northeast-1' : 'ec2.ap-northeast-1.amazonaws.com',
-    'ap-southeast-1' : 'ec2.ap-southeast-1.amazonaws.com'}
 
 class Eutester(object):
-    def __init__(self, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, region=None, ec2_ip=None, s3_ip=None, boto_debug=0):
+    def __init__(self, credpath=None, aws_access_key_id=None, aws_secret_access_key = None):
         """This class is intended to setup boto connections for the various services that the *ops classes will use.
-
         :param credpath: Path to a valid eucarc file.
         :param aws_access_key_id: Used in conjuction with aws_secret_access_key allows for creation of connections without needing a credpath.
         :param aws_secret_access_key: Used in conjuction with aws_access_key_id allows for creation of connections without needing a credpath.
-        :param region: When connecting to Amazon EC2 allows you to point to a specific region.
-        :param ec2_ip: Hostname or IP of the EC2 endpoint to connect to. Can be used in the absence of region.
-        :param s3_ip: Hostname or IP of the S3 endpoint to connect to.
-        :param boto_debug: Hostname or IP of the S3 endpoint to connect to.
         :rtype: :class:`eutester.Eutester` or ``None``
         :returns: A Eutester object with all connections that were able to be created. Currently EC2, S3, IAM, and STS.
         """
         ### Default values for configuration
-        self.boto_debug = boto_debug
         self.credpath = credpath
-        self.region = RegionInfo()
         
         ### Eutester logs
-        if self.logger is None:
-            self.logger = eulogger.Eulogger(identifier="EUTESTER")
-            self.debug = self.logger.log.debug
-            self.critical = self.logger.log.critical
-            self.info = self.logger.log.info
+        self.logger = eulogger.Eulogger(identifier="EUTESTER")
+        self.debug = self.logger.log.debug
+        self.critical = self.logger.log.critical
+        self.info = self.logger.log.info
         
         ### LOGS to keep for printing later
         self.fail_log = []
@@ -102,91 +82,6 @@ class Eutester(object):
         else:
             self.aws_access_key_id = aws_access_key_id
             self.aws_secret_access_key = aws_secret_access_key
-        
-        ### If you have credentials for the boto connections, create them
-        if (self.aws_access_key_id is not None) and (self.aws_secret_access_key is not None):
-            if not boto.config.has_section('Boto'):
-                boto.config.add_section('Boto')
-            boto.config.set('Boto', 'num_retries', '2')
-            self.setup_boto_connections(region=region,ec2_ip=ec2_ip,s3_ip=s3_ip)
-
-    def setup_boto_connections(self, region=None, aws_access_key_id=None, aws_secret_access_key=None, ec2_ip=None, s3_ip=None, is_secure=False):
-        
-        if aws_access_key_id is None:
-            aws_access_key_id = self.aws_access_key_id
-        if aws_secret_access_key is None:
-            aws_secret_access_key = self.aws_secret_access_key     
-        port = 443
-        ec2_service_path = "/"
-        APIVersion = '2009-11-30'
-
-        if region is not None:
-            self.debug("Check region: " + str(region))        
-            try:
-                self.region.endpoint = EC2RegionData[region]
-            except KeyError:
-                raise Exception( 'Unknown region: %s' % region)
-        
-        if not self.region.endpoint:
-            self.region.name = 'eucalyptus'
-            if ec2_ip is None:
-                self.region.endpoint = self.get_ec2_ip()       
-            else:
-                self.region.endpoint = ec2_ip
-            port = 8773
-            ec2_service_path="/services/Eucalyptus"
-        connection_args = { 'aws_access_key_id' :aws_access_key_id,
-                            'aws_secret_access_key': aws_secret_access_key,
-                            'is_secure': is_secure,
-                            'debug': self.boto_debug,
-                            'port' : port }
-
-        if re.search('2.6', boto.__version__):
-            connection_args['validate_certs'] = False
-
-        try:
-            ec2_connection_args = copy.copy(connection_args)
-            ec2_connection_args['path'] = ec2_service_path
-            ec2_connection_args['api_version'] = APIVersion
-            ec2_connection_args['region'] = self.region
-            self.debug("Attempting to create ec2 connection to " + self.region.endpoint)
-            self.ec2 = boto.connect_ec2(**ec2_connection_args)
-        except Exception, e:
-            self.critical("Was unable to create ec2 connection because of exception: " + str(e))
-
-        try:
-            if s3_ip is not None:
-                walrus_endpoint = s3_ip
-            else:
-                walrus_endpoint = self.get_s3_ip()
-            walrus_path = "/services/Walrus"
-            s3_connection_args = copy.copy(connection_args)
-            s3_connection_args['path'] = walrus_path
-            s3_connection_args['host'] = walrus_endpoint
-            s3_connection_args['calling_format'] = OrdinaryCallingFormat()
-            self.debug("Attempting to create S3 connection to " + walrus_endpoint)
-            self.s3 = boto.connect_s3(**s3_connection_args)
-        except Exception, e:
-            self.critical("Was unable to create S3 connection because of exception: " + str(e))
-        
-        try:
-            euare_connection_args = copy.copy(connection_args)
-            euare_connection_args['path'] = "/services/Euare"
-            euare_connection_args['host'] = self.get_ec2_ip()
-            self.debug("Attempting to create IAM connection to " + self.get_ec2_ip())
-            self.euare = boto.connect_iam(**euare_connection_args)
-        except Exception, e:
-            self.critical("Was unable to create IAM connection because of exception: " + str(e))
-
-        try:
-            sts_connection_args = copy.copy(connection_args)
-            sts_connection_args['path'] = "/services/Tokens"
-            sts_connection_args['region'] = self.region
-            ec2_connection_args['api_version'] = APIVersion
-            self.debug("Attempting to create STS connection to " + self.get_ec2_ip())
-            self.tokens = boto.connect_sts(**sts_connection_args)
-        except Exception, e:
-            self.critical("Was unable to create STS connection because of exception: " + str(e))
 
     def get_access_key(self):
         """Parse the eucarc for the EC2_ACCESS_KEY"""
@@ -203,13 +98,11 @@ class Eutester(object):
     def get_user_id(self):
         """Parse the eucarc for the EC2_ACCOUNT_NUMBER"""
         return self.parse_eucarc("EC2_USER_ID")
-        
-    def parse_eucarc(self, field):
-        with open( self.credpath + "/eucarc") as eucarc: 
-            for line in eucarc.readlines():
-                if re.search(field, line):
-                    return line.split("=")[1].strip().strip("'")
-            raise Exception("Unable to find " +  field + " id in eucarc")
+
+    def get_port(self):
+        """Parse the eucarc for the EC2_ACCOUNT_NUMBER"""
+        ec2_url = self.parse_eucarc("EC2_URL")
+        return ec2_url.split(':')[1].split("/")[0]
     
     def get_s3_ip(self):
         """Parse the eucarc for the S3_URL"""
@@ -219,7 +112,14 @@ class Eutester(object):
     def get_ec2_ip(self):
         """Parse the eucarc for the EC2_URL"""
         ec2_url = self.parse_eucarc("EC2_URL")
-        return ec2_url.split("/")[2].split(":")[0]        
+        return ec2_url.split("/")[2].split(":")[0]
+
+    def parse_eucarc(self, field):
+        with open( self.credpath + "/eucarc") as eucarc:
+            for line in eucarc.readlines():
+                if re.search(field, line):
+                    return line.split("=")[1].strip().strip("'")
+            raise Exception("Unable to find " +  field + " id in eucarc")
     
     def handle_timeout(self, signum, frame): 
         raise TimeoutFunctionException()
