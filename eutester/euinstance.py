@@ -190,7 +190,7 @@ class EuInstance(Instance):
             self.debugmethod(msg)
             
                 
-    def sys(self, cmd, verbose=True, timeout=120):
+    def sys(self, cmd, verbose=True, code=None, timeout=120):
         '''
         Issues a command against the ssh connection to this instance
         Returns a list of the lines from stdout+stderr as a result of the command
@@ -200,7 +200,7 @@ class EuInstance(Instance):
         '''
         output = []
         if (self.ssh is not None):
-            output = self.ssh.sys(cmd, verbose=verbose, timeout=timeout)
+            output = self.ssh.sys(cmd, verbose=verbose, code=code, timeout=timeout)
             return output
         else:
             raise Exception("Euinstance ssh connection is None")
@@ -596,7 +596,7 @@ class EuInstance(Instance):
             md5 = str(self.sys("head -c "+str(length)+" "+str(devpath)+" | md5sum")[0]).split(' ')[0].strip()
         return md5
         
-    def reboot_instance_and_verify(self,waitconnect=30, timeout=300, connect=True, checkvolstatus=False):
+    def reboot_instance_and_verify(self,waitconnect=30, timeout=300, connect=True, checkvolstatus=False, pad=5):
         '''
         Attempts to reboot an instance and verify it's state post reboot. 
         waitconnect-optional-integer representing seconds to wait before attempting to connect to instance after reboot
@@ -606,6 +606,9 @@ class EuInstance(Instance):
         '''
         msg=""
         self.debug('Attempting to reboot instance:'+str(self.id))
+        uptime = int(self.sys('cat /proc/uptime')[0].split()[1].split('.')[0])
+        elapsed = 0
+        start = time.time()
         if checkvolstatus:
             #update the md5sums per volume before reboot
             bad_vols=self.get_unsynced_volumes()
@@ -616,6 +619,11 @@ class EuInstance(Instance):
         self.reboot()
         time.sleep(waitconnect)
         self.connect_to_instance(timeout=timeout)
+        elapsed = int(time.time()-start)
+        newuptime = int(self.sys('cat /proc/uptime')[0].split()[1].split('.')[0])
+        #Check to see if new uptime is at least 'pad' less than before, allowing for some pad 
+        if (newuptime - (uptime+elapsed)) > pad:
+            raise Exception("Instance uptime does not represent a reboot. Orig:"+str(uptime)+", New:"+str(newuptime)+", elapsed:"+str(elapsed))
         if checkvolstatus:
             badvols= self.get_unsynced_volumes()
             if badvols != []:

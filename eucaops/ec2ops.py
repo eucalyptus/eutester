@@ -1423,8 +1423,7 @@ class EC2ops(Eutester):
         retlist = []
         if (attached_instance is not None) or (attached_dev is not None):
             status='in-use'
-        volumes = self.test_resources['volumes']
-        volumes.extend(self.ec2.get_all_volumes())             
+        volumes = self.ec2.get_all_volumes()             
         for volume in volumes:
             if not hasattr(volume,'md5'):
                 volume = EuVolume.make_euvol_from_vol(volume)

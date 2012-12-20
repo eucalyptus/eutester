@@ -26,9 +26,11 @@ try:
         start = time.time()
         for x in xrange(0,bytes):
             print "\r\x1b[K Writing:"+str(x)+", Rate:"+writerate+" bytes/sec, Lastread:"+str(lr)+", READ Rate:"+readrate+" bytes/sec",
-            sys.stdout.flush()
-            f.write(str(x)+"\n")
-            wlength += len(str(x))+1 
+            xstr = x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x
+	    xstr = str(xstr).lstrip('(').rstrip(')')+"\n"
+	    sys.stdout.flush()
+            f.write(xstr)
+            wlength += len(str(xstr)) 
             if x and not x % 1:
                 f.flush()
                 os.fsync(f.fileno())
@@ -78,16 +80,16 @@ try:
                         leftover = lines.pop()
                     for x in lines:
                         print "\r\x1b[K Reading:"+str(x)+",",
-                        lr = x
                         sys.stdout.flush()
-                        cur = int(x)
+                        cur = int(x.split(',')[0])
+			lr = str(cur) 
                         if cur != 0 and cur != (last + 1):
                             raise Exception('bad incremented in value, last:'+str(last)+" vs cur:"+str(cur))
                         last = cur
                         cur = 0
                     readin = f.read(1024)
         if length != wlength:
-            raise Exception("Read length:"+str(length)+" != written length:"+str(wlength) )
+            raise Exception("Read length:"+str(length)+" != written length:"+str(wlength)+",Diff:"+str(length-wlength))
         elapsed = time.time() - start
         readrate = str("%.2f" % (length / elapsed))
         rbuf = '\n\nREAD Rate:'+readrate +" bytes/sec\n\n"
