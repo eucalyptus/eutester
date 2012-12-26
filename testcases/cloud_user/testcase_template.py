@@ -2,6 +2,7 @@
 
 import time
 from eucaops import Eucaops
+from eucaops import EC2ops
 from eutester.eutestcase import EutesterTestCase
 import os
 import random
@@ -10,12 +11,16 @@ class InstanceBasics(EutesterTestCase):
     def __init__(self, extra_args= None):
         self.setuptestcase()
         self.setup_parser()
+        self.parser.add_argument("--region", default=None)
         if extra_args:
             for arg in extra_args:
                 self.parser.add_argument(arg)
         self.get_args()
         # Setup basic eutester object
-        self.tester = Eucaops( credpath=self.args.credpath)
+        if self.args.region:
+            self.tester = EC2ops( credpath=self.args.credpath, region=self.args.region)
+        else:
+            self.tester = Eucaops( credpath=self.args.credpath)
         self.tester.poll_count = 120
 
         ### Add and authorize a group for the instance
@@ -30,6 +35,7 @@ class InstanceBasics(EutesterTestCase):
             self.image = self.tester.get_emi(root_device_type="instance-store")
         self.address = None
         self.volume = None
+        self.snapshot = None
         self.private_addressing = False
         zones = self.tester.ec2.get_all_zones()
         self.zone = random.choice(zones).name
