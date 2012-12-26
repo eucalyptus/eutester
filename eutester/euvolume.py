@@ -41,7 +41,8 @@ import time
 
 
 
-class EuVolume(Volume):   
+class EuVolume(Volume):
+    tester = None
     md5 = None
     md5len = 32
     eutest_failmsg = None
@@ -59,9 +60,10 @@ class EuVolume(Volume):
     clouddev = "" #the device name given to the cloud as a request to be used. 
         
     @classmethod
-    def make_euvol_from_vol(cls,volume,cmdstart=None):
+    def make_euvol_from_vol(cls,volume, tester=None, cmdstart=None):
         newvol = EuVolume(volume.connection)
         newvol.__dict__ = volume.__dict__
+        newvol.tester = tester
         newvol.md5 = None
         newvol.md5len = 32
         newvol.eutest_failmsg = None
@@ -70,6 +72,7 @@ class EuVolume(Volume):
         newvol.eutest_cmdstart = cmdstart or eucaops.EC2ops.get_volume_time_created(volume)
         newvol.eutest_createorder = None
         newvol.eutest_cmdtime = None
+
         return newvol
     
     def update(self):
@@ -80,7 +83,42 @@ class EuVolume(Volume):
         self.eutest_laststatus = self.status
         self.eutest_laststatustime = time.time()
         self.eutest_ageatstatus = "{0:.2f}".format(time.time() - self.eutest_cmdstart)
-        
+
+    def create_tags(self, tags):
+        self.tester.debug("Current tags: " + str(self.tags))
+        self.tester.create_tags([self.id], tags)
+        self.wait_for_tags(tags)
+
+    def wait_for_tags(self, tags, creation=True, timeout=60):
+        start= time.time()
+        elapsed = 0
+        while elapsed < timeout:
+            self.update()
+            self.tester.debug("Current tags: " + str(self.tags))
+            found_keys = 0
+            for key, value in tags.iteritems():
+                if self.tags[key]:
+                    self.tester.debug("Found key:" + key)
+                    found_keys += 1
+            if creation:
+                if found_keys == len(tags):
+                    return True
+                else:
+                    pass
+            else:
+                if found_keys == 0:
+                    return True
+                else:
+                    pass
+            elapsed = int(time.time() - start)
+            time.sleep(5)
+        raise Exception("Did not apply tags within " + str(timeout) + " seconds")
+
+    def delete_tags(self, tags):
+        self.tester.debug("Current tags: " + str(self.tags))
+        self.tester.delete_tags([self.id], tags)
+        self.wait_for_tags(tags, creation=False)
+
     def printself(self,title=True, footer=True, printmethod=None):
         buf = "\n"
         if title:

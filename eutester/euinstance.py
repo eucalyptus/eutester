@@ -189,7 +189,38 @@ class EuInstance(Instance):
         if ( self.verbose is True ):
             self.debugmethod(msg)
             
-                
+    def create_tags(self, tags):
+        self.tester.create_tags([self.id], tags)
+        self.wait_for_tags(tags)
+
+    def wait_for_tags(self, tags, creation=True, timeout=60):
+        start= time.time()
+        elapsed = 0
+        while elapsed < timeout:
+            self.update()
+            found_keys = 0
+            for key, value in tags.iteritems():
+                if self.tags[key] == value:
+                    found_keys += 1
+
+            if creation:
+                if found_keys == len(tags):
+                    return True
+                else:
+                    pass
+            else:
+                if found_keys == 0:
+                    return True
+                else:
+                    pass
+            elapsed = int(time.time() - start)
+            self.tester.sleep(5)
+        raise Exception("Did not apply tags within " + str(timeout) + " seconds")
+
+    def delete_tags(self, tags):
+        self.tester.delete_tags([self.id], tags)
+        self.wait_for_tags(tags, creation=False)
+
     def sys(self, cmd, verbose=True, code=None, timeout=120):
         '''
         Issues a command against the ssh connection to this instance
