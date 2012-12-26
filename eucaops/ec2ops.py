@@ -127,6 +127,8 @@ class EC2ops(Eutester):
         :param resource_ids:      List of resources IDs to tag
         :param tags:              Dict of key value pairs to add, for just a name include a key with a '' value
         """
+        self.debug("Adding the following tags:" + str(tags) )
+        self.debug("To Resources: " + str(resource_ids))
         self.ec2.create_tags(resource_ids=resource_ids, tags=tags)
 
     def delete_tags(self, resource_ids, tags):
@@ -136,6 +138,8 @@ class EC2ops(Eutester):
         :param resource_ids:      List of resources IDs to tag
         :param tags:              Dict of key value pairs to add, for just a name include a key with a '' value
         """
+        self.debug("Deleting the following tags:" + str(tags) )
+        self.debug("From Resources: " + str(resource_ids))
         self.ec2.delete_tags(resource_ids=resource_ids, tags=tags)
 
     def add_keypair(self,key_name=None):
@@ -504,7 +508,7 @@ class EC2ops(Eutester):
                 vol = self.ec2.create_volume(size, azone, snapshot)
                 cmdtime =  time.time() - cmdstart 
                 if vol:
-                    vol = EuVolume.make_euvol_from_vol(vol, cmdstart=cmdstart)
+                    vol = EuVolume.make_euvol_from_vol(vol, tester=self, cmdstart=cmdstart)
                     vol.eutest_cmdstart = cmdstart
                     vol.eutest_createorder = x
                     vol.eutest_cmdtime = "{0:.2f}".format(cmdtime)
@@ -949,7 +953,7 @@ class EC2ops(Eutester):
         """
         if isinstance(volume_id, Volume):
             raise Exception('Expected volume.id got Volume, try create_snapshots or create_snapshot_from_volume methods instead')
-        volume = EuVolume.make_euvol_from_vol(self.get_volume(volume_id))
+        volume = EuVolume.make_euvol_from_vol(self.get_volume(volume_id), tester=self)
         return self.create_snapshots(volume, count=count, mincount=mincount, eof=eof, delay=delay, wait_on_progress=wait_on_progress, poll_interval=poll_interval, timeout=timeout, description=description)
 
 
@@ -972,7 +976,7 @@ class EC2ops(Eutester):
         """
         #Fix EuSnapshot for isinstance() use later...
         if not hasattr(volume, 'md5'):
-            volume = EuVolume.make_euvol_from_vol(volume)
+            volume = EuVolume.make_euvol_from_vol(volume,tester= self)
         volume_id = volume.id
         snapshots = []
         retlist = []
@@ -1444,7 +1448,7 @@ class EC2ops(Eutester):
         volumes = self.ec2.get_all_volumes()             
         for volume in volumes:
             if not hasattr(volume,'md5'):
-                volume = EuVolume.make_euvol_from_vol(volume)
+                volume = EuVolume.make_euvol_from_vol(volume, tester=self)
             if not re.match(volume_id, volume.id):
                 continue
             if (snapid is not None) and (volume.snapshot_id != snapid):
