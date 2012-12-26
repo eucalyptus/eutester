@@ -58,9 +58,11 @@ EC2RegionData = {
 
 class EC2ops(Eutester):
     def __init__(self, host=None, credpath=None, endpoint=None, aws_access_key_id=None, aws_secret_access_key = None, username="root",region=None,
-                 is_secure=False, path='/', port='80', boto_debug=0):
+                 is_secure=False, path='/', port=80, boto_debug=0, APIVersion = '2012-07-20'):
         super(EC2ops, self).__init__(credpath=credpath, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key)
-        self.setup_ec2_connection(host= host, region=region, endpoint=endpoint, aws_access_key_id=self.aws_access_key_id ,aws_secret_access_key=self.aws_secret_access_key, is_secure=is_secure, path=path, port=port, boto_debug=boto_debug)
+        self.setup_ec2_connection(host= host, region=region, endpoint=endpoint, aws_access_key_id=self.aws_access_key_id ,
+                                    aws_secret_access_key=self.aws_secret_access_key, is_secure=is_secure, path=path, port=port,
+                                    boto_debug=boto_debug, APIVersion=APIVersion)
         self.poll_count = 48
         self.username = username
         self.test_resources = {}
@@ -68,7 +70,7 @@ class EC2ops(Eutester):
         self.key_dir = "./"
 
     def setup_ec2_connection(self, endpoint=None, aws_access_key_id=None, aws_secret_access_key=None, is_secure=True,host=None ,
-                             region=None, path = "/", port = 443,  APIVersion = '2009-11-30', boto_debug=0):
+                             region=None, path = "/", port = 443,  APIVersion ='2012-07-20', boto_debug=0):
         ec2_region = RegionInfo()
         if region:
             self.debug("Check region: " + str(region))
@@ -118,7 +120,23 @@ class EC2ops(Eutester):
         self.test_resources["security-groups"] = []
         self.test_resources["images"] = []
 
+    def create_tags(self, resource_ids, tags):
+        """
+        Add tags to the given resource
 
+        :param resource_ids:      List of resources IDs to tag
+        :param tags:              Dict of key value pairs to add, for just a name include a key with a '' value
+        """
+        self.ec2.create_tags(resource_ids=resource_ids, tags=tags)
+
+    def delete_tags(self, resource_ids, tags):
+        """
+        Add tags to the given resource
+
+        :param resource_ids:      List of resources IDs to tag
+        :param tags:              Dict of key value pairs to add, for just a name include a key with a '' value
+        """
+        self.ec2.delete_tags(resource_ids=resource_ids, tags=tags)
 
     def add_keypair(self,key_name=None):
         """
