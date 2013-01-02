@@ -47,7 +47,7 @@ class TaggingBasics(EutesterTestCase):
             self.assertTrue(self.tester.terminate_instances(self.reservation), "Unable to terminate instance(s)")
 
         if self.volume:
-            self.tester.delete_volume(self.volume)
+            self.tester.delete_volume(self.volume,timeout=600)
 
         if self.snapshot:
             self.tester.delete_snapshot(self.snapshot)
@@ -101,27 +101,28 @@ class TaggingBasics(EutesterTestCase):
         This case was developed to exercise tagging of an instance resource
         """
         self.volume = self.tester.create_volume(azone=self.zone)
-        tags = { u'name': 'volume-tag-test', u'location' : 'over there'}
+        tags = { u'name': 'volume-tag-test', u'location' : 'datacenter'}
         self.volume.create_tags(tags)
         self.volume.update()
         if self.volume.tags != tags:
             raise Exception('Tags were not set properly for the volume resource')
 
         ### Test Filtering
-        tag_filter = { u'tag:name': 'volume-tag-test', u'tag:location' : 'over there'}
+        tag_filter = { u'tag:name': 'volume-tag-test', u'tag:location' : 'datacenter'}
         volumes = self.tester.ec2.get_all_volumes(filters=tag_filter)
+        if len(volumes) is 0:
+            raise Exception('Filter for instances returned no results ' + str(volumes))
         if len(volumes) is not 1:
             raise Exception('Filter for instances returned too many results ' + str(volumes))
         if volumes[0].id != self.volume.id:
             raise Exception('Wrong volume ID returned after filtering ' + str(volumes) )
 
         ### Test Deletion
-        self.volume.delete_tags( tags)
-        self.volume.update()
+        self.volume.delete_tags(tags, timeout=600)
         instances = self.tester.ec2.get_all_instances(filters=tag_filter)
         if len(instances) != 0:
             raise Exception('Filter returned volumes when there shouldnt be any')
-        if not self.volume.tags:
+        if self.volume.tags != {}:
             raise Exception('Tags still returned after deleting them from volume')
         self.test_restrictions(self.volume)
         self.test_in_series(self.volume)
@@ -162,19 +163,19 @@ class TaggingBasics(EutesterTestCase):
 
 
     def test_restrictions(self, resource):
-        max_tags = { u'name': 'snapshot-tag-test', u'location' : 'over there',  u'tag3' : 'test3', u'tag4' : 'test4',
+        max_tags = { u'name': 'tag-test', u'location' : 'over there',  u'tag3' : 'test3', u'tag4' : 'test4',
                      u'tag5' : 'test5', u'tag6' : 'test6', u'tag7' : 'test7', u'tag8' : 'test8',
                      u'tag9' : 'test9', u'tag10' : 'test10'}
         self.test_tag_creation(max_tags, resource=resource, fail_message="Failure when trying to add max allowable tags (10)", expected_outcome=True)
         self.test_tag_deletion(max_tags, resource=resource,fail_message="Failure when trying to delete max allowable tags (10)", expected_outcome=True)
 
-        too_many_tags = { u'name': 'snapshot-tag-test', u'location' : 'over there',  u'tag3' : 'test3', u'tag4' : 'test4',
+        too_many_tags = { u'name': 'tag-test', u'location' : 'over there',  u'tag3' : 'test3', u'tag4' : 'test4',
                           u'tag5' : 'test5', u'tag6' : 'test6', u'tag7' : 'test7', u'tag8' : 'test8',
                           u'tag9' : 'test9', u'tag10' : 'test10', u'tag11' : 'test11'}
         self.test_tag_creation(too_many_tags, resource=resource,fail_message="Allowed too many tags to be created", expected_outcome=False)
 
         maximum_key_length = { u'000000000000000000000000000000000000000000000000000000000000000000000000000000000000'
-                               u'00000000000000000000000000000000000000000000': 'my value'}
+                               u'0000000000000000000000000000000000000000000': 'my value'}
         self.test_tag_creation(maximum_key_length, resource=resource, fail_message="Unable to use a key with 128 characters", expected_outcome=True)
         self.test_tag_deletion(maximum_key_length, resource=resource, fail_message="Unable to delete a key with 128 characters", expected_outcome=True)
 
@@ -196,8 +197,8 @@ class TaggingBasics(EutesterTestCase):
         aws_key_prefix = { u'aws:something': 'asdfadsf'}
         self.test_tag_creation(aws_key_prefix, resource=resource, fail_message="Allowed key with 'aws:' prefix'", expected_outcome=False)
 
-        aws_key_prefix = { u'my_key': 'aws:somethingelse'}
-        self.test_tag_creation(aws_key_prefix, resource=resource, fail_message="Allowed key with 'aws:' prefix'", expected_outcome=False)
+        aws_value_prefix = { u'my_key': 'aws:somethingelse'}
+        self.test_tag_creation(aws_value_prefix, resource=resource, fail_message="Allowed key with 'aws:' prefix'", expected_outcome=True)
 
         lower_case = {u'case': 'value'}
         upper_case = {u'CASE': 'value'}
@@ -206,29 +207,33 @@ class TaggingBasics(EutesterTestCase):
         self.test_tag_deletion(lower_case, resource=resource, fail_message="Unable to delete a tag, when testing case sensitivity", expected_outcome=True)
         self.test_tag_deletion(upper_case, resource=resource, fail_message="Unable to delete a tag, when testing case sensitivity", expected_outcome=True)
 
-    def test_tag_creation(self, tags, resource, fail_message, expected_outcome=True):
+    def test_tag_creation(self, tags, resource, fail_message, expected_outcome=True, timeout=600):
         actual_outcome = None
+        exception = None
         try:
-            self.tester.create_tags([resource.id], tags)
+            resource.create_tags(tags, timeout=timeout)
             actual_outcome =  True
-        except:
+        except Exception, e:
+            exception = e
             actual_outcome =  False
         finally:
             if actual_outcome is not expected_outcome:
-                raise Exception(fail_message)
+                raise Exception(fail_message + "\nDue to: " + str(exception) )
 
-    def test_tag_deletion(self, tags, resource, fail_message, expected_outcome=True):
+    def test_tag_deletion(self, tags, resource, fail_message, expected_outcome=True, timeout=600):
         actual_outcome = None
+        exception = None
         try:
-            self.tester.delete_tags([resource.id], tags)
+            resource.delete_tags(tags, timeout=timeout)
             actual_outcome =  True
-        except:
+        except Exception, e:
+            exception = e
             actual_outcome =  False
         finally:
             if actual_outcome is not expected_outcome:
-                raise Exception(fail_message)
+                raise Exception(fail_message + "\nDue to: " + str(exception) )
 
-    def test_in_series(self, resource, count=200):
+    def test_in_series(self, resource, count=10):
         for i in xrange(count):
             normal_tag = { u'series_key': '!@$$%^^&&*()*&&^%{}":?><|][~'}
             self.test_tag_creation(normal_tag, resource=resource, fail_message="Failed adding tags in series", expected_outcome=True)
