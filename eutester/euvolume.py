@@ -84,10 +84,10 @@ class EuVolume(Volume):
         self.eutest_laststatustime = time.time()
         self.eutest_ageatstatus = "{0:.2f}".format(time.time() - self.eutest_cmdstart)
 
-    def create_tags(self, tags):
+    def create_tags(self, tags, timeout=60):
         self.tester.debug("Current tags: " + str(self.tags))
         self.tester.create_tags([self.id], tags)
-        self.wait_for_tags(tags)
+        self.wait_for_tags(tags, timeout=timeout)
 
     def wait_for_tags(self, tags, creation=True, timeout=60):
         start= time.time()
@@ -97,7 +97,7 @@ class EuVolume(Volume):
             self.tester.debug("Current tags: " + str(self.tags))
             found_keys = 0
             for key, value in tags.iteritems():
-                if self.tags[key]:
+                if key in self.tags:
                     self.tester.debug("Found key:" + key)
                     found_keys += 1
             if creation:
@@ -114,10 +114,10 @@ class EuVolume(Volume):
             time.sleep(5)
         raise Exception("Did not apply tags within " + str(timeout) + " seconds")
 
-    def delete_tags(self, tags):
+    def delete_tags(self, tags, timeout=60):
         self.tester.debug("Current tags: " + str(self.tags))
         self.tester.delete_tags([self.id], tags)
-        self.wait_for_tags(tags, creation=False)
+        self.wait_for_tags(tags, creation=False, timeout=timeout)
 
     def printself(self,title=True, footer=True, printmethod=None):
         buf = "\n"
