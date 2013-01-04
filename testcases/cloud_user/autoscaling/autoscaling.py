@@ -21,44 +21,8 @@ class AutoScalingBasics(EutesterTestCase):
         if self.args.region:
             self.tester = ASops( credpath=self.args.credpath, region=self.args.region)
         else:
-            self.tester = Eucaops( credpath=self.args.credpath)
+            self.tester = ASaops( credpath=self.args.credpath)
         self.tester.poll_count = 120
-
-        ### Add and authorize a group for the instance
-        self.group = self.tester.add_group(group_name="group-" + str(time.time()))
-        self.tester.authorize_group_by_name(group_name=self.group.name )
-        self.tester.authorize_group_by_name(group_name=self.group.name, port=-1, protocol="icmp" )
-        ### Generate a keypair for the instance
-        self.keypair = self.tester.add_keypair( "keypair-" + str(time.time()))
-        self.keypath = '%s/%s.pem' % (os.curdir, self.keypair.name)
-        self.image = self.args.emi
-        if not self.image:
-            self.image = self.tester.get_emi(root_device_type="instance-store")
-        self.address = None
-        self.volume = None
-        self.snapshot = None
-        self.private_addressing = False
-        zones = self.tester.ec2.get_all_zones()
-        self.zone = random.choice(zones).name
-        self.reservation = None
-
-    def clean_method(self):
-        ### Terminate the reservation if it is still up
-        if self.reservation:
-            self.assertTrue(self.tester.terminate_instances(self.reservation), "Unable to terminate instance(s)")
-
-        if self.volume:
-            self.tester.delete_volume(self.volume,timeout=600)
-
-        if self.snapshot:
-            self.tester.delete_snapshot(self.snapshot)
-
-        ### DELETE group
-        self.tester.delete_group(self.group)
-
-        ### Delete keypair in cloud and from filesystem
-        self.tester.delete_keypair(self.keypair)
-        os.remove(self.keypath)
 
     def CreateAutoScalingGroup(self):
         """
