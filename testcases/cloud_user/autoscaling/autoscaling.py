@@ -21,8 +21,15 @@ class AutoScalingBasics(EutesterTestCase):
         if self.args.region:
             self.tester = ASops( credpath=self.args.credpath, region=self.args.region)
         else:
-            self.tester = ASaops( credpath=self.args.credpath)
+            self.tester = ASops( credpath=self.args.credpath)
         self.tester.poll_count = 120
+        self.image = self.args.emi
+        if not self.image:
+            self.image = self.tester.get_emi(root_device_type="instance-store")
+
+    def clean_method(self):
+        ### once needed clean up should be done here
+        pass
 
     def CreateAutoScalingGroup(self):
         """
@@ -68,7 +75,7 @@ class AutoScalingBasics(EutesterTestCase):
         """
             This case was developed to exercise creating a new launch configuration
         """
-        self.tester.create_launch_config(self.test_lc, self.image)
+        self.tester.create_launch_config("test_lc", self.image)
 
     def DeleteLaunchConfiguration(self):
         """
