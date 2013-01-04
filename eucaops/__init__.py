@@ -46,7 +46,7 @@ from eutester import eulogger
 import re
 import os
 
-class Eucaops(EC2ops,S3ops,IAMops,STSops):
+class Eucaops(EC2ops,S3ops,IAMops,STSops,ASops):
     
     def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,  account="eucalyptus", user="admin", username=None, APIVersion='2009-11-30', region=None, ec2_ip=None, s3_ip=None, download_creds=True,boto_debug=0):
         self.config_file = config_file 
@@ -128,6 +128,8 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops):
         self.setup_s3_resource_trackers()
         self.setup_iam_connection(endpoint=ec2_ip, path="/services/Euare", port=8773, is_secure=False, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,  boto_debug=boto_debug)
         self.setup_sts_connection( endpoint=ec2_ip, path="/services/Eucalyptus", port=8773, is_secure=False, region=region, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
+        self.setup_as_connection(endpoint=ec2_ip, path="/services/Eucalyptus", port=8773, is_secure=False, region=region, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, APIVersion=APIVersion, boto_debug=boto_debug)
+
 
     def get_available_vms(self, type=None, zone=None):
         """
