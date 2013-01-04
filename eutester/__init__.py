@@ -53,7 +53,7 @@ class TimeoutFunctionException(Exception):
 
 
 class Eutester(object):
-    def __init__(self, credpath=None, aws_access_key_id=None, aws_secret_access_key = None):
+    def __init__(self, credpath=None, aws_access_key_id=None, aws_secret_access_key=None):
         """This class is intended to setup boto connections for the various services that the *ops classes will use.
         :param credpath: Path to a valid eucarc file.
         :param aws_access_key_id: Used in conjuction with aws_secret_access_key allows for creation of connections without needing a credpath.

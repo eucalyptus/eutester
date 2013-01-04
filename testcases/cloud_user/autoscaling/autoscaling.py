@@ -19,7 +19,7 @@ class AutoScalingBasics(EutesterTestCase):
         self.get_args()
         # Setup basic eutester object
         if self.args.region:
-            self.tester = EC2ops( credpath=self.args.credpath, region=self.args.region)
+            self.tester = ASops( credpath=self.args.credpath, region=self.args.region)
         else:
             self.tester = Eucaops( credpath=self.args.credpath)
         self.tester.poll_count = 120
