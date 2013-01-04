@@ -45,6 +45,8 @@ from boto.exception import EC2ResponseError
 from eutester.euinstance import EuInstance
 from eutester.euvolume import EuVolume
 from eutester.eusnapshot import EuSnapshot
+from boto.ec2.regioninfo import RegionInfo
+import boto
 
 EC2RegionData = {
     'us-east-1' : 'ec2.us-east-1.amazonaws.com',
