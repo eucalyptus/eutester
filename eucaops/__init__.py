@@ -37,6 +37,7 @@ from iamops import IAMops
 from ec2ops import EC2ops
 from s3ops import S3ops
 from stsops import STSops
+from asops import ASops
 import time
 from eutester.euservice import EuserviceManager
 from boto.ec2.instance import Reservation
