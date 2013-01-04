@@ -36,12 +36,13 @@ Place holder for volume test specific convenience methods+objects to extend boto
 
 '''
 from boto.ec2.volume import Volume
+from eutester.taggedresource import TaggedResource
 import eucaops
 import time
 
 
 
-class EuVolume(Volume):
+class EuVolume(Volume, TaggedResource):
     tester = None
     md5 = None
     md5len = 32
@@ -83,41 +84,6 @@ class EuVolume(Volume):
         self.eutest_laststatus = self.status
         self.eutest_laststatustime = time.time()
         self.eutest_ageatstatus = "{0:.2f}".format(time.time() - self.eutest_cmdstart)
-
-    def create_tags(self, tags, timeout=60):
-        self.tester.debug("Current tags: " + str(self.tags))
-        self.tester.create_tags([self.id], tags)
-        self.wait_for_tags(tags, timeout=timeout)
-
-    def wait_for_tags(self, tags, creation=True, timeout=60):
-        start= time.time()
-        elapsed = 0
-        while elapsed < timeout:
-            self.update()
-            self.tester.debug("Current tags: " + str(self.tags))
-            found_keys = 0
-            for key, value in tags.iteritems():
-                if key in self.tags:
-                    self.tester.debug("Found key:" + key)
-                    found_keys += 1
-            if creation:
-                if found_keys == len(tags):
-                    return True
-                else:
-                    pass
-            else:
-                if found_keys == 0:
-                    return True
-                else:
-                    pass
-            elapsed = int(time.time() - start)
-            time.sleep(5)
-        raise Exception("Did not apply tags within " + str(timeout) + " seconds")
-
-    def delete_tags(self, tags, timeout=60):
-        self.tester.debug("Current tags: " + str(self.tags))
-        self.tester.delete_tags([self.id], tags)
-        self.wait_for_tags(tags, creation=False, timeout=timeout)
 
     def printself(self,title=True, footer=True, printmethod=None):
         buf = "\n"
