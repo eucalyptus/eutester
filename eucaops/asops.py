@@ -45,44 +45,51 @@ from boto.exception import EC2ResponseError
 from eutester.euinstance import EuInstance
 from eutester.euvolume import EuVolume
 from eutester.eusnapshot import EuSnapshot
+from boto.ec2.autoscale import AutoScaleConnection
+from boto.ec2.autoscale import LaunchConfiguration
+from boto.ec2.autoscale import AutoScalingGroup
+import boto.ec2.autoscale
 from boto.ec2.regioninfo import RegionInfo
 import boto
 
-EC2RegionData = {
-    'us-east-1' : 'ec2.us-east-1.amazonaws.com',
-    'us-west-1' : 'ec2.us-west-1.amazonaws.com',
-    'eu-west-1' : 'ec2.eu-west-1.amazonaws.com',
-    'ap-northeast-1' : 'ec2.ap-northeast-1.amazonaws.com',
-    'ap-southeast-1' : 'ec2.ap-southeast-1.amazonaws.com'}
+ASRegionData = {
+    'us-east-1' : 'autoscaling.us-east-1.amazonaws.com',
+    'us-west-1' : 'autoscaling.us-west-1.amazonaws.com',
+    'us-west-2' : 'autoscaling.us-west-2.amazonaws.com',
+    'eu-west-1' : 'autoscaling.eu-west-1.amazonaws.com',
+    'ap-northeast-1' : 'autoscaling.ap-northeast-1.amazonaws.com',
+    'ap-southeast-1' : 'autoscaling.ap-southeast-1.amazonaws.com',
+    'ap-southeast-2' : 'autoscaling.ap-southeast-2.amazonaws.com',
+    'sa-east-1' : 'autoscaling.sa-east-1.amazonaws.com'}
 
 class ASops(Eutester):
-    def __init__(self, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, username="root",region=None, ec2_ip=None, s3_ip=None, boto_debug=0):
-        Eutester.__init__(self, credpath=credpath, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,region=region,  s3_ip=s3_ip, ec2_ip=ec2_ip, boto_debug=boto_debug)
+    def __init__(self, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, username="root",region=None, as_ip=None, s3_ip=None, boto_debug=0):
+        Eutester.__init__(self, credpath=credpath, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,region=region,  s3_ip=s3_ip, as_ip=as_ip, boto_debug=boto_debug)
         self.poll_count = 48
         self.username = username
         self.test_resources = {}
-        self.setup_ec2_resource_trackers()
+#        self.setup_ec2_resource_trackers()
         self.key_dir = "./"
 
     def setup_as_connection(self, endpoint=None, aws_access_key_id=None, aws_secret_access_key=None, is_secure=True,host=None ,
-                             region=None, path = "/", port = 443,  APIVersion ='2012-07-20', boto_debug=0):
-        ec2_region = RegionInfo()
+                             region=None, path = "/", port = 443,  APIVersion ='2011-01-01', boto_debug=0):
+        as_region = RegionInfo()
         if region:
             self.debug("Check region: " + str(region))
             try:
                 if not endpoint:
-                    ec2_region.endpoint = EC2RegionData[region]
+                    as_region.endpoint = ASRegionData[region]
                 else:
-                    ec2_region.endpoint = endpoint
+                    as_region.endpoint = endpoint
             except KeyError:
                 raise Exception( 'Unknown region: %s' % region)
         else:
-            ec2_region.name = 'eucalyptus'
+            as_region.name = 'eucalyptus'
             if not host:
                 if endpoint:
-                    ec2_region.endpoint = endpoint
+                    as_region.endpoint = endpoint
                 else:
-                    ec2_region.endpoint = self.get_ec2_ip()
+                    as_region.endpoint = self.get_as_ip()
         connection_args = { 'aws_access_key_id' : aws_access_key_id,
                             'aws_secret_access_key': aws_secret_access_key,
                             'is_secure': is_secure,
@@ -95,14 +102,17 @@ class ASops(Eutester):
             connection_args['validate_certs'] = False
 
         try:
-            ec2_connection_args = copy.copy(connection_args)
-            ec2_connection_args['path'] = path
-            ec2_connection_args['api_version'] = APIVersion
-            ec2_connection_args['region'] = ec2_region
-            self.debug("Attempting to create ec2 connection to " + ec2_region.endpoint + str(port) + path)
-            self.ec2 = boto.connect_ec2(**ec2_connection_args)
+            as_connection_args = copy.copy(connection_args)
+            as_connection_args['path'] = path
+            as_connection_args['api_version'] = APIVersion
+            as_connection_args['region'] = as_region
+            self.debug("Attempting to create AS connection to " + as_region.endpoint + str(port) + path)
+            self.AS = boto.connect_autoscale(aws_access_key_id, aws_secret_access_key)
         except Exception, e:
-            self.critical("Was unable to create ec2 connection because of exception: " + str(e))
+            self.critical("Was unable to create AS connection because of exception: " + str(e))
 
-
+    def create_launch_config(self, name=None, image_id=None, key_name=None, security_groups=[None]):
+        lc = LaunchConfiguration(name, image_id, key_name, security_groups)
+        conn = boto.connect_autoscale()
+        conn.create_launch_configuration(lc)
 
