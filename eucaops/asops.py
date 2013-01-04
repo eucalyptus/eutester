@@ -77,7 +77,7 @@ class ASops(Eutester):
 
     def clean_method(self):
         ### once needed clean up should be done here
-
+        self.debug("placeholder")
 
     def setup_as_connection(self, endpoint=None, aws_access_key_id=None, aws_secret_access_key=None, is_secure=True,host=None ,
                              region=None, path = "/", port = 443,  APIVersion ='2011-01-01', boto_debug=0):
