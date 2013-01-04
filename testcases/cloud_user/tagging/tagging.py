@@ -163,42 +163,45 @@ class TaggingBasics(EutesterTestCase):
 
 
     def test_restrictions(self, resource):
-        max_tags = { u'name': 'tag-test', u'location' : 'over there',  u'tag3' : 'test3', u'tag4' : 'test4',
-                     u'tag5' : 'test5', u'tag6' : 'test6', u'tag7' : 'test7', u'tag8' : 'test8',
-                     u'tag9' : 'test9', u'tag10' : 'test10'}
+        max_tags_number = 10
+        max_tags = {}
+
+        for i in xrange(max_tags_number):
+            max_tags[u'key' + str(i)] = 'value' + str(i)
+
         self.test_tag_creation(max_tags, resource=resource, fail_message="Failure when trying to add max allowable tags (10)", expected_outcome=True)
         self.test_tag_deletion(max_tags, resource=resource,fail_message="Failure when trying to delete max allowable tags (10)", expected_outcome=True)
 
-        too_many_tags = { u'name': 'tag-test', u'location' : 'over there',  u'tag3' : 'test3', u'tag4' : 'test4',
-                          u'tag5' : 'test5', u'tag6' : 'test6', u'tag7' : 'test7', u'tag8' : 'test8',
-                          u'tag9' : 'test9', u'tag10' : 'test10', u'tag11' : 'test11'}
+        too_many_tags = {}
+        for i in xrange(max_tags_number + 1):
+            too_many_tags[u'key' + str(i)] = 'value' + str(i)
+
         self.test_tag_creation(too_many_tags, resource=resource,fail_message="Allowed too many tags to be created", expected_outcome=False)
 
-        maximum_key_length = { u'000000000000000000000000000000000000000000000000000000000000000000000000000000000000'
-                               u'0000000000000000000000000000000000000000000': 'my value'}
-        self.test_tag_creation(maximum_key_length, resource=resource, fail_message="Unable to use a key with 128 characters", expected_outcome=True)
-        self.test_tag_deletion(maximum_key_length, resource=resource, fail_message="Unable to delete a key with 128 characters", expected_outcome=True)
+        max_key = u'0' * 127
 
-        key_too_large = { u'000000000000000000000000000000000000000000000000000000000000000000000000000000000000'
-                          u'00000000000000000000000000000000000000000000000': 'my value'}
+        maximum_key_length = { max_key : 'my value'}
+        self.test_tag_creation(maximum_key_length, resource=resource, fail_message="Unable to use a key with " + str(max_key) + " characters", expected_outcome=True)
+        self.test_tag_deletion(maximum_key_length, resource=resource, fail_message="Unable to delete a key with " + str(max_key) + " characters", expected_outcome=True)
+
+        key_too_large = { max_key + u'0' : 'my value'}
         self.test_tag_creation(key_too_large, resource=resource, fail_message="Allowed key with more than 128 chars", expected_outcome=False)
 
-        maximum_value_length = { u'my_key': '0000000000000000000000000000000000000000000000000000000000000000000000000000000000000'
-                                            '00000000000000000000000000000000000000000000000000000000000000000000000000000000000000'
-                                            '0000000000000000000000000000000000000000000000000000000000000000000000000000000000000'}
-        self.test_tag_creation(maximum_key_length, resource=resource, fail_message="Unable to use a value with 128 characters", expected_outcome=True)
-        self.test_tag_deletion(maximum_key_length, resource=resource, fail_message="Unable to delete a value with 128 characters", expected_outcome=True)
+        maximum_value = '0' * 255
 
-        value_too_large = { u'my_key': '0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000'
-                                       '00000000000000000000000000000000000000000000000000000000000000000000000000000000000000'
-                                       '0000000000000000000000000000000000000000000000000000000000000000000000000000000000000'}
-        self.test_tag_creation(value_too_large, resource=resource, fail_message="Allowed value with more than 128 chars", expected_outcome=False)
+        maximum_value_length = { u'my_key': maximum_value}
+        self.test_tag_creation(maximum_value_length, resource=resource, fail_message="Unable to use a value with " + str(maximum_value) + " characters", expected_outcome=True)
+        self.test_tag_deletion(maximum_value_length, resource=resource, fail_message="Unable to delete a value with " + str(maximum_value) + " characters", expected_outcome=True)
+
+        value_too_large = { u'my_key': maximum_value + '0'}
+        self.test_tag_creation(value_too_large, resource=resource, fail_message="Allowed value with more than " + str(maximum_value) + " chars", expected_outcome=False)
 
         aws_key_prefix = { u'aws:something': 'asdfadsf'}
         self.test_tag_creation(aws_key_prefix, resource=resource, fail_message="Allowed key with 'aws:' prefix'", expected_outcome=False)
 
         aws_value_prefix = { u'my_key': 'aws:somethingelse'}
-        self.test_tag_creation(aws_value_prefix, resource=resource, fail_message="Allowed key with 'aws:' prefix'", expected_outcome=True)
+        self.test_tag_creation(aws_value_prefix, resource=resource, fail_message="Did not allow creation value with 'aws:' prefix'", expected_outcome=True)
+        self.test_tag_creation(aws_value_prefix, resource=resource, fail_message="Did not allow deletion of value with 'aws:' prefix'", expected_outcome=True)
 
         lower_case = {u'case': 'value'}
         upper_case = {u'CASE': 'value'}
@@ -233,7 +236,7 @@ class TaggingBasics(EutesterTestCase):
             if actual_outcome is not expected_outcome:
                 raise Exception(fail_message + "\nDue to: " + str(exception) )
 
-    def test_in_series(self, resource, count=10):
+    def test_in_series(self, resource, count=5):
         for i in xrange(count):
             normal_tag = { u'series_key': '!@$$%^^&&*()*&&^%{}":?><|][~'}
             self.test_tag_creation(normal_tag, resource=resource, fail_message="Failed adding tags in series", expected_outcome=True)
