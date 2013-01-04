@@ -44,6 +44,8 @@ class TaggingBasics(EutesterTestCase):
     def clean_method(self):
         ### Terminate the reservation if it is still up
         if self.reservation:
+            for instance in self.reservation.instances:
+                instance.delete_tags(instance.tags)
             self.assertTrue(self.tester.terminate_instances(self.reservation), "Unable to terminate instance(s)")
 
         if self.volume:
@@ -65,34 +67,34 @@ class TaggingBasics(EutesterTestCase):
         """
         if not self.reservation:
             self.reservation = self.tester.run_instance(self.image, keypair=self.keypair.name, group=self.group.name)
-        instance_id = None
+        test_instance = None
         tags = { u'name': 'instance-tag-test', u'location' : 'over there'}
         for instance in self.reservation.instances:
-            instance.create_tags([instance.id], tags)
+            instance.create_tags(tags)
             instance.update()
             if instance.tags != tags:
                 raise Exception('Tags were not set properly for the instance resource')
-            instance_id = instance.id
+            test_instance = instance
 
         ### Test Filtering
         tag_filter = { u'tag:name': 'instance-tag-test', u'tag:location' : 'over there'}
-        instances = self.tester.ec2.get_all_instances(filters=tag_filter)
-        if len(instances) != 1:
+        reservations = self.tester.ec2.get_all_instances(filters=tag_filter)
+        if len(reservations) != 1:
             raise Exception('Filter for instances returned too many results')
-        instance = instances[0]
-        if instance.id is not instance_id:
-            raise Exception('Wrong instance id returned after filtering')
+        reservation = reservations[0]
+        if self.reservation.id not in reservation.id:
+            raise Exception('Wrong instance id returned after filtering, Expected: ' + self.reservation.id  + ' Received: ' + reservation.id )
 
         ### Test Deletion
-        instance.delete_tags([instance_id], tags)
-        instance.update()
+        test_instance.delete_tags(tags)
+        test_instance.update()
         instances = self.tester.ec2.get_all_instances(filters=tag_filter)
         if len(instances) != 0:
             raise Exception('Filter returned instances when there shouldnt be any')
-        if instance.tags != {}:
+        if test_instance.tags != {}:
             raise Exception('Tags still returned after deletion')
-        self.test_restrictions(instance)
-        self.test_in_series(instance)
+        self.test_restrictions(test_instance)
+        self.test_in_series(test_instance)
         self.tester.terminate_instances(self.reservation)
         self.reservation = None
 
@@ -118,7 +120,7 @@ class TaggingBasics(EutesterTestCase):
             raise Exception('Wrong volume ID returned after filtering ' + str(volumes) )
 
         ### Test Deletion
-        self.volume.delete_tags(tags, timeout=600)
+        self.volume.delete_tags(tags)
         instances = self.tester.ec2.get_all_instances(filters=tag_filter)
         if len(instances) != 0:
             raise Exception('Filter returned volumes when there shouldnt be any')
@@ -135,7 +137,7 @@ class TaggingBasics(EutesterTestCase):
             self.volume = self.tester.create_volume(azone=self.zone)
         self.snapshot = self.tester.create_snapshot_from_volume(self.volume)
         tags = { u'name': 'snapshot-tag-test', u'location' : 'over there'}
-        self.tester.create_tags([self.volume.id], tags)
+        self.snapshot.create_tags(tags)
         self.snapshot.update()
         if self.snapshot.tags != tags:
             raise Exception('Tags were not set properly for the snapshot resource')
@@ -149,7 +151,7 @@ class TaggingBasics(EutesterTestCase):
             raise Exception('Wrong instance id returned after filtering')
 
         ### Test Deletion
-        self.tester.delete_tags([self.snapshot.id], tags)
+        self.snapshot.delete_tags(tags)
         self.snapshot.update()
         instances = self.tester.ec2.get_all_instances(filters=tag_filter)
         if len(instances) != 0:
@@ -199,8 +201,8 @@ class TaggingBasics(EutesterTestCase):
         for i in xrange(max_tags_number):
             max_tags[u'key' + str(i)] = 'value' + str(i)
 
-        self.test_tag_creation(max_tags, resource=resource, fail_message="Failure when trying to add max allowable tags (10)", expected_outcome=True)
-        self.test_tag_deletion(max_tags, resource=resource,fail_message="Failure when trying to delete max allowable tags (10)", expected_outcome=True)
+        self.test_tag_creation(max_tags, resource=resource, fail_message="Failure when trying to add max allowable tags (" + str(max_tags_number) + ")", expected_outcome=True)
+        self.test_tag_deletion(max_tags, resource=resource,fail_message="Failure when trying to delete max allowable tags (" + str(max_tags_number) + ")", expected_outcome=True)
 
         too_many_tags = {}
         for i in xrange(max_tags_number + 1):
@@ -215,7 +217,7 @@ class TaggingBasics(EutesterTestCase):
         self.test_tag_deletion(maximum_key_length, resource=resource, fail_message="Unable to delete a key with " + str(max_key) + " characters", expected_outcome=True)
 
         key_too_large = { max_key + u'0' : 'my value'}
-        self.test_tag_creation(key_too_large, resource=resource, fail_message="Allowed key with more than 128 chars", expected_outcome=False)
+        self.test_tag_creation(key_too_large, resource=resource, fail_message="Allowed key with more than " + str(max_key) + " chars", expected_outcome=False)
 
         maximum_value = '0' * 255
 
@@ -276,8 +278,8 @@ class TaggingBasics(EutesterTestCase):
 if __name__ == "__main__":
     testcase = TaggingBasics()
     ### Use the list of tests passed from config/command line to determine what subset of tests to run
-    ### or use a predefined list  "InstanceTagging", "SnapshotTagging", "ImageTagging"
-    list = testcase.args.tests or ["VolumeTagging"]
+    ### or use a predefined list  "VolumeTagging", "InstanceTagging", "SnapshotTagging", "ImageTagging"
+    list = testcase.args.tests or ["SnapshotTagging"]
 
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]

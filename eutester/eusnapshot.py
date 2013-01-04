@@ -59,10 +59,11 @@ class EuSnapshot(Snapshot, TaggedResource):
     
         
     @classmethod
-    def make_eusnap_from_snap(cls,snapshot,cmdstart=None):
+    def make_eusnap_from_snap(cls, snapshot, tester=None, cmdstart=None):
         newsnap = EuSnapshot(snapshot.connection)
         newsnap.__dict__ = snapshot.__dict__
         newsnap.eutest_volume_md5 = None
+        newsnap.tester = tester
         newsnap.eutest_volume_md5len = None
         newsnap.eutest_volume_zone = None
         newsnap.eutest_volumes = []
@@ -74,7 +75,7 @@ class EuSnapshot(Snapshot, TaggedResource):
         newsnap.eutest_cmdtime = None
         newsnap.eutest_polls = 0
         newsnap.eutest_poll_count = 0
-        newsnap.eutest_last_progress = int(newsnap.progress.replace('%',''))
+        newsnap.eutest_last_progress = int(newsnap.progress.replace('%','')  or 0)
         newsnap.eutest_timeintest = 0
         return newsnap
     
