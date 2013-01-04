@@ -72,7 +72,6 @@ class ASops(Eutester):
         self.poll_count = 48
         self.username = username
         self.test_resources = {}
-#        self.setup_ec2_resource_trackers()
         self.key_dir = "./"
 
     def setup_as_connection(self, endpoint=None, aws_access_key_id=None, aws_secret_access_key=None, is_secure=True,host=None ,
@@ -117,6 +116,5 @@ class ASops(Eutester):
 
     def create_launch_config(self, name=None, image_id=None, key_name=None, security_groups=[None]):
         lc = LaunchConfiguration(name, image_id, key_name, security_groups)
-        conn = boto.connect_autoscale()
-        conn.create_launch_configuration(lc)
+        self.AS.create_launch_configuration(lc)
 
