@@ -35,57 +35,68 @@ class AutoScalingBasics(EutesterTestCase):
         """
             This case was developed to exercise creating an Auto Scaling group
         """
+        pass
 
     def DeleteAutoScalingGroup(self):
         """
             This case was developed to exercise deleting an Auto Scaling group
         """
+        pass
 
     def DescribeAutoScalingGroups(self):
         """
             This case was developed to exercise describing an Auto Scaling group
         """
+        pass
 
     def DescribeAutoScalingInstances(self):
         """
             This case was developed to exercise describing Auto Scaling instances
         """
+        pass
 
     def SetDesiredCapacity(self):
         """
             This case was developed to exercise setting Auto Scaling group capacity
         """
+        pass
 
     def SetInstanceHealth(self):
         """
             This case was developed to exercise setting the health of an instance belonging to an Auto Scaling group
         """
+        pass
 
     def TerminateInstanceInAutoScalingGroup(self):
         """
             This case was developed to exercise terminating an instance belonging to an Auto Scaling group
         """
+        pass
 
     def UpdateAutoScalingGroup(self):
         """
             This case was developed to exercise updating a specified Auto Scaling group
         """
+        pass
 
     def CreateLaunchConfiguration(self):
         """
             This case was developed to exercise creating a new launch configuration
         """
-        self.tester.create_launch_config("test_lc", self.image)
+#        self.tester.create_launch_config("test_lc", self.image)
+        pass
 
     def DeleteLaunchConfiguration(self):
         """
             This case was developed to exercise deleting a launch configuration
         """
+        pass
 
     def DescribeLaunchConfigurations(self):
         """
             This case was developed to exercise describing launch configurations
         """
+        pass
 
 if __name__ == "__main__":
     testcase = AutoScalingBasics()
