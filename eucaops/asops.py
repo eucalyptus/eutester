@@ -63,8 +63,12 @@ ASRegionData = {
     'sa-east-1' : 'autoscaling.sa-east-1.amazonaws.com'}
 
 class ASops(Eutester):
-    def __init__(self, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, username="root",region=None, as_ip=None, boto_debug=0):
-        Eutester.__init__(self, credpath=credpath, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,region=region, as_ip=as_ip, boto_debug=boto_debug)
+    def __init__(self, host=None, credpath=None, endpoint=None, aws_access_key_id=None, aws_secret_access_key = None, username="root",region=None,
+                 is_secure=False, path='/', port=80, boto_debug=0, APIVersion = '2011-01-01'):
+        super(ASops, self).__init__(credpath=credpath, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key)
+        self.setup_as_connection(host= host, region=region, endpoint=endpoint, aws_access_key_id=self.aws_access_key_id ,
+            aws_secret_access_key=self.aws_secret_access_key, is_secure=is_secure, path=path, port=port,
+            boto_debug=boto_debug, APIVersion=APIVersion)
         self.poll_count = 48
         self.username = username
         self.test_resources = {}
