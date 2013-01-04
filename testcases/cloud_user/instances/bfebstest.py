@@ -48,7 +48,8 @@ class BFEBSBasics(InstanceBasics):
             self.tester.terminate_instances(self.reservation)
         self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name, zone=zone)
         self.assertTrue(self.tester.stop_instances(self.reservation))
-        self.assertFalse( self.tester.ping(self.reservation.instances[0].public_dns_name, poll_count=2), 'Was able to ping stopped instance')
+        self.assertIsNone( self.reservation.instances[0].ip_address, 'Instance was left with public ip when stopped')
+        self.assertIsNone( self.reservation.instances[0].private_ip_address, 'Instance was left with private ip when stopped')
         self.assertTrue(self.tester.start_instances(self.reservation))
         self.assertTrue( self.tester.ping(self.reservation.instances[0].public_dns_name, poll_count=30), 'Could not ping instance')
 
