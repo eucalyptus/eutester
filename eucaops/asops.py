@@ -111,6 +111,7 @@ class ASops(Eutester):
             as_connection_args['region'] = as_region
             self.debug("Attempting to create AS connection to " + as_region.endpoint + str(port) + path)
             self.AS = boto.connect_autoscale(aws_access_key_id, aws_secret_access_key)
+            self.debug("aws_access_key_id : " + aws_access_key_id)
         except Exception, e:
             self.critical("Was unable to create AS connection because of exception: " + str(e))
 
