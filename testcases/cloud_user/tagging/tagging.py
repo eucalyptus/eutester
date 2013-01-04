@@ -161,6 +161,36 @@ class TaggingBasics(EutesterTestCase):
         self.tester.delete_snapshot(self.snapshot)
         self.snapshot = None
 
+    def ImageTagging(self):
+        """
+        This case was developed to exercise tagging of an instance resource
+        """
+        tags = { u'name': 'image-tag-test', u'location' : 'over there'}
+        self.tester.create_tags([self.image.id], tags)
+        self.image.update()
+        if self.image.tags != tags:
+            raise Exception('Tags were not set properly for the snapshot resource')
+
+        ### Test Filtering
+        tag_filter = { u'tag:name': 'image-tag-test', u'tag:location' : 'over there'}
+        images = self.tester.ec2.get_all_images(filters=tag_filter)
+        if len(images) != 1:
+            raise Exception('Filter for instances returned too many results')
+        if images[0].id != self.image.id:
+            raise Exception('Wrong instance id returned after filtering')
+
+        ### Test Deletion
+        self.tester.delete_tags([self.image.id], tags)
+        self.image.update()
+        images = self.tester.ec2.get_all_images(filters=tag_filter)
+        if len(images) != 0:
+            raise Exception('Filter returned volumes when there shouldnt be any')
+        if self.image.tags != {}:
+            raise Exception('Tags still returned after deleting them from volume')
+        self.test_restrictions(self.image)
+        self.test_in_series(self.image)
+        self.tester.delete_snapshot(self.image)
+
 
     def test_restrictions(self, resource):
         max_tags_number = 10
@@ -246,7 +276,7 @@ class TaggingBasics(EutesterTestCase):
 if __name__ == "__main__":
     testcase = TaggingBasics()
     ### Use the list of tests passed from config/command line to determine what subset of tests to run
-    ### or use a predefined list  "InstanceTagging", "SnapshotTagging"
+    ### or use a predefined list  "InstanceTagging", "SnapshotTagging", "ImageTagging"
     list = testcase.args.tests or ["VolumeTagging"]
 
     ### Convert test suite methods to EutesterUnitTest objects
