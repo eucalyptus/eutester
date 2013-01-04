@@ -115,7 +115,7 @@ class Eutester(object):
         return ec2_url.split("/")[2].split(":")[0]
 
     def get_as_ip(self):
-            """Parse the eucarc for the EC2_URL"""
+        """Parse the eucarc for the EC2_URL"""
         as_url = self.parse_eucarc("AWS_AUTO_SCALING_URL")
         return as_url.split("/")[2].split(":")[0]
 
