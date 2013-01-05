@@ -83,7 +83,7 @@ class AutoScalingBasics(EutesterTestCase):
         """
             This case was developed to exercise creating a new launch configuration
         """
-        self.tester.create_launch_config("test_lc", "ami-921f3fd7")
+        self.tester.create_launch_config(name="test_lc", image_id="ami-921f3fd7")
 
     def DeleteLaunchConfiguration(self):
         """
