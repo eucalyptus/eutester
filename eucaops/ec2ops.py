@@ -683,12 +683,18 @@ class EC2ops(Eutester):
         elapsed = 0
         volume.update()
         while elapsed < timeout:
-            self.debug( str(volume) + " in " + volume.status + " sleeping:"+str(poll_interval)+", elapsed:"+str(elapsed))
-            time.sleep(poll_interval)
-            volume.update()
-            elapsed = int(time.time()-start)
-            if volume.status == "deleted":
-                break
+            try:
+                self.debug( str(volume) + " in " + volume.status + " sleeping:"+str(poll_interval)+", elapsed:"+str(elapsed))
+                time.sleep(poll_interval)
+                volume.update()
+                elapsed = int(time.time()-start)
+                if volume.status == "deleted":
+                    break
+            except EC2ResponseError as e:
+                if e.status == 400:
+                    self.debug(str(volume) + "no longer exists in system")
+                else:
+                    raise Exception("Couldn't get deleted object, but got error other than 404: " + str(e.status))
 
         if volume.status != 'deleted':
             self.fail(str(volume) + " left in " +  volume.status + ',elapsed:'+str(elapsed))
@@ -1100,16 +1106,18 @@ class EC2ops(Eutester):
         else:
             return None
         
-    def get_snapshots(self,snapid=None, volume_id=None, volume_size=None, volume_md5=None, maxcount=None):
+    def get_snapshots(self,snapid=None, volume_id=None, volume_size=None, volume_md5=None, maxcount=None, owner_id=None):
         retlist =[]
+        owner_id = owner_id or self.get_account_id()
         snapshots = self.test_resources['snapshots']
-        snapshots.extend( self.ec2.get_all_snapshots())
+        snapshot_list = []
+        if snapid:
+            snapshot_list.append(snapid)
+        snapshots.extend( self.ec2.get_all_snapshots(snapshot_ids=snapshot_list, owner=owner_id))
         for snap in snapshots:
             if not hasattr(snap,'eutest_volume_md5'):
                 snap = EuSnapshot.make_eusnap_from_snap(snap, tester=self)
             self.debug("Checking snap:"+str(snap.id)+" for match...")
-            if snapid and snap.id != snapid:
-                continue
             if volume_id and snap.volume_id != volume_id:
                 continue
             if volume_size and snap.volume_size != volume_size:
