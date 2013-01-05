@@ -115,8 +115,9 @@ class ASops(Eutester):
             self.critical("Was unable to create AS connection because of exception: " + str(e))
 
     def create_launch_config(self, name=None, image_id=None, key_name=None, security_groups=None):
-        self.debug("*** name : " + name);
-        self.debug("*** image_id : " + image_id);
+        self.debug("*** name : " + name)
+        self.debug("*** image_id : " + image_id)
         lc = LaunchConfiguration(name, image_id, key_name, security_groups)
+        self.debug("*** launch configs : " + self.AS.get_all_launch_configurations())
         self.AS.create_launch_configuration(lc)
 
