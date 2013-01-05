@@ -118,6 +118,6 @@ class ASops(Eutester):
         self.debug("*** name : " + name)
         self.debug("*** image_id : " + image_id)
         lc = LaunchConfiguration(name, image_id, key_name, security_groups)
-        self.debug("*** launch configs : " + self.AS.get_all_launch_configurations())
+        self.AS.get_all_tags()
         self.AS.create_launch_configuration(lc)
 
