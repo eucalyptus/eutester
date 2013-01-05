@@ -693,7 +693,7 @@ class EC2ops(Eutester):
             except EC2ResponseError as e:
                 if e.status == 400:
                     self.debug(str(volume) + "no longer exists in system")
-                    break
+                    return True
                 else:
                     raise e
 
