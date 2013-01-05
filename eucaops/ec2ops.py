@@ -693,8 +693,9 @@ class EC2ops(Eutester):
             except EC2ResponseError as e:
                 if e.status == 400:
                     self.debug(str(volume) + "no longer exists in system")
+                    break
                 else:
-                    raise Exception("Couldn't get deleted object, but got error other than 404: " + str(e.status))
+                    raise e
 
         if volume.status != 'deleted':
             self.fail(str(volume) + " left in " +  volume.status + ',elapsed:'+str(elapsed))
