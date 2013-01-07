@@ -110,11 +110,42 @@ class ASops(Eutester):
             as_connection_args['api_version'] = APIVersion
             as_connection_args['region'] = as_region
             self.debug("Attempting to create AS connection to " + as_region.endpoint + str(port) + path)
-            self.AS = boto.connect_autoscale(aws_access_key_id, aws_secret_access_key)
+            self.AS = AutoScaleConnection(aws_access_key_id, aws_secret_access_key)
         except Exception, e:
             self.critical("Was unable to create AS connection because of exception: " + str(e))
 
     def create_launch_config(self, name=None, image_id=None, key_name=None, security_groups=None):
-        lc = LaunchConfiguration(name=name, image_id=image_id, key_name=key_name, security_groups=security_groups)
+        """
+        Creates a new launch configuration with specified attributes.
+
+        :param name: Name of the launch configuration to create. (Required)
+        :param image_id: Unique ID of the Amazon Machine Image (AMI) assigned during registration. (Required)
+        :param key_name: The name of the EC2 key pair.
+        :param security_groups: Names of the security groups with which to associate the EC2 instances.
+        """
+        lc = LaunchConfiguration(name=name,
+            image_id=image_id,
+            key_name=key_name,
+            security_groups=security_groups)
         self.AS.create_launch_configuration(lc)
 
+    def create_as_group(self, group_name=None, load_balancers=None, availability_zones=None, launch_config=None, min_size=None, max_size=None, connection=None):
+        """
+        Create auto scaling group.
+
+        :param group_name: Name of autoscaling group (required).
+        :param load_balancers: List of load balancers.
+        :param availability_zones: List of availability zones (required).
+        :param launch_config: Name of launch configuration (required).
+        :param min_size:  Minimum size of group (required).
+        :param max_size: Maximum size of group (required).
+        :param connection: connection to auto scaling service
+        """
+        as_group = AutoScalingGroup(group_name=group_name,
+            load_balancers=load_balancers,
+            availability_zones=availability_zones,
+            launch_config=launch_config,
+            min_size=min_size,
+            max_size=max_size,
+            connection=connection)
+        self.AS.create_auto_scaling_group(as_group)

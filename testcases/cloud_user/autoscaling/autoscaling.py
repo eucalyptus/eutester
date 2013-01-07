@@ -83,7 +83,7 @@ class AutoScalingBasics(EutesterTestCase):
         """
             This case was developed to exercise creating a new launch configuration
         """
-        self.tester.create_launch_config(name="test_lc", image_id="ami-1bf9de5e")
+        self.tester.create_launch_config(name="test_lc", image_id="ami-1bf9de5e", key_name="aws-key1", security_groups="default")
 
     def DeleteLaunchConfiguration(self):
         """
