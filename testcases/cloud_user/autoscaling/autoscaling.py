@@ -13,19 +13,29 @@ class AutoScalingBasics(EutesterTestCase):
         self.setuptestcase()
         self.setup_parser()
         self.parser.add_argument("--region", default=None)
+        self.parser.add_argument("--emi", default=None)
+        self.parser.add_argument("--vmtype", default=None)
         if extra_args:
             for arg in extra_args:
                 self.parser.add_argument(arg)
         self.get_args()
         # Setup basic eutester object
-        if self.args.region:
-            self.tester = ASops( credpath=self.args.credpath, region=self.args.region)
+        if self.args.emi:
+            self.tester = ASops( credpath=self.args.credpath, region=self.args.region, emi=self.args.emi, vmtype=self.args.vmtype)
         else:
-            self.tester = ASops( credpath=self.args.credpath)
-        self.tester.poll_count = 120
+            self.tester = Eucaops( credpath=self.args.credpath)
+
+        ### Add and authorize a group for the instance
+        self.group = self.tester.add_group(group_name="group-" + str(time.time()))
+        self.tester.authorize_group_by_name(group_name=self.group.name )
+        self.tester.authorize_group_by_name(group_name=self.group.name, port=-1, protocol="icmp" )
+        ### Generate a keypair for the instance
+        self.keypair = self.tester.add_keypair( "keypair-" + str(time.time()))
+        self.keypath = '%s/%s.pem' % (os.curdir, self.keypair.name)
         self.image = self.args.emi
         if not self.image:
             self.image = self.tester.get_emi(root_device_type="instance-store")
+        self.address = None
 
     def clean_method(self):
         ### once needed clean up should be done here
@@ -84,7 +94,7 @@ class AutoScalingBasics(EutesterTestCase):
             This case was developed to exercise creating a new launch configuration
             image_id="ami-0af30663" a us-east image
         """
-        self.tester.create_launch_config(name="test_lc", image_id=self.image, key_name="aws-key1", security_groups="default")
+        self.tester.create_launch_config(name="test_lc", image_id=self.image, key_name=self.keypair, security_groups=self.group)
 
     def DeleteLaunchConfiguration(self):
         """

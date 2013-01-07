@@ -110,11 +110,11 @@ class ASops(Eutester):
             as_connection_args['api_version'] = APIVersion
             as_connection_args['region'] = as_region
             self.debug("Attempting to create AS connection to " + as_region.endpoint + str(port) + path)
-            self.AS = AutoScaleConnection(aws_access_key_id, aws_secret_access_key)
+            self.AS = AutoScaleConnection(aws_access_key_id, aws_secret_access_key,region=as_region)
         except Exception, e:
             self.critical("Was unable to create AS connection because of exception: " + str(e))
 
-    def create_launch_config(self, name=None, image_id=None, key_name=None, security_groups=None):
+    def create_launch_config(self, name=None, image_id=None, key_name=None, security_groups=[None]):
         """
         Creates a new launch configuration with specified attributes.
 
