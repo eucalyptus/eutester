@@ -11,14 +11,13 @@ class AutoScalingBasics(EutesterTestCase):
         self.setuptestcase()
         self.setup_parser()
         self.parser.add_argument("--region", default=None)
-        self.parser.add_argument("--vmtype", default=None)
         if extra_args:
             for arg in extra_args:
                 self.parser.add_argument(arg)
         self.get_args()
         # Setup basic eutester object
         if self.args.emi:
-            self.tester = ASops( credpath=self.args.credpath, region=self.args.region, emi=self.args.emi, vmtype=self.args.vmtype)
+            self.tester = ASops( credpath=self.args.credpath, region=self.args.region)
         else:
             self.tester = Eucaops( credpath=self.args.credpath)
 
