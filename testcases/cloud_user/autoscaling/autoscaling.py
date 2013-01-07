@@ -21,13 +21,14 @@ class AutoScalingBasics(EutesterTestCase):
         else:
             self.tester = Eucaops( credpath=self.args.credpath)
 
-        ### Add and authorize a group for the instance
-        self.group = self.tester.add_group(group_name="group-" + str(time.time()))
-        self.tester.authorize_group_by_name(group_name=self.group.name )
-        self.tester.authorize_group_by_name(group_name=self.group.name, port=-1, protocol="icmp" )
-        ### Generate a keypair for the instance
-        self.keypair = self.tester.add_keypair( "keypair-" + str(time.time()))
-        self.keypath = '%s/%s.pem' % (os.curdir, self.keypair.name)
+#        ### Add and authorize a group for the instance
+#        self.group = self.tester.add_group(group_name="group-" + str(time.time()))
+#        self.tester.authorize_group_by_name(group_name=self.group.name )
+#        self.tester.authorize_group_by_name(group_name=self.group.name, port=-1, protocol="icmp" )
+#        ### Generate a keypair for the instance
+#        self.keypair = self.tester.add_keypair( "keypair-" + str(time.time()))
+#        self.keypath = '%s/%s.pem' % (os.curdir, self.keypair.name)
+
         self.image = self.args.emi
         if not self.image:
             self.image = self.tester.get_emi(root_device_type="instance-store")
@@ -90,7 +91,7 @@ class AutoScalingBasics(EutesterTestCase):
             This case was developed to exercise creating a new launch configuration
             image_id="ami-0af30663" a us-east image
         """
-        self.tester.create_launch_config(name="test_lc", image_id=self.image, key_name=self.keypair, security_groups=self.group)
+        self.tester.create_launch_config(name="test_lc", image_id=self.image, key_name='aws-key1', security_groups='default')
 
     def DeleteLaunchConfiguration(self):
         """
