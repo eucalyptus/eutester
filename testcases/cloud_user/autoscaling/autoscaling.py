@@ -2,18 +2,15 @@
 
 import time
 from eucaops import Eucaops
-from eucaops import EC2ops
 from eucaops import ASops
 from eutester.eutestcase import EutesterTestCase
 import os
-import random
 
 class AutoScalingBasics(EutesterTestCase):
     def __init__(self, extra_args= None):
         self.setuptestcase()
         self.setup_parser()
         self.parser.add_argument("--region", default=None)
-        self.parser.add_argument("--emi", default=None)
         self.parser.add_argument("--vmtype", default=None)
         if extra_args:
             for arg in extra_args:
