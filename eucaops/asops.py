@@ -126,7 +126,7 @@ class ASops(Eutester):
         lc = LaunchConfiguration(name=name,
             image_id=image_id,
             key_name=key_name,
-            security_groups=security_groups)
+            security_groups=['default'])
         self.AS.create_launch_configuration(lc)
 
     def create_as_group(self, group_name=None, load_balancers=None, availability_zones=None, launch_config=None, min_size=None, max_size=None, connection=None):
