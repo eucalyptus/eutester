@@ -45,7 +45,7 @@ class Qa_214_volume_churn(EutesterTestCase):
         self.get_args()
         # Setup basic eutester object
         self.tester = self.do_with_args(Eucaops)
-        self.tester.debug = self.debug
+        self.tester.debug = lambda msg: self.debug(msg, traceback=2, linebyline=False)
         self.reservation = None
         self.instance = None
         ### Add and authorize a group for the instance
@@ -181,12 +181,18 @@ class Qa_214_volume_churn(EutesterTestCase):
         for x in xrange(0,testcount):
             volumes=[]
             snaps=[]
-            self.status("\'qa_214_test4\' number:"+str(x)+"/"+str(testcount))
+            self.status("\'qa_214_test4\' number:"+str(x)+"/"+str(testcount)+", volcount:"+str(volcount)+", snapcount:"+str(snapcount)+", size:"+str(size))
+            self.status('Creating '+str(volcount)+' new volumes...')
             volumes = self.tester.create_volumes(self.zone, size=size, count=volcount, timepergig=timepergig)
             for vol in volumes:
+                v_index = volumes.index(vol)+1
+                self.status('Creating '+str(snapcount)+' snapshots from our new volume ('+str(v_index)+'/'+str(len(volumes))+'):'+str(vol.id) )
                 snaps.extend(self.tester.create_snapshots(vol, count=snapcount, wait_on_progress=wait_on_progress))
             for snap in snaps:
+                s_index = snaps.index(snap)+1
+                self.status('Creating '+str(volcount)+' volumes from our new snapshot('+str(s_index)+'/'+str(len(snaps))+'):'+str(snap.id) )
                 volumes.extend(self.tester.create_volumes(self.zone, count=volcount, snapshot=snap, timepergig=timepergig))
+            self.status('Test#'+str(x)+': Main block of test complete, deleting '+str(len(volumes))+' volumes, and '+str(len(snaps))+' snapshots')
             self.tester.delete_volumes(volumes, poll_interval=5, timeout=deletetimeout)
             for snap in snaps:
                 self.tester.delete_snapshot(snap, timeout=deletetimeout)

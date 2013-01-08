@@ -727,8 +727,8 @@ class EC2ops(Eutester):
                 if volume.status == "deleted":
                     vollist.remove(volume)
                 elapsed = int(time.time()-start)
-                self.debug("---Sleeping:"+str(poll_interval)+", elapsed:"+str(elapsed)+"---")
-                time.sleep(poll_interval)
+            time.sleep(poll_interval)
+            self.debug("---Sleeping:"+str(poll_interval)+", elapsed:"+str(elapsed)+"---")
         if vollist:
             errmsg =""
             for volume in vollist:

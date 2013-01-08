@@ -91,11 +91,11 @@ class EuSnapshot(Snapshot, TaggedResource):
     def printself(self,title=True, printmethod=None):
         buf = "\n"
         if title:
-             buf = "\n-----------------------------------------------------------------------------------------------------------------------\n"
+             buf = "\n-------------------------------------------------------------------------------------------------------------------------------------\n"
              buf += str('SNAP_ID').ljust(15)+'|'+str('ORDER').center(5)+'|'+str('CMDTIME').center(8)+'|'+str('ELAPSED').center(8)+'|'+str('%').center(4)+'|'+str('STATUS').center(12)+'|'+str('SRC_VOL').center(15)+'|'+str('SRC_VOL_MD5').center(33)+'|'+str('VOLZONE').center(15)+'|'+str('INFO-MSG')+"\n"
              buf += '-----------------------------------------------------------------------------------------------------------------------\n'     
         buf += str(self.id).ljust(15)+'|'+str(self.eutest_createorder).center(5)+'|'+str(self.eutest_cmdtime).center(8)+'|'+str(self.eutest_timeintest).center(8)+'|'+str(self.eutest_last_progress).center(4)+'|'+str(self.eutest_laststatus).center(12)+'|'+str(self.volume_id).center(15)+'|'+str(self.eutest_volume_md5).center(33)+'|'+str(self.eutest_volume_zone).center(15)+'|'+str(self.eutest_failmsg)+"\n"
-        buf += '-----------------------------------------------------------------------------------------------------------------------\n'
+        buf += '-------------------------------------------------------------------------------------------------------------------------------------\n'
         if printmethod:
             printmethod(buf)
         return buf
