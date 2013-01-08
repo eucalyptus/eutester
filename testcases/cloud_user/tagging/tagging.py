@@ -44,6 +44,8 @@ class TaggingBasics(EutesterTestCase):
     def clean_method(self):
         ### Terminate the reservation if it is still up
         if self.reservation:
+            for instance in self.reservation.instances:
+                instance.delete_tags(instance.tags)
             self.assertTrue(self.tester.terminate_instances(self.reservation), "Unable to terminate instance(s)")
 
         if self.volume:
@@ -65,34 +67,34 @@ class TaggingBasics(EutesterTestCase):
         """
         if not self.reservation:
             self.reservation = self.tester.run_instance(self.image, keypair=self.keypair.name, group=self.group.name)
-        instance_id = None
+        test_instance = None
         tags = { u'name': 'instance-tag-test', u'location' : 'over there'}
         for instance in self.reservation.instances:
-            instance.create_tags([instance.id], tags)
+            instance.create_tags(tags)
             instance.update()
             if instance.tags != tags:
                 raise Exception('Tags were not set properly for the instance resource')
-            instance_id = instance.id
+            test_instance = instance
 
         ### Test Filtering
         tag_filter = { u'tag:name': 'instance-tag-test', u'tag:location' : 'over there'}
-        instances = self.tester.ec2.get_all_instances(filters=tag_filter)
-        if len(instances) != 1:
+        reservations = self.tester.ec2.get_all_instances(filters=tag_filter)
+        if len(reservations) != 1:
             raise Exception('Filter for instances returned too many results')
-        instance = instances[0]
-        if instance.id is not instance_id:
-            raise Exception('Wrong instance id returned after filtering')
+        reservation = reservations[0]
+        if self.reservation.id not in reservation.id:
+            raise Exception('Wrong instance id returned after filtering, Expected: ' + self.reservation.id  + ' Received: ' + reservation.id )
 
         ### Test Deletion
-        instance.delete_tags([instance_id], tags)
-        instance.update()
+        test_instance.delete_tags(tags)
+        test_instance.update()
         instances = self.tester.ec2.get_all_instances(filters=tag_filter)
         if len(instances) != 0:
             raise Exception('Filter returned instances when there shouldnt be any')
-        if instance.tags != {}:
+        if test_instance.tags != {}:
             raise Exception('Tags still returned after deletion')
-        self.test_restrictions(instance)
-        self.test_in_series(instance)
+        self.test_restrictions(test_instance)
+        self.test_in_series(test_instance)
         self.tester.terminate_instances(self.reservation)
         self.reservation = None
 
@@ -118,7 +120,7 @@ class TaggingBasics(EutesterTestCase):
             raise Exception('Wrong volume ID returned after filtering ' + str(volumes) )
 
         ### Test Deletion
-        self.volume.delete_tags(tags, timeout=600)
+        self.volume.delete_tags(tags)
         instances = self.tester.ec2.get_all_instances(filters=tag_filter)
         if len(instances) != 0:
             raise Exception('Filter returned volumes when there shouldnt be any')
@@ -135,7 +137,7 @@ class TaggingBasics(EutesterTestCase):
             self.volume = self.tester.create_volume(azone=self.zone)
         self.snapshot = self.tester.create_snapshot_from_volume(self.volume)
         tags = { u'name': 'snapshot-tag-test', u'location' : 'over there'}
-        self.tester.create_tags([self.volume.id], tags)
+        self.snapshot.create_tags(tags)
         self.snapshot.update()
         if self.snapshot.tags != tags:
             raise Exception('Tags were not set properly for the snapshot resource')
@@ -149,7 +151,7 @@ class TaggingBasics(EutesterTestCase):
             raise Exception('Wrong instance id returned after filtering')
 
         ### Test Deletion
-        self.tester.delete_tags([self.snapshot.id], tags)
+        self.snapshot.delete_tags(tags)
         self.snapshot.update()
         instances = self.tester.ec2.get_all_instances(filters=tag_filter)
         if len(instances) != 0:
@@ -161,44 +163,77 @@ class TaggingBasics(EutesterTestCase):
         self.tester.delete_snapshot(self.snapshot)
         self.snapshot = None
 
+    def ImageTagging(self):
+        """
+        This case was developed to exercise tagging of an instance resource
+        """
+        tags = { u'name': 'image-tag-test', u'location' : 'over there'}
+        self.tester.create_tags([self.image.id], tags)
+        self.image.update()
+        if self.image.tags != tags:
+            raise Exception('Tags were not set properly for the snapshot resource')
+
+        ### Test Filtering
+        tag_filter = { u'tag:name': 'image-tag-test', u'tag:location' : 'over there'}
+        images = self.tester.ec2.get_all_images(filters=tag_filter)
+        if len(images) != 1:
+            raise Exception('Filter for instances returned too many results')
+        if images[0].id != self.image.id:
+            raise Exception('Wrong instance id returned after filtering')
+
+        ### Test Deletion
+        self.tester.delete_tags([self.image.id], tags)
+        self.image.update()
+        images = self.tester.ec2.get_all_images(filters=tag_filter)
+        if len(images) != 0:
+            raise Exception('Filter returned volumes when there shouldnt be any')
+        if self.image.tags != {}:
+            raise Exception('Tags still returned after deleting them from volume')
+        self.test_restrictions(self.image)
+        self.test_in_series(self.image)
+        self.tester.delete_snapshot(self.image)
+
 
     def test_restrictions(self, resource):
-        max_tags = { u'name': 'tag-test', u'location' : 'over there',  u'tag3' : 'test3', u'tag4' : 'test4',
-                     u'tag5' : 'test5', u'tag6' : 'test6', u'tag7' : 'test7', u'tag8' : 'test8',
-                     u'tag9' : 'test9', u'tag10' : 'test10'}
-        self.test_tag_creation(max_tags, resource=resource, fail_message="Failure when trying to add max allowable tags (10)", expected_outcome=True)
-        self.test_tag_deletion(max_tags, resource=resource,fail_message="Failure when trying to delete max allowable tags (10)", expected_outcome=True)
+        max_tags_number = 10
+        max_tags = {}
 
-        too_many_tags = { u'name': 'tag-test', u'location' : 'over there',  u'tag3' : 'test3', u'tag4' : 'test4',
-                          u'tag5' : 'test5', u'tag6' : 'test6', u'tag7' : 'test7', u'tag8' : 'test8',
-                          u'tag9' : 'test9', u'tag10' : 'test10', u'tag11' : 'test11'}
+        for i in xrange(max_tags_number):
+            max_tags[u'key' + str(i)] = 'value' + str(i)
+
+        self.test_tag_creation(max_tags, resource=resource, fail_message="Failure when trying to add max allowable tags (" + str(max_tags_number) + ")", expected_outcome=True)
+        self.test_tag_deletion(max_tags, resource=resource,fail_message="Failure when trying to delete max allowable tags (" + str(max_tags_number) + ")", expected_outcome=True)
+
+        too_many_tags = {}
+        for i in xrange(max_tags_number + 1):
+            too_many_tags[u'key' + str(i)] = 'value' + str(i)
+
         self.test_tag_creation(too_many_tags, resource=resource,fail_message="Allowed too many tags to be created", expected_outcome=False)
 
-        maximum_key_length = { u'000000000000000000000000000000000000000000000000000000000000000000000000000000000000'
-                               u'0000000000000000000000000000000000000000000': 'my value'}
-        self.test_tag_creation(maximum_key_length, resource=resource, fail_message="Unable to use a key with 128 characters", expected_outcome=True)
-        self.test_tag_deletion(maximum_key_length, resource=resource, fail_message="Unable to delete a key with 128 characters", expected_outcome=True)
+        max_key = u'0' * 127
 
-        key_too_large = { u'000000000000000000000000000000000000000000000000000000000000000000000000000000000000'
-                          u'00000000000000000000000000000000000000000000000': 'my value'}
-        self.test_tag_creation(key_too_large, resource=resource, fail_message="Allowed key with more than 128 chars", expected_outcome=False)
+        maximum_key_length = { max_key : 'my value'}
+        self.test_tag_creation(maximum_key_length, resource=resource, fail_message="Unable to use a key with " + str(max_key) + " characters", expected_outcome=True)
+        self.test_tag_deletion(maximum_key_length, resource=resource, fail_message="Unable to delete a key with " + str(max_key) + " characters", expected_outcome=True)
 
-        maximum_value_length = { u'my_key': '0000000000000000000000000000000000000000000000000000000000000000000000000000000000000'
-                                            '00000000000000000000000000000000000000000000000000000000000000000000000000000000000000'
-                                            '0000000000000000000000000000000000000000000000000000000000000000000000000000000000000'}
-        self.test_tag_creation(maximum_key_length, resource=resource, fail_message="Unable to use a value with 128 characters", expected_outcome=True)
-        self.test_tag_deletion(maximum_key_length, resource=resource, fail_message="Unable to delete a value with 128 characters", expected_outcome=True)
+        key_too_large = { max_key + u'0' : 'my value'}
+        self.test_tag_creation(key_too_large, resource=resource, fail_message="Allowed key with more than " + str(max_key) + " chars", expected_outcome=False)
 
-        value_too_large = { u'my_key': '0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000'
-                                       '00000000000000000000000000000000000000000000000000000000000000000000000000000000000000'
-                                       '0000000000000000000000000000000000000000000000000000000000000000000000000000000000000'}
-        self.test_tag_creation(value_too_large, resource=resource, fail_message="Allowed value with more than 128 chars", expected_outcome=False)
+        maximum_value = '0' * 255
+
+        maximum_value_length = { u'my_key': maximum_value}
+        self.test_tag_creation(maximum_value_length, resource=resource, fail_message="Unable to use a value with " + str(maximum_value) + " characters", expected_outcome=True)
+        self.test_tag_deletion(maximum_value_length, resource=resource, fail_message="Unable to delete a value with " + str(maximum_value) + " characters", expected_outcome=True)
+
+        value_too_large = { u'my_key': maximum_value + '0'}
+        self.test_tag_creation(value_too_large, resource=resource, fail_message="Allowed value with more than " + str(maximum_value) + " chars", expected_outcome=False)
 
         aws_key_prefix = { u'aws:something': 'asdfadsf'}
         self.test_tag_creation(aws_key_prefix, resource=resource, fail_message="Allowed key with 'aws:' prefix'", expected_outcome=False)
 
         aws_value_prefix = { u'my_key': 'aws:somethingelse'}
-        self.test_tag_creation(aws_value_prefix, resource=resource, fail_message="Allowed key with 'aws:' prefix'", expected_outcome=True)
+        self.test_tag_creation(aws_value_prefix, resource=resource, fail_message="Did not allow creation value with 'aws:' prefix'", expected_outcome=True)
+        self.test_tag_creation(aws_value_prefix, resource=resource, fail_message="Did not allow deletion of value with 'aws:' prefix'", expected_outcome=True)
 
         lower_case = {u'case': 'value'}
         upper_case = {u'CASE': 'value'}
@@ -233,7 +268,7 @@ class TaggingBasics(EutesterTestCase):
             if actual_outcome is not expected_outcome:
                 raise Exception(fail_message + "\nDue to: " + str(exception) )
 
-    def test_in_series(self, resource, count=10):
+    def test_in_series(self, resource, count=5):
         for i in xrange(count):
             normal_tag = { u'series_key': '!@$$%^^&&*()*&&^%{}":?><|][~'}
             self.test_tag_creation(normal_tag, resource=resource, fail_message="Failed adding tags in series", expected_outcome=True)
@@ -243,8 +278,8 @@ class TaggingBasics(EutesterTestCase):
 if __name__ == "__main__":
     testcase = TaggingBasics()
     ### Use the list of tests passed from config/command line to determine what subset of tests to run
-    ### or use a predefined list  "InstanceTagging", "SnapshotTagging"
-    list = testcase.args.tests or ["VolumeTagging"]
+    ### or use a predefined list  "VolumeTagging", "InstanceTagging", "SnapshotTagging", "ImageTagging"
+    list = testcase.args.tests or ["SnapshotTagging"]
 
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
