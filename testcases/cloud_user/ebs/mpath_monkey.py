@@ -147,21 +147,32 @@ if __name__ == "__main__":
     try:
         #while(1):
         #    time.sleep(2)
+        q_empty_cnt = 0 
         while m_thread.isAlive: 
             m_thread.join(5)
             time.sleep(1)
             try:
                 qstr = my_queue.get_nowait()
             except Queue.Empty, qe:
+                q_empty_cnt += 1
                 print "(q-check)",
                 sys.stdout.flush()
             else:
+                q_empty_cnt = 0
+                q_time = time.time()
                 print "Got from thread queue: "+qstr
-            
+            if q_empty_cnt = 30:
+                q_elapsed = int(time.time() - q_time )
+                raise Exception("q-check was empty for for 30 intervals, "+str(q_elapsed)+" seconds")
     except KeyboardInterrupt:
         if monkey.timer:
             monkey.timer.cancel()
             print "Caught keyboard interrupt, killing timer and exiting..."
+            sys.exit()
+    except Exception, e:
+        if monkey.timer:
+            monkey.timer.cancel()
+            print str(e)
             sys.exit()
             
             

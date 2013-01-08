@@ -25,10 +25,9 @@
 
 import unittest
 from eutester.eutestcase import EutesterTestCase
-from eutester.eutestcase import EutesterTestResult
+from eutester.eutestcase import TestColor
 from eucaops import Eucaops
 import time
-
 
 
 
@@ -110,6 +109,7 @@ class Qa_214_volume_churn(EutesterTestCase):
             self.status("\'qa_214_test1\' number:"+str(x)+"/"+str(testcount))
             self.volumes = self.tester.create_volumes(self.zone, size=size, count=volcount, timepergig=timepergig)
             self.tester.delete_volumes(self.volumes, poll_interval=5, timeout=deletetimeout)
+            self.status('qa_214_test1: Completed:'+str(x)+'/'+str(testcount)+' tests',testcolor=TestColor.get_canned_color('whiteonblue'))
     
     
         
@@ -129,6 +129,7 @@ class Qa_214_volume_churn(EutesterTestCase):
                 instance.attach_volume(volume)
                 time.sleep(1)
                 instance.detach_euvolume(volume)
+            self.status('qa_214_test2: Completed:'+str(x)+'/'+str(testcount)+' tests',testcolor=TestColor.get_canned_color('whiteonblue'))
                     
  
     def qa_214_test3(self, 
@@ -155,6 +156,7 @@ class Qa_214_volume_churn(EutesterTestCase):
                 time.sleep(1)
                 instance.detach_euvolume(volume)
             self.tester.delete_volumes(volumes, poll_interval=5, timeout=deletetimeout)
+            self.status('qa_214_test3: Completed:'+str(x)+'/'+str(testcount)+' tests',testcolor=TestColor.get_canned_color('whiteonblue'))
             
     def qa_214_test4(self, 
                      volcount=5,
@@ -174,10 +176,11 @@ class Qa_214_volume_churn(EutesterTestCase):
         :param timepergig: integer time allowed per GB in seconds during creation
         :param deletetimeout: integer timeout in seconds waiting for volume to transition to 'deleted' state
         """
-        volumes=[]
-        snaps=[]
+        
         wait_on_progress = 15 * snapcount
         for x in xrange(0,testcount):
+            volumes=[]
+            snaps=[]
             self.status("\'qa_214_test4\' number:"+str(x)+"/"+str(testcount))
             volumes = self.tester.create_volumes(self.zone, size=size, count=volcount, timepergig=timepergig)
             for vol in volumes:
@@ -185,6 +188,9 @@ class Qa_214_volume_churn(EutesterTestCase):
             for snap in snaps:
                 volumes.extend(self.tester.create_volumes(self.zone, count=volcount, snapshot=snap, timepergig=timepergig))
             self.tester.delete_volumes(volumes, poll_interval=5, timeout=deletetimeout)
+            for snap in snaps:
+                self.tester.delete_snapshot(snap, timeout=deletetimeout)
+            self.status('qa_214_test4: Completed:'+str(x)+'/'+str(testcount)+' tests',testcolor=TestColor.get_canned_color('whiteonblue'))
     
 
 if __name__ == "__main__":
