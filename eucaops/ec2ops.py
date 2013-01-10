@@ -974,7 +974,7 @@ class EC2ops(Eutester):
                     elapsed = int(time.time()-snap_start)
                     if snapshot.eutest_poll_count <= 0:
                         raise Exception("Snapshot did not make progress for "+str(wait_on_progress)+" polls, after "+str(elapsed)+" seconds")
-                    self.debug(str(snapshot.id)+", Status:"+snapshot.status+", Progress:"+snapshot.progress+", Polls w/o progress:"+str(wait_on_progress-snapshot.eutest_poll_count)+"/"+str(wait_on_progress)+", Time Elapsed:"+str(elapsed))    
+                    self.debug(str(snapshot.id)+", Status:"+snapshot.status+", Progress:"+snapshot.progress+", Polls w/o progress:"+str(wait_on_progress-snapshot.eutest_poll_count)+"/"+str(wait_on_progress)+", Time Elapsed:"+str(elapsed)+"/"+str(timeout))    
                     if snapshot.status == 'completed':
                         self.debug(str(snapshot.id)+" created after " + str(elapsed) + " seconds. Status:"+snapshot.status+", Progress:"+snapshot.progress)
                         self.test_resources["snapshots"].append(snapshot)
