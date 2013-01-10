@@ -187,7 +187,7 @@ class Qa_214_volume_churn(EutesterTestCase):
             for vol in volumes:
                 v_index = volumes.index(vol)+1
                 self.status('Creating '+str(snapcount)+' snapshots from our new volume ('+str(v_index)+'/'+str(len(volumes))+'):'+str(vol.id) )
-                snaps.extend(self.tester.create_snapshots(vol, count=snapcount, wait_on_progress=wait_on_progress))
+                snaps.extend(self.tester.create_snapshots(vol, count=snapcount, wait_on_progress=wait_on_progress, monitor_to_state=False))
             for snap in snaps:
                 s_index = snaps.index(snap)+1
                 self.status('Creating '+str(volcount)+' volumes from our new snapshot('+str(s_index)+'/'+str(len(snaps))+'):'+str(snap.id) )
