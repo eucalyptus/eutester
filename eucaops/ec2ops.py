@@ -1043,10 +1043,9 @@ class EC2ops(Eutester):
                 self.debug("Caught exception creating snapshot,eof is False, continuing. Error:"+str(e))
                 if eof:
                     if delete_failed:
-                        for snap in snapshots:
-                            try:
-                                self.delete_snapshot(snap)
-                            except: pass
+                        try:
+                            self.delete_snapshots(snapshots)
+                        except: pass
                     raise e
                 else:
                     failed.append(snapshot)
@@ -1055,19 +1054,17 @@ class EC2ops(Eutester):
                     if (count - len(failed)) > mincount:
                         if delete_failed: 
                             snapshots.extend(failed)
-                            for snap in snapshots:
-                                try:
-                                    self.delete_snapshot(snap)
-                                except: pass
+                            try:
+                                self.delete_snapshots(snapshots)
+                            except:pass
                             raise Exception('Failed to created mincount('+str(mincount)+') number of snapshots from volume:'+str(volume_id))
             #If a delay was given, wait before next snapshot gets created
             if delay:
                 time.sleep(delay)
         #If we have failed snapshots, but still met our minimum clean up the failed and continue (this might be better as a thread?)...
         if delete_failed:
-            for snap in failed:
                 try:
-                    self.delete_snapshot(snap)
+                    self.delete_snapshots(failed)
                 except: pass
         #Pass the list of created snapshots to monitor method if state was not None, otherwise just return the list of newly created
         #snapshots. 
@@ -1159,8 +1156,7 @@ class EC2ops(Eutester):
                 except Exception, e:
                     if eof:
                         #If exit on fail, delete all snaps and raise exception
-                        for snap in snapshots:
-                            snap.delete()
+                        self.delete_snapshots(snapshots)
                         raise e
                     else:
                         self.debug("Exception caught in snapshot creation, snapshot:"+str(snapshot.id)+".Err:"+str(e))
@@ -1178,10 +1174,8 @@ class EC2ops(Eutester):
             snapshots.remove(snapshot)
         #If delete_failed flag is set, delete the snapshots believed to have failed...
         if delete_failed:
-            for snap in failed:
                 try:
-                    snap.delete()
-                    self.debug("Removed failed snapshot:"+str(snap.id))
+                   self.delete_snapshots(failed)
                 except: pass
         #join the lists again for printing debug purposes, retlist should only contain snaps believed to be good
         snapshots = copy.copy(retlist)
@@ -1258,7 +1252,7 @@ class EC2ops(Eutester):
             for snap in delete_me:
                 snaps.remove(snap)
             if snaps:
-                buf = "\n-------| WAITING ON "+str(len(snaps))+" SNAPSHOTS TO ENTER VALID DELETE STATES:("+str(valid_states)+"), elapsed:"+ str(elapsed)+'/'+str(wait_for_valid_state)+"|-----"
+                buf = "\n-------| WAITING ON "+str(len(snaps))+" SNAPSHOTS TO ENTER A DELETE-ABLE STATE:("+str(valid_states)+"), elapsed:"+ str(elapsed)+'/'+str(wait_for_valid_state)+"|-----"
                 for snap in snaps:
                     buf = buf +"\nSnapshot:"+str(snap.id)+",status:"+str(snap.status)+", progress:"+str(snap.progress)
                 self.debug(buf)
