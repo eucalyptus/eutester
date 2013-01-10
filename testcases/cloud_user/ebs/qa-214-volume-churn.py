@@ -193,9 +193,10 @@ class Qa_214_volume_churn(EutesterTestCase):
                 self.status('Creating '+str(volcount)+' volumes from our new snapshot('+str(s_index)+'/'+str(len(snaps))+'):'+str(snap.id) )
                 volumes.extend(self.tester.create_volumes(self.zone, count=volcount, snapshot=snap, timepergig=timepergig))
             self.status('Test#'+str(x)+': Main block of test complete, deleting '+str(len(volumes))+' volumes, and '+str(len(snaps))+' snapshots')
+           
             self.tester.delete_volumes(volumes, poll_interval=5, timeout=deletetimeout)
-        
             self.tester.delete_snapshot(snaps, basetimeout=deletetimeout)
+
             self.status('qa_214_test4: Completed:'+str(x)+'/'+str(testcount)+' tests',testcolor=TestColor.get_canned_color('whiteonblue'))
     
 

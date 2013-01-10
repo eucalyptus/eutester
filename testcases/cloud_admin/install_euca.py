@@ -86,12 +86,12 @@ class Install(EutesterTestCase):
             if machine.distro.name is "vmware":
                 continue
             if re.search("cc", " ".join(machine.components)):
-                machine.sys("service eucalyptus-cc start")
+                machine.sys("service eucalyptus-cc start", timeout=480)
             if re.search("nc", " ".join(machine.components)):
-                machine.sys("service eucalyptus-nc start")
+                machine.sys("service eucalyptus-nc start", timeout=480)
             if re.search("clc", " ".join(machine.components)) or re.search("ws", " ".join(machine.components))\
                or re.search("sc", " ".join(machine.components)) or re.search("vb", " ".join(machine.components)):
-                machine.sys("service eucalyptus-cloud start")
+                machine.sys("service eucalyptus-cloud start", timeout=480)
 
     def initialize_db(self):
         first_clc = self.tester.get_component_machines("clc")[0]
@@ -105,10 +105,10 @@ class Install(EutesterTestCase):
             nc.sys("echo 'DEVICE=" + bridge_interface +"\nTYPE=Ethernet\nBRIDGE=br0' > /etc/sysconfig/network-scripts/ifcfg-" + bridge_interface)
             nc.sys("service network restart")
 
-    def extend_logical_volume(self, logical_volume="/dev/vg01/lv_root", extents="100%FREE"):
+    def extend_logical_volume(self, logical_volume="/dev/vg01/lv_root", extents="50%FREE"):
         for machine in self.tester.config["machines"]:
             machine.sys("lvextend " + logical_volume + " -l" + extents )
-            machine.sys("resize2fs -f " + logical_volume)
+            machine.sys("resize2fs -f " + logical_volume, timeout=12000)
 
     def wait_for_creds(self, timeout=300):
         while timeout > 0:

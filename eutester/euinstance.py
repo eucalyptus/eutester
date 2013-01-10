@@ -50,19 +50,18 @@ from boto.ec2.instance import Instance
 #from eutester import euvolume
 from eutester.euvolume import EuVolume
 from eutester import eulogger
-
+from eutester.taggedresource import TaggedResource
 from random import randint
 import sshconnection
 import os
 import re
 import time
-import re
-import eulogger
 
 
 
 
-class EuInstance(Instance):
+
+class EuInstance(Instance, TaggedResource):
     keypair = None
     keypath = None
     username = None
@@ -236,9 +235,8 @@ class EuInstance(Instance):
         '''
         if ( self.verbose is True ):
             self.debugmethod(msg)
-            
-                
-    def sys(self, cmd, verbose=True, timeout=120):
+
+    def sys(self, cmd, verbose=True, code=None, timeout=120):
         '''
         Issues a command against the ssh connection to this instance
         Returns a list of the lines from stdout+stderr as a result of the command
@@ -248,7 +246,7 @@ class EuInstance(Instance):
         '''
         output = []
         if (self.ssh is not None):
-            output = self.ssh.sys(cmd, verbose=verbose, timeout=timeout)
+            output = self.ssh.sys(cmd, verbose=verbose, code=code, timeout=timeout)
             return output
         else:
             raise Exception("Euinstance ssh connection is None")

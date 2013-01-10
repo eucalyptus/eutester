@@ -12,6 +12,10 @@ class Upgrade(Install):
         self.zones = self.tester.get_zones()
         machine = self.tester.get_component_machines("clc")[0]
         self.old_version = machine.sys("cat /etc/eucalyptus/eucalyptus-version")[0]
+        for machine in self.tester.config["machines"]:
+            if re.search(machine.distro.name, "vmware"):
+                self.add_enterprise_repo()
+                break
 
     def upgrade_packages(self):
         for machine in self.tester.config["machines"]:
