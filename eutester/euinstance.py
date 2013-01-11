@@ -101,7 +101,7 @@ class EuInstance(Instance, TaggedResource):
                                       connect = True,
                                       verbose=True, 
                                       timeout=120,
-                                      private_addresssing = False,
+                                      private_addressing = False,
                                       reservation_id = None, 
                                       cmdstart=None, 
                                       retry=2
@@ -138,16 +138,16 @@ class EuInstance(Instance, TaggedResource):
         newins.timeout = timeout
         newins.retry = retry    
         newins.private_addressing = private_addressing
-        newins.reservation_id = reservation_id or newins.tester.get_reservation_id_for_instance(self.id)
+        newins.reservation_id = reservation_id or newins.tester.ec2.get_all_instances(instance_ids=newins.id)
         newins.laststate = newins.state
         newins.cmdstart = cmdstart or newins.tester.get_instance_time_launched(newins)
         newins.ageatstate = cmdstart
         #newins.set_block_device_prefix()
-        if self.root_device_type == 'ebs':
+        if newins.root_device_type == 'ebs':
             newins.bdm_vol = newins.tester.get_volume(volume_id = newins.block_device_mapping.current_value.volume_id)
         if connect:
             newins.connect_to_instance(timeout=timeout)
-        if self.ssh:
+        if newins.ssh:
             newins.set_rootfs_device()
         return newins
     
@@ -156,7 +156,7 @@ class EuInstance(Instance, TaggedResource):
         self.set_last_status()
     
     def set_last_status(self,status=None):
-        self.eutest_laststate = self.status
+        self.eutest_laststate = self.state
         self.eutest_laststatetime = time.time()
         self.eutest_ageatstate = "{0:.2f}".format(time.time() - self.cmdstart)
     
@@ -400,13 +400,13 @@ class EuInstance(Instance, TaggedResource):
         raise Exception("Detach Volume("+str(euvolume.id)+") not found on ("+str(self.id)+")")
         return True
     
-    def get_metadata(self, element_path): 
+    def get_metadata(self, element_path, prefix='latest/meta-data/'): 
         """Return the lines of metadata from the element path provided"""
         ### If i can reach the metadata service ip use it to get metadata otherwise try the clc directly
         if self.found("ping -c 1 169.254.169.254", "1 received"):
-            return self.sys("curl http://169.254.169.254/latest/meta-data/" + element_path)
+            return self.sys("curl http://169.254.169.254/"+str(prefix)+str(element_path), code=0)
         else:
-            return self.sys("curl http://" + self.tester.get_ec2_ip()  + ":8773/latest/meta-data/" + element_path)
+            return self.sys("curl http://" + self.tester.get_ec2_ip()  + ":8773/"+str(prefix) + str(element_path), code=0)
         
     def set_block_device_prefix(self):
         return self.set_rootfs_device()

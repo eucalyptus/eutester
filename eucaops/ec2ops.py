@@ -2113,7 +2113,7 @@ class EC2ops(Eutester):
         if isinstance(idstring, list):
             instance_ids = idstring
         else:
-            instance_ids = [idstring]
+            instance_ids = idstring
         
         reservations = self.ec2.get_all_instances(instance_ids=instance_ids)
         for res in reservations:
@@ -2142,6 +2142,7 @@ class EC2ops(Eutester):
                     ilist.append(i)
         return ilist
 
+        
     
     def get_connectable_euinstances(self,path=None,username='root', password=None, connect=True):
         """
@@ -2149,7 +2150,7 @@ class EC2ops(Eutester):
         for which there are local keys at 'path'
 
         :param path: Path to look for private keys
-        :param username: username to use if path is not passed
+        :param username: username to use if path is not pfassed
         :param password: password to use if path is not passed
         :param connect: bool, Whether to create an ssh connection to the instances
         :return:
@@ -2171,7 +2172,7 @@ class EC2ops(Eutester):
                       
             return euinstances
         except Exception, e:
-            self.debug("Failed to find a pre-existing isntance we can connect to:"+str(e))
+            self.debug("Failed to find a pre-existing instance we can connect to:"+str(e))
             pass
     
     
