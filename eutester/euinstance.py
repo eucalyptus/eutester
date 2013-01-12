@@ -56,6 +56,7 @@ import sshconnection
 import os
 import re
 import time
+import types
 
 
 
@@ -85,7 +86,7 @@ class EuInstance(Instance, TaggedResource):
     tester = None
     laststate = None
     laststatetime = None
-    ageatstate = None
+    age_at_state = None
     cmdstart = 0
 
    
@@ -124,11 +125,16 @@ class EuInstance(Instance, TaggedResource):
         
         newins.debugmethod = debugmethod
         if newins.debugmethod is None:
-            newins.logger = eulogger.Eulogger(identifier= str(instance.id) + "-" + str(instance.ip_address))
+            newins.logger = eulogger.Eulogger(identifier= str(instance.id))
             newins.debugmethod= newins.logger.log.debug
             
         if (keypair is not None):
-            keypath = os.getcwd() + "/" + keypair.name + ".pem" 
+            if isinstance(keypair,types.StringTypes):
+                keyname = keypair
+                keypair = tester.get_keypair(keyname)
+            else:
+                keyname = keypair.name
+            keypath = os.getcwd() + "/" + keyname + ".pem" 
         newins.keypair = keypair
         newins.keypath = keypath
         newins.password = password
@@ -140,8 +146,8 @@ class EuInstance(Instance, TaggedResource):
         newins.private_addressing = private_addressing
         newins.reservation_id = reservation_id or newins.tester.ec2.get_all_instances(instance_ids=newins.id)
         newins.laststate = newins.state
-        newins.cmdstart = cmdstart or newins.tester.get_instance_time_launched(newins)
-        newins.ageatstate = cmdstart
+        newins.cmdstart = cmdstart
+        newins.set_last_status()
         #newins.set_block_device_prefix()
         if newins.root_device_type == 'ebs':
             newins.bdm_vol = newins.tester.get_volume(volume_id = newins.block_device_mapping.current_value.volume_id)
@@ -156,22 +162,31 @@ class EuInstance(Instance, TaggedResource):
         self.set_last_status()
     
     def set_last_status(self,status=None):
-        self.eutest_laststate = self.state
-        self.eutest_laststatetime = time.time()
-        self.eutest_ageatstate = "{0:.2f}".format(time.time() - self.cmdstart)
+        self.laststate = self.state
+        self.laststatetime = time.time()
+        self.age_at_state = self.tester.get_instance_time_launched(self)
+        #Also record age from user's perspective, ie when they issued the run instance request (if this is available)
+        if self.cmdstart:
+            self.age_from_run_cmd = "{0:.2f}".format(time.time() - self.cmdstart) 
+        else:
+            self.age_from_run_cmd = None
+        
+        
     
     def printself(self,title=True, footer=True, printmethod=None):
         if self.bdm_vol:
             bdmvol = self.bdm_vol.id
+        else:
+            bdmvol = None
             
         buf = "\n"
         if title:
-            buf += str("------------------------------------------------------------------------------------------------------------------------------\n")
-            buf += str('INST_ID').center(15)+'|'+str('RES_ID').center(23)+'|'+str('LASTSTATUS').center(10)+'|'+str('PRIV_ADDR').center(10)+'|'+str('AGE@STATUS').center(10)+'|'+str('VMTYPE').center(12)+'|'+str('BDM_VOL').center(15)+'|'+str('CLUSTER').center(25)+'|'+str('PUB_IP').center(20)+'|'+str('PRIV_IP')+'\n'
-            buf += str("------------------------------------------------------------------------------------------------------------------------------\n")
-        buf += str(self.id).center(15)+'|'+str(self.reservation_id).center(23)+'|'+str(self.laststatus).center(10)+'|'+str(self.private_addressing).center(10)+'|'+str(self.eutest_ageatstatus).center(10)+'|'+str(self.instance_type).center(12)+'|'+str(bdmvol).center(15)+'|'+str(self.region).center(25)+'|'+str(self.public_dns_name).center(20)+'|'+str(self.private_ip_address).rstrip()+"\n"
+            buf += str("-------------------------------------------------------------------------------------------------------------------------------------------------------------------\n")
+            buf += str('INST_ID').center(11)+'|'+str('EMI').center(13)+'|'+str('RES_ID').center(11)+'|'+str('LASTSTATE').center(10)+'|'+str('PRIV_ADDR').center(10)+'|'+str('AGE@STATUS').center(13)+'|'+str('VMTYPE').center(12)+'|'+str('BDM_VOL').center(13)+'|'+str('CLUSTER').center(25)+'|'+str('PUB_IP').center(16)+'|'+str('PRIV_IP')+'\n'
+            buf += str("-------------------------------------------------------------------------------------------------------------------------------------------------------------------\n")
+        buf += str(self.id).center(11)+'|'+str(self.image_id).center(13)+'|'+str(self.reservation_id).center(11)+'|'+str(self.laststate).center(10)+'|'+str(self.private_addressing).center(10)+'|'+str(self.age_at_state).center(13)+'|'+str(self.instance_type).center(12)+'|'+str(bdmvol).center(13)+'|'+str(self.placement).center(25)+'|'+str(self.public_dns_name).center(16)+'|'+str(self.private_ip_address).rstrip()
         if footer:
-            buf += str("------------------------------------------------------------------------------------------------------------------------------")
+            buf += str("\n-------------------------------------------------------------------------------------------------------------------------------------------------------------------")
         if printmethod:
             printmethod(buf)
         return buf
@@ -181,9 +196,11 @@ class EuInstance(Instance, TaggedResource):
         
     
     def reset_ssh_connection(self):
+        self.debug('reset_ssh_connection for:'+str(self.id))
         if ((self.keypath is not None) or ((self.username is not None)and(self.password is not None))):
             if self.ssh is not None:
                 self.ssh.close()
+            self.debug('Connecting ssh '+str(self.id))
             self.ssh = sshconnection.SshConnection(
                                                     self.public_dns_name, 
                                                     keypair=self.keypair, 
@@ -214,9 +231,10 @@ class EuInstance(Instance, TaggedResource):
             while (elapsed < timeout):
                 try:
                     self.reset_ssh_connection()
+                    self.debug('Try some sys...')
                     self.sys("")
                 except Exception, se:
-                    self.debug('Caught exception attempting to reconnect ssh'+ str(se))
+                    self.debug('Caught exception attempting to reconnect ssh:'+ str(se))
                     elapsed = int(time.time()-start)
                     self.debug('retrying ssh connection, elapsed:'+str(elapsed)+'/'+str(timeout))
                     time.sleep(5)

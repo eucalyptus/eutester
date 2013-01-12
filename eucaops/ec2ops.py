@@ -1,4 +1,4 @@
-# Software License Agreement (BSD License)
+ # Software License Agreement (BSD License)
 #
 # Copyright (c) 2009-2011, Eucalyptus Systems, Inc.
 # All rights reserved.
@@ -38,6 +38,10 @@ import os
 import copy
 import socket
 import struct
+import types
+import StringIO
+import traceback
+import sys
 from datetime import datetime
 from boto.ec2.image import Image
 from boto.ec2.keypair import KeyPair
@@ -50,6 +54,7 @@ from eutester.eusnapshot import EuSnapshot
 from eutester.eutestcase import EutesterTestCase
 from boto.ec2.regioninfo import RegionInfo
 import boto
+
 
 EC2RegionData = {
     'us-east-1' : 'ec2.us-east-1.amazonaws.com',
@@ -111,6 +116,7 @@ class EC2ops(Eutester):
             self.ec2 = boto.connect_ec2(**ec2_connection_args)
         except Exception, e:
             self.critical("Was unable to create ec2 connection because of exception: " + str(e))
+        self.ec2_source_ip = None #Source ip on local test machine used to reach instances
 
     def setup_ec2_resource_trackers(self):
         """
@@ -884,7 +890,7 @@ class EC2ops(Eutester):
         :rtype: integer
         :returns: The number of seconds elapsed since this volume was attached. 
         '''
-        instance.update()
+        #instance.update()
         #get timestamp from launch data
         launch_time = cls.get_datetime_from_resource_string(instance.launch_time)
         #return the elapsed time in seconds
@@ -1780,6 +1786,7 @@ class EC2ops(Eutester):
                   clean_on_fail=True,
                   monitor_to_running = True,
                   timeout=480):
+        reservation = None
         try:
             instances = []
             if image is None:
@@ -1802,63 +1809,99 @@ class EC2ops(Eutester):
                     keypair = keypair.name
                 
             self.debug( "Attempting to run "+ str(image.root_device_type)  +", image " + str(image) + " in group " + str(group))
+            cmdstart=time.time()
             reservation = image.run(key_name=keypair,security_groups=[group],instance_type=type, placement=zone, min_count=min, max_count=max, user_data=user_data, addressing_type=addressing_type)
             self.test_resources["reservations"].append(reservation)
             
             if (len(reservation.instances) < min) or (len(reservation.instances) > max):
                 fail = "Reservation:"+str(reservation.id)+" returned "+str(len(reservation.instances))+" instances, not within min("+str(min)+") and max("+str(max)+")"
-            for instance in reservation:
+            for instance in reservation.instances:
                 try:
+                    self.debug('Converting instance to euinstance type:'+str(instance.id))
                     #convert to euinstances, connect ssh later...
-                    eu_instance =  EuInstance.make_euinstance_from_instance( instance, self, keypair=keypair, username = username, password=password, reservation_id = reservation.id, private_addressing=private_addressing, timeout=timeout,connect=False )
+                    eu_instance =  EuInstance.make_euinstance_from_instance( instance, 
+                                                                             self, 
+                                                                             keypair=keypair, 
+                                                                             username = username, 
+                                                                             password=password, 
+                                                                             reservation_id = reservation.id, 
+                                                                             private_addressing=private_addressing, 
+                                                                             timeout=timeout,
+                                                                             cmdstart=cmdstart, 
+                                                                             connect=False )
                     #set the connect flag in the euinstance object for future use
                     eu_instance.connect = connect
                     instances.append(eu_instance)
                 except Exception, e:
                     raise Exception("Unable to create Euinstance from " + str(instance)+", err:\n"+str(e))
             if monitor_to_running:
-                return self.monitor_euinstances_to_running(instances, connect=connect, timeout=timeout)
+                return self.monitor_euinstances_to_running(instances, timeout=timeout)
             else:
                 return instances
         except Exception, e:
-            self.debug('Run_instance failed, terminating reservation. Error:'+str(e))
+            trace = self.get_traceback()
+            self.debug('!!! Run_instance failed, terminating reservation. Error:'+str(e)+"\n"+trace)
             if reservation:
                 self.terminate_instances(reservation=reservation)
             raise e 
     
     
-    def monitor_euinstances_to_running(self,instances, timeout=480):
-        self.debug("Monitor_instances_to_running starting...")
+    def monitor_euinstances_to_running(self,instances, poll_interval=10, timeout=480):
+        self.debug("("+str(len(instances))+") Monitor_instances_to_running starting...")
         #Wait for instances to go to running state...
         self.monitor_euinstances_to_state(instances,timeout=timeout)
+        self.debug("("+str(len(instances))+") after monitor to state")
         #Wait for instances in list to get valid ips, check for duplicates, etc...
         self.wait_for_valid_ip(instances, timeout)
+        self.debug("("+str(len(instances))+") after wait_for_valid_ip")
         #Now attempt to connect to instances if connect flag is set in the instance...
         waiting = copy.copy(instances)
+        self.debug("("+str(len(waiting))+") after copying to waiting")
+        good = []
+        elapsed = 0
+        start = time.time()
+        self.debug("Instances in running state and IPs are valid, attempting connections...")
         while waiting and (elapsed < timeout):
+            self.debug("Checking "+str(len(waiting))+" instance ssh connections...")
+            elapsed = int(time.time()-start)
             for instance in waiting:
+                self.debug('Checking instance:'+str(instance.id)+" ...")
                 if instance.connect:
                     try:
                         #First try ping
                         self.debug('Security group rules allow ping from this test machine:'+str(self.does_instance_sec_group_allow(instance, protocol='icmp', port=0)))
                         self.ping(instance.public_dns_name, 2)
                         #now try to connect ssh
-                        self.debug('Security group rules allow ssh from this test machine:'+str(self.does_instance_sec_group_allow(instance, protocol='tcp', port=22)))
-                        for instance in instances:
-                            instance.connect_to_instance(timeout=2)
-                            good.append(waiting.pop(index(instance)))
-                    except:pass
+                        allow = "None"
+                        try:
+                            allow=str(self.does_instance_sec_group_allow(instance, protocol='tcp', port=22))
+                        except:pass
+                        self.debug('Security group rules allow ssh from this test machine:'+str(allow))
+                        instance.connect_to_instance(timeout=2)
+                        self.debug("Connected to instance:"+str(instance.id))
+                        good.append(instance)
+                    except:
+                        self.debug(self.get_traceback())
+                        pass
                 else:
-                    good.append(waiting.pop(index(instance)))
+                    good.append(instance)
+            for instance in good:
+                if instance in waiting:
+                    waiting.remove(instance)
+            if waiting:
+                time.sleep(poll_interval)
+                
         if waiting:
-            buf += "Timed out waiting to connect to the following instances:\n"
+            buf = "Timed out waiting to connect to the following instances:\n"
             for instance in waiting:
                 buf += str(instance.id)+":"+str(instance.public_dns_name)+","
-            raise 
-        self.print_euinstance_list(instances)
+            raise Exception(buf)
+        self.print_euinstance_list(good)
+        return good
     
     def does_instance_sec_group_allow(self, instance, src_addr=None, protocol='tcp',port=22):
         s = None
+        self.debug("does_instance_sec_group_allow:"+str(instance.id)+" src_addr:"+str(src_addr))
         try:
             if not src_addr:
                 #Use the local test machine's addr
@@ -1871,11 +1914,19 @@ class EC2ops(Eutester):
                 if self.ec2_source_ip == "0.0.0.0":
                     raise Exception('Test machine source ip detected:'+str(self.ec2_source_ip)+', tester may need ec2_source_ip set manually')
                 src_addr = self.ec2_source_ip
-                groups = self.get_instance_security_groups(instance)
-                for group in groups:
-                    if self.does_sec_group_allow(group, src_addr, protocol=protocol, port=port):
-                        return True
+            
+            self.debug('Using src_addr:'+str(src_addr))
+            groups = self.get_instance_security_groups(instance)
+            for group in groups:
+                self.debug("Is src_addr:"+str(src_addr)+" allowed in group:"+str(group.name)+"...?")
+                if self.does_sec_group_allow(group, src_addr, protocol=protocol, port=port):
+                    self.debug("Sec allows from source")
+                    return True
+            self.debug("Sec does NOT allow from source")
             return False
+        except Exception, e:
+            self.debug(self.get_traceback())
+            raise e
         finally:
             if s:
                 s.close()
@@ -1885,16 +1936,26 @@ class EC2ops(Eutester):
         Test whether a security group will allow traffic from a specific 'src' ip address to
         a specific 'port' using a specific 'protocol'
         '''
+        self.debug('does_sec_group_allow: sec_group:'+str(group.name)+", from_src:"+str(src)+", proto:"+str(protocol)+", port:"+str(port))
+        g_buf =""
         for rule in group.rules:
-            if rule.ip_protocol == protocal:
-                if (rule.to_port == 0 ) or (rule.to_port == -1) or (rule.to_port == port):
-                    for grant in group.grants:
-                        if is_address_in_network(src, grant):
+            if rule.ip_protocol == protocol:
+                for grant in rule.grants:
+                    g_buf += str(grant)+","
+                self.debug("rule#"+str(group.rules.index(rule))+": port:"+str(rule.to_port)+", grants:"+str(g_buf))
+                to_port= int(rule.to_port)
+                if (to_port == 0 ) or (to_port == -1) or (to_port == port):
+                    for grant in rule.grants:
+                        if self.is_address_in_network(src, str(grant)):
+                            self.debug("does_sec_group_allow? True")
                             return True
+        self.debug("does_sec_group_allow? False")
         return False
                     
-    
-    def is_address_in_network(ip_addr, network):
+    @classmethod
+    def is_address_in_network(cls,ip_addr, network):
+        ip_addr = str(ip_addr)
+        network = str(network)
         ipaddr = int(''.join([ '%02x' % int(x) for x in ip_addr.split('.') ]), 16)
         netstr, bits = network.split('/')
         netaddr = int(''.join([ '%02x' % int(x) for x in netstr.split('.') ]), 16)
@@ -1905,7 +1966,7 @@ class EC2ops(Eutester):
         secgroups = []
         res = self.get_reservation_for_instance(instance)
         for group in res.groups:
-         secgroups.append(self.ec2.get_all_security_groups(groupnames=str(group.id))) 
+         secgroups.extend(self.ec2.get_all_security_groups(groupnames=str(group.id))) 
         return secgroups
     
     def get_reservation_for_instance(self, instance):
@@ -1927,10 +1988,12 @@ class EC2ops(Eutester):
         failmsg = None
         pollinterval = 10
         while monitor and elapsed < timeout:
+            elapsed = int(time.time() - start)
             for instance in monitor:
+                instance.update()
                 bdm_vol_status = None
                 bdm_vol_id = None
-                if emi.root_device_type == ebs:
+                if instance.root_device_type == 'ebs':
                     if not instance.bdm_vol:
                         try:
                             instance.bdm_vol = self.get_volume(volume_id = instance.block_device_mapping.current_value.volume_id)
@@ -1940,39 +2003,44 @@ class EC2ops(Eutester):
                     else:
                         bdm_vol_id = instance.bdm_vol.id
                         bdm_vol_status = instance.bdm_vol.status
-                dbgmsg = ('to state:'+str(instance.id)+':'+str(instance.state)+', backing volume:status'+str(bdm_vol_id)+':'+str(bdm_vol_status))
+                dbgmsg = ('for '+str(state)+": "+str(instance.id)+' state:'+str(instance.state)+', backing volume:'+str(bdm_vol_id)+' status:'+str(bdm_vol_status)+", elapsed:"+str(elapsed)+"/"+str(timeout))
                 if instance.state == state:
                     self.debug("SUCCESS "+dbgmsg)
                     #This instance is in the correct state, remove from monitor list
-                    good.append(monitor.pop(monitor.index(instance)))
+                    good.append(instance)
                 else:
                     self.debug("WAITING "+dbgmsg)
             dbgstr = 'Waiting for '+str(len(monitor))+"/"+str(len(instance_list))+" instances to go to state:"+str(state)+', elapsed:'+str(elapsed)+'/'+str(timeout)+"\n"
-            elapsed = int(time.time() - start)
-            time.sleep(poll_interval)
-        self.show_instance_list(instance_list)
+            #remove good instances from list to monitor
+            for instance in good:
+                if instance in monitor:
+                    monitor.remove(instance)
+            if monitor:
+                time.sleep(poll_interval)
+        self.print_euinstance_list(instance_list)
         if monitor:
             failmsg = "Some instances did not go to state:"+str(state)+' within timeout:'+str(timeout)+"\nFailed:"
             for instance in monitor:
                 failmsg += str(instance.id)+","
-            self.show_instance_list(monitor)
+            self.print_euinstance_list(monitor)
             raise Exception(failmsg)
         
         
     
         
     def print_euinstance_list(self, list):
-        first = list.pop(0)
-        for instance in list:
+        plist = copy.copy(list)
+        first = plist.pop(0)
+        for instance in plist:
             if not isinstance(instance,EuInstance):
                 raise Exception("print_euinstance list passed non-EuInstnace type")
         buf = first.printself(title=True, footer=False)
-        for instance in list:
+        for instance in plist:
             buf += instance.printself(title=False, footer=False)
         self.debug("\n"+str(buf)+"\n")
     
 
-    def wait_for_valid_ip(self, instances, timeout = 60):
+    def wait_for_valid_ip(self, instances, poll_interval=10, timeout = 60):
         """
         Wait for instance public DNS name to clear from 0.0.0.0
 
@@ -1981,15 +2049,17 @@ class EC2ops(Eutester):
         :return: True on success
         :raise: Exception if IP stays at 0.0.0.0
         """
-        self.debug("Monitoring instances for valid ips...")
-        if not isinstance(instances, List):
+        self.debug("wait_for_valid_ip: Monitoring instances for valid ips...")
+        if not isinstance(instances, types.ListType):
             monitoring = [instances]
         else:
             monitoring = copy.copy(instances)
         elapsed = 0
+        good = []
         start = time.time()
         zeros = re.compile("0.0.0.0")
         while monitoring and (elapsed <= timeout):
+            elapsed = int(time.time()- start)
             for instance in monitoring:
                 instance.update()
                 if zeros.search(instance.public_dns_name):
@@ -1999,27 +2069,36 @@ class EC2ops(Eutester):
                     if (instance.ip_address is instance.private_ip_address) and (instance.public_dns_name is instance.private_dns_name) and not instance.private_addressing:
                         self.debug("ERROR:"+str(instance.id) + " got Public IP: " + str(instance.ip_address)  + " Private IP: " + str(instance.private_ip_address) + " Public DNS Name: " + str(instance.public_dns_name) + " Private DNS Name: " + str(instance.private_dns_name))
                     else:
-                        good.append(monitoring.pop(index(instance)))
-                elapsed = int(time.time()- start)
+                        good.append(instance)
+            #clean up list outside of loop
+            for instance in good:
+                if instance in monitoring:
+                    monitoring.remove(instance)
+            if monitoring:
+                time.sleep(poll_interval)
         if monitoring:
             buf = "Instances timed out waiting for a valid IP, elapsed:"+str(elapsed)+"/"+str(timeout)+"\n"
             for instance in instances:
                 buf += "Instance: "+str(instance.id)+", public ip: "+str(instance.public_dns_name)+"\n"
             raise Exception(buf)
         self.check_system_for_dup_ip(instances=good)
+        self.debug('Wait_for_valid_ip done')
                 
     def check_system_for_dup_ip(self, instances=None):
         '''
         Check system for instances with conflicting duplicate IPs. Will raise exception at end of iterating through all running, pending, or starting instances with info 
         as to which instances and IPs conflict. 
-        If a single isntance 'inst' is provided, all other conflicting IPS will be ignored and will only raise an exception for conflicts with the provided instance 'inst'
+        If a list of instances is provided, all other conflicting IPS will be ignored and will only raise an exception for conflicts with the provided instance 'inst'
         '''
         errbuf = ""
         publist = {}
         privlist = {}
+        self.debug('Check_system_for_dup_ip starting...')
         reslist = self.ec2.get_all_instances()
         for res in reslist:
+            self.debug("Checking reservation: "+str(res.id))
             for instance in res.instances:
+                self.debug('Checking instance '+str(instance.id).ljust(20)+', state:'+str(instance.state).ljust(20)+' pubip:'+str(instance.public_dns_name).ljust(20)+' privip:'+str(instance.private_dns_name).ljust(20))
                 if instance.state == 'running' or instance.state == 'pending' or instance.state == 'starting':
                     if instance.public_dns_name != '0.0.0.0':
                         if instance.public_dns_name in publist:
@@ -2035,8 +2114,9 @@ class EC2ops(Eutester):
                                 raise Exception("PRIVATE:"+str(instance.id)+"/"+str(instance.state)+"="+str(instance.private_dns_name)+" vs: "+str(privlist[instance_private_dns_name]))
                         else:
                             privlist[instance.private_dns_name] = str(instance.id+"/"+instance.state)
-        if not inst and errbuf:
+        if not instances and errbuf:
             raise Exception("DUPLICATE IPs FOUND:"+errbuf)
+        self.debug("Done with check_system_for_dup_ip")
         
 
     def convert_reservation_to_euinstance(self, reservation, username="root", password=None, keyname=None, timeout=60):
@@ -2191,6 +2271,19 @@ class EC2ops(Eutester):
                 print str(item)+" = "+str(obj.__dict__[item])
             buf += str(item)+" = "+str(obj.__dict__[item])+"\n"
         return buf
+    
+    def get_traceback(self):
+        '''
+        Returns a string buffer with traceback, to be used for debug/info purposes. 
+        '''
+        try:
+            out = StringIO.StringIO()
+            traceback.print_exception(*sys.exc_info(),file=out)
+            out.seek(0)
+            buf = out.read()
+        except Exception, e:
+                buf = "Could not get traceback"+str(e)
+        return str(buf) 
 
     def terminate_instances(self, reservation=None, timeout=480):
         """
@@ -2203,10 +2296,13 @@ class EC2ops(Eutester):
         aggregate_result = True
         if reservation is None:
             reservations = self.ec2.get_all_instances()
+            #first send terminate for all instances
             for res in reservations:
                 for instance in res.instances:
                     self.debug( "Sending terminate for " + str(instance) )
                     instance.terminate()
+            #now go wait on the instance states
+            for res in reservations:
                 if self.wait_for_reservation(res, state="terminated", timeout=timeout) is False:
                     aggregate_result = False
         ### Otherwise just kill this reservation
