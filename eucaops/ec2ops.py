@@ -1043,8 +1043,8 @@ class EC2ops(Eutester):
                     snapshot.eutest_volume_zone = volume.zone
                     
                     snapshot.update()
-                    if not re.match(str(snapshot.description), str(description)):
-                        raise Exception('Snapshot Description does not match request:\nSnap.description:"'+str(snapshot.description)+'", -vs- "'+str(description)+'"')
+                    if description and (not re.match(str(snapshot.description), str(description)) ):
+                        raise Exception('Snapshot Description does not match request: Snap.description:"'+str(snapshot.description)+'" -vs- "'+str(description)+'"')
 
                     if snapshot:
                         snapshots.append(snapshot)
@@ -1815,6 +1815,9 @@ class EC2ops(Eutester):
             
             if (len(reservation.instances) < min) or (len(reservation.instances) > max):
                 fail = "Reservation:"+str(reservation.id)+" returned "+str(len(reservation.instances))+" instances, not within min("+str(min)+") and max("+str(max)+")"
+            
+            if image.root_device_type == 'ebs':
+                self.wait_for_instances_block_dev_mapping(reservation.instances, timeout=timeout)
             for instance in reservation.instances:
                 try:
                     self.debug('Converting instance to euinstance type:'+str(instance.id))
@@ -1846,17 +1849,46 @@ class EC2ops(Eutester):
             raise e 
     
     
+    def wait_for_instances_block_dev_mapping(self, instances, poll_interval=1, timeout=60):
+        waiting = copy.copy(instances)
+        elapsed = 0
+        good = []
+        start = time.time()
+        self.debug('wait_for_instance_block_dev_mapping started...')
+        while waiting and (elapsed < timeout):
+            elapsed = time.time() - start
+            for instance in waiting:
+                instance.update()
+                if instance.root_device_type == 'ebs':
+                    if instance.block_device_mapping and instance.block_device_mapping.current_value:
+                        self.debug('Instance block device mapping is populated:'+str(instance.id))
+                        good.append(instance)
+                else:
+                    good.append(instance)
+            for instance in good:
+                if instance in waiting:
+                    waiting.remove(instance)
+            if waiting:
+                if not int(elapsed)%10:
+                    for instance in waiting:
+                        self.debug('Waiting for instance block device mapping to be populated:'+str(instance.id))
+                time.sleep(poll_interval)
+        if waiting:
+            err_buf = 'Instances failed to populate block dev mapping after '+str(elapsed)+'/'+str(timeout)+' seconds: '
+            for instance in waiting:
+                err_buf += str(instance.id)+','
+            raise Exception(err_buf)
+        self.debug('wait_for_instance_block_dev_mapping started done. elapsed:'+str(elapsed))
+    
+    
     def monitor_euinstances_to_running(self,instances, poll_interval=10, timeout=480):
         self.debug("("+str(len(instances))+") Monitor_instances_to_running starting...")
         #Wait for instances to go to running state...
         self.monitor_euinstances_to_state(instances,timeout=timeout)
-        self.debug("("+str(len(instances))+") after monitor to state")
         #Wait for instances in list to get valid ips, check for duplicates, etc...
         self.wait_for_valid_ip(instances, timeout)
-        self.debug("("+str(len(instances))+") after wait_for_valid_ip")
         #Now attempt to connect to instances if connect flag is set in the instance...
         waiting = copy.copy(instances)
-        self.debug("("+str(len(waiting))+") after copying to waiting")
         good = []
         elapsed = 0
         start = time.time()
@@ -1931,6 +1963,7 @@ class EC2ops(Eutester):
             if s:
                 s.close()
     
+                        
     def does_sec_group_allow(self, group, src, protocol='tcp', port=22):
         '''
         Test whether a security group will allow traffic from a specific 'src' ip address to
@@ -1976,54 +2009,86 @@ class EC2ops(Eutester):
                     return res
         raise Exception('No reservation found for instance:'+str(instance.id))
         
-    def monitor_euinstances_to_state(self, instance_list, state='running', poll_interval=10, timeout=120):   
-        self.debug("monitor_instances_to_state "+str(state)+" starting....") 
+    def monitor_euinstances_to_state(self, instance_list, state='running', min=None, poll_interval=10, timeout=120, eof=True):   
+        self.debug('('+str(len(instance_list))+") monitor_instances_to_state: '"+str(state)+"' starting....") 
         monitor = copy.copy(instance_list)
         for instance in monitor:
             if not isinstance(instance, EuInstance):
                 instance = EuInstance.make_euinstance_from_instance( instance, self, connect=False)
         good = []
+        failed = []
         elapsed = 0
         start = time.time()
         failmsg = None
         pollinterval = 10
+        failmsg = ""
+        #If no min allowed successful instance count is given, set it to the length of the list provdied. 
+        if min is None:
+            min = len(instance_list)
         while monitor and elapsed < timeout:
             elapsed = int(time.time() - start)
+            self.debug("\nWaiting for remaining "+str(len(monitor))+"/"+str(len(instance_list))+" instances to go to state:"+str(state)+', elapsed:'+str(elapsed)+'/'+str(timeout)+")...")
             for instance in monitor:
-                instance.update()
-                bdm_vol_status = None
-                bdm_vol_id = None
-                if instance.root_device_type == 'ebs':
-                    if not instance.bdm_vol:
-                        try:
-                            instance.bdm_vol = self.get_volume(volume_id = instance.block_device_mapping.current_value.volume_id)
+                try:
+                    instance.update()
+                    bdm_vol_status = None
+                    bdm_vol_id = None
+                    if instance.root_device_type == 'ebs':
+                        if not instance.bdm_vol:
+                            try:
+                                instance.bdm_vol = self.get_volume(volume_id = instance.block_device_mapping.current_value.volume_id)
+                                bdm_vol_id = instance.bdm_vol.id
+                                bdm_vol_status = instance.bdm_vol.status
+                            except: pass
+                        else:
+                            instance.bdm_vol.update()
                             bdm_vol_id = instance.bdm_vol.id
                             bdm_vol_status = instance.bdm_vol.status
-                        except: pass
+                        if instance.laststate:
+                            #fail fast on ebs backed instances that go into stopped stated unintentionally
+                            if state != "stopped" and ( instance.laststate == 'pending' and instance.state == "stopped"):
+                                raise Exception("Instance:"+str(instance.id)+" illegal state transition from "+str(instance.laststate)+" to "+str(instance.state))
+                    dbgmsg = (str(state)+": "+str(instance.id)+' state:'+str(instance.state)+', backing volume:'+str(bdm_vol_id)+' status:'+str(bdm_vol_status)+", elapsed:"+str(elapsed)+"/"+str(timeout))
+                    if instance.state == state:
+                        self.debug("SUCCESS "+ dbgmsg)
+                        #This instance is in the correct state, remove from monitor list
+                        good.append(instance)
                     else:
-                        bdm_vol_id = instance.bdm_vol.id
-                        bdm_vol_status = instance.bdm_vol.status
-                dbgmsg = ('for '+str(state)+": "+str(instance.id)+' state:'+str(instance.state)+', backing volume:'+str(bdm_vol_id)+' status:'+str(bdm_vol_status)+", elapsed:"+str(elapsed)+"/"+str(timeout))
-                if instance.state == state:
-                    self.debug("SUCCESS "+dbgmsg)
-                    #This instance is in the correct state, remove from monitor list
-                    good.append(instance)
-                else:
-                    self.debug("WAITING "+dbgmsg)
-            dbgstr = 'Waiting for '+str(len(monitor))+"/"+str(len(instance_list))+" instances to go to state:"+str(state)+', elapsed:'+str(elapsed)+'/'+str(timeout)+"\n"
+                        self.debug("WAITING for "+dbgmsg)
+                except Exception, e:
+                    failed.append(instance)
+                    tb = self.get_traceback()
+                    self.debug('FAILED: Instance:'+str(instance.id)+",err:"+str(e)+"\n"+str(tb))
+                    if eof:
+                        self.debug("EOF set to True, monitor_euinstances_to_state ending...")
+                        raise e
+                    if (len(instance_list) - len(failed) > min):
+                        self.debug('Failed instances has exceeded allowed minimum('+str(min)+") monitor_euinstances_to_state ending...")
+                        raise e
+                    else:
+                        failmsg += str(e)+"\n"
+                        
             #remove good instances from list to monitor
-            for instance in good:
-                if instance in monitor:
+            for instance in monitor:
+                if instance in good or instance in failed:
                     monitor.remove(instance)
+                    
             if monitor:
                 time.sleep(poll_interval)
+                
         self.print_euinstance_list(instance_list)
         if monitor:
             failmsg = "Some instances did not go to state:"+str(state)+' within timeout:'+str(timeout)+"\nFailed:"
             for instance in monitor:
+                failed.append(instance)
                 failmsg += str(instance.id)+","
-            self.print_euinstance_list(monitor)
-            raise Exception(failmsg)
+            if eof:
+                raise Exception(failmsg)
+            if (len(instance_list) - len(failed) > min):
+                self.debug('Failed instances has exceeded allowed minimum('+str(min)+") monitor_euinstances_to_state ending...")
+                raise Exception(failmsg)
+            else:
+                self.debug(failmsg)
         
         
     

@@ -150,7 +150,11 @@ class EuInstance(Instance, TaggedResource):
         newins.set_last_status()
         #newins.set_block_device_prefix()
         if newins.root_device_type == 'ebs':
-            newins.bdm_vol = newins.tester.get_volume(volume_id = newins.block_device_mapping.current_value.volume_id)
+            try:
+                volume = newins.tester.get_volume(volume_id = newins.block_device_mapping.current_value.volume_id)
+                newins.bdm_vol = EuVolume.make_euvol_from_vol(volume, tester=newins.tester,cmdstart=news.cmdstart)
+            except:pass
+                
         if connect:
             newins.connect_to_instance(timeout=timeout)
         if newins.ssh:
@@ -453,10 +457,13 @@ class EuInstance(Instance, TaggedResource):
         else:
             self.rootfs_device = "sda"
             self.virtio_blk = False
+        
+    
     
     def terminate_and_verify(self,verify_vols=True,volto=30, timeout=300):
         '''
-        Attempts to terminate the instance and if flagged will attempt to verify the correct
+        Attempts to terminate the instance and verify delete on terminate state of an ebs root block dev if any. 
+        If flagged will attempt to verify the correct
         state of any volumes attached during the terminate operation. 
         
         :type verify_vols: boolean
@@ -470,6 +477,7 @@ class EuInstance(Instance, TaggedResource):
         '''
         bad_vols = []
         bad_vol_ids = []
+        start = time.time()
         if verify_vols:
             self.debug('Checking euinstance attached volume state is in sync with clouds...')
             for vol in self.attached_vols:
@@ -480,12 +488,22 @@ class EuInstance(Instance, TaggedResource):
                     bad_vols.append(vol)
                     bad_vol_ids.append(vol.id)
         self.tester.terminate_single_instance(self, timeout=timeout)
+        elapsed = int(time.time()-start)
+        if self.bdm_vol:
+            if self.block_device_mapping.current_value.delete_on_termination:
+                vol_state='deleted'
+            else:
+                vol_state='available'
+            self.bdm_vol.update()
+            while self.bdm_vol.status != vol_state and elapsed < timeout:
+                elapsed = int(time.time()-start)
+                self.debug('Delete on terminate:'+str(self.block_device_mapping.current_value.delete_on_termination)+', expected state:'+str(vol_state)+', '+str(self.bdm_vol.id)+" in state:"+str(self.bdm_vol.status)+", elapsed:"+str(elapsed)+"/"+str(timeout))
+                self.bdm_vol.update()
+                time.sleep(5)
         if verify_vols:
             for vol in self.attached_vols:
                 if vol in bad_vols:
                     continue
-                start = time.time()
-                elapsed = 0 
                 while (vol.status != 'available') and (elapsed < timeout):
                     time.sleep(5)
                     vol.update()
