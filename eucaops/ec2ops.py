@@ -696,7 +696,6 @@ class EC2ops(Eutester):
                     return True
                 else:
                     raise e
-
         if volume.status != 'deleted':
             self.fail(str(volume) + " left in " +  volume.status + ',elapsed:'+str(elapsed))
             return False
@@ -744,12 +743,7 @@ class EC2ops(Eutester):
         volumes = self.ec2.get_all_volumes()
         for volume in volumes:
             self.delete_volume(volume.id)
-        """
 
-        instance
-        volume
-        device_path
-        """
     def attach_volume(self, instance, volume, device_path, pause=10, timeout=120):
         """
         Attach a volume to an instance
@@ -785,12 +779,6 @@ class EC2ops(Eutester):
             self.debug( str(volume) + ", state:" + volume.status+', attached status:'+str(astatus) + ", elapsed:"+str(elapsed)+'/'+str(timeout))
             self.sleep(pause)
             elapsed = int(time.time()-start)
-
-
-        """
-
-        volume
-        """
     
     def detach_volume(self, volume, pause = 10, timeout=60):
         """
@@ -1154,17 +1142,7 @@ class EC2ops(Eutester):
     def register_snapshot(self, snapshot, rdn="/dev/sda1", description="bfebs", windows=False, bdmdev=None, name=None, ramdisk=None, kernel=None, dot=True):
         """Convience function for passing a snapshot instead of its id. See register_snapshot_by_id"""
         return self.register_snapshot_by_id( snapshot.id, rdn, description, windows, bdmdev, name, ramdisk, kernel, dot )
-    """
 
-    snap_id
-    name
-    description    (optional string)
-    bdmdev         (optional string)
-    rdn            (optional string)
-    dot            (optional boolean)
-    windows        (optional boolean)
-    kernel         (optional string)
-    """
     def register_snapshot_by_id( self, snap_id, rdn="/dev/sda1", description="bfebs", windows=False, bdmdev=None, name=None, ramdisk=None, kernel=None, dot=True ):
         """
         Register an image snapshot
@@ -1713,9 +1691,6 @@ class EC2ops(Eutester):
                     ilist.append(i)
         return ilist
 
-        """
-
-        """
     def get_connectable_euinstances(self,path=None,username='root', password=None, connect=True):
         """
         Convenience method, returns a list of all running instances, for the current creduser
