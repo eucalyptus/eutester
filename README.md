@@ -21,8 +21,8 @@ Installation
 ------
 If easy_install is not available in your environment use your package manager to install python-setuptools
     
-    yum install python-setuptools gcc python-devel
-    apt-get install python-setuptools gcc python-dev
+    yum install python-setuptools gcc python-devel git
+    apt-get install python-setuptools gcc python-dev git
 
 Installing eutester and its dependencies is as easy as:
 

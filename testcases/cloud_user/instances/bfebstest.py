@@ -73,7 +73,7 @@ class BFEBSBasics(InstanceBasics):
 if __name__ == "__main__":
     testcase = BFEBSBasics()
     ### Either use the list of tests passed from config/command line to determine what subset of tests to run
-    list = testcase.args.tests or [ "RegisterImage",  "LaunchImage", "StopStart", "MultipleBFEBSInstances", "ChurnBFEBS" ]
+    list = testcase.args.tests or [ "RegisterImage",  "StopStart", "MultipleBFEBSInstances", "ChurnBFEBS" ]
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
     for test in list:
