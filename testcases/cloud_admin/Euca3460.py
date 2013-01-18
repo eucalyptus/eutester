@@ -32,7 +32,7 @@ class Euca3460(unittest.TestCase):
         self.source  = "source " + self.tester.credpath + "/eucarc && "
         self.clc1 = self.tester.service_manager.get_enabled_clc() 
         self.iu = ImageUtils(tester=self.tester, config_file=self.conf )
-        self.iu.create_emi_from_url( "http://192.168.7.65/windows_images/" + self.imgName )
+        self.iu.create_emi_from_url( "http://192.168.7.15/windows_images/" + self.imgName )
         self.doAuth()
         
     def doAuth(self):
