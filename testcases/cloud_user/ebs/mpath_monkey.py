@@ -47,6 +47,13 @@ class Mpath_Monkey(EutesterTestCase):
                 print 'adding ip to sp_ip_list:'+str(ip)
                 self.sp_ip_list.append(ip)
         self.timer = None
+    
+    def clear_all_eutester_rules(self):
+        #clears all rules which match the description string ipt_msg
+        out = self.sys('iptables -L -n --line-numbers | grep "'+str(self.ipt_msg)+'"')
+        for line in out:
+            rule_number = str(line).split()[0]
+            self.sys('iptables -D OUPUT '+str(rule_number))
         
         
     def set_timer(self, interval=30, cb=None, *args):
@@ -101,7 +108,8 @@ class Mpath_Monkey(EutesterTestCase):
             #iterate through sp ip list, block the next available ip in the list. 
             #if we've reached the end of the list restore all paths for an interval period
             block = None
-            self.restore_paths(self.sp_ip_list)
+            self.clear_all_eutester_rules()
+            #self.restore_paths(self.sp_ip_list)
             self.wait(self.restore_time)
             #time.sleep(self.restore_time)
             if lastblocked:
@@ -140,6 +148,7 @@ class Mpath_Monkey(EutesterTestCase):
         
 if __name__ == "__main__":
     monkey = Mpath_Monkey()
+    qinterval = int(monkey.args.interval)* (2+(len(monkey.sp_ip_list)))
     m_thread = threading.Thread(target=monkey.block_single_path_cycle)
     m_thread.daemon=True
     #monkey.block_single_path_cycle(None)
@@ -161,7 +170,7 @@ if __name__ == "__main__":
                 q_empty_cnt = 0
                 q_time = time.time()
                 print "Got from thread queue: "+qstr
-            if q_empty_cnt == 30:
+            if q_empty_cnt > (4 * interval):
                 q_elapsed = int(time.time() - q_time )
                 raise Exception("q-check was empty for for 30 intervals, "+str(q_elapsed)+" seconds")
     except KeyboardInterrupt:

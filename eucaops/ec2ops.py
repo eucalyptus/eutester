@@ -1725,13 +1725,10 @@ class EC2ops(Eutester):
         if (len(reservation.instances) < min) or (len(reservation.instances) > max):
             fail = "Reservation:"+str(reservation.id)+" returned "+str(len(reservation.instances))+" instances, not within min("+str(min)+") and max("+str(max)+")"
         
-        
         try:
-            if emi.root_device_type == ebs:
-                self.monitor_ebs_instances_to_state(reservation.instances)
-            else:
-                self.wait_for_reservation(reservation,timeout=timeout)
+            self.wait_for_reservation(reservation,timeout=timeout)
         except Exception, e:
+            self.debug(self.get_traceback())
             self.critical("An instance did not enter proper running state in " + str(reservation) )
             self.critical("Terminatng instances in " + str(reservation))
             self.terminate_instances(reservation)
@@ -1782,7 +1779,7 @@ class EC2ops(Eutester):
                   private_addressing=False, 
                   username="root", 
                   password=None, 
-                  connect=True,
+                  auto_connect=True,
                   clean_on_fail=True,
                   monitor_to_running = True,
                   timeout=480):
@@ -1820,7 +1817,7 @@ class EC2ops(Eutester):
                 self.wait_for_instances_block_dev_mapping(reservation.instances, timeout=timeout)
             for instance in reservation.instances:
                 try:
-                    self.debug('Converting instance to euinstance type:'+str(instance.id))
+                    self.debug(str(instance.id)+':Converting instance to euinstance type.')
                     #convert to euinstances, connect ssh later...
                     eu_instance =  EuInstance.make_euinstance_from_instance( instance, 
                                                                              self, 
@@ -1831,11 +1828,12 @@ class EC2ops(Eutester):
                                                                              private_addressing=private_addressing, 
                                                                              timeout=timeout,
                                                                              cmdstart=cmdstart, 
-                                                                             connect=False )
+                                                                             auto_connect=False )
                     #set the connect flag in the euinstance object for future use
-                    eu_instance.connect = connect
+                    eu_instance.auto_connect = auto_connect
                     instances.append(eu_instance)
                 except Exception, e:
+                    self.debug(self.get_traceback())
                     raise Exception("Unable to create Euinstance from " + str(instance)+", err:\n"+str(e))
             if monitor_to_running:
                 return self.monitor_euinstances_to_running(instances, timeout=timeout)
@@ -1898,7 +1896,7 @@ class EC2ops(Eutester):
             elapsed = int(time.time()-start)
             for instance in waiting:
                 self.debug('Checking instance:'+str(instance.id)+" ...")
-                if instance.connect:
+                if instance.auto_connect:
                     try:
                         #First try ping
                         self.debug('Security group rules allow ping from this test machine:'+str(self.does_instance_sec_group_allow(instance, protocol='icmp', port=0)))
@@ -1908,11 +1906,11 @@ class EC2ops(Eutester):
                         try:
                             allow=str(self.does_instance_sec_group_allow(instance, protocol='tcp', port=22))
                         except:pass
-                        self.debug('Security group rules allow ssh from this test machine:'+str(allow))
-                        instance.connect_to_instance(timeout=2)
+                        self.debug('Does security group rules allow ssh from this test machine:'+str(allow))
+                        instance.connect_to_instance(timeout=15)
                         self.debug("Connected to instance:"+str(instance.id))
                         good.append(instance)
-                    except:
+                    except :
                         self.debug(self.get_traceback())
                         pass
                 else:
@@ -1997,7 +1995,12 @@ class EC2ops(Eutester):
     
     def get_instance_security_groups(self,instance):
         secgroups = []
-        res = self.get_reservation_for_instance(instance)
+        if hasattr(instance, 'security_groups') and instance.security_groups:
+            return instance.security_groups
+        if hasattr(instance, 'reservation_id') and instance.reservation_id:
+            res = instance.reservation_id
+        else:
+            res = self.get_reservation_for_instance(instance)
         for group in res.groups:
          secgroups.extend(self.ec2.get_all_security_groups(groupnames=str(group.id))) 
         return secgroups
@@ -2202,10 +2205,16 @@ class EC2ops(Eutester):
         for instance in reservation.instances:
             if keypair is not None or (password is not None and username is not None):
                 try:
-                    euinstance_list.append( EuInstance.make_euinstance_from_instance( instance, self, keypair=keypair, username = username, password=password, timeout=timeout ))
+                    euinstance_list.append( EuInstance.make_euinstance_from_instance(instance, 
+                                                                                     self, 
+                                                                                     keypair=keypair, 
+                                                                                     username = username, 
+                                                                                     password=password, 
+                                                                                     timeout=timeout ))
                 except Exception, e:
+                    self.debug(self.get_traceback())
                     euinstance_list.append(instance)
-                    self.fail("Unable to create Euinstance from " + str(instance)+str(e))
+                    self.fail("Unable to create Euinstance from " + str(instance)+": "+str(e))
             else:
                 euinstance_list.append(instance)
         reservation.instances = euinstance_list

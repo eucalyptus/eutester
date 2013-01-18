@@ -88,6 +88,8 @@ class EuInstance(Instance, TaggedResource):
     laststatetime = None
     age_at_state = None
     cmdstart = 0
+    auto_connect = True
+    security_groups = []
 
    
     @classmethod
@@ -99,7 +101,7 @@ class EuInstance(Instance, TaggedResource):
                                       keypath=None, 
                                       password=None, 
                                       username="root",  
-                                      connect = True,
+                                      auto_connect = True,
                                       verbose=True, 
                                       timeout=120,
                                       private_addressing = False,
@@ -145,8 +147,10 @@ class EuInstance(Instance, TaggedResource):
         newins.retry = retry    
         newins.private_addressing = private_addressing
         newins.reservation_id = reservation_id or newins.tester.ec2.get_all_instances(instance_ids=newins.id)
+        newins.security_groups = newins.tester.get_instance_security_groups(newins)
         newins.laststate = newins.state
         newins.cmdstart = cmdstart
+        newins.auto_connect = auto_connect
         newins.set_last_status()
         #newins.set_block_device_prefix()
         if newins.root_device_type == 'ebs':
@@ -155,7 +159,7 @@ class EuInstance(Instance, TaggedResource):
                 newins.bdm_vol = EuVolume.make_euvol_from_vol(volume, tester=newins.tester,cmdstart=news.cmdstart)
             except:pass
                 
-        if connect:
+        if newins.auto_connect:
             newins.connect_to_instance(timeout=timeout)
         if newins.ssh:
             newins.set_rootfs_device()
