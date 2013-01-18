@@ -170,7 +170,7 @@ if __name__ == "__main__":
                 q_empty_cnt = 0
                 q_time = time.time()
                 print "Got from thread queue: "+qstr
-            if q_empty_cnt > (4 * interval):
+            if q_empty_cnt > qinterval:
                 q_elapsed = int(time.time() - q_time )
                 raise Exception("q-check was empty for for 30 intervals, "+str(q_elapsed)+" seconds")
     except KeyboardInterrupt:
