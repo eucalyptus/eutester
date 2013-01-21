@@ -20,7 +20,9 @@ class Mpath_Monkey(EutesterTestCase):
         self.setuptestcase()
         self.setup_parser(testname='Mpath_monkey', vmtype=False,zone=False, keypair=False,emi=False,credpath=False,
                           description='Run multipath failover script')
+        self.parser.add_argument('--clear_rules', help='If set will clear all eutester applied rules matching ipt_msg string',action='store_true', default=False)
         self.parser.add_argument('--host', help='String representing host address or FQDN',default=None)
+        self.parser.add_argument('--clear_on_exit', help='If set will clear rules on exit',action='store_true', default=False)
         self.parser.add_argument('--username', help='String representing username for host login, default:root',default='root')
         self.parser.add_argument('--keypath', help='String representing local path to host ssh key',default=None)
         self.parser.add_argument('--interval', help='Integer representing seconds between path failover',default=30)
@@ -48,12 +50,22 @@ class Mpath_Monkey(EutesterTestCase):
                 self.sp_ip_list.append(ip)
         self.timer = None
     
-    def clear_all_eutester_rules(self):
+    def clear_all_eutester_rules(self, timeout=60):
+        self.debug('Clear_all_eutester_rules...')
         #clears all rules which match the description string ipt_msg
+        start = time.time()
+        elapsed = 0
         out = self.sys('iptables -L -n --line-numbers | grep "'+str(self.ipt_msg)+'"')
-        for line in out:
-            rule_number = str(line).split()[0]
-            self.sys('iptables -D OUPUT '+str(rule_number))
+        while out and elapsed < timeout:
+            elapsed = int(time.time()-start)
+            self.debug("Attempting to remove "+str(len(out))+" eutester rules from system. Elapsed: "+str(elapsed)+'/'+str(timeout))
+            for line in out:
+                self.debug('Clearing rule: '+str(line))
+                rule_number = str(line).split()[0]
+                self.sys('iptables -D OUTPUT '+str(rule_number))
+            out = self.sys('iptables -L -n --line-numbers | grep "'+str(self.ipt_msg)+'"')
+            time.sleep(2)
+            
         
         
     def set_timer(self, interval=30, cb=None, *args):
@@ -92,7 +104,8 @@ class Mpath_Monkey(EutesterTestCase):
              
     def block_path(self,addr):
         self.debug('Attempting to add iptables rule blocking traffic to: "'+str(addr)+'"')
-        self.sys('iptables -A OUTPUT -j DROP -d '+str(addr)+' -m comment --comment "'+str(self.ipt_msg)+'"', code=0)
+        #First delete rule before adding in the case a duplicate exists
+        self.sys('iptables -D OUTPUT -j DROP -d '+str(addr)+'; iptables -A OUTPUT -j DROP -d '+str(addr)+' -m comment --comment "'+str(self.ipt_msg)+'"', code=0)
                     
     def can_ping_path(self, addr, count=1, timeout=10):
         self.debug('can_ping_path starting:'+str(addr)+", count:"+str(count)+", timeout:"+str(timeout))
@@ -148,41 +161,50 @@ class Mpath_Monkey(EutesterTestCase):
         
 if __name__ == "__main__":
     monkey = Mpath_Monkey()
-    qinterval = int(monkey.args.interval)* (2+(len(monkey.sp_ip_list)))
-    m_thread = threading.Thread(target=monkey.block_single_path_cycle)
-    m_thread.daemon=True
-    #monkey.block_single_path_cycle(None)
-    m_thread.start()
-    try:
-        #while(1):
-        #    time.sleep(2)
-        q_empty_cnt = 0 
-        while m_thread.isAlive: 
-            m_thread.join(5)
-            time.sleep(1)
-            try:
-                qstr = my_queue.get_nowait()
-            except Queue.Empty, qe:
-                q_empty_cnt += 1
-                print "(q-check)",
-                sys.stdout.flush()
-            else:
-                q_empty_cnt = 0
-                q_time = time.time()
-                print "Got from thread queue: "+qstr
-            if q_empty_cnt > qinterval:
-                q_elapsed = int(time.time() - q_time )
-                raise Exception("q-check was empty for for 30 intervals, "+str(q_elapsed)+" seconds")
-    except KeyboardInterrupt:
-        if monkey.timer:
-            monkey.timer.cancel()
-            print "Caught keyboard interrupt, killing timer and exiting..."
-            sys.exit()
-    except Exception, e:
-        if monkey.timer:
-            monkey.timer.cancel()
-            print str(e)
-            sys.exit()
+    qinterval = int(monkey.args.interval) * (2+(len(monkey.sp_ip_list)))
+    if monkey.args.clear_rules:
+        monkey.clear_all_eutester_rules()
+        sys.exit()
+    else:
+        m_thread = threading.Thread(target=monkey.block_single_path_cycle)
+        m_thread.daemon=True
+        #monkey.block_single_path_cycle(None)
+        m_thread.start()
+        try:
+            #while(1):
+            #    time.sleep(2)
+            q_empty_cnt = 0 
+            while m_thread.isAlive: 
+                m_thread.join(5)
+                time.sleep(1)
+                try:
+                    qstr = my_queue.get_nowait()
+                except Queue.Empty, qe:
+                    q_empty_cnt += 1
+                    print "(q-check)",
+                    sys.stdout.flush()
+                else:
+                    q_empty_cnt = 0
+                    q_time = time.time()
+                    print "Got from thread queue: "+qstr
+                if q_empty_cnt > qinterval:
+                    q_elapsed = int(time.time() - q_time )
+                    raise Exception("q-check was empty for for "+str(q_elapsed)+" seconds")
+        except KeyboardInterrupt:
+            if monkey.timer:
+                monkey.timer.cancel()
+                print "Caught keyboard interrupt, killing timer and exiting..."
+                if monkey.clean_on_exit:
+                    monkey.clear_all_eutester_rules()
+                sys.exit()
+        except Exception, e:
+            if monkey.timer:
+                monkey.timer.cancel()
+                print str(e)
+                if monkey.args.clean_on_exit:
+                    monkey.clear_all_eutester_rules()
+                sys.exit()
+       
             
             
         
