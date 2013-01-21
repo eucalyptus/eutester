@@ -1824,7 +1824,7 @@ class EC2ops(Eutester):
                                                                              keypair=keypair, 
                                                                              username = username, 
                                                                              password=password, 
-                                                                             reservation_id = reservation.id, 
+                                                                             reservation = reservation, 
                                                                              private_addressing=private_addressing, 
                                                                              timeout=timeout,
                                                                              cmdstart=cmdstart, 
@@ -1997,8 +1997,8 @@ class EC2ops(Eutester):
         secgroups = []
         if hasattr(instance, 'security_groups') and instance.security_groups:
             return instance.security_groups
-        if hasattr(instance, 'reservation_id') and instance.reservation_id:
-            res = instance.reservation_id
+        if hasattr(instance, 'reservation') and instance.reservation:
+            res = instance.reservation
         else:
             res = self.get_reservation_for_instance(instance)
         for group in res.groups:
@@ -2009,6 +2009,8 @@ class EC2ops(Eutester):
         for res in self.ec2.get_all_instances():
             for inst in res.instances:
                 if inst.id == instance.id:
+                    if hasattr(instance,'reservation'):
+                        instance.reservation = res
                     return res
         raise Exception('No reservation found for instance:'+str(instance.id))
         
