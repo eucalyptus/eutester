@@ -31,8 +31,27 @@
 # Author: vic.iglesias@eucalyptus.com
 from eutester import Eutester
 import re
+import boto
 
 class IAMops(Eutester):
+
+    def __init__(self,credpath=None, endpoint="iam.amazonaws.com", aws_access_key_id=None,aws_secret_access_key=None, is_secure=True, port=443, path='/', boto_debug=0 ):
+        super(IAMops, self).__init__(credpath=credpath, aws_access_key_id=aws_access_key_id ,aws_secret_access_key=aws_secret_access_key)
+        self.setup_iam_connection(endpoint=endpoint, aws_access_key_id=self.aws_access_key_id ,aws_secret_access_key=self.aws_secret_access_key, is_secure=is_secure, port=port,path=path, boto_debug=boto_debug )
+
+    def setup_iam_connection(self, endpoint="iam.amazonaws.com", aws_access_key_id=None,aws_secret_access_key=None, is_secure=True, port=443, path='/', boto_debug=0 ):
+        try:
+            euare_connection_args = { 'aws_access_key_id' : aws_access_key_id,
+                                      'aws_secret_access_key': aws_secret_access_key,
+                                      'is_secure': is_secure,
+                                      'debug':boto_debug,
+                                      'port' : port,
+                                      'path' : path,
+                                      'host' : endpoint}
+            self.debug("Attempting to create IAM connection to " + endpoint + ':' + str(port) + path)
+            self.euare = boto.connect_iam(**euare_connection_args)
+        except Exception, e:
+            self.critical("Was unable to create IAM connection because of exception: " + str(e))
     
     def create_account(self,account_name):
         """

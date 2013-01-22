@@ -8,14 +8,19 @@ from testcases.cloud_admin.install_euca import Install
 class Upgrade(Install):
     def __init__(self):
         super(Upgrade, self).__init__(download_creds=True)
-        self.clc_service = self.tester.service_manager.get("eucalyptus")[0]
+        self.clc_service = self.tester.service_manager.get_enabled_clc()
         self.zones = self.tester.get_zones()
         machine = self.tester.get_component_machines("clc")[0]
         self.old_version = machine.sys("cat /etc/eucalyptus/eucalyptus-version")[0]
+        for machine in self.tester.config["machines"]:
+            if re.search(machine.distro.name, "vmware"):
+                self.add_enterprise_repo()
+                break
 
     def upgrade_packages(self):
         for machine in self.tester.config["machines"]:
             if machine.distro.name is "vmware":
+                self.add_enterprise_repo()
                 continue
             if self.args.nogpg:
                 machine.upgrade(nogpg=True)
@@ -47,7 +52,7 @@ class Upgrade(Install):
 
     def UpgradeAll(self):
         self.add_euca_repo()
-        if self.args.enterprise_url:
+        if hasattr(self.args, 'ebs_storage_manager'):
             self.add_enterprise_repo()
         self.upgrade_packages()
         self.start_components()

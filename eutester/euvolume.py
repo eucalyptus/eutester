@@ -36,12 +36,14 @@ Place holder for volume test specific convenience methods+objects to extend boto
 
 '''
 from boto.ec2.volume import Volume
+from eutester.taggedresource import TaggedResource
 import eucaops
 import time
 
 
 
-class EuVolume(Volume):   
+class EuVolume(Volume, TaggedResource):
+    tester = None
     md5 = None
     md5len = 32
     eutest_failmsg = None
@@ -59,9 +61,10 @@ class EuVolume(Volume):
     clouddev = "" #the device name given to the cloud as a request to be used. 
         
     @classmethod
-    def make_euvol_from_vol(cls,volume,cmdstart=None):
+    def make_euvol_from_vol(cls,volume, tester=None, cmdstart=None):
         newvol = EuVolume(volume.connection)
         newvol.__dict__ = volume.__dict__
+        newvol.tester = tester
         newvol.md5 = None
         newvol.md5len = 32
         newvol.eutest_failmsg = None
@@ -70,6 +73,7 @@ class EuVolume(Volume):
         newvol.eutest_cmdstart = cmdstart or eucaops.EC2ops.get_volume_time_created(volume)
         newvol.eutest_createorder = None
         newvol.eutest_cmdtime = None
+
         return newvol
     
     def update(self):
@@ -80,14 +84,14 @@ class EuVolume(Volume):
         self.eutest_laststatus = self.status
         self.eutest_laststatustime = time.time()
         self.eutest_ageatstatus = "{0:.2f}".format(time.time() - self.eutest_cmdstart)
-        
+
     def printself(self,title=True, footer=True, printmethod=None):
         buf = "\n"
         if title:
             buf += str("------------------------------------------------------------------------------------------------------------------------------\n")
-            buf += str('VOL_ID').center(15)+'|'+str('ORDER').center(5)+'|'+str('LASTSTATUS').center(10)+'|'+str('TESTSTATUS').center(10)+'|'+str('AGE@STATUS').center(10)+'|'+str('SIZE').center(4)+'|'+str('FROM_SNAP').center(15)+'|'+str('MD5_SUM').center(33)+'|'+str('MD5LEN').center(6)+'|'+str('INFO_MSG')+'\n'
+            buf += str('VOL_ID').ljust(15)+'|'+str('ORDER').center(5)+'|'+str('LASTSTATUS').center(10)+'|'+str('TESTSTATUS').center(10)+'|'+str('AGE@STATUS').center(10)+'|'+str('SIZE').center(4)+'|'+str('FROM_SNAP').center(15)+'|'+str('MD5_SUM').center(33)+'|'+str('MD5LEN').center(6)+'|'+str('INFO_MSG')+'\n'
             buf += str("------------------------------------------------------------------------------------------------------------------------------\n")
-        buf += str(self.id).center(15)+'|'+str(self.eutest_createorder).center(5)+'|'+str(self.eutest_laststatus).center(10)+'|'+str(self.status).center(10)+'|'+str(self.eutest_ageatstatus).center(10)+'|'+str(self.size).center(4)+'|'+str(self.snapshot_id).center(15)+'|'+str(self.md5).center(33)+'|'+str(self.md5len).center(6)+'|'+str(self.eutest_failmsg).rstrip()+"\n"
+        buf += str(self.id).ljust(15)+'|'+str(self.eutest_createorder).center(5)+'|'+str(self.eutest_laststatus).center(10)+'|'+str(self.status).center(10)+'|'+str(self.eutest_ageatstatus).center(10)+'|'+str(self.size).center(4)+'|'+str(self.snapshot_id).center(15)+'|'+str(self.md5).center(33)+'|'+str(self.md5len).center(6)+'|'+str(self.eutest_failmsg).rstrip()+"\n"
         if footer:
             buf += str("------------------------------------------------------------------------------------------------------------------------------")
         if printmethod:

@@ -35,23 +35,24 @@ class BFEBSBasics(InstanceBasics):
             image_id = self.tester.register_snapshot(snapshot)
         self.image = self.tester.get_emi(image_id)
 
-    def LaunchImage(self, zone= None):
-        '''Launch a BFEBS image'''
-        if zone is None:
-            zone = self.zone
-        self.image = self.tester.get_emi(root_device_type="ebs")
-        self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name, zone=zone)
-        self.assertTrue( self.tester.ping(self.reservation.instances[0].public_dns_name), 'Could not ping instance')
-
     def StopStart(self, zone = None):
         '''Launch a BFEBS instance, stop it then start it again'''
         if zone is None:
             zone = self.zone
-        self.image = self.tester.get_emi(root_device_type="ebs")
-        if not self.reservation:
-            self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name, zone=zone)
+        try:
+            self.image = self.tester.get_emi(root_device_type="ebs")
+        except Exception,e:
+            self.RegisterImage()
+            self.image = self.tester.get_emi(root_device_type="ebs")
+        if self.reservation:
+            self.tester.terminate_instances(self.reservation)
+        self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name, zone=zone)
         self.assertTrue(self.tester.stop_instances(self.reservation))
-        self.assertFalse( self.tester.ping(self.reservation.instances[0].public_dns_name, poll_count=2), 'Was able to ping stopped instance')
+        #self.assertEquals( self.reservation.instances[0].ip_address, "",'Instance was left with public ip when stopped +')
+        #self.assertEquas( self.reservation.instances[0].private_ip_address, "" ,'Instance was left with private ip when stopped')
+        for instance in self.reservation.instances:
+            if instance.ip_address or instance.private_ip_address:
+                raise Exception("Instance had a public " + str(instance.ip_address) + " private " + str(instance.private_ip_address) )
         self.assertTrue(self.tester.start_instances(self.reservation))
         self.assertTrue( self.tester.ping(self.reservation.instances[0].public_dns_name, poll_count=30), 'Could not ping instance')
 
@@ -72,7 +73,7 @@ class BFEBSBasics(InstanceBasics):
 if __name__ == "__main__":
     testcase = BFEBSBasics()
     ### Either use the list of tests passed from config/command line to determine what subset of tests to run
-    list = testcase.args.tests or [ "RegisterImage",  "LaunchImage", "StopStart", "MultipleBFEBSInstances", "ChurnBFEBS" ]
+    list = testcase.args.tests or [ "RegisterImage",  "StopStart", "MultipleBFEBSInstances", "ChurnBFEBS" ]
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
     for test in list:

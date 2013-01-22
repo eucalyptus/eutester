@@ -1,4 +1,4 @@
-
+#!/usr/bin/python
 #
 # Description:  Creates an image instance based on the image argument passed in. Then 
 #               attempts to download a remote image and store it on an attached volume.
@@ -185,17 +185,17 @@ if __name__ == '__main__':
             pmsg("Attempting to launch initial instance now...")
             try:
                 #Grab an emi based on our given criteria
-                image=tester.get_emi(emi=img, root_device_type=itype)
+                image=tester.get_emi(emi=img, root_device_type=itype,not_location='windows')
                 pmsg("Got emi to use:"+image.id)
             
                 #Launch an instance from the emi we've retrieved, instance is returned in the running state
                 tester.poll_count = 96 
-                reservation=tester.run_instance(image, keypair=keypair.name, type=vmtype, group=group_name,zone=zone, )
-                if (reservation is not None):
-                    instance = reservation.instances[0]
-                    pmsg("Launched instance:"+instance.id)
-                else:
-                    raise Exception("Failed to run an instance using emi:"+image.id)
+                instance=tester.run_image(image, keypair=keypair.name, type=vmtype, group=group_name,zone=zone, )[0]
+                #if (reservation is not None):
+                #    instance = reservation.instances[0]
+                #    pmsg("Launched instance:"+instance.id)
+                #else:
+                #    raise Exception("Failed to run an instance using emi:"+image.id)
             except Exception, e:
                 pmsg("Doh, error while trying to run instance using emi:"+image.id)
                 raise e
