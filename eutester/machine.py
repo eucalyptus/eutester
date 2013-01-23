@@ -385,21 +385,24 @@ class Machine:
         cmd = 'df '+str(path)
         if verbose:
             self.debug('get_df_info cmd:'+str(cmd))
-        out = self.cmd(cmd,listformat=True)
-        if out['status'] != 0:
-            raise Exception("df returned err code:"+str(out['status']))
-        output = out['output']
+        output = self.sys(cmd, code=0)
         # Get the presented fields from commands output,
         # Convert to lowercase, use this as our dict keys
         fields=[]
-        for field in str(output[0]).split():
+        line = 0
+        for field in str(output[line]).split():
             fields.append(str(field).lower())
+        # Move line forward and gather columns into the dict to be returned
         x = 0 
-        for value in str(output[1]).split():
+        line += 1
+        # gather columns equal to the number of column headers accounting for newlines...
+        while x < (len(fields)-1):
+            for value in str(output[line]).split():
                 ret[fields[x]]=value
                 if verbose:
                     self.debug(str('DF FIELD: '+fields[x])+' = '+str(value))
                 x += 1
+            line += 1
         return ret
     
     def upgrade(self, package=None, nogpg=False):

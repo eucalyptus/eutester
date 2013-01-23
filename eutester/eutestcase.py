@@ -326,7 +326,10 @@ class EutesterTestCase(unittest.TestCase):
                    configblocks=True,
                    ignoreblocks=True,
                    color=True,
-                   testlist=True):
+                   testlist=True,
+                   userdata=True,
+                   instance_user=True,
+                   instance_password=True):
         '''
         Description: Convenience method to setup argparse parser and some canned default arguments, based
         upon the boolean values provided. For each item marked as 'True' this method will add pre-defined 
@@ -374,6 +377,15 @@ class EutesterTestCase(unittest.TestCase):
         :type testlist: string list
         :param testlist: Flag to present the testlist command line argument/option for providing a list of testnames to run
         
+        :type userdata: boolean
+        :param userdata: Flag to present the userdata command line argument/option for providing userdata to instance(s) within test
+        
+        :type instance_user: boolean
+        :param instance_user: Flag to present the instance_user command line argument/option for providing an ssh username for instance login via the cli
+        
+        :type instance_password: boolean
+        :param instance_password: Flag to present the instance_password command line argument/option for providing a ssh password for instance login via the cli
+        
         :type use_color: flag
         :param use_color: Flag to enable/disable use of ascci color codes in debug output. 
         '''
@@ -414,6 +426,15 @@ class EutesterTestCase(unittest.TestCase):
         if vmtype:
             parser.add_argument('--vmtype',
                                 help="Virtual Machine Type to use in this test", default='c1.medium')
+        if userdata:
+            parser.add_argument('--userdata',
+                                help="User data string to provide instance run within this test", default=None)
+        if instance_user:
+            parser.add_argument('--instance_user',
+                                help="Username used for ssh login. Default:'root'", default='root')
+        if instance_password:
+            parser.add_argument('--instance_passsword',
+                                help="Password used for ssh login. When value is 'None' ssh keypair will be used and not username/password, default:'None'", default=None)   
         if color: 
             parser.add_argument('--use_color', dest='use_color', action='store_true', default=False)
         self.parser = parser  

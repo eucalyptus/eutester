@@ -1,4 +1,4 @@
-# Software License Agreement (BSD License)
+ # Software License Agreement (BSD License)
 #
 # Copyright (c) 2009-2011, Eucalyptus Systems, Inc.
 # All rights reserved.
@@ -36,6 +36,12 @@ import time
 import re
 import os
 import copy
+import socket
+import struct
+import types
+import StringIO
+import traceback
+import sys
 from datetime import datetime
 from boto.ec2.image import Image
 from boto.ec2.keypair import KeyPair
@@ -45,8 +51,10 @@ from boto.exception import EC2ResponseError
 from eutester.euinstance import EuInstance
 from eutester.euvolume import EuVolume
 from eutester.eusnapshot import EuSnapshot
+from eutester.eutestcase import EutesterTestCase
 from boto.ec2.regioninfo import RegionInfo
 import boto
+
 
 EC2RegionData = {
     'us-east-1' : 'ec2.us-east-1.amazonaws.com',
@@ -54,7 +62,6 @@ EC2RegionData = {
     'eu-west-1' : 'ec2.eu-west-1.amazonaws.com',
     'ap-northeast-1' : 'ec2.ap-northeast-1.amazonaws.com',
     'ap-southeast-1' : 'ec2.ap-southeast-1.amazonaws.com'}
-
 
 class EC2ops(Eutester):
     def __init__(self, host=None, credpath=None, endpoint=None, aws_access_key_id=None, aws_secret_access_key = None, username="root",region=None,
@@ -68,6 +75,7 @@ class EC2ops(Eutester):
         self.test_resources = {}
         self.setup_ec2_resource_trackers()
         self.key_dir = "./"
+        self.ec2_source_ip = None #Source ip on local test machine used to reach instances
 
     def setup_ec2_connection(self, endpoint=None, aws_access_key_id=None, aws_secret_access_key=None, is_secure=True,host=None ,
                              region=None, path = "/", port = 443,  APIVersion ='2012-07-20', boto_debug=0):
@@ -108,6 +116,7 @@ class EC2ops(Eutester):
             self.ec2 = boto.connect_ec2(**ec2_connection_args)
         except Exception, e:
             self.critical("Was unable to create ec2 connection because of exception: " + str(e))
+        self.ec2_source_ip = None #Source ip on local test machine used to reach instances
 
     def setup_ec2_resource_trackers(self):
         """
@@ -696,6 +705,7 @@ class EC2ops(Eutester):
                     return True
                 else:
                     raise e
+
         if volume.status != 'deleted':
             self.fail(str(volume) + " left in " +  volume.status + ',elapsed:'+str(elapsed))
             return False
@@ -726,8 +736,8 @@ class EC2ops(Eutester):
                 if volume.status == "deleted":
                     vollist.remove(volume)
                 elapsed = int(time.time()-start)
-                self.debug("---Sleeping:"+str(poll_interval)+", elapsed:"+str(elapsed)+"---")
-                time.sleep(poll_interval)
+            time.sleep(poll_interval)
+            self.debug("---Sleeping:"+str(poll_interval)+", elapsed:"+str(elapsed)+"---")
         if vollist:
             errmsg =""
             for volume in vollist:
@@ -743,7 +753,12 @@ class EC2ops(Eutester):
         volumes = self.ec2.get_all_volumes()
         for volume in volumes:
             self.delete_volume(volume.id)
+        """
 
+        instance
+        volume
+        device_path
+        """
     def attach_volume(self, instance, volume, device_path, pause=10, timeout=120):
         """
         Attach a volume to an instance
@@ -779,6 +794,12 @@ class EC2ops(Eutester):
             self.debug( str(volume) + ", state:" + volume.status+', attached status:'+str(astatus) + ", elapsed:"+str(elapsed)+'/'+str(timeout))
             self.sleep(pause)
             elapsed = int(time.time()-start)
+
+
+        """
+
+        volume
+        """
     
     def detach_volume(self, volume, pause = 10, timeout=60):
         """
@@ -869,7 +890,7 @@ class EC2ops(Eutester):
         :rtype: integer
         :returns: The number of seconds elapsed since this volume was attached. 
         '''
-        instance.update()
+        #instance.update()
         #get timestamp from launch data
         launch_time = cls.get_datetime_from_resource_string(instance.launch_time)
         #return the elapsed time in seconds
@@ -952,7 +973,18 @@ class EC2ops(Eutester):
         return self.create_snapshots(volume, count=count, mincount=mincount, eof=eof, delay=delay, wait_on_progress=wait_on_progress, poll_interval=poll_interval, timeout=timeout, description=description)
 
 
-    def create_snapshots(self, volume, count=1, mincount=None, eof=True, delay=0, wait_on_progress=20, poll_interval=10, timeout=0, description=""):
+    def create_snapshots(self, 
+                         volume, 
+                         count=1, 
+                         mincount=None, 
+                         eof=True, 
+                         delay=0, 
+                         wait_on_progress=20, 
+                         poll_interval=10, 
+                         timeout=0, 
+                         monitor_to_completed=True,
+                         delete_failed = True, 
+                         description="Created by eutester"):
         """
         Create a new EBS snapshot from an existing volume then wait for it to go to the created state.
         By default will poll for poll_count.  If wait_on_progress is specified than will wait on "wait_on_progress"
@@ -962,11 +994,13 @@ class EC2ops(Eutester):
         :param volume: (mandatory Volume object) Volume to create snapshot from
         :parram count: (optional Integer) Specify how many snapshots to attempt to create
         :param mincount: (optional Integer) Specify the min success count, defaults to 'count'
-        :param eof: (optional boolean) End on failure.If true will end on first failure, otherwise will continue to try and fufill mincount
-        :param wait_on_progress: (optional string) string used to describe the snapshot
-        :param poll_interval: (optional integer) # of poll intervals to wait while 0 progress is made before exiting, overrides "poll_count" when used
-        :param timeout: (optional integer) time to sleep between polling snapshot status
-        :param description: (optional integer) over all time to wait before exiting as failure
+        :param eof: (optional boolean) End on failure.If true will end on first failure, otherwise will continue to try and fufill mincount 
+        :param wait_on_progress: (optional integer) # of poll intervals to wait while 0 progress is made before exiting, overrides "poll_count" when used
+        :param poll_interval: (optional integer) time to sleep between polling snapshot status
+        :param monitor_to_completed: (optional boolean) If true will monitor created snapshots to the completed state, else return a list of created snaps
+        :param timeout: (optional integer) over all time to wait before exiting as failure
+        :param delete_failed: (optional boolean) automatically delete failed volumes
+        :param description: (optional string) string used to describe the snapshot
         :return: EuSnapshot list
         """
         #Fix EuSnapshot for isinstance() use later...
@@ -986,12 +1020,11 @@ class EC2ops(Eutester):
         last_progress = 0
         elapsed = 0
         polls = 0
-        snap_start = time.time()
         self.debug('Create_snapshots count:'+str(count)+", mincount:"+str(mincount)+', wait_on_progress:'+str(wait_on_progress)+",eof:"+str(eof))
         for x in xrange(0,count):
             try:
                 start = time.time()
-                snapshot = self.ec2.create_snapshot( volume_id )
+                snapshot = self.ec2.create_snapshot( volume_id, description=str(description))
                 cmdtime = time.time()-start
                 if snapshot:
                     self.debug("Attempting to create snapshot #"+str(x)+ ", id:"+str(snapshot.id))
@@ -1008,20 +1041,101 @@ class EC2ops(Eutester):
                     snapshot.eutest_volume_md5 = volume.md5
                     snapshot.eutest_volume_md5len = volume.md5len
                     snapshot.eutest_volume_zone = volume.zone
+                    
+                    snapshot.update()
+                    if description and (not re.match(str(snapshot.description), str(description)) ):
+                        raise Exception('Snapshot Description does not match request: Snap.description:"'+str(snapshot.description)+'" -vs- "'+str(description)+'"')
 
                     if snapshot:
                         snapshots.append(snapshot)
             except Exception, e:
+                self.debug("Caught exception creating snapshot,eof is False, continuing. Error:"+str(e))
                 if eof:
+                    if delete_failed:
+                        try:
+                            self.delete_snapshots(snapshots)
+                        except: pass
                     raise e
                 else:
-                    self.debug("Caught exception creating snapshot,eof is False, continuing. Error:"+str(e))
+                    failed.append(snapshot)
+                    #Check to see if our min count of snapshots succeeded, we allow this for specific tests. 
+                    #If not clean up all snapshots from this system created from this operation
+                    if (count - len(failed)) > mincount:
+                        if delete_failed: 
+                            snapshots.extend(failed)
+                            try:
+                                self.delete_snapshots(snapshots)
+                            except:pass
+                            raise Exception('Failed to created mincount('+str(mincount)+') number of snapshots from volume:'+str(volume_id))
+            #If a delay was given, wait before next snapshot gets created
             if delay:
                 time.sleep(delay)
+        #If we have failed snapshots, but still met our minimum clean up the failed and continue (this might be better as a thread?)...
+        if delete_failed:
+                try:
+                    self.delete_snapshots(failed)
+                except: pass
+        #Pass the list of created snapshots to monitor method if state was not None, otherwise just return the list of newly created
+        #snapshots. 
+        if monitor_to_completed:
+            snapshots = self.monitor_eusnaps_to_completed(snapshots, 
+                                                        mincount=mincount, 
+                                                        eof=eof, 
+                                                        wait_on_progress=wait_on_progress, 
+                                                        poll_interval=poll_interval, 
+                                                        timeout=timeout, 
+                                                        delete_failed=delete_failed
+                                                        )
+        return snapshots
+        
+    def monitor_eusnaps_to_completed(self,
+                                     snaps,
+                                     mincount=None, 
+                                     eof=True, 
+                                     wait_on_progress=20, 
+                                     poll_interval=10, 
+                                     timeout=0, 
+                                     monitor_to_completed=True,
+                                     delete_failed=True ):
+        """
+        Monitor an EBS snapshot list for snapshots to enter the to the completed state.
+        By default will poll for poll_count.  If wait_on_progress is specified than will wait on "wait_on_progress"
+        overrides # of poll_interval periods, using wait_on_progress # of periods of poll_interval length in seconds
+        w/o progress before failing
+
+        :param mincount: (optional Integer) Specify the min success count, defaults to length of list provided
+        :param eof: (optional boolean) End on failure.If true will end on first failure, otherwise will continue to try and fufill mincount 
+        :param wait_on_progress: (optional integer) # of poll intervals to wait while 0 progress is made before exiting, overrides "poll_count" when used
+        :param poll_interval: (optional integer) time to sleep between polling snapshot status
+        :param timeout: (optional integer) over all time to wait before exiting as failure
+        :param delete_failed: (optional boolean) automatically delete failed volumes
+        :return: EuSnapshot list
+        """
               
+        failed = []
+        retlist = []
+        elapsed = 0
+        self.debug("Monitor_snapshot_to_completed starting...")
+        mincount = mincount or len(snaps)
+        if mincount > len(snaps):
+            raise Exception('Mincount can not be greater than count')
+        if wait_on_progress > 0:
+            poll_count = wait_on_progress
+        else:
+            poll_count = self.poll_count
+        last_progress = 0
+        monitor_start = time.time()
+        for snap in snaps:
+            if not isinstance(snap, EuSnapshot):
+                raise Exception("object not of type EuSnapshot. Found type:"+str(type(snap)))
+        snapshots = copy.copy(snaps)      
+        for snap in snapshots:
+            if not snap.eutest_polls:
+                snap.eutest_poll_count = poll_count
+        
         self.debug('Waiting for '+str(len(snapshots))+" snapshots to go to completed state...")
+        
         while (timeout == 0 or elapsed <= timeout) and snapshots:
-            time.sleep(poll_interval)
             self.debug("Waiting for "+str(len(snapshots))+" snapshots to complete creation")
             for snapshot in snapshots:
                 try:
@@ -1037,10 +1151,10 @@ class EC2ops(Eutester):
                     else: 
                         snapshot.eutest_poll_count -= 1
                     snapshot.eutest_last_progress = curr_progress
-                    elapsed = int(time.time()-snap_start)
+                    elapsed = int(time.time()-monitor_start)
                     if snapshot.eutest_poll_count <= 0:
                         raise Exception("Snapshot did not make progress for "+str(wait_on_progress)+" polls, after "+str(elapsed)+" seconds")
-                    self.debug(str(snapshot.id)+", Status:"+snapshot.status+", Progress:"+snapshot.progress+", Polls w/o progress:"+str(wait_on_progress-snapshot.eutest_poll_count)+"/"+str(wait_on_progress)+", Time Elapsed:"+str(elapsed))    
+                    self.debug(str(snapshot.id)+", Status:"+snapshot.status+", Progress:"+snapshot.progress+", Polls w/o progress:"+str(wait_on_progress-snapshot.eutest_poll_count)+"/"+str(wait_on_progress)+", Time Elapsed:"+str(elapsed)+"/"+str(timeout))    
                     if snapshot.status == 'completed':
                         self.debug(str(snapshot.id)+" created after " + str(elapsed) + " seconds. Status:"+snapshot.status+", Progress:"+snapshot.progress)
                         self.test_resources["snapshots"].append(snapshot)
@@ -1051,8 +1165,7 @@ class EC2ops(Eutester):
                 except Exception, e:
                     if eof:
                         #If exit on fail, delete all snaps and raise exception
-                        for snap in snapshots:
-                            snap.delete()
+                        self.delete_snapshots(snapshots)
                         raise e
                     else:
                         self.debug("Exception caught in snapshot creation, snapshot:"+str(snapshot.id)+".Err:"+str(e))
@@ -1060,26 +1173,25 @@ class EC2ops(Eutester):
                         snapshot.eutest_timeintest = elapsed
                         failed.append(snapshot)
                         snapshots.remove(snapshot)
-        elapsed = int(time.time()-snap_start)
+            elapsed = int(time.time()-monitor_start)
+            if snapshots:
+                time.sleep(poll_interval)
         for snap in snapshots:
             snapshot.eutest_failmsg = "Snapshot timed out in creation after "+str(elapsed)+" seconds"
             snapshot.eutest_timeintest = elapsed
             failed.append(snapshot)
             snapshots.remove(snapshot)
-            
-        for snap in failed:
-            try:
-                snap.delete()
-                self.debug("Removed failed snapshot:"+str(snap.id))
-            except: pass
-            
-        #join the lists again for debug purposes
+        #If delete_failed flag is set, delete the snapshots believed to have failed...
+        if delete_failed:
+                try:
+                   self.delete_snapshots(failed)
+                except: pass
+        #join the lists again for printing debug purposes, retlist should only contain snaps believed to be good
         snapshots = copy.copy(retlist)
         snapshots.extend(failed)
         #Print the results in a formated table
         self.print_eusnapshot_list(snapshots)
         #Check for failure and failure criteria and return 
-        #self.fail(str(snapshot) + " failed after Polling("+str(polls)+") ,Waited("+str(elapsed)+" sec), last reported (status:" + snapshot.status+" progress:"+snapshot.progress+")")
         self.test_resources['snapshots'].extend(snapshots)
         if failed and eof:
             raise(str(len(failed))+' snapshots failed in create, see debug output for more info')
@@ -1119,6 +1231,72 @@ class EC2ops(Eutester):
         self.debug("Found "+str(len(retlist))+" snapshots matching criteria")
         return retlist
     
+    def delete_snapshots(self,
+                         snapshots, 
+                         valid_states='completed,failed', 
+                         base_timeout=60, 
+                         add_time_per_snap=10, 
+                         wait_for_valid_state=120,
+                         poll_interval=10, 
+                         eof=False):
+        snaps = copy.copy(snapshots)
+        delete_me = []
+        start = time.time()
+        elapsed = 0
+        valid_delete_states = str(valid_states).split(',')
+        if not valid_delete_states:
+            raise Exception("delete_snapshots, error in valid_states provided:"+str(valid_states))
+            
+        while snaps and (elapsed < wait_for_valid_state):
+            elapsed = int(time.time()-start)
+            for snap in snaps:
+                snap.update()
+                self.debug("Checking snapshot:"+str(snap.id)+" status:"+str(snap.status))
+                for v_state in valid_delete_states:
+                    v_state = str(v_state).rstrip().lstrip()
+                    if snap.status == v_state:
+                        delete_me.append(snap)
+                        snap.delete()
+                        break
+            for snap in delete_me:
+                snaps.remove(snap)
+            if snaps:
+                buf = "\n-------| WAITING ON "+str(len(snaps))+" SNAPSHOTS TO ENTER A DELETE-ABLE STATE:("+str(valid_states)+"), elapsed:"+ str(elapsed)+'/'+str(wait_for_valid_state)+"|-----"
+                for snap in snaps:
+                    buf = buf +"\nSnapshot:"+str(snap.id)+",status:"+str(snap.status)+", progress:"+str(snap.progress)
+                self.debug(buf)
+                self.debug('waiting poll_interval to recheck snapshots:'+str(poll_interval)+' seconds')
+                time.sleep(poll_interval)
+            
+
+        if snaps:
+            buf = ""
+            for snap in snaps:
+                buf = buf+','+str(snap.id)
+            msg = "Following snapshots did not enter a valid state("+str(valid_states)+") for deletion:"+str(buf)
+            if eof:
+                raise Exception(msg)
+            else:
+                self.debug(msg)
+        start = time.time()
+        elapsed = 0
+        timeout= base_timeout + (add_time_per_snap*len(delete_me))
+        while delete_me and (elapsed < timeout):
+            self.debug('Waiting for remaining '+str(int(len(delete_me)))+' snaps to delete...' )
+            for snapshot in delete_me:
+                snapshot.update()
+                if not self.ec2.get_all_snapshots(snapshot_ids=[snapshot.id]) or snapshot.status == 'deleted':
+                    self.debug('Snapshot:'+str(snapshot.id)+" is deleted")
+                    delete_me.remove(snapshot)
+            time.sleep(poll_interval)
+            elapsed = int(time.time()-start)
+        if delete_me:
+            buf = ""
+            for snap in snaps:
+                buf += "\nSnapshot:"+str(snap.id)+",status:"+str(snap.status)+", progress:"+str(snap.progress)+", elapsed:"+str(elapsed)+'/'+str(timeout)
+            raise Exception("Snapshots did not delete within timeout:"+str(timeout)+"\n"+str(buf))
+                
+             
         
     
     def delete_snapshot(self,snapshot,timeout=60):
@@ -1130,6 +1308,7 @@ class EC2ops(Eutester):
         """
         snapshot.delete()
         self.debug( "Sent snapshot delete request for snapshot: " + snapshot.id)
+        '''
         start = time.time()
         elapsed = 0
         while ( len(self.ec2.get_all_snapshots(snapshot_ids=[snapshot.id])) > 0) and (elapsed < timeout):
@@ -1138,11 +1317,24 @@ class EC2ops(Eutester):
             self.debug(str(snapshot) + " status " +  snapshot.status + " with " + str(snapshot.progress) + "% progress. Elapsed:"+str(elapsed))
         if len(self.ec2.get_all_snapshots(snapshot_ids=[snapshot.id])) > 0:
             raise Exception(str(snapshot) + " left in" +  snapshot.status + " with " + str(snapshot.progress) + "% progress. Elapsed:"+str(elapsed))
+        '''
+        return self.delete_snapshots([snapshot],basetimeout=60)
+    
     
     def register_snapshot(self, snapshot, rdn="/dev/sda1", description="bfebs", windows=False, bdmdev=None, name=None, ramdisk=None, kernel=None, dot=True):
         """Convience function for passing a snapshot instead of its id. See register_snapshot_by_id"""
         return self.register_snapshot_by_id( snapshot.id, rdn, description, windows, bdmdev, name, ramdisk, kernel, dot )
+    """
 
+    snap_id
+    name
+    description    (optional string)
+    bdmdev         (optional string)
+    rdn            (optional string)
+    dot            (optional boolean)
+    windows        (optional boolean)
+    kernel         (optional string)
+    """
     def register_snapshot_by_id( self, snap_id, rdn="/dev/sda1", description="bfebs", windows=False, bdmdev=None, name=None, ramdisk=None, kernel=None, dot=True ):
         """
         Register an image snapshot
@@ -1444,7 +1636,7 @@ class EC2ops(Eutester):
                 continue
             if (status is not None) and (volume.status != status):
                 continue
-            if (md5 is not None) and (volume.md5 != md5):
+            if (md5 is not None) and hasattr(volume,'md5') and (volume.md5 != md5):
                 continue
             if volume.attach_data is not None:
                 if (attached_instance is not None) and ( volume.attach_data.instance_id != attached_instance):
@@ -1453,6 +1645,8 @@ class EC2ops(Eutester):
                     continue
             if not (volume.size >= minsize) and (maxsize is None or volume.size <= maxsize):
                 continue
+            if not hasattr(volume,'md5'):
+                volume = EuVolume.make_euvol_from_vol(volume)
             retlist.append(volume)
         if eof and retlist == []:
             raise Exception("Unable to find matching volume")
@@ -1529,11 +1723,12 @@ class EC2ops(Eutester):
         self.test_resources["reservations"].append(reservation)
         
         if (len(reservation.instances) < min) or (len(reservation.instances) > max):
-            self.fail("Reservation:"+str(reservation.id)+" returned "+str(len(reservation.instances))+" instances, not within min("+str(min)+") and max("+str(max)+" ")
+            fail = "Reservation:"+str(reservation.id)+" returned "+str(len(reservation.instances))+" instances, not within min("+str(min)+") and max("+str(max)+")"
         
         try:
             self.wait_for_reservation(reservation,timeout=timeout)
         except Exception, e:
+            self.debug(self.get_traceback())
             self.critical("An instance did not enter proper running state in " + str(reservation) )
             self.critical("Terminatng instances in " + str(reservation))
             self.terminate_instances(reservation)
@@ -1544,9 +1739,9 @@ class EC2ops(Eutester):
                 self.critical("Instance " + instance.id + " now in " + instance.state  + " state  in zone: "  + instance.placement )
             else:
                 self.debug( "Instance " + instance.id + " now in " + instance.state  + " state  in zone: "  + instance.placement )
-        #    
-        # check to see if public and private DNS names and IP addresses are the same
-        #
+            #    
+            # check to see if public and private DNS names and IP addresses are the same
+            #
             if (instance.ip_address is instance.private_ip_address) and (instance.public_dns_name is instance.private_dns_name) and ( private_addressing is False ):
                 self.debug(str(instance) + " got Public IP: " + str(instance.ip_address)  + " Private IP: " + str(instance.private_ip_address) + " Public DNS Name: " + str(instance.public_dns_name) + " Private DNS Name: " + str(instance.private_dns_name))
                 self.critical("Instance " + instance.id + " has he same public and private IPs of " + str(instance.ip_address))
@@ -1570,8 +1765,352 @@ class EC2ops(Eutester):
             return self.convert_reservation_to_euinstance(reservation, username=username, password=password, keyname=keypair, timeout=timeout)
         else:
             return reservation
+        
+    
+    def run_image(self, 
+                  image=None, 
+                  keypair=None, 
+                  group="default", 
+                  type=None, 
+                  zone=None, 
+                  min=1, 
+                  max=1, 
+                  user_data=None,
+                  private_addressing=False, 
+                  username="root", 
+                  password=None, 
+                  auto_connect=True,
+                  clean_on_fail=True,
+                  monitor_to_running = True,
+                  timeout=480):
+        reservation = None
+        try:
+            instances = []
+            if image is None:
+                images = self.ec2.get_all_images()
+                for emi in images:
+                    if re.match("emi",emi.id):
+                        image = emi      
+            if not isinstance(image, Image):
+                image = self.get_emi(emi=str(image))
+            if image is None:
+                raise Exception("emi is None. run_instance could not auto find an emi?")   
+            if private_addressing is True:
+                addressing_type = "private"
+                connect = False
+            else:
+                addressing_type = None
+            #In the case a keypair object was passed instead of the keypair name
+            if keypair:
+                if isinstance(keypair, KeyPair):
+                    keypair = keypair.name
+                
+            self.debug( "Attempting to run "+ str(image.root_device_type)  +", image " + str(image) + " in group " + str(group))
+            cmdstart=time.time()
+            reservation = image.run(key_name=keypair,security_groups=[group],instance_type=type, placement=zone, min_count=min, max_count=max, user_data=user_data, addressing_type=addressing_type)
+            self.test_resources["reservations"].append(reservation)
+            
+            if (len(reservation.instances) < min) or (len(reservation.instances) > max):
+                fail = "Reservation:"+str(reservation.id)+" returned "+str(len(reservation.instances))+" instances, not within min("+str(min)+") and max("+str(max)+")"
+            
+            if image.root_device_type == 'ebs':
+                self.wait_for_instances_block_dev_mapping(reservation.instances, timeout=timeout)
+            for instance in reservation.instances:
+                try:
+                    self.debug(str(instance.id)+':Converting instance to euinstance type.')
+                    #convert to euinstances, connect ssh later...
+                    eu_instance =  EuInstance.make_euinstance_from_instance( instance, 
+                                                                             self, 
+                                                                             keypair=keypair, 
+                                                                             username = username, 
+                                                                             password=password, 
+                                                                             reservation = reservation, 
+                                                                             private_addressing=private_addressing, 
+                                                                             timeout=timeout,
+                                                                             cmdstart=cmdstart, 
+                                                                             auto_connect=False )
+                    #set the connect flag in the euinstance object for future use
+                    eu_instance.auto_connect = auto_connect
+                    instances.append(eu_instance)
+                except Exception, e:
+                    self.debug(self.get_traceback())
+                    raise Exception("Unable to create Euinstance from " + str(instance)+", err:\n"+str(e))
+            if monitor_to_running:
+                return self.monitor_euinstances_to_running(instances, timeout=timeout)
+            else:
+                return instances
+        except Exception, e:
+            trace = self.get_traceback()
+            self.debug('!!! Run_instance failed, terminating reservation. Error:'+str(e)+"\n"+trace)
+            if reservation:
+                self.terminate_instances(reservation=reservation)
+            raise e 
+    
+    
+    def wait_for_instances_block_dev_mapping(self, instances, poll_interval=1, timeout=60):
+        waiting = copy.copy(instances)
+        elapsed = 0
+        good = []
+        start = time.time()
+        self.debug('wait_for_instance_block_dev_mapping started...')
+        while waiting and (elapsed < timeout):
+            elapsed = time.time() - start
+            for instance in waiting:
+                instance.update()
+                if instance.root_device_type == 'ebs':
+                    if instance.block_device_mapping and instance.block_device_mapping.current_value:
+                        self.debug('Instance block device mapping is populated:'+str(instance.id))
+                        good.append(instance)
+                else:
+                    good.append(instance)
+            for instance in good:
+                if instance in waiting:
+                    waiting.remove(instance)
+            if waiting:
+                if not int(elapsed)%10:
+                    for instance in waiting:
+                        self.debug('Waiting for instance block device mapping to be populated:'+str(instance.id))
+                time.sleep(poll_interval)
+        if waiting:
+            err_buf = 'Instances failed to populate block dev mapping after '+str(elapsed)+'/'+str(timeout)+' seconds: '
+            for instance in waiting:
+                err_buf += str(instance.id)+','
+            raise Exception(err_buf)
+        self.debug('wait_for_instance_block_dev_mapping started done. elapsed:'+str(elapsed))
+    
+    
+    def monitor_euinstances_to_running(self,instances, poll_interval=10, timeout=480):
+        self.debug("("+str(len(instances))+") Monitor_instances_to_running starting...")
+        #Wait for instances to go to running state...
+        self.monitor_euinstances_to_state(instances,timeout=timeout)
+        #Wait for instances in list to get valid ips, check for duplicates, etc...
+        self.wait_for_valid_ip(instances, timeout)
+        #Now attempt to connect to instances if connect flag is set in the instance...
+        waiting = copy.copy(instances)
+        good = []
+        elapsed = 0
+        start = time.time()
+        self.debug("Instances in running state and IPs are valid, attempting connections...")
+        while waiting and (elapsed < timeout):
+            self.debug("Checking "+str(len(waiting))+" instance ssh connections...")
+            elapsed = int(time.time()-start)
+            for instance in waiting:
+                self.debug('Checking instance:'+str(instance.id)+" ...")
+                if instance.auto_connect:
+                    try:
+                        #First try ping
+                        self.debug('Security group rules allow ping from this test machine:'+str(self.does_instance_sec_group_allow(instance, protocol='icmp', port=0)))
+                        self.ping(instance.public_dns_name, 2)
+                        #now try to connect ssh
+                        allow = "None"
+                        try:
+                            allow=str(self.does_instance_sec_group_allow(instance, protocol='tcp', port=22))
+                        except:pass
+                        self.debug('Does security group rules allow ssh from this test machine:'+str(allow))
+                        instance.connect_to_instance(timeout=15)
+                        self.debug("Connected to instance:"+str(instance.id))
+                        good.append(instance)
+                    except :
+                        self.debug(self.get_traceback())
+                        pass
+                else:
+                    good.append(instance)
+            for instance in good:
+                if instance in waiting:
+                    waiting.remove(instance)
+            if waiting:
+                time.sleep(poll_interval)
+                
+        if waiting:
+            buf = "Timed out waiting to connect to the following instances:\n"
+            for instance in waiting:
+                buf += str(instance.id)+":"+str(instance.public_dns_name)+","
+            raise Exception(buf)
+        self.print_euinstance_list(good)
+        return good
+    
+    def does_instance_sec_group_allow(self, instance, src_addr=None, protocol='tcp',port=22):
+        s = None
+        self.debug("does_instance_sec_group_allow:"+str(instance.id)+" src_addr:"+str(src_addr))
+        try:
+            if not src_addr:
+                #Use the local test machine's addr
+                if not self.ec2_source_ip:
+                    #Try to get the outgoing addr used to connect to this instance
+                    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM,socket.IPPROTO_UDP)
+                    s.connect((instance.public_dns_name,1))
+                    #set the tester's global source_ip, assuming it can re-used (at least until another method sets it to None again)
+                    self.ec2_source_ip = s.getsockname()[0]
+                if self.ec2_source_ip == "0.0.0.0":
+                    raise Exception('Test machine source ip detected:'+str(self.ec2_source_ip)+', tester may need ec2_source_ip set manually')
+                src_addr = self.ec2_source_ip
+            
+            self.debug('Using src_addr:'+str(src_addr))
+            groups = self.get_instance_security_groups(instance)
+            for group in groups:
+                self.debug("Is src_addr:"+str(src_addr)+" allowed in group:"+str(group.name)+"...?")
+                if self.does_sec_group_allow(group, src_addr, protocol=protocol, port=port):
+                    self.debug("Sec allows from source")
+                    return True
+            self.debug("Sec does NOT allow from source")
+            return False
+        except Exception, e:
+            self.debug(self.get_traceback())
+            raise e
+        finally:
+            if s:
+                s.close()
+    
+                        
+    def does_sec_group_allow(self, group, src, protocol='tcp', port=22):
+        '''
+        Test whether a security group will allow traffic from a specific 'src' ip address to
+        a specific 'port' using a specific 'protocol'
+        '''
+        self.debug('does_sec_group_allow: sec_group:'+str(group.name)+", from_src:"+str(src)+", proto:"+str(protocol)+", port:"+str(port))
+        g_buf =""
+        for rule in group.rules:
+            if rule.ip_protocol == protocol:
+                for grant in rule.grants:
+                    g_buf += str(grant)+","
+                self.debug("rule#"+str(group.rules.index(rule))+": port:"+str(rule.to_port)+", grants:"+str(g_buf))
+                to_port= int(rule.to_port)
+                if (to_port == 0 ) or (to_port == -1) or (to_port == port):
+                    for grant in rule.grants:
+                        if self.is_address_in_network(src, str(grant)):
+                            self.debug("does_sec_group_allow? True")
+                            return True
+        self.debug("does_sec_group_allow? False")
+        return False
+                    
+    @classmethod
+    def is_address_in_network(cls,ip_addr, network):
+        ip_addr = str(ip_addr)
+        network = str(network)
+        ipaddr = int(''.join([ '%02x' % int(x) for x in ip_addr.split('.') ]), 16)
+        netstr, bits = network.split('/')
+        netaddr = int(''.join([ '%02x' % int(x) for x in netstr.split('.') ]), 16)
+        mask = (0xffffffff << (32 - int(bits))) & 0xffffffff
+        return (ipaddr & mask) == (netaddr & mask)
+    
+    def get_instance_security_groups(self,instance):
+        secgroups = []
+        if hasattr(instance, 'security_groups') and instance.security_groups:
+            return instance.security_groups
+        if hasattr(instance, 'reservation') and instance.reservation:
+            res = instance.reservation
+        else:
+            res = self.get_reservation_for_instance(instance)
+        for group in res.groups:
+         secgroups.extend(self.ec2.get_all_security_groups(groupnames=str(group.id))) 
+        return secgroups
+    
+    def get_reservation_for_instance(self, instance):
+        for res in self.ec2.get_all_instances():
+            for inst in res.instances:
+                if inst.id == instance.id:
+                    if hasattr(instance,'reservation'):
+                        instance.reservation = res
+                    return res
+        raise Exception('No reservation found for instance:'+str(instance.id))
+        
+    def monitor_euinstances_to_state(self, instance_list, state='running', min=None, poll_interval=10, timeout=120, eof=True):   
+        self.debug('('+str(len(instance_list))+") monitor_instances_to_state: '"+str(state)+"' starting....") 
+        monitor = copy.copy(instance_list)
+        for instance in monitor:
+            if not isinstance(instance, EuInstance):
+                instance = EuInstance.make_euinstance_from_instance( instance, self, connect=False)
+        good = []
+        failed = []
+        elapsed = 0
+        start = time.time()
+        failmsg = None
+        pollinterval = 10
+        failmsg = ""
+        #If no min allowed successful instance count is given, set it to the length of the list provdied. 
+        if min is None:
+            min = len(instance_list)
+        while monitor and elapsed < timeout:
+            elapsed = int(time.time() - start)
+            self.debug("\nWaiting for remaining "+str(len(monitor))+"/"+str(len(instance_list))+" instances to go to state:"+str(state)+', elapsed:'+str(elapsed)+'/'+str(timeout)+")...")
+            for instance in monitor:
+                try:
+                    instance.update()
+                    bdm_vol_status = None
+                    bdm_vol_id = None
+                    if instance.root_device_type == 'ebs':
+                        if not instance.bdm_vol:
+                            try:
+                                instance.bdm_vol = self.get_volume(volume_id = instance.block_device_mapping.current_value.volume_id)
+                                bdm_vol_id = instance.bdm_vol.id
+                                bdm_vol_status = instance.bdm_vol.status
+                            except: pass
+                        else:
+                            instance.bdm_vol.update()
+                            bdm_vol_id = instance.bdm_vol.id
+                            bdm_vol_status = instance.bdm_vol.status
+                        if instance.laststate:
+                            #fail fast on ebs backed instances that go into stopped stated unintentionally
+                            if state != "stopped" and ( instance.laststate == 'pending' and instance.state == "stopped"):
+                                raise Exception("Instance:"+str(instance.id)+" illegal state transition from "+str(instance.laststate)+" to "+str(instance.state))
+                    dbgmsg = (str(state)+": "+str(instance.id)+' state:'+str(instance.state)+', backing volume:'+str(bdm_vol_id)+' status:'+str(bdm_vol_status)+", elapsed:"+str(elapsed)+"/"+str(timeout))
+                    if instance.state == state:
+                        self.debug("SUCCESS "+ dbgmsg)
+                        #This instance is in the correct state, remove from monitor list
+                        good.append(instance)
+                    else:
+                        self.debug("WAITING for "+dbgmsg)
+                except Exception, e:
+                    failed.append(instance)
+                    tb = self.get_traceback()
+                    self.debug('FAILED: Instance:'+str(instance.id)+",err:"+str(e)+"\n"+str(tb))
+                    if eof:
+                        self.debug("EOF set to True, monitor_euinstances_to_state ending...")
+                        raise e
+                    if (len(instance_list) - len(failed) > min):
+                        self.debug('Failed instances has exceeded allowed minimum('+str(min)+") monitor_euinstances_to_state ending...")
+                        raise e
+                    else:
+                        failmsg += str(e)+"\n"
+                        
+            #remove good instances from list to monitor
+            for instance in monitor:
+                if instance in good or instance in failed:
+                    monitor.remove(instance)
+                    
+            if monitor:
+                time.sleep(poll_interval)
+                
+        self.print_euinstance_list(instance_list)
+        if monitor:
+            failmsg = "Some instances did not go to state:"+str(state)+' within timeout:'+str(timeout)+"\nFailed:"
+            for instance in monitor:
+                failed.append(instance)
+                failmsg += str(instance.id)+","
+            if eof:
+                raise Exception(failmsg)
+            if (len(instance_list) - len(failed) > min):
+                self.debug('Failed instances has exceeded allowed minimum('+str(min)+") monitor_euinstances_to_state ending...")
+                raise Exception(failmsg)
+            else:
+                self.debug(failmsg)
+        
+        
+    
+        
+    def print_euinstance_list(self, list):
+        plist = copy.copy(list)
+        first = plist.pop(0)
+        for instance in plist:
+            if not isinstance(instance,EuInstance):
+                raise Exception("print_euinstance list passed non-EuInstnace type")
+        buf = first.printself(title=True, footer=False)
+        for instance in plist:
+            buf += instance.printself(title=False, footer=False)
+        self.debug("\n"+str(buf)+"\n")
+    
 
-    def wait_for_valid_ip(self, instance, timeout = 60):
+    def wait_for_valid_ip(self, instances, poll_interval=10, timeout = 60):
         """
         Wait for instance public DNS name to clear from 0.0.0.0
 
@@ -1580,18 +2119,75 @@ class EC2ops(Eutester):
         :return: True on success
         :raise: Exception if IP stays at 0.0.0.0
         """
+        self.debug("wait_for_valid_ip: Monitoring instances for valid ips...")
+        if not isinstance(instances, types.ListType):
+            monitoring = [instances]
+        else:
+            monitoring = copy.copy(instances)
         elapsed = 0
+        good = []
+        start = time.time()
         zeros = re.compile("0.0.0.0")
-        while elapsed <= timeout:
-            if zeros.search(instance.public_dns_name):
-                self.sleep(1)
+        while monitoring and (elapsed <= timeout):
+            elapsed = int(time.time()- start)
+            for instance in monitoring:
                 instance.update()
-                elapsed += 1
-            else:
-                return True
-        raise Exception("Timed out waiting for a valid IP (ie anything other than 0.0.0.0.)")
+                if zeros.search(instance.public_dns_name):
+                    self.debug(str(instance.id)+": WAITING for public ip. Current:"+str(instance.public_dns_name)+", elapsed:"+str(elapsed)+"/"+str(timeout))
+                else:
+                    self.debug(str(instance.id)+": FOUND public ip. Current:"+str(instance.public_dns_name)+", elapsed:"+str(elapsed)+"/"+str(timeout))
+                    if (instance.ip_address is instance.private_ip_address) and (instance.public_dns_name is instance.private_dns_name) and not instance.private_addressing:
+                        self.debug("ERROR:"+str(instance.id) + " got Public IP: " + str(instance.ip_address)  + " Private IP: " + str(instance.private_ip_address) + " Public DNS Name: " + str(instance.public_dns_name) + " Private DNS Name: " + str(instance.private_dns_name))
+                    else:
+                        good.append(instance)
+            #clean up list outside of loop
+            for instance in good:
+                if instance in monitoring:
+                    monitoring.remove(instance)
+            if monitoring:
+                time.sleep(poll_interval)
+        if monitoring:
+            buf = "Instances timed out waiting for a valid IP, elapsed:"+str(elapsed)+"/"+str(timeout)+"\n"
+            for instance in instances:
+                buf += "Instance: "+str(instance.id)+", public ip: "+str(instance.public_dns_name)+"\n"
+            raise Exception(buf)
+        self.check_system_for_dup_ip(instances=good)
+        self.debug('Wait_for_valid_ip done')
                 
-            
+    def check_system_for_dup_ip(self, instances=None):
+        '''
+        Check system for instances with conflicting duplicate IPs. Will raise exception at end of iterating through all running, pending, or starting instances with info 
+        as to which instances and IPs conflict. 
+        If a list of instances is provided, all other conflicting IPS will be ignored and will only raise an exception for conflicts with the provided instance 'inst'
+        '''
+        errbuf = ""
+        publist = {}
+        privlist = {}
+        self.debug('Check_system_for_dup_ip starting...')
+        reslist = self.ec2.get_all_instances()
+        for res in reslist:
+            self.debug("Checking reservation: "+str(res.id))
+            for instance in res.instances:
+                self.debug('Checking instance '+str(instance.id).ljust(20)+', state:'+str(instance.state).ljust(20)+' pubip:'+str(instance.public_dns_name).ljust(20)+' privip:'+str(instance.private_dns_name).ljust(20))
+                if instance.state == 'running' or instance.state == 'pending' or instance.state == 'starting':
+                    if instance.public_dns_name != '0.0.0.0':
+                        if instance.public_dns_name in publist:
+                            errbuf += "PUBLIC:"+str(instance.id)+"/"+str(instance.state)+"="+str(instance.public_dns_name)+" vs: "+str(publist[instance_public_dns_name])+"\n"
+                            if instances and (instance in instances):
+                                raise Exception("PUBLIC:"+str(instance.id)+"/"+str(instance.state)+"="+str(instance.public_dns_name)+" vs: "+str(publist[instance_public_dns_name]))    
+                        else:
+                            publist[instance.public_dns_name] = str(instance.id+"/"+instance.state)
+                    if instance.private_dns_name != '0.0.0.0':
+                        if instance.private_dns_name in privlist:
+                            errbuf += "PRIVATE:"+str(instance.id)+"/"+str(instance.state)+"="+str(instance.private_dns_name)+" vs: "+str(privlist[instance_private_dns_name])+"\n"
+                            if instances and (instance in instances):
+                                raise Exception("PRIVATE:"+str(instance.id)+"/"+str(instance.state)+"="+str(instance.private_dns_name)+" vs: "+str(privlist[instance_private_dns_name]))
+                        else:
+                            privlist[instance.private_dns_name] = str(instance.id+"/"+instance.state)
+        if not instances and errbuf:
+            raise Exception("DUPLICATE IPs FOUND:"+errbuf)
+        self.debug("Done with check_system_for_dup_ip")
+        
 
     def convert_reservation_to_euinstance(self, reservation, username="root", password=None, keyname=None, timeout=60):
         """
@@ -1611,10 +2207,16 @@ class EC2ops(Eutester):
         for instance in reservation.instances:
             if keypair is not None or (password is not None and username is not None):
                 try:
-                    euinstance_list.append( EuInstance.make_euinstance_from_instance( instance, self, keypair=keypair, username = username, password=password, timeout=timeout ))
+                    euinstance_list.append( EuInstance.make_euinstance_from_instance(instance, 
+                                                                                     self, 
+                                                                                     keypair=keypair, 
+                                                                                     username = username, 
+                                                                                     password=password, 
+                                                                                     timeout=timeout ))
                 except Exception, e:
+                    self.debug(self.get_traceback())
                     euinstance_list.append(instance)
-                    self.fail("Unable to create Euinstance from " + str(instance)+str(e))
+                    self.fail("Unable to create Euinstance from " + str(instance)+": "+str(e))
             else:
                 euinstance_list.append(instance)
         reservation.instances = euinstance_list
@@ -1664,12 +2266,17 @@ class EC2ops(Eutester):
         :return: list of instances
         """
         ilist = []
-        reservations = self.ec2.get_all_instances()
+        if isinstance(idstring, list):
+            instance_ids = idstring
+        else:
+            instance_ids = idstring
+        
+        reservations = self.ec2.get_all_instances(instance_ids=instance_ids)
         for res in reservations:
             if ( reservation is None ) or (re.search(reservation, res.id)):
                 for i in res.instances:
-                    if (idstring is not None) and (not re.search(idstring, i.id)) :
-                        continue
+                    #if (idstring is not None) and (not re.search(idstring, i.id)) :
+                    #   continue
                     if (state is not None) and (i.state != state):
                         continue
                     if (rootdevtype is not None) and (i.root_device_type != rootdevtype):
@@ -1691,13 +2298,15 @@ class EC2ops(Eutester):
                     ilist.append(i)
         return ilist
 
+        
+    
     def get_connectable_euinstances(self,path=None,username='root', password=None, connect=True):
         """
         Convenience method, returns a list of all running instances, for the current creduser
         for which there are local keys at 'path'
 
         :param path: Path to look for private keys
-        :param username: username to use if path is not passed
+        :param username: username to use if path is not pfassed
         :param password: password to use if path is not passed
         :param connect: bool, Whether to create an ssh connection to the instances
         :return:
@@ -1719,7 +2328,7 @@ class EC2ops(Eutester):
                       
             return euinstances
         except Exception, e:
-            self.debug("Failed to find a pre-existing isntance we can connect to:"+str(e))
+            self.debug("Failed to find a pre-existing instance we can connect to:"+str(e))
             pass
     
     
@@ -1738,6 +2347,19 @@ class EC2ops(Eutester):
                 print str(item)+" = "+str(obj.__dict__[item])
             buf += str(item)+" = "+str(obj.__dict__[item])+"\n"
         return buf
+    
+    def get_traceback(self):
+        '''
+        Returns a string buffer with traceback, to be used for debug/info purposes. 
+        '''
+        try:
+            out = StringIO.StringIO()
+            traceback.print_exception(*sys.exc_info(),file=out)
+            out.seek(0)
+            buf = out.read()
+        except Exception, e:
+                buf = "Could not get traceback"+str(e)
+        return str(buf) 
 
     def terminate_instances(self, reservation=None, timeout=480):
         """
@@ -1750,10 +2372,13 @@ class EC2ops(Eutester):
         aggregate_result = True
         if reservation is None:
             reservations = self.ec2.get_all_instances()
+            #first send terminate for all instances
             for res in reservations:
                 for instance in res.instances:
                     self.debug( "Sending terminate for " + str(instance) )
                     instance.terminate()
+            #now go wait on the instance states
+            for res in reservations:
                 if self.wait_for_reservation(res, state="terminated", timeout=timeout) is False:
                     aggregate_result = False
         ### Otherwise just kill this reservation
