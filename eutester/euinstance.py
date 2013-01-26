@@ -641,6 +641,7 @@ class EuInstance(Instance, TaggedResource):
                'dd_gig' : 0,
                'dd_elapsed' : 0,
                'dd_rate' : 0,
+               'dd_units' : "",
                'dd_full_rec_in' : 0,
                'dd_full_rec_out' : 0,
                'dd_partial_rec_in' : 0,
@@ -720,22 +721,22 @@ class EuInstance(Instance, TaggedResource):
                 try:
                     if re.search('records in',line):
                         ret['dd_records_in'] = str(line.split()[0]).strip()
-                        ret['dd_full_rec_in'] = str(dd_records_in.split("+")[0].strip())
+                        ret['dd_full_rec_in'] = str(ret['dd_records_in'].split("+")[0].strip())
                         #dd_full_rec_in = int(dd_full_rec_in)
-                        ret['dd_partial_rec_in'] = str(dd_records_in.split("+")[1].strip())
+                        ret['dd_partial_rec_in'] = str(ret['dd_records_in'].split("+")[1].strip())
                         #dd_partial_rec_in = int(dd_partial_rec_in)
                     elif re.search('records out', line):
                         ret['dd_records_out'] = str(line.split()[0]).strip()
-                        ret['dd_full_rec_out'] = str(dd_records_out.split("+")[0].strip())
+                        ret['dd_full_rec_out'] = str(ret['dd_records_out'].split("+")[0].strip())
                         #dd_ful_rec_out = int(dd_full_rec_out)
-                        ret['dd_partial_rec_out'] = str(dd_records_out.split("+")[1].strip())
+                        ret['dd_partial_rec_out'] = str(ret['dd_records_out'].split("+")[1].strip())
                         #dd_partial_rec_out = int(dd_partial_rec_out)
                     elif re.search('copied',line):
                         #123456789 bytes (123 MB) copied, 12.34 s, 123.45 MB/s
                         summary = line.split()
                         ret['dd_bytes'] = int(summary[0])
-                        ret['dd_mb'] = float("{0:.2f}".format(dd_bytes/float(mb)))
-                        ret['dd_gig'] = float("{0:.2f}".format(dd_bytes/float(gig)))
+                        ret['dd_mb'] = float("{0:.2f}".format(ret['dd_bytes']/float(mb)))
+                        ret['dd_gig'] = float("{0:.2f}".format(ret['dd_bytes']/float(gig)))
                         ret['dd_elapsed'] = float(summary[5])
                         ret['dd_rate'] = float(summary[7])
                         ret['dd_units'] = str(summary[8])
@@ -745,7 +746,7 @@ class EuInstance(Instance, TaggedResource):
                     infobuf = '\n\nCaught exception while processing line:"'+str(line)+'"'
                     infobuf += '\n'+str(tb)+"\n"+str(e)+'\n'
             elapsed = float(time.time()-start)
-            ret['test_rate'] = float("{0:.2f}".format(dd_mb / elapsed ))
+            ret['test_rate'] = float("{0:.2f}".format(ret['dd_mb'] / elapsed ))
             ret['test_time'] = "{0:.4f}".format(elapsed)
             #Create and format the status output buffer, then print it...
             buf = str(ret['dd_bytes']).ljust(15)
@@ -773,7 +774,7 @@ class EuInstance(Instance, TaggedResource):
             if out:
                 outbuf = "\n".join(out)
             raise Exception('Did not transfer any data using dd cmd:'+str(ddcmd)+"\nstderr: "+str(outbuf))
-        self.debug('Done with dd, copied '+str(dd_bytes)+' over elapsed:'+str(elapsed))
+        self.debug('Done with dd, copied '+str(ret['dd_bytes'])+' over elapsed:'+str(elapsed))
         return ret
     
     def vol_write_random_data_get_md5(self, euvolume, srcdev=None, length=32, timepergig=90, overwrite=False):
