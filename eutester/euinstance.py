@@ -590,6 +590,7 @@ class EuInstance(Instance, TaggedResource):
         :param length: the number of bytes to copy into the euvolume
         :returns dd's data/time stat
         '''
+        mb = 1048576
         gb = 1073741824 
         fsize = 10485760 #10mb
         if not euvolume in self.attached_vols:
@@ -605,24 +606,30 @@ class EuInstance(Instance, TaggedResource):
                 srcdev = "/dev/"+str(self.sys("ls -1 /dev | grep 'da$'")[0]).strip()
                 fsize = randint(1048576,10485760)
         if not length:
-            fillcmd = 'dd if='+str(srcdev)+' of='+str(voldev+' bs=4096')
             timeout = int(euvolume.size) * timepergig
-            return self.time_dd(fillcmd, timeout=timeout)
+            return self.dd_monitor(ddif=str(srcdev), ddof=str(voldev), ddbs=bs,timeout=timeout)
         else:
-            fillcmd = "head -c "+str(length)+" "+srcdev+" > "+voldev+"; echo "+str(euvolume.id)+" > " + str(voldev)+"; sync"
             timeout = timepergig * ((length/gb) or 1) 
-            start = time.time()
-            self.sys(fillcmd)
-            return int(time.time()-start)
+            #write the volume id into the volume for starters
+            ddcmd = 'echo '+str(euvolume.id)+' | dd of='+str(voldev)
+            dd_res_for_id = self.dd_monitor(ddcmd=ddcmd, timeout=timeout)
+            len_remaining = length - int(dd_res_for_id['dd_bytes'])
+            if len_remaining <= length:
+                return dd_res_for_id
+            if length < mb:
+                return self.dd_monitor(ddif=str(srcdev), ddof=str(voldev), ddbs=length, ddseek=int(dd_res_for_id['dd_bytes']), timeout=timeout)
+            else:
+                return self.dd_monitor(ddif=str(srcdev), ddof=str(voldev), ddbytes=length, ddseek=int(dd_res_for_id['dd_bytes']), timeout=timeout)
+                
             
     
     def time_dd(self,ddcmd, timeout=90, poll_interval=1, tmpfile=None):
         '''
-        Executes dd command on instance, parses and returns stats on dd outcome
+        (use dd_monitor intead) Executes dd command on instance, parses and returns stats on dd outcome
         '''
         return self.dd_monitor(ddcmd=ddcmd, poll_interval=poll_interval, tmpfile=tmpfile)
         
-    def dd_monitor(self, ddif=None, ddof=None, ddcount=None, ddbs=1024, ddbytes=None, ddcmd=None,  timeout=300, poll_interval=1, tmpfile=None):
+    def dd_monitor(self, ddif=None, ddof=None, ddcount=None, ddbs=1024, ddbytes=None, ddcmd=None, ddseek=None, timeout=300, poll_interval=1, tmpfile=None):
         '''
         Executes dd command on instance, monitors and displays ongoing status, and returns stats dict for dd outcome
         :type ddif: str
@@ -642,6 +649,9 @@ class EuInstance(Instance, TaggedResource):
         
         :type ddcmd: str
         :param ddcmd: String representing a preformed dd comand to be executed and monitored
+        
+        :type ddseek: int
+        :param ddseek: length of ddof file to seek before writing
         
         :type timeout: int
         :param timeout: Number of seconds to wait before timing out on dd cmd. 
@@ -696,7 +706,11 @@ class EuInstance(Instance, TaggedResource):
                 ddcount_str = str(' count='+str(ddbytes/ddbs)+' ')
             else:
                 ddcount_str = ''
-            ddcmd = str('dd if='+str(ddif)+' of='+str(ddof)+str(ddbs_str)+str(ddcount_str))
+            if ddseek:
+                ddseek_str = str(' seek='+str(ddseek)+' ')
+            else:
+                 ddseek_str = ''
+            ddcmd = str('dd if='+str(ddif)+' of='+str(ddof)+str(dd_seek_str)+str(ddbs_str)+str(ddcount_str))
             ret['ddcmd'] = ddcmd
         '''
         Due to the ssh psuedo tty, this is done in an ugly manner to get output of future usr1 signals 
