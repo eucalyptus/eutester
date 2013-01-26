@@ -624,8 +624,38 @@ class EuInstance(Instance, TaggedResource):
         
     def dd_monitor(self, ddif=None, ddof=None, ddcount=None, ddbs=1024, ddbytes=None, ddcmd=None,  timeout=300, poll_interval=1, tmpfile=None):
         '''
-        Executes dd command on instance, parses and returns stats on dd outcome
+        Executes dd command on instance, monitors and displays ongoing status, and returns stats dict for dd outcome
+        :type ddif: str
+        :param ddif: Interface to read data in from
+        
+        :type ddof: str
+        :param ddof: Interface to write data to
+        
+        :type ddcount: int
+        :param ddcount: Number or count of block size (ddbs) to read/write
+        
+        :type ddbs: int
+        :param ddbs: Block size used for  reads/writes
+        
+        :type ddbytes: int
+        :param ddbytes: Number of bytes to be roughly read/write (note: used as ddbytes/ddbs = count) 
+        
+        :type ddcmd: str
+        :param ddcmd: String representing a preformed dd comand to be executed and monitored
+        
+        :type timeout: int
+        :param timeout: Number of seconds to wait before timing out on dd cmd. 
+        
+        :type poll_interval: int
+        :param poll_interval: Number of seconds to pause between polling dd and updating status
+        
+        :type tmpfile: str
+        :param tmpfile: temp file used on remote instance to redirect dd's stderr to in order to nohup dd. 
+        
+        :rtype: dict
+        :returns: dict containing dd stats
         '''
+        
         mb = 1048576 #bytes per mb
         gig = 1073741824 #bytes per gig
         #this tmp file will be created on remote instance to write stderr from dd to...
@@ -763,9 +793,15 @@ class EuInstance(Instance, TaggedResource):
             time.sleep(poll_interval)
         sys.stdout.write(linediv)
         sys.stdout.flush()
-        #sync to ensure writes to dev
-        self.sys('sync', code=0)
         elapsed = int(time.time()-start)
+        if not done:
+            #Attempt to kill dd process...
+            self.sys('kill '+str(dd_pid))
+            raise Exception('dd_monitor timed out before dd cmd completed, elapsed:'+str(elapsed)+'/'+str(timeout))
+        else:
+            #sync to ensure writes to dev
+            self.sys('sync', code=0)
+            elapsed = int(time.time()-start)
         #if we have any info from exceptions caught during parsing, print that here...
         if infobuf:
             print infobuf
