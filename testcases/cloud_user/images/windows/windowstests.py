@@ -340,7 +340,7 @@ class WindowsTests(EutesterTestCase):
                                      time_per_gig = None,
                                      ):
         '''
-        Attempts bundle, upload and register a windows image on component filesystem at fpath.  
+        Definition: Attempts bundle, upload and register a windows image on component filesystem at fpath.  
         Work is done on a given machine and requires euca2ools present on that machine. 
         Returns the emi of the registered image
         '''
