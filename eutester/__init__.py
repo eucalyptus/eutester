@@ -79,25 +79,35 @@ class Eutester(object):
             self.debug("Extracting keys from " + self.credpath)         
             self.aws_access_key_id = self.get_access_key()
             self.aws_secret_access_key = self.get_secret_key()
+            self.account_id = self.get_account_id()
+            self.user_id = self.get_user_id()
         else:
             self.aws_access_key_id = aws_access_key_id
             self.aws_secret_access_key = aws_secret_access_key
 
     def get_access_key(self):
-        """Parse the eucarc for the EC2_ACCESS_KEY"""
-        return self.parse_eucarc("EC2_ACCESS_KEY")   
+        if not self.aws_access_key_id:     
+            """Parse the eucarc for the EC2_ACCESS_KEY"""
+            self.aws_access_key_id = self.parse_eucarc("EC2_ACCESS_KEY")  
+        return self.aws_access_key_id 
     
     def get_secret_key(self):
-        """Parse the eucarc for the EC2_SECRET_KEY"""
-        return self.parse_eucarc("EC2_SECRET_KEY")
+        if not self.aws_secret_access_key: 
+            """Parse the eucarc for the EC2_SECRET_KEY"""
+            self.aws_secret_access_key = self.parse_eucarc("EC2_SECRET_KEY")
+        return self.aws_secret_access_key
     
     def get_account_id(self):
-        """Parse the eucarc for the EC2_ACCOUNT_NUMBER"""
-        return self.parse_eucarc("EC2_ACCOUNT_NUMBER")
+        if not self.account_id:
+            """Parse the eucarc for the EC2_ACCOUNT_NUMBER"""
+            self.account_id = self.parse_eucarc("EC2_ACCOUNT_NUMBER")
+        return self.account_id
     
     def get_user_id(self):
+        if not self.user_id:
+            self.user_id = self.parse_eucarc("EC2_USER_ID")
         """Parse the eucarc for the EC2_ACCOUNT_NUMBER"""
-        return self.parse_eucarc("EC2_USER_ID")
+        return self.user_id 
 
     def get_port(self):
         """Parse the eucarc for the EC2_ACCOUNT_NUMBER"""
