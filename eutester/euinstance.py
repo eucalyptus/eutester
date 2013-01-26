@@ -53,6 +53,7 @@ from eutester import eulogger
 from eutester.taggedresource import TaggedResource
 from random import randint
 import sshconnection
+import sys
 import os
 import re
 import time
@@ -561,7 +562,7 @@ class EuInstance(Instance, TaggedResource):
                     in_use_cloud += str(vol.id)+", "
                     continue
             if inuse is False:
-                self.debug("Instance:"+str(self.id)+" returning available scsi dev:"+str(dev))
+                self.debug("Instance:"+str(self.id)+" returning available cloud scsi dev:"+str(dev))
                 return str(dev)
             else:
                 d = chr(ord('e') + x) #increment the letter we append to the device string prefix
@@ -578,7 +579,7 @@ class EuInstance(Instance, TaggedResource):
         fillcmd = "dd if=/dev/zero of="+str(voldev)+"; sync"
         return self.time_dd(fillcmd)
     
-    def random_fill_volume(self,euvolume,srcdev=None, length=None):
+    def random_fill_volume(self,euvolume,srcdev=None, length=None, timepergig=90):
         '''
         Attempts to fill the entie given euvolume with unique non-zero data.
         The srcdev is read from in a set size, and then used to write to the euvolume to populate it. The file 
@@ -593,8 +594,7 @@ class EuInstance(Instance, TaggedResource):
         fsize = 10485760 #10mb
         if not euvolume in self.attached_vols:
             raise Exception(self.id+" Did not find this in instance's attached list. Can not write to this euvolume")
-        if not length:
-            length = euvolume.size * gb
+        
         voldev = euvolume.guestdev.strip()
         self.assertFilePresent(voldev)
         if srcdev is None:
@@ -604,23 +604,177 @@ class EuInstance(Instance, TaggedResource):
                 #look for the another large device we can read from in random size increments
                 srcdev = "/dev/"+str(self.sys("ls -1 /dev | grep 'da$'")[0]).strip()
                 fsize = randint(1048576,10485760)
-                
-        fillcmd = "head -c "+str(length)+" "+srcdev+" > "+voldev+"; echo "+str(euvolume.id)+" > " + str(voldev)+"; sync"
-
-        return self.time_dd(fillcmd)
+        if not length:
+            fillcmd = 'dd if='+str(srcdev)+' of='+str(voldev+' bs=4096')
+            timeout = int(euvolume.size) * timepergig
+            return self.time_dd(fillcmd, timeout=timeout)
+        else:
+            fillcmd = "head -c "+str(length)+" "+srcdev+" > "+voldev+"; echo "+str(euvolume.id)+" > " + str(voldev)+"; sync"
+            timeout = timepergig * ((length/gb) or 1) 
+            start = time.time()
+            self.sys(fillcmd)
+            return int(time.time()-start)
+            
     
-    
-    def time_dd(self,ddcmd):
+    def time_dd(self,ddcmd, timeout=90, poll_interval=1, tmpfile=None):
         '''
-        Executes dd command on instance, parses and returns dd's data/time stat
+        Executes dd command on instance, parses and returns stats on dd outcome
         '''
-        time=""
-        out = self.sys(ddcmd)
-        for line in out:
-            line = str(line)
-            if re.search('copied',line):
-                time=float(str(line.split(',').pop()).split()[0])
-        return time
+        return self.dd_monitor(ddcmd=ddcmd, poll_interval=poll_interval, tmpfile=tmpfile)
+        
+    def dd_monitor(self, ddif=None, ddof=None, ddcount=None, ddbs=1024, ddbytes=None, ddcmd=None,  timeout=300, poll_interval=1, tmpfile=None):
+        '''
+        Executes dd command on instance, parses and returns stats on dd outcome
+        '''
+        mb = 1048576 #bytes per mb
+        gig = 1073741824 #bytes per gig
+        #this tmp file will be created on remote instance to write stderr from dd to...
+        if not tmpfile:
+            tstamp = time.time()
+            tmpfile = '/tmp/eutesterddcmd.'+str(int(tstamp))
+        #init return dict 
+        ret = {
+               'dd_records_in' : 0,
+               'dd_records_out' : 0,
+               'dd_bytes' : 0,
+               'dd_mb' : 0,
+               'dd_gig' : 0,
+               'dd_elapsed' : 0,
+               'dd_rate' : 0,
+               'dd_full_rec_in' : 0,
+               'dd_full_rec_out' : 0,
+               'dd_partial_rec_in' : 0,
+               'dd_partial_rec_out' : 0,
+               'test_time' : 0,
+               'test_rate' : 0,
+               'ddcmd' : "" }
+        dd_units = 0
+        elapsed = 0
+        done = False
+        infobuf = None
+        start = time.time()
+        if ddcmd:
+            ddcmd = ddcmd
+        else:
+            if not ddif or not ddof:
+                raise Exception('dd_monitor needs ddif and ddof, or a preformed ddcmd string')
+            ddbs_str = str(' bs='+str(ddbs)+' ') or ""
+            if ddcount:
+                ddcount_str = str(' count='+str(ddcount)+' ')
+            elif ddbytes and ddbs:
+                ddcount_str = str(' count='+str(ddbytes/ddbs)+' ')
+            else:
+                ddcount_str = ''
+            ddcmd = str('dd if='+str(ddif)+' of='+str(ddof)+str(ddbs_str)+str(ddcount_str))
+            ret['ddcmd'] = ddcmd
+        '''
+        Due to the ssh psuedo tty, this is done in an ugly manner to get output of future usr1 signals 
+        for dd status updates and allow this to run with nohup in the background. Added sleep so cmd is nohup'd 
+        before tty is terminated (maybe?)
+        '''
+        cmd = 'nohup '+str(ddcmd)+' 2> '+str(tmpfile)+' & echo $! && sleep 2'
+        #Execute dd command and store echo'd pid from output
+        dd_pid = self.sys(cmd)[0]
+        
+        #Form the table headers for printing dd status...
+        linediv = '\n----------------------------------------------------------------------------------------------------------------------------\n'
+        databuf = str('BYTES').ljust(15)
+        databuf += '|'+str('MBs').center(15)
+        databuf += '|'+str('GIGs').center(8)
+        
+        timebuf = '|'+str('DD TIME').center(10)
+        timebuf += '|'+str('TEST TIME').center(10)
+        
+        ratebuf = '|'+str('DD RATE').center(12)
+        ratebuf += '|'+str('TEST RATE').center(12)
+        
+        recbuf = '|'+str('REC_IN').center(18)
+        recbuf += '|'+str('REC_OUT').center(18)
+        
+        info_header = str('DD DATA INFO').ljust(len(databuf))
+        info_header += '|' + str('DD TIME INFO').center(len(timebuf)-1) 
+        info_header += '|' + str('DD RECORDS FULL/PARTIAL INFO').center(len(recbuf)-1)
+        
+        buf = linediv
+        buf += info_header
+        buf += linediv
+        buf += databuf + timebuf + ratebuf + recbuf
+        buf += linediv
+        sys.stdout.write(buf)
+        sys.stdout.flush()
+        
+        #Keep getting and printing dd status until done...
+        while not done and (elapsed < timeout):
+            #send sig usr1 to have dd process dump status to stderr redirected to tmpfile
+            output = self.ssh.cmd('kill -USR1 '+str(dd_pid), verbose=False)
+            cmdstatus = int(output['status'])
+            if cmdstatus != 0:
+                done = True
+                #if the command returned error, process is done
+                out = self.sys('cat '+str(tmpfile)+"; rm -f "+str(tmpfile),code=0, verbose=False)
+            else:
+                #if the above command didn't error out then dd ps is still running, grab status from tmpfile, and clear it
+                out= self.sys('cat '+str(tmpfile)+" && echo '' > "+str(tmpfile)+ ' 2>&1 > /dev/null', code=0, verbose=False)
+            for line in out:
+                line = str(line)
+                try:
+                    if re.search('records in',line):
+                        ret['dd_records_in'] = str(line.split()[0]).strip()
+                        ret['dd_full_rec_in'] = str(dd_records_in.split("+")[0].strip())
+                        #dd_full_rec_in = int(dd_full_rec_in)
+                        ret['dd_partial_rec_in'] = str(dd_records_in.split("+")[1].strip())
+                        #dd_partial_rec_in = int(dd_partial_rec_in)
+                    elif re.search('records out', line):
+                        ret['dd_records_out'] = str(line.split()[0]).strip()
+                        ret['dd_full_rec_out'] = str(dd_records_out.split("+")[0].strip())
+                        #dd_ful_rec_out = int(dd_full_rec_out)
+                        ret['dd_partial_rec_out'] = str(dd_records_out.split("+")[1].strip())
+                        #dd_partial_rec_out = int(dd_partial_rec_out)
+                    elif re.search('copied',line):
+                        #123456789 bytes (123 MB) copied, 12.34 s, 123.45 MB/s
+                        summary = line.split()
+                        ret['dd_bytes'] = int(summary[0])
+                        ret['dd_mb'] = float("{0:.2f}".format(dd_bytes/float(mb)))
+                        ret['dd_gig'] = float("{0:.2f}".format(dd_bytes/float(gig)))
+                        ret['dd_elapsed'] = float(summary[5])
+                        ret['dd_rate'] = float(summary[7])
+                        ret['dd_units'] = str(summary[8])
+                except Exception, e:
+                    #catch any exception in the data parsing and show it as info/debug later...
+                    tb = self.tester.get_traceback()
+                    infobuf = '\n\nCaught exception while processing line:"'+str(line)+'"'
+                    infobuf += '\n'+str(tb)+"\n"+str(e)+'\n'
+            elapsed = float(time.time()-start)
+            ret['test_rate'] = float("{0:.2f}".format(dd_mb / elapsed ))
+            ret['test_time'] = "{0:.4f}".format(elapsed)
+            #Create and format the status output buffer, then print it...
+            buf = str(ret['dd_bytes']).ljust(15)
+            buf += '|'+str(ret['dd_mb']).center(15)
+            buf += '|'+str(ret['dd_gig']).center(8)
+            buf += '|'+str(ret['dd_elapsed']).center(10)
+            buf += '|'+str(ret['test_time']).center(10)
+            buf += '|'+str(str(ret['dd_rate'])+" "+str(ret['dd_units'])).center(12)
+            buf += '|'+str(str(ret['test_rate'])+" "+str('MB/s')).center(12)
+            buf += '|'+str("F:"+str(ret['dd_full_rec_in'])+" P:"+str(ret['dd_partial_rec_in'])+" ").center(18)
+            buf += '|'+str("F:"+str(ret['dd_full_rec_out'])+" P:"+str(ret['dd_partial_rec_out'])).center(18)
+            sys.stdout.write("\r\x1b[K"+str(buf))
+            sys.stdout.flush()
+            time.sleep(poll_interval)
+        sys.stdout.write(linediv)
+        sys.stdout.flush()
+        #sync to ensure writes to dev
+        self.sys('sync', code=0)
+        elapsed = int(time.time()-start)
+        #if we have any info from exceptions caught during parsing, print that here...
+        if infobuf:
+            print infobuf
+        #if we didn't transfer any bytes of data, assume the cmd failed and wrote to stderr now in outbuf...
+        if not ret['dd_bytes']:
+            if out:
+                outbuf = "\n".join(out)
+            raise Exception('Did not transfer any data using dd cmd:'+str(ddcmd)+"\nstderr: "+str(outbuf))
+        self.debug('Done with dd, copied '+str(dd_bytes)+' over elapsed:'+str(elapsed))
+        return ret
     
     def vol_write_random_data_get_md5(self, euvolume, srcdev=None, length=32, timepergig=90, overwrite=False):
         '''
@@ -636,7 +790,8 @@ class EuInstance(Instance, TaggedResource):
         
         voldev = euvolume.guestdev.strip()  
         #check to see if there's existing data that we should avoid overwriting 
-        if overwrite or ( int(self.sys('head -c 32 '+str(voldev)+' | xargs -0 printf %s | wc -c')[0]) == 0):
+        if overwrite or ( int(self.sys('head -c '+str(length)+ ' '+str(voldev)+' | xargs -0 printf %s | wc -c')[0]) == 0):
+            
             self.random_fill_volume(euvolume, srcdev=srcdev, length=length)
         else:
             self.debug("Volume has existing data, skipping random data fill")
