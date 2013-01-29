@@ -42,7 +42,7 @@ class ChangeProperty(EutesterTestCase):
         if extra_args:
             for arg in extra_args:
                 self.parser.add_argument(arg)
-        self.parser.add_argument("--property", default="cloud.network.global_max_network_tag")
+        self.parser.add_argument("--property", default="cloud.euca_log_level")
         self.parser.add_argument("--value", default="DEBUG")
         self.get_args()
         # Setup basic eutester object
