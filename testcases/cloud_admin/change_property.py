@@ -56,7 +56,7 @@ class ChangeProperty(EutesterTestCase):
         Change VLAN range to a given subset
         '''
         clc = self.tester.get_component_machines("clc")[0]
-        clc.sys("source " + self.tester.credpath + "/eucarc && " + self.tester.eucapath + "/usr/sbin/euca-modify-property -p "+ self.args.property +" =" + self.args.value)
+        clc.sys("source " + self.tester.credpath + "/eucarc && " + self.tester.eucapath + "/usr/sbin/euca-modify-property -p "+ self.args.property +"=" + self.args.value)
 
 if __name__ == "__main__":
     testcase = ChangeProperty()
