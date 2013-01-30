@@ -67,7 +67,7 @@ class EC2ops(Eutester):
     def __init__(self, host=None, credpath=None, endpoint=None, aws_access_key_id=None, aws_secret_access_key = None, username="root",region=None,
                  is_secure=False, path='/', port=80, boto_debug=0, APIVersion = '2012-07-20'):
         super(EC2ops, self).__init__(credpath=credpath, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key)
-        self.setup_ec2_connection(host= host, region=region, endpoint=endpoint, aws_access_key_id=self.aws_access_key_id ,
+        self.setup_ec2_connection(host= host, region=region, endpoint=endpoint, aws_access_key_id=aws_access_key_id ,
                                     aws_secret_access_key=self.aws_secret_access_key, is_secure=is_secure, path=path, port=port,
                                     boto_debug=boto_debug, APIVersion=APIVersion)
         self.poll_count = 48
@@ -1968,6 +1968,8 @@ class EC2ops(Eutester):
         a specific 'port' using a specific 'protocol'
         '''
         self.debug('does_sec_group_allow: sec_group:'+str(group.name)+", from_src:"+str(src)+", proto:"+str(protocol)+", port:"+str(port))
+        #refresh group in case group rules have changed...
+        group = self.ec2.get_all_security_groups(groupnames=[group.name], group_ids=group.id)
         g_buf =""
         for rule in group.rules:
             if rule.ip_protocol == protocol:
@@ -2032,7 +2034,7 @@ class EC2ops(Eutester):
             min = len(instance_list)
         while monitor and elapsed < timeout:
             elapsed = int(time.time() - start)
-            self.debug("\nWaiting for remaining "+str(len(monitor))+"/"+str(len(instance_list))+" instances to go to state:"+str(state)+', elapsed:'+str(elapsed)+'/'+str(timeout)+")...")
+            self.debug("\n------>Waiting for remaining "+str(len(monitor))+"/"+str(len(instance_list))+" instances to go to state:"+str(state)+', elapsed:('+str(elapsed)+'/'+str(timeout)+")...")
             for instance in monitor:
                 try:
                     instance.update()

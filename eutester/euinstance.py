@@ -710,7 +710,7 @@ class EuInstance(Instance, TaggedResource):
                 ddseek_str = str(' seek='+str(ddseek)+' ')
             else:
                  ddseek_str = ''
-            ddcmd = str('dd if='+str(ddif)+' of='+str(ddof)+str(dd_seek_str)+str(ddbs_str)+str(ddcount_str))
+            ddcmd = str('dd if='+str(ddif)+' of='+str(ddof)+str(ddseek_str)+str(ddbs_str)+str(ddcount_str))
             ret['ddcmd'] = ddcmd
         '''
         Due to the ssh psuedo tty, this is done in an ugly manner to get output of future usr1 signals 
