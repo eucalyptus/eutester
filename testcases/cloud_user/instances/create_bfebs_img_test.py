@@ -248,10 +248,10 @@ if __name__ == '__main__':
             pmsg("The md5sum of the remote image: "+str(md5sum))
             
         #Download the remote image, write it directly to our volume
-        cmd="curl "+url+" > "+attached_block_dev+" && echo 'GOOD' && sync"
+        cmd="curl "+url+" > "+attached_block_dev+" && sync"
         try:
             pmsg("Issuing cmd:"+cmd+" , timeout:"+str(timeout))
-            output=instance.sys(cmd,  timeout=timeout)
+            output=instance.sys(cmd,  timeout=timeout, code=0)
             pmsg("Curl output:"+"".join(output))
             result = output[len(output)-1]
             result = result.split(' ')[0]

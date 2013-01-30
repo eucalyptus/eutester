@@ -1960,7 +1960,20 @@ class EC2ops(Eutester):
         finally:
             if s:
                 s.close()
-    
+    def get_security_group(self, id=None, name=None):
+        #Adding this as both a convienence to the user to separate euare groups from security groups
+        #Not sure if botos filter on group names and ids is reliable?
+        if not id and not name:
+            raise Exception('get_security_group needs either a name or an id')
+        groups = self.ec2.get_all_security_groups(groupnames=[name], group_ids=id)
+        for group in groups:
+            if not id or (id and group.id == id):
+                if not name or (name and group.name == name):
+                    self.debug('Found matching security group for name:'+str(name)+' and id:'+str(id))
+                    return group
+        self.debug('No matching security group found for name:'+str(name)+' and id:'+str(id))
+        return None
+        
                         
     def does_sec_group_allow(self, group, src, protocol='tcp', port=22):
         '''
@@ -1969,7 +1982,7 @@ class EC2ops(Eutester):
         '''
         self.debug('does_sec_group_allow: sec_group:'+str(group.name)+", from_src:"+str(src)+", proto:"+str(protocol)+", port:"+str(port))
         #refresh group in case group rules have changed...
-        group = self.ec2.get_all_security_groups(groupnames=[group.name], group_ids=group.id)
+        group = self.get_security_group(id=group.id, name=group.name)
         g_buf =""
         for rule in group.rules:
             if rule.ip_protocol == protocol:
