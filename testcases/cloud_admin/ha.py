@@ -1,6 +1,7 @@
 #!/usr/bin/python
 import time
 import re
+import boto
 
 from testcases.cloud_user.instances.instancetest import InstanceBasics
 from testcases.cloud_user.s3.bucket_tests import BucketTestSuite
@@ -13,9 +14,14 @@ class HAtests(InstanceBasics, BucketTestSuite):
         self.setuptestcase()
         self.setup_parser()
         self.get_args()
+        if not boto.config.has_section('Boto'):
+            boto.config.add_section('Boto')
+            boto.config.set('Boto', 'num_retries', '1')
+            boto.config.set('Boto', 'http_socket_timeout', '20')
         self.tester = Eucaops( config_file=self.args.config_file, password=self.args.password)
+        self.tester.ec2.connection.timeout = 30
         self.servman = self.tester.service_manager
-        self.tester.poll_count = 120
+        self.instance_timeout = 120
         ### Add and authorize a group for the instance
         self.start_time = str(int(time.time()))
         try:
@@ -25,7 +31,10 @@ class HAtests(InstanceBasics, BucketTestSuite):
             ### Generate a keypair for the instance
             self.keypair = self.tester.add_keypair( "keypair-" + self.start_time)
             self.keypath = os.curdir + "/" + self.keypair.name + ".pem"
-            self.image = self.tester.get_emi(root_device_type="instance-store")
+            if self.args.emi:
+                self.image = self.tester.get_emi(self.args.emi)
+            else:
+                self.image = self.tester.get_emi(root_device_type="instance-store")
             self.reservation = None
             self.private_addressing = False
             self.bucket_prefix = "buckettestsuite-" + self.start_time + "-"
@@ -38,9 +47,11 @@ class HAtests(InstanceBasics, BucketTestSuite):
             ### Create standing resources that will be checked after all failures
             ### Instance, volume, buckets
             ###
-            self.standing_reservation = self.tester.run_instance(keypair=self.keypair.name,group=self.group.name, zone=self.zone)
+            self.standing_reservation = self.tester.run_instance(image=self.image ,keypair=self.keypair.name,group=self.group.name, zone=self.zone)
             self.volume = self.tester.create_volume(self.zone)
             self.device = self.standing_reservation.instances[0].attach_volume(self.volume)
+            for instance in self.standing_reservation.instances:
+                instance.sys("echo " + instance.id  + " > " + self.device)
             self.standing_bucket_name = "failover-bucket-" + self.start_time
             self.standing_bucket = self.tester.create_bucket(self.standing_bucket_name)
             self.standing_key_name = "failover-key-" + self.start_time
@@ -48,15 +59,17 @@ class HAtests(InstanceBasics, BucketTestSuite):
             self.standing_key = self.tester.get_objects_by_prefix(self.standing_bucket_name, self.standing_key_name)
         except Exception, e:
             self.clean_method()
+            raise Exception("Init for testcase failed. Reason: " + str(e))
 
     def clean_method(self):
-        if hasattr(self,"standing_reservation"):
+        if hasattr(self,"standing_reservation") and self.standing_reservation:
             self.tester.terminate_instances(self.standing_reservation)
-        if hasattr(self,"reservation"):
+        if hasattr(self,"reservation") and self.reservation:
             self.tester.terminate_instances(self.reservation)
-        if hasattr(self,"volume"):
+        if hasattr(self,"volume") and self.volume:
             self.tester.delete_volume(self.volume)
         self.servman.start_all()
+        self.servman.all_services_operational()
 
     def clean_testcase(self):
         if self.reservation:
@@ -65,7 +78,7 @@ class HAtests(InstanceBasics, BucketTestSuite):
 
     def run_testcase(self, testcase_callback, **kwargs):
         poll_count = 20
-        poll_interval = 20       
+        poll_interval = 20
         while (poll_count > 0):
             try:
                 testcase_callback(**kwargs)
@@ -81,10 +94,12 @@ class HAtests(InstanceBasics, BucketTestSuite):
         
     def failoverService(self, service_aquisition_callback, testcase_callback, **kwargs):
         ### Process Take down
+
         primary_service = service_aquisition_callback()
         secondary_service = self.tester.service_manager.wait_for_service(primary_service, state="DISABLED")
         self.tester.debug("Primary Service: " + primary_service.machine.hostname + " Secondary Service: " + secondary_service.machine.hostname)
-        primary_service.stop()    
+        self.status("Failing over via service stop: " + str(primary_service.machine.hostname))
+        primary_service.stop()
         
         if "clc" in primary_service.machine.components:
             self.tester.debug("Switching ec2 connection to host: " +  secondary_service.machine.hostname)
@@ -95,19 +110,16 @@ class HAtests(InstanceBasics, BucketTestSuite):
             self.tester.debug("Switching walrus connection to host: " +  secondary_service.machine.hostname)
             self.tester.walrus = secondary_service.machine
             self.tester.s3.host = secondary_service.machine.hostname
-            
-        self.tester.service_manager.wait_for_service(primary_service, state="NOTREADY")
-            
+
         self.run_testcase(testcase_callback, **kwargs)
 
         after_failover = self.tester.service_manager.wait_for_service(primary_service, state="ENABLED")
-          
         if primary_service.hostname is after_failover.hostname:
             self.fail("The enabled CLC was the same before and after the failover")     
 
         ### REMOVE DISABLED LOCK FILE FROM NON ACTIVE CLC AFTER 3.1
-        if not re.search("^3.1", self.version):
-            primary_service.machine.sys("rm -rf " + self.tester.eucapath + "/var/lib/eucalyptus/db/data/disabled.lock")
+        #if not re.search("^3.1", self.version):
+        #    primary_service.machine.sys("rm -rf " + self.tester.eucapath + "/var/lib/eucalyptus/db/data/disabled.lock")
         primary_service.start()
         
         try:
@@ -122,7 +134,7 @@ class HAtests(InstanceBasics, BucketTestSuite):
         primary_service = service_aquisition_callback()
         secondary_service = self.tester.service_manager.wait_for_service(primary_service, state="DISABLED")
         self.tester.debug("Primary Service: " + primary_service.machine.hostname + " Secondary Service: " + secondary_service.machine.hostname)
-        
+        self.status("Failing over via reboot: " + str(primary_service.machine.hostname))
         primary_service.machine.reboot()    
         
         if "clc" in primary_service.machine.components:
@@ -134,12 +146,10 @@ class HAtests(InstanceBasics, BucketTestSuite):
             self.tester.debug("Switching walrus connection to host: " +  secondary_service.machine.hostname)
             self.tester.walrus = secondary_service.machine
             self.tester.s3.host = secondary_service.machine.hostname
-            
-        self.tester.sleep(30)
-            
-        self.run_testcase(testcase_callback, **kwargs)
 
         after_failover =  self.tester.service_manager.wait_for_service(primary_service, state="ENABLED")
+
+        self.run_testcase(testcase_callback, **kwargs)
 
         if primary_service.hostname is after_failover.hostname:
             self.fail("The enabled CLC was the same before and after the failover")     
@@ -154,7 +164,11 @@ class HAtests(InstanceBasics, BucketTestSuite):
         primary_service = service_aquisition_callback()
         secondary_service = self.tester.service_manager.wait_for_service(primary_service, state="DISABLED")
         self.tester.debug("Primary Service: " + primary_service.machine.hostname + " Secondary Service: " + secondary_service.machine.hostname)
-        primary_service.machine.interrupt_network(120)
+        self.status("Failing over via network outage: " + str(primary_service.machine.hostname))
+
+        interrupt_length = 800
+        interrupt_start = int(time.time())
+        primary_service.machine.interrupt_network(interrupt_length)
         
         if "clc" in primary_service.machine.components:
             self.tester.debug("Switching ec2 connection to host: " +  secondary_service.machine.hostname)
@@ -166,15 +180,21 @@ class HAtests(InstanceBasics, BucketTestSuite):
             self.tester.walrus = secondary_service.machine
             self.tester.s3.host = secondary_service.machine.hostname
 
-        self.tester.sleep(60)
-            
+        after_failover = self.servman.wait_for_service(primary_service, state ="ENABLED", timeout=interrupt_length)
+
         self.run_testcase(testcase_callback, **kwargs)
 
-        after_failover =  self.tester.service_manager.wait_for_service(primary_service, state="ENABLED")
-                     
+        testcase_finish = int(time.time()) - interrupt_start
+
+
         if primary_service.hostname is after_failover.hostname:
-            self.fail("The enabled CLC was the same before and after the failover")     
-             
+            self.fail("The enabled CLC was the same before and after the failover")
+
+        outage_window_left = interrupt_length - testcase_finish
+        if outage_window_left > 0:
+            self.status("Sleeping wating for interfaces to come back up")
+            self.tester.sleep(interrupt_length - testcase_finish)
+
         try:
             self.servman.wait_for_service(primary_service, state ="DISABLED")
         except Exception, e:
@@ -196,9 +216,9 @@ class HAtests(InstanceBasics, BucketTestSuite):
         self.servman.all_services_operational()
         
     def failoverCLC(self):
-        self.failoverService(self.servman.get_enabled_clc, self.MetaData)
-        self.post_run_checks()
         self.failoverReboot(self.servman.get_enabled_clc, self.MetaData)
+        self.post_run_checks()
+        self.failoverService(self.servman.get_enabled_clc, self.MetaData)
         self.post_run_checks()
         self.failoverNetwork(self.servman.get_enabled_clc, self.MetaData)
         self.post_run_checks()

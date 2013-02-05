@@ -145,17 +145,18 @@ class EbsTestSuite(EutesterTestCase):
         
     
         #Setup the keypairs for later use
-        try:
-            if (keypair is not None):
-                self.keypair = keypair
-            else:     
-                keys = self.tester.get_all_current_local_keys() 
-                if keys != []:
-                    self.keypair = keys[0]
-                else:
-                    self.keypair = keypair = self.tester.add_keypair('ebs_test_key-' + str(time.time()))
-        except Exception, ke:
-            raise Exception("Failed to find/create a keypair, error:" + str(ke))
+        if not self.inst_pass:
+            try:
+                if (keypair is not None):
+                    self.keypair = keypair
+                else:     
+                    keys = self.tester.get_all_current_local_keys() 
+                    if keys != []:
+                        self.keypair = keys[0]
+                    else:
+                        self.keypair = keypair = self.tester.add_keypair('ebs_test_key-' + str(time.time()))
+            except Exception, ke:
+                raise Exception("Failed to find/create a keypair, error:" + str(ke))
         
         
     def setup_testzones(self):
@@ -229,10 +230,14 @@ class EbsTestSuite(EutesterTestCase):
         inst_pass = inst_pass or self.inst_pass
                 
         vmtype = vmtype or self.vmtype
+        if keypair:
+            keyname = keypair.name
+        else:
+            keyname = None
             
         for testzone in zonelist:
             zone = testzone.name
-            res = self.tester.run_instance(image=image, keypair=keypair.name, group=group, username=username, password=inst_pass, type=vmtype, zone=zone, min=count, max=count)
+            res = self.tester.run_instance(image=image, keypair=keyname, group=group, username=username, password=inst_pass, type=vmtype, zone=zone, min=count, max=count)
             for inst in res.instances:
                 testzone.instances.append(inst)
             self.debug('Created instance: ' + str(inst.id)+" in zone:"+str(zone))
@@ -585,7 +590,7 @@ class EbsTestSuite(EutesterTestCase):
                 for vol in snap.eutest_volumes:
                     self.debug("Checking volume:"+vol.id+" status:"+vol.status)
                     if (vol.zone == zone.name) and (vol.status == "available"):
-                        if i > len(instance = zone.instances)-1:
+                        if i > len(zone.instances)-1:
                             i = 0
                         instance = zone.instances[i]
                         instance.attach_euvolume(vol, timeout=timeout)

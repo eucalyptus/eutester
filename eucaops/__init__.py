@@ -48,8 +48,9 @@ import os
 
 class Eucaops(EC2ops,S3ops,IAMops,STSops):
     
-    def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,  account="eucalyptus", user="admin", username=None, region=None, ec2_ip=None, s3_ip=None, download_creds=True,boto_debug=0):
+    def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,  account="eucalyptus", user="admin", username=None, APIVersion='2010-08-31', region=None, ec2_ip=None, s3_ip=None, download_creds=True,boto_debug=0):
         self.config_file = config_file 
+        self.APIVersion = APIVersion
         self.eucapath = "/opt/eucalyptus"
         self.ssh = None
         self.sftp = None
@@ -62,15 +63,15 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops):
         self.fail_count = 0
         self.start_time = time.time()
         self.key_dir = "./"
-        self.hypervisor = None
         self.clc_index = 0
         self.credpath = credpath
         self.download_creds = download_creds
-        self.logger = eulogger.Eulogger(identifier="EUTESTER")
+        self.logger = eulogger.Eulogger(identifier="EUCAOPS")
         self.debug = self.logger.log.debug
         self.critical = self.logger.log.critical
         self.info = self.logger.log.info
-        
+        self.username = username
+
         if self.config_file is not None:
             ## read in the config file
             self.debug("Reading config file: " + config_file)
@@ -112,11 +113,23 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops):
                 self.service_manager = EuserviceManager(self)
                 self.clc = self.service_manager.get_enabled_clc().machine
                 self.walrus = self.service_manager.get_enabled_walrus().machine 
-        EC2ops.__init__(self, credpath=self.credpath, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, username=username, region=region, ec2_ip=ec2_ip, s3_ip=s3_ip, boto_debug=boto_debug)
+        if self.credpath and not ec2_ip:
+            ec2_ip = self.get_ec2_ip()
+        if self.credpath and not s3_ip:
+            s3_ip = self.get_s3_ip()
+        if self.credpath and not aws_access_key_id:
+            aws_access_key_id = self.get_access_key()
+        if self.credpath and not aws_secret_access_key:
+            aws_secret_access_key = self.get_secret_key()
         self.test_resources = {}
-        self.setup_s3_resource_trackers()
-        self.setup_ec2_resource_trackers()
-    
+        if self.download_creds:
+            self.setup_ec2_connection(endpoint=ec2_ip, path="/services/Eucalyptus", port=8773, is_secure=False, region=region, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, APIVersion=APIVersion, boto_debug=boto_debug)
+            self.setup_ec2_resource_trackers()
+            self.setup_s3_connection(endpoint=s3_ip, path="/services/Walrus", port=8773, is_secure=False,aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,  boto_debug=boto_debug)
+            self.setup_s3_resource_trackers()
+            self.setup_iam_connection(endpoint=ec2_ip, path="/services/Euare", port=8773, is_secure=False, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,  boto_debug=boto_debug)
+            self.setup_sts_connection( endpoint=ec2_ip, path="/services/Eucalyptus", port=8773, is_secure=False, region=region, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
+
     def get_available_vms(self, type=None, zone=None):
         """
         Get available VMs of a certain type or return a dictionary with all types and their available vms

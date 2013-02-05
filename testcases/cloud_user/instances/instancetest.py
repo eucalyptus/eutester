@@ -25,7 +25,7 @@ class InstanceBasics(EutesterTestCase):
                 self.parser.add_argument(arg)
         self.get_args()
         # Setup basic eutester object
-        self.tester = Eucaops( credpath=self.args.credpath)
+        self.tester = Eucaops( credpath=self.args.credpath, config_file=self.args.config,password=self.args.password)
         self.tester.poll_count = 120
 
         ### Add and authorize a group for the instance

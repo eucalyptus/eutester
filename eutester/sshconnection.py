@@ -272,7 +272,7 @@ class SshConnection():
                             status = self.lastexitcode = chan.recv_exit_status()
                             chan.close()
                             break
-                    if newdebug:
+                    if newdebug and verbose:
                         self.debug(str(newdebug))
                         newdebug = ''
                         

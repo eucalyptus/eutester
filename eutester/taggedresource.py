@@ -28,33 +28,45 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 #
-# Author: Vic Iglesias vic.iglesias@eucalyptus.com
-#         
+# Author: vic.iglesias@eucalyptus.com
 
-try:
-    from setuptools import setup
-except ImportError:
-    from distutils.core import setup
-import eutester
+import time
 
-setup(name = "eutester",
-      version = eutester.__version__,
-      description = "Test Framework for AWS compatible clouds",
-      long_description="Test Framework for AWS compatible clouds",
-      author = "Victor Iglesias",
-      author_email = "vic.iglesias@eucalyptus.com",
-      url = "http://open.eucalyptus.com",
-      install_requires = ['paramiko >= 1.7','boto == 2.5.2', 'argparse'],
-      packages = ["eutester","eucaops", "eucaweb", "testcases", "testcases.cloud_admin", "testcases.cloud_user",
-                  "testcases.cloud_user.instances", "testcases.cloud_user.s3",  "testcases.cloud_user.load",  
-                  "testcases.cloud_user.images", "testcases.cloud_user.images.eustore", "testcases.cloud_user.images.windows",
-                  "testcases.cloud_user.ebs"],
-      license = 'BSD (Simplified)',
-      platforms = 'Posix; MacOS X; Windows',
-      classifiers = [ 'Development Status :: 3 - Alpha',
-                      'Intended Audience :: System Administrators',
-                      'License :: OSI Approved :: BSD License',
-                      'Operating System :: OS Independent',
-                      'Topic :: System :: Systems Administration',
-                      ],
-      )
+class TaggedResource():
+    def __init__(self):
+        pass
+
+    def create_tags(self, tags, timeout=600):
+        self.tester.debug("Current tags: " + str(self.tags))
+        self.tester.create_tags([self.id], tags)
+        self.wait_for_tags(tags, timeout=timeout)
+
+    def wait_for_tags(self, tags, creation=True, timeout=60):
+        start= time.time()
+        elapsed = 0
+        while elapsed < timeout:
+            self.update()
+            self.tester.debug("Current tags: " + str(self.tags))
+            found_keys = 0
+            for key, value in tags.iteritems():
+                if key in self.tags:
+                    self.tester.debug("Found key:" + key)
+                    found_keys += 1
+            if creation:
+                if found_keys == len(tags):
+                    return True
+                else:
+                    pass
+            else:
+                if found_keys == 0:
+                    return True
+                else:
+                    pass
+            elapsed = int(time.time() - start)
+            time.sleep(5)
+        raise Exception("Did not apply tags within " + str(timeout) + " seconds")
+
+    def delete_tags(self, tags, timeout=600):
+        self.tester.debug("Current tags: " + str(self.tags))
+        self.tester.delete_tags([self.id], tags)
+        self.wait_for_tags(tags, creation=False, timeout=timeout)
