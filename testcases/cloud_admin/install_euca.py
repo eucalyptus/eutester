@@ -82,16 +82,28 @@ class Install(EutesterTestCase):
             machine.package_manager.install("eucalyptus-nc")
 
     def start_components(self):
-        for machine in self.tester.config["machines"]:
-            if machine.distro.name is "vmware":
-                continue
-            if re.search("cc", " ".join(machine.components)):
-                machine.sys("service eucalyptus-cc start", timeout=480)
-            if re.search("nc", " ".join(machine.components)):
-                machine.sys("service eucalyptus-nc start", timeout=480)
-            if re.search("clc", " ".join(machine.components)) or re.search("ws", " ".join(machine.components))\
-               or re.search("sc", " ".join(machine.components)) or re.search("vb", " ".join(machine.components)):
-                machine.sys("service eucalyptus-cloud start", timeout=480)
+        for machine in self.tester.get_component_machines("nc"):
+            machine.sys("service eucalyptus-nc start", timeout=480)
+        for machine in self.tester.get_component_machines("cc"):
+            machine.sys("service eucalyptus-cc start", timeout=480)
+        for machine in self.tester.get_component_machines("sc"):
+            machine.sys("service eucalyptus-cloud start", timeout=480)
+        for machine in self.tester.get_component_machines("ws"):
+            machine.sys("service eucalyptus-cloud start", timeout=480)
+        for machine in self.tester.get_component_machines("clc"):
+            machine.sys("service eucalyptus-cloud start", timeout=480)
+
+    def stop_components(self):
+        for machine in self.tester.get_component_machines("clc"):
+            machine.sys("service eucalyptus-cloud stop", timeout=480)
+        for machine in self.tester.get_component_machines("sc"):
+            machine.sys("service eucalyptus-cloud stop", timeout=480)
+        for machine in self.tester.get_component_machines("ws"):
+            machine.sys("service eucalyptus-cloud stop", timeout=480)
+        for machine in self.tester.get_component_machines("cc"):
+            machine.sys("service eucalyptus-cc stop", timeout=480)
+        for machine in self.tester.get_component_machines("nc"):
+            machine.sys("service eucalyptus-nc stop", timeout=480)
 
     def initialize_db(self):
         first_clc = self.tester.get_component_machines("clc")[0]
