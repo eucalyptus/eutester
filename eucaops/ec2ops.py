@@ -780,26 +780,22 @@ class EC2ops(Eutester):
         laststatus=None
         while elapsed < timeout:
             volume.update()
-            astatus=None
+            attach_status=None
             if volume.attach_data is not None:
                 if re.search("attached",str(volume.attach_data.status)):
                     self.debug(str(volume) + ", Attached: " +  volume.status+ " - " + str(volume.attach_data.status) + ", elapsed:"+str(elapsed))
                     return True
                 else:
-                    astatus = volume.attach_data.status
-                    if astatus:
-                        laststatus = astatus
-                    elif laststatus and not astatus:
+                    attach_status = volume.attach_data.status
+                    if attach_status:
+                        laststatus = attach_status
+                    elif laststatus and not attach_status:
                         raise Exception('Volume status reverted from '+str(laststatus)+' to None, attach failed')
-            self.debug( str(volume) + ", state:" + volume.status+', attached status:'+str(astatus) + ", elapsed:"+str(elapsed)+'/'+str(timeout))
+            self.debug( str(volume) + ", state:" + volume.status+', attached status:'+str(attach_status) + ", elapsed:"+str(elapsed)+'/'+str(timeout))
             self.sleep(pause)
             elapsed = int(time.time()-start)
 
 
-        """
-
-        volume
-        """
     
     def detach_volume(self, volume, pause = 10, timeout=60):
         """
@@ -1214,8 +1210,11 @@ class EC2ops(Eutester):
         snapshot_list = []
         if snapid:
             snapshot_list.append(snapid)
-        snapshots.extend( self.ec2.get_all_snapshots(snapshot_ids=snapshot_list, owner=owner_id))
+        ec2_snaps =  self.ec2.get_all_snapshots(snapshot_ids=snapshot_list, owner=owner_id)
+        
         for snap in snapshots:
+            if not snap in ec2_snaps:
+                self.debug('Snapshot:'+str(snap.id)+' no longer found on system')
             if not hasattr(snap,'eutest_volume_md5'):
                 snap = EuSnapshot.make_eusnap_from_snap(snap, tester=self)
             self.debug("Checking snap:"+str(snap.id)+" for match...")
@@ -1259,7 +1258,8 @@ class EC2ops(Eutester):
                         snap.delete()
                         break
             for snap in delete_me:
-                snaps.remove(snap)
+                if snap in snaps:
+                    snaps.remove(snap)
             if snaps:
                 buf = "\n-------| WAITING ON "+str(len(snaps))+" SNAPSHOTS TO ENTER A DELETE-ABLE STATE:("+str(valid_states)+"), elapsed:"+ str(elapsed)+'/'+str(wait_for_valid_state)+"|-----"
                 for snap in snaps:
@@ -1490,7 +1490,7 @@ class EC2ops(Eutester):
         self.debug("Allocated " + str(address))
         return address
 
-    def associate_address(self,instance, address, timeout=75):
+    def associate_address(self,instance, address, refresh_ssh=True, timeout=75):
         """
         Associate an address object with an instance
 
@@ -1500,6 +1500,7 @@ class EC2ops(Eutester):
         :raise: Exception in case of association failure
         """
         ip =  str(address.public_ip)
+        old_ip = str(instance.public_dns_name)
         self.debug("Attemtping to associate " + str(ip) + " with " + str(instance.id))
         try:
             address.associate(instance.id)
@@ -1528,7 +1529,17 @@ class EC2ops(Eutester):
             self.sleep(5)
             instance.update()
             elapsed = int(time.time()-start)
-        self.debug("Associated IP successfully")
+            self.debug("Associated IP successfully old_ip:"+str(old_ip)+' new_ip:'+str(instance.public_dns_name))
+        if refresh_ssh:
+            if isinstance(instance, EuInstance):
+                self.debug('Refreshing EuInstance:'+str(instance.id)+' ssh connection to associated addr:'+str(instance.public_dns_name))
+                instance.reset_ssh_connection()
+            else:
+                self.debug('WARNING: associate_address called with refresh_ssh set to true, but instance is not EuInstance type:'+str(instance.id))
+        
+            
+            
+        
 
     def disassociate_address_from_instance(self, instance, timeout=75):
         """
@@ -1805,7 +1816,7 @@ class EC2ops(Eutester):
                 if isinstance(keypair, KeyPair):
                     keypair = keypair.name
                 
-            self.debug( "Attempting to run "+ str(image.root_device_type)  +", image " + str(image) + " in group " + str(group))
+            self.debug( "Attempting to run "+ str(image.root_device_type)  +" image " + str(image) + " in group " + str(group))
             cmdstart=time.time()
             reservation = image.run(key_name=keypair,security_groups=[group],instance_type=type, placement=zone, min_count=min, max_count=max, user_data=user_data, addressing_type=addressing_type)
             self.test_resources["reservations"].append(reservation)
@@ -2262,6 +2273,7 @@ class EC2ops(Eutester):
             zone_names.append(zone.name)
         return zone_names
  
+    @Eutester.printinfo
     def get_instances(self, state=None, idstring=None, reservation=None, rootdevtype=None, zone=None, key=None,
                       pubip=None, privip=None, ramdisk=None, kernel=None, image_id=None ):
         """
