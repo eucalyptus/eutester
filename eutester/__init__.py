@@ -44,6 +44,8 @@ import string
 import socket
 import sys
 import eulogger
+import types
+
 
 
 
@@ -266,6 +268,57 @@ class Eutester(object):
              chars   Array of characters to use in generation of the string
         """
         return ''.join(random.choice(chars) for x in range(size))
+    
+    @classmethod
+    def printinfo(cls, func):
+        '''
+        Decorator to print method positional and keyword args when decorated method is called
+        usage:
+        @printinfo
+        def myfunction(arg1, arg2, kwarg1=defaultval):
+            stuff = dostuff(arg1, arg2, kwarg1)
+            return stuff
+        '''
+        def methdecor(*func_args, **func_kwargs):
+            defaults = func.func_defaults
+            kw_count = len(defaults)
+            arg_count = func.func_code.co_argcount - kw_count
+            var_names = func.func_code.co_varnames[:func.func_code.co_argcount]
+            arg_names = var_names[:arg_count]
+            kw_names =  var_names[arg_count:func.func_code.co_argcount]
+            kw_defaults = {}
+            for kw_name in kw_names: 
+                kw_defaults[kw_name] = defaults[kw_names.index(kw_name)]
+            kw_string = ""
+            for kw in kw_names:
+                kw_string += ', '+str(kw)+'='
+                if kw in func_kwargs:
+                    kw_string += str(func_kwargs[kw])
+                else:
+                    kw_string += str(kw_defaults[kw])
+            arg_string=''
+            for count, arg in enumerate(func_args):
+                #print '{0}. {1}'.format(count, str(arg))
+                
+                if func.func_code.co_varnames[0] == 'self' and count == 0: #and if hasattr(arg, func.func_name):
+                    arg_string += 'self'
+                    obj = arg
+                else:
+                    arg_string += ', '
+                    arg_string += str(arg_names[func_args.index(arg)])+'='+str(arg)
+            debugstring = '('+str(func.func_code.co_filename)+":"+str(func.func_code.co_firstlineno)+") - Starting method: "+str(func.func_name)+"()\n---> "+str(func.func_name)+'('+arg_string+kw_string+')'
+            debugmethod = None
+            if hasattr(obj,'debug'):
+                debug = getattr(obj, 'debug')
+                if isinstance(debug, types.MethodType):
+                    debugmethod = debug
+            if debugmethod:    
+                debugmethod(debugstring)
+            else:
+                print debugstring
+            return func(*func_args, **func_kwargs)
+        return methdecor
+    
         
     def __str__(self):
         """
@@ -281,4 +334,6 @@ class Eutester(object):
         s += "+" + "Credential Path: " +  str(self.credpath) +"\n"
         s += "+++++++++++++++++++++++++++++++++++++++++++++++++++++\n"
         return s
+    
+
 
