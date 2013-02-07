@@ -625,7 +625,7 @@ class EuInstance(Instance, TaggedResource):
     
     def time_dd(self,ddcmd, timeout=90, poll_interval=1, tmpfile=None):
         '''
-        (use dd_monitor intead) Executes dd command on instance, parses and returns stats on dd outcome
+        (Added for legacy support, use dd_monitor instead) Executes dd command on instance, parses and returns stats on dd outcome
         '''
         return self.dd_monitor(ddcmd=ddcmd, poll_interval=poll_interval, tmpfile=tmpfile)
         
@@ -923,20 +923,39 @@ class EuInstance(Instance, TaggedResource):
         
         
     def attach_euvolume_list(self,list,intervoldelay=0, timepervol=90, md5len=32):
+        '''
+        Attempts to attach a list of euvolumes. Due to limitations with KVM and detecting the location/device
+        name of the volume as attached on the guest, MD5 sums are used... 
+        -If volumes contain an md5 will wait intervoldelay seconds
+        before attempting to attach the next volume in the list. 
+        -If the next volume in the list does not have an MD5, the next volume will not be attached until
+        this volume is detected and an md5sum is populated in the euvolume. 
+        
+        :param list: List of volumes to be attached, if volumes are not of type euvolume they will be converted
+        :param intervoldelay : integer representing seconds between each volume attach attempt
+        :param timepervol: time to wait for volume to attach before failing
+        :param md5len: length from head of block device to read when calculating md5
+        
+        '''
         for euvol in list:
-            if not isinstance(euvol, EuVolume) or not euvol.md5:
-                raise Exception("Volumes in list must be of type EuVolume containing an accurate populated md5sum")
+            if not isinstance(euvol, EuVolume): # or not euvol.md5:
+                list[list.index(euvol)] = EuVolume.make_euvol_from_vol(euvol, self.tester)
         for euvol in list:
             dev = self.get_free_scsi_dev()
-            if (self.tester.attach_volume(self, euvolume, dev, pause=10,timeout=timeout)):
-                self.attached_vols.append(euvol)
+            if euvol.md5:
+                #Monitor volume to attached, dont write/read head for md5 use existing. Check md5 sum later in get_unsynced_volumes. 
+                if (self.tester.attach_volume(self, euvolume, dev, pause=10,timeout=timepervol)):
+                    self.attached_vols.append(euvol)
+                else:
+                    raise Exception('attach_euvolume_list: Test Failed to attach volume:'+str(euvolume.id))
             else:
-                raise Exception('attach_euvolume_list: Test Failed to attach volume:'+str(euvolume.id))
-            if delay:
+                #monitor volume to attached and write unique string to head and record it's md5sum 
+                self.attach_euvolume(euvol, dev, timeout=timepervol)
+            if intervoldelay:
                 time.sleep(intervoldelay)
         start = time.time()
         elapsed = 0 
-        badvols = self.get_unsynced_volumes(euvol_list, md5length=md5length, timepervol=timepervol, check_md5=True)
+        badvols = self.get_unsynced_volumes(list, md5length=md5len, timepervol=timepervol, check_md5=True)
         if badvols:
             buf = ""
             for bv in badvols:
@@ -969,7 +988,7 @@ class EuInstance(Instance, TaggedResource):
         found = False
 
         if euvol_list is not None:
-            vol_list.append(euvol_list)
+            vol_list.extend(euvol_list)
         else:
             vol_list = self.attached_vols
         self.debug("Checking for volumes whos state is not in sync with our instance's test state...")
