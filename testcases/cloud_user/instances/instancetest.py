@@ -5,12 +5,11 @@
 #               features for Eucalyptus.  The test cases/modules that are executed can be 
 #               found in the script under the "tests" list.
 
-import unittest
 import time
 from boto.ec2.address import Address
 from eucaops import Eucaops
 from eutester.eutestcase import EutesterTestCase
-from eutester.euvolume import EuVolume
+from eucaops import EC2ops
 import os
 import re
 import random
@@ -25,7 +24,10 @@ class InstanceBasics(EutesterTestCase):
                 self.parser.add_argument(arg)
         self.get_args()
         # Setup basic eutester object
-        self.tester = Eucaops( credpath=self.args.credpath, config_file=self.args.config,password=self.args.password)
+        if self.args.region:
+            self.tester = EC2ops( credpath=self.args.credpath, region=self.args.region, boto_debug=self.args.debug)
+        else:
+            self.tester = Eucaops( credpath=self.args.credpath, boto_debug=self.args.debug)
         self.tester.poll_count = 120
 
         ### Add and authorize a group for the instance
