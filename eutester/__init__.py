@@ -43,6 +43,8 @@ import time
 import string
 import socket
 import sys
+import traceback
+import StringIO
 import eulogger
 import types
 
@@ -275,52 +277,82 @@ class Eutester(object):
         Decorator to print method positional and keyword args when decorated method is called
         usage:
         @printinfo
-        def myfunction(arg1, arg2, kwarg1=defaultval):
+        def myfunction(self, arg1, arg2, kwarg1=defaultval):
             stuff = dostuff(arg1, arg2, kwarg1)
             return stuff
+        When the method is run it will produce debug output showing info as to how the method was called, example:
+        
+        myfunction(arg1=123, arg2='abc', kwarg='words)
+        
+        2013-02-07 14:46:58,928] [DEBUG]:(mydir/myfile.py:1234) - Starting method: myfunction()
+        2013-02-07 14:46:58,928] [DEBUG]:---> myfunction(self, arg1=123, arg2=abc, kwarg='words')
+    
         '''
         def methdecor(*func_args, **func_kwargs):
-            defaults = func.func_defaults
-            kw_count = len(defaults)
-            arg_count = func.func_code.co_argcount - kw_count
-            var_names = func.func_code.co_varnames[:func.func_code.co_argcount]
-            arg_names = var_names[:arg_count]
-            kw_names =  var_names[arg_count:func.func_code.co_argcount]
-            kw_defaults = {}
-            for kw_name in kw_names: 
-                kw_defaults[kw_name] = defaults[kw_names.index(kw_name)]
-            kw_string = ""
-            for kw in kw_names:
-                kw_string += ', '+str(kw)+'='
-                if kw in func_kwargs:
-                    kw_string += str(func_kwargs[kw])
+            try:
+                defaults = func.func_defaults
+                kw_count = len(defaults)
+                arg_count = func.func_code.co_argcount - kw_count
+                var_names = func.func_code.co_varnames[:func.func_code.co_argcount]
+                arg_names = var_names[:arg_count]
+                kw_names =  var_names[arg_count:func.func_code.co_argcount]
+                kw_defaults = {}
+                for kw_name in kw_names: 
+                    kw_defaults[kw_name] = defaults[kw_names.index(kw_name)]
+                arg_string=''
+                #iterate on func_args instead of arg_names to make sure we pull out self object if present
+                for count, arg in enumerate(func_args):
+                    if count == 0 and var_names[0] == 'self': #and if hasattr(arg, func.func_name):
+                        #self was passed don't print obj addr, and save obj for later
+                        arg_string += 'self'
+                        selfobj = arg
+                    elif count >= arg_count:
+                        #Handle case where kw args are passed w/o key word as a positional arg add 
+                        #Add it to the kw_defaults so it gets printed later
+                        kw_defaults[var_names[count]] = arg
+                    else:
+                        #This is a positional arg so grab name from arg_names list
+                        arg_string += ', '
+                        arg_string += str(arg_names[count])+'='+str(arg)
+                kw_string = ""
+                for kw in kw_names:
+                    kw_string += ', '+str(kw)+'='
+                    if kw in func_kwargs:
+                        kw_string += str(func_kwargs[kw])
+                    else:
+                        kw_string += str(kw_defaults[kw])
+                debugstring = '('+str(func.func_code.co_filename)+":"+str(func.func_code.co_firstlineno)+") - Starting method: "+str(func.func_name)+"()\n---> "+str(func.func_name)+'('+arg_string+kw_string+')'
+                debugmethod = None
+                if hasattr(selfobj,'debug'):
+                    debug = getattr(selfobj, 'debug')
+                    if isinstance(debug, types.MethodType):
+                        debugmethod = debug
+                if debugmethod:    
+                    debugmethod(debugstring)
                 else:
-                    kw_string += str(kw_defaults[kw])
-            arg_string=''
-            for count, arg in enumerate(func_args):
-                #print '{0}. {1}'.format(count, str(arg))
-                
-                if func.func_code.co_varnames[0] == 'self' and count == 0: #and if hasattr(arg, func.func_name):
-                    arg_string += 'self'
-                    obj = arg
-                else:
-                    arg_string += ', '
-                    arg_string += str(arg_names[func_args.index(arg)])+'='+str(arg)
-            debugstring = '('+str(func.func_code.co_filename)+":"+str(func.func_code.co_firstlineno)+") - Starting method: "+str(func.func_name)+"()\n---> "+str(func.func_name)+'('+arg_string+kw_string+')'
-            debugmethod = None
-            if hasattr(obj,'debug'):
-                debug = getattr(obj, 'debug')
-                if isinstance(debug, types.MethodType):
-                    debugmethod = debug
-            if debugmethod:    
-                debugmethod(debugstring)
-            else:
-                print debugstring
+                    print debugstring
+            except Exception, e:
+                print Eutester.get_traceback()
+                print 'printinfo method decorator error:'+str(e)
             return func(*func_args, **func_kwargs)
         return methdecor
     
-        
+    @classmethod
+    def get_traceback(cls):
+        '''
+        Returns a string buffer with traceback, to be used for debug/info purposes. 
+        '''
+        try:
+            out = StringIO.StringIO()
+            traceback.print_exception(*sys.exc_info(),file=out)
+            out.seek(0)
+            buf = out.read()
+        except Exception, e:
+                buf = "Could not get traceback"+str(e)
+        return str(buf) 
+    
     def __str__(self):
+        return 'got self'
         """
         Prints informations about configuration of Eucateser as configuration file,
         how many errors, the path of the Eucalyptus, and the path of the user credentials
@@ -328,7 +360,7 @@ class Eutester(object):
         s  = "+++++++++++++++++++++++++++++++++++++++++++++++++++++\n"
         s += "+" + "Eucateser Configuration" + "\n"
         s += "+" + "+++++++++++++++++++++++++++++++++++++++++++++++\n"
-        s += "+" + "Config File: " + self.config_file +"\n"
+        s += "+" + "Config File: " + str(self.config_file) +"\n"
         s += "+" + "Fail Count: " +  str(self.fail_count) +"\n"
         s += "+" + "Eucalyptus Path: " +  str(self.eucapath) +"\n"
         s += "+" + "Credential Path: " +  str(self.credpath) +"\n"
