@@ -13,6 +13,8 @@ class Install(EutesterTestCase):
         self.parser.add_argument("--branch")
         self.parser.add_argument("--nogpg",action='store_true')
         self.parser.add_argument("--nightly",action='store_true')
+        self.parser.add_argument("--lvm-extents")
+        self.parser.add_argument("--root-lv")
         if extra_args:
             for arg in extra_args:
                 self.parser.add_argument(arg)
@@ -118,6 +120,10 @@ class Install(EutesterTestCase):
             nc.sys("service network restart")
 
     def extend_logical_volume(self, logical_volume="/dev/vg01/lv_root", extents="50%FREE"):
+        if self.args.root_lv:
+            logical_volume = self.args.root_lv
+        if self.args.lv_extents:
+            logical_volume= self.args.lv_extents
         for machine in self.tester.config["machines"]:
             machine.sys("lvextend " + logical_volume + " -l" + extents )
             machine.sys("resize2fs -f " + logical_volume, timeout=12000)
@@ -221,7 +227,7 @@ class Install(EutesterTestCase):
 if __name__ == "__main__":
     testcase = Install()
     ### Either use the list of tests passed from config/command line to determine what subset of tests to run
-    list = testcase.args.tests or [ "InstallEuca"]
+    list = testcase.args.tests or ["InstallEuca"]
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
     for test in list:
