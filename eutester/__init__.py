@@ -321,7 +321,7 @@ class Eutester(object):
                         kw_string += str(func_kwargs[kw])
                     else:
                         kw_string += str(kw_defaults[kw])
-                debugstring = '('+str(func.func_code.co_filename)+":"+str(func.func_code.co_firstlineno)+") - Starting method: "+str(func.func_name)+"()\n---> "+str(func.func_name)+'('+arg_string+kw_string+')'
+                debugstring = '\n--->('+str(os.path.basename(func.func_code.co_filename))+":"+str(func.func_code.co_firstlineno)+")Starting method: "+str(func.func_name)+'('+arg_string+kw_string+')'
                 debugmethod = None
                 if hasattr(selfobj,'debug'):
                     debug = getattr(selfobj, 'debug')
