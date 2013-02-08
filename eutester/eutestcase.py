@@ -329,7 +329,8 @@ class EutesterTestCase(unittest.TestCase):
                    testlist=True,
                    userdata=True,
                    instance_user=True,
-                   instance_password=True):
+                   instance_password=True,
+                   region=True):
         '''
         Description: Convenience method to setup argparse parser and some canned default arguments, based
         upon the boolean values provided. For each item marked as 'True' this method will add pre-defined 
@@ -434,8 +435,11 @@ class EutesterTestCase(unittest.TestCase):
                                 help="Username used for ssh login. Default:'root'", default='root')
         if instance_password:
             parser.add_argument('--instance_passsword',
-                                help="Password used for ssh login. When value is 'None' ssh keypair will be used and not username/password, default:'None'", default=None)   
-        if color: 
+                                help="Password used for ssh login. When value is 'None' ssh keypair will be used and not username/password, default:'None'", default=None)
+        if region:
+            parser.add_argument('--region',
+                help="Use AWS region instead of Eucalyptus", default=None)
+        if color:
             parser.add_argument('--use_color', dest='use_color', action='store_true', default=False)
         self.parser = parser  
         return parser
