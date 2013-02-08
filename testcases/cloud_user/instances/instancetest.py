@@ -25,9 +25,9 @@ class InstanceBasics(EutesterTestCase):
         self.get_args()
         # Setup basic eutester object
         if self.args.region:
-            self.tester = EC2ops( credpath=self.args.credpath, region=self.args.region, boto_debug=self.args.debug)
+            self.tester = EC2ops( credpath=self.args.credpath, region=self.args.region)
         else:
-            self.tester = Eucaops( credpath=self.args.credpath, boto_debug=self.args.debug)
+            self.tester = Eucaops( credpath=self.args.credpath)
         self.tester.poll_count = 120
 
         ### Add and authorize a group for the instance
