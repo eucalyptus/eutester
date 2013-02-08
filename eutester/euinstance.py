@@ -484,7 +484,7 @@ class EuInstance(Instance, TaggedResource):
         bad_vol_ids = []
         start = time.time()
         if verify_vols:
-            self.debug('Checking euinstance attached volume state is in sync with clouds...')
+            self.debug('Checking euinstance attached volumes states are in sync with clouds...')
             for vol in self.attached_vols:
                 try:
                     self.verify_attached_vol_cloud_status(vol)
@@ -495,6 +495,7 @@ class EuInstance(Instance, TaggedResource):
         self.tester.terminate_single_instance(self, timeout=timeout)
         elapsed = int(time.time()-start)
         if self.bdm_vol:
+            #check for bfebs backing volume state
             if self.block_device_mapping.current_value.delete_on_termination:
                 vol_state='deleted'
             else:
@@ -506,18 +507,26 @@ class EuInstance(Instance, TaggedResource):
                 self.bdm_vol.update()
                 time.sleep(5)
         if verify_vols:
-            for vol in self.attached_vols:
-                if vol in bad_vols:
-                    continue
-                while (vol.status != 'available') and (elapsed < timeout):
-                    time.sleep(5)
-                    vol.update()
+            self.debug('Waiting for attached volumes to go to available...')
+            while self.attached_vols and (elapsed < timeout): 
+                for vol in self.attached_vols:
                     elapsed = int(time.time()-start)
-                if vol.status != 'available':
-                    raise Exception("volume:"+str(vol.id)+", did not enter available state after terminating:"+str(self.id))
-                self.debug('Previously attached volume:'+str(vol.id)+" has gone to status:"+str(vol.status))
-            if bad_vols:
-                raise Exception("Check test code. Unsync'd volumes found before terminating:"+",".join(bad_vol_ids))
+                    vol.update()
+                    self.debug(str(self.id)+' terminated, waiting for attached volume:'+str(vol.id)+ ', status:'+str(vol.status))
+                    if vol.status == 'available':
+                        self.attached_vols.remove(vol)
+                if self.attached_vols and (elapsed < timeout):
+                        time.sleep(5)
+            
+            if self.attached_vols or bad_vols:
+                if bad_vols:
+                    bad_vol_error = 'ERROR: Unsynced volumes found prior to issuing terminate, check test code:'+",".join(bad_vol_ids)
+                if self.attached_vols:
+                    attached_vol_error += 'ERROR: Volumes did not become available after instance was terminated:'
+                    for vol in self.attached_vols:
+                        attached_vol_error += str(vol.id)+':'+str(vol.status)+", "                        
+                raise Exception(str(self.id)+", volume errors found during instance terminate:\n"+bad_vol_error+"\n"+attached_vol_error )
+                
                 
         
     def get_guestdevs_inuse_by_vols(self):
