@@ -894,7 +894,7 @@ class EuInstance(Instance, TaggedResource):
         checkvolstatus - optional -boolean to be used to check volume status post start up
         '''
         msg=""
-        self.debug('Attempting to reboot instance:'+str(self.id))
+        self.debug('Attempting to reboot instance:'+str(self.id)+', check attached volume state first')
         uptime = int(self.sys('cat /proc/uptime')[0].split()[1].split('.')[0])
         elapsed = 0
         start = time.time()
@@ -905,6 +905,7 @@ class EuInstance(Instance, TaggedResource):
                 for bv in bad_vols:
                     self.debug(str(self.id)+'Unsynced volume found:'+str(bv.id))
                 raise Exception(str(self.id)+"Could not reboot using checkvolstatus flag due to unsync'd volumes")
+        self.debug('Rebooting now...')
         self.reboot()
         time.sleep(waitconnect)
         self.connect_to_instance(timeout=timeout)
