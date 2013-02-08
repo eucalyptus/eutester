@@ -1,7 +1,4 @@
 #!/usr/bin/python
-from Queue import Queue
-import unittest
-import re
 from instancetest import InstanceBasics
 
 class BFEBSBasics(InstanceBasics):
@@ -34,6 +31,8 @@ class BFEBSBasics(InstanceBasics):
             snapshot = self.tester.create_snapshot(self.volume.id)
             image_id = self.tester.register_snapshot(snapshot)
         self.image = self.tester.get_emi(image_id)
+        self.tester.terminate_instances(self.reservation)
+        self.reservation = None
 
     def StopStart(self, zone = None):
         '''Launch a BFEBS instance, stop it then start it again'''
@@ -48,8 +47,6 @@ class BFEBSBasics(InstanceBasics):
             self.tester.terminate_instances(self.reservation)
         self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name, zone=zone)
         self.assertTrue(self.tester.stop_instances(self.reservation))
-        #self.assertEquals( self.reservation.instances[0].ip_address, "",'Instance was left with public ip when stopped +')
-        #self.assertEquas( self.reservation.instances[0].private_ip_address, "" ,'Instance was left with private ip when stopped')
         for instance in self.reservation.instances:
             if instance.ip_address or instance.private_ip_address:
                 raise Exception("Instance had a public " + str(instance.ip_address) + " private " + str(instance.private_ip_address) )

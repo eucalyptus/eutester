@@ -1,4 +1,4 @@
- # Software License Agreement (BSD License)
+# Software License Agreement (BSD License)
 #
 # Copyright (c) 2009-2011, Eucalyptus Systems, Inc.
 # All rights reserved.
@@ -31,27 +31,27 @@
 # Author: vic.iglesias@eucalyptus.com
 
 
-from eutester import Eutester
 import time
 import re
 import os
 import copy
 import socket
-import struct
 import types
 import sys
 from datetime import datetime
+
 from boto.ec2.image import Image
 from boto.ec2.keypair import KeyPair
 from boto.ec2.blockdevicemapping import BlockDeviceMapping, BlockDeviceType
 from boto.ec2.volume import Volume
 from boto.exception import EC2ResponseError
+from boto.ec2.regioninfo import RegionInfo
+import boto
+
+from eutester import Eutester
 from eutester.euinstance import EuInstance
 from eutester.euvolume import EuVolume
 from eutester.eusnapshot import EuSnapshot
-from eutester.eutestcase import EutesterTestCase
-from boto.ec2.regioninfo import RegionInfo
-import boto
 
 
 EC2RegionData = {
@@ -62,20 +62,30 @@ EC2RegionData = {
     'ap-southeast-1' : 'ec2.ap-southeast-1.amazonaws.com'}
 
 class EC2ops(Eutester):
-    
+
     @Eutester.printinfo
-    def __init__(self, host=None, credpath=None, endpoint=None, aws_access_key_id=None, aws_secret_access_key = None, username="root",region=None,
-                 is_secure=False, path='/', port=80, boto_debug=0, APIVersion = '2012-07-20'):
-        super(EC2ops, self).__init__(credpath=credpath, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key)
-        self.setup_ec2_connection(host= host, region=region, endpoint=endpoint, aws_access_key_id=aws_access_key_id ,
-                                    aws_secret_access_key=self.aws_secret_access_key, is_secure=is_secure, path=path, port=port,
-                                    boto_debug=boto_debug, APIVersion=APIVersion)
+    def __init__(self, host=None, credpath=None, endpoint=None, aws_access_key_id=None, aws_secret_access_key = None,
+                 username="root",region=None, is_secure=False, path='/', port=80, boto_debug=0, APIVersion = '2012-07-20'):
+        super(EC2ops, self).__init__(credpath=credpath,
+                                     aws_access_key_id=aws_access_key_id,
+                                     aws_secret_access_key=aws_secret_access_key)
+
+        self.setup_ec2_connection(host= host,
+                                  region=region,
+                                  endpoint=endpoint,
+                                  aws_access_key_id=self.aws_access_key_id ,
+                                  aws_secret_access_key=self.aws_secret_access_key,
+                                  is_secure=is_secure,
+                                  path=path,
+                                  port=port,
+                                  boto_debug=boto_debug,
+                                  APIVersion=APIVersion)
         self.poll_count = 48
         self.username = username
         self.test_resources = {}
         self.setup_ec2_resource_trackers()
         self.key_dir = "./"
-        self.ec2_source_ip = None #Source ip on local test machine used to reach instances
+        self.ec2_source_ip = None  #Source ip on local test machine used to reach instances
 
 
     @Eutester.printinfo
@@ -118,7 +128,9 @@ class EC2ops(Eutester):
             self.ec2 = boto.connect_ec2(**ec2_connection_args)
         except Exception, e:
             self.critical("Was unable to create ec2 connection because of exception: " + str(e))
-        self.ec2_source_ip = None #Source ip on local test machine used to reach instances
+
+        #Source ip on local test machine used to reach instances
+        self.ec2_source_ip = None
 
     def setup_ec2_resource_trackers(self):
         """
@@ -138,7 +150,7 @@ class EC2ops(Eutester):
         :param resource_ids:      List of resources IDs to tag
         :param tags:              Dict of key value pairs to add, for just a name include a key with a '' value
         """
-        self.debug("Adding the following tags:" + str(tags) )
+        self.debug("Adding the following tags:" + str(tags))
         self.debug("To Resources: " + str(resource_ids))
         self.ec2.create_tags(resource_ids=resource_ids, tags=tags)
 
@@ -149,11 +161,11 @@ class EC2ops(Eutester):
         :param resource_ids:      List of resources IDs to tag
         :param tags:              Dict of key value pairs to add, for just a name include a key with a '' value
         """
-        self.debug("Deleting the following tags:" + str(tags) )
+        self.debug("Deleting the following tags:" + str(tags))
         self.debug("From Resources: " + str(resource_ids))
         self.ec2.delete_tags(resource_ids=resource_ids, tags=tags)
 
-    def add_keypair(self,key_name=None):
+    def add_keypair(self, key_name=None):
         """
         Add a keypair with name key_name unless it already exists
 
@@ -161,7 +173,7 @@ class EC2ops(Eutester):
         """
         if key_name is None:
             key_name = "keypair-" + str(int(time.time())) 
-        self.debug(  "Looking up keypair " + key_name )
+        self.debug("Looking up keypair " + key_name)
         key = []
         try:
             key = self.ec2.get_all_key_pairs(keynames=[key_name])    
@@ -284,7 +296,8 @@ class EC2ops(Eutester):
         :return: decrypted password
         :raise: Exception when private key cannot be found on filesystem
         """
-        self.debug("get_windows_instance_password, instance:"+str(instance.id)+", keypath:"+str(private_key_path)+", dir:"+str(dir)+", exten:"+str(exten)+", encoded:"+str(encoded))
+        self.debug("get_windows_instance_password, instance:"+str(instance.id)+", keypath:"+str(private_key_path)+
+                   ", dir:"+str(dir)+", exten:"+str(exten)+", encoded:"+str(encoded))
         try:
             from M2Crypto import RSA
             import base64
@@ -575,17 +588,17 @@ class EC2ops(Eutester):
     
     @Eutester.printinfo
     def monitor_created_euvolumes_to_state(self, volumes, eof=True, mincount=None, state='available', poll_interval=10, deletefailed=True, size=1, timepergig=120):
-        '''
+        """
         Description:
                     Monitors a list of created volumes until 'state' or failure. Allows for a variety of volumes, using differnt
-                     types and creation methods to be monitored by a central method. 
+                     types and creation methods to be monitored by a central method.
         :param volumes: list of created volumes
         :param eof: boolean, if True will end on first failure
         :param mincount: minimum number of successful volumes, else fail
-        :param state: string indicating the expected state to monitor to 
-        :param deletefailed: delete all failed volumes, in eof case deletes 'volumes' list. In non-eof, if mincount is met, will delete any failed volumes. 
+        :param state: string indicating the expected state to monitor to
+        :param deletefailed: delete all failed volumes, in eof case deletes 'volumes' list. In non-eof, if mincount is met, will delete any failed volumes.
         :param timepergig: integer, time allowed per gig before failing.
-        '''
+        """
         
         retlist = []
         failed = []
@@ -771,12 +784,7 @@ class EC2ops(Eutester):
         volumes = self.ec2.get_all_volumes()
         for volume in volumes:
             self.delete_volume(volume.id)
-        """
 
-        instance
-        volume
-        device_path
-        """
         
     @Eutester.printinfo    
     def attach_volume(self, instance, volume, device_path, pause=10, timeout=120):
@@ -815,8 +823,6 @@ class EC2ops(Eutester):
             self.sleep(pause)
             elapsed = int(time.time()-start)
 
-
-    
     def detach_volume(self, volume, pause = 10, timeout=60):
         """
         Detach a volume
@@ -843,15 +849,15 @@ class EC2ops(Eutester):
         raise Exception('Volume status remained at '+str(volume.status)+', attach failed')
     
     def get_volume_time_attached(self,volume):
-        '''
+        """
         Get the seconds elapsed since the volume was attached.
-        
+
         :type volume: boto volume object
-        :param volume: The volume used to calculate the elapsed time since attached. 
-        
+        :param volume: The volume used to calculate the elapsed time since attached.
+
         :rtype: integer
-        :returns: The number of seconds elapsed since this volume was attached. 
-        '''
+        :returns: The number of seconds elapsed since this volume was attached.
+        """
         self.debug("Getting time elapsed since volume attached...")
         volume.update()
         if volume.attach_data is None:
@@ -863,15 +869,15 @@ class EC2ops(Eutester):
     
     @classmethod
     def get_volume_time_created(cls,volume):
-        '''
+        """
         Get the seconds elapsed since the volume was created.
-        
+
         :type volume: boto volume object
-        :param volume: The volume used to calculate the elapsed time since created. 
-        
+        :param volume: The volume used to calculate the elapsed time since created.
+
         :rtype: integer
-        :returns: The number of seconds elapsed since this volume was created. 
-        '''
+        :returns: The number of seconds elapsed since this volume was created.
+        """
         volume.update()
         #get timestamp from attach_data
         create_time = cls.get_datetime_from_resource_string(volume.create_time)
@@ -880,15 +886,15 @@ class EC2ops(Eutester):
     
     @classmethod
     def get_snapshot_time_started(cls,snapshot):
-        '''
+        """
         Get the seconds elapsed since the snapshot was started.
-        
+
         :type snapshot: boto snapshot object
-        :param snapshot: The volume used to calculate the elapsed time since started. 
-        
+        :param snapshot: The volume used to calculate the elapsed time since started.
+
         :rtype: integer
-        :returns: The number of seconds elapsed since this snapshot was started. 
-        '''
+        :returns: The number of seconds elapsed since this snapshot was started.
+        """
         snapshot.update()
         #get timestamp from attach_data
         start_time = cls.get_datetime_from_resource_string(snapshot.start_time)
@@ -897,15 +903,15 @@ class EC2ops(Eutester):
     
     @classmethod
     def get_instance_time_launched(cls,instance):
-        '''
+        """
         Get the seconds elapsed since the volume was attached.
-        
+
         :type volume: boto volume object
-        :param volume: The volume used to calculate the elapsed time since attached. 
-        
+        :param volume: The volume used to calculate the elapsed time since attached.
+
         :rtype: integer
-        :returns: The number of seconds elapsed since this volume was attached. 
-        '''
+        :returns: The number of seconds elapsed since this volume was attached.
+        """
         #instance.update()
         #get timestamp from launch data
         launch_time = cls.get_datetime_from_resource_string(instance.launch_time)
@@ -914,15 +920,15 @@ class EC2ops(Eutester):
     
     @classmethod
     def get_datetime_from_resource_string(cls,timestamp):
-        '''
+        """
         Convert a typical resource timestamp to datetime time_struct.
-        
+
         :type timestamp: string
         :param timestamp: Timestamp held within specific boto resource objects.Example timestamp format: 2012-09-19T21:24:03.864Z
-        
+
         :rtype: time_struct
-        :returns: The time_struct representation of the timestamp provided. 
-        '''
+        :returns: The time_struct representation of the timestamp provided.
+        """
         t = re.findall('\w+',str(timestamp).replace('T',' '))
         #remove milliseconds from list...
         t.pop()
@@ -1342,33 +1348,12 @@ class EC2ops(Eutester):
         """
         snapshot.delete()
         self.debug( "Sent snapshot delete request for snapshot: " + snapshot.id)
-        '''
-        start = time.time()
-        elapsed = 0
-        while ( len(self.ec2.get_all_snapshots(snapshot_ids=[snapshot.id])) > 0) and (elapsed < timeout):
-            self.sleep(10)
-            elapsed = int(time.time()-start)
-            self.debug(str(snapshot) + " status " +  snapshot.status + " with " + str(snapshot.progress) + "% progress. Elapsed:"+str(elapsed))
-        if len(self.ec2.get_all_snapshots(snapshot_ids=[snapshot.id])) > 0:
-            raise Exception(str(snapshot) + " left in" +  snapshot.status + " with " + str(snapshot.progress) + "% progress. Elapsed:"+str(elapsed))
-        '''
-        return self.delete_snapshots([snapshot],basetimeout=60)
+        return self.delete_snapshots([snapshot], base_timeout=60)
     
     @Eutester.printinfo
     def register_snapshot(self, snapshot, rdn="/dev/sda1", description="bfebs", windows=False, bdmdev=None, name=None, ramdisk=None, kernel=None, dot=True):
         """Convience function for passing a snapshot instead of its id. See register_snapshot_by_id"""
         return self.register_snapshot_by_id( snapshot.id, rdn, description, windows, bdmdev, name, ramdisk, kernel, dot )
-    """
-
-    snap_id
-    name
-    description    (optional string)
-    bdmdev         (optional string)
-    rdn            (optional string)
-    dot            (optional boolean)
-    windows        (optional boolean)
-    kernel         (optional string)
-    """
     
     @Eutester.printinfo
     def register_snapshot_by_id( self, snap_id, rdn="/dev/sda1", description="bfebs", windows=False, bdmdev=None, name=None, ramdisk=None, kernel=None, dot=True ):
@@ -2032,13 +2017,11 @@ class EC2ops(Eutester):
         
     @Eutester.printinfo                    
     def does_sec_group_allow(self, group, src, protocol='tcp', port=22):
-        '''
+        """
         Test whether a security group will allow traffic from a specific 'src' ip address to
         a specific 'port' using a specific 'protocol'
-        '''
-        #self.debug('does_sec_group_allow: sec_group:'+str(group.name)+", from_src:"+str(src)+", proto:"+str(protocol)+", port:"+str(port))
-        #refresh group in case group rules have changed...
-        group = self.get_security_group(id=group.id, name=group.name)
+        """
+	group = self.get_security_group(id=group.id, name=group.name)
         g_buf =""
         for rule in group.rules:
             if rule.ip_protocol == protocol:
@@ -2140,7 +2123,7 @@ class EC2ops(Eutester):
                     if eof:
                         self.debug("EOF set to True, monitor_euinstances_to_state ending...")
                         raise e
-                    if (len(instance_list) - len(failed) > min):
+                    if len(instance_list) - len(failed) > min:
                         self.debug('Failed instances has exceeded allowed minimum('+str(min)+") monitor_euinstances_to_state ending...")
                         raise e
                     else:
@@ -2162,7 +2145,7 @@ class EC2ops(Eutester):
                 failmsg += str(instance.id)+","
             if eof:
                 raise Exception(failmsg)
-            if (len(instance_list) - len(failed) > min):
+            if len(instance_list) - len(failed) > min:
                 self.debug('Failed instances has exceeded allowed minimum('+str(min)+") monitor_euinstances_to_state ending...")
                 raise Exception(failmsg)
             else:
@@ -2228,11 +2211,11 @@ class EC2ops(Eutester):
         self.debug('Wait_for_valid_ip done')
                 
     def check_system_for_dup_ip(self, instances=None):
-        '''
-        Check system for instances with conflicting duplicate IPs. Will raise exception at end of iterating through all running, pending, or starting instances with info 
-        as to which instances and IPs conflict. 
+        """
+        Check system for instances with conflicting duplicate IPs. Will raise exception at end of iterating through all running, pending, or starting instances with info
+        as to which instances and IPs conflict.
         If a list of instances is provided, all other conflicting IPS will be ignored and will only raise an exception for conflicts with the provided instance 'inst'
-        '''
+        """
         errbuf = ""
         publist = {}
         privlist = {}
@@ -2245,7 +2228,7 @@ class EC2ops(Eutester):
                 if instance.state == 'running' or instance.state == 'pending' or instance.state == 'starting':
                     if instance.public_dns_name != '0.0.0.0':
                         if instance.public_dns_name in publist:
-                            errbuf += "PUBLIC:"+str(instance.id)+"/"+str(instance.state)+"="+str(instance.public_dns_name)+" vs: "+str(publist[instance_public_dns_name])+"\n"
+                            errbuf += "PUBLIC:"+str(instance.id)+"/"+str(instance.state)+"="+str(instance.public_dns_name)+" vs: "+str(publist[instance.public_dns_name])+"\n"
                             if instances and (instance in instances):
                                 raise Exception("PUBLIC:"+str(instance.id)+"/"+str(instance.state)+"="+str(instance.public_dns_name)+" vs: "+str(publist[instance_public_dns_name]))    
                         else:
@@ -2424,7 +2407,6 @@ class EC2ops(Eutester):
                 print str(item)+" = "+str(obj.__dict__[item])
             buf += str(item)+" = "+str(obj.__dict__[item])+"\n"
         return buf
-    
     
 
     def terminate_instances(self, reservation=None, timeout=480):

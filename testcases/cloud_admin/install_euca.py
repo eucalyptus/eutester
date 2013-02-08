@@ -13,6 +13,8 @@ class Install(EutesterTestCase):
         self.parser.add_argument("--branch")
         self.parser.add_argument("--nogpg",action='store_true')
         self.parser.add_argument("--nightly",action='store_true')
+        self.parser.add_argument("--lvm-extents")
+        self.parser.add_argument("--root-lv")
         if extra_args:
             for arg in extra_args:
                 self.parser.add_argument(arg)
@@ -82,16 +84,28 @@ class Install(EutesterTestCase):
             machine.package_manager.install("eucalyptus-nc")
 
     def start_components(self):
-        for machine in self.tester.config["machines"]:
-            if machine.distro.name is "vmware":
-                continue
-            if re.search("cc", " ".join(machine.components)):
-                machine.sys("service eucalyptus-cc start", timeout=480)
-            if re.search("nc", " ".join(machine.components)):
-                machine.sys("service eucalyptus-nc start", timeout=480)
-            if re.search("clc", " ".join(machine.components)) or re.search("ws", " ".join(machine.components))\
-               or re.search("sc", " ".join(machine.components)) or re.search("vb", " ".join(machine.components)):
-                machine.sys("service eucalyptus-cloud start", timeout=480)
+        for machine in self.tester.get_component_machines("nc"):
+            machine.sys("service eucalyptus-nc start", timeout=480)
+        for machine in self.tester.get_component_machines("cc"):
+            machine.sys("service eucalyptus-cc start", timeout=480)
+        for machine in self.tester.get_component_machines("sc"):
+            machine.sys("service eucalyptus-cloud start", timeout=480)
+        for machine in self.tester.get_component_machines("ws"):
+            machine.sys("service eucalyptus-cloud start", timeout=480)
+        for machine in self.tester.get_component_machines("clc"):
+            machine.sys("service eucalyptus-cloud start", timeout=480)
+
+    def stop_components(self):
+        for machine in self.tester.get_component_machines("clc"):
+            machine.sys("service eucalyptus-cloud stop", timeout=480)
+        for machine in self.tester.get_component_machines("sc"):
+            machine.sys("service eucalyptus-cloud stop", timeout=480)
+        for machine in self.tester.get_component_machines("ws"):
+            machine.sys("service eucalyptus-cloud stop", timeout=480)
+        for machine in self.tester.get_component_machines("cc"):
+            machine.sys("service eucalyptus-cc stop", timeout=480)
+        for machine in self.tester.get_component_machines("nc"):
+            machine.sys("service eucalyptus-nc stop", timeout=480)
 
     def initialize_db(self):
         first_clc = self.tester.get_component_machines("clc")[0]
@@ -106,6 +120,10 @@ class Install(EutesterTestCase):
             nc.sys("service network restart")
 
     def extend_logical_volume(self, logical_volume="/dev/vg01/lv_root", extents="50%FREE"):
+        if self.args.root_lv:
+            logical_volume = self.args.root_lv
+        if self.args.lv_extents:
+            logical_volume= self.args.lv_extents
         for machine in self.tester.config["machines"]:
             machine.sys("lvextend " + logical_volume + " -l" + extents )
             machine.sys("resize2fs -f " + logical_volume, timeout=12000)
@@ -209,7 +227,7 @@ class Install(EutesterTestCase):
 if __name__ == "__main__":
     testcase = Install()
     ### Either use the list of tests passed from config/command line to determine what subset of tests to run
-    list = testcase.args.tests or [ "InstallEuca"]
+    list = testcase.args.tests or ["InstallEuca"]
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
     for test in list:

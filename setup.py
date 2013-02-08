@@ -35,9 +35,10 @@ try:
     from setuptools import setup
 except ImportError:
     from distutils.core import setup
+import eutester
 
 setup(name = "eutester",
-      version = "0.0.5",
+      version = eutester.__version__,
       description = "Test Framework for AWS compatible clouds",
       long_description="Test Framework for AWS compatible clouds",
       author = "Victor Iglesias",

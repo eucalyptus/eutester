@@ -747,6 +747,7 @@ class EuInstance(Instance, TaggedResource):
         
         info_header = str('DD DATA INFO').ljust(len(databuf))
         info_header += '|' + str('DD TIME INFO').center(len(timebuf)-1) 
+        info_header += '|' + str('DD RATE INFO').center(len(ratebuf)-1)
         info_header += '|' + str('DD RECORDS FULL/PARTIAL INFO').center(len(recbuf)-1)
         
         buf = linediv

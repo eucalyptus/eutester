@@ -54,6 +54,7 @@ class Upgrade(Install):
         self.add_euca_repo()
         if hasattr(self.args, 'ebs_storage_manager'):
             self.add_enterprise_repo()
+        self.stop_components()
         self.upgrade_packages()
         self.start_components()
         if re.search("^3.1", self.old_version):

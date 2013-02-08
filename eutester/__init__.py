@@ -31,10 +31,8 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 # Author: vic.iglesias@eucalyptus.com
-import copy
 
-
-__version__ = '0.0.5'
+__version__ = '0.0.6'
 
 import re
 import os

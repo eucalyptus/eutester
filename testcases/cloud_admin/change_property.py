@@ -32,21 +32,18 @@
 # Author: vic.iglesias@eucalyptus.com
 
 from eucaops import Eucaops
-import re
-import string
-from eutester.euinstance import EuInstance
 from eutester.eutestcase import EutesterTestCase
 
-class ChangeVLAN(EutesterTestCase):
-    
+class ChangeProperty(EutesterTestCase):
+
     def __init__(self,extra_args = None):
         self.setuptestcase()
         self.setup_parser()
         if extra_args:
             for arg in extra_args:
                 self.parser.add_argument(arg)
-        self.parser.add_argument("--min-vlan", default=1)
-        self.parser.add_argument("--max-vlan", default=4096)
+        self.parser.add_argument("--property", default="cloud.euca_log_level")
+        self.parser.add_argument("--value", default="DEBUG")
         self.get_args()
         # Setup basic eutester object
         self.tester = Eucaops( config_file=self.args.config, password=self.args.password)
@@ -54,18 +51,17 @@ class ChangeVLAN(EutesterTestCase):
     def clean_method(self):
         pass
 
-    def ChangeVLAN(self):
+    def ChangeProperty(self):
         '''
         Change VLAN range to a given subset
         '''
         clc = self.tester.get_component_machines("clc")[0]
-        clc.sys("source " + self.tester.credpath + "/eucarc && " + self.tester.eucapath + "/usr/sbin/euca-modify-property -p cloud.network.global_max_network_tag=" + str(self.args.max_vlan))
-        clc.sys("source " + self.tester.credpath + "/eucarc && " + self.tester.eucapath + "/usr/sbin/euca-modify-property -p cloud.network.global_min_network_tag=" + str(self.args.min_vlan))
+        clc.sys("source " + self.tester.credpath + "/eucarc && " + self.tester.eucapath + "/usr/sbin/euca-modify-property -p "+ self.args.property +"=" + self.args.value, code=0)
 
 if __name__ == "__main__":
-    testcase = ChangeVLAN()
+    testcase = ChangeProperty()
     ### Either use the list of tests passed from config/command line to determine what subset of tests to run
-    list = testcase.args.tests or ["ChangeVLAN"]
+    list = testcase.args.tests or ["ChangeProperty"]
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
     for test in list:
