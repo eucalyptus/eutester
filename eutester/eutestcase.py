@@ -404,10 +404,10 @@ class EutesterTestCase(unittest.TestCase):
                                 help="path to credentials", default=None)
         if password:
             parser.add_argument('--password', 
-                                help="password to use for machine root ssh access", default='foobar')
+                                help="password to use for machine root ssh access", default=None)
         if config:
             parser.add_argument('--config',
-                                help='path to config file', default='../input/2b_tested.lst')   
+                                help='path to config file', default=None)
         if configblocks:
             parser.add_argument('--configblocks', nargs='+',
                                 help="Config sections/blocks in config file to read in", default=[])
