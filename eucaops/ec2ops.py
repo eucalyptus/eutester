@@ -226,8 +226,12 @@ class EC2ops(Eutester):
         keys = self.ec2.get_all_key_pairs()
         keyfile = None
         for k in keys:
+            self.debug('Checking local path:'+str(path)+" for keyfile: "+str(k.name)+str(exten))
             try:
+                #will raise exception if keypath is not found
                 keypath = self.verify_local_keypath(k.name, path, exten)
+                if not keypath:
+                    continue
                 keyfile = open(keypath,'r')
                 for line in keyfile.readlines():
                     if re.search('KEYPAIR',line):
@@ -235,13 +239,13 @@ class EC2ops(Eutester):
                         break
                 keyfile.close()
                 if fingerprint == k.fingerprint:
-                    self.debug('Found key:'+k.name)
+                    self.debug('Found file with matching finger print for key:'+k.name)
                     keylist.append(k)
-            except: pass
+            except: 
+                self.debug('Did not find local match for key:'+str(k.name))
             finally:
                 if keyfile and not keyfile.closed:
                     keyfile.close()
-                
         return keylist
 
     def delete_keypair(self,keypair):
@@ -2338,8 +2342,10 @@ class EC2ops(Eutester):
         ilist = []
         if isinstance(idstring, list):
             instance_ids = idstring
-        else:
+        elif idstring:
             instance_ids = str(idstring)
+        else:
+            instance_ids = idstring
         
         reservations = self.ec2.get_all_instances(instance_ids=instance_ids)
         for res in reservations:
@@ -2383,19 +2389,20 @@ class EC2ops(Eutester):
         """
         try:
             euinstances = []
-            keys = self.get_all_current_local_keys(path=path)
-            if keys:
-                for keypair in keys:
-                    self.debug('looking for instances using keypair:'+keypair.name)
-                    instances = self.get_instances(state='running',key=keypair.name)
-                    if instances:
-                        for instance in instances:
-                            if not connect:
-                                keypair=None
-                                euinstances.append(instance)
-                            else:
-                                euinstances.append(EuInstance.make_euinstance_from_instance( instance, self, username=username,password=password,keypair=keypair))
-                      
+            keys = self.get_all_current_local_keys(path=path) or []
+            for keypair in keys:
+                self.debug('Looking for instances using keypair:'+keypair.name)
+                instances = self.get_instances(state='running',key=keypair.name) or []
+                for instance in instances:
+                    if not connect:
+                        keypair=None
+                        euinstances.append(instance)
+                    else:
+                        euinstances.append(EuInstance.make_euinstance_from_instance( instance, 
+                                                                                     self, 
+                                                                                     username=username,
+                                                                                     password=password,
+                                                                                     keypair=keypair ))
             return euinstances
         except Exception, e:
             self.debug("Failed to find a pre-existing instance we can connect to:"+str(e))
