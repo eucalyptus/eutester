@@ -291,7 +291,7 @@ class Eutester(object):
         def methdecor(*func_args, **func_kwargs):
             try:
                 defaults = func.func_defaults
-                kw_count = len(defaults)
+                kw_count = len(defaults or [])
                 arg_count = func.func_code.co_argcount - kw_count
                 var_names = func.func_code.co_varnames[:func.func_code.co_argcount]
                 arg_names = var_names[:arg_count]
