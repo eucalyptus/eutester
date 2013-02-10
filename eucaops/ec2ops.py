@@ -550,7 +550,7 @@ class EC2ops(Eutester):
              #Clean up any volumes from this operation and raise exception
             for vol in volumes:
                 vol.delete()
-            raise Exception("Created "+str(len(retlist))+"/"+str(count)+' volumes. Less than minimum specified:'+str(mincount))
+            raise Exception("Created "+str(len(volumes))+"/"+str(count)+' volumes. Less than minimum specified:'+str(mincount))
         self.debug( str(len(volumes))+"/"+str(count)+" requests for volume creation succeeded." )
         
         if volumes:
@@ -633,7 +633,7 @@ class EC2ops(Eutester):
                         if deletefailed:
                             for failedvol in failed:
                                 retlist.remove(failedvol)
-                                buf += str(failedvol.id)+"-state:"+str(failedvol.status)+","
+                                buf += str(failedvol.id)+"-state:"+str(failedvol.status) + ","
                                 self.debug(buf)
                             for vol in origlist:
                                 self.debug('Failure caught in monitor volumes, attempting to delete all volumes...')
@@ -1198,7 +1198,7 @@ class EC2ops(Eutester):
         if failed and eof:
             raise(str(len(failed))+' snapshots failed in create, see debug output for more info')
         if len(retlist) < mincount:
-            raise('Created '+str(len(retlist))+'/'+str(count)+' snapshots is less than provided mincount, see debug output for more info')
+            raise('Created '+str(len(retlist))+'/'+str(mincount)+' snapshots is less than provided mincount, see debug output for more info')
         return retlist
     
     
@@ -1241,6 +1241,18 @@ class EC2ops(Eutester):
                          wait_for_valid_state=120,
                          poll_interval=10, 
                          eof=False):
+        """
+        Delete a list of snapshots.
+
+        :param snapshots: List of snapshot IDs
+        :param valid_states: Valid status for snapshot to enter (Default: 'completed,failed')
+        :param base_timeout: Timeout for waiting for poll interval
+        :param add_time_per_snap: Amount of time to add to base_timeout per snapshot in the list
+        :param wait_for_valid_state: How long to wait for a valid state to be reached
+        :param poll_interval: Time to wait between checking the snapshot states
+        :param eof: Whether or not to call an Exception() when a failure is reached
+        :raise:
+        """
         snaps = copy.copy(snapshots)
         delete_me = []
         start = time.time()
@@ -1314,7 +1326,17 @@ class EC2ops(Eutester):
     
     
     def register_snapshot(self, snapshot, rdn="/dev/sda1", description="bfebs", windows=False, bdmdev=None, name=None, ramdisk=None, kernel=None, dot=True):
-        """Convience function for passing a snapshot instead of its id. See register_snapshot_by_id"""
+        """Convience function for passing a snapshot instead of its id. See register_snapshot_by_id
+        :param snapshot: Snapshot object to use as an image
+        :param rdn: root device name to use when registering
+        :param description: Description of image that will be registered
+        :param windows: Is the image a Windows image
+        :param bdmdev: Block device mapping
+        :param name: Name to register the image as
+        :param ramdisk: Ramdisk ID to use
+        :param kernel: Kernel ID to use
+        :param dot: Delete on terminate flag
+        """
         return self.register_snapshot_by_id( snapshot.id, rdn, description, windows, bdmdev, name, ramdisk, kernel, dot )
 
     def register_snapshot_by_id( self, snap_id, rdn="/dev/sda1", description="bfebs", windows=False, bdmdev=None, name=None, ramdisk=None, kernel=None, dot=True ):
@@ -1374,12 +1396,11 @@ class EC2ops(Eutester):
         :param image: boto image object to deregister
         """
         self.ec2.deregister_image(image.id)
-        image = self.get_emi(image.id)
-        if image.state is not "deregistered":
-            raise Exception("Image " + image.id +  " did not enter deregistered state after deregistration was sent to server")
-        else:
-            if clear:
-                self.ec2.deregister_image(image.id)
+        try:
+            image = self.get_emi(image.id,state="deregistered")
+        except:
+            raise Exception("Image did not show as deregistered after first deregistration")
+        self.ec2.deregister_image(image.id)
 
     def get_emi(self, emi=None, root_device_type=None, root_device_name=None, location=None, state="available", arch=None, owner_id=None, not_location=None):
         """
