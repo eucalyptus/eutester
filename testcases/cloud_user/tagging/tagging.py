@@ -97,8 +97,10 @@ class TaggingBasics(EutesterTestCase):
         self.tester.delete_group(new_group)
         self.tester.delete_keypair(self.keypair)
 
-        if len(keypair_match) != 1 or len(group_match) != 2:
-            raise Exception("Non-tag Filtering of instances did not return the proper number of resources")
+        if len(group_match) != 1:
+            raise Exception("Non-tag Filtering of instances by group name: " + str(len(group_match))  + " expected: 1")
+        if len(keypair_match) != 2:
+            raise Exception("Non-tag Filtering of instances by keypair name: " + str(len(keypair_match))  + " expected: 2")
 
         ### Test Deletion
         test_instance.delete_tags(tags)
@@ -143,8 +145,10 @@ class TaggingBasics(EutesterTestCase):
 
         self.tester.delete_volume(filter_test_volume)
 
-        if len(size_match) != 1 or len(zone_match) != 2:
-            raise Exception("Non-tag Filtering of volumes did not return the proper number of resources")
+        if len(size_match) != 1:
+            raise Exception("Non-tag Filtering of volumes by size: " + str(len(size_match))  + " expected: 1")
+        if len(zone_match) != 2:
+            raise Exception("Non-tag Filtering of volumes by zone: " + str(len(zone_match))  + " expected: 2")
 
         ### Test Deletion
         self.volume.delete_tags(tags)
@@ -235,8 +239,10 @@ class TaggingBasics(EutesterTestCase):
         filter_image = self.tester.get_emi(emi=filter_image_id)
         self.tester.deregister_image(filter_image)
 
-        if len(description_match) != 1 or len(location_match) != 2:
-            raise Exception("Non-tag Filtering of images did not return the proper number of resources")
+        if len(description_match) != 1:
+            raise Exception("Non-tag Filtering of volumes by size: " + str(len(description_match))  + " expected: 1")
+        if len(location_match) != 2:
+            raise Exception("Non-tag Filtering of volumes by zone: " + str(len(location_match))  + " expected: 2")
 
         ### Test Deletion
         self.tester.delete_tags([self.image.id], tags)
@@ -253,6 +259,8 @@ class TaggingBasics(EutesterTestCase):
         This case was developed to exercise tagging of an security group resource
         """
         tags = { u'name': 'security-tag-test', u'location' : 'over there'}
+        self.debug("Security group ID: " + self.group.id)
+        return true
         self.tester.create_tags([self.group.id], tags)
 
         ### Test Tag Filtering , u'tag:location' : 'over there'
