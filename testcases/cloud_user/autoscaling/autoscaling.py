@@ -98,7 +98,6 @@ class AutoScalingBasics(EutesterTestCase):
             This case was developed to exercise creating a new launch configuration
             image_id="ami-0af30663" a us-east image
         """
-        self.debug("What we think the image_id is " + self.image)
         self.tester.create_launch_config(name="test_lc", image_id=self.image, key_name=self.keypair,
                                          security_groups=self.group)
 
