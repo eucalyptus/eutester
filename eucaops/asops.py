@@ -55,23 +55,57 @@ ASRegionData = {
 
 
 class ASops(Eutester):
-    def __init__(self, host=None, credpath=None, endpoint=None, aws_access_key_id=None, aws_secret_access_key = None,
-                 username="root", region=None, is_secure=False, path='/', port=80, boto_debug=0,
-                 APIVersion = '2012-07-20'):
-        super(ASops, self).__init__(credpath=credpath,
-                                    aws_access_key_id=aws_access_key_id,
-                                    aws_secret_access_key=aws_secret_access_key)
-        self.setup_as_connection(host=host, region=region, endpoint=endpoint, aws_access_key_id=self.aws_access_key_id,
-                                 aws_secret_access_key=self.aws_secret_access_key, is_secure=is_secure, path=path,
-                                 port=port, boto_debug=boto_debug, APIVersion=APIVersion)
+    @Eutester.printinfo
+    def __init__(self, host=None, credpath=None, endpoint=None, aws_access_key_id=None, aws_secret_access_key=None,
+                 username="root", region=None, is_secure=False, path='/', port=80, boto_debug=0):
+        """
+        :param host:
+        :param credpath:
+        :param endpoint:
+        :param aws_access_key_id:
+        :param aws_secret_access_key:
+        :param username:
+        :param region:
+        :param is_secure:
+        :param path:
+        :param port:
+        :param boto_debug:
+        """
+        self.aws_access_key_id = aws_access_key_id
+        self.aws_secret_access_key = aws_secret_access_key
+        self.account_id = None
+        self.user_id = None
+        super(ASops, self).__init__(credpath=credpath)
+
+        self.setup_as_connection(host=host,
+                                 region=region,
+                                 endpoint=endpoint,
+                                 aws_access_key_id=self.aws_access_key_id,
+                                 aws_secret_access_key=self.aws_secret_access_key,
+                                 is_secure=is_secure,
+                                 path=path,
+                                 port=port,
+                                 boto_debug=boto_debug)
         self.poll_count = 48
         self.username = username
         self.test_resources = {}
         self.setup_as_resource_trackers()
-        self.key_dir = "./"
 
+    @Eutester.printinfo
     def setup_as_connection(self, endpoint=None, aws_access_key_id=None, aws_secret_access_key=None, is_secure=True,
-                            host=None, region=None, path="/", port=443, APIVersion='2011-01-01', boto_debug=0):
+                            host=None, region=None, path="/", port=443, boto_debug=0):
+        """
+        :param endpoint:
+        :param aws_access_key_id:
+        :param aws_secret_access_key:
+        :param is_secure:
+        :param host:
+        :param region:
+        :param path:
+        :param port:
+        :param boto_debug:
+        :raise:
+        """
         as_region = RegionInfo()
         if region:
             self.debug("Check region: " + str(region))
@@ -81,44 +115,41 @@ class ASops(Eutester):
                 else:
                     as_region.endpoint = endpoint
             except KeyError:
-                raise Exception( 'Unknown region: %s' % region)
+                raise Exception('Unknown region: %s' % region)
         else:
             as_region.name = 'eucalyptus'
             if not host:
                 if endpoint:
                     as_region.endpoint = endpoint
                 else:
-                    as_region.endpoint = self.get_ec2_ip()
+                    as_region.endpoint = self.get_as_ip()
         connection_args = {'aws_access_key_id': aws_access_key_id,
                            'aws_secret_access_key': aws_secret_access_key,
                            'is_secure': is_secure,
                            'debug': boto_debug,
                            'port': port,
                            'path': path,
-                           'host': host}
+                           'region': as_region}
+
         if re.search('2.6', boto.__version__):
             connection_args['validate_certs'] = False
 
         try:
             as_connection_args = copy.copy(connection_args)
             as_connection_args['path'] = path
-            as_connection_args['api_version'] = APIVersion
             as_connection_args['region'] = as_region
-            self.debug("Attempting to create Auto Scale connection to " + as_region.endpoint + ':' + str(port) + path)
-            # self.AS = AutoScaleConnection(aws_access_key_id, aws_secret_access_key)
-            self.AS = boto.ec2.autoscale.connect_to_region(**as_connection_args)
-            # self.AS = boto.connect_autoscale(aws_access_key_id, aws_secret_access_key, **as_connection_args)
-
+            self.debug("Attempting to create auto scale connection to " + as_region.endpoint + ":" + str(port) + path)
+            self.AS = boto.connect_autoscale(**as_connection_args)
         except Exception, e:
-            self.critical("Was unable to create Auto Scale connection because of exception: " + str(e))
+            self.critical("Was unable to create auto scale connection because of exception: " + str(e))
+
+        #Source ip on local test machine used to reach instances
+        self.as_source_ip = None
 
     def setup_as_resource_trackers(self):
         """
         Setup keys in the test_resources hash in order to track artifacts created
         """
-        self.test_resources["reservations"] = []
-        self.test_resources["volumes"] = []
-        self.test_resources["snapshots"] = []
         self.test_resources["keypairs"] = []
         self.test_resources["security-groups"] = []
         self.test_resources["images"] = []
@@ -141,7 +172,7 @@ class ASops(Eutester):
                                  image_id=image_id,
                                  key_name=key_name,
                                  security_groups=security_groups)
-        self.AS.create_launch_configuration(lc)
+        # self.AS.create_launch_configuration(lc)
 
     def delete_launch_config(self, launch_config_name):
         self.AS.delete_launch_configuration(launch_config_name)
