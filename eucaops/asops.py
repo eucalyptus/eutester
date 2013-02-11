@@ -32,20 +32,9 @@
 
 
 from eutester import Eutester
-from eucaops import EC2ops
-import time
 import re
 import os
 import copy
-from datetime import datetime
-from boto.ec2.image import Image
-from boto.ec2.keypair import KeyPair
-from boto.ec2.blockdevicemapping import BlockDeviceMapping, BlockDeviceType
-from boto.ec2.volume import Volume
-from boto.exception import EC2ResponseError
-from eutester.euinstance import EuInstance
-from eutester.euvolume import EuVolume
-from eutester.eusnapshot import EuSnapshot
 from boto.ec2.autoscale import AutoScaleConnection
 from boto.ec2.autoscale import LaunchConfiguration
 from boto.ec2.autoscale import AutoScalingGroup
@@ -103,8 +92,7 @@ class ASops(Eutester):
                            'is_secure': is_secure,
                            'debug': boto_debug,
                            'port': port,
-                           'path': path,
-                           'host': host}
+                           'path': path}
 
         if re.search('2.6', boto.__version__):
             connection_args['validate_certs'] = False
