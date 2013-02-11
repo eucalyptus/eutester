@@ -130,9 +130,9 @@ class ASops(Eutester):
         :param security_groups: Names of the security groups with which to associate the EC2 instances.
         """
         self.debug("*** LC name = " + name)
-        self.debug("*** LC image = " + str(image_id))
-        self.debug("*** LC key = " + str(key_name))
-        self.debug("*** LC group = " + security_groups)
+        self.debug("*** LC image = " + image_id)
+        self.debug("*** LC key = " + key_name)
+        self.debug("*** LC group = " + str(security_groups[0]))
 
         lc = LaunchConfiguration(name=name,
                                  image_id=image_id,
