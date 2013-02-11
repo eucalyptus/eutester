@@ -55,7 +55,7 @@ class TimeoutFunctionException(Exception):
 
 
 class Eutester(object):
-    def __init__(self, credpath=None, aws_access_key_id=None, aws_secret_access_key = None):
+    def __init__(self, credpath=None):
         """This class is intended to setup boto connections for the various services that the *ops classes will use.
         :param credpath: Path to a valid eucarc file.
         :param aws_access_key_id: Used in conjuction with aws_secret_access_key allows for creation of connections without needing a credpath.
@@ -84,8 +84,7 @@ class Eutester(object):
             self.account_id = self.get_account_id()
             self.user_id = self.get_user_id()
         else:
-            self.aws_access_key_id = aws_access_key_id
-            self.aws_secret_access_key = aws_secret_access_key
+            raise Exception("Please provide credpath argument")
 
     def get_access_key(self):
         if not self.aws_access_key_id:     
@@ -231,7 +230,7 @@ class Eutester(object):
         """ Remove the strings from the list that do not match the regex string"""
         expr = re.compile(string)
         return filter(expr.search,list)
-        
+
     def diff(self, list1, list2):
         """Return the diff of the two lists"""
         return list(set(list1)-set(list2))
