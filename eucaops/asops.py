@@ -133,6 +133,7 @@ class ASops(Eutester):
         self.debug("*** LC image = " + image_id)
         self.debug("*** LC key = " + key_name)
         self.debug("*** LC group = " + security_groups)
+        self.debug("AS api version: " + self.AS.APIVersion)
 
         lc = LaunchConfiguration(name=name,
                                  image_id=image_id,
