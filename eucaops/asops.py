@@ -29,7 +29,6 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 # Author: tony@eucalyptus.com
-from eucaops import Eucaops
 
 from eutester import Eutester
 import re
@@ -54,7 +53,7 @@ ASRegionData = {
     'sa-east-1': 'autoscaling.sa-east-1.amazonaws.com'}
 
 
-class ASops(Eucaops):
+class ASops(Eutester):
     def __init__(self, host=None, credpath=None, endpoint=None, aws_access_key_id=None, aws_secret_access_key=None,
                  username="root", region=None, is_secure=False, path='/', port=80, boto_debug=0):
         """
@@ -137,7 +136,8 @@ class ASops(Eucaops):
             as_connection_args['path'] = path
             as_connection_args['region'] = as_region
             self.debug("Attempting to create auto scale connection to " + as_region.endpoint + ":" + str(port) + path)
-            self.AS = boto.connect_autoscale(**as_connection_args)
+            # self.AS = boto.connect_autoscale(**as_connection_args)
+            self.AS = boto.ec2.autoscale.connect_to_region("eucalyptus", aws_access_key_id, aws_secret_access_key)
         except Exception, e:
             self.critical("Was unable to create auto scale connection because of exception: " + str(e))
 
