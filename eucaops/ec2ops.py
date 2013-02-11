@@ -66,10 +66,17 @@ class EC2ops(Eutester):
     @Eutester.printinfo
     def __init__(self, host=None, credpath=None, endpoint=None, aws_access_key_id=None, aws_secret_access_key = None,
                  username="root",region=None, is_secure=False, path='/', port=80, boto_debug=0, APIVersion = '2012-07-20'):
-        super(EC2ops, self).__init__(credpath=credpath,
-                                     aws_access_key_id=aws_access_key_id,
-                                     aws_secret_access_key=aws_secret_access_key)
-
+        super(EC2ops, self).__init__(credpath=credpath)
+        self.aws_access_key_id = aws_access_key_id
+        self.aws_secret_access_key = aws_secret_access_key
+        self.user_id = None
+        self.account_id = None
+        self.poll_count = 48
+        self.username = username
+        self.test_resources = {}
+        self.setup_ec2_resource_trackers()
+        self.key_dir = "./"
+        self.ec2_source_ip = None  #Source ip on local test machine used to reach instances
         self.setup_ec2_connection(host= host,
                                   region=region,
                                   endpoint=endpoint,
@@ -80,13 +87,6 @@ class EC2ops(Eutester):
                                   port=port,
                                   boto_debug=boto_debug,
                                   APIVersion=APIVersion)
-        self.poll_count = 48
-        self.username = username
-        self.test_resources = {}
-        self.setup_ec2_resource_trackers()
-        self.key_dir = "./"
-        self.ec2_source_ip = None  #Source ip on local test machine used to reach instances
-
 
     @Eutester.printinfo
     def setup_ec2_connection(self, endpoint=None, aws_access_key_id=None, aws_secret_access_key=None, is_secure=True,host=None ,
