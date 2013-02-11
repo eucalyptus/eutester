@@ -36,6 +36,7 @@ import re
 import os
 import copy
 from boto.ec2.autoscale import AutoScaleConnection
+import boto.ec2.autoscale
 from boto.ec2.autoscale import LaunchConfiguration
 from boto.ec2.autoscale import AutoScalingGroup
 import boto.ec2.autoscale
@@ -88,7 +89,7 @@ class ASops(Eutester):
                     as_region.endpoint = endpoint
                 else:
                     as_region.endpoint = self.get_ec2_ip()
-        connection_args = {'aws_access_key_id' : aws_access_key_id,
+        connection_args = {'aws_access_key_id': aws_access_key_id,
                            'aws_secret_access_key': aws_secret_access_key,
                            'is_secure': is_secure,
                            'debug': boto_debug,
@@ -104,9 +105,9 @@ class ASops(Eutester):
             as_connection_args['api_version'] = APIVersion
             as_connection_args['region'] = as_region
             self.debug("Attempting to create Auto Scale connection to " + as_region.endpoint + str(port) + path)
-            self.AS = boto.connect_autoscale(**as_connection_args)
+            self.AS = boto.ec2.autoscale.connect_to_region(as_region.endpoint, **as_connection_args)
         except Exception, e:
-            self.critical("Was unable to create ec2 connection because of exception: " + str(e))
+            self.critical("Was unable to create Auto Scale connection because of exception: " + str(e))
 
     def setup_as_resource_trackers(self):
         """
