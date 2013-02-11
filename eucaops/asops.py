@@ -29,7 +29,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 # Author: tony@eucalyptus.com
-
+from eucaops import Eucaops
 
 from eutester import Eutester
 import re
@@ -54,7 +54,7 @@ ASRegionData = {
     'sa-east-1': 'autoscaling.sa-east-1.amazonaws.com'}
 
 
-class ASops(Eutester):
+class ASops(Eucaops):
     def __init__(self, host=None, credpath=None, endpoint=None, aws_access_key_id=None, aws_secret_access_key=None,
                  username="root", region=None, is_secure=False, path='/', port=80, boto_debug=0):
         """
