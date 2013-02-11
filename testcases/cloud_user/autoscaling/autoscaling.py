@@ -121,7 +121,7 @@ if __name__ == "__main__":
     ### or use a predefined list "CreateAutoScalingGroup", "DeleteAutoScalingGroup", "DescribeAutoScalingGroups",
     # "DescribeAutoScalingInstances", "SetDesiredCapacity", "SetInstanceHealth", "TerminateInstanceInAutoScalingGroup",
     # "UpdateAutoScalingGroup", "CreateLaunchConfiguration", "DeleteLaunchConfiguration", "DescribeLaunchConfigurations"
-    list = testcase.args.tests or ["CreateLaunchConfiguration", "DeleteLaunchConfiguration"]
+    list = testcase.args.tests or ["CreateLaunchConfiguration"]
 
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
