@@ -132,12 +132,12 @@ class ASops(Eutester):
         self.debug("*** LC name = " + name)
         self.debug("*** LC image = " + image_id)
         self.debug("*** LC key = " + key_name)
-        self.debug("*** LC group = " + str(security_groups[0]))
+        self.debug("*** LC group = " + security_groups)
 
         lc = LaunchConfiguration(name=name,
                                  image_id=image_id,
                                  key_name=key_name,
-                                 security_groups=[security_groups])
+                                 security_groups=security_groups)
         self.AS.create_launch_configuration(lc)
 
     def delete_launch_config(self, launch_config_name):
