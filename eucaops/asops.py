@@ -32,6 +32,7 @@
 
 
 from eutester import Eutester
+from eucaops import EC2ops
 import time
 import re
 import os
