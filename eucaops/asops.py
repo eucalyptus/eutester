@@ -161,10 +161,6 @@ class ASops(Eutester):
         :param key_name: The name of the EC2 key pair.
         :param security_groups: Names of the security groups with which to associate the EC2 instances.
         """
-        self.debug("*** LC name = " + name)
-        self.debug("*** LC image = " + image_id)
-        self.debug("*** LC key = " + key_name)
-        self.debug("*** LC group = " + security_groups)
 
         lc = LaunchConfiguration(name=name,
                                  image_id=image_id,
