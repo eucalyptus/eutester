@@ -2,8 +2,9 @@
 from testcases.cloud_user.instances.instancetest import InstanceBasics
 from testcases.cloud_user.s3.bucket_tests import BucketTestSuite
 from eucaops import Eucaops
+from eutester.eutestcase import EutesterTestCase
 
-class GatherDebug(InstanceBasics, BucketTestSuite):
+class GatherDebug(EutesterTestCase):
     basic_commands = ['df -B M',
                       'ps aux',
                       'free',
@@ -51,9 +52,15 @@ class GatherDebug(InstanceBasics, BucketTestSuite):
                    'll /var/lib/eucalyptus/instances/**/**/**']
                    
 
-    def __init__(self, config_file="cloud.conf", password="foobar"):
-        self.tester = Eucaops( config_file=config_file, password=password)
-        self.servman = self.tester.service_manager
+    def __init__(self):
+        self.setuptestcase()
+        self.setup_parser()
+        self.get_args()
+        # Setup basic eutester object
+        self.tester = Eucaops( config_file=self.args.config_file, password=self.args.password,download_creds=True)
+
+    def clean_method(self):
+        pass
 
     def run_command_list(self,machine, list):
         for command in list:
@@ -85,37 +92,29 @@ class GatherDebug(InstanceBasics, BucketTestSuite):
         for machine in self.tester.get_component_machines("nc"):
             self.run_command_list(machine,nc_commands)
 
-    def run_testcase(self, testcase_callback, **kwargs):
-        poll_count = 20
-        poll_interval = 20
-        while poll_count > 0:
-            try:
-                testcase_callback(**kwargs)
-                break
-            except Exception, e:
-                self.tester.debug("Attempt failed due to: " + str(e)  + "\nRetrying testcase in " + str(poll_interval) )
-            self.tester.sleep(poll_interval)
-            poll_count = poll_count - 1
-        if poll_count is 0:
-            self.fail("Could not run an instance after " + str(poll_count) +" tries with " + str(poll_interval) + "s sleep in between")
-
     def cleanup(self):
         pass
 
-    def run_suite(self):
-        self.testlist = []
-        testlist = self.testlist
-        testlist.append(self.create_testcase_from_method(self.debug_clc))
-        testlist.append(self.create_testcase_from_method(self.debug_walrus))
-        testlist.append(self.create_testcase_from_method(self.debug_cc))
-        testlist.append(self.create_testcase_from_method(self.debug_sc))
-        testlist.append(self.create_testcase_from_method(self.debug_sc))
-        self.run_test_case_list(testlist)
-        self.cleanup()
+    def DebugAll(self):
+        self.debug_clc()
+        self.debug_walrus()
+        self.debug_cc()
+        self.debug_sc()
+        self.debug_sc()
+
 
 if __name__ == "__main__":
-    parser = GatherDebug.get_parser()
-    args = parser.parse_args()
-    debugsuite = GatherDebug(config_file=args.config, password = args.password)
-    debugsuite.run_suite()
+    testcase = GatherDebug()
+    ### Use the list of tests passed from config/command line to determine what subset of tests to run
+    ### or use a predefined list  "VolumeTagging", "InstanceTagging", "SnapshotTagging", "ImageTagging"
+    list = testcase.args.tests or ["DebugAll"]
+
+    ### Convert test suite methods to EutesterUnitTest objects
+    unit_list = [ ]
+    for test in list:
+        unit_list.append( testcase.create_testunit_by_name(test) )
+
+    ### Run the EutesterUnitTest objects
+    result = testcase.run_test_case_list(unit_list,clean_on_exit=True)
+    exit(result)
    
