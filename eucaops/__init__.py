@@ -71,6 +71,9 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops):
         self.critical = self.logger.log.critical
         self.info = self.logger.log.info
         self.username = username
+        self.account_id = None
+        self.aws_access_key_id = aws_access_key_id
+        self.aws_secret_access_key = aws_secret_access_key 
 
         if self.config_file is not None:
             ## read in the config file
@@ -117,6 +120,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops):
             ec2_ip = self.get_ec2_ip()
         if self.credpath and not s3_ip:
             s3_ip = self.get_s3_ip()
+        
         if self.credpath and not aws_access_key_id:
             aws_access_key_id = self.get_access_key()
         if self.credpath and not aws_secret_access_key:

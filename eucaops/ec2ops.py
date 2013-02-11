@@ -37,8 +37,6 @@ import os
 import copy
 import socket
 import types
-import StringIO
-import traceback
 import sys
 from datetime import datetime
 
@@ -64,6 +62,8 @@ EC2RegionData = {
     'ap-southeast-1' : 'ec2.ap-southeast-1.amazonaws.com'}
 
 class EC2ops(Eutester):
+
+    @Eutester.printinfo
     def __init__(self, host=None, credpath=None, endpoint=None, aws_access_key_id=None, aws_secret_access_key = None,
                  username="root",region=None, is_secure=False, path='/', port=80, boto_debug=0, APIVersion = '2012-07-20'):
         super(EC2ops, self).__init__(credpath=credpath,
@@ -87,6 +87,8 @@ class EC2ops(Eutester):
         self.key_dir = "./"
         self.ec2_source_ip = None  #Source ip on local test machine used to reach instances
 
+
+    @Eutester.printinfo
     def setup_ec2_connection(self, endpoint=None, aws_access_key_id=None, aws_secret_access_key=None, is_secure=True,host=None ,
                              region=None, path = "/", port = 443,  APIVersion ='2012-07-20', boto_debug=0):
         ec2_region = RegionInfo()
@@ -221,6 +223,8 @@ class EC2ops(Eutester):
             raise Exception("key:"+keyname+"not found at the provided path:"+str(path))
         return keypath
     
+    
+    @Eutester.printinfo
     def get_all_current_local_keys(self,path=None, exten=".pem"):
         """
         Convenience function to provide a list of all keys in the local dir at 'path' that exist on the server to help
@@ -234,8 +238,12 @@ class EC2ops(Eutester):
         keys = self.ec2.get_all_key_pairs()
         keyfile = None
         for k in keys:
+            self.debug('Checking local path:'+str(path)+" for keyfile: "+str(k.name)+str(exten))
             try:
+                #will raise exception if keypath is not found
                 keypath = self.verify_local_keypath(k.name, path, exten)
+                if not keypath:
+                    continue
                 keyfile = open(keypath,'r')
                 for line in keyfile.readlines():
                     if re.search('KEYPAIR',line):
@@ -243,13 +251,13 @@ class EC2ops(Eutester):
                         break
                 keyfile.close()
                 if fingerprint == k.fingerprint:
-                    self.debug('Found key:'+k.name)
+                    self.debug('Found file with matching finger print for key:'+k.name)
                     keylist.append(k)
-            except: pass
+            except: 
+                self.debug('Did not find local match for key:'+str(k.name))
             finally:
                 if keyfile and not keyfile.closed:
                     keyfile.close()
-                
         return keylist
 
     def delete_keypair(self,keypair):
@@ -273,6 +281,8 @@ class EC2ops(Eutester):
             return False
         return True
     
+    
+    @Eutester.printinfo
     def get_windows_instance_password(self, instance, private_key_path=None, key=None, dir=None, exten=".pem", encoded=True):
         """
         Get password for a windows instance.
@@ -307,6 +317,7 @@ class EC2ops(Eutester):
             string_to_decrypt = encrypted_string
         return user_priv_key.private_decrypt(string_to_decrypt,RSA.pkcs1_padding)
 
+    @Eutester.printinfo
     def add_group(self, group_name=None, fail_if_exists=False ):
         """
         Add a security group to the system with name group_name, if it exists dont create it
@@ -323,12 +334,12 @@ class EC2ops(Eutester):
             else:
                 self.debug(  "Group " + group_name + " already exists")
                 group = self.ec2.get_all_security_groups(group_name)[0]
-            self.test_resources["security-groups"].append(group)
             return group
         else:
             self.debug( 'Creating Security Group: %s' % group_name)
             # Create a security group to control access to instance via SSH.
             group = self.ec2.create_security_group(group_name, group_name)
+            self.test_resources["security-groups"].append(group)
         return group
 
     def delete_group(self, group):
@@ -364,6 +375,7 @@ class EC2ops(Eutester):
         else:
             return True
 
+    @Eutester.printinfo
     def authorize_group_by_name(self,group_name="default", port=22, protocol="tcp", cidr_ip="0.0.0.0/0"):
         """
         Authorize the group with group_name
@@ -461,6 +473,8 @@ class EC2ops(Eutester):
                 aggregate_result = False
         return aggregate_result
     
+    
+    @Eutester.printinfo
     def create_volume(self, azone, size=1, eof=True, snapshot=None, timeout=0, poll_interval=10,timepergig=120):
         """
         Create a new EBS volume then wait for it to go to available state, size or snapshot is mandatory
@@ -477,6 +491,9 @@ class EC2ops(Eutester):
         """
         return self.create_volumes(azone, size=size, count=1, mincount=1, eof=eof, snapshot=snapshot, timeout=timeout, poll_interval=poll_interval,timepergig=timepergig)[0]
 
+
+
+    @Eutester.printinfo
     def create_volumes(self, 
                        azone, 
                        size = 1, 
@@ -568,7 +585,8 @@ class EC2ops(Eutester):
             snapshot.eutest_volumes.extend(retlist)
         return retlist
     
-
+    
+    @Eutester.printinfo
     def monitor_created_euvolumes_to_state(self, volumes, eof=True, mincount=None, state='available', poll_interval=10, deletefailed=True, size=1, timepergig=120):
         """
         Description:
@@ -767,6 +785,8 @@ class EC2ops(Eutester):
         for volume in volumes:
             self.delete_volume(volume.id)
 
+        
+    @Eutester.printinfo    
     def attach_volume(self, instance, volume, device_path, pause=10, timeout=120):
         """
         Attach a volume to an instance
@@ -788,18 +808,18 @@ class EC2ops(Eutester):
         laststatus=None
         while elapsed < timeout:
             volume.update()
-            astatus=None
+            attach_status=None
             if volume.attach_data is not None:
                 if re.search("attached",str(volume.attach_data.status)):
                     self.debug(str(volume) + ", Attached: " +  volume.status+ " - " + str(volume.attach_data.status) + ", elapsed:"+str(elapsed))
                     return True
                 else:
-                    astatus = volume.attach_data.status
-                    if astatus:
-                        laststatus = astatus
-                    elif laststatus and not astatus:
+                    attach_status = volume.attach_data.status
+                    if attach_status:
+                        laststatus = attach_status
+                    elif laststatus and not attach_status:
                         raise Exception('Volume status reverted from '+str(laststatus)+' to None, attach failed')
-            self.debug( str(volume) + ", state:" + volume.status+', attached status:'+str(astatus) + ", elapsed:"+str(elapsed)+'/'+str(timeout))
+            self.debug( str(volume) + ", state:" + volume.status+', attached status:'+str(attach_status) + ", elapsed:"+str(elapsed)+'/'+str(timeout))
             self.sleep(pause)
             elapsed = int(time.time()-start)
 
@@ -915,6 +935,8 @@ class EC2ops(Eutester):
         #create a time_struct out of our list
         return datetime.strptime(" ".join(t), "%Y %m %d %H %M %S")
     
+    
+    @Eutester.printinfo
     def create_snapshot_from_volume(self, volume, wait_on_progress=20, poll_interval=10, timeout=0, description=""):
         """
         Create a new EBS snapshot from an existing volume then wait for it to go to the created state.
@@ -931,7 +953,8 @@ class EC2ops(Eutester):
         """
         return self.create_snapshots(volume, count=1, mincount=1, eof=True, wait_on_progress=wait_on_progress, poll_interval=poll_interval, timeout=timeout, description=description)[0]
         
-    
+        
+    @Eutester.printinfo
     def create_snapshot(self, volume_id, wait_on_progress=20, poll_interval=10, timeout=0, description=""):
         """
         Create a new single EBS snapshot from an existing volume id then wait for it to go to the created state.
@@ -952,6 +975,8 @@ class EC2ops(Eutester):
         else:
             raise Exception("create_snapshot: Expected 1 snapshot, got '"+str(len(snapshots))+"' snapshots")
     
+    
+    @Eutester.printinfo
     def create_snapshots_from_vol_id(self,volume_id, count=1, mincount=None, eof=True, delay=0, wait_on_progress=20, poll_interval=10, timeout=0, description=""):
         """
         Create a new EBS snapshot from an existing volume' string then wait for it to go to the created state.
@@ -975,6 +1000,8 @@ class EC2ops(Eutester):
         return self.create_snapshots(volume, count=count, mincount=mincount, eof=eof, delay=delay, wait_on_progress=wait_on_progress, poll_interval=poll_interval, timeout=timeout, description=description)
 
 
+
+    @Eutester.printinfo
     def create_snapshots(self, 
                          volume, 
                          count=1, 
@@ -1090,6 +1117,8 @@ class EC2ops(Eutester):
                                                         )
         return snapshots
         
+        
+    @Eutester.printinfo    
     def monitor_eusnaps_to_completed(self,
                                      snaps,
                                      mincount=None, 
@@ -1208,7 +1237,10 @@ class EC2ops(Eutester):
             return snaps[0]
         else:
             return None
-        
+    
+    
+    
+    @Eutester.printinfo   
     def get_snapshots(self,snapid=None, volume_id=None, volume_size=None, volume_md5=None, maxcount=None, owner_id=None):
         retlist =[]
         owner_id = owner_id or self.get_account_id()
@@ -1216,8 +1248,11 @@ class EC2ops(Eutester):
         snapshot_list = []
         if snapid:
             snapshot_list.append(snapid)
-        snapshots.extend( self.ec2.get_all_snapshots(snapshot_ids=snapshot_list, owner=owner_id))
+        ec2_snaps =  self.ec2.get_all_snapshots(snapshot_ids=snapshot_list, owner=owner_id)
+        
         for snap in snapshots:
+            if not snap in ec2_snaps:
+                self.debug('Snapshot:'+str(snap.id)+' no longer found on system')
             if not hasattr(snap,'eutest_volume_md5'):
                 snap = EuSnapshot.make_eusnap_from_snap(snap, tester=self)
             self.debug("Checking snap:"+str(snap.id)+" for match...")
@@ -1233,6 +1268,8 @@ class EC2ops(Eutester):
         self.debug("Found "+str(len(retlist))+" snapshots matching criteria")
         return retlist
     
+    
+    @Eutester.printinfo
     def delete_snapshots(self,
                          snapshots, 
                          valid_states='completed,failed', 
@@ -1273,7 +1310,8 @@ class EC2ops(Eutester):
                         snap.delete()
                         break
             for snap in delete_me:
-                snaps.remove(snap)
+                if snap in snaps:
+                    snaps.remove(snap)
             if snaps:
                 buf = "\n-------| WAITING ON "+str(len(snaps))+" SNAPSHOTS TO ENTER A DELETE-ABLE STATE:("+str(valid_states)+"), elapsed:"+ str(elapsed)+'/'+str(wait_for_valid_state)+"|-----"
                 for snap in snaps:
@@ -1324,7 +1362,7 @@ class EC2ops(Eutester):
         self.debug( "Sent snapshot delete request for snapshot: " + snapshot.id)
         return self.delete_snapshots([snapshot], base_timeout=60)
     
-    
+    @Eutester.printinfo
     def register_snapshot(self, snapshot, rdn="/dev/sda1", description="bfebs", windows=False, bdmdev=None, name=None, ramdisk=None, kernel=None, dot=True):
         """Convience function for passing a snapshot instead of its id. See register_snapshot_by_id
         :param snapshot: Snapshot object to use as an image
@@ -1338,7 +1376,8 @@ class EC2ops(Eutester):
         :param dot: Delete on terminate flag
         """
         return self.register_snapshot_by_id( snapshot.id, rdn, description, windows, bdmdev, name, ramdisk, kernel, dot )
-
+    
+    @Eutester.printinfo
     def register_snapshot_by_id( self, snap_id, rdn="/dev/sda1", description="bfebs", windows=False, bdmdev=None, name=None, ramdisk=None, kernel=None, dot=True ):
         """
         Register an image snapshot
@@ -1372,6 +1411,8 @@ class EC2ops(Eutester):
         self.debug("Image now registered as " + image_id)
         return image_id
 
+
+    @Eutester.printinfo
     def register_image( self, image_location, rdn=None, description=None, bdmdev=None, name=None, ramdisk=None, kernel=None ):
         """
         Register an image based on the s3 stored manifest location
@@ -1402,6 +1443,7 @@ class EC2ops(Eutester):
             raise Exception("Image did not show as deregistered after first deregistration")
         self.ec2.deregister_image(image.id)
 
+    @Eutester.printinfo
     def get_emi(self, emi=None, root_device_type=None, root_device_name=None, location=None, state="available", arch=None, owner_id=None, not_location=None):
         """
         Get an emi with name emi, or just grab any emi in the system. Additional 'optional' match criteria can be defined.
@@ -1493,7 +1535,7 @@ class EC2ops(Eutester):
         self.debug("Allocated " + str(address))
         return address
 
-    def associate_address(self,instance, address, timeout=75):
+    def associate_address(self,instance, address, refresh_ssh=True, timeout=75):
         """
         Associate an address object with an instance
 
@@ -1503,6 +1545,7 @@ class EC2ops(Eutester):
         :raise: Exception in case of association failure
         """
         ip =  str(address.public_ip)
+        old_ip = str(instance.public_dns_name)
         self.debug("Attemtping to associate " + str(ip) + " with " + str(instance.id))
         try:
             address.associate(instance.id)
@@ -1531,7 +1574,17 @@ class EC2ops(Eutester):
             self.sleep(5)
             instance.update()
             elapsed = int(time.time()-start)
-        self.debug("Associated IP successfully")
+            self.debug("Associated IP successfully old_ip:"+str(old_ip)+' new_ip:'+str(instance.public_dns_name))
+        if refresh_ssh:
+            if isinstance(instance, EuInstance):
+                self.debug('Refreshing EuInstance:'+str(instance.id)+' ssh connection to associated addr:'+str(instance.public_dns_name))
+                instance.reset_ssh_connection()
+            else:
+                self.debug('WARNING: associate_address called with refresh_ssh set to true, but instance is not EuInstance type:'+str(instance.id))
+        
+            
+            
+        
 
     def disassociate_address_from_instance(self, instance, timeout=75):
         """
@@ -1598,6 +1651,7 @@ class EC2ops(Eutester):
         """
         return self.found("ls -1 " + device_path, device_path)
 
+    @Eutester.printinfo
     def get_volumes(self, 
                     volume_id="vol-", 
                     status=None, 
@@ -1656,6 +1710,7 @@ class EC2ops(Eutester):
         else:
             return retlist
 
+  
     def get_volume(self, volume_id="vol-", status=None, attached_instance=None, attached_dev=None, snapid=None, zone=None, minsize=1, maxsize=None, eof=True):
         """
         Return first volume that matches the criteria.
@@ -1680,6 +1735,7 @@ class EC2ops(Eutester):
                 raise e
         return vol
 
+    @Eutester.printinfo
     def run_instance(self, image=None, keypair=None, group="default", type=None, zone=None, min=1, max=1, user_data=None,private_addressing=False, username="root", password=None, is_reachable=True, timeout=480):
         """
         Run instance/s and wait for them to go to the running state
@@ -1769,7 +1825,7 @@ class EC2ops(Eutester):
         else:
             return reservation
         
-    
+    @Eutester.printinfo
     def run_image(self, 
                   image=None, 
                   keypair=None, 
@@ -1808,7 +1864,7 @@ class EC2ops(Eutester):
                 if isinstance(keypair, KeyPair):
                     keypair = keypair.name
                 
-            self.debug( "Attempting to run "+ str(image.root_device_type)  +", image " + str(image) + " in group " + str(group))
+            #self.debug( "Attempting to run "+ str(image.root_device_type)  +" image " + str(image) + " in group " + str(group))
             cmdstart=time.time()
             reservation = image.run(key_name=keypair,security_groups=[group],instance_type=type, placement=zone, min_count=min, max_count=max, user_data=user_data, addressing_type=addressing_type)
             self.test_resources["reservations"].append(reservation)
@@ -1882,6 +1938,7 @@ class EC2ops(Eutester):
         self.debug('wait_for_instance_block_dev_mapping started done. elapsed:'+str(elapsed))
     
     
+    @Eutester.printinfo 
     def monitor_euinstances_to_running(self,instances, poll_interval=10, timeout=480):
         self.debug("("+str(len(instances))+") Monitor_instances_to_running starting...")
         #Wait for instances to go to running state...
@@ -1932,9 +1989,11 @@ class EC2ops(Eutester):
         self.print_euinstance_list(good)
         return good
     
+    
+    @Eutester.printinfo
     def does_instance_sec_group_allow(self, instance, src_addr=None, protocol='tcp',port=22):
         s = None
-        self.debug("does_instance_sec_group_allow:"+str(instance.id)+" src_addr:"+str(src_addr))
+        #self.debug("does_instance_sec_group_allow:"+str(instance.id)+" src_addr:"+str(src_addr))
         try:
             if not src_addr:
                 #Use the local test machine's addr
@@ -1963,14 +2022,27 @@ class EC2ops(Eutester):
         finally:
             if s:
                 s.close()
-    
-                        
+    def get_security_group(self, id=None, name=None):
+        #Adding this as both a convienence to the user to separate euare groups from security groups
+        #Not sure if botos filter on group names and ids is reliable?
+        if not id and not name:
+            raise Exception('get_security_group needs either a name or an id')
+        groups = self.ec2.get_all_security_groups(groupnames=[name], group_ids=id)
+        for group in groups:
+            if not id or (id and group.id == id):
+                if not name or (name and group.name == name):
+                    self.debug('Found matching security group for name:'+str(name)+' and id:'+str(id))
+                    return group
+        self.debug('No matching security group found for name:'+str(name)+' and id:'+str(id))
+        return None
+        
+    @Eutester.printinfo                    
     def does_sec_group_allow(self, group, src, protocol='tcp', port=22):
         """
         Test whether a security group will allow traffic from a specific 'src' ip address to
         a specific 'port' using a specific 'protocol'
         """
-        self.debug('does_sec_group_allow: sec_group:'+str(group.name)+", from_src:"+str(src)+", proto:"+str(protocol)+", port:"+str(port))
+	group = self.get_security_group(id=group.id, name=group.name)
         g_buf =""
         for rule in group.rules:
             if rule.ip_protocol == protocol:
@@ -1987,6 +2059,7 @@ class EC2ops(Eutester):
         return False
                     
     @classmethod
+    @Eutester.printinfo
     def is_address_in_network(cls,ip_addr, network):
         ip_addr = str(ip_addr)
         network = str(network)
@@ -2016,7 +2089,8 @@ class EC2ops(Eutester):
                         instance.reservation = res
                     return res
         raise Exception('No reservation found for instance:'+str(instance.id))
-        
+    
+    @Eutester.printinfo    
     def monitor_euinstances_to_state(self, instance_list, state='running', min=None, poll_interval=10, timeout=120, eof=True):   
         self.debug('('+str(len(instance_list))+") monitor_instances_to_state: '"+str(state)+"' starting....") 
         monitor = copy.copy(instance_list)
@@ -2035,7 +2109,7 @@ class EC2ops(Eutester):
             min = len(instance_list)
         while monitor and elapsed < timeout:
             elapsed = int(time.time() - start)
-            self.debug("\nWaiting for remaining "+str(len(monitor))+"/"+str(len(instance_list))+" instances to go to state:"+str(state)+', elapsed:'+str(elapsed)+'/'+str(timeout)+")...")
+            self.debug("\n------>Waiting for remaining "+str(len(monitor))+"/"+str(len(instance_list))+" instances to go to state:"+str(state)+', elapsed:('+str(elapsed)+'/'+str(timeout)+")...")
             for instance in monitor:
                 try:
                     instance.update()
@@ -2112,7 +2186,7 @@ class EC2ops(Eutester):
             buf += instance.printself(title=False, footer=False)
         self.debug("\n"+str(buf)+"\n")
     
-
+    @Eutester.printinfo
     def wait_for_valid_ip(self, instances, poll_interval=10, timeout = 60):
         """
         Wait for instance public DNS name to clear from 0.0.0.0
@@ -2122,7 +2196,7 @@ class EC2ops(Eutester):
         :return: True on success
         :raise: Exception if IP stays at 0.0.0.0
         """
-        self.debug("wait_for_valid_ip: Monitoring instances for valid ips...")
+        #self.debug("wait_for_valid_ip: Monitoring instances for valid ips...")
         if not isinstance(instances, types.ListType):
             monitoring = [instances]
         else:
@@ -2250,6 +2324,7 @@ class EC2ops(Eutester):
             zone_names.append(zone.name)
         return zone_names
  
+    @Eutester.printinfo
     def get_instances(self, state=None, idstring=None, reservation=None, rootdevtype=None, zone=None, key=None,
                       pubip=None, privip=None, ramdisk=None, kernel=None, image_id=None ):
         """
@@ -2271,6 +2346,8 @@ class EC2ops(Eutester):
         ilist = []
         if isinstance(idstring, list):
             instance_ids = idstring
+        elif idstring:
+            instance_ids = str(idstring)
         else:
             instance_ids = idstring
         
@@ -2316,19 +2393,20 @@ class EC2ops(Eutester):
         """
         try:
             euinstances = []
-            keys = self.get_all_current_local_keys(path=path)
-            if keys:
-                for keypair in keys:
-                    self.debug('looking for instances using keypair:'+keypair.name)
-                    instances = self.get_instances(state='running',key=keypair.name)
-                    if instances:
-                        for instance in instances:
-                            if not connect:
-                                keypair=None
-                                euinstances.append(instance)
-                            else:
-                                euinstances.append(EuInstance.make_euinstance_from_instance( instance, self, username=username,password=password,keypair=keypair))
-                      
+            keys = self.get_all_current_local_keys(path=path) or []
+            for keypair in keys:
+                self.debug('Looking for instances using keypair:'+keypair.name)
+                instances = self.get_instances(state='running',key=keypair.name) or []
+                for instance in instances:
+                    if not connect:
+                        keypair=None
+                        euinstances.append(instance)
+                    else:
+                        euinstances.append(EuInstance.make_euinstance_from_instance( instance, 
+                                                                                     self, 
+                                                                                     username=username,
+                                                                                     password=password,
+                                                                                     keypair=keypair ))
             return euinstances
         except Exception, e:
             self.debug("Failed to find a pre-existing instance we can connect to:"+str(e))
@@ -2351,18 +2429,6 @@ class EC2ops(Eutester):
             buf += str(item)+" = "+str(obj.__dict__[item])+"\n"
         return buf
     
-    def get_traceback(self):
-        """
-        Returns a string buffer with traceback, to be used for debug/info purposes.
-        """
-        try:
-            out = StringIO.StringIO()
-            traceback.print_exception(*sys.exc_info(),file=out)
-            out.seek(0)
-            buf = out.read()
-        except Exception, e:
-                buf = "Could not get traceback"+str(e)
-        return str(buf) 
 
     def terminate_instances(self, reservation=None, timeout=480):
         """

@@ -137,10 +137,11 @@ class EbsTestSuite(EutesterTestCase):
             group_name='EbsTestGroup'
             
             try:
-                self.group = self.tester.add_group(group_name)
+                self.group = self.tester.add_group(group_name,fail_if_exists=False)
                 self.tester.authorize_group_by_name(self.group.name)
                 self.tester.authorize_group_by_name(self.group.name,protocol="icmp",port=-1)
-            except Exception, e:    
+            except Exception, e:  
+                self.debug(self.tester.get_traceback())  
                 raise Exception("Error when setting up group:"+str(group_name)+", Error:"+str(e))   
         
     
