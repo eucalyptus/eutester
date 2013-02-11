@@ -37,43 +37,68 @@ from eutester import Eutester
 
 
 EC2RegionData = {
-    'us-east-1' : 'ec2.us-east-1.amazonaws.com',
-    'us-west-1' : 'ec2.us-west-1.amazonaws.com',
-    'eu-west-1' : 'ec2.eu-west-1.amazonaws.com',
-    'ap-northeast-1' : 'ec2.ap-northeast-1.amazonaws.com',
-    'ap-southeast-1' : 'ec2.ap-southeast-1.amazonaws.com'}
+    'us-east-1': 'monitoring.us-east-1.amazonaws.com',
+    'us-west-1': 'monitoring.us-west-1.amazonaws.com',
+    'eu-west-1': 'monitoring.eu-west-1.amazonaws.com',
+    'ap-northeast-1': 'monitoring.ap-northeast-1.amazonaws.com',
+    'ap-southeast-1': 'monitoring.ap-southeast-1.amazonaws.com'}
+
 
 class CWops(Eutester):
     @Eutester.printinfo
-    def __init__(self, host=None, credpath=None, endpoint=None, aws_access_key_id=None, aws_secret_access_key = None,
-                 username="root",region=None, is_secure=False, path='/', port=80, boto_debug=0, APIVersion = '2012-07-20'):
+    def __init__(self, host=None, credpath=None, endpoint=None, aws_access_key_id=None, aws_secret_access_key=None,
+                 username="root", region=None, is_secure=False, path='/', port=80, boto_debug=0):
+        """
+
+        :param host:
+        :param credpath:
+        :param endpoint:
+        :param aws_access_key_id:
+        :param aws_secret_access_key:
+        :param username:
+        :param region:
+        :param is_secure:
+        :param path:
+        :param port:
+        :param boto_debug:
+        """
         self.aws_access_key_id = aws_access_key_id
         self.aws_secret_access_key = aws_secret_access_key
         self.account_id = None
         self.user_id = None
         super(CWops, self).__init__(credpath=credpath)
 
-        self.setup_cw_connection( host= host,
-                                  region=region,
-                                  endpoint=endpoint,
-                                  aws_access_key_id=self.aws_access_key_id ,
-                                  aws_secret_access_key=self.aws_secret_access_key,
-                                  is_secure=is_secure,
-                                  path=path,
-                                  port=port,
-                                  boto_debug=boto_debug,
-                                  APIVersion=APIVersion)
+        self.setup_cw_connection(host=host,
+                                 region=region,
+                                 endpoint=endpoint,
+                                 aws_access_key_id=self.aws_access_key_id,
+                                 aws_secret_access_key=self.aws_secret_access_key,
+                                 is_secure=is_secure,
+                                 path=path,
+                                 port=port,
+                                 boto_debug=boto_debug)
         self.poll_count = 48
         self.username = username
         self.test_resources = {}
         self.setup_cw_resource_trackers()
-        self.key_dir = "./"
-        self.ec2_source_ip = None  #Source ip on local test machine used to reach instances
-
 
     @Eutester.printinfo
-    def setup_cw_connection(self, endpoint=None, aws_access_key_id=None, aws_secret_access_key=None, is_secure=True,host=None ,
-                             region=None, path = "/", port = 443,  APIVersion ='2012-07-20', boto_debug=0):
+    def setup_cw_connection(self, endpoint=None, aws_access_key_id=None, aws_secret_access_key=None, is_secure=True,
+                            host=None,
+                            region=None, path="/", port=443, boto_debug=0):
+        """
+
+        :param endpoint:
+        :param aws_access_key_id:
+        :param aws_secret_access_key:
+        :param is_secure:
+        :param host:
+        :param region:
+        :param path:
+        :param port:
+        :param boto_debug:
+        :raise:
+        """
         ec2_region = RegionInfo()
         if region:
             self.debug("Check region: " + str(region))
@@ -83,21 +108,21 @@ class CWops(Eutester):
                 else:
                     ec2_region.endpoint = endpoint
             except KeyError:
-                raise Exception( 'Unknown region: %s' % region)
+                raise Exception('Unknown region: %s' % region)
         else:
             ec2_region.name = 'eucalyptus'
             if not host:
                 if endpoint:
                     ec2_region.endpoint = endpoint
                 else:
-                    ec2_region.endpoint = self.get_ec2_ip()
-        connection_args = { 'aws_access_key_id' : aws_access_key_id,
-                            'aws_secret_access_key': aws_secret_access_key,
-                            'is_secure': is_secure,
-                            'debug':boto_debug,
-                            'port' : port,
-                            'path' : path,
-                            'region' : ec2_region}
+                    ec2_region.endpoint = self.get_cw_ip()
+        connection_args = {'aws_access_key_id': aws_access_key_id,
+                           'aws_secret_access_key': aws_secret_access_key,
+                           'is_secure': is_secure,
+                           'debug': boto_debug,
+                           'port': port,
+                           'path': path,
+                           'region': ec2_region}
 
         if re.search('2.6', boto.__version__):
             connection_args['validate_certs'] = False
@@ -121,3 +146,8 @@ class CWops(Eutester):
         self.test_resources["alarms"] = []
         self.test_resources["metric"] = []
         self.test_resources["datapoint"] = []
+
+    def get_cw_ip(self):
+        """Parse the eucarc for the EC2_URL"""
+        ec2_url = self.parse_eucarc("AWS_CLOUDWATCH_URL")
+        return ec2_url.split("/")[2].split(":")[0]
