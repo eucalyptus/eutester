@@ -129,14 +129,15 @@ class ASops(Eutester):
         :param key_name: The name of the EC2 key pair.
         :param security_groups: Names of the security groups with which to associate the EC2 instances.
         """
+        self.debug("*** LC name = " + name)
+        self.debug("*** LC image = " + str(image_id))
+        self.debug("*** LC key = " + str(key_name))
+        self.debug("*** LC group = " + security_groups)
+
         lc = LaunchConfiguration(name=name,
                                  image_id=image_id,
                                  key_name=key_name,
                                  security_groups=[security_groups])
-        self.debug("*** LC name = " + name)
-        self.debug("*** LC image = " + image_id)
-        self.debug("*** LC key = " + key_name)
-        self.debug("*** LC group = " + security_groups)
         self.AS.create_launch_configuration(lc)
 
     def delete_launch_config(self, launch_config_name):
