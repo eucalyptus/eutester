@@ -106,6 +106,8 @@ class ASops(Eutester):
             as_connection_args['region'] = as_region
             self.debug("Attempting to create Auto Scale connection to " + as_region.endpoint + str(port) + path)
             self.AS = boto.ec2.autoscale.connect_to_region(as_region.endpoint, **as_connection_args)
+            self.debug("AS api version: " + self.AS.APIVersion)
+
         except Exception, e:
             self.critical("Was unable to create Auto Scale connection because of exception: " + str(e))
 
@@ -133,7 +135,6 @@ class ASops(Eutester):
         self.debug("*** LC image = " + image_id)
         self.debug("*** LC key = " + key_name)
         self.debug("*** LC group = " + security_groups)
-        self.debug("AS api version: " + self.AS.APIVersion)
 
         lc = LaunchConfiguration(name=name,
                                  image_id=image_id,
