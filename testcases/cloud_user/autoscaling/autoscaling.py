@@ -18,17 +18,18 @@ class AutoScalingBasics(EutesterTestCase):
         self.get_args()
         # Setup basic eutester object
         if self.args.emi:
-            self.AS_tester = ASops(credpath=self.args.credpath, region=self.args.region)
-            self.EC2_tester = EC2ops(credpath=self.args.credpath, region=self.args.region)
+            # self.AS_tester = ASops(credpath=self.args.credpath, region=self.args.region)
+            # self.EC2_tester = EC2ops(credpath=self.args.credpath, region=self.args.region)
+            self.tester = Eucaops(credpath=self.args.credpath, region=self.args.region)
         else:
             self.tester = Eucaops(credpath=self.args.credpath)
 
        ### Add and authorize a group for the instance
-        self.group = self.EC2_tester.add_group(group_name="group-" + str(time.time()))
-        self.EC2_tester.authorize_group_by_name(group_name=self.group.name )
-        self.EC2_tester.authorize_group_by_name(group_name=self.group.name, port=-1, protocol="icmp" )
+        self.group = self.tester.add_group(group_name="group-" + str(time.time()))
+        self.tester.authorize_group_by_name(group_name=self.group.name )
+        self.tester.authorize_group_by_name(group_name=self.group.name, port=-1, protocol="icmp" )
         ### Generate a keypair for the instance
-        self.keypair = self.EC2_tester.add_keypair( "keypair-" + str(time.time()))
+        self.keypair = self.tester.add_keypair( "keypair-" + str(time.time()))
         self.keypath = '%s/%s.pem' % (os.curdir, self.keypair.name)
 
         self.image = self.args.emi
@@ -93,8 +94,8 @@ class AutoScalingBasics(EutesterTestCase):
             This case was developed to exercise creating a new launch configuration
             image_id="ami-0af30663" a us-east image
         """
-        self.AS_tester.create_launch_config(name="test_lc", image_id=self.image, key_name=self.keypair,
-                                            security_groups=self.group)
+        self.tester.create_launch_config(name="test_lc", image_id=self.image, key_name=self.keypair,
+                                         security_groups=self.group)
 
     def DeleteLaunchConfiguration(self):
         """
@@ -122,5 +123,5 @@ if __name__ == "__main__":
         unit_list.append( testcase.create_testunit_by_name(test) )
 
     ### Run the EutesterUnitTest objects
-    result = testcase.run_test_case_list(unit_list,clean_on_exit=True)
+    result = testcase.run_test_case_list(unit_list, clean_on_exit=True)
     exit(result)

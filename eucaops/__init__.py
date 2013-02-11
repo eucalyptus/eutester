@@ -49,7 +49,10 @@ import os
 
 class Eucaops(EC2ops,S3ops,IAMops,STSops,ASops):
     
-    def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,  account="eucalyptus", user="admin", username=None, APIVersion='2009-11-30', region=None, ec2_ip=None, s3_ip=None, as_ip=None, download_creds=True,boto_debug=0):
+    def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None,
+                 aws_secret_access_key = None,  account="eucalyptus", user="admin", username=None,
+                 APIVersion='2009-11-30', region=None, ec2_ip=None, s3_ip=None, as_ip=None, download_creds=True,
+                 boto_debug=0):
         self.config_file = config_file 
         self.APIVersion = APIVersion
         self.eucapath = "/opt/eucalyptus"
@@ -118,6 +121,8 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,ASops):
             ec2_ip = self.get_ec2_ip()
         if self.credpath and not s3_ip:
             s3_ip = self.get_s3_ip()
+        if self.credpath and not as_ip:
+            as_ip = self.get_as_ip()
         if self.credpath and not aws_access_key_id:
             aws_access_key_id = self.get_access_key()
         if self.credpath and not aws_secret_access_key:
