@@ -66,7 +66,7 @@ class STSops(Eutester):
                                     'port' : port,
                                     'path' : path,
                                     'region' : sts_region}
-            self.debug("Attempting to create STS connection to " + self.get_ec2_ip() + + ':' + str(port) + path)
+            self.debug("Attempting to create STS connection to " + self.get_ec2_ip()  + ':' + str(port) + path)
             self.tokens = boto.connect_sts(**sts_connection_args)
         except Exception, e:
             self.critical("Was unable to create STS connection because of exception: " + str(e))
