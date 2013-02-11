@@ -38,8 +38,12 @@ class AutoScalingBasics(EutesterTestCase):
         self.address = None
 
     def clean_method(self):
-        ### once needed clean up should be done here
-        pass
+        ### DELETE group
+        self.tester.delete_group(self.group)
+
+        ### Delete keypair in cloud and from filesystem
+        self.tester.delete_keypair(self.keypair)
+        os.remove(self.keypath)
 
     def CreateAutoScalingGroup(self):
         """
@@ -101,7 +105,7 @@ class AutoScalingBasics(EutesterTestCase):
         """
             This case was developed to exercise deleting a launch configuration
         """
-        pass
+        self.tester.delete_launch_config(launch_config_name="test_lc")
 
     def DescribeLaunchConfigurations(self):
         """
@@ -115,7 +119,7 @@ if __name__ == "__main__":
     ### or use a predefined list "CreateAutoScalingGroup", "DeleteAutoScalingGroup", "DescribeAutoScalingGroups",
     # "DescribeAutoScalingInstances", "SetDesiredCapacity", "SetInstanceHealth", "TerminateInstanceInAutoScalingGroup",
     # "UpdateAutoScalingGroup", "CreateLaunchConfiguration", "DeleteLaunchConfiguration", "DescribeLaunchConfigurations"
-    list = testcase.args.tests or ["CreateLaunchConfiguration"]
+    list = testcase.args.tests or ["CreateLaunchConfiguration", "DeleteLaunchConfiguration"]
 
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]

@@ -133,6 +133,9 @@ class ASops(Eutester):
                                  security_groups=[security_groups])
         self.AS.create_launch_configuration(lc)
 
+    def delete_launch_config(self, launch_config_name):
+        self.AS.delete_launch_configuration(launch_config_name)
+
     def create_as_group(self, group_name=None, load_balancers=None, availability_zones=None, launch_config=None,
                         min_size=None, max_size=None, connection=None):
         """
