@@ -104,7 +104,7 @@ class ASops(Eutester):
             as_connection_args['path'] = path
             as_connection_args['api_version'] = APIVersion
             as_connection_args['region'] = as_region
-            self.debug("Attempting to create Auto Scale connection to " + as_region.endpoint + str(port) + path)
+            self.debug("Attempting to create Auto Scale connection to " + as_region.endpoint + ':' + str(port) + path)
             self.AS = boto.ec2.autoscale.connect_to_region(as_region.endpoint, **as_connection_args)
             self.debug("AS api version: " + self.AS.APIVersion)
 

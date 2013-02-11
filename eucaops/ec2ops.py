@@ -104,7 +104,7 @@ class EC2ops(Eutester):
             ec2_connection_args['path'] = path
             ec2_connection_args['api_version'] = APIVersion
             ec2_connection_args['region'] = ec2_region
-            self.debug("Attempting to create ec2 connection to " + ec2_region.endpoint + str(port) + path)
+            self.debug("Attempting to create ec2 connection to " + ec2_region.endpoint + ':' + str(port) + path)
             self.ec2 = boto.connect_ec2(**ec2_connection_args)
         except Exception, e:
             self.critical("Was unable to create ec2 connection because of exception: " + str(e))
