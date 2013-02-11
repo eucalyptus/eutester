@@ -54,22 +54,23 @@ ASRegionData = {
 
 
 class ASops(Eutester):
-    def __init__(self, host=None, credpath=None, endpoint=None, aws_access_key_id=None, aws_secret_access_key=None,
+    def __init__(self, host=None, credpath=None, endpoint=None, aws_access_key_id=None, aws_secret_access_key = None,
                  username="root", region=None, is_secure=False, path='/', port=80, boto_debug=0,
-                 APIVersion='2011-01-01'):
-        super(ASops, self).__init__(credpath=credpath, aws_access_key_id=aws_access_key_id,
+                 APIVersion = '2012-07-20'):
+        super(ASops, self).__init__(credpath=credpath,
+                                    aws_access_key_id=aws_access_key_id,
                                     aws_secret_access_key=aws_secret_access_key)
         self.setup_as_connection(host=host, region=region, endpoint=endpoint, aws_access_key_id=self.aws_access_key_id,
                                  aws_secret_access_key=self.aws_secret_access_key, is_secure=is_secure, path=path,
-                                 port=port,
-                                 boto_debug=boto_debug, APIVersion=APIVersion)
+                                 port=port, boto_debug=boto_debug, APIVersion=APIVersion)
         self.poll_count = 48
         self.username = username
         self.test_resources = {}
+        self.setup_as_resource_trackers()
         self.key_dir = "./"
 
     def setup_as_connection(self, endpoint=None, aws_access_key_id=None, aws_secret_access_key=None, is_secure=True,
-                            host=None, region=None, path="/", port=8773, APIVersion='2011-01-01', boto_debug=0):
+                            host=None, region=None, path="/", port=443, APIVersion='2011-01-01', boto_debug=0):
         as_region = RegionInfo()
         if region:
             self.debug("Check region: " + str(region))
@@ -79,21 +80,21 @@ class ASops(Eutester):
                 else:
                     as_region.endpoint = endpoint
             except KeyError:
-                raise Exception('Unknown region: %s' % region)
+                raise Exception( 'Unknown region: %s' % region)
         else:
             as_region.name = 'eucalyptus'
             if not host:
                 if endpoint:
                     as_region.endpoint = endpoint
                 else:
-                    as_region.endpoint = self.get_as_ip()
-        connection_args = {'aws_access_key_id': aws_access_key_id,
+                    as_region.endpoint = self.get_ec2_ip()
+        connection_args = {'aws_access_key_id' : aws_access_key_id,
                            'aws_secret_access_key': aws_secret_access_key,
                            'is_secure': is_secure,
                            'debug': boto_debug,
                            'port': port,
-                           'path': path}
-
+                           'path': path,
+                           'host': host}
         if re.search('2.6', boto.__version__):
             connection_args['validate_certs'] = False
 
@@ -102,11 +103,21 @@ class ASops(Eutester):
             as_connection_args['path'] = path
             as_connection_args['api_version'] = APIVersion
             as_connection_args['region'] = as_region
-            self.debug("Attempting to create AS connection to " + as_region.endpoint + str(port) + path)
-            # self.AS = AutoScaleConnection(aws_access_key_id, aws_secret_access_key, region=as_region)
-            self.AS = AutoScaleConnection(**as_connection_args)
+            self.debug("Attempting to create Auto Scale connection to " + as_region.endpoint + str(port) + path)
+            self.AS = boto.connect_autoscale(**as_connection_args)
         except Exception, e:
-            self.critical("Was unable to create AS connection because of exception: " + str(e))
+            self.critical("Was unable to create ec2 connection because of exception: " + str(e))
+
+    def setup_as_resource_trackers(self):
+        """
+        Setup keys in the test_resources hash in order to track artifacts created
+        """
+        self.test_resources["reservations"] = []
+        self.test_resources["volumes"] = []
+        self.test_resources["snapshots"] = []
+        self.test_resources["keypairs"] = []
+        self.test_resources["security-groups"] = []
+        self.test_resources["images"] = []
 
     def create_launch_config(self, name=None, image_id=None, key_name=None, security_groups=None):
         """
