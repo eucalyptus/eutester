@@ -97,9 +97,9 @@ class AutoScalingBasics(EutesterTestCase):
         pass
 
     def cleanAll(self):
-        for item in self.tester.get_all_groups():
+        for item in self.tester.describe_as_group():
             self.debug("Going to delete: " + item.name)
-
+            self.tester.delete_as_group(names=item.name, force=True)
 
 if __name__ == "__main__":
     testcase = AutoScalingBasics()
