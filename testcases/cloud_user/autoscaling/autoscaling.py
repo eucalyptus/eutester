@@ -52,7 +52,7 @@ class AutoScalingBasics(EutesterTestCase):
             raise Exception('Launch Config not created')
         self.debug('***** Created Launch Config: ' + self.tester.describe_launch_config([self.launch_config_name])[0].name)
 
-        ### test create and descibe auto scale group
+        ### test create and describe auto scale group
         self.debug("Number of AS groups before create: " + str(len(self.tester.describe_as_group())))
         self.auto_scaling_group_name = 'Auto-Scaling-Group-' + str(time.time())
         self.tester.create_as_group(group_name=self.auto_scaling_group_name,
@@ -64,7 +64,7 @@ class AutoScalingBasics(EutesterTestCase):
         self.debug("Created Auto Scaling Group: " + self.tester.describe_as_group(self.auto_scaling_group_name)[0].name)
         self.debug("Number of AS groups after create: " + str(len(self.tester.describe_as_group())))
         self.debug("*** When I ask for 1 Auto scaling group I get: " +
-                   str(len(self.tester.describe_as_group([self.auto_scaling_group_name]))))
+                   str(len(self.tester.describe_as_group(self.auto_scaling_group_name)[0].name)))
         if len(self.tester.describe_as_group([self.auto_scaling_group_name])) != 1:
             raise Exception('Auto Scaling Group not created')
 
