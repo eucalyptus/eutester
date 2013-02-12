@@ -53,7 +53,8 @@ class AutoScalingBasics(EutesterTestCase):
         self.debug('***** Created Launch Config: ' + self.tester.describe_launch_config([self.launch_config_name])[0].name)
 
         ### test create and describe auto scale group
-        self.debug("Number of AS groups before create: " + str(len(self.tester.describe_as_group())))
+        self.initial_size = len(self.tester.describe_as_group())
+        self.debug("Number of AS groups before create: " + str(self.initial_size))
         self.auto_scaling_group_name = 'ASG-' + str(time.time())
         self.tester.create_as_group(group_name=self.auto_scaling_group_name,
                                     launch_config=self.launch_config_name,
@@ -62,20 +63,18 @@ class AutoScalingBasics(EutesterTestCase):
                                     max_size=5,
                                     connection=self.tester.AS)
 
-        self.lastIndex = len(self.tester.describe_as_group()) - 1
-        self.debug("Last index: " + str(self.lastIndex))
         self.debug("Created Auto Scaling Group: " + self.tester.describe_as_group(self.auto_scaling_group_name)[self.lastIndex].name)
-        self.debug("Number of AS groups after create: " + str(len(self.tester.describe_as_group())))
-        self.debug("*** When I ask for 1 Auto scaling group I get: " +
-                   str(len(self.tester.describe_as_group([self.auto_scaling_group_name]))))
-        # if len(self.tester.describe_as_group([self.auto_scaling_group_name])) != 1:
-        #     raise Exception('Auto Scaling Group not created')
+        self.debug("Number of AS groups after create: " + str(self.final_size))
+        # self.debug("*** When I ask for 1 Auto scaling group I get: " +
+        #            str(len(self.tester.describe_as_group([self.auto_scaling_group_name]))))
+        if len(self.tester.describe_as_group()) <= self.initial_size:
+            raise Exception('Auto Scaling Group not created')
         ### self.AS.get_all_groups(names=[group_name])[0]
 
         ### Test Delete Auto Scaling Group
         self.tester.delete_as_group(self.auto_scaling_group_name, True)
-        # if len(self.tester.describe_as_group([self.auto_scaling_group_name])) != 0:
-        #     raise Exception('Auto Scaling Group not deleted')
+        if len(self.tester.describe_as_group()) != self.initial_size:
+            raise Exception('Auto Scaling Group not deleted')
         self.debug('***** Deleted Auto Scaling Group: ' + self.auto_scaling_group_name)
 
         ### Test delete launch config
