@@ -18,8 +18,6 @@ class AutoScalingBasics(EutesterTestCase):
         self.get_args()
         # Setup basic eutester object
         if self.args.emi:
-            # self.AS_tester = ASops(credpath=self.args.credpath, region=self.args.region)
-            # self.EC2_tester = EC2ops(credpath=self.args.credpath, region=self.args.region)
             self.tester = Eucaops(credpath=self.args.credpath, region=self.args.region)
         else:
             self.tester = Eucaops(credpath=self.args.credpath)
@@ -116,16 +114,16 @@ class AutoScalingBasics(EutesterTestCase):
         """
         pass
     def LaunchConfigBasics(self):
-        self.name = 'test_launch_config'
+        self.name = 'Test-Launch-Config-' + str(time.time())
 
-        self.tester.create_launch_config(name=self.name, image_id=str(self.image), key_name=str(self.keypair.name),
-                                            security_groups=self.group.name)
+        self.tester.create_launch_config(name=self.name, image_id=self.image.id, key_name=self.keypair.name,
+                                         security_groups=self.group.name)
         list_size_after_create = len(self.tester.describe_launch_config([self.name]))
         if list_size_after_create != 1:
             raise Exception('Launch Config not created')
         self.debug('***** Launch Config Created')
 
-        self.AS_tester.delete_launch_config(self.name)
+        self.tester.delete_launch_config(self.name)
         list_size_after_delete = len(self.tester.describe_launch_config([self.name]))
         if list_size_after_delete != 0:
             raise Exception('Launch Config not deleted')
