@@ -97,7 +97,7 @@ class AutoScalingBasics(EutesterTestCase):
         pass
 
     def cleanAll(self):
-        self.debug("Singled out: " + str(len(self.tester.describe_as_group(names="AS-3fd01ddf2b491374")[0])))
+        self.debug("Singled out: " + str(self.tester.describe_as_group(names="AS-3fd01ddf2b491374")[0]))
         for item in self.tester.describe_as_group():
             self.debug("Going to delete: " + item.name)
             # self.tester.delete_as_group(names=item.name, force=True)
