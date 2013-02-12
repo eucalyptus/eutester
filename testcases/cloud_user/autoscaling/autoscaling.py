@@ -63,6 +63,8 @@ class AutoScalingBasics(EutesterTestCase):
                                     connection=self.tester.AS)
         self.debug("Created Auto Scaling Group: " + self.tester.describe_as_group(self.auto_scaling_group_name)[0].name)
         self.debug("Number of AS groups after create: " + str(len(self.tester.describe_as_group())))
+        self.debug("*** When I ask for 1 Auto scaling group I get: " +
+                   str(len(self.tester.describe_as_group([self.auto_scaling_group_name]))))
         if len(self.tester.describe_as_group([self.auto_scaling_group_name])) != 1:
             raise Exception('Auto Scaling Group not created')
 
