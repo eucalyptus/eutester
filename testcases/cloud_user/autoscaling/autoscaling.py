@@ -63,12 +63,12 @@ class AutoScalingBasics(EutesterTestCase):
                                     connection=self.tester.AS)
         self.debug("Created Auto Scaling Group: " + self.tester.describe_as_group(self.auto_scaling_group_name)[0].name)
         self.debug("Number of AS groups after create: " + str(len(self.tester.describe_as_group())))
-        if len(self.tester.describe_as_group(self.auto_scaling_group_name)) != 1:
+        if len(self.tester.describe_as_group([self.auto_scaling_group_name])) != 1:
             raise Exception('Auto Scaling Group not created')
 
         ### Test Delete Auto Scaling Group
         self.tester.delete_as_group(self.auto_scaling_group_name, True)
-        if len(self.tester.describe_as_group(self.auto_scaling_group_name)) != 0:
+        if len(self.tester.describe_as_group([self.auto_scaling_group_name])) != 0:
             raise Exception('Auto Scaling Group not deleted')
         self.debug('***** Deleted Auto Scaling Group: ' + self.auto_scaling_group_name)
 
