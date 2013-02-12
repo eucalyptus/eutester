@@ -42,15 +42,36 @@ class AutoScalingBasics(EutesterTestCase):
         self.tester.delete_keypair(self.keypair)
         os.remove(self.keypath)
 
-    def LaunchConfigBasics(self):
+    def AutoScalingBasics(self):
         self.launch_config_name = 'Test-Launch-Config-' + str(time.time())
 
+        ### test create  and describe launch config
         self.tester.create_launch_config(name=self.launch_config_name, image_id=self.image.id, key_name=self.keypair.name,
                                          security_groups=[self.group.name])
         if len(self.tester.describe_launch_config([self.launch_config_name])) != 1:
             raise Exception('Launch Config not created')
         self.debug('***** Created Launch Config: ' + self.tester.describe_launch_config([self.launch_config_name])[0].name)
 
+        ### test create and descibe auto scale group
+        self.auto_scaling_group_name = 'AutoScaling-Group-' + str(time.time())
+        self.tester.create_as_group(group_name=self.auto_scaling_group_name,
+                                    launch_config=self.launch_config_name,
+                                    availability_zones=self.tester.get_zones(),
+                                    min_size=0,
+                                    max_size=5,
+                                    connection=self.tester.AS)
+        self.debug("Created Auto Scaling Group: " + self.tester.describe_as_group(self.auto_scaling_group_name)[0].name)
+        if len(self.tester.describe_as_group(self.auto_scaling_group_name)) != 1:
+            raise Exception('Auto Scaling Group not created')
+
+        ### Test Delete Auto Scaling Group
+        self.tester.delete_as_group(self.auto_scaling_group_name, True)
+        if len(self.tester.describe_as_group(self.auto_scaling_group_name)) != 0:
+            raise Exception('Auto Scaling Group not deleted')
+        self.debug('***** Deleted Auto Scaling Group: ' + self.auto_scaling_group_name)
+
+
+        ### Test delete launch config
         self.tester.delete_launch_config(self.launch_config_name)
         if len(self.tester.describe_launch_config([self.launch_config_name])) != 0:
             raise Exception('Launch Config not deleted')
@@ -66,27 +87,13 @@ class AutoScalingBasics(EutesterTestCase):
         """
         This case will be for basic Auto Scaling Group CRUD, SetDesiredCapacity and
         """
-        self.auto_scaling_group_name = 'AutoScaling-Group-' + str(time.time())
-        self.tester.create_as_group(group_name=self.auto_scaling_group_name,
-                                    launch_config=self.launch_config_name,
-                                    availability_zones=self.tester.get_zones(),
-                                    min_size=0,
-                                    max_size=5,
-                                    connection=self.tester.AS)
-        self.debug("Created Auto Scaling Group: " + self.tester.describe_as_group(self.auto_scaling_group_name)[0].name)
-        if len(self.tester.describe_as_group(self.auto_scaling_group_name)) != 1:
-            raise Exception('Auto Scaling Group not created')
-
-        self.tester.delete_as_group(self.auto_scaling_group_name, True)
-        if len(self.tester.describe_as_group(self.auto_scaling_group_name)) != 0:
-            raise Exception('Auto Scaling Group not deleted')
-        self.debug('***** Deleted Auto Scaling Group: ' + self.auto_scaling_group_name)
+        pass
 
 if __name__ == "__main__":
     testcase = AutoScalingBasics()
     ### Use the list of tests passed from config/command line to determine what subset of tests to run
     ### or use a predefined list "AutoScalingGroupBasics", "LaunchConfigBasics", "AutoScalingInstanceBasics"
-    list = testcase.args.tests or ["LaunchConfigBasics", "AutoScalingGroupBasics"]
+    list = testcase.args.tests or ["AutoScalingBasics"]
 
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
