@@ -96,13 +96,14 @@ class AutoScalingBasics(EutesterTestCase):
     def cleanAll(self):
         for item in self.tester.describe_as_group():
             self.debug("Found Auto Scaling Group: " + item.name)
+            self.tester.delete_as_group(item.name)
 
 if __name__ == "__main__":
     testcase = AutoScalingBasics()
     ### Use the list of tests passed from config/command line to determine what subset of tests to run
     ### or use a predefined list "AutoScalingGroupBasics", "LaunchConfigBasics", "AutoScalingInstanceBasics"
     # list = testcase.args.tests or ["AutoScalingBasics"]
-    list = testcase.args.tests or ["AutoScalingBasics",'cleanAll']
+    list = testcase.args.tests or ['cleanAll', 'AutoScalingBasics']
 
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
