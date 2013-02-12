@@ -54,7 +54,6 @@ class AutoScalingBasics(EutesterTestCase):
 
         ### test create and describe auto scale group
         self.initial_size = len(self.tester.describe_as_group())
-        self.debug("Number of AS groups before create: " + str(self.initial_size))
         self.auto_scaling_group_name = 'ASG-' + str(time.time())
         self.tester.create_as_group(group_name=self.auto_scaling_group_name,
                                     launch_config=self.launch_config_name,
@@ -64,7 +63,6 @@ class AutoScalingBasics(EutesterTestCase):
                                     connection=self.tester.AS)
         self.lastIndex = len(self.tester.describe_as_group()) - 1
         self.debug("Created Auto Scaling Group: " + self.tester.describe_as_group(self.auto_scaling_group_name)[self.lastIndex].name)
-        self.debug("Number of AS groups after create: " + str(self.final_size))
         # self.debug("*** When I ask for 1 Auto scaling group I get: " +
         #            str(len(self.tester.describe_as_group([self.auto_scaling_group_name]))))
         if len(self.tester.describe_as_group()) <= self.initial_size:
