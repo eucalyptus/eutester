@@ -167,6 +167,15 @@ class ASops(Eutester):
                                  security_groups=security_groups)
         self.AS.create_launch_configuration(lc)
 
+    def describe_launch_config(self, names=None):
+        """
+        return a list of launch configs
+
+        :param names: list of names to query (optional) otherwise return all launch configs
+        :return:
+        """
+        return self.AS.get_all_launch_configurations(names=names)
+
     def delete_launch_config(self, launch_config_name):
         self.AS.delete_launch_configuration(launch_config_name)
 

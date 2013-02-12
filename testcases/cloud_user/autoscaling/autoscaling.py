@@ -118,14 +118,15 @@ class AutoScalingBasics(EutesterTestCase):
     def LaunchConfigBasics(self):
         self.name = 'test_launch_config'
 
-        self.AS_tester.create_launch_config(name=self.name, image_id=self.image, key_name=self.keypair.name, security_groups=[self.group.name])
-        list_size_after_create = len(self.AS_tester.describe_launch_config([self.name]))
+        self.tester.create_launch_config(name=self.name, image_id=str(self.image), key_name=str(self.keypair.name),
+                                            security_groups=self.group.name)
+        list_size_after_create = len(self.tester.describe_launch_config([self.name]))
         if list_size_after_create != 1:
             raise Exception('Launch Config not created')
         self.debug('***** Launch Config Created')
 
         self.AS_tester.delete_launch_config(self.name)
-        list_size_after_delete = len(self.AS_tester.describe_launch_config([self.name]))
+        list_size_after_delete = len(self.tester.describe_launch_config([self.name]))
         if list_size_after_delete != 0:
             raise Exception('Launch Config not deleted')
         self.debug('***** Launch Config Deleted')
