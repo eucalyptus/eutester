@@ -52,28 +52,28 @@ class AutoScalingBasics(EutesterTestCase):
             raise Exception('Launch Config not created')
         self.debug('***** Created Launch Config: ' + self.tester.describe_launch_config([self.launch_config_name])[0].name)
 
-        ### test create and describe auto scale group
-        self.initial_size = len(self.tester.describe_as_group())
-        self.auto_scaling_group_name = 'ASG-' + str(time.time())
-        self.tester.create_as_group(group_name=self.auto_scaling_group_name,
-                                    launch_config=self.launch_config_name,
-                                    availability_zones=self.tester.get_zones(),
-                                    min_size=0,
-                                    max_size=5,
-                                    connection=self.tester.AS)
-
-        # self.debug("Created Auto Scaling Group: " + self.tester.describe_as_group(self.auto_scaling_group_name)[0].name)
-        # self.debug("*** When I ask for 1 Auto scaling group I get: " +
-        #            str(len(self.tester.describe_as_group([self.auto_scaling_group_name]))))
-        if len(self.tester.describe_as_group()) <= self.initial_size:
-            raise Exception('Auto Scaling Group not created')
-        ### self.AS.get_all_groups(names=[group_name])[0]
-
-        ### Test Delete Auto Scaling Group
-        self.tester.delete_as_group(self.auto_scaling_group_name, True)
-        if len(self.tester.describe_as_group()) != self.initial_size:
-            raise Exception('Auto Scaling Group not deleted')
-        self.debug('***** Deleted Auto Scaling Group: ' + self.auto_scaling_group_name)
+        # ### test create and describe auto scale group
+        # self.initial_size = len(self.tester.describe_as_group())
+        # self.auto_scaling_group_name = 'ASG-' + str(time.time())
+        # self.tester.create_as_group(group_name=self.auto_scaling_group_name,
+        #                             launch_config=self.launch_config_name,
+        #                             availability_zones=self.tester.get_zones(),
+        #                             min_size=0,
+        #                             max_size=5,
+        #                             connection=self.tester.AS)
+        #
+        # # self.debug("Created Auto Scaling Group: " + self.tester.describe_as_group(self.auto_scaling_group_name)[0].name)
+        # # self.debug("*** When I ask for 1 Auto scaling group I get: " +
+        # #            str(len(self.tester.describe_as_group([self.auto_scaling_group_name]))))
+        # if len(self.tester.describe_as_group()) <= self.initial_size:
+        #     raise Exception('Auto Scaling Group not created')
+        # ### self.AS.get_all_groups(names=[group_name])[0]
+        #
+        # ### Test Delete Auto Scaling Group
+        # self.tester.delete_as_group(self.auto_scaling_group_name, True)
+        # if len(self.tester.describe_as_group()) != self.initial_size:
+        #     raise Exception('Auto Scaling Group not deleted')
+        # self.debug('***** Deleted Auto Scaling Group: ' + self.auto_scaling_group_name)
 
         ### Test delete launch config
         self.tester.delete_launch_config(self.launch_config_name)
@@ -96,7 +96,11 @@ class AutoScalingBasics(EutesterTestCase):
     def cleanAll(self):
         for item in self.tester.describe_as_group():
             self.debug("Found Auto Scaling Group: " + item.name)
-            self.tester.delete_as_group(item.name)
+            self.debug("AZ: " + item.availability_zones)
+            self.debug("desired_capacity: " + item.desired_capacity)
+            self.debug("max_size: " + item.max_size)
+            self.debug("min_size: " + item.min_size)
+
 
 if __name__ == "__main__":
     testcase = AutoScalingBasics()
