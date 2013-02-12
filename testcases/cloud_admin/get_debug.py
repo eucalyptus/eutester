@@ -1,6 +1,4 @@
 #!/usr/bin/python
-from testcases.cloud_user.instances.instancetest import InstanceBasics
-from testcases.cloud_user.s3.bucket_tests import BucketTestSuite
 from eucaops import Eucaops
 from eutester.eutestcase import EutesterTestCase
 
