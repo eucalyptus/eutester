@@ -115,6 +115,20 @@ class AutoScalingBasics(EutesterTestCase):
             This case was developed to exercise describing launch configurations
         """
         pass
+    def LaunchConfigBasics(self):
+        self.name = 'test_launch_config'
+
+        self.AS_tester.create_launch_config(name=self.name, image_id=self.image, key_name=self.keypair.name, security_groups=[self.group.name])
+        list_size_after_create = len(self.AS_tester.describe_launch_config([self.name]))
+        if list_size_after_create != 1:
+            raise Exception('Launch Config not created')
+        self.debug('***** Launch Config Created')
+
+        self.AS_tester.delete_launch_config(self.name)
+        list_size_after_delete = len(self.AS_tester.describe_launch_config([self.name]))
+        if list_size_after_delete != 0:
+            raise Exception('Launch Config not deleted')
+        self.debug('***** Launch Config Deleted')
 
 if __name__ == "__main__":
     testcase = AutoScalingBasics()
@@ -122,7 +136,7 @@ if __name__ == "__main__":
     ### or use a predefined list "CreateAutoScalingGroup", "DeleteAutoScalingGroup", "DescribeAutoScalingGroups",
     # "DescribeAutoScalingInstances", "SetDesiredCapacity", "SetInstanceHealth", "TerminateInstanceInAutoScalingGroup",
     # "UpdateAutoScalingGroup", "CreateLaunchConfiguration", "DeleteLaunchConfiguration", "DescribeLaunchConfigurations"
-    list = testcase.args.tests or ["CreateLaunchConfiguration", "DeleteLaunchConfiguration"]
+    list = testcase.args.tests or ["LaunchConfigBasics"]
 
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
