@@ -94,7 +94,6 @@ class AutoScalingBasics(EutesterTestCase):
         pass
 
     def cleanAll(self):
-        self.tester.delete_as_group("AS-3fd01ddf2b491374")
         for item in self.tester.describe_as_group():
             self.debug("Found Auto Scaling Group: " + item.name)
 
