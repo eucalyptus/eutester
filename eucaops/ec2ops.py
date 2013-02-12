@@ -64,8 +64,35 @@ EC2RegionData = {
 class EC2ops(Eutester):
 
     @Eutester.printinfo
-    def __init__(self, host=None, credpath=None, endpoint=None, aws_access_key_id=None, aws_secret_access_key = None,
-                 username="root",region=None, is_secure=False, path='/', port=80, boto_debug=0, APIVersion = '2012-07-20'):
+    def __init__(self,
+                 host=None,
+                 credpath=None,
+                 endpoint=None,
+                 aws_access_key_id=None,
+                 aws_secret_access_key = None,
+                 username="root",
+                 region=None,
+                 is_secure=False,
+                 path='/',
+                 port=80,
+                 boto_debug=0,
+                 APIVersion = '2012-07-20'):
+
+        """
+
+        :param host:
+        :param credpath:
+        :param endpoint:
+        :param aws_access_key_id:
+        :param aws_secret_access_key:
+        :param username:
+        :param region:
+        :param is_secure:
+        :param path:
+        :param port:
+        :param boto_debug:
+        :param APIVersion:
+        """
         super(EC2ops, self).__init__(credpath=credpath)
         self.aws_access_key_id = aws_access_key_id
         self.aws_secret_access_key = aws_secret_access_key
@@ -589,6 +616,8 @@ class EC2ops(Eutester):
     @Eutester.printinfo
     def monitor_created_euvolumes_to_state(self, volumes, eof=True, mincount=None, state='available', poll_interval=10, deletefailed=True, size=1, timepergig=120):
         """
+
+
         Description:
                     Monitors a list of created volumes until 'state' or failure. Allows for a variety of volumes, using differnt
                      types and creation methods to be monitored by a central method.
@@ -598,10 +627,13 @@ class EC2ops(Eutester):
         :param state: string indicating the expected state to monitor to
         :param deletefailed: delete all failed volumes, in eof case deletes 'volumes' list. In non-eof, if mincount is met, will delete any failed volumes.
         :param timepergig: integer, time allowed per gig before failing.
+        :param poll_interval: int seconds to wait between polling for status
+        :param size: int size in gigs to request for volume creation
         """
         
         retlist = []
         failed = []
+        elapsed = 0
         
         if not volumes:
             raise Exception("Volumes list empty in monitor_created_volumes_to_state")
@@ -622,7 +654,8 @@ class EC2ops(Eutester):
                 volume.update()
                 voltimeout = timepergig * (volume.size or size)
                 elapsed = time.time()-start
-                self.debug("Volume #"+str(volume.eutest_createorder)+" ("+volume.id+") State("+volume.status+"), seconds elapsed: " + str(int(elapsed))+'/'+str(voltimeout))
+                self.debug("Volume #"+str(volume.eutest_createorder)+" ("+volume.id+") State("+volume.status+
+                           "), seconds elapsed: " + str(int(elapsed))+'/'+str(voltimeout))
                 if volume.status == state:
                     #add to return list and remove from volumes list
                     retlist.append(volumes.pop(volumes.index(volume)))
@@ -639,7 +672,8 @@ class EC2ops(Eutester):
                                         self.delete_volume(vol)
                                     except Exception, e:
                                         self.debug('Could not delete volume:'+str(vol.id)+", err:"+str(e))
-                            raise Exception(str(volume) + ", failed to reach state:"+str(state)+", vol status:"+str(volume.eutest_laststatus)+", test status:"+str(vol.status))
+                            raise Exception(str(volume) + ", failed to reach state:"+str(state)+", vol status:"+
+                                            str(volume.eutest_laststatus)+", test status:"+str(vol.status))
                         else:
                             #End on failure is not set, so record this failure and move on
                             msg = str(volume) + " went to: " + volume.status
@@ -649,10 +683,11 @@ class EC2ops(Eutester):
                     #Fail fast if we know we've exceeded our mincount already
                     if (count - len(failed)) < mincount:
                         if deletefailed:
+                            buf = ""
                             for failedvol in failed:
                                 retlist.remove(failedvol)
                                 buf += str(failedvol.id)+"-state:"+str(failedvol.status) + ","
-                                self.debug(buf)
+                            self.debug(buf)
                             for vol in origlist:
                                 self.debug('Failure caught in monitor volumes, attempting to delete all volumes...')
                                 try:
@@ -660,7 +695,8 @@ class EC2ops(Eutester):
                                 except Exception, e:
                                     self.debug('Could not delete volume:'+str(vol.id)+", err:"+str(e))
                         raise Exception("Mincount of volumes did not enter state:"+str(state)+" due to faults")
-            self.debug("----Time Elapsed:"+str(int(elapsed))+", Waiting on "+str(len(volumes))+" volumes to enter state:"+str(state)+"-----")
+            self.debug("----Time Elapsed:"+str(int(elapsed))+", Waiting on "+str(len(volumes))+
+                       " volumes to enter state:"+str(state)+"-----")
             if volumes:
                 time.sleep(poll_interval)
             else:
@@ -2245,20 +2281,30 @@ class EC2ops(Eutester):
         for res in reslist:
             self.debug("Checking reservation: "+str(res.id))
             for instance in res.instances:
-                self.debug('Checking instance '+str(instance.id).ljust(20)+', state:'+str(instance.state).ljust(20)+' pubip:'+str(instance.public_dns_name).ljust(20)+' privip:'+str(instance.private_dns_name).ljust(20))
+                self.debug('Checking instance '+str(instance.id).ljust(20)+', state:'+str(instance.state).ljust(20)+
+                           ' pubip:'+str(instance.public_dns_name).ljust(20)+
+                           ' privip:'+str(instance.private_dns_name).ljust(20))
                 if instance.state == 'running' or instance.state == 'pending' or instance.state == 'starting':
                     if instance.public_dns_name != '0.0.0.0':
                         if instance.public_dns_name in publist:
-                            errbuf += "PUBLIC:"+str(instance.id)+"/"+str(instance.state)+"="+str(instance.public_dns_name)+" vs: "+str(publist[instance.public_dns_name])+"\n"
+                            errbuf += "PUBLIC:"+str(instance.id)+"/"+str(instance.state)+"="+\
+                                      str(instance.public_dns_name)+" vs: "+\
+                                      str(publist[instance.public_dns_name])+"\n"
                             if instances and (instance in instances):
-                                raise Exception("PUBLIC:"+str(instance.id)+"/"+str(instance.state)+"="+str(instance.public_dns_name)+" vs: "+str(publist[instance_public_dns_name]))    
+                                raise Exception("PUBLIC:"+str(instance.id)+"/"+str(instance.state)+"="+
+                                                str(instance.public_dns_name)+" vs: "+
+                                                str(publist[instance.public_dns_name]))
                         else:
                             publist[instance.public_dns_name] = str(instance.id+"/"+instance.state)
                     if instance.private_dns_name != '0.0.0.0':
                         if instance.private_dns_name in privlist:
-                            errbuf += "PRIVATE:"+str(instance.id)+"/"+str(instance.state)+"="+str(instance.private_dns_name)+" vs: "+str(privlist[instance_private_dns_name])+"\n"
+                            errbuf += "PRIVATE:"+str(instance.id)+"/"+str(instance.state)+"="+\
+                                      str(instance.private_dns_name)+" vs: "+\
+                                      str(privlist[instance.private_dns_name])+"\n"
                             if instances and (instance in instances):
-                                raise Exception("PRIVATE:"+str(instance.id)+"/"+str(instance.state)+"="+str(instance.private_dns_name)+" vs: "+str(privlist[instance_private_dns_name]))
+                                raise Exception("PRIVATE:"+str(instance.id)+"/"+str(instance.state)+"="+
+                                                str(instance.private_dns_name)+" vs: "+
+                                                str(privlist[instance.private_dns_name]))
                         else:
                             privlist[instance.private_dns_name] = str(instance.id+"/"+instance.state)
         if not instances and errbuf:
