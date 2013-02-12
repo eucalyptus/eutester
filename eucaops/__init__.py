@@ -33,7 +33,6 @@
 from boto.ec2.image import Image
 from boto.ec2.volume import Volume
 from cwops import CWops
-
 from iamops import IAMops
 from ec2ops import EC2ops
 from s3ops import S3ops

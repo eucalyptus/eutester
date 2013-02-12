@@ -136,9 +136,6 @@ class CWops(Eutester):
         except Exception, e:
             self.critical("Was unable to create ec2 connection because of exception: " + str(e))
 
-        #Source ip on local test machine used to reach instances
-        self.ec2_source_ip = None
-
     def setup_cw_resource_trackers(self):
         """
         Setup keys in the test_resources hash in order to track artifacts created
