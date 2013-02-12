@@ -99,7 +99,7 @@ class AutoScalingBasics(EutesterTestCase):
     def cleanAll(self):
         for item in self.tester.describe_as_group():
             self.debug("Going to delete: " + item.name)
-            self.tester.delete_as_group(item)
+            self.tester.AS.delete_auto_scaling_group(item, True)
 
 if __name__ == "__main__":
     testcase = AutoScalingBasics()
