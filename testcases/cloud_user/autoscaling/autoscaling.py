@@ -63,7 +63,7 @@ class AutoScalingBasics(EutesterTestCase):
                                     connection=self.tester.AS)
 
         self.lastIndex = len(self.tester.describe_as_group()) - 1
-        self.debug("Last index: " + self.lastIndex)
+        self.debug("Last index: " + str(self.lastIndex))
         self.debug("Created Auto Scaling Group: " + self.tester.describe_as_group(self.auto_scaling_group_name)[self.lastIndex].name)
         self.debug("Number of AS groups after create: " + str(len(self.tester.describe_as_group())))
         self.debug("*** When I ask for 1 Auto scaling group I get: " +
