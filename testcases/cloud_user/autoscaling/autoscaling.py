@@ -101,7 +101,7 @@ class AutoScalingBasics(EutesterTestCase):
         for item in self.tester.describe_as_group():
             self.debug("Going to delete: " + item.name)
             # self.tester.delete_as_group(names=item.name, force=True)
-        self.tester.describe_as_group(names="AS-3fd01ddf2b491374")
+        self.tester.delete_as_group(names="AS-3fd01ddf2b491374")
 
 if __name__ == "__main__":
     testcase = AutoScalingBasics()
