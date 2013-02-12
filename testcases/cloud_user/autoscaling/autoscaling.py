@@ -2,10 +2,9 @@
 
 import time
 from eucaops import Eucaops
-from eucaops import ASops
-from eucaops.ec2ops import EC2ops
 from eutester.eutestcase import EutesterTestCase
 import os
+
 
 class AutoScalingBasics(EutesterTestCase):
     def __init__(self, extra_args= None):
@@ -43,76 +42,18 @@ class AutoScalingBasics(EutesterTestCase):
         self.tester.delete_keypair(self.keypair)
         os.remove(self.keypath)
 
-    def CreateAutoScalingGroup(self):
+    def AutoScalingGroupBasics(self):
         """
-            This case was developed to exercise creating an Auto Scaling group
-        """
-        pass
-
-    def DeleteAutoScalingGroup(self):
-        """
-            This case was developed to exercise deleting an Auto Scaling group
+        This case will be for basic Auto Scaling Group CRUD, SetDesiredCapacity and
         """
         pass
 
-    def DescribeAutoScalingGroups(self):
+    def AutoScalingInstanceBasics(self):
         """
-            This case was developed to exercise describing an Auto Scaling group
-        """
-        pass
-
-    def DescribeAutoScalingInstances(self):
-        """
-            This case was developed to exercise describing Auto Scaling instances
+        This case will test DescribeAutoScalingInstances, SetInstanceHealth and TerminateInstanceInAutoScalingGroup
         """
         pass
 
-    def SetDesiredCapacity(self):
-        """
-            This case was developed to exercise setting Auto Scaling group capacity
-        """
-        pass
-
-    def SetInstanceHealth(self):
-        """
-            This case was developed to exercise setting the health of an instance belonging to an Auto Scaling group
-        """
-        pass
-
-    def TerminateInstanceInAutoScalingGroup(self):
-        """
-            This case was developed to exercise terminating an instance belonging to an Auto Scaling group
-        """
-        pass
-
-    def UpdateAutoScalingGroup(self):
-        """
-            This case was developed to exercise updating a specified Auto Scaling group
-        """
-        pass
-
-    def CreateLaunchConfiguration(self):
-        """
-            This case was developed to exercise creating a new launch configuration
-            image_id="ami-0af30663" a us-east image
-            image_id="ami-921f3fd7" a us-west-1 image
-        """
-        self.tester.create_launch_config(name="test_lc", image_id=str(self.image), key_name=str(self.keypair),
-                                         security_groups=self.group.name)
-
-        # self.tester.create_launch_config(name="test_lc", image_id="ami-921f3fd7")
-
-    def DeleteLaunchConfiguration(self):
-        """
-            This case was developed to exercise deleting a launch configuration
-        """
-        self.tester.delete_launch_config(launch_config_name="test_lc")
-
-    def DescribeLaunchConfigurations(self):
-        """
-            This case was developed to exercise describing launch configurations
-        """
-        pass
     def LaunchConfigBasics(self):
         self.name = 'Test-Launch-Config-' + str(time.time())
 
@@ -132,9 +73,7 @@ class AutoScalingBasics(EutesterTestCase):
 if __name__ == "__main__":
     testcase = AutoScalingBasics()
     ### Use the list of tests passed from config/command line to determine what subset of tests to run
-    ### or use a predefined list "CreateAutoScalingGroup", "DeleteAutoScalingGroup", "DescribeAutoScalingGroups",
-    # "DescribeAutoScalingInstances", "SetDesiredCapacity", "SetInstanceHealth", "TerminateInstanceInAutoScalingGroup",
-    # "UpdateAutoScalingGroup", "CreateLaunchConfiguration", "DeleteLaunchConfiguration", "DescribeLaunchConfigurations"
+    ### or use a predefined list "AutoScalingGroupBasics", "LaunchConfigBasics", "AutoScalingInstanceBasics"
     list = testcase.args.tests or ["LaunchConfigBasics"]
 
     ### Convert test suite methods to EutesterUnitTest objects
