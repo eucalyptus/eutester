@@ -65,9 +65,8 @@ class EC2ops(Eutester):
     @Eutester.printinfo
     def __init__(self, host=None, credpath=None, endpoint=None, aws_access_key_id=None, aws_secret_access_key=None,
                  username="root", region=None, is_secure=False, path='/', port=80, boto_debug=0,
-                 APIVersion='2012-07-20'):
+                 APIVersion='2009-11-30'):
         """
-
         :param host:
         :param credpath:
         :param endpoint:
