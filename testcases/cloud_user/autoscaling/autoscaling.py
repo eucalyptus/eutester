@@ -94,11 +94,9 @@ class AutoScalingBasics(EutesterTestCase):
         pass
 
     def cleanAll(self):
-        self.tester.delete_as_group("ASG-1360656706.75")
-        self.tester.delete_as_group("ASG-1360657300.79")
+        # self.tester.delete_as_group("ASG-1360656706.75")
         for item in self.tester.describe_as_group():
             self.debug("Found Auto Scaling Group: " + item.name)
-            # self.tester.delete_as_group(item, True)
 
 if __name__ == "__main__":
     testcase = AutoScalingBasics()
