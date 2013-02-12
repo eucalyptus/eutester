@@ -56,15 +56,15 @@ class AutoScalingBasics(EutesterTestCase):
             raise Exception('Launch Config not deleted')
         self.debug('***** Deleted Launch Config: ' + self.launch_config_name)
 
-    def AutoScalingGroupBasics(self):
-        """
-        This case will be for basic Auto Scaling Group CRUD, SetDesiredCapacity and
-        """
-        pass
-
     def AutoScalingInstanceBasics(self):
         """
         This case will test DescribeAutoScalingInstances, SetInstanceHealth and TerminateInstanceInAutoScalingGroup
+        """
+        pass
+
+    def AutoScalingGroupBasics(self):
+        """
+        This case will be for basic Auto Scaling Group CRUD, SetDesiredCapacity and
         """
         self.auto_scaling_group_name = 'AutoScaling-Group-' + str(time.time())
         self.tester.create_as_group(group_name=self.auto_scaling_group_name,
@@ -86,7 +86,7 @@ if __name__ == "__main__":
     testcase = AutoScalingBasics()
     ### Use the list of tests passed from config/command line to determine what subset of tests to run
     ### or use a predefined list "AutoScalingGroupBasics", "LaunchConfigBasics", "AutoScalingInstanceBasics"
-    list = testcase.args.tests or ["LaunchConfigBasics"]
+    list = testcase.args.tests or ["LaunchConfigBasics", "AutoScalingGroupBasics"]
 
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
