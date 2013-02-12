@@ -98,10 +98,10 @@ class AutoScalingBasics(EutesterTestCase):
 
     def cleanAll(self):
         # self.debug("Singled out: " + str(self.tester.describe_as_group(names="AS-3fd01ddf2b491374")[0]))
-        # self.tester.AS.delete_auto_scaling_group(names=self.tester.describe_as_group(), force_delete=True)
+        self.tester.AS.delete_auto_scaling_group(self.tester.describe_as_group(), True)
         for item in self.tester.describe_as_group():
             self.debug("Going to delete: " + item.name)
-            self.tester.delete_as_group(item.name, True)
+            # self.tester.delete_as_group(item.name, True)
 
 if __name__ == "__main__":
     testcase = AutoScalingBasics()
