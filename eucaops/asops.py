@@ -136,7 +136,7 @@ class ASops(Eutester):
             as_connection_args['path'] = path
             as_connection_args['region'] = as_region
             self.debug("Attempting to create auto scale connection to " + as_region.endpoint + ":" + str(port) + path)
-            self.AS = boto.ec2.autoscale.AutoScaleConnection(**as_connection_args);
+            self.AS = boto.ec2.autoscale.AutoScaleConnection(**as_connection_args)
         except Exception, e:
             self.critical("Was unable to create auto scale connection because of exception: " + str(e))
 
@@ -165,6 +165,7 @@ class ASops(Eutester):
                                  image_id=image_id,
                                  key_name=key_name,
                                  security_groups=security_groups)
+        self.debug("Creating launch config: " + name)
         self.AS.create_launch_configuration(lc)
 
     def describe_launch_config(self, names=None):
@@ -177,6 +178,7 @@ class ASops(Eutester):
         return self.AS.get_all_launch_configurations(names=names)
 
     def delete_launch_config(self, launch_config_name):
+        self.debug("Deleting launch config: " + launch_config_name)
         self.AS.delete_launch_configuration(launch_config_name)
 
     def create_as_group(self, group_name=None, load_balancers=None, availability_zones=None, launch_config=None,
@@ -199,4 +201,13 @@ class ASops(Eutester):
                                     min_size=min_size,
                                     max_size=max_size,
                                     connection=connection)
+        self.debug("Creating Auto Scaling group: " + group_name)
         self.AS.create_auto_scaling_group(as_group)
+
+    def describe_as_group(self, names=None):
+        return self.AS.get_all_groups(names=names)
+
+    def delete_as_group(self, names=None, force=None):
+        self.debug("Deleting Auto Scaling Group: " + names)
+        self.debug("Forcing: " + str(force))
+        self.AS.delete_auto_scaling_group(names,force)
