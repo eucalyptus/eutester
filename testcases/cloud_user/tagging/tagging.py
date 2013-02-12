@@ -260,7 +260,6 @@ class TaggingBasics(EutesterTestCase):
         """
         tags = { u'name': 'security-tag-test', u'location' : 'over there'}
         self.debug("Security group ID: " + self.group.id)
-        return true
         self.tester.create_tags([self.group.id], tags)
 
         ### Test Tag Filtering , u'tag:location' : 'over there'
