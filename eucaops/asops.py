@@ -209,6 +209,6 @@ class ASops(Eutester):
 
     def delete_as_group(self, names=None, force=None):
         for item in names:
-            self.debug("Deleting Auto Scaling Group: " + names[item.name])
+            self.debug("Deleting Auto Scaling Group: " + item.name)
             self.debug("Forcing: " + str(force))
-            self.AS.delete_auto_scaling_group(names,force)
+            self.AS.delete_auto_scaling_group(item.name,force)
