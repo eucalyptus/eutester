@@ -46,6 +46,14 @@ class BFEBSBasics(InstanceBasics):
         if self.reservation:
             self.tester.terminate_instances(self.reservation)
         self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name, zone=zone)
+        ## Ensure that we can attach and use a volume
+        for instance in self.reservation.instances:
+            vol_dev = instance.attach_volume(self.volume)
+            data_amount = 1024
+            data = self.tester.id_generator(size=data_amount)
+            instance.sys("echo " + data + " >> " + vol_dev)
+            data_read = instance.sys("")[0]
+            self.assertEqual(data, data_read, "Data written not the same as data read")
         self.assertTrue(self.tester.stop_instances(self.reservation))
         for instance in self.reservation.instances:
             if instance.ip_address or instance.private_ip_address:
