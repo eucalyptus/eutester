@@ -70,6 +70,7 @@ class AutoScalingBasics(EutesterTestCase):
                    str(len(self.tester.describe_as_group([self.auto_scaling_group_name]))))
         if len(self.tester.describe_as_group([self.auto_scaling_group_name])) != 1:
             raise Exception('Auto Scaling Group not created')
+        ### self.AS.get_all_groups(names=[group_name])[0]
 
         ### Test Delete Auto Scaling Group
         self.tester.delete_as_group(self.auto_scaling_group_name, True)
@@ -95,11 +96,17 @@ class AutoScalingBasics(EutesterTestCase):
         """
         pass
 
+    def cleanAll(self):
+        for item in self.tester.get_all_groups():
+            self.debug("Going to delete: " + item.name)
+
+
 if __name__ == "__main__":
     testcase = AutoScalingBasics()
     ### Use the list of tests passed from config/command line to determine what subset of tests to run
     ### or use a predefined list "AutoScalingGroupBasics", "LaunchConfigBasics", "AutoScalingInstanceBasics"
-    list = testcase.args.tests or ["AutoScalingBasics"]
+    # list = testcase.args.tests or ["AutoScalingBasics"]
+    list = testcase.args.tests or ["cleanAll"]
 
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
