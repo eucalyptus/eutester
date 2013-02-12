@@ -140,7 +140,7 @@ class ASops(Eutester):
             # self.AS = boto.connect_autoscale("AKIAJWTY6ISPYZS4XV5A", "yFXY022/j7eeVGzeLoTBy4cIhd1upXHpve6R0wiy")
             # self.AS = boto.ec2.autoscale.AutoScaleConnection("AKIAJWTY6ISPYZS4XV5A", "yFXY022/j7eeVGzeLoTBy4cIhd1upXHpve6R0wiy")
             # self.AS = boto.ec2.autoscale.connect_to_region("us-west-1")
-            self.AS = boto.ec2.autoscale.AutoScaleConnection("AKIAJWTY6ISPYZS4XV5A", "yFXY022/j7eeVGzeLoTBy4cIhd1upXHpve6R0wiy","us-west-1")
+            self.AS = boto.ec2.autoscale.AutoScaleConnection("AKIAJWTY6ISPYZS4XV5A", "yFXY022/j7eeVGzeLoTBy4cIhd1upXHpve6R0wiy",region="us-west-1")
         except Exception, e:
             self.critical("Was unable to create auto scale connection because of exception: " + str(e))
 
