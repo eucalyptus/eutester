@@ -102,7 +102,7 @@ class AutoScalingBasics(EutesterTestCase):
         # self.tester.create_launch_config(name="test_lc", image_id=str(self.image), key_name=str(self.keypair),
         #                                  security_groups=self.group.name)
 
-        self.tester.create_launch_config(name="test_lc", image_id="ami-003a1b45")
+        self.tester.create_launch_config(name="test_lc", image_id="ami-921f3fd7")
 
     def DeleteLaunchConfiguration(self):
         """
