@@ -96,7 +96,7 @@ class AutoScalingBasics(EutesterTestCase):
     def cleanAll(self):
         for item in self.tester.describe_as_group():
             self.debug("Found Auto Scaling Group: " + item.name)
-            self.debug("AZ: " + item.availability_zones)
+            self.debug("AZ: " + item.availability_zones[0])
             self.debug("desired_capacity: " + item.desired_capacity)
             self.debug("max_size: " + item.max_size)
             self.debug("min_size: " + item.min_size)
