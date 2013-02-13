@@ -43,6 +43,8 @@ class BFEBSBasics(InstanceBasics):
         except Exception,e:
             self.RegisterImage()
             self.image = self.tester.get_emi(root_device_type="ebs")
+        if not self.volume:
+            self.volume = self.tester.create_volume(azone=self.zone, size=2)
         if self.reservation:
             self.tester.terminate_instances(self.reservation)
         self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name, zone=zone)
