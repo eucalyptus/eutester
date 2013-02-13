@@ -1,6 +1,6 @@
 # Software License Agreement (BSD License)
 #
-# Copyright (c) 2009-2011, Eucalyptus Systems, Inc.
+# Copyright (c) 2009-2013, Eucalyptus Systems, Inc.
 # All rights reserved.
 #
 # Redistribution and use of this software in source and binary forms, with or
@@ -32,15 +32,12 @@
 
 from eutester import Eutester
 import re
-import os
 import copy
-from boto.ec2.autoscale import AutoScaleConnection
 import boto.ec2.autoscale
+from boto.ec2.autoscale import ScalingPolicy
 from boto.ec2.autoscale import LaunchConfiguration
 from boto.ec2.autoscale import AutoScalingGroup
-import boto.ec2.autoscale
 from boto.ec2.regioninfo import RegionInfo
-import boto
 
 ASRegionData = {
     'us-east-1': 'autoscaling.us-east-1.amazonaws.com',
@@ -130,7 +127,6 @@ class ASops(Eutester):
 
         if re.search('2.6', boto.__version__):
             connection_args['validate_certs'] = False
-
         try:
             as_connection_args = copy.copy(connection_args)
             as_connection_args['path'] = path
@@ -160,7 +156,6 @@ class ASops(Eutester):
         :param key_name: The name of the EC2 key pair.
         :param security_groups: Names of the security groups with which to associate the EC2 instances.
         """
-
         lc = LaunchConfiguration(name=name,
                                  image_id=image_id,
                                  key_name=key_name,
@@ -207,7 +202,36 @@ class ASops(Eutester):
     def describe_as_group(self, names=None):
         return self.AS.get_all_groups(names=names)
 
-    def delete_as_group(self, names=None, force=True):
+    def delete_as_group(self, names=None, force=None):
         self.debug("Deleting Auto Scaling Group: " + names)
         self.debug("Forcing: " + str(force))
-        self.AS.delete_auto_scaling_group(names, force)
+        self.AS.delete_auto_scaling_group(name=names, force_delete=force)
+
+    def create_as_policy(self, name=None, adjustment_type=None, as_name=None, scaling_adjustment=None, cooldown=None):
+        """
+        Create an auto scaling policy
+
+        :param name:
+        :param adjustment_type: (ChangeInCapacity, ExactCapacity, PercentChangeInCapacity)
+        :param as_name:
+        :param scaling_adjustment:
+        :param cooldown: (if something gets scaled, the wait in seconds before trying again.)
+        """
+        scaling_policy = ScalingPolicy(name=name,
+                                       adjustment_type=adjustment_type,
+                                       as_name=as_name,
+                                       scaling_adjustment=scaling_adjustment,
+                                       cooldown=cooldown)
+        self.debug("Creating Auto Scaling Policy: " + name)
+        self.AS.create_scaling_policy(scaling_policy)
+
+    def describe_as_policies(self, as_group=None, policy_names=None):
+        self.AS.get_all_policies(as_group=as_group, policy_names=policy_names)
+
+    def execute_as_policy(self, policy_name=None, as_group=None, honor_cooldown=None):
+        self.debug("Executing Auto Scaling Policy: " + policy_name)
+        self.AS.execute_policy(policy_name=policy_name, as_group=as_group, honor_cooldown=honor_cooldown)
+
+    def delete_as_policy(self, policy_name=None, autoscale_group=None):
+        self.debug("Deleting Policy: " + policy_name + " from group: " + autoscale_group)
+        self.AS.delete_policy(policy_name=policy_name,autoscale_group=autoscale_group)
