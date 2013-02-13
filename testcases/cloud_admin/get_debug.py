@@ -65,6 +65,21 @@ class GatherDebug(InstanceBasics, BucketTestSuite):
             for command in clc_commands:
                 machine.sys("source " + self.tester.credpath + "/eucarc && " + command)
 
+        for account in self.tester.get_all_accounts():
+            account_name = next((value for key, value in account.iteritems() if 'account_name' in key), None)
+            self.tester.debug( "## Account Name: " + account_name )
+            for user in self.tester.get_users_from_account(delegate_account=account_name):
+                user_name = next((value for key, value in user.iteritems() if 'user_name' in key), None)
+                self.tester.debug( "### User Name: " + user_name )
+                for policy in self.tester.get_user_policies(user_name, delegate_account=account_name):
+                    self.tester.debug( "#### User " + user_name + " Policy ####" )
+                    for key, value in policy.iteritems():
+                        self.tester.debug( key + ": " + value )
+
+            for group in self.tester.get_all_groups(account_name=account_name):
+                for key, value in group.iteritems():
+                    self.tester.debug ( key + ": " + value )
+
     def debug_walrus(self, **kwargs):
         walrus_commands = self.basic_commands + self.network_commands + self.euca_commands
         for machine in self.tester.get_component_machines("ws"):
