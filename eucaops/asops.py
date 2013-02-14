@@ -1,6 +1,6 @@
 # Software License Agreement (BSD License)
 #
-# Copyright (c) 2009-2011, Eucalyptus Systems, Inc.
+# Copyright (c) 2009-2013, Eucalyptus Systems, Inc.
 # All rights reserved.
 #
 # Redistribution and use of this software in source and binary forms, with or
@@ -30,52 +30,76 @@
 #
 # Author: tony@eucalyptus.com
 
-
 from eutester import Eutester
-import time
 import re
-import os
 import copy
-from datetime import datetime
-from boto.ec2.image import Image
-from boto.ec2.keypair import KeyPair
-from boto.ec2.blockdevicemapping import BlockDeviceMapping, BlockDeviceType
-from boto.ec2.volume import Volume
-from boto.exception import EC2ResponseError
-from eutester.euinstance import EuInstance
-from eutester.euvolume import EuVolume
-from eutester.eusnapshot import EuSnapshot
-from boto.ec2.autoscale import AutoScaleConnection
+import boto.ec2.autoscale
+from boto.ec2.autoscale import ScalingPolicy
 from boto.ec2.autoscale import LaunchConfiguration
 from boto.ec2.autoscale import AutoScalingGroup
-import boto.ec2.autoscale
 from boto.ec2.regioninfo import RegionInfo
-import boto
 
 ASRegionData = {
-    'us-east-1' : 'autoscaling.us-east-1.amazonaws.com',
-    'us-west-1' : 'autoscaling.us-west-1.amazonaws.com',
-    'us-west-2' : 'autoscaling.us-west-2.amazonaws.com',
-    'eu-west-1' : 'autoscaling.eu-west-1.amazonaws.com',
-    'ap-northeast-1' : 'autoscaling.ap-northeast-1.amazonaws.com',
-    'ap-southeast-1' : 'autoscaling.ap-southeast-1.amazonaws.com',
-    'ap-southeast-2' : 'autoscaling.ap-southeast-2.amazonaws.com',
-    'sa-east-1' : 'autoscaling.sa-east-1.amazonaws.com'}
+    'us-east-1': 'autoscaling.us-east-1.amazonaws.com',
+    'us-west-1': 'autoscaling.us-west-1.amazonaws.com',
+    'us-west-2': 'autoscaling.us-west-2.amazonaws.com',
+    'eu-west-1': 'autoscaling.eu-west-1.amazonaws.com',
+    'ap-northeast-1': 'autoscaling.ap-northeast-1.amazonaws.com',
+    'ap-southeast-1': 'autoscaling.ap-southeast-1.amazonaws.com',
+    'ap-southeast-2': 'autoscaling.ap-southeast-2.amazonaws.com',
+    'sa-east-1': 'autoscaling.sa-east-1.amazonaws.com'}
+
 
 class ASops(Eutester):
-    def __init__(self, host=None, credpath=None, endpoint=None, aws_access_key_id=None, aws_secret_access_key = None, username="root",region=None,
-                 is_secure=False, path='/', port=80, boto_debug=0, APIVersion = '2011-01-01'):
-        super(ASops, self).__init__(credpath=credpath, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key)
-        self.setup_as_connection(host= host, region=region, endpoint=endpoint, aws_access_key_id=self.aws_access_key_id ,
-            aws_secret_access_key=self.aws_secret_access_key, is_secure=is_secure, path=path, port=port,
-            boto_debug=boto_debug, APIVersion=APIVersion)
+    def __init__(self, host=None, credpath=None, endpoint=None, aws_access_key_id=None, aws_secret_access_key=None,
+                 username="root", region=None, is_secure=False, path='/', port=80, boto_debug=0):
+        """
+        :param host:
+        :param credpath:
+        :param endpoint:
+        :param aws_access_key_id:
+        :param aws_secret_access_key:
+        :param username:
+        :param region:
+        :param is_secure:
+        :param path:
+        :param port:
+        :param boto_debug:
+        """
+        self.aws_access_key_id = aws_access_key_id
+        self.aws_secret_access_key = aws_secret_access_key
+        self.account_id = None
+        self.user_id = None
+        super(ASops, self).__init__(credpath=credpath)
+
+        self.setup_as_connection(host=host,
+                                 region=region,
+                                 endpoint=endpoint,
+                                 aws_access_key_id=self.aws_access_key_id,
+                                 aws_secret_access_key=self.aws_secret_access_key,
+                                 is_secure=is_secure,
+                                 path=path,
+                                 port=port,
+                                 boto_debug=boto_debug)
         self.poll_count = 48
         self.username = username
         self.test_resources = {}
-        self.key_dir = "./"
+        self.setup_as_resource_trackers()
 
-    def setup_as_connection(self, endpoint=None, aws_access_key_id=None, aws_secret_access_key=None, is_secure=True,host=None ,
-                             region=None, path = "/", port = 443,  APIVersion ='2011-01-01', boto_debug=0):
+    def setup_as_connection(self, endpoint=None, aws_access_key_id=None, aws_secret_access_key=None, is_secure=True,
+                            host=None, region=None, path="/", port=443, boto_debug=0):
+        """
+        :param endpoint:
+        :param aws_access_key_id:
+        :param aws_secret_access_key:
+        :param is_secure:
+        :param host:
+        :param region:
+        :param path:
+        :param port:
+        :param boto_debug:
+        :raise:
+        """
         as_region = RegionInfo()
         if region:
             self.debug("Check region: " + str(region))
@@ -85,7 +109,7 @@ class ASops(Eutester):
                 else:
                     as_region.endpoint = endpoint
             except KeyError:
-                raise Exception( 'Unknown region: %s' % region)
+                raise Exception('Unknown region: %s' % region)
         else:
             as_region.name = 'eucalyptus'
             if not host:
@@ -93,29 +117,37 @@ class ASops(Eutester):
                     as_region.endpoint = endpoint
                 else:
                     as_region.endpoint = self.get_as_ip()
-        connection_args = { 'aws_access_key_id' : aws_access_key_id,
-                            'aws_secret_access_key': aws_secret_access_key,
-                            'is_secure': is_secure,
-                            'debug':boto_debug,
-                            'port' : port,
-                            'path' : path,
-                            'host' : host}
+        connection_args = {'aws_access_key_id': aws_access_key_id,
+                           'aws_secret_access_key': aws_secret_access_key,
+                           'is_secure': is_secure,
+                           'debug': boto_debug,
+                           'port': port,
+                           'path': path,
+                           'region': as_region}
 
         if re.search('2.6', boto.__version__):
             connection_args['validate_certs'] = False
-
         try:
             as_connection_args = copy.copy(connection_args)
             as_connection_args['path'] = path
-            as_connection_args['api_version'] = APIVersion
             as_connection_args['region'] = as_region
-            self.debug("Attempting to create AS connection to " + as_region.endpoint + str(port) + path)
-            self.AS = AutoScaleConnection(aws_access_key_id, aws_secret_access_key,region=as_region)
+            self.debug("Attempting to create auto scale connection to " + as_region.endpoint + ":" + str(port) + path)
+            self.AS = boto.ec2.autoscale.AutoScaleConnection(**as_connection_args)
         except Exception, e:
-            self.critical("Was unable to create AS connection because of exception: " + str(e))
+            self.critical("Was unable to create auto scale connection because of exception: " + str(e))
 
+        #Source ip on local test machine used to reach instances
+        self.as_source_ip = None
 
-    def create_launch_config(self, name=None, image_id=None, key_name=None, security_groups=[]):
+    def setup_as_resource_trackers(self):
+        """
+        Setup keys in the test_resources hash in order to track artifacts created
+        """
+        self.test_resources["keypairs"] = []
+        self.test_resources["security-groups"] = []
+        self.test_resources["images"] = []
+
+    def create_launch_config(self, name=None, image_id=None, key_name=None, security_groups=None):
         """
         Creates a new launch configuration with specified attributes.
 
@@ -124,13 +156,14 @@ class ASops(Eutester):
         :param key_name: The name of the EC2 key pair.
         :param security_groups: Names of the security groups with which to associate the EC2 instances.
         """
-        launch_config = LaunchConfiguration(name=name,
-            image_id=image_id,
-            key_name=key_name,
-            security_groups=security_groups)
-        self.AS.create_launch_configuration(launch_config)
+        lc = LaunchConfiguration(name=name,
+                                 image_id=image_id,
+                                 key_name=key_name,
+                                 security_groups=security_groups)
+        self.debug("Creating launch config: " + name)
+        self.AS.create_launch_configuration(lc)
 
-    def describe_launch_config(self, names=[]):
+    def describe_launch_config(self, names=None):
         """
         return a list of launch configs
 
@@ -139,16 +172,12 @@ class ASops(Eutester):
         """
         return self.AS.get_all_launch_configurations(names=names)
 
-    def delete_launch_config(self, launch_config=None):
-        """
-        Delete a launch configuration
+    def delete_launch_config(self, launch_config_name):
+        self.debug("Deleting launch config: " + launch_config_name)
+        self.AS.delete_launch_configuration(launch_config_name)
 
-        :param launch_config: the launch config to delete
-        :return:
-        """
-        self.AS.delete_launch_configuration(launch_config)
-
-    def create_as_group(self, group_name=None, load_balancers=None, availability_zones=None, launch_config=None, min_size=None, max_size=None, connection=None):
+    def create_as_group(self, group_name=None, load_balancers=None, availability_zones=None, launch_config=None,
+                        min_size=None, max_size=None, connection=None):
         """
         Create auto scaling group.
 
@@ -161,10 +190,48 @@ class ASops(Eutester):
         :param connection: connection to auto scaling service
         """
         as_group = AutoScalingGroup(group_name=group_name,
-            load_balancers=load_balancers,
-            availability_zones=availability_zones,
-            launch_config=launch_config,
-            min_size=min_size,
-            max_size=max_size,
-            connection=connection)
+                                    load_balancers=load_balancers,
+                                    availability_zones=availability_zones,
+                                    launch_config=launch_config,
+                                    min_size=min_size,
+                                    max_size=max_size,
+                                    connection=connection)
+        self.debug("Creating Auto Scaling group: " + group_name)
         self.AS.create_auto_scaling_group(as_group)
+
+    def describe_as_group(self, names=None):
+        return self.AS.get_all_groups(names=names)
+
+    def delete_as_group(self, names=None, force=None):
+        self.debug("Deleting Auto Scaling Group: " + names)
+        self.debug("Forcing: " + str(force))
+        self.AS.delete_auto_scaling_group(name=names, force_delete=force)
+
+    def create_as_policy(self, name=None, adjustment_type=None, as_name=None, scaling_adjustment=None, cooldown=None):
+        """
+        Create an auto scaling policy
+
+        :param name:
+        :param adjustment_type: (ChangeInCapacity, ExactCapacity, PercentChangeInCapacity)
+        :param as_name:
+        :param scaling_adjustment:
+        :param cooldown: (if something gets scaled, the wait in seconds before trying again.)
+        """
+        scaling_policy = ScalingPolicy(name=name,
+                                       adjustment_type=adjustment_type,
+                                       as_name=as_name,
+                                       scaling_adjustment=scaling_adjustment,
+                                       cooldown=cooldown)
+        self.debug("Creating Auto Scaling Policy: " + name)
+        self.AS.create_scaling_policy(scaling_policy)
+
+    def describe_as_policies(self, as_group=None, policy_names=None):
+        self.AS.get_all_policies(as_group=as_group, policy_names=policy_names)
+
+    def execute_as_policy(self, policy_name=None, as_group=None, honor_cooldown=None):
+        self.debug("Executing Auto Scaling Policy: " + policy_name)
+        self.AS.execute_policy(policy_name=policy_name, as_group=as_group, honor_cooldown=honor_cooldown)
+
+    def delete_as_policy(self, policy_name=None, autoscale_group=None):
+        self.debug("Deleting Policy: " + policy_name + " from group: " + autoscale_group)
+        self.AS.delete_policy(policy_name=policy_name,autoscale_group=autoscale_group)
