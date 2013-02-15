@@ -45,6 +45,7 @@ import traceback
 import StringIO
 import eulogger
 import types
+from functools import wraps
 
 
 
@@ -273,8 +274,9 @@ class Eutester(object):
         
         2013-02-07 14:46:58,928] [DEBUG]:(mydir/myfile.py:1234) - Starting method: myfunction()
         2013-02-07 14:46:58,928] [DEBUG]:---> myfunction(self, arg1=123, arg2=abc, kwarg='words')
-    
         '''
+
+        @wraps(func)
         def methdecor(*func_args, **func_kwargs):
             try:
                 defaults = func.func_defaults
