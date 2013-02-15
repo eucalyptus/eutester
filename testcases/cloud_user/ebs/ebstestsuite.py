@@ -238,8 +238,17 @@ class EbsTestSuite(EutesterTestCase):
             
         for testzone in zonelist:
             zone = testzone.name
-            res = self.tester.run_instance(image=image, keypair=keyname, group=group, username=username, password=inst_pass, type=vmtype, zone=zone, min=count, max=count)
-            for inst in res.instances:
+            instances = self.tester.run_image( image=image,
+                                                keypair=keyname,
+                                                group=group,
+                                                username=username,
+                                                password=inst_pass,
+                                                type=vmtype,
+                                                zone=zone,
+                                                min=count,
+                                                max=count)
+
+            for inst in instances:
                 testzone.instances.append(inst)
             self.debug('Created instance: ' + str(inst.id)+" in zone:"+str(zone))
         #self.endsuccess()
