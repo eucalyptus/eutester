@@ -86,7 +86,12 @@ class S3ops(Eutester):
         """
         self.test_resources["keys"] = []
         self.test_resources["buckets"] = []
-        
+
+    def get_s3_ip(self):
+        """Parse the eucarc for the S3_URL"""
+        walrus_url = self.parse_eucarc("S3_URL")
+        return walrus_url.split("/")[2].split(":")[0]
+
     def create_bucket(self,bucket_name):
         """
         Create a bucket.  If the bucket already exists and you have

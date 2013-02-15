@@ -32,7 +32,7 @@
 #
 # Author: vic.iglesias@eucalyptus.com
 
-__version__ = '0.0.6'
+__version__ = '0.0.7'
 
 import re
 import os
@@ -114,16 +114,6 @@ class Eutester(object):
         """Parse the eucarc for the EC2_ACCOUNT_NUMBER"""
         ec2_url = self.parse_eucarc("EC2_URL")
         return ec2_url.split(':')[1].split("/")[0]
-    
-    def get_s3_ip(self):
-        """Parse the eucarc for the S3_URL"""
-        walrus_url = self.parse_eucarc("S3_URL")
-        return walrus_url.split("/")[2].split(":")[0]
-    
-    def get_ec2_ip(self):
-        """Parse the eucarc for the EC2_URL"""
-        ec2_url = self.parse_eucarc("EC2_URL")
-        return ec2_url.split("/")[2].split(":")[0]
 
     def parse_eucarc(self, field):
         with open( self.credpath + "/eucarc") as eucarc:

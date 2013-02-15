@@ -260,7 +260,6 @@ class TaggingBasics(EutesterTestCase):
         """
         tags = { u'name': 'security-tag-test', u'location' : 'over there'}
         self.debug("Security group ID: " + self.group.id)
-        return true
         self.tester.create_tags([self.group.id], tags)
 
         ### Test Tag Filtering , u'tag:location' : 'over there'
@@ -275,17 +274,19 @@ class TaggingBasics(EutesterTestCase):
         ### Filters can be found here, most will be tested manually, but a spot check should be added
         ### http://docs.aws.amazon.com/AWSEC2/latest/CommandLineReference/ApiReference-cmd-DescribeSecurityGroups.html
         group_description = "group-filtering"
-        filter_group = self.tester.add_group(group_name="filter-test", group_description=group_description)
+        filter_group = self.tester.add_group(group_name="filter-test", description=group_description)
 
         description_filter = {u'description': group_description }
-        owner_filter = {u'manifest-location': self.group.owner_id}
+        owner_filter = {u'owner-id': filter_group.owner_id}
 
         description_match = self.tester.ec2.get_all_security_groups(filters=description_filter)
+        self.debug("Groups matching description:" + str(description_match))
         owner_match = self.tester.ec2.get_all_security_groups(filters=owner_filter)
+        self.debug("Groups matching owner-id (" + owner_filter[u'owner-id']  + "):" + str(owner_match))
 
         self.tester.delete_group(filter_group)
 
-        if len(description_match) != 1 or len(owner_match) != 2:
+        if len(description_match) != 1 or len(owner_match) != 3:
             raise Exception("Non-tag Filtering of images did not return the proper number of resources")
 
         ### Test Deletion

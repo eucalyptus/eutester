@@ -170,6 +170,11 @@ class EC2ops(Eutester):
         self.test_resources["security-groups"] = []
         self.test_resources["images"] = []
 
+    def get_ec2_ip(self):
+        """Parse the eucarc for the S3_URL"""
+        walrus_url = self.parse_eucarc("EC2_URL")
+        return walrus_url.split("/")[2].split(":")[0]
+
     def create_tags(self, resource_ids, tags):
         """
         Add tags to the given resource
@@ -345,7 +350,7 @@ class EC2ops(Eutester):
         return user_priv_key.private_decrypt(string_to_decrypt,RSA.pkcs1_padding)
 
     @Eutester.printinfo
-    def add_group(self, group_name=None, fail_if_exists=False ):
+    def add_group(self, group_name=None, description=None, fail_if_exists=False ):
         """
         Add a security group to the system with name group_name, if it exists dont create it
 
@@ -365,7 +370,9 @@ class EC2ops(Eutester):
         else:
             self.debug( 'Creating Security Group: %s' % group_name)
             # Create a security group to control access to instance via SSH.
-            group = self.ec2.create_security_group(group_name, group_name)
+            if not description:
+                description = group_name
+            group = self.ec2.create_security_group(group_name, description)
             self.test_resources["security-groups"].append(group)
         return group
 
