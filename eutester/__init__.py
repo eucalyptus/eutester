@@ -281,6 +281,7 @@ class Eutester(object):
             try:
                 defaults = func.func_defaults
                 kw_count = len(defaults or [])
+                selfobj = None
                 arg_count = func.func_code.co_argcount - kw_count
                 var_names = func.func_code.co_varnames[:func.func_code.co_argcount]
                 arg_names = var_names[:arg_count]
@@ -312,7 +313,7 @@ class Eutester(object):
                         kw_string += str(kw_defaults[kw])
                 debugstring = '\n--->('+str(os.path.basename(func.func_code.co_filename))+":"+str(func.func_code.co_firstlineno)+")Starting method: "+str(func.func_name)+'('+arg_string+kw_string+')'
                 debugmethod = None
-                if hasattr(selfobj,'debug'):
+                if selfobj and hasattr(selfobj,'debug'):
                     debug = getattr(selfobj, 'debug')
                     if isinstance(debug, types.MethodType):
                         debugmethod = debug
