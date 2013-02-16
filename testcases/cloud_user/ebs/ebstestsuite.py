@@ -95,7 +95,8 @@ class EbsTestSuite(EutesterTestCase):
                  volumes=None, 
                  keypair=None, 
                  group=None, 
-                 emi=None, 
+                 emi=None,
+                 root_device_type='instance-store',
                  vmtype='c1.medium',
                  eof=1):
         
@@ -112,7 +113,7 @@ class EbsTestSuite(EutesterTestCase):
         if emi:
             self.image = self.tester.get_emi(emi=emi)
         else:
-            self.image = self.tester.get_emi(not_location='windows')
+            self.image = self.tester.get_emi(root_device_type=root_device_type, not_location='windows')
         
         self.vmtype = vmtype
         self.zone = None    
@@ -671,8 +672,8 @@ class EbsTestSuite(EutesterTestCase):
             self.debug('Finished creating '+str(count)+' snapshots in zone:'+str(zone.name)+', now creating vols from them')
             try:
                 for snap in snaps:
-                    createdvols.append(self.tester.create_volumes(zone,snapshot=snap,timepergig=tpg, monitor_to_state=False))
-                vols.append(self.tester.monitor_created_euvolumes_to_state(createdvols, timepergig=tpg))
+                    createdvols.extend(self.tester.create_volumes(zone,snapshot=snap,timepergig=tpg, monitor_to_state=False))
+                vols.extend(self.tester.monitor_created_euvolumes_to_state(createdvols, timepergig=tpg))
                 self.tester.print_euvolume_list(vols)
                 self.status("Attempting to attach new vols from new snapshots to instance:"+str(instance.id)+" to verify md5s...")
                 for newvol in vols:
