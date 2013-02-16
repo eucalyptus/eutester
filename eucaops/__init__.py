@@ -42,6 +42,7 @@ from eutester.euservice import EuserviceManager
 from boto.ec2.instance import Reservation
 from eutester.euconfig import EuConfig
 from eutester.machine import Machine
+from eutester.euvolume import EuVolume
 from eutester import eulogger
 import re
 import os
@@ -189,6 +190,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops):
    
     def cleanup_artifacts(self):
         self.debug("Starting cleanup of artifacts")
+        self.clean_up_test_volumes()
         for key,array in self.test_resources.iteritems():
             for item in array:
                 try:
@@ -208,6 +210,49 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops):
                         item.delete()
                 except Exception, e:
                     self.fail("Unable to delete item: " + str(item) + "\n" + str(e))
+
+    def clean_up_test_volumes(self, volumes=None):
+        """
+        Definition: cleaup helper method intended to clean up volumes created within a test, after the test has ran.
+
+        :param volumes: optional list of volumes to delete from system, otherwise will use test_resources['volumes']
+        """
+        euvolumes = []
+        detaching = []
+        vol_str = volumes or "test_resources['volumes']"
+        self.debug('clean_up_test_volumes starting, volumes:'+str(vol_str))
+        if not volumes:
+            volumes = self.test_resources['volumes']
+        if not volumes:
+            return
+
+        for vol in volumes:
+            try:
+                vol.update()
+                if not isinstance(vol, EuVolume):
+                    vol = EuVolume.make_euvol_from_vol(vol, self)
+                euvolumes.append(vol)
+            except:
+                print self.get_traceback()
+        try:
+            self.print_euvolume_list(euvolumes)
+        except: pass
+        self.debug('Clean_up_volumes: Detaching any attached volumes to be deleted...')
+        for vol in volumes:
+            try:
+                if vol.status == 'in-use':
+                    if vol.attach_data and vol.attach_data.status != 'detaching':
+                        vol.detach()
+                    detaching.append(vol)
+            except:
+                print self.get_traceback()
+        if detaching:
+            self.monitor_euvolumes_to_status(detaching, status='available', attached_status=None)
+        self.debug('clean_up_volumes: Deleteing volumes now...')
+        self.delete_volumes(euvolumes)
+
+
+
                     
     def get_current_resources(self,verbose=False):
         '''Return a dictionary with all known resources the system has. Optional pass the verbose=True flag to print this info to the logs
