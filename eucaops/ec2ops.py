@@ -1028,7 +1028,8 @@ class EC2ops(Eutester):
 
         :param volume: (mandatory Volume) Volume id of the volume to create snapshot from
         :param wait_on_progress: (optional string) string used to describe the snapshot
-        :param poll_interval: (optional integer) # of poll intervals to wait while 0 progress is made before exiting, overrides "poll_count" when used
+        :param poll_interval: (optional integer) # of poll intervals to wait while 0 progress is made before exiting,
+         overrides "poll_count" when used
         :param timeout: (optional integer) time to sleep between polling snapshot status
         :param description: (optional integer) over all time to wait before exiting as failure
         :return: EuSnapshot
@@ -1047,7 +1048,8 @@ class EC2ops(Eutester):
 
         :param volume_id: (mandatory string) Volume id of the volume to create snapshot from
         :param wait_on_progress: (optional string) string used to describe the snapshot
-        :param poll_interval: (optional integer) # of poll intervals to wait while 0 progress is made before exiting, overrides "poll_count" when used
+        :param poll_interval: (optional integer) # of poll intervals to wait while 0 progress is made before exiting,
+         overrides "poll_count" when used
         :param timeout: (optional integer) time to sleep between polling snapshot status
         :param description: (optional integer) over all time to wait before exiting as failure
         :return: EuSnapshot
@@ -1081,9 +1083,11 @@ class EC2ops(Eutester):
         :param volume_id: (mandatory string) Volume id of the volume to create snapshot from
         :parram count: (optional Integer) Specify how many snapshots to attempt to create
         :param mincount: (optional Integer) Specify the min success count, defaults to 'count'
-        :param eof: (optional boolean) End on failure.If true will end on first failure, otherwise will continue to try and fufill mincount
+        :param eof: (optional boolean) End on failure.If true will end on first failure, otherwise will continue to try
+         and fufill mincount
         :param wait_on_progress: (optional string) string used to describe the snapshot
-        :param poll_interval: (optional integer) # of poll intervals to wait while 0 progress is made before exiting, overrides "poll_count" when used
+        :param poll_interval: (optional integer) # of poll intervals to wait while 0 progress is made before exiting,
+         overrides "poll_count" when used
         :param timeout: (optional integer) time to sleep between polling snapshot status
         :param description: (optional integer) over all time to wait before exiting as failure
         :return: EuSnapshot list
@@ -1091,7 +1095,10 @@ class EC2ops(Eutester):
         if isinstance(volume_id, Volume):
             raise Exception('Expected volume.id got Volume, try create_snapshots or create_snapshot_from_volume methods instead')
         volume = EuVolume.make_euvol_from_vol(self.get_volume(volume_id), tester=self)
-        return self.create_snapshots(volume, count=count, mincount=mincount, eof=eof, delay=delay, wait_on_progress=wait_on_progress, poll_interval=poll_interval, timeout=timeout, description=description)
+        return self.create_snapshots(volume,
+                                     count=count, mincount=mincount, eof=eof, delay=delay,
+                                     wait_on_progress=wait_on_progress, poll_interval=poll_interval,
+                                     timeout=timeout, description=description)
 
 
 
