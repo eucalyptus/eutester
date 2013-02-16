@@ -739,6 +739,120 @@ class EC2ops(Eutester):
                 self.debug(buf)
         self.print_euvolume_list(origlist)
         return retlist
+
+    @Eutester.printinfo
+    def monitor_euvolumes_to_status(self,
+                                   euvolumes,
+                                   status = None,
+                                   attached_status = None,
+                                   poll_interval=10,
+                                   timeout=180,
+                                   eof=True,
+                                   validate_args=True):
+        """
+        (See: monitor_created_euvolumes_to_state() if monitoring newly created volumes, otherwise this method is
+              intended for monitoring attached and in-use states of volume(s). )
+        Definition: monitors a list of euvolumes to a given state.
+        Some example valid states:
+            status = available, attached_status = None
+            status = in-use, attached_status = attached, attaching, detaching
+
+        :param euvolumes:  list of euvolumes to monitor
+        :param status: state of volume expected: ie 'in-use', 'available', 'deleted'
+        :param attached_status: state of volume's attached data. ie 'attached', 'attaching', 'detaching', 'none'
+        :param poll_interval: integer seconds between polling for status updates
+        :param timeout: time to wait before failing
+        :param eof: exit on first failure encountered, otherwise wait until other volumes pass/fail. Default=True
+        :param validate_args: boolean, Will check args for a valid status/available_status pair.
+                                If False will monitor to a non-valid state for testing purposes
+        """
+        good = []
+        failed = []
+        monitor = []
+        failmsg = ""
+        self.debug('Monitor_euvolumes_to_state:'+str(status)+"/"+str(attached_status))
+        if attached_status and not status:
+            status = 'in-use'
+        #check for valid states in given arguments...
+        if validate_args:
+            if (status != 'available') and (status != 'in-use') and (status != 'deleted') and (status != 'failed'):
+                raise Exception('Invalid volume states in monitor request:'+str(status)+" != in-use or available")
+            if attached_status is None:
+                if status != 'available':
+                    raise Exception('Invalid volume states in monitor request:'+str(status)+"/"+str(attached_status))
+            else:
+                if (attached_status == 'attached') or (attached_status == 'attaching') or \
+                        (attached_status == 'detaching') or (attached_status == 'detaching'):
+                    if status != 'in-use':
+                        raise Exception('Invalid volume states in monitor request:'+str(status)+"/"+str(attached_status))
+                else:
+                    raise Exception('Invalid volume states in monitor request:'+str(status)+"/"+str(attached_status)+
+                                    " != attached, attaching, detaching")
+
+        start = time.time()
+        elapsed = 0
+        self.debug('Updating volume list before monitoring...')
+        for vol in euvolumes:
+            try:
+                vol.update()
+                if not isinstance(vol, EuVolume):
+                    vol = EuVolume.make_euvol_from_vol(vol,self)
+                monitor.append(vol)
+            except:
+                self.debug(self.get_traceback())
+
+        self.print_euvolume_list(monitor)
+        while monitor and (elapsed < timeout):
+            elapsed = int(time.time()-start)
+            for vol in monitor:
+                last_attached_status = vol.eutest_attached_status
+                vol.update()
+                if vol.eutest_attached_instance_id:
+                    instance_debug_str = ', (att_instance'+str(vol.eutest_attached_instance_id)+")"
+                else:
+                    instance_debug_str = ""
+                self.debug("Monitoring volume:"+str(vol.id)+". Currently state/attached_state:'"+str(vol.status)
+                            +"/"+str(vol.eutest_attached_status)+"', needed: '"+str(status)+"/"+str(attached_status)+
+                           "'"+instance_debug_str)
+                #fail fast for improper state transitions when attaching:
+                if attached_status and last_attached_status and not vol.eutest_attached_status:
+                    failmsg += str(vol.id)+" - state:"+str(vol.status)+", reverted from attached state:'"\
+                              +str(last_attached_status)+"' to '"+str(vol.eutest_attached_status)+"', elapsed:" \
+                              +str(elapsed)+"/"+str(timeout)+"\n"
+                    if eof:
+                        raise Exception(failmsg)
+                    else:
+                        failed.append(monitor.pop(monitor.index(vol)))
+                        continue
+                if (vol.status == 'deleted' and status != 'deleted') or (vol.status == 'failed' and status != 'failed'):
+                    failmsg += str(vol.id)+" - detected error in state:'"+str(vol.status)+\
+                               "/"+str(vol.eutest_attached_status)+"'"+str(elapsed)+"/"+str(timeout)+"\n"
+                    if eof:
+                        raise Exception(failmsg)
+                    else:
+                        failed.append(monitor.pop(monitor.index(vol)))
+                        continue
+                if vol.status == status:
+                        if vol.eutest_attached_status == attached_status:
+                            good.append(monitor.pop(monitor.index(vol)))
+            self.debug('Waiting for '+str(len(monitor))+ " remaining Volumes. Sleeping for poll_interval: "
+                       +str(poll_interval)+" seconds ...")
+            time.sleep(poll_interval)
+        self.debug('Done with monitor volumes after '+str(elapsed)+"/"+str(timeout)+"...")
+        self.print_euvolume_list(euvolumes)
+        if monitor:
+            for vol in monitor:
+                failmsg +=  str(vol.id)+" - state:"+str(vol.status)+", TIMED OUT current state/attached_state:'" \
+                        +str(last_attached_status)+"' != '"+str(vol.eutest_attached_status)+"', elapsed:" \
+                        +str(elapsed)+"/"+str(timeout)+"\n"
+            failed.extend(monitor)
+        #finally raise an exception if any failures were detected allong the way...
+        if failmsg:
+            self.print_euvolume_list(failed)
+            raise Exception(failmsg)
+        return good
+
+
                 
     def print_euvolume_list(self,euvolumelist):
         """
@@ -797,6 +911,8 @@ class EC2ops(Eutester):
                 volume.update()
                 elapsed = int(time.time()-start)
                 if volume.status == "deleted":
+                    if volume in self.test_resources['volumes']:
+                        self.test_resources['volumes'].remove(volume)
                     break
             except EC2ResponseError as e:
                 if e.status == 400:
@@ -834,9 +950,12 @@ class EC2ops(Eutester):
                 volume.update()
                 if volume.status == "deleted":
                     vollist.remove(volume)
+                    if volume in self.test_resources['volumes']:
+                        self.test_resources['volumes'].remove(volume)
                 elapsed = int(time.time()-start)
             time.sleep(poll_interval)
-            self.debug("---Sleeping:"+str(poll_interval)+", elapsed:"+str(elapsed)+"---")
+            self.debug("---Waiting for:"+str(len(vollist))+" volumes to delete. Sleeping:"+
+                       str(poll_interval)+", elapsed:"+str(elapsed)+"/"+str(timeout)+"---")
         if vollist:
             errmsg =""
             for volume in vollist:
