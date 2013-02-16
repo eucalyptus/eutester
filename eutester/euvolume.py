@@ -48,11 +48,13 @@ class EuVolume(Volume, TaggedResource):
     md5len = 32
     eutest_failmsg = None
     eutest_laststatus = None
+    eutest_attached_status = None
     eutest_laststatustime = None
     eutest_cmdstart = None
     eutest_createorder = None
     eutest_cmdtime = None
     eutest_ageatstatus = None
+    eutest_attached_instance_id = None
     '''
     Note: Different hypervisors will honor the requested cloud dev differently, so the requested device can not 
     be relied up as the device it attached to on the guest 'guestdev'
@@ -73,6 +75,7 @@ class EuVolume(Volume, TaggedResource):
         newvol.eutest_cmdstart = cmdstart or eucaops.EC2ops.get_volume_time_created(volume)
         newvol.eutest_createorder = None
         newvol.eutest_cmdtime = None
+        newvol.set_attached_status()
 
         return newvol
     
@@ -81,9 +84,18 @@ class EuVolume(Volume, TaggedResource):
         self.set_last_status()
     
     def set_last_status(self,status=None):
-        self.eutest_laststatus = self.status
+        self.eutest_laststatus = status or self.status
         self.eutest_laststatustime = time.time()
+        self.set_attached_status()
         self.eutest_ageatstatus = "{0:.2f}".format(time.time() - self.eutest_cmdstart)
+
+    def set_attached_status(self):
+        if self.attach_data:
+            self.eutest_attached_status = self.attach_data.status
+            self.eutest_attached_instance_id = self.attach_data.instance_id
+        else:
+            self.eutest_attached_status = None
+            self.eutest_attached_instance_id = None
 
     def printself(self,title=True, footer=True, printmethod=None):
         buf = "\n"
