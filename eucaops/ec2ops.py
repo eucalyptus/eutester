@@ -903,6 +903,8 @@ class EC2ops(Eutester):
         :param timeout: Total time in seconds to wait for volume to reach the attached state
         :return: True on success
         """
+        attach_data_status = None
+        instance_id = None
         if volume is None:
             raise Exception(str(volume) + " does not exist")
         volume.detach()
@@ -914,10 +916,18 @@ class EC2ops(Eutester):
             if volume.status != "in-use":
                 self.debug(str(volume) + " left in " +  volume.status)
                 return True
-            self.debug( str(volume) + " state:" + volume.status + " pause:"+str(pause)+" elapsed:"+str(elapsed))
+            if volume.attach_data is not None:
+                attach_data_status = volume.attach_data.status
+                if not instance_id:
+                    instance_id = volume.attach_data.instance_id
+            else:
+                attach_data_status = None
+            self.debug( str(volume) + " state:" + volume.status + ", attached_data:"+
+                        str(attach_data_status)+", pause:"+str(pause)+", instance:"+str(instance_id)+", elapsed:"+str(elapsed))
             self.sleep(pause)
             elapsed = int(time.time() - start)
-        raise Exception('Volume status remained at '+str(volume.status)+', attach failed')
+        raise Exception(str(volume.id)+':DETACH FAILED - Volume status remained at:'+
+                        str(volume.status)+', attach_data_status:'+str(attach_data_status)+", instance: "+str(instance_id))
     
     def get_volume_time_attached(self,volume):
         """
@@ -2365,8 +2375,9 @@ class EC2ops(Eutester):
                             if state != "stopped" and ( instance.laststate == 'pending' and instance.state == "stopped"):
                                 raise Exception("Instance:"+str(instance.id)+" illegal state transition from "
                                                 +str(instance.laststate)+" to "+str(instance.state))
-                    dbgmsg = (str(state)+": "+str(instance.id)+' state:'+str(instance.state)+', backing volume:'
-                              +str(bdm_vol_id)+' status:'+str(bdm_vol_status)+", elapsed:"+str(elapsed)+"/"+str(timeout))
+                    dbgmsg = (str(state)+": "+str(instance.id)+' state:'+str(instance.state)+', type:'+
+                              str(instance.root_device_type) + ', backing volume:'+str(bdm_vol_id)+' status:'+
+                              str(bdm_vol_status)+", elapsed:"+ str(elapsed)+"/"+str(timeout))
                     if instance.state == state:
                         self.debug("SUCCESS "+ dbgmsg)
                         #This instance is in the correct state, remove from monitor list
