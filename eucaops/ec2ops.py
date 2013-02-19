@@ -37,6 +37,7 @@ import os
 import copy
 import socket
 import types
+import time
 import sys
 from datetime import datetime
 
@@ -1538,9 +1539,10 @@ class EC2ops(Eutester):
         :param valid_states: Valid status for snapshot to enter (Default: 'completed,failed')
         :param base_timeout: Timeout for waiting for poll interval
         :param add_time_per_snap: Amount of time to add to base_timeout per snapshot in the list
-        :param wait_for_valid_state: How long to wait for a valid state to be reached
+        :param wait_for_valid_state: How long to wait for a valid state to be reached before attempting delete,
+                                     as some states will reject a delete request.
         :param poll_interval: Time to wait between checking the snapshot states
-        :param eof: Whether or not to call an Exception() when a failure is reached
+        :param eof: Whether or not to call an Exception() when first failure is reached
         :raise:
         """
         snaps = copy.copy(snapshots)
@@ -1550,7 +1552,8 @@ class EC2ops(Eutester):
         valid_delete_states = str(valid_states).split(',')
         if not valid_delete_states:
             raise Exception("delete_snapshots, error in valid_states provided:"+str(valid_states))
-            
+
+        #Wait for snapshot to enter a state that will accept the deletion action, before attempting to delete it...
         while snaps and (elapsed < wait_for_valid_state):
             elapsed = int(time.time()-start)
             for snap in snaps:
@@ -1715,18 +1718,68 @@ class EC2ops(Eutester):
         self.test_resources["images"].append(image_id)
         return image_id
 
-    def deregister_image(self, image, clear=False):
+    def delete_image(self, image, timeout=60):
+        """
+        Delete image by multiple deregistrations.
+
+        :param timeout: int seconds to wait before failing operation
+        :param image: boto image object to deregister
+        :param delete: boolean, if True will attempt to deregister until removed/deleted, default:False
+        """
+        return self.deregister_image(image, delete=True, timeout=timeout)
+
+    def deregister_image(self, image, delete=False, poll_interval=5, timeout=60):
         """
         Deregister an image.
 
+        :param poll_interval: int seconds to wait between polling for image state
+        :param timeout: int seconds to wait before failing operation
         :param image: boto image object to deregister
+        :param delete: boolean, if True will attempt to deregister until removed/deleted, default:False
         """
-        self.ec2.deregister_image(image.id)
-        try:
-            image = self.get_emi(image.id,state="deregistered")
-        except:
-            raise Exception("Image did not show as deregistered after first deregistration")
-        self.ec2.deregister_image(image.id)
+        gotimage = None
+        elapsed = 0
+        start = time.time()
+        gotimage = image
+
+        while gotimage and (elapsed < timeout):
+            elapsed = int(time.time()-start)
+            try:
+                gotimage = self.ec2.get_all_images(image_ids=[image.id])[0]
+            except IndexError, ie:
+                if delete:
+                    self.debug("deregister_image:"+str(image.id)+", No image found in get_all_images. Delete is True, ok")
+                    return
+                else:
+                    raise Exception("deregister_image:"+str(image.id)+", No image found in get_all_images.Error: "
+                                                                      "Image unexpectedly deleted!")
+            except Exception, e:
+                #should return [] if not found, exception indicates an error with the command maybe?
+                tb = self.get_traceback()
+                raise Exception('deregister_image: Error attempting to get image:'+str(image.id)+", err:"+str(tb)+'\n'+str(e))
+            self.ec2.deregister_image(image.id)
+            # If the state is not deregistered deregister image for the first time, should leave image behind in a
+            # Deregistered state. Verify the image enters that state...
+            if gotimage.state != 'deregistered':
+                gotimage.update()
+                if image.state != 'deregistered':
+                    raise Exception("Image did not show as deregistered after first deregistration")
+                else:
+                    self.debug('deregister_image: Success, '+str(image.id)+' is now in deregistered state')
+            else:
+                # If the image is already deregistered, a 2nd deregister request should remove the image from the system
+                # If the 'remove' flag is not set, we can return now as the method is complete.
+                # Otherwise continue till removed/deleted
+                if not delete:
+                    return
+                else:
+                    self.debug("deregister_image:"+str(image.id)+" waiting for image to be deleted after deregistration. "
+                                "Elapsed:"+str(elapsed)+"/"+str(timeout))
+                    time.sleep(poll_interval)
+
+
+
+
 
     @Eutester.printinfo
     def get_emi(self,
@@ -2121,7 +2174,7 @@ class EC2ops(Eutester):
             #    
             # check to see if public and private DNS names and IP addresses are the same
             #
-            if (instance.ip_address is instance.private_ip_address) and \
+            if (instance.ip_address is instance.private_ip_address) or \
                     (instance.public_dns_name is instance.private_dns_name) and \
                     ( private_addressing is False ):
                 self.debug(str(instance) + " got Public IP: " + str(instance.ip_address)  + " Private IP: " +
@@ -2525,7 +2578,7 @@ class EC2ops(Eutester):
                         
             #remove good instances from list to monitor
             for instance in monitor:
-                if instance in good or instance in failed:
+                if (instance in good) or (instance in failed):
                     monitor.remove(instance)
                     
             if monitor:
@@ -2595,7 +2648,7 @@ class EC2ops(Eutester):
                 else:
                     self.debug(str(instance.id)+": FOUND public ip. Current:"+str(instance.public_dns_name)+
                                ", elapsed:"+str(elapsed)+"/"+str(timeout))
-                    if (instance.ip_address is instance.private_ip_address) and \
+                    if (instance.ip_address is instance.private_ip_address) or \
                             (instance.public_dns_name is instance.private_dns_name) and \
                             not instance.private_addressing:
                         self.debug("ERROR:"+str(instance.id) + " got Public IP: " + str(instance.ip_address)  +

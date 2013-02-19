@@ -190,7 +190,11 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops):
    
     def cleanup_artifacts(self):
         self.debug("Starting cleanup of artifacts")
+        for res in self.test_resources["reservations"]:
+            self.terminate_instances(s)
         self.clean_up_test_volumes()
+        self.cleanup_test_snapshots()
+
         for key,array in self.test_resources.iteritems():
             for item in array:
                 try:
@@ -211,6 +215,29 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops):
                 except Exception, e:
                     self.fail("Unable to delete item: " + str(item) + "\n" + str(e))
 
+    def cleanup_test_snapshots(self,snaps=None, clean_images=False, add_time_per_snap=10, wait_for_valid_state=120, base_timeout=120):
+        """
+        :param snaps: optional list of snapshots, else will attempt to delete from test_resources[]
+        :param clean_images: Boolean, if set will attempt to delete registered images referencing the snapshots first.
+                             Images referencing the snapshot may prevent snapshot deletion to protect the image.
+        :param add_time_per_snap:  int number of seconds to append to base_timeout per snapshot
+        :param wait_for_valid_state: int seconds to wait for snapshot(s) to enter a 'deletable' state
+        :param base_timeout: base timeout to use before giving up, and failing operation.
+        """
+        snaps = snaps or self.test_resources['snapshots']
+        if not snaps:
+            return
+        if clean_images:
+            for snap in snaps:
+                for image in self.test_resources['images']:
+                    for dev in image.block_device_mapping:
+                        if image.block_device_mapping[dev].snapshot_id == snap.id:
+                            self.delete_image(image)
+        return self.delete_snapshots(snaps,base_timeout=base_timeout, add_time_per_snap=add_time_per_snap, wait_for_valid_state=wait_for_valid_state)
+
+
+
+
     def clean_up_test_volumes(self, volumes=None):
         """
         Definition: cleaup helper method intended to clean up volumes created within a test, after the test has ran.
@@ -221,8 +248,8 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops):
         detaching = []
         vol_str = volumes or "test_resources['volumes']"
         self.debug('clean_up_test_volumes starting, volumes:'+str(vol_str))
-        if not volumes:
-            volumes = self.test_resources['volumes']
+
+        volumes = volumes or  self.test_resources['volumes']
         if not volumes:
             return
 
