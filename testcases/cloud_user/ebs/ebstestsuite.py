@@ -942,9 +942,10 @@ class EbsTestSuite(EutesterTestCase):
         self.clean_created_resources(zonelist=self.zonelist, timeout=360)
     
     def clean_created_resources(self, zonelist=None, timeout=360):
-        self.terminate_test_instances_for_zones(zonelist=zonelist, timeout=timeout)
-        self.delete_volumes_in_zones(zonelist=zonelist, timeout=timeout)
-        self.delete_snapshots_in_zones(zonelist=zonelist,  timeout=timeout)
+        self.tester.cleanup_artifacts()
+        #self.terminate_test_instances_for_zones(zonelist=zonelist, timeout=timeout)
+        #self.delete_volumes_in_zones(zonelist=zonelist, timeout=timeout)
+        #self.delete_snapshots_in_zones(zonelist=zonelist,  timeout=timeout)
    
             
     
