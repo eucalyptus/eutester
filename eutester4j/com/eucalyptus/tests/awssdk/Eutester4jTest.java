@@ -31,22 +31,19 @@
  * 
  * @author tony
  */
+
+package com.eucalyptus.tests.awssdk;
+
+import static com.eucalyptus.tests.awssdk.Eutester4j.*;
+
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.Test;
 import org.testng.annotations.BeforeClass;
 import org.testng.AssertJUnit;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
-
-import com.amazonaws.auth.AWSCredentials;
-import com.amazonaws.auth.PropertiesCredentials;
 import com.amazonaws.services.autoscaling.AmazonAutoScaling;
-import com.amazonaws.services.autoscaling.AmazonAutoScalingClient;
-import com.amazonaws.services.autoscaling.model.CreateLaunchConfigurationRequest;
-import com.amazonaws.services.autoscaling.model.InstanceMonitoring;
-import com.amazonaws.services.ec2.AmazonEC2Client;
 import com.amazonaws.services.ec2.AmazonEC2;
 import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesResult;
 import com.amazonaws.services.ec2.model.SecurityGroup;
@@ -58,7 +55,7 @@ import com.amazonaws.services.autoscaling.model.LaunchConfiguration;
  * To test AWS or Euca comment out the lines for the one you do not want to 
  * test ie. "//euca" lines and uncomment the one you do ie. the "//AWS" lines
  */
-public class Eutester4jTest extends Eutester4j {
+public class Eutester4jTest {
 	
 	private static AmazonEC2 ec2;
 	private static AmazonAutoScaling as;
@@ -68,22 +65,22 @@ public class Eutester4jTest extends Eutester4j {
 	private static String accessKey= null;
 	private static String credpath = null;
 	
-	private static String secGroupName = "TestGroup-" + genRandomString();
-	private static String secGroupDesc = "TestDesc-" + genRandomString();
-	private static String keyName = "TestKey-" + genRandomString();
+	private static String secGroupName = "TestGroup-" + eucaUUID();
+	private static String secGroupDesc = "TestDesc-" + eucaUUID();
+	private static String keyName = "TestKey-" + eucaUUID();
 	private static ArrayList<String> securityGroups = new ArrayList<String>();
 
 	/*
 	 * for testing against euca cloud
 	 */
-	private static String emi = "emi-69E73A37"; //euca an emi you have access to
-	private static String type = "m1.small"; //euca
+//	private static String emi = "emi-52F13945"; //euca an emi you have access to
+//	private static String type = "m1.small"; //euca
 	
 	/*
 	 * for testing against AWS
 	 */
-//	private static String type = "t1.micro"; //AWS
-//	private static String emi = "ami-921f3fd7"; //AWS an ami you have access to
+	private static String type = "t1.micro"; //AWS
+	private static String emi = "ami-921f3fd7"; //AWS an ami you have access to
 	
 	/**
 	 * Called once, before the first test is run. Creates an ec2 connection.
@@ -100,10 +97,11 @@ public class Eutester4jTest extends Eutester4j {
 		secretKey = parseEucarc(credpath, "EC2_SECRET_KEY").replace("'", ""); //euca
 		accessKey = parseEucarc(credpath, "EC2_ACCESS_KEY").replace("'", ""); //euca
 		ec2Endpoint = parseEucarc(credpath, "EC2_URL")+"/"; //euca
-		asEndpoint = parseEucarc(credpath, "AUTO_SCALING_URL") + "/"; //euca
-		System.out.println("DEBUG: got Auto Sclaing endpoint: " + asEndpoint); //euca
-		ec2 = ec2Connection(accessKey,secretKey); //euca
-		as = asConnection(accessKey, secretKey); //euca
+		asEndpoint = parseEucarc(credpath, "AWS_AUTO_SCALING_URL") + "/"; //euca
+		ec2 = getEc2Client(accessKey, secretKey, ec2Endpoint);
+		as = getAutoScalingClient(accessKey, secretKey, asEndpoint);
+//		ec2 = ec2Connection(accessKey,secretKey); //euca
+//		as = asConnection(accessKey, secretKey); //euca
 		
 		/*
 		 * For testing against AWS
@@ -117,8 +115,8 @@ public class Eutester4jTest extends Eutester4j {
 //		secretKey = credentials.getAWSSecretKey(); //AWS
 //		accessKey = credentials.getAWSAccessKeyId(); //AWS
 		
-		ec2.setEndpoint(ec2Endpoint);
-		as.setEndpoint(asEndpoint);
+//		ec2.setEndpoint(ec2Endpoint);
+//		as.setEndpoint(asEndpoint);
 		createSecurityGoup(ec2, secGroupName, secGroupDesc);
 		createKeyPair(ec2, keyName);
 		securityGroups.add(secGroupName);
@@ -131,7 +129,7 @@ public class Eutester4jTest extends Eutester4j {
 	 */
 	@AfterClass
 	public static void tearDownAfterClass() throws Exception {
-		sleep(60); // give the system a chance to complete test actions
+//		sleep(60); // give the system a chance to complete test actions
 		deleteKeyPair(ec2, keyName);
 		deleteSecurityGroup(ec2, secGroupName);
 		ec2 = null;
@@ -142,37 +140,37 @@ public class Eutester4jTest extends Eutester4j {
 		asEndpoint = null;
 	}
 
-	/*
-	 * Test that invalid access key prevents execution of ec2 commands. There should be an exception caught
-	 * After the test, credentials are reset to values present before the test ran.
-	 */
-	@Test(enabled=true)
-	public void testInvalidAccessKey() {
-		ec2Connection("badAccessKey", secretKey);
-		try {
-			ec2.describeAvailabilityZones();
-		} catch (Exception e) {
-			AssertJUnit.assertTrue(e.getMessage().length() > 0);
-		} finally {
-			ec2Connection(accessKey, secretKey);
-		}
-	}
-	
-	/*
-	 * Test that invalid secret key prevents execution of ec2 commands. There should be an exception caught.
-	 * After the test, credentials are reset to values present before the test ran
-	 */
-	@Test(enabled=true)
-	public void testInvalidSecretKey() {
-		ec2Connection(accessKey, "badSecretKey");
-		try {
-			ec2.describeAvailabilityZones();
-		} catch (Exception e) {
-			AssertJUnit.assertTrue(e.getMessage().length() > 0);
-		} finally {
-			ec2Connection(accessKey, secretKey);
-		}
-	}
+//	/*
+//	 * Test that invalid access key prevents execution of ec2 commands. There should be an exception caught
+//	 * After the test, credentials are reset to values present before the test ran.
+//	 */
+//	@Test(enabled=true)
+//	public void testInvalidAccessKey() {
+//		ec2Connection("badAccessKey", secretKey);
+//		try {
+//			ec2.describeAvailabilityZones();
+//		} catch (Exception e) {
+//			AssertJUnit.assertTrue(e.getMessage().length() > 0);
+//		} finally {
+//			ec2Connection(accessKey, secretKey);
+//		}
+//	}
+//	
+//	/*
+//	 * Test that invalid secret key prevents execution of ec2 commands. There should be an exception caught.
+//	 * After the test, credentials are reset to values present before the test ran
+//	 */
+//	@Test(enabled=true)
+//	public void testInvalidSecretKey() {
+//		ec2Connection(accessKey, "badSecretKey");
+//		try {
+//			ec2.describeAvailabilityZones();
+//		} catch (Exception e) {
+//			AssertJUnit.assertTrue(e.getMessage().length() > 0);
+//		} finally {
+//			ec2Connection(accessKey, secretKey);
+//		}
+//	}
 	
 	/*
 	 * Test that valid credentials have a successful connection by verifying
@@ -189,8 +187,8 @@ public class Eutester4jTest extends Eutester4j {
 	 */
 	@Test(enabled=true)
 	public void testCreateSecurityGroup() {
-		String name = genRandomString();
-		String desc = genRandomString();
+		String name = eucaUUID();
+		String desc = eucaUUID();
 		
 		List<SecurityGroup> secGroups = describeSecurityGroups(ec2);
 		int initialSize = secGroups.size();
@@ -211,8 +209,8 @@ public class Eutester4jTest extends Eutester4j {
 	 */
 	@Test(enabled=true)
 	public void testDeleteSecurityGroup() {
-		String name = genRandomString();
-		String desc = genRandomString();
+		String name = eucaUUID();
+		String desc = eucaUUID();
 	
 		try {
 			createSecurityGoup(ec2, name, desc);
@@ -231,7 +229,7 @@ public class Eutester4jTest extends Eutester4j {
 	/**
 	 * Test running instances also tests get instance count
 	 */
-	@Test(enabled=true)
+	@Test(enabled=false)
 	public void testRunInstances(){
 		int initalInstanceCount = getInstancesList(ec2).size();
 		runInstances(ec2, emi, keyName, type, securityGroups, 1, 1);
@@ -246,29 +244,29 @@ public class Eutester4jTest extends Eutester4j {
 
 	}
 	
-	/**
-	 * test stopping instances (bfebs image required)
-	 *
-	 * appears there is a compatibility issue with euca supporting getState() for instances
-	 * it is always returning null
-	 */
-	@Test(enabled=false)
-	public void testStopInstances(){
-		runInstances(ec2, emi, keyName, type, securityGroups, 1, 1);
-		List<String> instanceIds = new ArrayList<String>();
-		instanceIds.add(getLastlaunchedInstance(ec2).get(0).getInstanceId());
-		System.out.println("State Check 1: " + getInstanceStateName(ec2, instanceIds));
-		while(!getLastlaunchedInstance(ec2).get(0).getState().getName().equals("running")){}
-		System.out.println("State Check 2: " + getInstanceStateName(ec2, instanceIds));
-		stopInstances(ec2, instanceIds);
-		System.out.println("State Check 3: " + getInstanceStateName(ec2, instanceIds));
-		while(!getLastlaunchedInstance(ec2).get(0).getState().getName().equals("stopped")){}
-		System.out.println("State Check 4: " + getInstanceStateName(ec2, instanceIds));
-		AssertJUnit.assertTrue(getLastlaunchedInstance(ec2).get(0).getState().getName().equals("stopped"));
-		// after test terminate the instance
-		terminateInstances(ec2, instanceIds);
-		System.out.println("State Check 6: " + getInstanceStateName(ec2, instanceIds));
-	}
+//	/**
+//	 * test stopping instances (bfebs image required)
+//	 *
+//	 * appears there is a compatibility issue with euca supporting getState() for instances
+//	 * it is always returning null
+//	 */
+//	@Test(enabled=false)
+//	public void testStopInstances(){
+//		runInstances(ec2, emi, keyName, type, securityGroups, 1, 1);
+//		List<String> instanceIds = new ArrayList<String>();
+//		instanceIds.add(getLastlaunchedInstance(ec2).get(0).getInstanceId());
+//		System.out.println("State Check 1: " + getInstanceStateName(ec2, instanceIds));
+//		while(!getLastlaunchedInstance(ec2).get(0).getState().getName().equals("running")){}
+//		System.out.println("State Check 2: " + getInstanceStateName(ec2, instanceIds));
+//		stopInstances(ec2, instanceIds);
+//		System.out.println("State Check 3: " + getInstanceStateName(ec2, instanceIds));
+//		while(!getLastlaunchedInstance(ec2).get(0).getState().getName().equals("stopped")){}
+//		System.out.println("State Check 4: " + getInstanceStateName(ec2, instanceIds));
+//		AssertJUnit.assertTrue(getLastlaunchedInstance(ec2).get(0).getState().getName().equals("stopped"));
+//		// after test terminate the instance
+//		terminateInstances(ec2, instanceIds);
+//		System.out.println("State Check 6: " + getInstanceStateName(ec2, instanceIds));
+//	}
 	
 	/**
 	 * test terminating
@@ -300,5 +298,26 @@ public class Eutester4jTest extends Eutester4j {
 		createKeyPair(ec2, keyName);
 		AssertJUnit.assertTrue(getKeyPairCount(ec2) > initialKeyPairCount);
 		deleteKeyPair(ec2, keyName);
+	}
+	
+	/**
+	 * Tests create, describe and delete launch configurations
+	 */
+	@Test(enabled=true)
+	public void testBasicLaunchConfig(){
+		String launchConfigurationName = "LC-" + eucaUUID();
+		try {
+			createLaunchConfig(as, launchConfigurationName, emi, type, keyName, securityGroups);
+			
+			List<LaunchConfiguration> launchConfigs = describeLaunchConfigs(as);
+			
+			int initialSize = launchConfigs.size();
+			deleteLaunchConfig(as, "LC-3fd0d59cd39bf7fc");
+			deleteLaunchConfig(as, launchConfigurationName);
+			launchConfigs = describeLaunchConfigs(as);
+			AssertJUnit.assertTrue(launchConfigs.size() < initialSize);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
 	}
 }
