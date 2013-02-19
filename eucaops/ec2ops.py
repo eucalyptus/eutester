@@ -2174,8 +2174,8 @@ class EC2ops(Eutester):
             #    
             # check to see if public and private DNS names and IP addresses are the same
             #
-            if (instance.ip_address is instance.private_ip_address) or \
-                    (instance.public_dns_name is instance.private_dns_name) and \
+            if (instance.ip_address == instance.private_ip_address) or \
+                    (instance.public_dns_name == instance.private_dns_name) and \
                     ( private_addressing is False ):
                 self.debug(str(instance) + " got Public IP: " + str(instance.ip_address)  + " Private IP: " +
                            str(instance.private_ip_address) + " Public DNS Name: " + str(instance.public_dns_name) +
@@ -2648,8 +2648,8 @@ class EC2ops(Eutester):
                 else:
                     self.debug(str(instance.id)+": FOUND public ip. Current:"+str(instance.public_dns_name)+
                                ", elapsed:"+str(elapsed)+"/"+str(timeout))
-                    if (instance.ip_address is instance.private_ip_address) or \
-                            (instance.public_dns_name is instance.private_dns_name) and \
+                    if (instance.ip_address == instance.private_ip_address) or \
+                            (instance.public_dns_name == instance.private_dns_name) and \
                             not instance.private_addressing:
                         self.debug("ERROR:"+str(instance.id) + " got Public IP: " + str(instance.ip_address)  +
                                    " Private IP: " + str(instance.private_ip_address) + " Public DNS Name: " +
