@@ -451,7 +451,7 @@ final class Eutester4j {
             instancelist = reservation.getInstances();
 		    Collections.sort(instancelist, new Comparator<Instance>() {
 		       public int compare(Instance i1, Instance i2) {
-		          return i1.getInstanceId().compareTo(i2.getInstanceId());
+		          return i1.getLaunchTime().compareTo(i2.getLaunchTime()); 
 		       }
 		    });
 		}
