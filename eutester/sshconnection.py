@@ -50,10 +50,8 @@ example usage:
      print out['output']
 '''
 
-import time, os, sys
+import time, os, socket, re
 import paramiko
-from threading import Timer
-from boto.ec2 import keypair
 import select
 
 class SshCbReturn():
@@ -84,7 +82,8 @@ class SshConnection():
                  keypair= None, 
                  keypath=None, 
                  password=None, 
-                 username='root', 
+                 username='root',
+                 enable_ipv6_dns=False,
                  timeout=60, 
                  retry=1,
                  debugmethod=None,
@@ -107,6 +106,7 @@ class SshConnection():
         self.keypath = keypath
         self.password = password
         self.username=username
+        self.enable_ipv6_dns=enable_ipv6_dns
         self.timeout = timeout
         self.retry = retry
         self.debugmethod = debugmethod
@@ -300,48 +300,106 @@ class SshConnection():
         return ret
         
     def refresh_connection(self):
-        self.connection = self.get_ssh_connection(self.host, self.username,self.password , self.keypath, self.timeout, self.retry)
+        if self.connection:
+            self.connection.close()
+        self.connection = self.get_ssh_connection(self.host,
+                                                  username=self.username,
+                                                  password=self.password,
+                                                  keypath=self.keypath,
+                                                  enable_ipv6_dns=self.enable_ipv6_dns,
+                                                  timeout=self.timeout,
+                                                  retry=self.retry)
         
-    def get_ssh_connection(self, hostname, username="root", password=None, keypath=None, timeout= 60, retry=1):
+    def get_ssh_connection(self,
+                           hostname,
+                           username="root",
+                           password=None,
+                           keypath=None,
+                           enable_ipv6_dns=None,
+                           port=22,
+                           timeout= 60,
+                           retry=1):
         '''
         Create a paramiko ssh session to hostname. Will attempt to authenticate first with a keypath if provided, 
         if the sshkey file path is not provided.  username and password will be used to authenticate. This leaves out the case
         where a password is passed as the password needed to unlock the key file. This 3rd case may need to be added but
         may mask failures in tests for key inseration when using tests who's images have baked in passwords for login access(tbd). 
         Upon success returns a paramiko sshclient with an established connection. 
-        hostname - mandatory - hostname or ip to establish ssh connection with
-        username - optional - username used to authenticate ssh session
-        password - optional - password used to authenticate ssh session
-        keypath - optional - full path to sshkey file used to authenticate ssh session
-        timeout - optional - tcp timeout 
-        retry - optional - amount of retry attempts to establish ssh connection for errors outside of authentication
+
+        :param hostname: - mandatory - hostname or ip to establish ssh connection with
+        :param username: - optional - username used to authenticate ssh session
+        :param password: - optional - password used to authenticate ssh session
+        :param keypath: - optional - full path to sshkey file used to authenticate ssh session
+        :param timeout: - optional - tcp timeout
+        :param enable_ipv6_dns: - optional - boolean to avoid ipv6 dns 'AAAA' lookups
+        :param retry: - optional - amount of retry attempts to establish ssh connection for errors outside of authentication
+        :param port: - optional - port to connect to, default: 22
         '''
+        connected = False
+        iplist = []
         if ((password is None) and (keypath is None)):
             raise Exception("ssh_connect: both password and keypath were set to None")
-        
-        #self.debug("ssh_connect args:\nhostname:"+hostname+"\nusername:"+username+"\npassword:"+str(password)+"\nkeypath:"+str(keypath)+"\ntimeout:"+str(timeout)+"\nretry:"+str(retry))
+        if enable_ipv6_dns is None:
+            enable_ipv6_dns=self.enable_ipv6_dns
+        self.debug("ssh_connect args:\nhostname:"+hostname+"\nusername:"+username+"\npassword:"+str(password)+"\nkeypath:"+str(keypath)+"\ntimeout:"+str(timeout)+"\nretry:"+str(retry))
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    
-        while ( retry >= 0  ):
-            retry -= 1 
+        hostname = str(hostname.strip())
+        if not enable_ipv6_dns:
+            self.debug('IPV6 DNS lookup disabled, do IPV4 resolution and pass IP to connect()')
+            get_ipv4_ip = False
+            # Paramiko uses family type 'AF_UNSPEC' which does both ipv4/ipv6 lookups and can cause some DNS servers
+            # to fail in their response(s). Hack to avoid ipv6 lookups...
+            # Try ipv4 dns resolution of 'hostname', and pass the ip instead of a hostname to
+            # Paramiko's connect to avoid the potential ipv6 'AAAA' lookup...
             try:
-                #self.debug("Attempting SSH connection: "+username+"@"+hostname )            
-                if keypath is None:   
-                    #self.debug("Using username:"+username+" and password:"+password)
-                    ssh.connect(hostname, username=username, password=password, timeout= timeout)
-                else:
-                    if self.verbose:
-                        self.debug("Using Keypath:"+keypath)
-                    ssh.connect(hostname,  username=username, key_filename=keypath, timeout= timeout)
+                ipcheck = re.compile("^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
+
+                if socket.inet_aton(hostname):
+                    if not ipcheck.match(hostname):
+                        get_ipv4_ip = True
+                self.debug(str(hostname)+", is already an ip, dont do host lookup...")
+                # This is already an ip don't look it up (regex might be better here?)
+            except socket.error:
+                get_ipv4_ip = True
+            if get_ipv4_ip:
+                try:
+                    #Lookup host for ssh connection...
+                    addrs = socket.getaddrinfo(hostname, 22, socket.AF_INET, socket.IPPROTO_IP, socket.IPPROTO_TCP)
+                    for addr in addrs:
+                        iplist.append(str(addr[4][0]))
+                    self.debug('Resolved hostname:'+str(hostname)+' to IP(s):'+",".join(iplist))
+                except Exception, de:
+                    self.debug('Error looking up DNS ip for hostname:'+str(hostname)+", err:"+str(de))
+
+        if not iplist:
+            iplist = [hostname]
+        attempt = 0
+        while (attempt <= retry) and not connected:
+            attempt += 1
+            for ip in iplist:
+                try:
+                    self.debug("Attempting SSH connection: "+username+"@"+hostname+", using ip: "+str(ip)+", retry:"+str(attempt) )
+                    if keypath is None:
+                        #self.debug("Using username:"+username+" and password:"+password)
+                        ssh.connect(ip, username=username, password=password, timeout= timeout)
+                        connected = True
+                        break
+                    else:
+                        if self.verbose:
+                            self.debug("Using Keypath:"+keypath)
+                        ssh.connect(ip, port=port, username=username, key_filename=keypath, timeout= timeout)
+                        self.debug('Connected to '+str(ip))
+                        connected = True
+                        break
+                except paramiko.ssh_exception.SSHException, se:
+                        self.debug("Failed to connect to "+hostname+", retry in 10 seconds")
+                        time.sleep(10)
+                        pass
+            if connected:
                 break
-            except paramiko.ssh_exception.SSHException, se:
-                if retry < 0: 
-                    self.debug("Failed to connect to "+hostname+", retry in 10 seconds")
-                    time.sleep(10)
-                    pass
-                else:
-                    raise se
+        if not connected:
+            raise Exception('Failed to connect to "'+str(hostname)+'", attempts:'+str(attempt)+". IPs tried:"+",".join(iplist))
         #self.debug("Returning ssh connection to: "+ hostname)
         return ssh
     

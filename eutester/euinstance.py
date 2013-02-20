@@ -204,7 +204,8 @@ class EuInstance(Instance, TaggedResource):
         
         
     
-    def reset_ssh_connection(self):
+    def reset_ssh_connection(self, timeout=None):
+        timeout = timeout or self.timeout
         self.debug('reset_ssh_connection for:'+str(self.id))
         if ((self.keypath is not None) or ((self.username is not None)and(self.password is not None))):
             if self.ssh is not None:
@@ -216,7 +217,7 @@ class EuInstance(Instance, TaggedResource):
                                                     keypath=self.keypath,          
                                                     password=self.password, 
                                                     username=self.username, 
-                                                    timeout=self.timeout, 
+                                                    timeout=timeout,
                                                     retry=self.retry,
                                                     debugmethod=self.debugmethod,
                                                     verbose=self.verbose)
@@ -231,6 +232,7 @@ class EuInstance(Instance, TaggedResource):
         timeout - optional - time in seconds to wait for connection before failure
         '''
         self.debug("Attempting to reconnect_to_instance:"+self.id)
+        attempts = 0
         if ((self.keypath is not None) or ((self.username is not None)and(self.password is not None))):
             start = time.time()
             elapsed = 0
@@ -238,6 +240,7 @@ class EuInstance(Instance, TaggedResource):
                 self.ssh.close()
             self.ssh = None
             while (elapsed < timeout):
+                attempts += 1
                 try:
                     self.reset_ssh_connection()
                     self.debug('Try some sys...')
@@ -245,13 +248,14 @@ class EuInstance(Instance, TaggedResource):
                 except Exception, se:
                     self.debug('Caught exception attempting to reconnect ssh:'+ str(se))
                     elapsed = int(time.time()-start)
-                    self.debug('retrying ssh connection, elapsed:'+str(elapsed)+'/'+str(timeout))
+                    self.debug('connect_to_instance: Attempts:'+str(attempts)+', elapsed:'+str(elapsed)+'/'+str(timeout))
                     time.sleep(5)
                     pass
                 else:
                     break
             if self.ssh is None:
-                raise Exception(str(self.id)+":Failed establishing ssh connection in reconnect")
+                raise Exception(str(self.id)+":Failed establishing ssh connection to instance, elapsed:"+str(elapsed)+
+                                "/"+str(timeout))
         else:
             self.debug("keypath or username/password need to be populated for ssh connection") 
     

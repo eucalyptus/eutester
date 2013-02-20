@@ -45,6 +45,7 @@ import traceback
 import StringIO
 import eulogger
 import types
+from functools import wraps
 
 
 
@@ -273,12 +274,14 @@ class Eutester(object):
         
         2013-02-07 14:46:58,928] [DEBUG]:(mydir/myfile.py:1234) - Starting method: myfunction()
         2013-02-07 14:46:58,928] [DEBUG]:---> myfunction(self, arg1=123, arg2=abc, kwarg='words')
-    
         '''
+
+        @wraps(func)
         def methdecor(*func_args, **func_kwargs):
             try:
                 defaults = func.func_defaults
                 kw_count = len(defaults or [])
+                selfobj = None
                 arg_count = func.func_code.co_argcount - kw_count
                 var_names = func.func_code.co_varnames[:func.func_code.co_argcount]
                 arg_names = var_names[:arg_count]
@@ -310,7 +313,7 @@ class Eutester(object):
                         kw_string += str(kw_defaults[kw])
                 debugstring = '\n--->('+str(os.path.basename(func.func_code.co_filename))+":"+str(func.func_code.co_firstlineno)+")Starting method: "+str(func.func_name)+'('+arg_string+kw_string+')'
                 debugmethod = None
-                if hasattr(selfobj,'debug'):
+                if selfobj and hasattr(selfobj,'debug'):
                     debug = getattr(selfobj, 'debug')
                     if isinstance(debug, types.MethodType):
                         debugmethod = debug
