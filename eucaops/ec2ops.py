@@ -509,11 +509,11 @@ class EC2ops(Eutester):
     
     
     @Eutester.printinfo
-    def create_volume(self, azone, size=1, eof=True, snapshot=None, timeout=0, poll_interval=10,timepergig=120):
+    def create_volume(self, zone, size=1, eof=True, snapshot=None, timeout=0, poll_interval=10,timepergig=120):
         """
         Create a new EBS volume then wait for it to go to available state, size or snapshot is mandatory
 
-        :param azone: Availability zone to create the volume in
+        :param zone: Availability zone to create the volume in
         :param size: Size of the volume to be created
         :param count: Number of volumes to be created
         :param eof: Boolean, indicates whether to end on first instance of failure
@@ -523,13 +523,13 @@ class EC2ops(Eutester):
         :param timepergig: Time to wait per gigabyte size of volume, used when timeout is set to 0
         :return:
         """
-        return self.create_volumes(azone, size=size, count=1, mincount=1, eof=eof, snapshot=snapshot, timeout=timeout, poll_interval=poll_interval,timepergig=timepergig)[0]
+        return self.create_volumes(zone, size=size, count=1, mincount=1, eof=eof, snapshot=snapshot, timeout=timeout, poll_interval=poll_interval,timepergig=timepergig)[0]
 
 
 
     @Eutester.printinfo
     def create_volumes(self, 
-                       azone, 
+                       zone,
                        size = 1, 
                        count = 1, 
                        mincount = None, 
@@ -545,7 +545,7 @@ class EC2ops(Eutester):
                     Create a multiple new EBS volumes then wait for them to go to available state, 
                     size or snapshot is mandatory
 
-        :param azone: Availability zone to create the volume in
+        :param zone: Availability zone to create the volume in
         :param size: Size of the volume to be created
         :param count: Number of volumes to be created
         :param mincount: Minimum number of volumes to be created to be considered a success.Default = 'count'
@@ -578,7 +578,7 @@ class EC2ops(Eutester):
             vol = None
             try:
                 cmdstart = time.time()
-                vol = self.ec2.create_volume(size, azone, snapshot)
+                vol = self.ec2.create_volume(size, zone, snapshot)
                 cmdtime =  time.time() - cmdstart 
                 if vol:
                     vol = EuVolume.make_euvol_from_vol(vol, tester=self, cmdstart=cmdstart)
@@ -1406,10 +1406,10 @@ class EC2ops(Eutester):
         return self.delete_snapshots([snapshot], base_timeout=60)
     
     @Eutester.printinfo
-    def register_snapshot(self, snapshot, rdn="/dev/sda1", description="bfebs", windows=False, bdmdev=None, name=None, ramdisk=None, kernel=None, dot=True):
+    def register_snapshot(self, snapshot, root_device_name="/dev/sda1", description="bfebs", windows=False, bdmdev=None, name=None, ramdisk=None, kernel=None, dot=True):
         """Convience function for passing a snapshot instead of its id. See register_snapshot_by_id
         :param snapshot: Snapshot object to use as an image
-        :param rdn: root device name to use when registering
+        :param root_device_name: root device name to use when registering
         :param description: Description of image that will be registered
         :param windows: Is the image a Windows image
         :param bdmdev: Block device mapping
@@ -1418,15 +1418,15 @@ class EC2ops(Eutester):
         :param kernel: Kernel ID to use
         :param dot: Delete on terminate flag
         """
-        return self.register_snapshot_by_id( snapshot.id, rdn, description, windows, bdmdev, name, ramdisk, kernel, dot )
+        return self.register_snapshot_by_id( snapshot.id, root_device_name, description, windows, bdmdev, name, ramdisk, kernel, dot )
     
     @Eutester.printinfo
-    def register_snapshot_by_id( self, snap_id, rdn="/dev/sda1", description="bfebs", windows=False, bdmdev=None, name=None, ramdisk=None, kernel=None, dot=True ):
+    def register_snapshot_by_id( self, snap_id, root_device_name="/dev/sda1", description="bfebs", windows=False, bdmdev=None, name=None, ramdisk=None, kernel=None, dot=True ):
         """
         Register an image snapshot
 
         :param snap_id: snapshot id
-        :param rdn: root-device-name for image
+        :param root_device_name: root-device-name for image
         :param description: description of image to be registered
         :param windows: Is windows image boolean
         :param bdmdev: block-device-mapping device for image
@@ -1437,7 +1437,7 @@ class EC2ops(Eutester):
         :return: emi id of registered image
         """
         if bdmdev is None:
-            bdmdev=rdn
+            bdmdev=root_device_name
         if name is None:
             name="bfebs_"+ snap_id
         if ( windows is True ) and ( kernel is not None):
@@ -1449,19 +1449,20 @@ class EC2ops(Eutester):
         block_dev_type.delete_on_termination = dot
         bdmap[bdmdev] = block_dev_type
             
-        self.debug("Register image with: snap_id:"+str(snap_id)+", rdn:"+str(rdn)+", desc:"+str(description)+", windows:"+str(windows)+", bdname:"+str(bdmdev)+", name:"+str(name)+", ramdisk:"+str(ramdisk)+", kernel:"+str(kernel))
-        image_id = self.ec2.register_image(name=name, description=description, kernel_id=kernel, ramdisk_id=ramdisk, block_device_map=bdmap, root_device_name=rdn)
+        self.debug("Register image with: snap_id:"+str(snap_id)+", root_device_name:"+str(root_device_name)+", desc:"+str(description)+", windows:"+str(windows)+", bdname:"+str(bdmdev)+", name:"+str(name)+", ramdisk:"+str(ramdisk)+", kernel:"+str(kernel))
+        image_id = self.ec2.register_image(name=name, description=description, kernel_id=kernel, ramdisk_id=ramdisk, block_device_map=bdmap, root_device_name=root_device_name)
         self.debug("Image now registered as " + image_id)
         return image_id
 
 
     @Eutester.printinfo
-    def register_image( self, image_location, rdn=None, description=None, bdmdev=None, name=None, ramdisk=None, kernel=None ):
+    def register_image( self, image_location, root_device_name=None, description=None, bdmdev=None, name=None,
+                        ramdisk_id=None, kernel_id=None, architecture="x86_64", block_device_map=None ):
         """
         Register an image based on the s3 stored manifest location
 
         :param image_location:
-        :param rdn: root-device-name for image
+        :param root_device_name: root-device-name for image
         :param description: description of image to be registered
         :param bdmdev: block-device-mapping object for image
         :param name: name of image to be registered
@@ -1469,7 +1470,10 @@ class EC2ops(Eutester):
         :param kernel: kernel id (note for windows this name should be "windows")
         :return: image id string
         """
-        image_id = self.ec2.register_image(name=name, description=description, kernel_id=kernel, image_location=image_location, ramdisk_id=ramdisk, block_device_map=bdmdev, root_device_name=rdn)
+        image_id = self.ec2.register_image(name=name, description=description, kernel_id=kernel_id, image_location=image_location,
+                                           ramdisk_id=ramdisk_id, block_device_map=block_device_map, root_device_name=root_device_name,
+                                           architecture=architecture)
+
         self.test_resources["images"].append(image_id)
         return image_id
 
