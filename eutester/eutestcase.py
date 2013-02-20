@@ -283,10 +283,10 @@ class EutesterTestUnit():
 class EutesterTestCase(unittest.TestCase):
     color = TestColor()
 
-    def __init__(self,name=None, debugmethod=None, use_default_file=True, default_config='eutester.conf'):
-        return self.setuptestcase(name=name, debugmethod=debugmethod, use_default_file=use_default_file, default_config=default_config)
+    def __init__(self,name=None, debugmethod=None):
+        return self.setuptestcase(name=name, debugmethod=debugmethod)
         
-    def setuptestcase(self, name=None, debugmethod=None, use_default_file=True, default_config='eutester.conf' ):
+    def setuptestcase(self, name=None, debugmethod=None, use_default_file=False, default_config='eutester.conf' ):
         self.name = self._testMethodName = name 
         if not self.name:
             callerfilename=inspect.getouterframes(inspect.currentframe())[1][1]
@@ -820,7 +820,7 @@ class EutesterTestCase(unittest.TestCase):
     
     
     def clean_method(self):
-        raise Exception("Clean_method needs not implemented. Was run_list using clean_on_exit?")
+        raise Exception("Clean_method was not implemented. Was run_list using clean_on_exit?")
 
     def print_test_list_results(self,list=None, printout=True, printmethod=None):
         '''
@@ -975,6 +975,10 @@ class EutesterTestCase(unittest.TestCase):
         '''
         eof=False
         autoarg=True
+        obj = obj or self
+        meth = getattr(obj,name)
+        methvars = self.get_meth_arg_names(meth)
+
 
         
         #Pull out value relative to this method, leave in any that are intended to be passed through
@@ -993,12 +997,10 @@ class EutesterTestCase(unittest.TestCase):
                 obj = kwargs['obj']
             else:
                 obj = kwargs.pop('obj')
-                
-        obj = obj or self
-        meth = getattr(obj,name)
-        methvars = self.get_meth_arg_names(meth)       
+
         testunit = EutesterTestUnit(meth, *args, **kwargs)
         testunit.eof = eof
+
         #if autoarg, auto populate testunit arguements from local testcase.args namespace values
         if autoarg:
             self.populate_testunit_with_args(testunit)
@@ -1031,7 +1033,8 @@ class EutesterTestCase(unittest.TestCase):
         cf = argparse.Namespace()
         
         
-        if self.use_default_file and self.default_config:
+        if (hasattr(self, 'use_default_file') and self.use_default_file) and \
+                (hasattr(self, 'use_default_config') and self.default_config):
             try:
                 configfiles.append(self.default_config)
             except Exception, e:
