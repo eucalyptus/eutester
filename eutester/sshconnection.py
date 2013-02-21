@@ -205,7 +205,8 @@ class SshConnection():
             p_transport = paramiko.Transport(proxy_host)
             p_transport.start_client()
             if proxy_keypath:
-                p_transport.auth_publickey(proxy_username,proxy_keypath)
+                priv_key = paramiko.RSAKey.from_private_key_file(proxy_keypath)
+                p_transport.auth_publickey(proxy_username,priv_key)
             else:
                 p_transport.auth_password(proxy_username, proxy_password)
             #forward from 127.0.0.1:<free_random_port> to |dest_host|
@@ -503,7 +504,8 @@ class SshConnection():
                         break
                     else:
                         self.debug("Using Keypath:" + keypath, verbose=verbose)
-                        self._transport.auth_publickey(username,keypath)
+                        priv_key = paramiko.RSAKey.from_private_key_file(keypath)
+                        ssh._transport.auth_publickey(username,priv_key)
                         #ssh.connect(ip, port=port, username=username, key_filename=keypath, timeout=timeout)
                         connected = True
                         break
@@ -516,7 +518,7 @@ class SshConnection():
                 if proxy_transport:
                     proxy_host,port = ssh._transport.getpeername()
                     via_string = ' via proxy host:'+str(proxy_host)+':'+str(port)
-                self.debug('Connected to ' + str(ip)+str(via_string))
+                self.debug('SSH - Connected to ' + str(ip)+str(via_string))
                 break
         if not connected:
             raise Exception(
