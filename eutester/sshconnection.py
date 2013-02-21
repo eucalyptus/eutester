@@ -62,17 +62,23 @@ example with proxy:
     proxy_keypath = '/home/testuser/keyfile.pem'
 
 
-    instance_ssh = SshConnection( instance_private_ip,
-                                  username=instance_user,
-                                  keypath=instance_keypath,
-                                  proxy=proxy_ip,
-                                  proxy_username = proxy_username,
-                                  proxy_keypath = proxy_keypath,
-                                  debug_connect = True)
-    instance_ssh.sys('hostname')
+    example output from ipython:
 
-
-    sample output from ipython:
+    In[4]: instance_ssh = SshConnection( instance_private_ip, username=instance_user, keypath=instance_keypath,
+            proxy=proxy_ip, proxy_username = proxy_username, proxy_keypath = proxy_keypath, debug_connect = True)
+    ssh_connect args:
+    hostname:10.1.1.5
+    username:root
+    password:None
+    keypath:/tmp/instancekey.pem
+    timeout:60
+    retry:1
+    IPV6 DNS lookup disabled, do IPV4 resolution and pass IP to connect()
+    10.1.1.5, is already an ip, dont do host lookup...
+    192.168.1.2, is already an ip, dont do host lookup...
+    SSH connection attempt(1 of 2), host:'root@10.1.1.5', using ipv4:10.1.1.5, thru proxy:'192.168.1.2'
+    Using Keypath:/tmp/instancekey.pem
+    SSH - Connected to 10.1.1.5 via proxy host:192.168.1.2:22
 
     In [5]: instance_ssh.sys('hostname')
     Out[5]: ['euca_10_1_1_5.eucalyptus_cloud.com']
