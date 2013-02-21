@@ -55,17 +55,18 @@ import paramiko
 import select
 
 class SshCbReturn():
-    '''
-    Used to return data from an ssh cmd callback method that can be used to handle output as it's rx'd instead of...  
-    waiting for the cmd to finish and returned buffer. See SshConnection.cmd() for more info.
-    The call back must return type SshCbReturn.   
-        If cb returns stop==True, recv loop will end, and channel will be closed, cmd will return. 
-        if cb settimer is > 0, timer timeout will be adjusted for this time
-        if cb statuscode is != -1 cmd status will return with this value
-        if cb nextargs is set, the next time cb is called these args will be passed instead
-        if cb buf is not None, the cmd['output'] buffer will be appended with this buf
-    '''
-    def __init__(self, stop=False, statuscode=-1, settimer=0, buf=None,nextargs=[]):
+
+    def __init__(self, stop=False, statuscode=-1, settimer=0, buf=None, nextargs=[]):
+        """
+        Used to return data from an ssh cmd callback method that can be used to handle output as it's rx'd instead of...
+        waiting for the cmd to finish and returned buffer. See SshConnection.cmd() for more info.
+        The call back must return type SshCbReturn.
+        :param stop: If cb returns stop==True, recv loop will end, and channel will be closed, cmd will return.
+        :param settimer: if cb settimer is > 0, timer timeout will be adjusted for this time
+        :param statuscode: if cb statuscode is != -1 cmd status will return with this value
+        :param nextargs: if cb nextargs is set, the next time cb is called these args will be passed instead
+        :param buf: if cb buf is not None, the cmd['output'] buffer will be appended with this buf
+        """
         self.stop = stop
         self.statuscode = statuscode
         self.settimer = settimer
@@ -89,15 +90,17 @@ class SshConnection():
                  debugmethod=None,
                  verbose=False):
         '''
-        host -mandatory - string, hostname or ip address to establish ssh connection to
-        username - optional - string, username used to establish ssh session when keypath is not provided
-        password - optional - string, password used to establish ssh session when keypath is not provided
-        keypair - optional - boto keypair object, used to attept to derive local path to ssh key if present
-        keypath  - optional - string, path to ssh key
-        timeout - optional - integer, tcp timeout in seconds
-        retry - optional - integer, # of attempts made to establish ssh session without auth failures
-        debugmethod - method, used to handle debug msgs
-        verbose - optional - boolean to flag debug output on or off
+
+        :param host: -mandatory - string, hostname or ip address to establish ssh connection to
+        :param username: - optional - string, username used to establish ssh session when keypath is not provided
+        :param password: - optional - string, password used to establish ssh session when keypath is not provided
+        :param keypair: - optional - boto keypair object, used to attept to derive local path to ssh key if present
+        :param keypath:  - optional - string, path to ssh key
+        :param enable_ipv6_dns: - optional - boolean to allow ipv6 dns hostname resolution
+        :param timeout: - optional - integer, tcp timeout in seconds
+        :param retry: - optional - integer, # of attempts made to establish ssh session without auth failures
+        :param debugmethod: - method, used to handle debug msgs
+        :param verbose: - optional - boolean to flag debug output on or off
         '''
         
         self.host = host
@@ -121,20 +124,27 @@ class SshConnection():
         if (self.keypair is not None):
             self.keypath = os.getcwd() + "/" + self.keypair.name + ".pem" 
         if (self.keypath is not None):
-            self.debug( "SSH connection has hostname:"+ str(self.host) +" user:"+ str(self.username) +" and keypath: "+ str(self.keypath) )
+            self.debug("SSH connection has hostname:" + str(self.host) + " user:" +
+                        str(self.username) + " and keypath: " + str(self.keypath))
         else:
-            self.debug( "SSH connection has hostname:"+ str(self.host)+" user:"+ str(self.username) +" password:"+ str(self.password))
+            self.debug("SSH connection has hostname:" + str(self.host) + " user:" +
+                       str(self.username) + " password:" + str(self.password))
             
         if (self.keypath is not None) or ((self.username is not None) and (self.password is not None)):
-            self.connection = self.get_ssh_connection(self.host, username=self.username, password=self.password, keypath=self.keypath, timeout=self.timeout)
+            self.connection = self.get_ssh_connection(self.host,
+                                                      username=self.username,
+                                                      password=self.password,
+                                                      keypath=self.keypath,
+                                                      enable_ipv6_dns=self.enable_ipv6_dns,
+                                                      timeout=self.timeout,
+                                                      retry=self.retry)
         else:
             raise Exception("Need either a keypath or username+password to create ssh connection")
     
     def debug(self,msg):
         '''
         simple method for printing debug. 
-        msg - mandatory - string to be printed
-        method - optional - callback to over ride default printing method 
+        :param msg: - mandatory - string to be printed
         '''
         if (self.verbose is True):
             if (self.debugmethod is None):
@@ -145,8 +155,9 @@ class SshConnection():
     def ssh_sys_timeout(self,chan,start,cmd):
         '''
         callback to be scheduled during ssh cmds which have timed out. 
-        chan - paramiko channel to be closed 
-        start - time.time() used to calc elapsed time when this fired for debug
+        :param chan: - paramiko channel to be closed
+        :param start - time.time() used to calc elapsed time when this fired for debug
+        :param cmd - the command ran
         '''
         chan.close()
         elapsed = time.time()-start
@@ -156,20 +167,23 @@ class SshConnection():
     def sys(self, cmd, verbose=False, timeout=120, listformat=True, code=None):
         '''
         Issue a command cmd and return output in list format
-        cmd - mandatory - string representing the command to be run  against the remote ssh session
-        verbose - optional - will default to global setting, can be set per cmd() as well here
-        timeout - optional - integer used to timeout the overall cmd() operation in case of remote blockingd
+
+        :param cmd: - mandatory - string representing the command to be run  against the remote ssh session
+        :param verbose: - optional - will default to global setting, can be set per cmd() as well here
+        :param timeout: - optional - integer used to timeout the overall cmd() operation in case of remote blockingd
+        :param listformat:  - optional - format output into single buffer or list of lines
+        :param code: - optional - expected exitcode, will except if cmd's  exitcode does not match this value
         '''
         out = self.cmd(cmd, verbose=verbose, timeout=timeout, listformat=listformat )
         output = out['output']
         if code is not None:
             if out['status'] != code:
                 self.debug(output)
-                raise Exception('Cmd:'+str(cmd)+' failed with status code:'+str(out['status']))
+                raise Exception('Cmd:' + str(cmd) + ' failed with status code:' + str(out['status']))
         return output
     
     
-    def cmd(self, cmd, verbose=None, timeout=120, readtimeout=20, listformat=False, cb=None, cbargs=[] ):
+    def cmd(self, cmd, verbose=None, timeout=120, readtimeout=20, listformat=False, cb=None, cbargs=[]):
         """ 
         Runs a command 'cmd' within an ssh connection. 
         Upon success returns dict representing outcome of the command.
@@ -180,11 +194,11 @@ class SshConnection():
             ['cbfired']  - Boolean to indicate whether or not the provided callback fired (ie returned False)
             ['elapsed'] - Time elapsed waiting for command loop to end. 
         Arguments:
-        cmd - mandatory - string representing the command to be run  against the remote ssh session
-        verbose - optional - will default to global setting, can be set per cmd() as well here
-        timeout - optional - integer used to timeout the overall cmd() operation in case of remote blocking
-        listformat - optional - boolean, if set returns output as list of lines, else a single buffer/string
-        cb - optional - callback, method that can be used to handle output as it's rx'd instead of...  
+        :param cmd: - mandatory - string representing the command to be run  against the remote ssh session
+        :param verbose: - optional - will default to global setting, can be set per cmd() as well here
+        :param timeout: - optional - integer used to timeout the overall cmd() operation in case of remote blocking
+        :param listformat: - optional - boolean, if set returns output as list of lines, else a single buffer/string
+        :param cb: - optional - callback, method that can be used to handle output as it's rx'd instead of...
                         waiting for the cmd to finish and return buffer. 
                         Must accept string buffer, and return an integer to be used as cmd status. 
                         Must return type 'sshconnection.SshCbReturn'
@@ -192,9 +206,8 @@ class SshConnection():
                         if cb settimer is > 0, timer timeout will be adjusted for this time
                         if cb statuscode is != -1 cmd status will return with this value
                         if cb nextargs is set, the next time cb is called these args will be passed instead
-        cbargs - optional - list of arguments to be appended to output buffer and passed to cb
-        
-        
+        :param cbargs: - optional - list of arguments to be appended to output buffer and passed to cb
+
         """
         args =[]
         if verbose is None:
@@ -333,7 +346,7 @@ class SshConnection():
         :param timeout: - optional - tcp timeout
         :param enable_ipv6_dns: - optional - boolean to avoid ipv6 dns 'AAAA' lookups
         :param retry: - optional - amount of retry attempts to establish ssh connection for errors outside of authentication
-        :param port: - optional - port to connect to, default: 22
+        :param port: - optional - port to connect to, default 22
         '''
         connected = False
         iplist = []
@@ -341,7 +354,12 @@ class SshConnection():
             raise Exception("ssh_connect: both password and keypath were set to None")
         if enable_ipv6_dns is None:
             enable_ipv6_dns=self.enable_ipv6_dns
-        self.debug("ssh_connect args:\nhostname:"+hostname+"\nusername:"+username+"\npassword:"+str(password)+"\nkeypath:"+str(keypath)+"\ntimeout:"+str(timeout)+"\nretry:"+str(retry))
+        self.debug("ssh_connect args:\nhostname:" + hostname
+                   + "\nusername:" + username
+                   + "\npassword:" + str(password)
+                   + "\nkeypath:" + str(keypath)
+                   + "\ntimeout:" + str(timeout)
+                   + "\nretry:" + str(retry))
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         hostname = str(hostname.strip())
@@ -354,7 +372,6 @@ class SshConnection():
             # Paramiko's connect to avoid the potential ipv6 'AAAA' lookup...
             try:
                 ipcheck = re.compile("^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
-
                 if socket.inet_aton(hostname):
                     if not ipcheck.match(hostname):
                         get_ipv4_ip = True
@@ -364,14 +381,13 @@ class SshConnection():
                 get_ipv4_ip = True
             if get_ipv4_ip:
                 try:
-                    #Lookup host for ssh connection...
+                    #ipv4 lookup host for ssh connection...
                     addrs = socket.getaddrinfo(hostname, 22, socket.AF_INET, socket.IPPROTO_IP, socket.IPPROTO_TCP)
                     for addr in addrs:
                         iplist.append(str(addr[4][0]))
                     self.debug('Resolved hostname:'+str(hostname)+' to IP(s):'+",".join(iplist))
                 except Exception, de:
                     self.debug('Error looking up DNS ip for hostname:'+str(hostname)+", err:"+str(de))
-
         if not iplist:
             iplist = [hostname]
         attempt = 0
