@@ -52,44 +52,58 @@ import com.amazonaws.services.ec2.model.SecurityGroup;
 import com.amazonaws.services.ec2.model.StartInstancesRequest;
 import com.amazonaws.services.ec2.model.StopInstancesRequest;
 import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
+import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancing;
+import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancingClient;
 
 final class Eutester4j {
-	
+
 	static String EC2_ENDPOINT = null;
-    static String AS_ENDPOINT = null;
+	static String AS_ENDPOINT = null;
+	static String ELB_ENDPOINT = null;
 	static String SECRET_KEY = null;
-	static String ACCESS_KEY= null;
+	static String ACCESS_KEY = null;
 	static String CREDPATH = null;
 	static String instanceType = "m1.small";
-	
+
 	public static void getCloudInfo() throws Exception {
 		CREDPATH = "/Users/tony/Desktop/as_test_cloud/eucarc";
-		EC2_ENDPOINT = parseEucarc(CREDPATH, "EC2_URL")+"/";
+		EC2_ENDPOINT = parseEucarc(CREDPATH, "EC2_URL") + "/";
 		AS_ENDPOINT = parseEucarc(CREDPATH, "AWS_AUTO_SCALING_URL") + "/";
+		ELB_ENDPOINT = parseEucarc(CREDPATH, "AWS_ELB_URL") + "/";
 		SECRET_KEY = parseEucarc(CREDPATH, "EC2_SECRET_KEY").replace("'", "");
 		ACCESS_KEY = parseEucarc(CREDPATH, "EC2_ACCESS_KEY").replace("'", "");
 	}
-	
+
 	/**
 	 * create ec2 connection based with supplied accessKey and secretKey
 	 * 
 	 * @param accessKey
 	 * @param secretKey
 	 */
-	public static AmazonEC2 getEc2Client(String accessKey, String secretKey, String endpoint) {
-		AWSCredentials creds = new BasicAWSCredentials(accessKey,secretKey);
+	public static AmazonEC2 getEc2Client(String accessKey, String secretKey,
+			String endpoint) {
+		AWSCredentials creds = new BasicAWSCredentials(accessKey, secretKey);
 		final AmazonEC2 ec2 = new AmazonEC2Client(creds);
 		ec2.setEndpoint(endpoint);
 		return ec2;
 	}
-	
-	public static AmazonAutoScaling getAutoScalingClient(String accessKey, String secretKey, String endpoint) {
-		AWSCredentials creds = new BasicAWSCredentials(accessKey,secretKey);
+
+	public static AmazonAutoScaling getAutoScalingClient(String accessKey,
+			String secretKey, String endpoint) {
+		AWSCredentials creds = new BasicAWSCredentials(accessKey, secretKey);
 		final AmazonAutoScaling as = new AmazonAutoScalingClient(creds);
 		as.setEndpoint(endpoint);
 		return as;
 	}
-	
+
+	public static AmazonElasticLoadBalancing getElbClient(String accessKey, String secretKey,
+			String endpoint) {
+		AWSCredentials creds = new BasicAWSCredentials(accessKey, secretKey);
+		final AmazonElasticLoadBalancing elb = new AmazonElasticLoadBalancingClient(creds);
+		elb.setEndpoint(endpoint);
+		return elb;
+	}
+
 	/**
 	 * 
 	 * @param credpath
@@ -97,19 +111,20 @@ final class Eutester4j {
 	 * @return the value of the field from eucarc file
 	 * @throws IOException
 	 */
-	public static String parseEucarc(String credpath, String field) throws IOException{
+	public static String parseEucarc(String credpath, String field)
+			throws IOException {
 		Charset charset = Charset.forName("UTF-8");
 		String creds = credpath;
 		String result = null;
 		try {
-			 List<String> lines = Files.readAllLines(Paths.get(creds), charset);
-			 CharSequence find = field;
-			 for (String line : lines){
-				 if (line.contains(find)){
-					 result = line.substring(line.lastIndexOf('=') + 1);
-					 break;
-				 }
-			 }
+			List<String> lines = Files.readAllLines(Paths.get(creds), charset);
+			CharSequence find = field;
+			for (String line : lines) {
+				if (line.contains(find)) {
+					result = line.substring(line.lastIndexOf('=') + 1);
+					break;
+				}
+			}
 		} catch (IOException ioe) {
 			ioe.printStackTrace();
 		}
@@ -131,7 +146,8 @@ final class Eutester4j {
 	/**
 	 * helper method to pause execution
 	 * 
-	 * @param secs time to sleep in seconds
+	 * @param secs
+	 *            time to sleep in seconds
 	 */
 	public static void sleep(int secs) {
 		try {
@@ -140,7 +156,7 @@ final class Eutester4j {
 			e.printStackTrace();
 		}
 	}
-	
+
 	public static void verifyInstanceHealthStatus(final AmazonAutoScaling as,
 			final String instanceId, final String expectedStatus) {
 		final String healthStatus = getHealthStatus(as, instanceId);
@@ -289,23 +305,25 @@ final class Eutester4j {
 
 		return azResult.getAvailabilityZones();
 	}
-	
+
 	/**
 	 * 
 	 * @param name
 	 * @param desc
 	 */
-	public static void createSecurityGoup(AmazonEC2 ec2, String name, String desc) {
+	public static void createSecurityGoup(AmazonEC2 ec2, String name,
+			String desc) {
 		try {
-        	CreateSecurityGroupRequest securityGroupRequest = new CreateSecurityGroupRequest(name, desc);
-        	ec2.createSecurityGroup(securityGroupRequest);
-        	System.out.println("Created Security Group: " + name);
-    	} catch (AmazonServiceException ase) {
-    		// Likely this means that the group is already created, so ignore.
-    		System.out.println(ase.getMessage());
-    	}
+			CreateSecurityGroupRequest securityGroupRequest = new CreateSecurityGroupRequest(
+					name, desc);
+			ec2.createSecurityGroup(securityGroupRequest);
+			System.out.println("Created Security Group: " + name);
+		} catch (AmazonServiceException ase) {
+			// Likely this means that the group is already created, so ignore.
+			System.out.println(ase.getMessage());
+		}
 	}
-	
+
 	/**
 	 * 
 	 * @return list of security groups
@@ -314,109 +332,119 @@ final class Eutester4j {
 		DescribeSecurityGroupsResult securityGroupsResult = null;
 		try {
 			DescribeSecurityGroupsRequest describeSecurityGroupsRequest = new DescribeSecurityGroupsRequest();
-			securityGroupsResult = ec2.describeSecurityGroups(describeSecurityGroupsRequest);
-    	} catch (AmazonServiceException ase) {
-    		// Likely this means that the group is already created, so ignore.
-    		System.out.println(ase.getMessage());
-    	}
-    	return securityGroupsResult.getSecurityGroups();
+			securityGroupsResult = ec2
+					.describeSecurityGroups(describeSecurityGroupsRequest);
+		} catch (AmazonServiceException ase) {
+			// Likely this means that the group is already created, so ignore.
+			System.out.println(ase.getMessage());
+		}
+		return securityGroupsResult.getSecurityGroups();
 	}
-	
+
 	/**
 	 * 
-	 * @param groupName security group to delete
+	 * @param groupName
+	 *            security group to delete
 	 */
 	public static void deleteSecurityGroup(AmazonEC2 ec2, String groupName) {
 		try {
-			DeleteSecurityGroupRequest deleteSecurityGroupRequest = new DeleteSecurityGroupRequest(groupName);
+			DeleteSecurityGroupRequest deleteSecurityGroupRequest = new DeleteSecurityGroupRequest(
+					groupName);
 			ec2.deleteSecurityGroup(deleteSecurityGroupRequest);
 			System.out.println("Deleted Security Group: " + groupName);
 		} catch (AmazonServiceException ase) {
 			System.out.println(ase.getMessage());
 		}
 	}
-	
+
 	/**
-	 *	
+	 * 
 	 * @param ec2
 	 * @param emi
 	 * @param keyName
 	 * @param type
 	 * @param securityGroups
 	 */
-	public static void runInstances(AmazonEC2 ec2, String emi, String keyName, String type, ArrayList<String> securityGroups, int minCount, int maxCount) {
+	public static void runInstances(AmazonEC2 ec2, String emi, String keyName,
+			String type, ArrayList<String> securityGroups, int minCount,
+			int maxCount) {
 		RunInstancesRequest runInstancesRequest = new RunInstancesRequest()
-		    .withInstanceType(type)
-		    .withImageId(emi)
-		    .withMinCount(minCount)
-		    .withMaxCount(maxCount)
-		    .withSecurityGroups(securityGroups)
-		    .withKeyName(keyName)
-		;	
+				.withInstanceType(type).withImageId(emi).withMinCount(minCount)
+				.withMaxCount(maxCount).withSecurityGroups(securityGroups)
+				.withKeyName(keyName);
 		ec2.runInstances(runInstancesRequest);
+		System.out.println("Started instance: "
+				+ getLastlaunchedInstance(ec2).get(0).getInstanceId());
 	}
-	
+
 	/**
 	 * 
 	 * @param ec2
 	 * @param instanceIds
 	 */
 	public static void stopInstances(AmazonEC2 ec2, List<String> instanceIds) {
-		StopInstancesRequest stopInstancesRequest = new StopInstancesRequest(instanceIds);
+		StopInstancesRequest stopInstancesRequest = new StopInstancesRequest(
+				instanceIds);
 		ec2.stopInstances(stopInstancesRequest);
-		for(String instance : instanceIds){
-			System.out.println("Stopped instance: " + instance);			
+		for (String instance : instanceIds) {
+			System.out.println("Stopped instance: " + instance);
 		}
 	}
-	
+
 	/**
 	 * 
 	 * @param ec2
 	 * @param instanceIds
 	 */
 	public static void startInstances(AmazonEC2 ec2, List<String> instanceIds) {
-		StartInstancesRequest startInstancesRequest = new StartInstancesRequest(instanceIds);
+		StartInstancesRequest startInstancesRequest = new StartInstancesRequest(
+				instanceIds);
 		ec2.startInstances(startInstancesRequest);
-		for(String instance : instanceIds){
-			System.out.println("Started instance: " + instance);			
+		for (String instance : instanceIds) {
+			System.out.println("Started instance: " + instance);
 		}
 	}
-	
+
 	/**
 	 * 
 	 * @param ec2
 	 * @param instanceIds
 	 */
-	public static void terminateInstances(AmazonEC2 ec2, List<String> instanceIds) {
-		TerminateInstancesRequest terminateInstancesRequest = new TerminateInstancesRequest(instanceIds);
+	public static void terminateInstances(AmazonEC2 ec2,
+			List<String> instanceIds) {
+		TerminateInstancesRequest terminateInstancesRequest = new TerminateInstancesRequest(
+				instanceIds);
 		ec2.terminateInstances(terminateInstancesRequest);
-		for(String instance : instanceIds){
-			System.out.println("Terminated instance: " + instance);			
+		for (String instance : instanceIds) {
+			System.out.println("Terminated instance: " + instance);
 		}
 	}
-	
+
 	/**
 	 * 
 	 * @param ec2
 	 * @return # of reservations
 	 */
 	public static List<Reservation> getInstancesList(AmazonEC2 ec2) {
-		DescribeInstancesResult describeInstancesRequest = ec2.describeInstances();
-        List<Reservation> reservations = describeInstancesRequest.getReservations();
+		DescribeInstancesResult describeInstancesRequest = ec2
+				.describeInstances();
+		List<Reservation> reservations = describeInstancesRequest
+				.getReservations();
 		return reservations;
 	}
-	
+
 	/**
 	 * 
 	 * @param ec2
 	 * @param keyName
 	 */
 	public static void createKeyPair(AmazonEC2 ec2, String keyName) {
-		CreateKeyPairRequest createKeyPairRequest = new CreateKeyPairRequest(keyName);
+		CreateKeyPairRequest createKeyPairRequest = new CreateKeyPairRequest(
+				keyName);
 		ec2.createKeyPair(createKeyPairRequest);
 		System.out.println("Created keypair: " + keyName);
 	}
-	
+
 	/**
 	 * 
 	 * @param ec2
@@ -424,105 +452,118 @@ final class Eutester4j {
 	 */
 	public static int getKeyPairCount(AmazonEC2 ec2) {
 		DescribeKeyPairsRequest describeKeyPairsRequest = new DescribeKeyPairsRequest();
-		DescribeKeyPairsResult describeKeyPairsResult = ec2.describeKeyPairs(describeKeyPairsRequest);
+		DescribeKeyPairsResult describeKeyPairsResult = ec2
+				.describeKeyPairs(describeKeyPairsRequest);
 		return describeKeyPairsResult.getKeyPairs().size();
 	}
-	
+
 	/**
 	 * 
 	 * @param ec2
 	 * @param keyName
 	 */
 	public static void deleteKeyPair(AmazonEC2 ec2, String keyName) {
-		DeleteKeyPairRequest deleteKeyPairRequest = new DeleteKeyPairRequest(keyName);
+		DeleteKeyPairRequest deleteKeyPairRequest = new DeleteKeyPairRequest(
+				keyName);
 		ec2.deleteKeyPair(deleteKeyPairRequest);
 		System.out.println("Deelted keypair: " + keyName);
 	}
-	
+
 	/**
 	 * 
 	 * @param ec2
 	 * @return
 	 */
 	public static List<Instance> getLastlaunchedInstance(AmazonEC2 ec2) {
-		List <Instance> instancelist = null;
-		List <Reservation> reservations = getInstancesList(ec2);
-		for (Reservation reservation : reservations){
-            instancelist = reservation.getInstances();
-		    Collections.sort(instancelist, new Comparator<Instance>() {
-		       public int compare(Instance i1, Instance i2) {
-		          return i1.getLaunchTime().compareTo(i2.getLaunchTime()); 
-		       }
-		    });
+		List<Instance> instancelist = null;
+		List<Reservation> reservations = getInstancesList(ec2);
+		for (Reservation reservation : reservations) {
+			instancelist = reservation.getInstances();
+			Collections.sort(instancelist, new Comparator<Instance>() {
+				public int compare(Instance i1, Instance i2) {
+					return i1.getLaunchTime().compareTo(i2.getLaunchTime());
+				}
+			});
 		}
-		return instancelist;		
+		return instancelist;
 	}
-	
-	public static void createLaunchConfig(AmazonAutoScaling as, String launchConfigurationName, String imageId, String type, String keyName, ArrayList<String> securityGroups){
+
+	public static void createLaunchConfig(AmazonAutoScaling as,
+			String launchConfigurationName, String imageId, String type,
+			String keyName, ArrayList<String> securityGroups) {
 		CreateLaunchConfigurationRequest createLaunchConfigurationRequest = new CreateLaunchConfigurationRequest()
-		    .withLaunchConfigurationName(launchConfigurationName)
-			.withImageId(imageId)
-		    .withInstanceType(type)
-		    .withSecurityGroups(securityGroups)
-		    .withKeyName(keyName);
+				.withLaunchConfigurationName(launchConfigurationName)
+				.withImageId(imageId).withInstanceType(type)
+				.withSecurityGroups(securityGroups).withKeyName(keyName);
 		as.createLaunchConfiguration(createLaunchConfigurationRequest);
-		System.out.println("Created Launch Configuration: " + launchConfigurationName);
+		System.out.println("Created Launch Configuration: "
+				+ launchConfigurationName);
 	}
-	
-	public static List<LaunchConfiguration> describeLaunchConfigs(AmazonAutoScaling as) {
+
+	public static List<LaunchConfiguration> describeLaunchConfigs(
+			AmazonAutoScaling as) {
 		DescribeLaunchConfigurationsResult launchConfigurationsResult = null;
 		try {
 			DescribeLaunchConfigurationsRequest describeLaunchConfigurationsRequest = new DescribeLaunchConfigurationsRequest();
-			launchConfigurationsResult = as.describeLaunchConfigurations(describeLaunchConfigurationsRequest);
-    	} catch (AmazonServiceException ase) {
-    		System.out.println(ase.getMessage());
-    	}
+			launchConfigurationsResult = as
+					.describeLaunchConfigurations(describeLaunchConfigurationsRequest);
+		} catch (AmazonServiceException ase) {
+			System.out.println(ase.getMessage());
+		}
 		return launchConfigurationsResult.getLaunchConfigurations();
 	}
-	
-	public static void deleteLaunchConfig(AmazonAutoScaling as, String launchConfigurationName){
+
+	public static void deleteLaunchConfig(AmazonAutoScaling as,
+			String launchConfigurationName) {
 		try {
 			DeleteLaunchConfigurationRequest deleteLaunchConfigurationRequest = new DeleteLaunchConfigurationRequest()
-				.withLaunchConfigurationName(launchConfigurationName);
+					.withLaunchConfigurationName(launchConfigurationName);
 			as.deleteLaunchConfiguration(deleteLaunchConfigurationRequest);
-			System.out.println("Deleted Launch Configuration: " + launchConfigurationName);
+			System.out.println("Deleted Launch Configuration: "
+					+ launchConfigurationName);
 		} catch (AmazonServiceException ase) {
 			System.out.println(ase.getMessage());
 		}
 	}
-	
-	public static void createAutoScalingGroup(AmazonAutoScaling as, String autoScalingGroupName, String launchConfigurationName, int minSize, int maxSize, String availabilityZones){
+
+	public static void createAutoScalingGroup(AmazonAutoScaling as,
+			String autoScalingGroupName, String launchConfigurationName,
+			int minSize, int maxSize, String availabilityZones) {
 		CreateAutoScalingGroupRequest createAutoScalingGroupRequest = new CreateAutoScalingGroupRequest()
-			.withAutoScalingGroupName(autoScalingGroupName)
-	    	.withLaunchConfigurationName(launchConfigurationName)
-	    	.withMinSize(minSize)
-	    	.withMaxSize(maxSize)
-			.withAvailabilityZones(availabilityZones);
+				.withAutoScalingGroupName(autoScalingGroupName)
+				.withLaunchConfigurationName(launchConfigurationName)
+				.withMinSize(minSize).withMaxSize(maxSize)
+				.withAvailabilityZones(availabilityZones);
 		as.createAutoScalingGroup(createAutoScalingGroupRequest);
-		System.out.println("Created Auto Scaling Group: " + autoScalingGroupName);
+		System.out.println("Created Auto Scaling Group: "
+				+ autoScalingGroupName);
 	}
-	
-	public static List<AutoScalingGroup> describeAutoScalingGroups(AmazonAutoScaling as) {
+
+	public static List<AutoScalingGroup> describeAutoScalingGroups(
+			AmazonAutoScaling as) {
 		DescribeAutoScalingGroupsResult autoScalingGroupsResult = null;
 		try {
 			DescribeAutoScalingGroupsRequest describeAutoScalingGroupsRequest = new DescribeAutoScalingGroupsRequest();
-			autoScalingGroupsResult = as.describeAutoScalingGroups(describeAutoScalingGroupsRequest);
-    	} catch (AmazonServiceException ase) {
-    		System.out.println(ase.getMessage());
-    	}
+			autoScalingGroupsResult = as
+					.describeAutoScalingGroups(describeAutoScalingGroupsRequest);
+		} catch (AmazonServiceException ase) {
+			System.out.println(ase.getMessage());
+		}
 		return autoScalingGroupsResult.getAutoScalingGroups();
 	}
-	
-	public static void deleteAutoScalingGroup(AmazonAutoScaling as, String autoScalingGroupName){
+
+	public static void deleteAutoScalingGroup(AmazonAutoScaling as,
+			String autoScalingGroupName) {
 		try {
 			DeleteAutoScalingGroupRequest deleteAutoScalingGroupRequest = new DeleteAutoScalingGroupRequest()
-				.withAutoScalingGroupName(autoScalingGroupName)
-				.withForceDelete(true);
+					.withAutoScalingGroupName(autoScalingGroupName)
+					.withForceDelete(true);
 			as.deleteAutoScalingGroup(deleteAutoScalingGroupRequest);
-			System.out.println("Deleted Auto Scaling Group: " + autoScalingGroupName);
+			System.out.println("Deleted Auto Scaling Group: "
+					+ autoScalingGroupName);
 		} catch (AmazonServiceException ase) {
 			System.out.println(ase.getMessage());
 		}
 	}
-	
+
 }
