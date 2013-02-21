@@ -50,7 +50,7 @@ import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
 public class TestEC2DescribeInstanceStatus {
 
 	@Test
-	public void test() throws Exception {
+	public void EC2DescribeInstanceStatusTest() throws Exception {
 		final String credpath = "/Users/tony/Desktop/as_test_cloud/eucarc";
 		final String ec2Endpoint = parseEucarc(credpath, "EC2_URL") + "/";
 		final String secretKey = parseEucarc(credpath, "EC2_SECRET_KEY")
