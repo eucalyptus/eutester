@@ -48,7 +48,7 @@ import com.amazonaws.services.elasticloadbalancing.model.Listener;
 public class TestAutoScalingELBReferenceValidation {
 
 	@Test
-	public void test() throws Exception {
+	public void AutoScalingELBReferenceValidationTest() throws Exception {
 		getCloudInfo();
 		final AmazonAutoScaling as = getAutoScalingClient(ACCESS_KEY,
 				SECRET_KEY, AS_ENDPOINT);
