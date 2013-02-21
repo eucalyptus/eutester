@@ -51,6 +51,7 @@ example usage:
 '''
 
 
+import copy
 import os
 import paramiko
 import re
@@ -86,84 +87,155 @@ class SshConnection():
 
     def __init__(self,
                  host,
-                 proxy=None,
+                 username='root',
+                 password=None,
                  keypair=None,
                  keypath=None,
-                 password=None,
-                 username='root',
+                 proxy=None,
+                 proxy_username='root',
+                 proxy_password=None,
+                 proxy_keyname=None,
+                 proxy_keypath=None,
                  enable_ipv6_dns=False,
                  timeout=60,
                  retry=1,
                  debugmethod=None,
-                 verbose=False):
-        '''
+                 verbose=False,
+                 debug_connect=False):
+        """
+
 
         :param host: -mandatory - string, hostname or ip address to establish ssh connection to
         :param username: - optional - string, username used to establish ssh session when keypath is not provided
         :param password: - optional - string, password used to establish ssh session when keypath is not provided
         :param keypair: - optional - boto keypair object, used to attept to derive local path to ssh key if present
         :param keypath:  - optional - string, path to ssh key
+        :param proxy: - optional - host to proxy ssh connection through
+        :param proxy_username:  - optional ssh username of proxy host for authentication
+        :param proxy_password: - optional ssh password of proxy host for authentication
+        :param proxy_keypath: - optional path to ssh key to use for proxy authentication
+        :param proxy_keyname: - optional keyname for proxy authentication, will attempt to derive keypath from this
         :param enable_ipv6_dns: - optional - boolean to allow ipv6 dns hostname resolution
         :param timeout: - optional - integer, tcp timeout in seconds
         :param retry: - optional - integer, # of attempts made to establish ssh session without auth failures
         :param debugmethod: - method, used to handle debug msgs
-        :param verbose: - optional - boolean to flag debug output on or off
-        '''
+        :param verbose: - optional - boolean to flag debug output on or off mainly for cmd execution
+        :param debug_connect: - optional - boolean to flag debug output on or off for connection related operations
+        """
 
         self.host = host
-        self.proxy = proxy
+        self.username = username
+        self.password = password
         self.keypair = keypair
         self.keypath = keypath
-        self.password = password
-        self.username = username
+        self.proxy = proxy
+        self.proxy_username = proxy_username
+        self.proxy_password = proxy_password
+        self.proxy_keyname = proxy_keyname
+        self.proxy_keypath = proxy_keypath
         self.enable_ipv6_dns = enable_ipv6_dns
         self.timeout = timeout
         self.retry = retry
         self.debugmethod = debugmethod
         self.verbose = verbose
+        self.debug_connect = debug_connect
 
         #Used to store the last cmd attempted and it's exit code
         self.lastcmd = ""
         self.lastexitcode = SshConnection.cmd_not_executed_code
 
-        if (self.keypair is not None):
+        if self.keypair is not None:
             self.keypath = os.getcwd() + "/" + self.keypair.name + ".pem"
-        if (self.keypath is not None):
+        if self.keypath is not None:
             self.debug("SSH connection has hostname:" + str(self.host) + " user:" +
                        str(self.username) + " and keypath: " + str(self.keypath))
         else:
             self.debug("SSH connection has hostname:" + str(self.host) + " user:" +
-                       str(self.username) + " password:" + str(self.password))
+                       str(self.username) + " password:" + str(self.mask_password(password)))
+        if proxy:
+            if self.proxy_keyname is not None:
+                self.proxy_keypath = os.getcwd() + "/" + self.proxy_keyname + ".pem"
+            if self.proxy_keypath is not None:
+                self.debug("SSH proxy has hostname:" + str(self.proxy) + " user:" +
+                           str(self.proxy_username) + " and keypath: " + str(self.proxy_keypath))
+            else:
+                self.debug("SSH proxy has hostname:" + str(self.proxy) + " user:" +
+                           str(proxy_username) + " password:" + str(self.mask_password(proxy_password)))
 
-        if (self.keypath is not None) or ((self.username is not None) and (self.password is not None)):
+        if self.keypath is not None or ((self.username is not None) and (self.password is not None)):
             self.connection = self.get_ssh_connection(self.host,
                                                       username=self.username,
                                                       password=self.password,
                                                       keypath=self.keypath,
+                                                      proxy_username=self.proxy_username,
+                                                      proxy_password=self.proxy_password,
+                                                      proxy_keypath=self.proxy_keypath,
                                                       enable_ipv6_dns=self.enable_ipv6_dns,
                                                       timeout=self.timeout,
-                                                      retry=self.retry)
+                                                      retry=self.retry,
+                                                      verbose=self.debug_connect)
         else:
             raise Exception("Need either a keypath or username+password to create ssh connection")
 
-    def debug(self, msg):
-        '''
-        simple method for printing debug. 
+    def get_proxy_transport(self,
+                            proxy_host=None,
+                            dest_host=None,
+                            port=22,
+                            proxy_username='root',
+                            proxy_password=None,
+                            proxy_keypath=None):
+        """
+        :param proxy_host:
+        :param port:
+        :param dest_host:
+        :param proxy_username:
+        :param proxy_password:
+        :param proxy_keyname:
+        :param proxy_keypath:
+        :return: paramiko transport
+        """
+        proxy_host = ((proxy_host or self.proxy),22)
+        dest_host = ((dest_host or self.host),22)
+        proxy_username = proxy_username or self.proxy_username
+        proxy_password = proxy_password or self.proxy_password
+        proxy_keypath = proxy_keypath or self.proxy_keypath
+
+        #Make sure there is at least one likely way to authenticate...
+        if proxy_keypath is not None or ((proxy_username is not None) and (proxy_password is not None)):
+            p_transport = paramiko.Transport(proxy_host)
+            p_transport.start_client()
+            if proxy_keypath:
+                p_transport.auth_publickey(proxy_username,proxy_keypath)
+            else:
+                p_transport.auth_password(proxy_username, proxy_password)
+            #forward from 127.0.0.1:<free_random_port> to |dest_host|
+            channel = p_transport.open_channel('direct-tcpip', dest_host, ('127.0.0.1', 0))
+            return paramiko.Transport(channel)
+        else:
+            raise Exception("Need either a keypath or username+password to create ssh proxy connection")
+
+
+    def debug(self, msg, verbose=None):
+        """
+        simple method for printing debug.
         :param msg: - mandatory - string to be printed
-        '''
-        if (self.verbose is True):
+        :param verbose: boolean to override global verbose flag
+        """
+        if verbose is None:
+            verbose = self.verbose
+        if (verbose is True):
             if (self.debugmethod is None):
                 print (str(msg))
             else:
                 self.debugmethod(msg)
 
     def ssh_sys_timeout(self, chan, start, cmd):
-        '''
-        callback to be scheduled during ssh cmds which have timed out. 
+        """
+        callback to be scheduled during ssh cmds which have timed out.
         :param chan: - paramiko channel to be closed
         :param start - time.time() used to calc elapsed time when this fired for debug
         :param cmd - the command ran
-        '''
+        """
         chan.close()
         elapsed = time.time() - start
         raise CommandTimeoutException(
@@ -171,7 +243,7 @@ class SshConnection():
 
 
     def sys(self, cmd, verbose=False, timeout=120, listformat=True, code=None):
-        '''
+        """
         Issue a command cmd and return output in list format
 
         :param cmd: - mandatory - string representing the command to be run  against the remote ssh session
@@ -179,7 +251,7 @@ class SshConnection():
         :param timeout: - optional - integer used to timeout the overall cmd() operation in case of remote blockingd
         :param listformat:  - optional - format output into single buffer or list of lines
         :param code: - optional - expected exitcode, will except if cmd's  exitcode does not match this value
-        '''
+        """
         out = self.cmd(cmd, verbose=verbose, timeout=timeout, listformat=listformat)
         output = out['output']
         if code is not None:
@@ -189,7 +261,7 @@ class SshConnection():
         return output
 
 
-    def cmd(self, cmd, verbose=None, timeout=120, listformat=False, cb=None, cbargs=[]):
+    def cmd(self, cmd, verbose=None, timeout=120, listformat=False, cb=None, cbargs=[], get_pty=False):
         """ 
         Runs a command 'cmd' within an ssh connection. 
         Upon success returns dict representing outcome of the command.
@@ -197,7 +269,7 @@ class SshConnection():
         Returns dict:
             ['cmd'] - The command which was executed
             ['output'] - The std out/err from the executed command
-            ['status'] - The exit (exitcode) of the command, in the case a call back fires, this status code is unreliable.
+            ['status'] - The exitcode of the command. Note in the case a call back fires, this exitcode is unreliable.
             ['cbfired']  - Boolean to indicate whether or not the provided callback fired (ie returned False)
             ['elapsed'] - Time elapsed waiting for command loop to end. 
         Arguments:
@@ -231,8 +303,8 @@ class SshConnection():
             tran = self.connection.get_transport()
             chan = tran.open_session()
             chan.settimeout(timeout)
-            chan.get_pty()
-            f = chan.makefile()
+            if get_pty:
+                chan.get_pty()
             chan.exec_command(cmd)
             output = ""
             fd = chan.fileno()
@@ -292,7 +364,7 @@ class SshConnection():
                         self.debug(str(newdebug))
                         newdebug = ''
 
-            if (listformat):
+            if listformat:
                 #return output as list of lines
                 output = output.splitlines()
                 if output is None:
@@ -315,100 +387,124 @@ class SshConnection():
         return ret
 
     def refresh_connection(self):
+        """
+        Attempts to establish a new ssh connection to replace the old 'connection' of this
+        ssh obj.
+        """
         if self.connection:
             self.connection.close()
         self.connection = self.get_ssh_connection(self.host,
                                                   username=self.username,
                                                   password=self.password,
                                                   keypath=self.keypath,
+                                                  proxy_username=self.proxy_username,
+                                                  proxy_password=self.proxy_password,
+                                                  proxy_keypath=self.proxy_keypath,
                                                   enable_ipv6_dns=self.enable_ipv6_dns,
                                                   timeout=self.timeout,
-                                                  retry=self.retry)
+                                                  retry=self.retry,
+                                                  verbose=self.debug_connect)
 
     def get_ssh_connection(self,
                            hostname,
                            username="root",
                            password=None,
                            keypath=None,
+                           proxy=None,
+                           proxy_username=None,
+                           proxy_password=None,
+                           proxy_keypath=None,
                            enable_ipv6_dns=None,
                            port=22,
                            timeout=60,
-                           retry=1):
-        '''
-        Create a paramiko ssh session to hostname. Will attempt to authenticate first with a keypath if provided, 
-        if the sshkey file path is not provided.  username and password will be used to authenticate. This leaves out the case
-        where a password is passed as the password needed to unlock the key file. This 3rd case may need to be added but
-        may mask failures in tests for key inseration when using tests who's images have baked in passwords for login access(tbd). 
-        Upon success returns a paramiko sshclient with an established connection. 
+                           retry=1,
+                           verbose=False):
+        """
+        Create a paramiko ssh session to hostname. Will attempt to authenticate first with a keypath if provided,
+        if the sshkey file path is not provided.  username and password will be used to authenticate. This leaves out
+        the case where a password is passed as the password needed to unlock the key file. This 3rd case may need to be
+        added but may mask failures in tests for key insertion when using tests who's images have baked in passwords for
+        login access(tbd).
+        Upon success returns a paramiko sshclient with an established connection.
 
         :param hostname: - mandatory - hostname or ip to establish ssh connection with
         :param username: - optional - username used to authenticate ssh session
         :param password: - optional - password used to authenticate ssh session
         :param keypath: - optional - full path to sshkey file used to authenticate ssh session
+        :param proxy: - optional - host to proxy ssh connection through
+        :param proxy_username:  - optional ssh username of proxy host for authentication
+        :param proxy_password: - optional ssh password of proxy host for authentication
+        :param proxy_keypath: - optional path to ssh key to use for proxy authentication
         :param timeout: - optional - tcp timeout
         :param enable_ipv6_dns: - optional - boolean to avoid ipv6 dns 'AAAA' lookups
-        :param retry: - optional - amount of retry attempts to establish ssh connection for errors outside of authentication
+        :param retry: - optional - Number of attempts to establish ssh connection for errors outside of authentication
         :param port: - optional - port to connect to, default 22
-        '''
+        :param verbose: - optional - enable verbose debug output
+        """
         connected = False
         iplist = []
-        if ((password is None) and (keypath is None)):
+        proxy_ip = None
+        if (password is None) and (keypath is None):
             raise Exception("ssh_connect: both password and keypath were set to None")
+        global_verbose=self.verbose
+        self.verbose = verbose or global_verbose
         if enable_ipv6_dns is None:
             enable_ipv6_dns = self.enable_ipv6_dns
+
         self.debug("ssh_connect args:\nhostname:" + hostname
-                   + "\nusername:" + username
-                   + "\npassword:" + str(password)
-                   + "\nkeypath:" + str(keypath)
-                   + "\ntimeout:" + str(timeout)
-                   + "\nretry:" + str(retry))
+                    + "\nusername:" + username
+                    + "\npassword:" + str(password)
+                    + "\nkeypath:" + str(keypath)
+                    + "\ntimeout:" + str(timeout)
+                    + "\nretry:" + str(retry),
+                    verbose=verbose)
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         hostname = str(hostname.strip())
         if not enable_ipv6_dns:
-            self.debug('IPV6 DNS lookup disabled, do IPV4 resolution and pass IP to connect()')
+            self.debug('IPV6 DNS lookup disabled, do IPV4 resolution and pass IP to connect()',verbose=verbose)
             get_ipv4_ip = False
             # Paramiko uses family type 'AF_UNSPEC' which does both ipv4/ipv6 lookups and can cause some DNS servers
             # to fail in their response(s). Hack to avoid ipv6 lookups...
             # Try ipv4 dns resolution of 'hostname', and pass the ip instead of a hostname to
             # Paramiko's connect to avoid the potential ipv6 'AAAA' lookup...
-            try:
-                ipcheck = re.compile("^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
-                if socket.inet_aton(hostname):
-                    if not ipcheck.match(hostname):
-                        get_ipv4_ip = True
-                self.debug(str(hostname) + ", is already an ip, dont do host lookup...")
-                # This is already an ip don't look it up (regex might be better here?)
-            except socket.error:
-                get_ipv4_ip = True
-            if get_ipv4_ip:
-                try:
-                    #ipv4 lookup host for ssh connection...
-                    addrs = socket.getaddrinfo(hostname, 22, socket.AF_INET, socket.IPPROTO_IP, socket.IPPROTO_TCP)
-                    for addr in addrs:
-                        iplist.append(str(addr[4][0]))
-                    self.debug('Resolved hostname:' + str(hostname) + ' to IP(s):' + ",".join(iplist))
-                except Exception, de:
-                    self.debug('Error looking up DNS ip for hostname:' + str(hostname) + ", err:" + str(de))
+            iplist = self.get_ipv4_lookup(hostname,verbose=verbose)
         if not iplist:
             iplist = [hostname]
         attempt = 0
-        while (attempt <= retry) and not connected:
+        #adjust retry count for debug 'readability' ie 'attempt 1' vs 'attempt 0'
+        retry += 1
+        while (attempt < retry) and not connected:
             attempt += 1
+            proxy_transport = None
             for ip in iplist:
+                if self.proxy:
+                    if not enable_ipv6_dns:
+                        proxy_ip = self.get_ipv4_lookup(self.proxy, verbose=verbose)[0]
+                        proxy_transport = self.get_proxy_transport(proxy_host=proxy_ip,
+                                                                   dest_host=ip,
+                                                                   proxy_username=proxy_username,
+                                                                   proxy_password=proxy_password,
+                                                                   proxy_keypath=proxy_keypath)
+                if proxy_transport:
+                    ssh._transport = proxy_transport
+                else:
+                    ssh._transport = paramiko.Transport(ip)
+                ssh._transport.start_client()
                 try:
-                    self.debug("Attempting SSH connection: " + username + "@" + hostname + ", using ip: " + str(
-                        ip) + ", retry:" + str(attempt))
+                    self.debug("SSH connection attempt(" + str(attempt) +" of " + str(retry) + "), host:'"
+                               + username + "@" + hostname + "', using ipv4:" + str(ip) + ", thru proxy:'"
+                               + str(proxy_ip) + "'")
                     if keypath is None:
-                        #self.debug("Using username:"+username+" and password:"+password)
-                        ssh.connect(ip, username=username, password=password, timeout=timeout)
+                        self.debug("Using username:"+username+" and password:"+str(self.mask_password(password)), verbose=verbose)
+                        ssh._transport.auth_password(username, password)
+                        #ssh.connect(ip, username=username, password=password, timeout=timeout)
                         connected = True
                         break
                     else:
-                        if self.verbose:
-                            self.debug("Using Keypath:" + keypath)
-                        ssh.connect(ip, port=port, username=username, key_filename=keypath, timeout=timeout)
-                        self.debug('Connected to ' + str(ip))
+                        self.debug("Using Keypath:" + keypath, verbose=verbose)
+                        self._transport.auth_publickey(username,keypath)
+                        #ssh.connect(ip, port=port, username=username, key_filename=keypath, timeout=timeout)
                         connected = True
                         break
                 except paramiko.ssh_exception.SSHException, se:
@@ -416,6 +512,11 @@ class SshConnection():
                     time.sleep(10)
                     pass
             if connected:
+                via_string = ''
+                if proxy_transport:
+                    proxy_host,port = ssh._transport.getpeername()
+                    via_string = ' via proxy host:'+str(proxy_host)+':'+str(port)
+                self.debug('Connected to ' + str(ip)+str(via_string))
                 break
         if not connected:
             raise Exception(
@@ -423,6 +524,62 @@ class SshConnection():
                     iplist))
             #self.debug("Returning ssh connection to: "+ hostname)
         return ssh
+
+    def get_ipv4_lookup(self, hostname, port=22,verbose=False):
+        """
+        Do an ipv4 lookup of 'hostname' and return list of any resolved ip addresses
+
+        :param hostname: hostname to resolve
+        :param port: port to include in lookup, default is ssh port 22
+        :param verbose: boolean to print addditional debug
+        :return: list of ip addresses (strings in a.b.c.d format)
+        """
+        get_ipv4_ip = False
+        iplist = []
+        try:
+            if socket.inet_aton(hostname):
+                ipcheck = re.compile("^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
+                if not ipcheck.match(hostname):
+                    get_ipv4_ip = True
+            self.debug(str(hostname) + ", is already an ip, dont do host lookup...",verbose=verbose)
+                # This is already an ip don't look it up (regex might be better here?)
+        except socket.error:
+            get_ipv4_ip = True
+        if get_ipv4_ip:
+            try:
+                #ipv4 lookup host for ssh connection...
+                addrs = socket.getaddrinfo(hostname, port, socket.AF_INET, socket.IPPROTO_IP, socket.IPPROTO_TCP)
+                for addr in addrs:
+                    iplist.append(str(addr[4][0]))
+                self.debug('Resolved hostname:' + str(hostname) + ' to IP(s):' + ",".join(iplist),verbose=verbose)
+            except Exception, de:
+                self.debug('Error looking up DNS ip for hostname:' + str(hostname) + ", err:" + str(de))
+        else:
+            #hostname is an ipv4 address...
+            iplist = [hostname]
+        return iplist
+
+    def mask_password(self,pass_string):
+        """
+        Replace all but first and last chars with '*' of provided password string.
+
+        :param password: string representing a password to hide/format
+        :return: Formatted hidden password
+        """
+        password = copy.copy(pass_string)
+        show = ""
+        if not password:
+            return password
+        if len(password) > 3:
+            length = len(password)-2
+        else:
+            length = len(password)
+        for x in xrange(length):
+            show += '*'
+        if len(password) > 3:
+            show = password[0]+show
+            show += password[len(password)-1]
+        return show
 
     def close(self):
         self.connection.close()
@@ -434,9 +591,4 @@ class CommandTimeoutException(Exception):
 
     def __str__(self):
         return repr(self.value)
-    
 
-    
-    
-    
-    
