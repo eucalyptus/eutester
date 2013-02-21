@@ -54,7 +54,7 @@ import com.amazonaws.services.ec2.model.Filter;
 public class TestAutoScalingEC2ReferenceValidation {
 
 	@Test
-	public void test() throws Exception {
+	public void AutoScalingEC2ReferenceValidationTest() throws Exception {
 		getCloudInfo();
 		final AmazonAutoScaling as = getAutoScalingClient(ACCESS_KEY,
 				SECRET_KEY, AS_ENDPOINT);
