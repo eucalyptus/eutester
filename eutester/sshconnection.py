@@ -29,7 +29,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 # Author: matt.clark@eucalyptus.com
-'''
+"""
 Created on Mar 7, 2012
 @author: clarkmatthew
 
@@ -37,15 +37,15 @@ simple class to establish an ssh session
 example usage:
     import sshconnection
     ssh = SshConnection( '192.168.1.1', keypath='/home/testuser/keyfile.pem')
-    
+
     #use sys() to get either a list of output lines or a single string buffer depending on listformat flag
     output = ssh.sys('ls /dev/sd*',timeout=10)
     print output[0]
     print ssh.lastcmd+" exited with code: "+str(ssh.lastexitcode)
-    
+
     #...or use cmd to get a dict of output, exitstatus, and elapsed time to execute...
     out = ssh.cmd('ping 192.168.1.2 -c 1 -W 5')
-   
+
      print out['cmd']+" exited with status:"+out['status']+", elapsed time:"+out['elapsed']
      print out['output']
 
@@ -83,7 +83,7 @@ example with proxy:
     In [5]: instance_ssh.sys('hostname')
     Out[5]: ['euca_10_1_1_5.eucalyptus_cloud.com']
 
-'''
+"""
 
 
 import copy
@@ -225,12 +225,11 @@ class SshConnection():
         :param dest_host:
         :param proxy_username:
         :param proxy_password:
-        :param proxy_keyname:
         :param proxy_keypath:
         :return: paramiko transport
         """
-        proxy_host = ((proxy_host or self.proxy),22)
-        dest_host = ((dest_host or self.host),22)
+        proxy_host = ((proxy_host or self.proxy),port)
+        dest_host = ((dest_host or self.host),port)
         proxy_username = proxy_username or self.proxy_username
         proxy_password = proxy_password or self.proxy_password
         proxy_keypath = proxy_keypath or self.proxy_keypath
@@ -259,8 +258,8 @@ class SshConnection():
         """
         if verbose is None:
             verbose = self.verbose
-        if (verbose is True):
-            if (self.debugmethod is None):
+        if verbose is True:
+            if self.debugmethod is None:
                 print (str(msg))
             else:
                 self.debugmethod(msg)
@@ -479,27 +478,25 @@ class SshConnection():
         """
         connected = False
         iplist = []
+        ip = None
         proxy_ip = None
         if (password is None) and (keypath is None):
             raise Exception("ssh_connect: both password and keypath were set to None")
-        global_verbose=self.verbose
-        self.verbose = verbose or global_verbose
         if enable_ipv6_dns is None:
             enable_ipv6_dns = self.enable_ipv6_dns
+        proxy = proxy or self.proxy
 
         self.debug("ssh_connect args:\nhostname:" + hostname
                     + "\nusername:" + username
                     + "\npassword:" + str(password)
                     + "\nkeypath:" + str(keypath)
                     + "\ntimeout:" + str(timeout)
-                    + "\nretry:" + str(retry),
-                    verbose=verbose)
+                    + "\nretry:" + str(retry),verbose=verbose)
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         hostname = str(hostname.strip())
         if not enable_ipv6_dns:
             self.debug('IPV6 DNS lookup disabled, do IPV4 resolution and pass IP to connect()',verbose=verbose)
-            get_ipv4_ip = False
             # Paramiko uses family type 'AF_UNSPEC' which does both ipv4/ipv6 lookups and can cause some DNS servers
             # to fail in their response(s). Hack to avoid ipv6 lookups...
             # Try ipv4 dns resolution of 'hostname', and pass the ip instead of a hostname to
@@ -517,8 +514,9 @@ class SshConnection():
                 if self.proxy:
                     if not enable_ipv6_dns:
                         proxy_ip = self.get_ipv4_lookup(self.proxy, verbose=verbose)[0]
-                        proxy_transport = self.get_proxy_transport(proxy_host=proxy_ip,
+                        proxy_transport = self.get_proxy_transport(proxy_host=proxy,
                                                                    dest_host=ip,
+                                                                   port=port,
                                                                    proxy_username=proxy_username,
                                                                    proxy_password=proxy_password,
                                                                    proxy_keypath=proxy_keypath)
@@ -545,7 +543,7 @@ class SshConnection():
                         connected = True
                         break
                 except paramiko.ssh_exception.SSHException, se:
-                    self.debug("Failed to connect to " + hostname + ", retry in 10 seconds")
+                    self.debug("Failed to connect to " + hostname + ", retry in 10 seconds. Err:"+str(se))
                     time.sleep(10)
                     pass
             if connected:
@@ -578,8 +576,8 @@ class SshConnection():
                 ipcheck = re.compile("^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
                 if not ipcheck.match(hostname):
                     get_ipv4_ip = True
-            self.debug(str(hostname) + ", is already an ip, dont do host lookup...",verbose=verbose)
-                # This is already an ip don't look it up (regex might be better here?)
+            self.debug(str(hostname) + ", is already an ip, dont do host lookup...", verbose=verbose)
+            # This is already an ip don't look it up (regex might be better here?)
         except socket.error:
             get_ipv4_ip = True
         if get_ipv4_ip:
@@ -600,7 +598,7 @@ class SshConnection():
         """
         Replace all but first and last chars with '*' of provided password string.
 
-        :param password: string representing a password to hide/format
+        :param pass_string: string representing a password to hide/format
         :return: Formatted hidden password
         """
         password = copy.copy(pass_string)
