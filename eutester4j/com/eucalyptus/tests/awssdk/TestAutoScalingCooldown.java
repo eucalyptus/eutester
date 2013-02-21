@@ -46,7 +46,7 @@ import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
 public class TestAutoScalingCooldown {
 	@SuppressWarnings("unchecked")
 	@Test
-	public void test() throws Exception {
+	public void AutoScalingCooldownTest() throws Exception {
 		getCloudInfo();
 		final AmazonAutoScaling as = getAutoScalingClient(ACCESS_KEY, SECRET_KEY, AS_ENDPOINT);
 		final AmazonEC2 ec2 = getEc2Client(ACCESS_KEY, SECRET_KEY, EC2_ENDPOINT);
