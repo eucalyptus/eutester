@@ -13,6 +13,8 @@
     	<class name="com.eucalyptus.tests.awssdk.TestAutoScalingTerminateInstances"></class>
     	<class name="com.eucalyptus.tests.awssdk.TestAutoScalingMultipleAvailabilityZones"></class>
     	<class name="com.eucalyptus.tests.awssdk.Eutester4jTest"></class>
+    	<class name="com.eucalyptus.tests.awssdk.TestEC2DescribeInstanceStatus"></class>
+    	<class name="com.eucalyptus.tests.awssdk.TestAutoScalingEC2ReferenceValidation"></class>
     </classes>
   </test> <!-- Test -->
 </suite> <!-- Suite -->
