@@ -48,6 +48,35 @@ example usage:
    
      print out['cmd']+" exited with status:"+out['status']+", elapsed time:"+out['elapsed']
      print out['output']
+
+example with proxy:
+    import sshconnection
+
+    instance_private_ip = '10.1.1.5'
+    instance_user = 'root'
+    instance_keypath = '/tmp/instancekey.pem'
+
+    proxy_ip = '192.168.1.2'
+    proxy_username = 'testuser'
+    #proxy_password = 'foo'
+    proxy_keypath = '/home/testuser/keyfile.pem'
+
+
+    instance_ssh = SshConnection( instance_private_ip,
+                                  username=instance_user,
+                                  keypath=instance_keypath,
+                                  proxy=proxy_ip,
+                                  proxy_username = proxy_username,
+                                  proxy_keypath = proxy_keypath,
+                                  debug_connect = True)
+    instance_ssh.sys('hostname')
+
+
+    sample output from ipython:
+
+    In [5]: instance_ssh.sys('hostname')
+    Out[5]: ['euca_10_1_1_5.eucalyptus_cloud.com']
+
 '''
 
 
