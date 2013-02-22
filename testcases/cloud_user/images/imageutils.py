@@ -320,7 +320,7 @@ class ImageUtils(EutesterTestCase):
                        destination=None,
                        debug=False):
         '''convience method to register an s3 image manifest, calls eutester main method'''
-        return self.tester.register_image( manifest, rdn=root_device_name, description=description, bdmdev=block_device_mapping, name=name, ramdisk=ramdisk, kernel=kernel)
+        return self.tester.register_image( manifest, root_device_name=root_device_name, description=description, bdmdev=block_device_mapping, name=name, ramdisk=ramdisk, kernel=kernel)
     
     
     def create_emi_from_url(self, 
@@ -373,7 +373,7 @@ class ImageUtils(EutesterTestCase):
                                                  timeout=upload_timeout, uniquebucket=uniquebucket)
         
         self.debug('create_emi_from_url: Now registering...')
-        emi = self.tester.register_image(image_location=upload_manifest, rdn=root_device_name, 
+        emi = self.tester.register_image(image_location=upload_manifest, root_device_name=root_device_name,
                                          description=description, bdmdev=block_device_mapping, 
                                          name=name, ramdisk=ramdisk, kernel=kernel)
         elapsed= int(time.time()-start)

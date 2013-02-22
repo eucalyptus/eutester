@@ -118,7 +118,7 @@ class TaggingBasics(EutesterTestCase):
         """
         This case was developed to exercise tagging of an instance resource
         """
-        self.volume = self.tester.create_volume(azone=self.zone)
+        self.volume = self.tester.create_volume(zone=self.zone)
         tags = { u'name': 'volume-tag-test', u'location' : 'datacenter'}
         self.volume.create_tags(tags)
 
@@ -136,7 +136,7 @@ class TaggingBasics(EutesterTestCase):
         ### Filters can be found here, most will be tested manually, but a spot check should be added
         ### http://docs.aws.amazon.com/AWSEC2/latest/CommandLineReference/ApiReference-cmd-DescribeImages.html
         vol_size = 3
-        filter_test_volume = self.tester.create_volume(azone=self.zone, size=vol_size)
+        filter_test_volume = self.tester.create_volume(zone=self.zone, size=vol_size)
         size_filter = {u'size': vol_size }
         zone_filter = {u'availability-zone': self.zone}
 
@@ -165,7 +165,7 @@ class TaggingBasics(EutesterTestCase):
         This case was developed to exercise tagging of an instance resource
         """
         if not self.volume:
-            self.volume = self.tester.create_volume(azone=self.zone)
+            self.volume = self.tester.create_volume(zone=self.zone)
         self.snapshot = self.tester.create_snapshot_from_volume(self.volume)
         tags = { u'name': 'snapshot-tag-test', u'location' : 'over there'}
         self.snapshot.create_tags(tags)
