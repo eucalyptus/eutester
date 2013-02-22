@@ -253,7 +253,7 @@ class EC2ops(Eutester):
             os.stat(keypath)
             self.debug("Found key at path:"+str(keypath))
         except:
-            raise Exception("key:"+keyname+"not found at the provided path:"+str(path))
+            raise Exception("key not found at the provided path:"+str(keypath))
         return keypath
     
     

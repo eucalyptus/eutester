@@ -17,53 +17,72 @@
  * CA 93117, USA or visit http://www.eucalyptus.com/licenses/ if you need
  * additional information or have any questions.
  ************************************************************************/
-
 package com.eucalyptus.tests.awssdk;
 
 import static com.eucalyptus.tests.awssdk.Eutester4j.*;
 
 import org.testng.annotations.Test;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
+import com.amazonaws.AmazonServiceException;
 import com.amazonaws.services.autoscaling.AmazonAutoScaling;
 import com.amazonaws.services.autoscaling.model.CreateAutoScalingGroupRequest;
 import com.amazonaws.services.autoscaling.model.CreateLaunchConfigurationRequest;
 import com.amazonaws.services.autoscaling.model.DeleteAutoScalingGroupRequest;
 import com.amazonaws.services.autoscaling.model.DeleteLaunchConfigurationRequest;
-import com.amazonaws.services.autoscaling.model.SetInstanceHealthRequest;
 import com.amazonaws.services.ec2.AmazonEC2;
-import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
+import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancing;
+import com.amazonaws.services.elasticloadbalancing.model.CreateLoadBalancerRequest;
+import com.amazonaws.services.elasticloadbalancing.model.DeleteLoadBalancerRequest;
+import com.amazonaws.services.elasticloadbalancing.model.Listener;
 
 /**
- * This application tests manually setting instance health for auto scaling.
+ * This application tests reference validation for auto scaling groups with ELB.
  * 
  * This is verification for the story:
  * 
- * https://eucalyptus.atlassian.net/browse/EUCA-4905
+ * https://eucalyptus.atlassian.net/browse/EUCA-5027
  */
-public class TestAutoScalingSetInstanceHealth {
-	@SuppressWarnings("unchecked")
+public class TestAutoScalingELBReferenceValidation {
+
 	@Test
-	public void AutoScalingSetInstanceHealthTest() throws Exception {
+	public void AutoScalingELBReferenceValidationTest() throws Exception {
 		getCloudInfo();
-		final AmazonAutoScaling as = getAutoScalingClient(ACCESS_KEY, SECRET_KEY, AS_ENDPOINT);
+		final AmazonAutoScaling as = getAutoScalingClient(ACCESS_KEY,
+				SECRET_KEY, AS_ENDPOINT);
 		final AmazonEC2 ec2 = getEc2Client(ACCESS_KEY, SECRET_KEY, EC2_ENDPOINT);
+		final AmazonElasticLoadBalancing elb = getElbClient(ACCESS_KEY,
+				SECRET_KEY, ELB_ENDPOINT);
 		final String imageId = findImage(ec2);
 		final String availabilityZone = findAvalablityZone(ec2);
 		final String namePrefix = eucaUUID() + "-";
 		print("Using resource prefix for test: " + namePrefix);
-		
-		// End discovery, start test
+
 		final List<Runnable> cleanupTasks = new ArrayList<Runnable>();
 		try {
-			// Create launch configuration
-			final String configName = namePrefix + "SetInstanceHealthTest";
-			print("Creating launch configuration: " + configName);
-			as.createLaunchConfiguration(new CreateLaunchConfigurationRequest()
-					.withLaunchConfigurationName(configName)
-					.withImageId(imageId).withInstanceType(instanceType));
+			// Generate a load balancer to use
+			final String loadBalancerName = namePrefix + "ELBReferenceTest";
+			print("Creating a load balancer for test use: " + loadBalancerName);
+			elb.createLoadBalancer(new CreateLoadBalancerRequest()
+					.withLoadBalancerName(loadBalancerName)
+					.withAvailabilityZones(availabilityZone)
+					.withListeners(
+							new Listener().withInstancePort(8888)
+									.withLoadBalancerPort(8888)
+									.withProtocol("HTTP")));
+			cleanupTasks.add(new Runnable() {
+				@Override
+				public void run() {
+					print("Deleting load balancer: " + loadBalancerName);
+					elb.deleteLoadBalancer(new DeleteLoadBalancerRequest()
+							.withLoadBalancerName(loadBalancerName));
+				}
+			});
+
+			// Register cleanup for launch config
+			final String configName = namePrefix + "ELBReferenceTest";
 			cleanupTasks.add(new Runnable() {
 				@Override
 				public void run() {
@@ -73,17 +92,14 @@ public class TestAutoScalingSetInstanceHealth {
 				}
 			});
 
-			// Create scaling group
-			final String groupName = namePrefix + "SetInstanceHealthTest";
-			print("Creating auto scaling group: " + groupName);
-			as.createAutoScalingGroup(new CreateAutoScalingGroupRequest()
-					.withAutoScalingGroupName(groupName)
+			// Create launch configuration
+			print("Creating launch configuration: " + configName);
+			as.createLaunchConfiguration(new CreateLaunchConfigurationRequest()
 					.withLaunchConfigurationName(configName)
-					.withDesiredCapacity(1).withMinSize(0).withMaxSize(1)
-					.withHealthCheckType("EC2").withHealthCheckGracePeriod(600)
-					// 10 minutes
-					.withAvailabilityZones(availabilityZone)
-					.withTerminationPolicies("OldestInstance"));
+					.withImageId(imageId).withInstanceType(instanceType));
+
+			// Register cleanup for auto scaling group
+			final String groupName = namePrefix + "ELBReferenceTest";
 			cleanupTasks.add(new Runnable() {
 				@Override
 				public void run() {
@@ -93,39 +109,28 @@ public class TestAutoScalingSetInstanceHealth {
 							.withForceDelete(true));
 				}
 			});
-			cleanupTasks.add(new Runnable() {
-				@Override
-				public void run() {
-					final List<String> instanceIds = (List<String>) getInstancesForGroup(ec2, groupName, null, true);
-					print("Terminating instances: " + instanceIds);
-					ec2.terminateInstances(new TerminateInstancesRequest()
-							.withInstanceIds(instanceIds));
-				}
-			});
 
-			// Wait for instances to launch
-			print("Waiting for instance to launch");
-			final long timeout = TimeUnit.MINUTES.toMillis(2);
-			final String instanceId = (String) waitForInstances(ec2, timeout, 1, groupName, true).get(0);
+			// Create scaling group with invalid availability zone
+			print("Creating auto scaling group with invalid load balancer: "
+					+ groupName);
+			try {
+				as.createAutoScalingGroup(new CreateAutoScalingGroupRequest()
+						.withAutoScalingGroupName(groupName)
+						.withLaunchConfigurationName(configName).withMinSize(0)
+						.withMaxSize(2).withAvailabilityZones(availabilityZone)
+						.withLoadBalancerNames("invalid load balancer name"));
+				assertThat(false, "Creation should fail");
+			} catch (AmazonServiceException e) {
+				print("Expected error returned: " + e);
+			}
 
-			// Verify initial health status
-			verifyInstanceHealthStatus(as, instanceId, "Healthy");
-
-			// Set respecting health check grace period, should be ignored
-			as.setInstanceHealth(new SetInstanceHealthRequest()
-					.withInstanceId(instanceId).withHealthStatus("Unhealthy")
-					.withShouldRespectGracePeriod(true));
-
-			// Verify health status is the same
-			verifyInstanceHealthStatus(as, instanceId, "Healthy");
-
-			// Set health status
-			as.setInstanceHealth(new SetInstanceHealthRequest()
-					.withInstanceId(instanceId).withHealthStatus("Unhealthy")
-					.withShouldRespectGracePeriod(false));
-
-			// Verify health status changed
-			verifyInstanceHealthStatus(as, instanceId, "Unhealthy");
+			// Create scaling group
+			print("Creating auto scaling group: " + groupName);
+			as.createAutoScalingGroup(new CreateAutoScalingGroupRequest()
+					.withAutoScalingGroupName(groupName)
+					.withLaunchConfigurationName(configName).withMinSize(0)
+					.withMaxSize(1).withAvailabilityZones(availabilityZone)
+					.withLoadBalancerNames(loadBalancerName));
 
 			print("Test complete");
 		} finally {

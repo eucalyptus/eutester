@@ -31,15 +31,125 @@
 # Author: vic.iglesias@eucalyptus.com
 
 import re
+from eutester import sshconnection
 
 class Eunode:
-    def __init__(self, hostname, partition,tester = None):
+    def __init__(self,
+                 tester,
+                 hostname,
+                 partition,
+                 name=None,
+                 instance_ids=None,
+                 machine = None,
+                 debugmethod = None,
+                 ):
+        """
+        init object containing node related info and methods
+
+        :param hostname: mandatory - string - hostname of the node (ie: 192.168.1.1)
+        :param partition: mandatory - string - partition name of the node (ie PARTI00)
+        :param name:  optional string - optional name for this eunode. Defaults to hostname
+        :param instances: - optional -list of instance strings reported on this node
+        :param machine: optional eutester machine type object
+        :param tester: - eutester obj
+        """
         self.hostname = hostname
         self.partition = partition
-        if tester is not None:
-            self.tester = tester
-            self.machine = self.tester.get_component_ip(hostname)
-            self.hypervisor = self.machine.sys("cat " + self.tester.eucapath + "/etc/eucalyptus/eucalyptus.conf | grep hypervisor").split("=").strip('"')
+        self.part_name = partition.name
+        self.name = name or self.hostname
+        self.instance_ids = instance_ids or []
+        self.tester = tester
+        self.machine = machine
+        self.service_state = None
+        self.debugmethod = debugmethod or self.tester.debug
+
+        if not machine:
+            try:
+                self.machine = self.tester.get_machine_by_ip(hostname)
+                self.get_service_state()
+            except Exception, e:
+                self.debug("Failed to get machine for this node:" + str(hostname) + ", err:" + str(e))
+        #if self.machine:
+            #self.hypervisor =
+
+    def debug(self, msg):
+        """
+        Simple method to print debug messsage 'msg'
+        :param msg: message to be printed
+        """
+        if self.debugmethod:
+            self.debugmethod(msg)
+        else:
+            print(msg)
+
+
+    def sys(self, cmd, code=None):
+        """
+        Command to be executed via ssh on remote eunode machine
+        :param cmd: string - command to be executed
+        :param code: int - optional exit code used to determine pass fail of remote command.
+        :return: list of lines from remote cmd's output
+        """
+        return self.machine.sys(cmd,code=code)
+
+    def get_hypervisor_from_euca_conf(self):
+        """
+        Attempts to find HYPERVISOR value in <eucalytpus home>/etc/eucalyptus.conf
+
+        :return: string representing hypervisor type if found
+        """
+        hypervisor =  None
+        out = self.sys("cat /etc/eucalyptus/eucalyptus.conf | grep '^HYPER'")
+        if out and re.search('^HYPERVISOR=',out[0]):
+            hypervisor = out[0].split('=')[1].strip().strip('"')
+        return hypervisor
+
+
+    def get_service_state(self):
+        service_state = None
+        if self.machine:
+            try:
+                self.sys("service eucalyptus-nc status | grep running", code=0)
+                service_state = 'running'
+            except sshconnection.CommandExitCodeException:
+                service_state = 'not_running'
+            except Exception, e:
+                self.debug('Could not get service state from node:' + str(self.hostname) + ", err:"+str(e))
+        else:
+            print "No machine object for this eunode:" + str(self.hostname)
+        self.service_state = service_state
+        return service_state
+
+
+    def get_virsh_list(self):
+        """
+        Return a dict of virsh list domains.
+        dict should have dict['id'], dict['name'], dict['state']
+
+        """
+        return_list = {}
+        if self.machine:
+            keys = []
+            output = self.machine.sys('virsh list', code=0)
+            if len(output) > 1:
+                keys = str(output[0]).strip().lower().split()
+                for line in output[2:]:
+                    line = line.strip()
+                    #skip blank lines...
+                    if line == "":
+                        continue
+                    domain_line = line.split()
+                    for key in keys:
+                        return_list[key] = domain_line[keys.index(key)]
+        return return_list
+
+    #def get_iscsi_connections(self,):
+    #def get_exported_volumes(self,)
+    #def get_all_instances_on_node(self, instance_id=None, state=None)
+
+
+
+
 
 class Euservice:
     def __init__(self, service_string, tester = None):
@@ -52,8 +162,9 @@ class Euservice:
         self.fullname = values[7]
         self.hostname = self.uri.split(":")[1].split("/")[2]
         self.running = True
-        if tester is not None:
-            self.tester = tester
+        self.tester = tester
+        self.machine = None
+        if self.tester:
             self.machine = tester.get_machine_by_ip(self.hostname)
         
     def isEnabled(self):
@@ -127,7 +238,11 @@ class Partition:
         return self.get_disabled(self.vbs)
  
 class EuserviceManager(object):
-   
+    cluster_type_string = "cluster"
+    walrus_type_string = 'walrus'
+    storage_type_string = 'storage'
+    clc_type_string = 'eucalyptus'
+
         
     def __init__(self, tester ):
         '''
@@ -141,6 +256,8 @@ class EuserviceManager(object):
         self.partitions = {}
         self.internal_components = []
         self.dns = None
+        self.all_services = []
+        self.node_list = []
         self.tester = tester
         self.eucaprefix = ". " + self.tester.credpath + "/eucarc && " + self.tester.eucapath
         if self.tester.clc is None:
@@ -175,22 +292,15 @@ class EuserviceManager(object):
             raise e
         
         #self.populate_nodes()
-        
         services = []
         for service_line in describe_services:
             services.append(Euservice(service_line, self.tester))
         return services
-    
-    def populate_nodes(self):
-        clc = self.get_enabled_clc()
-        nodes_list = clc.machine.sys("euca_conf --list-nodes")
-        for node_string in nodes_list:
-            split_string = node_string.split()
-            node = Eunode(split_string[1], split_string[2])
-            for part in self.partitions:
-                if node.patition is part.name:
-                    part.ncs.append(node)
-    
+
+
+
+
+
     def reset(self):
         self.walruses= []
         self.clcs = []
@@ -200,7 +310,266 @@ class EuserviceManager(object):
             self.partitions[k].ccs = []
             self.partitions[k].scs = []
             self.partitions[k].vbs = []
-    
+
+
+    def populate_nodes(self, enabled_clc=None):
+        """
+        Sort output of 'list nodes cmd' on clc, create/update eunode objects.
+        Returned list is used to update:'service_manager.node_list'
+
+        :param enabled_clc: To avoid an update() or update() loop the current enabled clc can be provided. This can
+                            also be used to test nc lookup on disabled CLC by providing this component obj instead.
+        :return: list of eunode objects
+        """
+        #name = 0
+        hostname_loc = 1
+        cc_name_loc = 2
+        instances_loc = 3
+        return_list = []
+        #to avoid update() loop allow enabled_clc to be provided as arg
+        clc = enabled_clc or self.get_enabled_clc()
+        nodes_strings = clc.machine.sys(self.eucaprefix + \
+                                        "/usr/sbin/euca_conf --list-nodes 2>1 | grep -v warning | grep '^NODE'")
+
+        for node_string in nodes_strings:
+            #handle/skip any blank lines first...
+            node_string = node_string.strip()
+            if not node_string:
+                continue
+            instance_list = []
+            partition = None
+            #sort out the node string...
+            split_string = node_string.split()
+            cc_name = split_string[cc_name_loc]
+            hostname = split_string[hostname_loc]
+            # grab the list of instances if any found in the string
+            if len(split_string) > instances_loc:
+                instance_list = split_string[instances_loc:]
+            #Try to match the part_name to the partition name it resides in
+            for part in self.get_all_partitions():
+                for cc in part.ccs:
+                    if cc.name == cc_name:
+                        partition = part
+                        break
+            if not partition:
+                raise Exception('populate_nodes: Node:' + str(hostname) + ' Failed to find partition for component: '
+                                + str(cc_name))
+            node = Eunode(self.tester,
+                          hostname,
+                          partition,
+                          instance_ids = instance_list)
+            return_list.append(node)
+            if node in part.ncs:
+                part.ncs[part.ncs.index(node)]=node
+            else:
+                part.ncs.append(node)
+        self.node_list = return_list
+        return return_list
+
+    def update_node_list(self, enabled_clc=None):
+        self.populate_nodes(enabled_clc=enabled_clc)
+
+    def update_service_list(self):
+        return self.get()
+
+    def get_all_services_of_type(self,
+                                 type,
+                                 partition=None,
+                                 state=None,
+                                 name=None,
+                                 hostname=None,
+                                 running=None,
+                                 use_cached_list=True):
+        """
+        Returns a list of services of service type 'type' that match the provided filter criteria.
+
+        :param type: type of service to look for (cluster, eucalyptus, storage, walrus)
+        :param partition: partition to fileter returned service list with
+        :param state: state to filter returned service list with
+        :param name: name to filter returned service list with
+        :param hostname: hostname/ip to filter returned service list with
+        :param running: running boolean to filter returned service list with
+        :param use_cached_list: use current list and state of self.all_services, else get_all_services()
+        :return: list of matching cc euservice objects
+        """
+        euservice_list = []
+        if use_cached_list:
+            services = self.all_services or self.get_all_services()
+        else:
+            services = self.get_all_services()
+        for service in services:
+            if service.type == type:
+                if partition and service.partition != partition:
+                    continue
+                if state and service.state != state:
+                    continue
+                if name and service.name != name:
+                    continue
+                if hostname and service.hostname != hostname:
+                    continue
+                if running is not None and service.running != running:
+                    continue
+                euservice_list.append(service)
+        return euservice_list
+
+
+    def get_all_cluster_controllers(self,
+                                    partition=None,
+                                    state=None,
+                                    name=None,
+                                    hostname=None,
+                                    running=None,
+                                    use_cached_list=True):
+        """
+        Returns a list of services of cluster services that match the provided filter criteria.
+
+        :param partition: partition to fileter returned service list with
+        :param state: state to filter returned service list with
+        :param name: name to filter returned service list with
+        :param hostname: hostname/ip to filter returned service list with
+        :param running: running boolean to filter returned service list with
+        :param service_list: list of euservices to filter from
+        :param use_cached_list: use current list and state of self.all_services, else get_all_services()
+        :return: list of matching cc euservice objects
+        """
+        return self.get_all_services_of_type(self.cluster_type_string,
+                                             partition=partition,
+                                             state=state,
+                                             name=name,
+                                             hostname=hostname,
+                                             running=running,
+                                             use_cached_list=use_cached_list)
+
+    def get_all_storage_controllers(self,
+                                    partition=None,
+                                    state=None,
+                                    name=None,
+                                    hostname=None,
+                                    running=None,
+                                    use_cached_list=True):
+        """
+        Returns a list of services of storage controller services that match the provided filter criteria.
+
+        :param partition: partition to fileter returned service list with
+        :param state: state to filter returned service list with
+        :param name: name to filter returned service list with
+        :param hostname: hostname/ip to filter returned service list with
+        :param running: running boolean to filter returned service list with
+        :param service_list: list of euservices to filter from
+        :param use_cached_list: use current list and state of self.all_services, else get_all_services()
+        :return: list of matching cc euservice objects
+        """
+        return self.get_all_services_of_type(self.storage_type_string,
+                                             partition=partition,
+                                             state=state,
+                                             name=name,
+                                             hostname=hostname,
+                                             running=running,
+                                             use_cached_list=use_cached_list)
+
+    def get_all_walrus(self,
+                       partition=None,
+                       state=None,
+                       name=None,
+                       hostname=None,
+                       running=None,
+                       use_cached_list=True):
+        """
+        Returns a list of services of walrus services that match the provided filter criteria.
+
+        :param partition: partition to fileter returned service list with
+        :param state: state to filter returned service list with
+        :param name: name to filter returned service list with
+        :param hostname: hostname/ip to filter returned service list with
+        :param running: running boolean to filter returned service list with
+        :param service_list: list of euservices to filter from
+        :param use_cached_list: use current list and state of self.all_services, else get_all_services()
+        :return: list of matching cc euservice objects
+        """
+        return self.get_all_services_of_type(self.walrus_type_string,
+                                             partition=partition,
+                                             state=state,
+                                             name=name,
+                                             hostname=hostname,
+                                             running=running,
+                                             use_cached_list=use_cached_list)
+
+    def get_all_cloud_controlers(self,
+                                 partition=None,
+                                 state=None,
+                                 name=None,
+                                 hostname=None,
+                                 running=None,
+                                 use_cached_list=True):
+        """
+        Returns a list of services of CLC services that match the provided filter criteria.
+
+        :param partition: partition to fileter returned service list with
+        :param state: state to filter returned service list with
+        :param name: name to filter returned service list with
+        :param hostname: hostname/ip to filter returned service list with
+        :param running: running boolean to filter returned service list with
+        :param service_list: list of euservices to filter from
+        :param use_cached_list: use current list and state of self.all_services, else get_all_services()
+        :return: list of matching cc euservice objects
+        """
+        return self.get_all_services_of_type(self.clc_type_string,
+                                             partition=partition,
+                                             state=state,
+                                             name=name,
+                                             hostname=hostname,
+                                             running=running,
+                                             use_cached_list=use_cached_list)
+
+    def get_all_node_controllers(self,
+                                 hostname=None,
+                                 partition=None,
+                                 part_name=None,
+                                 instance_id=None,
+                                 has_instances=None,
+                                 service_state=None,
+                                 use_cached_list=True):
+        """
+        Returns a list of services of node controllers that match the provided filter criteria.
+
+        :param part_name: name of partition to filter list with
+        :param instance_id: filter list for specific instance id
+        :param has_instances: filter list by nodes which have instance ids associated with them
+        :param partition: partition obj to filter returned service list with
+        :param name: name to filter returned service list with
+        :param hostname: hostname/ip to filter returned service list with
+        :param running: running boolean to filter returned service list with
+        :param use_cached_list: use current list and state of self.all_services, else get_all_services()
+        :return: list of matching cc euservice objects
+        """
+        return_list = []
+        if use_cached_list:
+            nodes = self.node_list or self.populate_nodes()
+        else:
+            nodes = self.populate_nodes()
+        for node in nodes:
+            if partition and node.partition != partition:
+                continue
+            if part_name and node.part_name != part_name:
+                continue
+            if hostname and node.hostname != hostname:
+                continue
+            if instance_id and not instance_id in node.instance_ids:
+                continue
+            if service_state and service_state != node.service_state:
+                continue
+            if has_instances and not node.instance_ids:
+                continue
+            return_list.append(node)
+        return return_list
+
+    def get_all_partitions(self):
+        return_list = []
+        for key in self.partitions:
+            part = self.partitions[key]
+            return_list.append(part)
+        return return_list
+
     def get_all_services(self):
         all_services = []
         self.update()
@@ -221,7 +590,6 @@ class EuserviceManager(object):
             vbs = self.partitions[partition].vbs
             if len(vbs) > 0:
                 all_services = all_services + vbs
-                
         return all_services
             
     def start_all(self):
@@ -260,11 +628,14 @@ class EuserviceManager(object):
         
     def sync_credentials(self):
         self.reset()
-        
+
+
+
     def update(self, name=None):
         ### Get all services
         self.reset()
         services = self.get(name)
+        self.all_services = services
         for current_euservice in services:
             ### If this is system wide component add it to the base level array
             if re.search("eucalyptus", current_euservice.type) :
@@ -299,6 +670,10 @@ class EuserviceManager(object):
                     my_partition.vbs.append(current_euservice)          
                 if append:
                     self.partitions[current_euservice.partition] = my_partition
+        enabled_clc = self.get_all_cloud_controlers(state='ENABLED')
+        if enabled_clc:
+            enabled_clc = enabled_clc[0]
+            self.update_node_list(enabled_clc=enabled_clc)
     
     def isReachable(self, address):
         return self.tester.ping(address)
