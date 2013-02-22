@@ -314,10 +314,12 @@ class EuserviceManager(object):
 
     def populate_nodes(self, enabled_clc=None):
         """
-        Sort list nodes ouptut and create/update eunode objects
-        updates service_manager.node_list
-        :param enabled_clc: To avoid an update() or update() loop the current enabled clc can be provided.
-        :returns: list of eunode objects
+        Sort output of 'list nodes cmd' on clc, create/update eunode objects.
+        Returned list is used to update:'service_manager.node_list'
+
+        :param enabled_clc: To avoid an update() or update() loop the current enabled clc can be provided. This can
+                            also be used to test nc lookup on disabled CLC by providing this component obj instead.
+        :return: list of eunode objects
         """
         #name = 0
         hostname_loc = 1
@@ -326,9 +328,14 @@ class EuserviceManager(object):
         return_list = []
         #to avoid update() loop allow enabled_clc to be provided as arg
         clc = enabled_clc or self.get_enabled_clc()
-        nodes_strings = clc.machine.sys("euca_conf --list-nodes")
+        nodes_strings = clc.machine.sys(self.eucaprefix + \
+                                        "/usr/sbin/euca_conf --list-nodes 2>1 | grep -v warning | grep '^NODE'")
 
         for node_string in nodes_strings:
+            #handle/skip any blank lines first...
+            node_string = node_string.strip()
+            if not node_string:
+                continue
             instance_list = []
             partition = None
             #sort out the node string...
