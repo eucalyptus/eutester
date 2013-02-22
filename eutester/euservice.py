@@ -31,15 +31,17 @@
 # Author: vic.iglesias@eucalyptus.com
 
 import re
+from eutester import sshconnection
 
 class Eunode:
     def __init__(self,
+                 tester,
                  hostname,
                  partition,
                  name=None,
                  instance_ids=None,
-                 tester = None,
                  machine = None,
+                 debugmethod = None,
                  ):
         """
         init object containing node related info and methods
@@ -59,15 +61,26 @@ class Eunode:
         self.tester = tester
         self.machine = machine
         self.service_state = None
+        self.debugmethod = debugmethod or self.tester.debug
 
-        if tester and hostname and not machine:
+        if not machine:
             try:
                 self.machine = self.tester.get_machine_by_ip(hostname)
                 self.get_service_state()
             except Exception, e:
-                print "Failed to get machine for this node:" + str(hostname) + ", err:" + str(e)
+                self.debug("Failed to get machine for this node:" + str(hostname) + ", err:" + str(e))
         #if self.machine:
             #self.hypervisor =
+
+    def debug(self, msg):
+        """
+        Simple method to print debug messsage 'msg'
+        :param msg: message to be printed
+        """
+        if self.debugmethod:
+            self.debugmethod(msg)
+        else:
+            print(msg)
 
 
     def sys(self, cmd, code=None):
@@ -93,14 +106,19 @@ class Eunode:
 
 
     def get_service_state(self):
+        service_state = None
         if self.machine:
-            if self.sys('service eucalyptus-nc status | grep running', code=0):
-                self.service_state = 'running'
-            else:
-                self.service_state = 'not_running'
+            try:
+                self.sys("service eucalyptus-nc status | grep running", code=0)
+                service_state = 'running'
+            except sshconnection.CommandExitCodeException:
+                service_state = 'not_running'
+            except Exception, e:
+                self.debug('Could not get service state from node:' + str(self.hostname) + ", err:"+str(e))
         else:
             print "No machine object for this eunode:" + str(self.hostname)
-        return self.service_state
+        self.service_state = service_state
+        return service_state
 
 
     def get_virsh_list(self):
@@ -324,10 +342,10 @@ class EuserviceManager(object):
             if not partition:
                 raise Exception('populate_nodes: Node:' + str(hostname) + ' Failed to find partition for component: '
                                 + str(cc_name))
-            node = Eunode(hostname,
+            node = Eunode(self.tester,
+                          hostname,
                           partition,
-                          instance_ids = instance_list,
-                          tester = self.tester)
+                          instance_ids = instance_list)
             return_list.append(node)
             if node in part.ncs:
                 part.ncs[part.ncs.index(node)]=node
