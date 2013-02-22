@@ -134,13 +134,18 @@ class Eunode:
             if len(output) > 1:
                 keys = str(output[0]).strip().lower().split()
                 for line in output[2:]:
-                    domain_line = line.strip().split()
+                    line = line.strip()
+                    #skip blank lines...
+                    if line == "":
+                        continue
+                    domain_line = line.split()
                     for key in keys:
                         return_list[key] = domain_line[keys.index(key)]
         return return_list
 
     #def get_iscsi_connections(self,):
     #def get_exported_volumes(self,)
+    #def get_all_instances_on_node(self, instance_id=None, state=None)
 
 
 
@@ -542,11 +547,11 @@ class EuserviceManager(object):
                 continue
             if hostname and node.hostname != hostname:
                 continue
-            if instance_id and not instance_id in node.instances:
+            if instance_id and not instance_id in node.instance_ids:
                 continue
             if service_state and service_state != node.service_state:
                 continue
-            if has_instances and not node.instances:
+            if has_instances and not node.instance_ids:
                 continue
             return_list.append(node)
         return return_list
