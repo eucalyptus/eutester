@@ -6,6 +6,7 @@ from eucaops import CWops
 from eutester.eutestcase import EutesterTestCase
 import os
 import random
+import datetime
 
 class CloudWatchBasics(EutesterTestCase):
     def __init__(self, extra_args= None):
@@ -60,14 +61,39 @@ class CloudWatchBasics(EutesterTestCase):
         self.tester.delete_keypair(self.keypair)
         os.remove(self.keypath)
 
+    def get_time_window(self, hours_ago=1, end=None):
+        if not end:
+            end = datetime.datetime.utcnow()
+        start = end - datetime.timedelta(hours=hours_ago)
+        return (start,end)
+
+    def print_timeseries_for_graphite(timeseries):
+            for datapoint in timeseries:
+                print "graph.Namespace-1361426618 " + str(int(datapoint['Average'])) + " " + \
+                      str((datapoint['Timestamp'] - datetime.datetime(1970,1,1)).total_seconds())
+
     def GetPut(self):
-        pass
+        seconds_to_put_data = 600000000000000
+        starting_metric_data = 1
+        time_string =  str(int(time.time()))
+        namespace = "Namespace-" + time_string
+        metric_name = "Metric-" + time_string
+        incrementing = True
+        for i in xrange(seconds_to_put_data):
+            self.tester.cw.put_metric_data(namespace, [metric_name],[starting_metric_data])
+            if starting_metric_data == 600 or starting_metric_data == 0:
+                incrementing = not incrementing
+            if incrementing:
+                starting_metric_data += 1
+            else:
+                starting_metric_data -= 1
+            self.tester.sleep(1)
 
 if __name__ == "__main__":
     testcase = CloudWatchBasics()
     ### Use the list of tests passed from config/command line to determine what subset of tests to run
     ### or use a predefined list  "VolumeTagging", "InstanceTagging", "SnapshotTagging", "ImageTagging"
-    list = testcase.args.tests or ["Basics"]
+    list = testcase.args.tests or ["GetPut"]
 
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
