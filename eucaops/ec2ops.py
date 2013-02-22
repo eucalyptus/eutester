@@ -510,11 +510,11 @@ class EC2ops(Eutester):
     
     
     @Eutester.printinfo
-    def create_volume(self, azone, size=1, eof=True, snapshot=None, timeout=0, poll_interval=10,timepergig=120):
+    def create_volume(self, zone, size=1, eof=True, snapshot=None, timeout=0, poll_interval=10,timepergig=120):
         """
         Create a new EBS volume then wait for it to go to available state, size or snapshot is mandatory
 
-        :param azone: Availability zone to create the volume in
+        :param zone: Availability zone to create the volume in
         :param size: Size of the volume to be created
         :param count: Number of volumes to be created
         :param eof: Boolean, indicates whether to end on first instance of failure
@@ -524,13 +524,13 @@ class EC2ops(Eutester):
         :param timepergig: Time to wait per gigabyte size of volume, used when timeout is set to 0
         :return:
         """
-        return self.create_volumes(azone, size=size, count=1, mincount=1, eof=eof, snapshot=snapshot, timeout=timeout, poll_interval=poll_interval,timepergig=timepergig)[0]
+        return self.create_volumes(zone, size=size, count=1, mincount=1, eof=eof, snapshot=snapshot, timeout=timeout, poll_interval=poll_interval,timepergig=timepergig)[0]
 
 
 
     @Eutester.printinfo
     def create_volumes(self, 
-                       azone, 
+                       zone,
                        size = 1, 
                        count = 1, 
                        mincount = None, 
@@ -546,7 +546,7 @@ class EC2ops(Eutester):
                     Create a multiple new EBS volumes then wait for them to go to available state, 
                     size or snapshot is mandatory
 
-        :param azone: Availability zone to create the volume in
+        :param zone: Availability zone to create the volume in
         :param size: Size of the volume to be created
         :param count: Number of volumes to be created
         :param mincount: Minimum number of volumes to be created to be considered a success.Default = 'count'
@@ -579,7 +579,7 @@ class EC2ops(Eutester):
             vol = None
             try:
                 cmdstart = time.time()
-                vol = self.ec2.create_volume(size, azone, snapshot)
+                vol = self.ec2.create_volume(size, zone, snapshot)
                 cmdtime =  time.time() - cmdstart 
                 if vol:
                     vol = EuVolume.make_euvol_from_vol(vol, tester=self, cmdstart=cmdstart)
