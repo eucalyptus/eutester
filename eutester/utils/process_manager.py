@@ -30,7 +30,7 @@
 #
 # Author: vic.iglesias@eucalyptus.com
 
-from eutester.eutestcase import EutesterTestCase
+from eutester.utils.eutestcase import EutesterTestCase
 from multiprocessing import Process
 from multiprocessing import Queue
 import inspect

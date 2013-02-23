@@ -29,29 +29,4 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 # Author: Vic Iglesias vic.iglesias@eucalyptus.com
-#         
-
-try:
-    from setuptools import setup
-except ImportError:
-    from distutils.core import setup
-import eutester
-
-setup(name = "eutester",
-      version = eutester.__version__,
-      description = "Test Framework for AWS compatible clouds",
-      long_description="Test Framework for AWS compatible clouds",
-      author = "Victor Iglesias",
-      author_email = "vic.iglesias@eucalyptus.com",
-      url = "http://open.eucalyptus.com",
-      install_requires = ['paramiko >= 1.7','boto == 2.5.2', 'argparse'],
-      packages = ["eutester"],
-      license = 'BSD (Simplified)',
-      platforms = 'Posix; MacOS X; Windows',
-      classifiers = [ 'Development Status :: 3 - Alpha',
-                      'Intended Audience :: System Administrators',
-                      'License :: OSI Approved :: BSD License',
-                      'Operating System :: OS Independent',
-                      'Topic :: System :: Systems Administration',
-                      ],
-      )
+#       

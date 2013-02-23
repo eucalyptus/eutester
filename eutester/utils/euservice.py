@@ -31,7 +31,7 @@
 # Author: vic.iglesias@eucalyptus.com
 
 import re
-from eutester import sshconnection
+from eutester.utils import sshconnection
 
 class Eunode:
     def __init__(self,

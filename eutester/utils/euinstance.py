@@ -48,9 +48,9 @@ Sample usage:
 from boto.ec2.volume import Volume
 from boto.ec2.instance import Instance
 #from eutester import euvolume
-from eutester.euvolume import EuVolume
+from eutester.utils.euvolume import EuVolume
 from eutester import eulogger
-from eutester.taggedresource import TaggedResource
+from eutester.utils.taggedresource import TaggedResource
 from random import randint
 import sshconnection
 import sys
@@ -959,7 +959,7 @@ class EuInstance(Instance, TaggedResource):
             dev = self.get_free_scsi_dev()
             if euvol.md5:
                 #Monitor volume to attached, dont write/read head for md5 use existing. Check md5 sum later in get_unsynced_volumes. 
-                if (self.tester.attach_volume(self, euvolume, dev, pause=10,timeout=timepervol)):
+                if (self.tester.attach_volume(self, euvol, dev, pause=10,timeout=timepervol)):
                     self.attached_vols.append(euvol)
                 else:
                     raise Exception('attach_euvolume_list: Test Failed to attach volume:'+str(euvolume.id))

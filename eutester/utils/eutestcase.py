@@ -9,8 +9,8 @@ import sys
 import os
 import types
 import traceback
-from eutester.eulogger import Eulogger
-from eutester.euconfig import EuConfig
+from eutester.utils.eulogger import Eulogger
+from eutester.utils.euconfig import EuConfig
 import StringIO
 import copy
 

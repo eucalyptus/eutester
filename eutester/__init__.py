@@ -43,10 +43,9 @@ import socket
 import sys
 import traceback
 import StringIO
-import eulogger
 import types
 from functools import wraps
-
+from eutester.utils.eulogger import Eulogger
 
 
 
@@ -68,7 +67,7 @@ class Eutester(object):
         self.credpath = credpath
         
         ### Eutester logs
-        self.logger = eulogger.Eulogger(identifier="EUTESTER")
+        self.logger = Eulogger(identifier="EUTESTER")
         self.debug = self.logger.log.debug
         self.critical = self.logger.log.critical
         self.info = self.logger.log.info
@@ -342,7 +341,6 @@ class Eutester(object):
         return str(buf) 
     
     def __str__(self):
-        return 'got self'
         """
         Prints informations about configuration of Eucateser as configuration file,
         how many errors, the path of the Eucalyptus, and the path of the user credentials

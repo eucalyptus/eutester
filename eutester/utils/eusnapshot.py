@@ -36,7 +36,7 @@ Place holder for snapshot test specific convenience methods+objects to extend bo
 
 '''
 from boto.ec2.snapshot import Snapshot
-from eutester.taggedresource import TaggedResource
+from eutester.utils.taggedresource import TaggedResource
 import eucaops
 import time
 

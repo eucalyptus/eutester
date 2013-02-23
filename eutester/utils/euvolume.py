@@ -36,7 +36,7 @@ Place holder for volume test specific convenience methods+objects to extend boto
 
 '''
 from boto.ec2.volume import Volume
-from eutester.taggedresource import TaggedResource
+from eutester.utils.taggedresource import TaggedResource
 import eucaops
 import time
 
