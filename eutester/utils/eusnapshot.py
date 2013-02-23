@@ -37,7 +37,6 @@ Place holder for snapshot test specific convenience methods+objects to extend bo
 '''
 from boto.ec2.snapshot import Snapshot
 from eutester.utils.taggedresource import TaggedResource
-import api
 import time
 
 
@@ -70,7 +69,7 @@ class EuSnapshot(Snapshot, TaggedResource):
         newsnap.eutest_failmsg = None
         newsnap.eutest_laststatus = newsnap.status
         newsnap.eutest_ageatstatus = 0 
-        newsnap.eutest_cmdstart = cmdstart or api.EC2ops.get_snapshot_time_started(snapshot)
+        newsnap.eutest_cmdstart = cmdstart or tester.get_snapshot_time_started(snapshot)
         newsnap.eutest_createorder = None
         newsnap.eutest_cmdtime = None
         newsnap.eutest_polls = 0

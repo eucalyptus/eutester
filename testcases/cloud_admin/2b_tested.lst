@@ -1,0 +1,34 @@
+TEST_NAME	alice-HA-02
+UNIQUE_ID	1010
+EMAIL	alice@eucalyptus.com
+PXE_TYPE	QAIMAGE
+BUILD_TYPE	NORMAL
+TEST_TYPE	NORMAL
+TEST_SEQ	euca-sequence-drbd-3.2
+NETWORK	MANAGED
+SUBNET_IP	172.27.128.0
+MANAGED_IPS	10.111.102.80 10.111.102.81 10.111.102.82 10.111.102.83 10.111.102.84 10.111.102.85 10.111.102.86 10.111.102.87
+BZR_BRANCH	sftp://root@192.168.7.1/home/repositories/eucalyptus/eee
+BZR_REVISION	0
+GIT_REPO	git+ssh://repo-euca@git.eucalyptus-systems.com/internal#maint/3.2/security
+GIT_HASH	fbffe725373f0f382b00631a9fe2b7ac5dc4159c
+
+10.111.5.31	CENTOS	6.3	64	REPO	[CLC CC00 WS SC00]
+10.111.5.32	CENTOS	6.3	64	REPO	[CLC CC00 WS SC00]
+10.111.5.37	CENTOS	6.3	64	REPO	[NC00]
+
+MEMO
+CLOUD_OPTS= --debug --db-home=/usr/pgsql-9.1/ --log-level=DEBUG
+
+SET_VNET_NETMASK=255.255.192.0
+
+EXTRA_REPO=pgrpms http://mirror.eucalyptus-systems.com/mirrors/pgrpm-91/redhat/rhel-6-x86_64/
+EXTRA_REPO=elrepo http://mirror.eucalyptus-systems.com/mirrors/elrepo/el6/x86_64/
+USE_EPEL_REPO=YES
+LOCAL_EUCA2OOLS_REPO=http://packages.release.eucalyptus-systems.com/yum/builds/euca2ools/commit/6907915e955a170b689e40d1e177155a7abe800b-2013-01-16-000-import-01/rhel/6/x86_64/
+
+EXTRA_PKG=drbd83 drbd83-kmod postgresql91-server PyGreSQL
+CUSTOM_EUCA_BUILDER=newdatacenter
+
+DISABLE_DNS=N
+END_MEMO

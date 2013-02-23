@@ -1,0 +1,17 @@
+EUCA_KEY_DIR=$(dirname $(readlink -f ${BASH_SOURCE}))
+export EC2_URL=http://10.0.1.91:8773/services/Eucalyptus
+export S3_URL=http://10.0.1.91:8773/services/Walrus
+export EUARE_URL=http://10.0.1.91:8773/services/Euare
+export TOKEN_URL=http://10.0.1.91:8773/services/Tokens
+export EUSTORE_URL=http://emis.eucalyptus.com/
+export EC2_PRIVATE_KEY=${EUCA_KEY_DIR}/euca2-admin-91b8976e-pk.pem
+export EC2_CERT=${EUCA_KEY_DIR}/euca2-admin-91b8976e-cert.pem
+export EC2_JVM_ARGS=-Djavax.net.ssl.trustStore=${EUCA_KEY_DIR}/jssecacerts
+export EUCALYPTUS_CERT=${EUCA_KEY_DIR}/cloud-cert.pem
+export EC2_ACCOUNT_NUMBER='498025213678'
+export EC2_ACCESS_KEY='X6NYVAAM2DACVF1KXCWP2'
+export EC2_SECRET_KEY='whAwuqR8zCS3gRLT9bv04xHdav8QMdkH6rv2kaRU'
+export AWS_CREDENTIAL_FILE=${EUCA_KEY_DIR}/iamrc
+export EC2_USER_ID='498025213678'
+alias ec2-bundle-image="ec2-bundle-image --cert ${EC2_CERT} --privatekey ${EC2_PRIVATE_KEY} --user ${EC2_ACCOUNT_NUMBER} --ec2cert ${EUCALYPTUS_CERT}"
+alias ec2-upload-bundle="ec2-upload-bundle -a ${EC2_ACCESS_KEY} -s ${EC2_SECRET_KEY} --url ${S3_URL}"

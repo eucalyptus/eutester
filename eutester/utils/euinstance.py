@@ -49,7 +49,7 @@ from boto.ec2.volume import Volume
 from boto.ec2.instance import Instance
 #from eutester import euvolume
 from eutester.utils.euvolume import EuVolume
-from eutester import eulogger
+from eutester.utils import eulogger
 from eutester.utils.taggedresource import TaggedResource
 from random import randint
 import sshconnection
