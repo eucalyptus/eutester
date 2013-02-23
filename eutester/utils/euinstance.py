@@ -323,7 +323,7 @@ class EuInstance(Instance, TaggedResource):
         '''
         Method used to attach a volume to an instance and track it's use by that instance
         required - euvolume - the euvolume object being attached
-        required - tester - the eucaops/eutester object/connection for this cloud
+        required - tester - the api/eutester object/connection for this cloud
         optional - dev - string to specify the dev path to 'request' when attaching the volume to
         optional - timeout - integer- time allowed before failing
         optional - overwrite - flag to indicate whether to overwrite head data of a non-zero filled volume upon attach for md5
@@ -337,7 +337,7 @@ class EuInstance(Instance, TaggedResource):
         '''
         Method used to attach a volume to an instance and track it's use by that instance
         required - euvolume - the euvolume object being attached
-        required - tester - the eucaops/eutester object/connection for this cloud
+        required - tester - the api/eutester object/connection for this cloud
         optional - dev - string to specify the dev path to 'request' when attaching the volume to
         optional - timeout - integer- time allowed before failing
         optional - overwrite - flag to indicate whether to overwrite head data of a non-zero filled volume upon attach for md5

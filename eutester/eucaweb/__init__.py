@@ -3,7 +3,7 @@ Created on Nov 10, 2011
 @author: mclark
 '''
 #from eutester import Eutester
-from eucaops import Eucaops
+from api import Eucaops
 from selenium import webdriver
 from selenium.webdriver.firefox.firefox_profile import FirefoxProfile
 #from selenium.webdriver.common.by import By

@@ -48,9 +48,9 @@ import re
 import os
 
 class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops):
-    
+
     def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,  account="eucalyptus", user="admin", username=None, APIVersion='2011-01-01', region=None, ec2_ip=None, s3_ip=None, download_creds=True,boto_debug=0):
-        self.config_file = config_file 
+        self.config_file = config_file
         self.APIVersion = APIVersion
         self.eucapath = "/opt/eucalyptus"
         self.ssh = None
@@ -74,7 +74,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops):
         self.username = username
         self.account_id = None
         self.aws_access_key_id = aws_access_key_id
-        self.aws_secret_access_key = aws_secret_access_key 
+        self.aws_secret_access_key = aws_secret_access_key
 
         if self.config_file is not None:
             ## read in the config file
@@ -113,15 +113,15 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops):
                         self.swap_clc()
                         self.sftp = self.clc.ssh.connection.open_sftp()
                         self.get_credentials(account,user)
-                        
+
                 self.service_manager = EuserviceManager(self)
                 self.clc = self.service_manager.get_enabled_clc().machine
-                self.walrus = self.service_manager.get_enabled_walrus().machine 
+                self.walrus = self.service_manager.get_enabled_walrus().machine
         if self.credpath and not ec2_ip:
             ec2_ip = self.get_ec2_ip()
         if self.credpath and not s3_ip:
             s3_ip = self.get_s3_ip()
-        
+
         if self.credpath and not aws_access_key_id:
             aws_access_key_id = self.get_access_key()
         if self.credpath and not aws_secret_access_key:
@@ -142,11 +142,11 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops):
         Get available VMs of a certain type or return a dictionary with all types and their available vms
         type        VM type to get available vms 
         """
-        
+
         zones = self.ec2.get_all_zones("verbose")
         if type is None:
             type = "m1.small"
-        ### Look for the right place to start parsing the zones
+            ### Look for the right place to start parsing the zones
         zone_index = 0
         if zone is not None:
             while zone_index < len(zones):
@@ -156,25 +156,25 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops):
                 zone_index += 7
             if zone_index > (len(zones) - 1)   :
                 self.fail("Was not able to find AZ: " + zone)
-                raise Exception("Unable to find Availability Zone")    
+                raise Exception("Unable to find Availability Zone")
         else:
             zone = zones[0].name
-            
+
         ### Inline switch statement
         type_index = {
-                      'm1.small': 2,
-                      'c1.medium': 3,
-                      'm1.large': 4,
-                      'm1.xlarge': 5,
-                      'c1.xlarge': 6,
-                      }[type] 
+            'm1.small': 2,
+            'c1.medium': 3,
+            'm1.large': 4,
+            'm1.xlarge': 5,
+            'c1.xlarge': 6,
+            }[type]
         type_state = zones[ zone_index + type_index ].state.split()
         self.debug("Finding available VMs: Partition=" + zone +" Type= " + type + " Number=" +  str(int(type_state[0])) )
         return int(type_state[0])
-        
-    
-    
-            
+
+
+
+
     def modify_property(self, property, value):
         """
         Modify a eucalyptus property through the command line euca-modify-property tool
@@ -186,8 +186,8 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops):
             self.debug("Properly modified property " + property)
         else:
             raise Exception("Setting property " + property + " failed")
-    
-   
+
+
     def cleanup_artifacts(self):
         self.debug("Starting cleanup of artifacts")
         for res in self.test_resources["reservations"]:
@@ -280,7 +280,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops):
 
 
 
-                    
+
     def get_current_resources(self,verbose=False):
         '''Return a dictionary with all known resources the system has. Optional pass the verbose=True flag to print this info to the logs
            Included resources are: addresses, images, instances, key_pairs, security_groups, snapshots, volumes, zones
@@ -295,11 +295,11 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops):
         current_artifacts["snapshots"] = self.ec2.get_all_snapshots()
         current_artifacts["volumes"] = self.ec2.get_all_volumes()
         current_artifacts["zones"] = self.ec2.get_all_zones()
-        
+
         if verbose:
             self.debug("Current resources in the system:\n" + str(current_artifacts))
         return current_artifacts
-    
+
     def read_config(self, filepath, username="root"):
         """ Parses the config file at filepath returns a dictionary with the config
             Config file
@@ -336,7 +336,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops):
         except IOError as (errno, strerror):
             self.debug( "ERROR: Could not find config file " + self.config_file)
             raise
-            
+
         for line in f:
             ### LOOK for the line that is defining a machine description
             line = line.strip()
@@ -350,26 +350,26 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops):
                 machine_dict["arch"] = machine_details[3]
                 machine_dict["source"] = machine_details[4]
                 machine_dict["components"] = map(str.lower, machine_details[5].strip('[]').split())
-               
+
                 ### We dont want to login to ESX boxes
                 if re.search("vmware", machine_dict["distro"], re.IGNORECASE):
                     connect=False
                 else:
                     connect=True
-                ### ADD the machine to the array of machine
-                cloud_machine = Machine(   machine_dict["hostname"], 
-                                        distro = machine_dict["distro"], 
-                                        distro_ver = machine_dict["distro_ver"], 
-                                        arch = machine_dict["arch"], 
-                                        source = machine_dict["source"], 
-                                        components = machine_dict["components"],
-                                        connect = connect,
-                                        password = self.password,
-                                        keypath = self.keypath,
-                                        username = username
-                                        )
+                    ### ADD the machine to the array of machine
+                cloud_machine = Machine(   machine_dict["hostname"],
+                                           distro = machine_dict["distro"],
+                                           distro_ver = machine_dict["distro_ver"],
+                                           arch = machine_dict["arch"],
+                                           source = machine_dict["source"],
+                                           components = machine_dict["components"],
+                                           connect = connect,
+                                           password = self.password,
+                                           keypath = self.keypath,
+                                           username = username
+                )
                 machines.append(cloud_machine)
-                
+
             ### LOOK for network mode in config file if not found then set it unknown
             try:
                 if re.search("^network",line, re.IGNORECASE):
@@ -377,32 +377,32 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops):
             except:
                 self.debug("Could not find network type setting to unknown")
                 config_hash["network"] = "unknown"
-        #f.close()   
-        config_hash["machines"] = machines 
+            #f.close()
+        config_hash["machines"] = machines
         return config_hash
-    
+
     def swap_clc(self):
         all_clcs = self.get_component_machines("clc")
         if self.clc is all_clcs[0]:
             self.debug("Swapping CLC from " + all_clcs[0].hostname + " to " + all_clcs[1].hostname)
             self.clc = all_clcs[1]
-            
+
         elif self.clc is all_clcs[1]:
             self.debug("Swapping CLC from " + all_clcs[1].hostname + " to " + all_clcs[0].hostname)
             self.clc = all_clcs[0]
 
     def swap_walrus(self):
         all_walruses = self.get_component_machines("ws")
-        if self.walrus is all_walruses[0]: 
+        if self.walrus is all_walruses[0]:
             self.debug("Swapping Walrus from " + all_walruses[0].hostname + " to " + all_walruses[1].hostname)
             self.walrus = all_walruses[1]
         elif self.walrus is all_walruses[1]:
             self.debug("Swapping Walrus from " + all_walruses[1].hostname + " to " + all_walruses[0].hostname)
             self.walrus = all_walruses[0]
-            
+
     def get_network_mode(self):
         return self.config['network']
-            
+
     def get_component_ip(self, component):
         """ Parse the machine list and a bm_machine object for a machine that matches the component passed in"""
         #loop through machines looking for this component type
@@ -412,16 +412,16 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops):
             raise Exception("Could not find component "  + component + " in list of machines")
         else:
             return machines_with_role[0]
-    
+
     def get_machine_by_ip(self, hostname):
         machines = [machine for machine in self.config['machines'] if re.search(hostname, machine.hostname)]
-        
+
         if machines is None or len(machines) == 0:
             self.fail("Could not find machine at "  + hostname + " in list of machines")
             return None
         else:
             return machines[0]
-         
+
     def get_component_machines(self, component):
         #loop through machines looking for this component type
         """ Parse the machine list and a list of bm_machine objects that match the component passed in"""
@@ -438,33 +438,33 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops):
                 component_hostname = self.get_component_ip(hostname)
                 hostname = component_hostname
         return hostname
-       
+
     def get_credentials(self, account="eucalyptus", user="admin"):
         """Login to the CLC and download credentials programatically for the user and account passed in
            Defaults to admin@eucalyptus 
         """
         self.debug("Starting the process of getting credentials")
-        
+
         ### GET the CLCs from the config file
         clcs = self.get_component_machines("clc")
         if len(clcs) < 1:
             raise Exception("Could not find a CLC in the config file when trying to get credentials")
-        
-        admin_cred_dir = "eucarc-" + clcs[0].hostname + "-" + account + "-" + user 
+
+        admin_cred_dir = "eucarc-" + clcs[0].hostname + "-" + account + "-" + user
         cred_file_name = "creds.zip"
         full_cred_path = admin_cred_dir + "/" + cred_file_name
-        
+
         ### IF I dont already have credentials, download and sync them
         if self.credpath is None:
             ### SETUP directory remotely
             self.setup_remote_creds_dir(admin_cred_dir)
-            
+
             ### Create credential from Active CLC
             self.create_credentials(admin_cred_dir, account, user)
-        
+
             ### SETUP directory locally
             self.setup_local_creds_dir(admin_cred_dir)
-          
+
             ### DOWNLOAD creds from clc
             self.download_creds_from_clc(admin_cred_dir)
 
@@ -476,25 +476,25 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops):
             self.send_creds_to_machine(admin_cred_dir, clc)
 
         return admin_cred_dir
-   
+
     def create_credentials(self, admin_cred_dir, account, user):
-       
+
         cred_dir =  admin_cred_dir + "/creds.zip"
         self.sys('rm -f '+cred_dir)
-        cmd_download_creds = self.eucapath + "/usr/sbin/euca_conf --get-credentials " + admin_cred_dir + "/creds.zip " + "--cred-user "+ user +" --cred-account " + account 
-       
+        cmd_download_creds = self.eucapath + "/usr/sbin/euca_conf --get-credentials " + admin_cred_dir + "/creds.zip " + "--cred-user "+ user +" --cred-account " + account
+
         if self.clc.found( cmd_download_creds, "The MySQL server is not responding"):
             raise IOError("Error downloading credentials, looks like CLC was not running")
         if self.clc.found( "unzip -o " + admin_cred_dir + "/creds.zip " + "-d " + admin_cred_dir, "cannot find zipfile directory"):
             raise IOError("Empty ZIP file returned by CLC")
-       
-        
-    
+
+
+
     def download_creds_from_clc(self, admin_cred_dir):
         self.debug("Downloading credentials from " + self.clc.hostname)
         self.sftp.get(admin_cred_dir + "/creds.zip" , admin_cred_dir + "/creds.zip")
         os.system("unzip -o " + admin_cred_dir + "/creds.zip -d " + admin_cred_dir )
-    
+
     def send_creds_to_machine(self, admin_cred_dir, machine):
         self.debug("Sending credentials to " + machine.hostname)
         try:
@@ -505,15 +505,15 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops):
             machine.sftp.put( admin_cred_dir + "/creds.zip" , admin_cred_dir + "/creds.zip")
             machine.sys("unzip -o " + admin_cred_dir + "/creds.zip -d " + admin_cred_dir )
             machine.sys("sed -i 's/" + self.get_ec2_ip() + "/" + machine.hostname  +"/g' " + admin_cred_dir + "/eucarc")
-            
-        
+
+
     def setup_local_creds_dir(self, admin_cred_dir):
         if not os.path.exists(admin_cred_dir):
             os.mkdir(admin_cred_dir)
-      
+
     def setup_remote_creds_dir(self, admin_cred_dir):
         self.sys("mkdir " + admin_cred_dir)
-    
+
     def sys(self, cmd, verbose=True, listformat=True, timeout=120, code=None):
         """ By default will run a command on the CLC machine, the connection used can be changed by passing a different hostname into the constructor
             For example:

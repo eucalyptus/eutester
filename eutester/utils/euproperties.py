@@ -34,7 +34,7 @@ Created on Mar 7, 2012
 @author: clarkmatthew
 Place holder class to provide convenience for testing, modifying, and retrieving Eucalyptus cloud property information
 Intention is to reduce the time in looking up property names, and values outside of the eutester test lib, etc
-Note: Debug output for the tester.sys command are controled by the eutester/eucaops object 
+Note: Debug output for the tester.sys command are controled by the eutester/api object
 
 Sample:
     
@@ -135,7 +135,7 @@ class Euproperty_manager():
         '''
         Returns a tuple containing the current property value plus the property string. 
         prop - mandatory - string representing the property to fetch. 
-        ecuaops -optional - the eucaops/eutester object to fetch the property from
+        ecuaops -optional - the api/eutester object to fetch the property from
         
         self.debug("Getting property:"+prop)
         prop_string = self.clc.sys(self.cmdpath+'euca-describe-properties -U '+str(self.service_url)+' -I '+str(self.access_key)+' -S '+ str(self.secret_key) +' | grep ' + prop, code=0)
@@ -212,11 +212,11 @@ class Euproperty_manager():
         
     def set_property(self,  prop, value):
         '''
-        Sets the property 'prop' at eucaops/eutester object 'tester' to 'value'    
+        Sets the property 'prop' at api/eutester object 'tester' to 'value'
         Returns new value  
         prop - mandatory - string representing the property to set
         value - mandatory - string representing the value to set the property to
-        eucaops - optional - the eucaops/eutester object to set the property at
+        api - optional - the api/eutester object to set the property at
         '''
         value = str(value)
         eucaops = self.tester
@@ -233,10 +233,10 @@ class Euproperty_manager():
         
     def reset_property_to_default(self, prop):
         '''
-        Sets a property 'prop' at eucaops/eutester object 'eucaops' to it's default value
+        Sets a property 'prop' at api/eutester object 'api' to it's default value
         Returns new value
         prop - mandatory - string representing the property to set
-        ucaops - optional - the eucaops/eutester object to set the property at
+        ucaops - optional - the api/eutester object to set the property at
         '''
     
         eucaops = self.tester

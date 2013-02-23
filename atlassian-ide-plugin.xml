@@ -1,0 +1,13 @@
+<atlassian-ide-plugin>
+  <project-configuration>
+    <servers>
+      <jira>
+        <server-id>6b4ad2b6-3d4d-4bcb-b57f-fca38ece8b81</server-id>
+        <name>Eucalyptus</name>
+        <url>https://eucalyptus.atlassian.net</url>
+        <shared>false</shared>
+      </jira>
+    </servers>
+    <default-jira-server>6b4ad2b6-3d4d-4bcb-b57f-fca38ece8b81</default-jira-server>
+  </project-configuration>
+</atlassian-ide-plugin>
