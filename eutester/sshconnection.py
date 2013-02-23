@@ -266,6 +266,7 @@ class SshConnection():
                 self.debug("Proxy auth -Using local keys, no keypath/password provided, trying:" + str(file),
                            verbose=verbose)
                 ssh._auth(proxy_username, None,None,[file], True, True)
+                p_transport = ssh._transport
             #forward from 127.0.0.1:<free_random_port> to |dest_host|
             channel = p_transport.open_channel('direct-tcpip', dest_host, ('127.0.0.1', 0))
             return paramiko.Transport(channel)
