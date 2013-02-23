@@ -37,7 +37,7 @@ Place holder for volume test specific convenience methods+objects to extend boto
 '''
 from boto.ec2.volume import Volume
 from eutester.utils.taggedresource import TaggedResource
-import eucaops
+from eucaops import EC2ops
 import time
 
 
@@ -72,7 +72,7 @@ class EuVolume(Volume, TaggedResource):
         newvol.eutest_failmsg = None
         newvol.eutest_laststatus = newvol.status
         newvol.eutest_ageatstatus = 0 
-        newvol.eutest_cmdstart = cmdstart or eucaops.EC2ops.get_volume_time_created(volume)
+        newvol.eutest_cmdstart = cmdstart or EC2ops.get_volume_time_created(volume)
         newvol.eutest_createorder = None
         newvol.eutest_cmdtime = None
         newvol.set_attached_status()
