@@ -40,7 +40,7 @@ import os
 import shutil
 
 testcases_dir = '/usr/share/eutester/testcases'
-os.mkdir(testcases_dir)
+shutil.rmtree(testcases_dir, ignore_errors=True)
 shutil.copytree('testcases',testcases_dir)
 
 setup(name = "eutester",
