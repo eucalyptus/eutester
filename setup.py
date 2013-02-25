@@ -29,18 +29,22 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 # Author: Vic Iglesias vic.iglesias@eucalyptus.com
-#         
+#
 
 try:
     from setuptools import setup
 except ImportError:
     from distutils.core import setup
 import eutester
-import shutil
+import os
+import sys
 
-testcases_dir = '/usr/share/eutester/testcases'
-shutil.rmtree(testcases_dir, ignore_errors=True)
-shutil.copytree('testcases',testcases_dir)
+DATA_PATH = os.path.join(sys.prefix, 'share', 'eutester')
+
+data_files = []
+for (dirpath, __, filenames) in os.walk('testcases'):
+    data_files.append((os.path.join(DATA_PATH, dirpath),
+                       [os.path.join(dirpath, fname) for fname in filenames]))
 
 setup(name = "eutester",
       version = eutester.__version__,
@@ -49,8 +53,9 @@ setup(name = "eutester",
       author = "Victor Iglesias",
       author_email = "vic.iglesias@eucalyptus.com",
       url = "https://github.com/eucalyptus/eutester",
-      install_requires = ['paramiko >= 1.7','boto == 2.5.2', 'argparse'],
+      install_requires = ['paramiko >= 1.7', 'boto == 2.5.2', 'argparse'],
       packages = ["eutester"],
+      data_files=data_files,
       license = 'BSD (Simplified)',
       platforms = 'Posix; MacOS X; Windows',
       classifiers = [ 'Development Status :: 3 - Alpha',
