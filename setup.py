@@ -36,7 +36,6 @@ try:
 except ImportError:
     from distutils.core import setup
 import eutester
-import os
 import shutil
 
 testcases_dir = '/usr/share/eutester/testcases'
