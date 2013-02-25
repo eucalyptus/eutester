@@ -36,6 +36,12 @@ try:
 except ImportError:
     from distutils.core import setup
 import eutester
+import os
+import shutil
+
+testcases_dir = '/usr/share/eutester/testcases'
+os.mkdir(testcases_dir)
+shutil.copytree('testcases',testcases_dir)
 
 setup(name = "eutester",
       version = eutester.__version__,
@@ -46,7 +52,6 @@ setup(name = "eutester",
       url = "https://github.com/eucalyptus/eutester",
       install_requires = ['paramiko >= 1.7','boto == 2.5.2', 'argparse'],
       packages = ["eutester"],
-      data_files=[('/usr/share/eutester/testcases', ['testcases/*'])],
       license = 'BSD (Simplified)',
       platforms = 'Posix; MacOS X; Windows',
       classifiers = [ 'Development Status :: 3 - Alpha',
