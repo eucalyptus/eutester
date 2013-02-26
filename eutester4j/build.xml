@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<project name="Eutester4J" basedir="." default="runTestNG">
+<project name="Eutester4J" basedir="." default="clean-build">
 
     <!-- change path of testng-jar and aws.dir for your env -->
     <property name="testng-jar"        value="/Users/tony/testng.jar"/>
@@ -21,11 +21,13 @@
         </dirset>
     </path>
 
+    <!-- delete build and resutls directories -->
     <target name="clean">
         <delete dir="${build.dir}"/>
         <delete dir="${testng.output.dir}"/>
     </target>
 
+    <!-- compile all classes of src.dir -->
     <target name="compile">
         <mkdir dir="${classes.dir}"/>
         <javac srcdir="${src.dir}" destdir="${classes.dir}" classpathref="classpath"/>
@@ -37,6 +39,7 @@
         </classpath>
     </taskdef>
 
+    <!-- compile all and run tests per testng.xml -->
     <target name="runTestNG" depends="compile">
         <mkdir dir="${testng.output.dir}"/><!-- Create the output directory. -->
         <testng outputdir="${testng.output.dir}" classpathref="classpath">
@@ -44,6 +47,7 @@
         </testng>
     </target>
 
+    <!-- clean, build and run tests -->
     <target name="clean-build" depends="clean, runTestNG"/>
 
 </project>
