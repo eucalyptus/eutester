@@ -168,7 +168,7 @@ final class Eutester4j {
 			final String instanceId, final String expectedStatus)
 			throws Exception {
 		final long startTime = System.currentTimeMillis();
-		final long timeout = TimeUnit.MINUTES.toMillis(1);
+		final long timeout = TimeUnit.MINUTES.toMillis(3);
 		boolean completed = false;
 		while (!completed && (System.currentTimeMillis() - startTime) < timeout) {
 			Thread.sleep(5000);
