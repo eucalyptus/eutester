@@ -142,7 +142,7 @@ public class TestAutoScalingEC2ReferenceValidation {
 				as.createLaunchConfiguration(new CreateLaunchConfigurationRequest()
 						.withLaunchConfigurationName(configName)
 						.withImageId("emi-00000000")
-						.withInstanceType(instanceType));
+						.withInstanceType(INSTANCE_TYPE));
 				assertThat(false, "Creation should fail");
 			} catch (AmazonServiceException e) {
 				print("Expected error returned: " + e);
@@ -155,7 +155,7 @@ public class TestAutoScalingEC2ReferenceValidation {
 				as.createLaunchConfiguration(new CreateLaunchConfigurationRequest()
 						.withLaunchConfigurationName(configName)
 						.withImageId(imageId).withKernelId("eki-00000000")
-						.withInstanceType(instanceType));
+						.withInstanceType(INSTANCE_TYPE));
 				assertThat(false, "Creation should fail");
 			} catch (AmazonServiceException e) {
 				print("Expected error returned: " + e);
@@ -168,7 +168,7 @@ public class TestAutoScalingEC2ReferenceValidation {
 				as.createLaunchConfiguration(new CreateLaunchConfigurationRequest()
 						.withLaunchConfigurationName(configName)
 						.withImageId(imageId).withRamdiskId("eri-00000000")
-						.withInstanceType(instanceType));
+						.withInstanceType(INSTANCE_TYPE));
 				assertThat(false, "Creation should fail");
 			} catch (AmazonServiceException e) {
 				print("Expected error returned: " + e);
@@ -181,7 +181,7 @@ public class TestAutoScalingEC2ReferenceValidation {
 				as.createLaunchConfiguration(new CreateLaunchConfigurationRequest()
 						.withLaunchConfigurationName(configName)
 						.withImageId(imageId).withKeyName("invalid key name")
-						.withInstanceType(instanceType));
+						.withInstanceType(INSTANCE_TYPE));
 				assertThat(false, "Creation should fail");
 			} catch (AmazonServiceException e) {
 				print("Expected error returned: " + e);
@@ -195,7 +195,7 @@ public class TestAutoScalingEC2ReferenceValidation {
 						.withLaunchConfigurationName(configName)
 						.withImageId(imageId)
 						.withSecurityGroups("invalid group name")
-						.withInstanceType(instanceType));
+						.withInstanceType(INSTANCE_TYPE));
 				assertThat(false, "Creation should fail");
 			} catch (AmazonServiceException e) {
 				print("Expected error returned: " + e);
@@ -208,7 +208,7 @@ public class TestAutoScalingEC2ReferenceValidation {
 					.withImageId(imageId).withKernelId(kernelId)
 					.withRamdiskId(ramdiskId).withKeyName(keyName)
 					.withSecurityGroups(securityGroupName)
-					.withInstanceType(instanceType));
+					.withInstanceType(INSTANCE_TYPE));
 
 			// Register cleanup for auto scaling group
 			final String groupName = namePrefix + "EC2ReferenceTest";

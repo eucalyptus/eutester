@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<project name="Eutester4J" basedir="." default="clean-build">
+
+    <!-- change path of testng-jar and aws.dir for your env -->
+    <property name="testng-jar"        value="/Users/tony/testng.jar"/>
+    <property name="aws.dir"           value="/Users/tony/aws-java-sdk/1.3.32"/>
+
+    <property name="src.dir"           value="com/eucalyptus/tests/awssdk"/>
+    <property name="build.dir"         value="build"/>
+    <property name="classes.dir"       value="${build.dir}/classes"/>
+    <property name="testng.output.dir" value="eutester4j_results"/>
+
+    <path id="classpath">
+        <fileset dir="${aws.dir}">
+            <include name="**/*.jar"/>
+        </fileset>
+        <pathelement location="${testng-jar}"/>
+        <dirset dir="${build.dir}">
+            <include name="**/classes"/>
+        </dirset>
+    </path>
+
+    <!-- delete build and resutls directories -->
+    <target name="clean">
+        <delete dir="${build.dir}"/>
+        <delete dir="${testng.output.dir}"/>
+    </target>
+
+    <!-- compile all classes of src.dir -->
+    <target name="compile">
+        <mkdir dir="${classes.dir}"/>
+        <javac srcdir="${src.dir}" destdir="${classes.dir}" classpathref="classpath"/>
+    </target>
+
+    <taskdef name="testng" classname="org.testng.TestNGAntTask">
+        <classpath>
+            <pathelement location="${testng-jar}"/>
+        </classpath>
+    </taskdef>
+
+    <!-- compile all and run tests per testng.xml -->
+    <target name="runTestNG" depends="compile">
+        <mkdir dir="${testng.output.dir}"/><!-- Create the output directory. -->
+        <testng outputdir="${testng.output.dir}" classpathref="classpath">
+            <xmlfileset dir="." includes="testng.xml"/>
+        </testng>
+    </target>
+
+    <!-- clean, build and run tests -->
+    <target name="clean-build" depends="clean, runTestNG"/>
+
+</project>
