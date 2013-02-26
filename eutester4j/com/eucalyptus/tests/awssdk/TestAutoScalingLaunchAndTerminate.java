@@ -65,7 +65,7 @@ public class TestAutoScalingLaunchAndTerminate {
 			print("Creating launch configuration: " + configName);
 			as.createLaunchConfiguration(new CreateLaunchConfigurationRequest()
 					.withLaunchConfigurationName(configName)
-					.withImageId(imageId).withInstanceType(instanceType));
+					.withImageId(imageId).withInstanceType(INSTANCE_TYPE));
 			cleanupTasks.add(new Runnable() {
 				@Override
 				public void run() {

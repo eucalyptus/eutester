@@ -96,7 +96,7 @@ public class TestAutoScalingELBReferenceValidation {
 			print("Creating launch configuration: " + configName);
 			as.createLaunchConfiguration(new CreateLaunchConfigurationRequest()
 					.withLaunchConfigurationName(configName)
-					.withImageId(imageId).withInstanceType(instanceType));
+					.withImageId(imageId).withInstanceType(INSTANCE_TYPE));
 
 			// Register cleanup for auto scaling group
 			final String groupName = namePrefix + "ELBReferenceTest";
@@ -132,7 +132,7 @@ public class TestAutoScalingELBReferenceValidation {
 					.withMaxSize(1).withAvailabilityZones(availabilityZone)
 					.withLoadBalancerNames(loadBalancerName));
 
-			print("Test complete");
+            print("Test complete");
 		} finally {
 			// Attempt to clean up anything we created
 			Collections.reverse(cleanupTasks);

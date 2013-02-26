@@ -76,7 +76,7 @@ public class TestAutoScalingTags {
 
 			// Create launch configuration
 			print("Creating launch configuration: " + configName);
-			createLaunchConfig(as, configName, imageId, instanceType, null, null);
+			createLaunchConfig(as, configName, imageId, INSTANCE_TYPE, null, null);
 
 			// Register cleanup for auto scaling group
 			final String groupName = namePrefix + "TagTest";

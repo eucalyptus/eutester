@@ -1,22 +1,25 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
-<suite name="Auto Scaling Test Suite" parallel="none">
+<suite name="Eutester4j Test Suite">
   <test name="Auto Scaling Tests">
     <classes>
-      <class name="com.eucalyptus.tests.awssdk.Eutester4jTest"></class><class name="com.eucalyptus.tests.awssdk.TestAutoScalingLaunchAndTerminate"/>
+      <class name="com.eucalyptus.tests.awssdk.TestAutoScalingLaunchAndTerminate"/>
       <class name="com.eucalyptus.tests.awssdk.TestAutoScalingCooldown"/>
       <class name="com.eucalyptus.tests.awssdk.TestAutoScalingEc2InstanceHealthMonitoring"/>
-      <class name="com.eucalyptus.tests.awssdk.TestAutoScalingDescribeInstances"/><class
-      	name="com.eucalyptus.tests.awssdk.TestAutoScalingDescribeGroupsInstances">
-</class>
-    	<class name="com.eucalyptus.tests.awssdk.TestAutoScalingSetInstanceHealth"></class>
-    	<class name="com.eucalyptus.tests.awssdk.TestAutoScalingTerminateInstances"></class>
-    	<class name="com.eucalyptus.tests.awssdk.TestAutoScalingMultipleAvailabilityZones"></class>
-    	
-    	<class name="com.eucalyptus.tests.awssdk.TestEC2DescribeInstanceStatus"></class>
-    	<class name="com.eucalyptus.tests.awssdk.TestAutoScalingEC2ReferenceValidation"></class>
-    	<class name="com.eucalyptus.tests.awssdk.TestAutoScalingELBReferenceValidation"></class>
-    	<class name="com.eucalyptus.tests.awssdk.TestAutoScalingTags"></class>
+      <class name="com.eucalyptus.tests.awssdk.TestAutoScalingDescribeInstances"/>
+      <class name="com.eucalyptus.tests.awssdk.TestAutoScalingDescribeGroupsInstances"></class>
+      <class name="com.eucalyptus.tests.awssdk.TestAutoScalingSetInstanceHealth"></class>
+      <class name="com.eucalyptus.tests.awssdk.TestAutoScalingTerminateInstances"></class>
+      <class name="com.eucalyptus.tests.awssdk.TestAutoScalingMultipleAvailabilityZones"></class>
+      <class name="com.eucalyptus.tests.awssdk.TestEC2DescribeInstanceStatus"></class>
+      <class name="com.eucalyptus.tests.awssdk.TestAutoScalingEC2ReferenceValidation"></class>
+      <class name="com.eucalyptus.tests.awssdk.TestAutoScalingELBReferenceValidation"></class>
+      <class name="com.eucalyptus.tests.awssdk.TestAutoScalingTags"></class>
+    </classes>
+  </test> <!-- Test -->
+  <test name="Eutester4j Sanity Tests">
+    <classes>
+      <class name="com.eucalyptus.tests.awssdk.Eutester4jTest"></class>
     </classes>
   </test> <!-- Test -->
 </suite> <!-- Suite -->

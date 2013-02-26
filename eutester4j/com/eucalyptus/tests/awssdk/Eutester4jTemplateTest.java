@@ -85,7 +85,7 @@ public class Eutester4jTemplateTest {
 		int initalInstanceCount = getInstancesList(ec2).size();
 		ArrayList<String> securityGroups = new ArrayList<String>();
 		securityGroups.add(securityGroup);
-		runInstances(ec2, imageId, keyName, instanceType, securityGroups, 0, 1);
+		runInstances(ec2, imageId, keyName, INSTANCE_TYPE, securityGroups, 0, 1);
 		assertThat(getInstancesList(ec2).size() > initalInstanceCount, "Instance not launched");
 	}
 
@@ -95,8 +95,10 @@ public class Eutester4jTemplateTest {
 		List<String> instanceIds = new ArrayList<String>();
 		instanceIds.add(getLastlaunchedInstance(ec2).get(0).getInstanceId());
 		terminateInstances(ec2, instanceIds);
-		
-		// wait for the instance to be terminated before trying to delete group
+
+        System.out.println("Instance state: " + getLastlaunchedInstance(ec2).get(0).getState().getName());
+
+        // wait for the instance to be terminated before trying to delete group
 		while(!getLastlaunchedInstance(ec2).get(0).getState().getName().equals("terminated")){}
 		deleteKeyPair(ec2, keyName);
 		deleteSecurityGroup(ec2, securityGroup);
