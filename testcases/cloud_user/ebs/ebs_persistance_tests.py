@@ -5,7 +5,9 @@
 #       Test Cases       #
 #                        #
 ##########################
-#
+#        Test Case is intended to test EBS services and persistance of EBS resource state(s) post EBS service
+#        interruption. This should include volume and snapshots before and after service start, stop, restart, and SC
+#        reboot.
 #
 #
 #        Cleanup:
@@ -17,8 +19,12 @@
 
 from eutester.eutestcase import EutesterTestCase
 from eutester.eutestcase import TestColor
+from eutester.euinstance import EuInstance
+from eutester.euvolume import EuVolume
+from eutester.eusnapshot import EuSnapshot
 from eucaops import Eucaops
 import time
+import copy
 
 class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
     def __init__(self):
@@ -117,7 +123,7 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
         except Exception, e:
             raise Exception('Cleanupfailed:'+str(e))
 
-    def pre_service_restart_launch_test_instances(self):
+    def pretest1_pre_service_restart_launch_test_instances(self):
         """
         For each zone, check if there are multiple nodes. If so launch 2 instances per that zone (no need to do more for
         this test). If there is only 1 node launch 1 instance. This should produce a multi-node and multi-cluster
@@ -134,7 +140,7 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
         self.instances = self.tester.monitor_euinstances_to_running(instances)
 
 
-    def pre_service_restart_create_volume_resources(self,
+    def pretest2_pre_service_restart_create_volume_resources(self,
                                                      volsperinstance=2,
                                                      size=1,
                                                      timepergig=120):
@@ -163,28 +169,27 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
                     testcolor=TestColor.get_canned_color('whiteonblue'))
 
 
-    def pre_service_restart_attach_all_volumes(self):
+    def pretest3_pre_service_restart_attach_all_volumes(self):
         '''
         Definition: Attach all volumes created in this test to all instances created in this test.
         This tests should be completed per zone prior to restarting services.
         '''
 
 
-            self.status("\'pre_service_restart_attach_all_volumes\' starting...",
+        self.status("\'pre_service_restart_attach_all_volumes\' starting...",
+                    testcolor=TestColor.get_canned_color('whiteonblue'))
+
+        for instance in self.instances:
+            for x in xrange(0,self.args.volsperinstance):
+                for vol in self.volumes:
+                    if vol.zone == instance.placement and vol.status == 'available':
+                        instance.attach_volume(vol)
+                        break
+        self.status("\'pre_service_restart_attach_all_volumes\' done",
                         testcolor=TestColor.get_canned_color('whiteonblue'))
 
-            self.tester.print
-            for instance in self.instances:
-                for x in xrange(0,self.args.volsperinstance):
-                    for vol in self.volumes:
-                        if vol.zone == instance.placement and vol.status == 'available':
-                            instance.attach_volume(vol)
-                            break
-            self.status("\'pre_service_restart_attach_all_volumes\' done",
-                        testcolor=TestColor.get_canned_color('whiteonblue'))
 
-
-    def pre_service_restart_create_snap_per_zone(self,timepergig=120):
+    def pretest4_pre_service_restart_create_snap_per_zone(self,timepergig=120):
         """
         Definition: Create a single snapshot. This tests should be completed per zone prior to restarting services.
         :param timepergig: integer time allowed per GB in seconds during creation
@@ -198,27 +203,233 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
                 snapvols.append(vol)
                 break
         #Create a snapshot of each volume...
+        wait_on_progress = len(snapvols)*20
         for vol in snapvols:
-            snaps.extend(self.tester.create_snapshots(vol, count=1, monitor_to_state=False))
-        self.snaps = self.tester.monitor_eusnaps_to_completed(snaps)
+            snaps.extend(self.tester.create_snapshots(vol,
+                                                      count=1,
+                                                      wait_on_progress=wait_on_progress,
+                                                      monitor_to_state=False))
+        self.snapshots = self.tester.monitor_eusnaps_to_completed(snaps)
 
 
 
-    def restart_sc_test(self):
+    def print_all_test_resources(self):
+        self.status('Printing test resources prior to service interruption...',
+                    testcolor=TestColor.get_canned_color('whiteonblue'))
+        self.tester.print_euinstance_list(self.instances)
+        self.tester.print_euvolume_list(self.volumes)
+        self.tester.print_eusnapshot_list(self.snapshots)
+
+    def reboot_sc_machine_verify_post_reboot(self, timeout = 600):
         """
         Definition: Restart the eucalyptus storage controller service
         """
+        self.print_all_test_resources()
+        #List to delay restart of storage controllers co-located with a cloud controller
+        delayed_restart_list = []
+        debug_str = ""
+        #first make sure everything is good before we star the test...
+        self.tester.service_manager.all_services_operational()
+        cloud_controllers = self.tester.service_manager.get_all_cloud_controllers()
+
         for zone in self.zones:
-            storage_controller = self.tester.service_manager.
+            storage_controllers = self.tester.service_manager.get_all_storage_controllers()
+            for sc in storage_controllers:
+                delay_this_sc = False
+                for clc in cloud_controllers:
+                    if clc.hostname == sc.hostname:
+                        delayed_restart_list = sc
+                        delay_this_sc = True
+                if not delay_this_sc:
+                    sc.machine.reboot()
+        if delayed_restart_list:
+            for sc in delayed_restart_list:
+                sc.machine.reboot()
+        start = time.time()
+        elapsed = 0
+        waiting = copy.copy(storage_controllers)
+        while elapsed < timeout and waiting:
+            elapsed = int(time.time()-start)
+            for sc in storage_controllers:
+                if self.tester.ping(sc.hostname, pollcount=1):
+                    waiting.remove(sc)
+            if waiting:
+                debug_str = ""
+                for sc in waiting:
+                    debug_str += " " + str(sc.hostname) + ","
+                self.debug("Waiting on SC's to become reachable post reboot:"
+                           + str(debug_str) + ", elapsed:"+str(elapsed))
+                time.sleep(10)
+            else:
+                self.status("All SC machines are reachable again, now wait for SSH...",
+                            testcolor=TestColor.get_canned_color('whiteonblue'))
+                break
+        if waiting:
+            raise("SC machines were not reachable after: "+str(elapsed)+" seconds:"+str(debug_str))
+
+        start = time.time()
+        elapsed = 0
+        waiting_for_ssh = copy.copy(storage_controllers)
+        debug_str = ""
+        while elapsed < 90 and waiting_for_ssh:
+            elapsed = int(time.time()-start)
+            for sc in storage_controllers:
+                try:
+                    sc.machine.refresh_ssh()
+                    waiting_for_ssh.remove(sc)
+                except Exception, e:
+                    self.debug('Failed to refresh ssh to:' + str(sc.hostname) + ', err:'+str(e))
+
+            if waiting:
+                debug_str = ""
+                for sc in waiting:
+                    debug_str += " " + str(sc.hostname) + ","
+                self.debug("Waiting on SSH connections to SCs:"
+                           + str(debug_str) + ", elapsed:"+str(elapsed))
+                time.sleep(10)
+            else:
+                self.status("All SC machines have established SSH connections, now wait on services to come back...",
+                            testcolor=TestColor.get_canned_color('whiteonblue'))
+                break
+        if waiting:
+            raise("SC machines failed to establish SSH after: "+str(elapsed)+" seconds:"+str(debug_str))
+        self.start_storage_controllers_service(storage_controllers)
+
+    def start_tgtd_service(self,sc_list):
+        for sc in sc_list:
+            sc.machine.sys('service tgtd start', code=0)
+
+    def start_storage_controllers_service(self, sc_list):
+        self.status("Waiting for storage controller's services to start...")
+        for sc in sc_list:
+            sc.start()
+        self.tester.service_manager.all_services_operational()
+        for sc in sc_list:
+            self.tester.wait_for_service(sc)
+
+    def test1_post_service_interruption_check_attached_volumes(self):
+        write_length = 10000
+        errmsg = ""
+        self.status("Checking volumes for attached state post service interruption...",
+                    testcolor=TestColor.get_canned_color('whiteonblue'))
+        for vol in self.volumes:
+            if vol.status != "attached":
+                errmsg += "Volume:" + str(vol.id) + ", status:" + str(vol.status) \
+                          + " was not attached post service interruption \n"
+        if errmsg:
+            raise Exception(errmsg)
+
+        self.status("Attached state passed. Now checking read/write with attached volumes...",
+                    testcolor=TestColor.get_canned_color('whiteonblue'))
+        for instance in self.instances:
+            for vol in instance.attached_vols:
+                try:
+                    md5before = vol.md5
+                    md5now = instance.md5_attached_euvolume(vol,updatevol=False)
+                    if md5before != md5now:
+                        errmsg += str(instance.id) +"Volume:" + str(vol.id) \
+                                    + "has different md5 sum after service interruption. Before:'" \
+                                    + str(md5before) + "' - vs - '" + str(md5now) + "'"
+                    vol.length = write_length
+                    instance.vol_write_random_data_get_md5(vol,length=write_length, overwrite=True)
+                    instance.sys('sync',code=0)
+                except Exception, e:
+                    errmsg += str(instance.id) + "Volume:" + \
+                              str(vol.id) + ", error while using vol post service interruption, err: "+str(e)
+        if errmsg:
+            raise Exception(errmsg)
+        self.status("Read/write test passed, now testing detachment of volumes...",
+                    testcolor=TestColor.get_canned_color('whiteonblue'))
+        for instance in self.instances:
+            for vol in instance.attached_vols:
+                try:
+                    instance.detach_euvolume(vol)
+                except Exception, e:
+                    errmsg += str(instance.id) + "Volume:" + str(vol.id) + "Error while detaching, err:" + str(e)
+        if errmsg:
+            raise Exception(errmsg)
+        self.status("Attached volume checks post service interruption have passed.",
+                    testcolor=TestColor.get_canned_color('whiteonblue'))
+
+
+
+    def test2_post_service_interuption_check_volume_from_snapshots(self):
+        self.status("Checking creation of volumes from pre-existing snapshots post service interruption...",
+                    testcolor=TestColor.get_canned_color('whiteonblue'))
+        vols = []
+        for snap in self.snapshots:
+            for zone in self.zones:
+                vols.append(self.tester.create_volumes(zone, snapshot=snap, monitor_to_state=None))
+        self.volumes.extend(self.tester.monitor_created_euvolumes_to_state(vols, state='available'))
+        self.status("Done creating volumes from pre-existing snapshots post service interruption.",
+                    testcolor=TestColor.get_canned_color('whiteonblue'))
+
+
+    def test3_post_service_interuption_check_volume_attachment_of_new_vols_from_old_snaps(self):
+        vols = []
+        errmsg = ""
+        self.tester = Eucaops()
+        for snap in self.snapshots:
+            vols.extend(self.tester.get_volume(snapid=snap.id))
+        if not vols:
+            raise Exception("No vols were found as created from previous snapshots")
+        for instance in self.instances:
+            instance = EuInstance()
+            for vol in vols:
+                if vol.zone == instance.placement:
+                    vol = EuVolume()
+                    try:
+                        instance.attach_volume(vol)
+                        for snap in self.snapshots:
+                            snap = EuSnapshot()
+                            if vol.snapshot_id == snap.id:
+                                if vol.md5_len != snap.eutest_volume_md5len:
+                                    self.debug('Need to adjust md5sum for length of snapshot...')
+                                    vol.md5len = snap.eutest_volume_md5len
+                                    instance.vol_write_random_data_get_md5(vol,length=snap.eutest_volume_md5len)
+                                if vol.md5 != snap.eutest_volume_md5:
+                                    errmsg += "Volume:" + str(vol.id) + " MD5 did not match snapshots " \
+                                              + str(snap.id) + ": snapmd5:" + str(snap.eutest_volume_md5) \
+                                              + " --vs volmd5:-- " + str(vol.md5)
+                    except Exception, e:
+                        errmsg += str(instance.id) +"Volume:" + str(vol.id) \
+                                  + " error when attaching and comparing md5, err:" + str(e)
+        if errmsg:
+            raise Exception(errmsg)
+
+
+
+
+    def test4_post_service_interuption_check_snapshot_creation(self):
+        testvols = []
+        testsnaps = []
+        for zone in self.zones:
+            for vol in self.volumes:
+                if vol.zone == zone:
+                    testvols.append(vol)
+                    break
+        for vol in testvols:
+            testsnaps.extend(self.tester.create_snapshots(vol, monitor_to_completed=False))
+        self.snapshots.extend(self.tester.monitor_eusnaps_to_completed(testsnaps))
+
 
 
 
 if __name__ == "__main__":
-    testcase =Qa_214_volume_churn()
+    testcase = Ebs_Multi_Node_Multi_Cluster_Persistance_Tests()
 
     ### Use the list of tests passed from config/command line to determine what subset of tests to run
     ### or use a predefined list
-    list = testcase.args.tests or [ "qa_214_test1", "qa_214_test2", "qa_214_test3", "qa_214_test4"]
+    list = testcase.args.tests or [ 'pretest1_pre_service_restart_launch_test_instances',
+                                    'pretest2_pre_service_restart_create_volume_resources',
+                                    'pretest3_pre_service_restart_attach_all_volumes',
+                                    'pretest4_pre_service_restart_create_snap_per_zone',
+                                    'reboot_sc_machine_verify_post_reboot',
+                                    'test1_post_service_interruption_check_attached_volumes',
+                                    'test2_post_service_interuption_check_volume_from_snapshots',
+                                    'test3_post_service_interuption_check_volume_attachment_of_new_vols_from_old_snaps',
+                                    'test4_post_service_interuption_check_snapshot_creation'
+                                    ]
 
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
