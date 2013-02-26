@@ -63,7 +63,7 @@ final class Eutester4j {
 	static String SECRET_KEY = null;
 	static String ACCESS_KEY = null;
 	static String CREDPATH = null;
-	static String instanceType = "m1.small";
+	static String INSTANCE_TYPE = "m1.small";
 
 	public static void getCloudInfo() throws Exception {
 		CREDPATH = "/Users/tony/Desktop/as_test_cloud/eucarc";
@@ -168,7 +168,7 @@ final class Eutester4j {
 			final String instanceId, final String expectedStatus)
 			throws Exception {
 		final long startTime = System.currentTimeMillis();
-		final long timeout = TimeUnit.MINUTES.toMillis(1);
+		final long timeout = TimeUnit.MINUTES.toMillis(3);
 		boolean completed = false;
 		while (!completed && (System.currentTimeMillis() - startTime) < timeout) {
 			Thread.sleep(5000);
@@ -466,7 +466,7 @@ final class Eutester4j {
 		DeleteKeyPairRequest deleteKeyPairRequest = new DeleteKeyPairRequest(
 				keyName);
 		ec2.deleteKeyPair(deleteKeyPairRequest);
-		System.out.println("Deelted keypair: " + keyName);
+		System.out.println("Delted keypair: " + keyName);
 	}
 
 	/**
