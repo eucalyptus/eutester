@@ -23,6 +23,7 @@
 
     <target name="clean">
         <delete dir="${build.dir}"/>
+        <delete dir="${testng.output.dir}"/>
     </target>
 
     <target name="compile">
