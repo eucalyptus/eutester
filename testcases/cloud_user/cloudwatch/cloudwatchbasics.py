@@ -74,12 +74,12 @@ class CloudWatchBasics(EutesterTestCase):
         ##Check sample 1
         assert first_sample['Maximum'] < 60 and first_sample['Minimum'] > 0
         assert first_sample['Average'] < 34 and first_sample['Average'] > 26
-        assert first_sample['Sum'] < 1700 and first_sample['Sum'] > 1500
+        assert first_sample['Sum'] < 1800 and first_sample['Sum'] > 1500
         assert first_sample['SampleCount'] > 50
         ##Check sample 2
         assert second_sample['Maximum'] < 120 and second_sample['Minimum'] > 50
         assert second_sample['Average'] < 90 and second_sample['Average'] > 80
-        assert second_sample['Sum'] < 5000 and second_sample['Sum'] > 4600
+        assert second_sample['Sum'] < 6000 and second_sample['Sum'] > 4600
         assert second_sample['SampleCount'] > 50
 
         assert first_sample['Average'] < second_sample['Average']
