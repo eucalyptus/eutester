@@ -66,7 +66,7 @@ final class Eutester4j {
 	static String INSTANCE_TYPE = "m1.small";
 
 	public static void getCloudInfo() throws Exception {
-		CREDPATH = "/Users/tony/Desktop/as_test_cloud/eucarc";
+		CREDPATH = "eucarc";
         logger.info("Getting cloud information from " + CREDPATH);
 		EC2_ENDPOINT = parseEucarc(CREDPATH, "EC2_URL") + "/";
 		AS_ENDPOINT = parseEucarc(CREDPATH, "AWS_AUTO_SCALING_URL") + "/";
