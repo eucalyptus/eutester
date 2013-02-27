@@ -55,21 +55,21 @@ public class TestAutoScalingTerminateInstances {
 		final String imageId = findImage(ec2);
 		final String availabilityZone = findAvalablityZone(ec2);
 		final String namePrefix = eucaUUID() + "-";
-		print("Using resource prefix for test: " + namePrefix);
+		logger.info("Using resource prefix for test: " + namePrefix);
 		
 		// End discovery, start test
 		final List<Runnable> cleanupTasks = new ArrayList<Runnable>();
 		try {
 			// Create launch configuration
 			final String configName = namePrefix + "TerminateTest";
-			print("Creating launch configuration: " + configName);
+			logger.info("Creating launch configuration: " + configName);
 			as.createLaunchConfiguration(new CreateLaunchConfigurationRequest()
 					.withLaunchConfigurationName(configName)
 					.withImageId(imageId).withInstanceType(INSTANCE_TYPE));
 			cleanupTasks.add(new Runnable() {
 				@Override
 				public void run() {
-					print("Deleting launch configuration: " + configName);
+					logger.info("Deleting launch configuration: " + configName);
 					as.deleteLaunchConfiguration(new DeleteLaunchConfigurationRequest()
 							.withLaunchConfigurationName(configName));
 				}
@@ -77,7 +77,7 @@ public class TestAutoScalingTerminateInstances {
 
 			// Create scaling group
 			final String groupName = namePrefix + "TerminateTest";
-			print("Creating auto scaling group: " + groupName);
+			logger.info("Creating auto scaling group: " + groupName);
 			as.createAutoScalingGroup(new CreateAutoScalingGroupRequest()
 					.withAutoScalingGroupName(groupName)
 					.withLaunchConfigurationName(configName)
@@ -88,7 +88,7 @@ public class TestAutoScalingTerminateInstances {
 			cleanupTasks.add(new Runnable() {
 				@Override
 				public void run() {
-					print("Deleting group: " + groupName);
+					logger.info("Deleting group: " + groupName);
 					as.deleteAutoScalingGroup(new DeleteAutoScalingGroupRequest()
 							.withAutoScalingGroupName(groupName)
 							.withForceDelete(true));
@@ -98,14 +98,14 @@ public class TestAutoScalingTerminateInstances {
 				@Override
 				public void run() {
 					final List<String> instanceIds = (List<String>) getInstancesForGroup(ec2, groupName, null, true);
-					print("Terminating instances: " + instanceIds);
+					logger.info("Terminating instances: " + instanceIds);
 					ec2.terminateInstances(new TerminateInstancesRequest()
 							.withInstanceIds(instanceIds));
 				}
 			});
 
 			// Wait for instances to launch
-			print("Waiting for instances to launch");
+			logger.info("Waiting for instances to launch");
 			final long timeout = TimeUnit.MINUTES.toMillis(2);
 			List<String> instanceIds = (List<String>) waitForInstances(ec2, timeout, 2, groupName, true);
 
@@ -114,7 +114,7 @@ public class TestAutoScalingTerminateInstances {
 			as.terminateInstanceInAutoScalingGroup(new TerminateInstanceInAutoScalingGroupRequest()
 					.withInstanceId(instanceToTerminate)
 					.withShouldDecrementDesiredCapacity(true));
-			print("Waiting for instance to terminate");
+			logger.info("Waiting for instance to terminate");
 			List<String> remainingInstances = (List<String>) waitForInstances(ec2, timeout, 1, groupName, true);
 			assertThat(!remainingInstances.contains(instanceToTerminate),
 					"Expected instance terminated");
@@ -125,7 +125,7 @@ public class TestAutoScalingTerminateInstances {
 			as.terminateInstanceInAutoScalingGroup(new TerminateInstanceInAutoScalingGroupRequest()
 					.withInstanceId(remainingInstances.get(0))
 					.withShouldDecrementDesiredCapacity(false));
-			print("Waiting for instance to be replaced");
+			logger.info("Waiting for instance to be replaced");
 			Thread.sleep(10000); // We sleep to ensure the first instance has a
 									// chance to start terminating ...
 			List<String> remainingInstances2 = (List<String>) waitForInstances(ec2, timeout, 1, groupName, true);
@@ -134,7 +134,7 @@ public class TestAutoScalingTerminateInstances {
 					"Instance replaced");
 
 			// Delete group without force, should fail due to existing instance
-			print("Deleting group without force, error expected");
+			logger.info("Deleting group without force, error expected");
 			try {
 				as.deleteAutoScalingGroup(new DeleteAutoScalingGroupRequest()
 						.withAutoScalingGroupName(groupName).withForceDelete(
@@ -145,12 +145,12 @@ public class TestAutoScalingTerminateInstances {
 			}
 
 			// Delete group with force to remove remaining instances
-			print("Deleting group with force, instances should be terminated.");
+			logger.info("Deleting group with force, instances should be terminated.");
 			as.deleteAutoScalingGroup(new DeleteAutoScalingGroupRequest()
 					.withAutoScalingGroupName(groupName).withForceDelete(true));
 			waitForInstances(ec2, timeout, 0, groupName, true);
 
-			print("Test complete");
+			logger.info("Test complete");
 		} finally {
 			// Attempt to clean up anything we created
 			Collections.reverse(cleanupTasks);

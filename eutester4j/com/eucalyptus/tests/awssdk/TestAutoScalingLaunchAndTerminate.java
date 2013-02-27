@@ -55,21 +55,21 @@ public class TestAutoScalingLaunchAndTerminate {
 		final String imageId = findImage(ec2);
 		final String availabilityZone = findAvalablityZone(ec2);
 		final String namePrefix = eucaUUID() + "-";
-		print("Using resource prefix for test: " + namePrefix);
+		logger.info("Using resource prefix for test: " + namePrefix);
 		
 		// End discovery, start test
 		final List<Runnable> cleanupTasks = new ArrayList<Runnable>();
 		try {
 			// Create launch configuration
 			final String configName = namePrefix + "LaunchTest";
-			print("Creating launch configuration: " + configName);
+			logger.info("Creating launch configuration: " + configName);
 			as.createLaunchConfiguration(new CreateLaunchConfigurationRequest()
 					.withLaunchConfigurationName(configName)
 					.withImageId(imageId).withInstanceType(INSTANCE_TYPE));
 			cleanupTasks.add(new Runnable() {
 				@Override
 				public void run() {
-					print("Deleting launch configuration: " + configName);
+					logger.info("Deleting launch configuration: " + configName);
 					as.deleteLaunchConfiguration(new DeleteLaunchConfigurationRequest()
 							.withLaunchConfigurationName(configName));
 				}
@@ -77,7 +77,7 @@ public class TestAutoScalingLaunchAndTerminate {
 
 			// Create scaling group
 			final String groupName = namePrefix + "LaunchTest";
-			print("Creating auto scaling group: " + groupName);
+			logger.info("Creating auto scaling group: " + groupName);
 			as.createAutoScalingGroup(new CreateAutoScalingGroupRequest()
 					.withAutoScalingGroupName(groupName)
 					.withLaunchConfigurationName(configName)
@@ -88,7 +88,7 @@ public class TestAutoScalingLaunchAndTerminate {
 			cleanupTasks.add(new Runnable() {
 				@Override
 				public void run() {
-					print("Deleting group: " + groupName);
+					logger.info("Deleting group: " + groupName);
 					as.deleteAutoScalingGroup(new DeleteAutoScalingGroupRequest()
 							.withAutoScalingGroupName(groupName)
 							.withForceDelete(true));
@@ -98,19 +98,19 @@ public class TestAutoScalingLaunchAndTerminate {
 				@Override
 				public void run() {
 					final List<String> instanceIds = (List<String>) getInstancesForGroup(ec2, groupName, null, true);
-					print("Terminating instances: " + instanceIds);
+					logger.info("Terminating instances: " + instanceIds);
 					ec2.terminateInstances(new TerminateInstancesRequest()
 							.withInstanceIds(instanceIds));
 				}
 			});
 
 			// Update group desired capacity and wait for instances to launch
-			print("Setting desired capacity to 2 for group: " + groupName);
+			logger.info("Setting desired capacity to 2 for group: " + groupName);
 			as.setDesiredCapacity(new SetDesiredCapacityRequest()
 					.withAutoScalingGroupName(groupName).withDesiredCapacity(2));
 
 			// Wait for instances to launch
-			print("Waiting for instances to launch");
+			logger.info("Waiting for instances to launch");
 			final long startTime = System.currentTimeMillis();
 			final long launchTimeout = TimeUnit.MINUTES.toMillis(2);
 			boolean launched = false;
@@ -122,16 +122,16 @@ public class TestAutoScalingLaunchAndTerminate {
 			}
 			assertThat(launched,
 					"Instances were not launched within the expected timeout");
-			print("Instances launched in "
+			logger.info("Instances launched in "
 					+ (System.currentTimeMillis() - startTime) + "ms");
 
 			// Update group desired capacity and wait for instances to terminate
-			print("Setting desired capacity to 0 for group: " + groupName);
+			logger.info("Setting desired capacity to 0 for group: " + groupName);
 			as.setDesiredCapacity(new SetDesiredCapacityRequest()
 					.withAutoScalingGroupName(groupName).withDesiredCapacity(0));
 
 			// Wait for instances to launch
-			print("Waiting for instances to terminate");
+			logger.info("Waiting for instances to terminate");
 			final long terminateStartTime = System.currentTimeMillis();
 			final long terminateTimeout = TimeUnit.MINUTES.toMillis(2);
 			boolean terminated = false;
@@ -143,9 +143,9 @@ public class TestAutoScalingLaunchAndTerminate {
 			}
 			assertThat(terminated,
 					"Instances were not terminated within the expected timeout");
-			print("Instances terminated in "
+			logger.info("Instances terminated in "
 					+ (System.currentTimeMillis() - terminateStartTime) + "ms");
-			print("Test complete");
+			logger.info("Test complete");
 		} finally {
 			// Attempt to clean up anything we created
 			Collections.reverse(cleanupTasks);
