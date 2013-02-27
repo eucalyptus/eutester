@@ -33,6 +33,7 @@
 from boto.ec2.image import Image
 from boto.ec2.volume import Volume
 from cwops import CWops
+from asops import ASops
 from iamops import IAMops
 from ec2ops import EC2ops
 from s3ops import S3ops
@@ -47,9 +48,9 @@ from eutester import eulogger
 import re
 import os
 
-class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops):
+class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops):
     
-    def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,  account="eucalyptus", user="admin", username=None, APIVersion='2011-01-01', region=None, ec2_ip=None, s3_ip=None, download_creds=True,boto_debug=0):
+    def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,  account="eucalyptus", user="admin", username=None, APIVersion='2011-01-01', region=None, ec2_ip=None, s3_ip=None, as_ip=None, download_creds=True,boto_debug=0):
         self.config_file = config_file 
         self.APIVersion = APIVersion
         self.eucapath = "/opt/eucalyptus"
@@ -121,7 +122,8 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops):
             ec2_ip = self.get_ec2_ip()
         if self.credpath and not s3_ip:
             s3_ip = self.get_s3_ip()
-        
+        if self.credpath and not as_ip:
+            as_ip = self.get_as_ip()
         if self.credpath and not aws_access_key_id:
             aws_access_key_id = self.get_access_key()
         if self.credpath and not aws_secret_access_key:
@@ -136,6 +138,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops):
             self.setup_sts_connection( endpoint=ec2_ip, path="/services/Eucalyptus", port=8773, is_secure=False, region=region, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
             self.setup_cw_connection( endpoint=ec2_ip, path="/services/CloudWatch", port=8773, is_secure=False, region=region, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
             self.setup_cw_resource_trackers()
+            self.setup_as_connection(endpoint=as_ip, path="/services/AutoScaling", port=8773, is_secure=False, region=region, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
 
     def get_available_vms(self, type=None, zone=None):
         """

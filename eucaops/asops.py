@@ -263,6 +263,11 @@ class ASops(Eutester):
             for lc in self.describe_launch_config():
                 self.debug("Found Launch Config:" + lc.name)
 
+    def get_as_ip(self):
+        """Parse the eucarc for the EC2_URL"""
+        as_url = self.parse_eucarc("AWS_AUTO_SCALING_URL")
+        return as_url.split("/")[2].split(":")[0]
+
     # def wait_for_group(self, as_group=None, state="Successful", poll_count=None, timeout=480):
     #     """
     #     conn.get_all_activities(ag)
