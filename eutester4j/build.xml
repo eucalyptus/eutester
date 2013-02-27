@@ -19,7 +19,8 @@
     <target name="download-deps">
         <echo message="installing testng..."/>
         <get src="http://testng.org/testng-${testng.version}.zip"
-             dest="${deps.dir}"/>
+             dest="${deps.dir}/testng-${testng.version}.zip"/>
+        <echo message="unzipping testng"/>
         <unzip src="${deps.dir}/testng-${testng.version}.zip" dest="${deps.dir}">
             <patternset>
                 <include name="**/testng-${testng.version}.jar"/>
