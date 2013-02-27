@@ -56,7 +56,7 @@ import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancingCli
 
 final class Eutester4j {
 
-    static Logger logger = Logger.getLogger("com.eucalyptus.tests");
+    static Logger logger = Logger.getLogger(Eutester4j.class.getCanonicalName());
 	static String EC2_ENDPOINT = null;
 	static String AS_ENDPOINT = null;
 	static String ELB_ENDPOINT = null;
@@ -66,7 +66,7 @@ final class Eutester4j {
 	static String INSTANCE_TYPE = "m1.small";
 
 	public static void getCloudInfo() throws Exception {
-		CREDPATH = "/Users/viglesias/Dropbox/creds/new-dc/eucarc";
+		CREDPATH = "/Users/tony/Desktop/as_test_cloud/eucarc";
         logger.info("Getting cloud information from " + CREDPATH);
 		EC2_ENDPOINT = parseEucarc(CREDPATH, "EC2_URL") + "/";
 		AS_ENDPOINT = parseEucarc(CREDPATH, "AWS_AUTO_SCALING_URL") + "/";
@@ -240,7 +240,7 @@ final class Eutester4j {
 								"tag:aws:autoscaling:groupName").withValues(
 								groupName)));
 		if (asString) {
-			final List<String> instanceIds = new ArrayList<String>();
+			final List<String> instanceIds = new ArrayList<>();
 			for (final Reservation reservation : instancesResult
 					.getReservations()) {
 				for (final Instance instance : reservation.getInstances()) {
@@ -252,7 +252,7 @@ final class Eutester4j {
 			}
 			return instanceIds;
 		} else {
-			final List<Instance> instances = new ArrayList<Instance>();
+			final List<Instance> instances = new ArrayList<>();
 			for (final Reservation reservation : instancesResult
 					.getReservations()) {
 				for (final Instance instance : reservation.getInstances()) {
@@ -427,11 +427,8 @@ final class Eutester4j {
 	 * @return # of reservations
 	 */
 	public static List<Reservation> getInstancesList(AmazonEC2 ec2) {
-		DescribeInstancesResult describeInstancesRequest = ec2
-				.describeInstances();
-		List<Reservation> reservations = describeInstancesRequest
-				.getReservations();
-		return reservations;
+		DescribeInstancesResult describeInstancesRequest = ec2.describeInstances();
+		return describeInstancesRequest.getReservations();
 	}
 
 	/**
@@ -529,11 +526,13 @@ final class Eutester4j {
 
 	public static void createAutoScalingGroup(AmazonAutoScaling as,
 			String autoScalingGroupName, String launchConfigurationName,
-			int minSize, int maxSize, String availabilityZones) {
+			int minSize, int maxSize, int desiredCapacity, String availabilityZones) {
 		CreateAutoScalingGroupRequest createAutoScalingGroupRequest = new CreateAutoScalingGroupRequest()
 				.withAutoScalingGroupName(autoScalingGroupName)
 				.withLaunchConfigurationName(launchConfigurationName)
-				.withMinSize(minSize).withMaxSize(maxSize)
+				.withMinSize(minSize)
+                .withMaxSize(maxSize)
+                .withDesiredCapacity(desiredCapacity)
 				.withAvailabilityZones(availabilityZones);
 		as.createAutoScalingGroup(createAutoScalingGroupRequest);
 		logger.info("Created Auto Scaling Group: "
@@ -566,5 +565,37 @@ final class Eutester4j {
 			logger.info(ase.getMessage());
 		}
 	}
+
+    public static String getInstanceState(final AmazonAutoScaling as, final String groupName) {
+        final DescribeAutoScalingGroupsResult groupResult =
+                as.describeAutoScalingGroups(new DescribeAutoScalingGroupsRequest().withAutoScalingGroupNames(groupName));
+        String state = null;
+        for (final AutoScalingGroup group : groupResult.getAutoScalingGroups()) {
+            assertThat(groupName.equals(group.getAutoScalingGroupName()), "Unexpected group: " + group.getAutoScalingGroupName());
+            assertThat(group.getInstances().size() < 2, "Unexpected instance count: " + group.getInstances().size());
+            for (final com.amazonaws.services.autoscaling.model.Instance instance : group.getInstances()) {
+                state = instance.getLifecycleState();
+            }
+        }
+        return state;
+    }
+
+    public static void waitForInstances(final AmazonAutoScaling as,
+                                  final String state,
+                                  final long timeout,
+                                  final String groupName,
+                                  final boolean allowEmpty) throws Exception {
+        final long startTime = System.currentTimeMillis();
+        boolean completed = false;
+        String instanceState = null;
+        while (!completed && (System.currentTimeMillis() - startTime) < timeout) {
+            instanceState = getInstanceState(as, groupName);
+            completed = instanceState == null && allowEmpty || state.equals(instanceState);
+            Thread.sleep(2500);
+        }
+        assertThat(completed, "Instance not found with state " + state + " within the expected timeout");
+        print("Instance found in " + (System.currentTimeMillis() - startTime) + "ms for state: " +
+                state + (instanceState == null ? " (instance terminated before state detected)" : ""));
+    }
 
 }

@@ -11,6 +11,8 @@
     <property name="testng.output.dir" value="eutester4j_results"/>
     <property name="testng.version" value="6.8"/>
     <property name="testng-jar" value="${deps.dir}/testng-${testng.version}.jar"/>
+    <property name="log4j.version" value="1.2.17"/>
+    <property name="log4j-jar" value="${deps.dir}/log4j-${log4j.version}.jar"/>
     <property name="aws.dir" value="${deps.dir}/aws-java-sdk"/>
 
     <!-- download and ready testng and AWS JAVA SDK -->
@@ -21,6 +23,16 @@
         <unzip src="${deps.dir}/testng-${testng.version}.zip" dest="${deps.dir}">
             <patternset>
                 <include name="**/testng-${testng.version}.jar"/>
+            </patternset>
+            <mapper type="flatten"/>
+        </unzip>
+
+        <echo message="installing log4j..."/>
+        <get src="http://www.eng.lsu.edu/mirrors/apache/logging/log4j/${log4j.version}/log4j-${log4j.version}.zip"
+             dest="${deps.dir}" skipexisting="true"/>
+        <unzip src="${deps.dir}/log4j-${log4j.version}.zip" dest="${deps.dir}">
+            <patternset>
+                <include name="**/log4j-${log4j.version}.jar"/>
             </patternset>
             <mapper type="flatten"/>
         </unzip>
@@ -45,6 +57,7 @@
         <dirset dir="${build.dir}">
             <include name="**/classes"/>
         </dirset>
+        <pathelement location="${log4j-jar}"/>
     </path>
 
     <!-- delete build and resutls directories -->
@@ -56,7 +69,8 @@
     <!-- compile all classes of src.dir -->
     <target name="compile" depends="download-deps">
         <mkdir dir="${classes.dir}"/>
-        <javac srcdir="${src.dir}" destdir="${classes.dir}" classpathref="classpath"/>
+        <javac includeantruntime="false" srcdir="${src.dir}" destdir="${classes.dir}" classpathref="classpath"/>
+        <copy file="log4j.properties" todir="${classes.dir}"/>
     </target>
 
     <!-- compile all and run tests per testng.xml -->
