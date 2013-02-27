@@ -28,7 +28,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-import com.amazonaws.services.autoscaling.AmazonAutoScaling;
 import org.testng.annotations.Test;
 import com.amazonaws.services.ec2.AmazonEC2;
 import com.amazonaws.services.ec2.model.DescribeInstanceStatusRequest;
