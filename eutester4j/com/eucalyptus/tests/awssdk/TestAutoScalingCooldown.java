@@ -53,21 +53,21 @@ public class TestAutoScalingCooldown {
 		final String imageId = findImage(ec2);
 		final String availabilityZone = findAvalablityZone(ec2);
 		final String namePrefix = eucaUUID() + "-";
-		print("Using resource prefix for test: " + namePrefix);
+		logger.info("Using resource prefix for test: " + namePrefix);
 
 		// End discovery, start test		
 		final List<Runnable> cleanupTasks = new ArrayList<Runnable>();
 		try {
 			// Create launch configuration
 			final String configName = namePrefix + "DescribeGroupsInstances";
-			print("Creating launch configuration: " + configName);
+			logger.info("Creating launch configuration: " + configName);
 			as.createLaunchConfiguration(new CreateLaunchConfigurationRequest()
 					.withLaunchConfigurationName(configName)
 					.withImageId(imageId).withInstanceType(INSTANCE_TYPE));
 			cleanupTasks.add(new Runnable() {
 				@Override
 				public void run() {
-					print("Deleting launch configuration: " + configName);
+					logger.info("Deleting launch configuration: " + configName);
 					as.deleteLaunchConfiguration(new DeleteLaunchConfigurationRequest()
 							.withLaunchConfigurationName(configName));
 				}
@@ -75,7 +75,7 @@ public class TestAutoScalingCooldown {
 
 			// Create scaling group
 			final String groupName = namePrefix + "DescribeGroupsInstances";
-			print("Creating auto scaling group: " + groupName);
+			logger.info("Creating auto scaling group: " + groupName);
 			as.createAutoScalingGroup(new CreateAutoScalingGroupRequest()
 					.withAutoScalingGroupName(groupName)
 					.withLaunchConfigurationName(configName).withMinSize(0)
@@ -84,7 +84,7 @@ public class TestAutoScalingCooldown {
 			cleanupTasks.add(new Runnable() {
 				@Override
 				public void run() {
-					print("Deleting group: " + groupName);
+					logger.info("Deleting group: " + groupName);
 					as.deleteAutoScalingGroup(new DeleteAutoScalingGroupRequest()
 							.withAutoScalingGroupName(groupName)
 							.withForceDelete(true));
@@ -94,24 +94,24 @@ public class TestAutoScalingCooldown {
 				@Override
 				public void run() {
 					final List<String> instanceIds = (List<String>) getInstancesForGroup(ec2, groupName, null, true);
-					print("Terminating instances: " + instanceIds);
+					logger.info("Terminating instances: " + instanceIds);
 					ec2.terminateInstances(new TerminateInstancesRequest()
 							.withInstanceIds(instanceIds));
 				}
 			});
 
 			//
-			print("Waiting for initial cooldown to expire");
+			logger.info("Waiting for initial cooldown to expire");
 			Thread.sleep(10000);
 
 			// Set desired capacity
-			print("Setting desired capacity to 1");
+			logger.info("Setting desired capacity to 1");
 			as.setDesiredCapacity(new SetDesiredCapacityRequest()
 					.withAutoScalingGroupName(groupName)
 					.withHonorCooldown(true).withDesiredCapacity(1));
 
 			try {
-				print("Setting desired capacity to 0 (will fail)");
+				logger.info("Setting desired capacity to 0 (will fail)");
 				as.setDesiredCapacity(new SetDesiredCapacityRequest()
 						.withAutoScalingGroupName(groupName)
 						.withHonorCooldown(true).withDesiredCapacity(0));
@@ -121,13 +121,13 @@ public class TestAutoScalingCooldown {
 				// expected failure
 			}
 
-			print("Setting desired capacity to 0");
+			logger.info("Setting desired capacity to 0");
 			as.setDesiredCapacity(new SetDesiredCapacityRequest()
 					.withAutoScalingGroupName(groupName)
 					.withHonorCooldown(false).withDesiredCapacity(0));
 
 			Thread.sleep(10000);
-			print("Setting desired capacity to 1 after cooldown expiry");
+			logger.info("Setting desired capacity to 1 after cooldown expiry");
 			as.setDesiredCapacity(new SetDesiredCapacityRequest()
 					.withAutoScalingGroupName(groupName)
 					.withHonorCooldown(true).withDesiredCapacity(1));
@@ -136,7 +136,7 @@ public class TestAutoScalingCooldown {
 					.withHonorCooldown(false).withDesiredCapacity(0));
 
 			// Create / execute policy
-			print("Creating scaling policy");
+			logger.info("Creating scaling policy");
 			final String policyName = namePrefix + "DescribeGroupsInstances";
 			as.putScalingPolicy(new PutScalingPolicyRequest()
 					.withAutoScalingGroupName(groupName)
@@ -144,12 +144,12 @@ public class TestAutoScalingCooldown {
 					.withAdjustmentType("ChangeInCapacity").withCooldown(5)
 					.withScalingAdjustment(1));
 
-			print("Executing policy");
+			logger.info("Executing policy");
 			as.executePolicy(new ExecutePolicyRequest()
 					.withAutoScalingGroupName(groupName)
 					.withPolicyName(policyName).withHonorCooldown(false));
 			try {
-				print("Executing policy (will fail)");
+				logger.info("Executing policy (will fail)");
 				as.executePolicy(new ExecutePolicyRequest()
 						.withAutoScalingGroupName(groupName)
 						.withPolicyName(policyName).withHonorCooldown(true));
@@ -160,15 +160,15 @@ public class TestAutoScalingCooldown {
 			}
 
 			Thread.sleep(5000);
-			print("Executing policy after cooldown expiry");
+			logger.info("Executing policy after cooldown expiry");
 			as.executePolicy(new ExecutePolicyRequest()
 					.withAutoScalingGroupName(groupName)
 					.withPolicyName(policyName).withHonorCooldown(true));
 
-			print("Waiting for scaling to complete");
+			logger.info("Waiting for scaling to complete");
 			waitForInstances(ec2, TimeUnit.MINUTES.toMillis(2), 2, groupName,true);
 
-			print("Test complete");
+			logger.info("Test complete");
 		} finally {
 			// Attempt to clean up anything we created
 			Collections.reverse(cleanupTasks);
