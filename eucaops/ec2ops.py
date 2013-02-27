@@ -1762,7 +1762,7 @@ class EC2ops(Eutester):
             # Deregistered state. Verify the image enters that state...
             if gotimage.state != 'deregistered':
                 gotimage.update()
-                if image.state != 'deregistered':
+                if gotimage.state != 'deregistered':
                     raise Exception("Image did not show as deregistered after first deregistration")
                 else:
                     self.debug('deregister_image: Success, '+str(image.id)+' is now in deregistered state')
