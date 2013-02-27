@@ -19,7 +19,7 @@
     <target name="download-deps">
         <echo message="installing testng..."/>
         <get src="http://testng.org/testng-${testng.version}.zip"
-             dest="${deps.dir}" skipexisting="true"/>
+             dest="${deps.dir}"/>
         <unzip src="${deps.dir}/testng-${testng.version}.zip" dest="${deps.dir}">
             <patternset>
                 <include name="**/testng-${testng.version}.jar"/>
@@ -29,7 +29,7 @@
 
         <echo message="installing log4j..."/>
         <get src="http://www.eng.lsu.edu/mirrors/apache/logging/log4j/${log4j.version}/log4j-${log4j.version}.zip"
-             dest="${deps.dir}" skipexisting="true"/>
+             dest="${deps.dir}"/>
         <unzip src="${deps.dir}/log4j-${log4j.version}.zip" dest="${deps.dir}">
             <patternset>
                 <include name="**/log4j-${log4j.version}.jar"/>
@@ -39,7 +39,7 @@
 
         <echo message="installing aws java sdk..."/>
         <get src="http://sdk-for-java.amazonwebservices.com/latest/aws-java-sdk.zip"
-             dest="${deps.dir}" skipexisting="true"/>
+             dest="${deps.dir}"/>
         <unzip src="${deps.dir}/aws-java-sdk.zip" dest="${aws.dir}">
             <patternset>
                 <include name="**/*.jar"/>
