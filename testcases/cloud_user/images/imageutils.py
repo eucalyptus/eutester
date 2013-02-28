@@ -311,6 +311,7 @@ class ImageUtils(EutesterTestCase):
                        destination=None,
                        debug=False):
         '''convience method to register an s3 image manifest, calls eutester main method'''
+<<<<<<< HEAD
         return self.tester.register_image( manifest, rdn=root_device_name, description=description, bdmdev=block_device_mapping, name=name, ramdisk=ramdisk, kernel=kernel)
 
 
@@ -336,7 +337,6 @@ class ImageUtils(EutesterTestCase):
         :param timeout_min: int, minutes to wait before timing out.
         """
         raise Exception('Test method not implemented yet')
-
 
 
     
@@ -390,7 +390,7 @@ class ImageUtils(EutesterTestCase):
                                                  timeout=upload_timeout, uniquebucket=uniquebucket)
         
         self.debug('create_emi_from_url: Now registering...')
-        emi = self.tester.register_image(image_location=upload_manifest, rdn=root_device_name, 
+        emi = self.tester.register_image(image_location=upload_manifest, root_device_name=root_device_name,
                                          description=description, bdmdev=block_device_mapping, 
                                          name=name, ramdisk=ramdisk, kernel=kernel)
         elapsed= int(time.time()-start)

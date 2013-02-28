@@ -42,7 +42,6 @@ class AutoScalingBasics(EutesterTestCase):
     def __init__(self, extra_args= None):
         self.setuptestcase()
         self.setup_parser()
-        self.parser.add_argument("--region", default=None)
         if extra_args:
             for arg in extra_args:
                 self.parser.add_argument(arg)
@@ -76,11 +75,6 @@ class AutoScalingBasics(EutesterTestCase):
 
     def AutoScalingBasics(self):
         ### test create  and describe launch config
-        """
-
-
-        :raise:
-        """
         self.launch_config_name = 'Test-Launch-Config-' + str(time.time())
         self.tester.create_launch_config(name=self.launch_config_name,
                                          image_id=self.image.id,
@@ -123,7 +117,7 @@ class AutoScalingBasics(EutesterTestCase):
                                      cooldown=120)
 
         self.exact_policy_name = "Exact-Policy-" + str(time.time())
-        self.exact_size = 1
+        self.exact_size = 0
         self.tester.create_as_policy(name=self.exact_policy_name,
                                      adjustment_type="ExactCapacity",
                                      as_name=self.auto_scaling_group_name,
@@ -166,14 +160,14 @@ class AutoScalingBasics(EutesterTestCase):
                    self.exact_policy_name)
 
         ### Test Delete Auto Scaling Group
-        self.tester.delete_as_group(self.auto_scaling_group_name)
+        self.tester.delete_as_group(names=self.auto_scaling_group_name)
         if len(self.tester.describe_as_group([self.auto_scaling_group_name])) != 0:
             raise Exception('Auto Scaling Group not deleted')
         self.debug('**** Deleted Auto Scaling Group: ' + self.auto_scaling_group_name)
 
         ### pause for Auto scaling group to be deleted
         # TODO write wait/poll op for auto scaling groups
-        time.sleep(10)
+        # time.sleep(5)
 
         ### Test delete launch config
         self.tester.delete_launch_config(self.launch_config_name)
@@ -187,33 +181,59 @@ class AutoScalingBasics(EutesterTestCase):
         """
         pass
 
-    def clean_groups_and_configs(self):
+    def too_many_launch_configs_test(self):
         """
-        This will attempt to delete all launch configs and all auto scaling groups
+        AWS enforces a 100 LC per account limit this tests what happens if we create more
         """
-        ### clear all ASGs
-        for asg in self.tester.describe_as_group():
-            self.debug("Found Auto Scaling Group: " + asg.name)
-            self.tester.delete_as_group(asg.name,True)
-        if len(self.tester.describe_as_group()) != 0:
-            self.debug("Some AS groups remain")
-            for asg in self.tester.describe_as_group():
-                self.debug("Found Auto Scaling Group: " + asg.name)
-
-        ### clear all LCs
+        for i in range(101):
+            self.launch_config_name = 'Test-Launch-Config-' + str(i + 1)
+            self.tester.create_launch_config(name=self.launch_config_name,
+                                             image_id=self.image.id)
+        if len(self.tester.describe_launch_config()) > 100:
+            raise Exception("More then 100 launch configs exist in 1 account")
         for lc in self.tester.describe_launch_config():
-            self.debug("Found Launch Config:" + lc.name)
             self.tester.delete_launch_config(lc.name)
-        if len(self.tester.describe_launch_config()) != 0:
-            self.debug("Some Launch Configs Remain")
-            for lc in self.tester.describe_launch_config():
-                self.debug("Found Launch Config:" + lc.name)
+
+    def too_many_policies_test(self):
+        launch_config_name = 'LC-' + str(time.time())
+        self.tester.create_launch_config(name=launch_config_name,
+                                         image_id=self.image.id,
+                                         key_name=self.keypair.name,
+                                         security_groups=[self.group.name])
+        asg = 'ASG-' + str(time.time())
+        self.tester.create_as_group(group_name=asg,
+                                    launch_config=launch_config_name,
+                                    availability_zones=self.tester.get_zones(),
+                                    min_size=0,
+                                    max_size=5,
+                                    connection=self.tester.AS)
+        for i in range(26):
+            policy_name = "Policy-" + str(i + 1)
+            self.tester.create_as_policy(name=policy_name,
+                                         adjustment_type="ExactCapacity",
+                                         as_name=asg,
+                                         scaling_adjustment=0,
+                                         cooldown=120)
+        if len(self.tester.AS.get_all_policies()) > 25:
+            raise Exception("More than 25 policies exist for 1 auto scaling group")
+        self.tester.delete_as_group(names=asg)
+
+    def too_many_as_groups(self):
+        """
+        AWS imposes a 20 ASG/acct limit
+        """
+        pass
+
+    def clear_all(self):
+        self.tester.delete_all_autoscaling_groups()
+        self.tester.delete_all_launch_configs()
 
 if __name__ == "__main__":
     testcase = AutoScalingBasics()
     ### Use the list of tests passed from config/command line to determine what subset of tests to run
     ### or use a predefined list "AutoScalingGroupBasics", "LaunchConfigBasics", "AutoScalingInstanceBasics"
-    # list = testcase.args.tests or ["AutoScalingBasics"] ["clean_groups_and_configs"]
+    # list = testcase.args.tests or ["AutoScalingBasics"] ["clean_groups_and_configs"] too_many_launch_configs_test
+    # too_many_policies_test
     list = testcase.args.tests or ["AutoScalingBasics"]
 
     ### Convert test suite methods to EutesterUnitTest objects

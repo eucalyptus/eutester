@@ -202,7 +202,7 @@ public class Eutester4jTest {
 	@Test(enabled=false)
 	public void testRunInstances(){
 		int initalInstanceCount = getInstancesList(ec2).size();
-		runInstances(ec2, emi, keyName, instanceType, securityGroups, 1, 1);
+		runInstances(ec2, emi, keyName, INSTANCE_TYPE, securityGroups, 1, 1);
 		AssertJUnit.assertTrue(getInstancesList(ec2).size() > initalInstanceCount);
 		
 		// terminate after the test
@@ -222,7 +222,7 @@ public class Eutester4jTest {
 	 */
 	@Test(enabled=false)
 	public void testStopInstances(){
-		runInstances(ec2, emi, keyName, instanceType, securityGroups, 1, 1);
+		runInstances(ec2, emi, keyName, INSTANCE_TYPE, securityGroups, 1, 1);
 		List<String> instanceIds = new ArrayList<String>();
 		instanceIds.add(getLastlaunchedInstance(ec2).get(0).getInstanceId());
 		
@@ -251,7 +251,7 @@ public class Eutester4jTest {
 	 */
 	@Test(enabled=false)
 	public void testTerminateInstances(){
-		runInstances(ec2, emi, keyName, instanceType, securityGroups, 1, 1);
+		runInstances(ec2, emi, keyName, INSTANCE_TYPE, securityGroups, 1, 1);
 		List<String> instanceIds = new ArrayList<String>();
 		instanceIds.add(getLastlaunchedInstance(ec2).get(0).getInstanceId());
 		System.out.println("Created instance = " + getLastlaunchedInstance(ec2).get(0).getInstanceId());
@@ -282,7 +282,7 @@ public class Eutester4jTest {
 	public void testBasicLaunchConfig(){
 		String launchConfigurationName = "LC-" + eucaUUID();
 		try {
-			createLaunchConfig(as, launchConfigurationName, emi, instanceType, keyName, securityGroups);
+			createLaunchConfig(as, launchConfigurationName, emi, INSTANCE_TYPE, keyName, securityGroups);
 			
 			List<LaunchConfiguration> launchConfigs = describeLaunchConfigs(as);
 			
