@@ -31,7 +31,58 @@
 # Author: vic.iglesias@eucalyptus.com
 
 import re
+import time
 from eutester import sshconnection
+from eutester import machine
+
+
+class log_marker:
+    def __init__(self,
+                 tester,
+                 components,
+                 start_marker=None,
+                 log_files=None):
+        """
+        Manages unique markers placed in log/text files on a list of components.
+        Intended to be used to indicate start and stop points of operations within the multiple sets of logs on multiple
+        systems. These log segments can then collected, analyzed, etc. at a later point in time.
+
+        :param tester: eutester object
+        :param components: list of component objs to operate on
+        :param start_marker: unique string, this will be auto-generated if not provided.
+        :param log_files: list of files (using full path to files to mark/operate upon on remote components
+
+        """
+        self.tester = tester
+        self.components = components
+        self.start_marker = start_marker or "eutester_marker_start:" + \
+                                         str(time.time()) + str(self.tester.id_generator(size=10))
+        self.log_files = log_files
+        self.start_time = time.time()
+        self.end_marker = None
+        self.end_time = None
+        self.elapsed = None
+
+
+    def add_start_marker(self, components=None, log_files=None, marker=None):
+        """
+        Attempts to add a unique 'marker' in the 'log_files' provided in all the 'components' provided.
+
+        :param components:
+        :param log_files:
+        :param marker:
+        """
+        marker = marker or self.start_marker
+        log_files = log_files or self.log_files
+        components = components or self.components
+
+        for component in components:
+            if component.machine:
+                log_files = log_files or component.log_files
+
+        return marker
+
+
 
 class Eunode:
     def __init__(self,
@@ -53,6 +104,7 @@ class Eunode:
         :param machine: optional eutester machine type object
         :param tester: - eutester obj
         """
+        type = EuserviceManager.node_type_string
         self.hostname = hostname
         self.partition = partition
         self.part_name = partition.name
@@ -91,6 +143,12 @@ class Eunode:
         :return: list of lines from remote cmd's output
         """
         return self.machine.sys(cmd,code=code)
+
+    def stop(self):
+        self.sys(self.tester.eucapath + "/etc/init.d/eucalyptus-nc stop", code=0)
+
+    def start(self):
+        self.sys(self.tester.eucapath + "/etc/init.d/eucalyptus-nc start", code=0)
 
     def get_hypervisor_from_euca_conf(self):
         """
@@ -190,6 +248,25 @@ class Euservice:
     
     def start(self):
         self.tester.service_manager.start(self)
+
+    def print_self(self, header=True, footer=True, printmethod=None):
+        part_len = 16 #self.partition
+        type_len  = 16 #self.type
+        hostname_len = 24 #self.hostname
+        state_len = 10 #self.state
+        uri_len = 36 #self.uri
+        buf = "\n"
+        line = "------------------------------------------------------------------------------------------------------------------------------------------"
+        if header:
+            buf += str(line+"\n")
+            buf += str('PARTITION').center(part_len)+'|'+str('TYPE').center(type_len)+'|'+str('HOSTNAME').center(hostname_len)+'|'+str('STATE').center(state_len)+'|'+str('URI').center(uri_len)+'\n'
+            buf += str(line+"\n")
+        buf += str(self.partition).center(part_len)+'|'+str(self.type).center(type_len)+'|'+str(self.hostname).center(hostname_len)+'|'+str(self.state).center(state_len)+'|'+str(self.uri).center(uri_len)
+        if footer:
+            buf += str("\n"+ line)
+        if printmethod:
+            printmethod(buf)
+        return buf
     
         
 class Partition:
@@ -242,6 +319,7 @@ class EuserviceManager(object):
     walrus_type_string = 'walrus'
     storage_type_string = 'storage'
     clc_type_string = 'eucalyptus'
+    node_type_string = 'node'
 
         
     def __init__(self, tester ):
@@ -259,45 +337,111 @@ class EuserviceManager(object):
         self.all_services = []
         self.node_list = []
         self.tester = tester
+        self.debug = tester.debug
         self.eucaprefix = ". " + self.tester.credpath + "/eucarc && " + self.tester.eucapath
         if self.tester.clc is None:
             raise AttributeError("Tester object does not have CLC machine to use for SSH")
         self.update()
 
     
-    def get(self, type=None, partition=None, attempt_both=True):
+    def get(self, type=None, partition=None, attempt_both=True, allow_clc_start_time=300):
+        """
+        Method attempts to 'get' euservices by parsing euca-describe-services on the CLC(s). The method
+        will do some basic service state checks as well as wait for a reasonable amount
+        of time 'allow_clc_start_time' in seconds to allow the eucalyptus service(s) to initialize/sync and be ready
+        to service requests.
+
+        :param type: service type string to filter returned services list by
+        :param partition: partition, aka zone, aka cluster to filter by.
+        :param attempt_both: When set, query the alternate CLC if the first errors
+        :param allow_clc_start_time: In the case both CLCs are not responding, this is used as the timeout. This time
+                                     represents the amount of time allowed from the time the clc process(s) were started.
+                                     If a valid response is not detected, this method will error out.
+        :return: list of euservices
+        """
+
+        good_clc_hosts = []
+        describe_services = []
+        services = []
+        clc_hostnames = ""
+        err_msg = ""
+        dbg_msg = ""
+
         if type is not None:
             type = " -T " + str(type) 
         else:
             type = ""
-        describe_services = []
         #### This is a hack around the fact that the -P filter is not working need to fix this once that functionality is fixed
         if partition is None:
             partition = ""
-        try:
-            out = self.tester.clc.sys(self.eucaprefix + "/usr/sbin/euca-describe-services " + str(type), code=0,timeout=15)
-            for line in out:
-                if re.search("SERVICE.+"+str(partition), line):
-                    describe_services.append(line)
-            if not describe_services:
-                raise IndexError("Did not receive proper response from describe services when looking for " + str(type))
-        except Exception, e:
-            if len(self.tester.get_component_machines("clc")) is 1:
-                raise Exception("Unable to get service information from the only clc: " + self.tester.clc.hostname+", err:" +str(e))
-            if attempt_both:
-                self.tester.swap_clc()
-                describe_services = self.tester.clc.sys(self.eucaprefix + "/usr/sbin/euca-describe-services " + str(type)  + " | grep SERVICE | grep "  + str(partition)  , timeout=15)
-                if len(describe_services) < 1:                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
-                    raise IndexError("Did not receive proper response from describe services when looking for " + str(type))
-            raise e
-        
-        #self.populate_nodes()
-        services = []
+        #Check each CLC to make sure the eucalyptus-cloud service is running on that machine
+        if attempt_both:
+            clc_machines =self.tester.get_component_machines("clc")
+        else:
+            clc_machines =[self.tester.clc]
+
+        for clc_machine in clc_machines:
+            clc_hostnames += clc_machine.hostname + ","
+            if clc_machine.get_eucalyptus_cloud_is_running_status():
+                #Add to front of check list if this is the current tester clc, otherwise append to end.
+                if clc_machine == self.tester.clc:
+                    good_clc_hosts.insert(0,clc_machine)
+                else:
+                    good_clc_hosts.append(clc_machine)
+            else:
+                self.debug('Eucalyptus cloud was not found running on CLC:'+str(clc_machine.hostname))
+
+        for clc_host in good_clc_hosts:
+            dbg_msg += clc_host.hostname + ", "
+        self.debug("Checking the following CLCs for services/status: " + str(dbg_msg) + "...")
+        while good_clc_hosts and not describe_services:
+            clc_process_uptimes = []
+            for clc in good_clc_hosts:
+                try:
+                    clc_process_uptimes.append(clc.get_eucalyptus_cloud_process_uptime())
+                    out = clc.sys(self.eucaprefix + "/usr/sbin/euca-describe-services " + str(type), code=0,timeout=15)
+                    for line in out:
+                        if re.search("SERVICE.+"+str(partition), line):
+                            describe_services.append(line)
+                    if not describe_services:
+                        raise IndexError("Did not receive proper response from describe services when looking for " + str(type))
+                    else:
+                        #if the check was successful, we may need to swap the tester's primary clc
+                        if clc != self.tester.clc:
+                            self.tester.swap_clc()
+                        break
+                except Exception, e:
+                    self.debug()
+                    err_msg += str(e) + "\n"
+                    #Check to make sure the CLC process is evening running on this machine, and if the youngest CLC process
+                    # has been up for a reasonable amount of time to sync and/or service requests.
+                    process_uptime = self.tester.clc.get_eucalyptus_cloud_process_uptime()
+
+                    is_running = self.tester.clc.get_eucalyptus_cloud_is_running_status()
+                    if not is_running:
+                        good_clc_hosts.remove(self.tester.clc)
+                        err_msg += "Error in service request on CLC:" + str(self.tester.clc.hostname) \
+                                   + ". PID uptime:" + str(process_uptime) + "/" + str(allow_clc_start_time) \
+                                   + ", service_running:"+ str(is_running) + "\n"
+            #If we've checked both CLCs and still don't have a valid response to parse, 'and' the youngest CLC
+            #process uptime has exceeed 'allow_clc_start_time' then raise error.
+            if not good_clc_hosts or (not describe_services and min(clc_process_uptimes) > allow_clc_start_time):
+                raise Exception("Could not get services from " + str(clc_hostnames)
+                                + ", after clc process uptime of at least "
+                                + str(allow_clc_start_time) + "\nErrors:"+str(err_msg))
+        #Create euservice objects from command output and return list of euservices.
         for service_line in describe_services:
             services.append(Euservice(service_line, self.tester))
         return services
 
 
+    def print_services_list(self, services=None):
+        services = services or self.all_services
+        service1 = services.pop(0)
+        buf = service1.print_self()
+        for service in services:
+            buf += service.print_self(header=False,)
+        self.debug(buf)
 
 
 
@@ -372,25 +516,33 @@ class EuserviceManager(object):
     def update_service_list(self):
         return self.get()
 
-    def get_all_services_of_type(self,
-                                 type,
-                                 partition=None,
-                                 state=None,
-                                 name=None,
-                                 hostname=None,
-                                 running=None,
-                                 use_cached_list=True):
+    def get_all_services_by_filter(self,
+                                   type=None,
+                                   partition=None,
+                                   state=None,
+                                   name=None,
+                                   hostname=None,
+                                   running=None,
+                                   use_cached_list=True):
         """
-        Returns a list of services of service type 'type' that match the provided filter criteria.
+        Returns a list of services of service that match the provided filter criteria.
 
         :param type: type of service to look for (cluster, eucalyptus, storage, walrus)
-        :param partition: partition to fileter returned service list with
+        :param partition: partition to filter returned service list with
         :param state: state to filter returned service list with
         :param name: name to filter returned service list with
         :param hostname: hostname/ip to filter returned service list with
         :param running: running boolean to filter returned service list with
         :param use_cached_list: use current list and state of self.all_services, else get_all_services()
         :return: list of matching cc euservice objects
+
+        Examples:
+                - Get all the services running on a specific machine "XYZ":
+                    get_all_services_by_filter(hostname="XYZ")
+                - Get all services in ENABLED state:
+                    get_all_services_by_filter(state="ENABLED")
+                - Get all Storage controllers in zone/partition "MYZONE":
+                    get_all_services_by_filter(type=self.storage_type_string, partition="MYZONE")
         """
         euservice_list = []
         if use_cached_list:
@@ -398,7 +550,8 @@ class EuserviceManager(object):
         else:
             services = self.get_all_services()
         for service in services:
-            if service.type == type:
+                if type and service.type != type:
+                    continue
                 if partition and service.partition != partition:
                     continue
                 if state and service.state != state:
@@ -423,7 +576,7 @@ class EuserviceManager(object):
         """
         Returns a list of services of cluster services that match the provided filter criteria.
 
-        :param partition: partition to fileter returned service list with
+        :param partition: partition to filter returned service list with
         :param state: state to filter returned service list with
         :param name: name to filter returned service list with
         :param hostname: hostname/ip to filter returned service list with
@@ -432,13 +585,13 @@ class EuserviceManager(object):
         :param use_cached_list: use current list and state of self.all_services, else get_all_services()
         :return: list of matching cc euservice objects
         """
-        return self.get_all_services_of_type(self.cluster_type_string,
-                                             partition=partition,
-                                             state=state,
-                                             name=name,
-                                             hostname=hostname,
-                                             running=running,
-                                             use_cached_list=use_cached_list)
+        return self.get_all_services_by_filter(type=self.cluster_type_string,
+                                                 partition=partition,
+                                                 state=state,
+                                                 name=name,
+                                                 hostname=hostname,
+                                                 running=running,
+                                                 use_cached_list=use_cached_list)
 
     def get_all_storage_controllers(self,
                                     partition=None,
@@ -459,7 +612,7 @@ class EuserviceManager(object):
         :param use_cached_list: use current list and state of self.all_services, else get_all_services()
         :return: list of matching cc euservice objects
         """
-        return self.get_all_services_of_type(self.storage_type_string,
+        return self.get_all_services_by_filter(type=self.storage_type_string,
                                              partition=partition,
                                              state=state,
                                              name=name,
@@ -486,7 +639,7 @@ class EuserviceManager(object):
         :param use_cached_list: use current list and state of self.all_services, else get_all_services()
         :return: list of matching cc euservice objects
         """
-        return self.get_all_services_of_type(self.walrus_type_string,
+        return self.get_all_services_by_filter(type=self.walrus_type_string,
                                              partition=partition,
                                              state=state,
                                              name=name,
@@ -494,7 +647,7 @@ class EuserviceManager(object):
                                              running=running,
                                              use_cached_list=use_cached_list)
 
-    def get_all_cloud_controlers(self,
+    def get_all_cloud_controllers(self,
                                  partition=None,
                                  state=None,
                                  name=None,
@@ -513,7 +666,7 @@ class EuserviceManager(object):
         :param use_cached_list: use current list and state of self.all_services, else get_all_services()
         :return: list of matching cc euservice objects
         """
-        return self.get_all_services_of_type(self.clc_type_string,
+        return self.get_all_services_by_filter(type=self.clc_type_string,
                                              partition=partition,
                                              state=state,
                                              name=name,
@@ -670,7 +823,7 @@ class EuserviceManager(object):
                     my_partition.vbs.append(current_euservice)          
                 if append:
                     self.partitions[current_euservice.partition] = my_partition
-        enabled_clc = self.get_all_cloud_controlers(state='ENABLED')
+        enabled_clc = self.get_all_cloud_controllers(state='ENABLED')
         if enabled_clc:
             enabled_clc = enabled_clc[0]
             self.update_node_list(enabled_clc=enabled_clc)
@@ -691,6 +844,8 @@ class EuserviceManager(object):
         service_name = "eucalyptus-cloud"
         if re.search("cluster", euservice.type):
             service_name = "eucalyptus-cc"
+        if euservice.type == self.node_type_string:
+            service_name = "eucalyptus-nc"
         if not euservice.machine.found(self.tester.eucapath + "/etc/init.d/" + service_name + " " + command, "done"):
             self.tester.fail("Was unable to stop service: " + euservice.name + " on host " + euservice.machine.hostname)
             raise Exception("Did not properly modify service")
@@ -732,10 +887,20 @@ class EuserviceManager(object):
             raise Exception("Service: " + euservice.name + " did not enter "  + state + " state")
         
     def all_services_operational(self):
-        all_services = self.get_all_services()
-        for service in all_services:
-            self.wait_for_service(service,"ENABLED")
-            self.wait_for_service(service,"DISABLED")
+        all_services_to_check = self.get_all_services()
+        while all_services_to_check:
+            ha_counterpart = None
+            service = all_services_to_check.pop()
+            for serv in all_services_to_check:
+                if serv.type == service.type and serv.partition == serv.partition:
+                    ha_counterpart = serv
+                    break
+            if ha_counterpart:
+                all_services_to_check.remove(ha_counterpart)
+                self.wait_for_service(service,"ENABLED")
+                self.wait_for_service(service,"DISABLED")
+            else:
+                self.wait_for_service(service,"ENABLED")
     
     def get_enabled_clc(self):
         clc = self.get_enabled(self.clcs)
@@ -778,5 +943,10 @@ class EuserviceManager(object):
             if service.isDisabled():
                 return service
         return None
+
+
+
+
+
 
 
