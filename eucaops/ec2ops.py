@@ -1712,8 +1712,12 @@ class EC2ops(Eutester):
         :param kernel: kernel id (note for windows this name should be "windows")
         :return: image id string
         """
-        image_id = self.ec2.register_image(name=name, description=description, kernel_id=kernel,
-                                           image_location=image_location, ramdisk_id=ramdisk, block_device_map=bdmdev,
+        image_id = self.ec2.register_image(name=name,
+                                           description=description,
+                                           kernel_id=kernel,
+                                           image_location=image_location,
+                                           ramdisk_id=ramdisk,
+                                           block_device_map=bdmdev,
                                            root_device_name=rdn)
         self.test_resources["images"].append(image_id)
         return image_id
