@@ -27,6 +27,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+
 import org.testng.annotations.Test;
 import com.amazonaws.services.ec2.AmazonEC2;
 import com.amazonaws.services.ec2.model.DescribeInstanceStatusRequest;
@@ -51,16 +52,11 @@ public class TestEC2DescribeInstanceStatus {
 
 	@Test
 	public void EC2DescribeInstanceStatusTest() throws Exception {
-		final String credpath = "/Users/tony/Desktop/as_test_cloud/eucarc";
-		final String ec2Endpoint = parseEucarc(credpath, "EC2_URL") + "/";
-		final String secretKey = parseEucarc(credpath, "EC2_SECRET_KEY")
-				.replace("'", "");
-		final String accessKey = parseEucarc(credpath, "EC2_ACCESS_KEY")
-				.replace("'", "");
-		final AmazonEC2 ec2 = getEc2Client(accessKey, secretKey, ec2Endpoint);
-		final String imageId = findImage(ec2);
-		final String namePrefix = eucaUUID() + "-";
-		logger.info("Using resource prefix for test: " + namePrefix);
+        getCloudInfo();
+        final AmazonEC2 ec2 = getEc2Client(ACCESS_KEY, SECRET_KEY, EC2_ENDPOINT);
+        final String imageId = findImage(ec2);
+        final String namePrefix = eucaUUID() + "-";
+        logger.info("Using resource prefix for test: " + namePrefix);
 
 		// End discovery, start test
 		final List<Runnable> cleanupTasks = new ArrayList<Runnable>();
