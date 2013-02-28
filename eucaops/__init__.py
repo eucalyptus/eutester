@@ -118,27 +118,41 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops):
                 self.service_manager = EuserviceManager(self)
                 self.clc = self.service_manager.get_enabled_clc().machine
                 self.walrus = self.service_manager.get_enabled_walrus().machine 
-        if self.credpath and not ec2_ip:
-            ec2_ip = self.get_ec2_ip()
-        if self.credpath and not s3_ip:
-            s3_ip = self.get_s3_ip()
-        if self.credpath and not as_ip:
-            as_ip = self.get_as_ip()
+
+
+
         if self.credpath and not aws_access_key_id:
             aws_access_key_id = self.get_access_key()
         if self.credpath and not aws_secret_access_key:
             aws_secret_access_key = self.get_secret_key()
         self.test_resources = {}
         if self.download_creds:
-            self.setup_ec2_connection(endpoint=ec2_ip, path="/services/Eucalyptus", port=8773, is_secure=False, region=region, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, APIVersion=APIVersion, boto_debug=boto_debug)
-            self.setup_ec2_resource_trackers()
-            self.setup_s3_connection(endpoint=s3_ip, path="/services/Walrus", port=8773, is_secure=False,aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,  boto_debug=boto_debug)
-            self.setup_s3_resource_trackers()
-            self.setup_iam_connection(endpoint=ec2_ip, path="/services/Euare", port=8773, is_secure=False, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,  boto_debug=boto_debug)
-            self.setup_sts_connection( endpoint=ec2_ip, path="/services/Eucalyptus", port=8773, is_secure=False, region=region, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
-            self.setup_cw_connection( endpoint=ec2_ip, path="/services/CloudWatch", port=8773, is_secure=False, region=region, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
-            self.setup_cw_resource_trackers()
-            self.setup_as_connection(endpoint=as_ip, path="/services/AutoScaling", port=8773, is_secure=False, region=region, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
+            try:
+                if self.credpath and not ec2_ip:
+                    ec2_ip = self.get_ec2_ip()
+                self.setup_ec2_connection(endpoint=ec2_ip, path="/services/Eucalyptus", port=8773, is_secure=False, region=region, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, APIVersion=APIVersion, boto_debug=boto_debug)
+                self.setup_ec2_resource_trackers()
+                self.setup_iam_connection(endpoint=ec2_ip, path="/services/Euare", port=8773, is_secure=False, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,  boto_debug=boto_debug)
+                self.setup_sts_connection( endpoint=ec2_ip, path="/services/Eucalyptus", port=8773, is_secure=False, region=region, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
+                self.setup_cw_connection( endpoint=ec2_ip, path="/services/CloudWatch", port=8773, is_secure=False, region=region, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
+                self.setup_cw_resource_trackers()
+            except Exception, e:
+                raise Exception("Unable to create EC2 connection because of: " + str(e) )
+
+            try:
+                if self.credpath and not s3_ip:
+                    s3_ip = self.get_s3_ip()
+                self.setup_s3_connection(endpoint=s3_ip, path="/services/Walrus", port=8773, is_secure=False,aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,  boto_debug=boto_debug)
+                self.setup_s3_resource_trackers()
+            except Exception, e:
+                raise Exception("Unable to create S3 connection because of: " + str(e) )
+
+            try:
+                if self.credpath and not as_ip:
+                    as_ip = self.get_as_ip()
+                self.setup_as_connection(endpoint=as_ip, path="/services/AutoScaling", port=8773, is_secure=False, region=region, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
+            except Exception, e:
+                self.debug("Unable to create AS connection because of: " + str(e) )
 
     def get_available_vms(self, type=None, zone=None):
         """
