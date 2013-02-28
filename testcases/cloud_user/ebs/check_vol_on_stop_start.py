@@ -1,3 +1,4 @@
+#!/usr/bin/python
 from eucaops import Eucaops
 from eutester.eutestcase import EutesterTestCase
 from eutester.euinstance import EuInstance

@@ -1,3 +1,4 @@
+#!/usr/bin/python
 __author__ = 'viglesias'
 import re
 from eucaops import Eucaops

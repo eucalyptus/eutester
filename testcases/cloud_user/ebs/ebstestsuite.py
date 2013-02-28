@@ -1,4 +1,4 @@
-#! ../share/python_lib/matt_dev/bin/python
+#!/usr/bin/python
 '''
 Test Summary: 
 

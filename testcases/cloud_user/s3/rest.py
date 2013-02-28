@@ -1,3 +1,4 @@
+#!/usr/bin/python
 import urlparse
 import httplib
 import base64
