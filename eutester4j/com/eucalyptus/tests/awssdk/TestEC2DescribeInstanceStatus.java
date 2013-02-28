@@ -52,6 +52,7 @@ public class TestEC2DescribeInstanceStatus {
 
 	@Test
 	public void EC2DescribeInstanceStatusTest() throws Exception {
+        testInfo(this.getClass().getSimpleName());
         getCloudInfo();
         final AmazonEC2 ec2 = getEc2Client(ACCESS_KEY, SECRET_KEY, EC2_ENDPOINT);
         final String imageId = findImage(ec2);

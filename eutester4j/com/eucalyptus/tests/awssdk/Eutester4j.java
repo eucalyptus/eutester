@@ -75,6 +75,9 @@ final class Eutester4j {
 		ACCESS_KEY = parseEucarc(CREDPATH, "EC2_ACCESS_KEY").replace("'", "");
 	}
 
+    public static void testInfo(String testName){
+        logger.info("*****TEST NAME: " + testName);
+    }
 	/**
 	 * create ec2 connection based with supplied accessKey and secretKey
 	 * 

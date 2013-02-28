@@ -80,7 +80,8 @@ public class Eutester4jTest {
 	 * @throws java.lang.Exception
 	 */
 	@BeforeClass
-	public static void setUpBeforeClass() throws Exception {
+	public void setUpBeforeClass() throws Exception {
+        testInfo(this.getClass().getSimpleName());
 		getCloudInfo();
 		as = getAutoScalingClient(ACCESS_KEY, SECRET_KEY, AS_ENDPOINT);
 		ec2 = getEc2Client(ACCESS_KEY, SECRET_KEY, EC2_ENDPOINT);
@@ -100,7 +101,7 @@ public class Eutester4jTest {
 	 * @throws java.lang.Exception
 	 */
 	@AfterClass
-	public static void tearDownAfterClass() throws Exception {
+	public void tearDownAfterClass() throws Exception {
 //		sleep(60); // give the system a chance to complete test actions
 		deleteKeyPair(ec2, keyName);
 		deleteSecurityGroup(ec2, secGroupName);

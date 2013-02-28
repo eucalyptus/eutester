@@ -60,6 +60,7 @@ public class Eutester4jTemplateTest {
 	}
 
 	private void test() throws Exception {
+        testInfo(this.getClass().getSimpleName());
 		// get cloud endpoints and keys create connection and find images
 		getCloudInfo();
 		final AmazonEC2 ec2 = getEc2Client(ACCESS_KEY, SECRET_KEY, EC2_ENDPOINT);

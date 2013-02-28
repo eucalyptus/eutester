@@ -43,7 +43,7 @@ public class TestAutoScalingCooldown {
 	@SuppressWarnings("unchecked")
 	@Test
 	public void AutoScalingCooldownTest() throws Exception {
-		getCloudInfo();
+        getCloudInfo();
 		final AmazonAutoScaling as = getAutoScalingClient(ACCESS_KEY, SECRET_KEY, AS_ENDPOINT);
 		final AmazonEC2 ec2 = getEc2Client(ACCESS_KEY, SECRET_KEY, EC2_ENDPOINT);
 		final String imageId = findImage(ec2);
