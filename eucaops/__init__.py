@@ -191,7 +191,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops):
     def cleanup_artifacts(self):
         self.debug("Starting cleanup of artifacts")
         for res in self.test_resources["reservations"]:
-            self.terminate_instances(s)
+            self.terminate_instances(res)
         self.clean_up_test_volumes()
         self.cleanup_test_snapshots()
 
