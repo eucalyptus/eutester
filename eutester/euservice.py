@@ -344,7 +344,7 @@ class EuserviceManager(object):
         self.update()
 
     
-    def get(self, type=None, partition=None, attempt_both=True, allow_clc_start_time=300):
+    def get(self, type=None, partition=None, attempt_both=True, poll_interval=15, allow_clc_start_time=300):
         """
         Method attempts to 'get' euservices by parsing euca-describe-services on the CLC(s). The method
         will do some basic service state checks as well as wait for a reasonable amount
@@ -429,6 +429,7 @@ class EuserviceManager(object):
                 raise Exception("Could not get services from " + str(clc_hostnames)
                                 + ", after clc process uptime of at least "
                                 + str(allow_clc_start_time) + "\nErrors:"+str(err_msg))
+            time.sleep(poll_interval)
         #Create euservice objects from command output and return list of euservices.
         for service_line in describe_services:
             services.append(Euservice(service_line, self.tester))
