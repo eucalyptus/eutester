@@ -29,9 +29,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 # Author: tony@eucalyptus.com
-from SystemEvents.Disk_Folder_File_Suite import folder
 from eutester import Eutester
-import time
 import re
 import copy
 import boto.ec2.autoscale

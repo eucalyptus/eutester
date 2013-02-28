@@ -2,15 +2,53 @@
 
 <project name="Eutester4J" basedir="." default="clean-build">
 
-    <!-- change path of testng-jar and aws.dir for your env -->
-    <property name="testng-jar"        value="/Users/tony/testng.jar"/>
-    <property name="aws.dir"           value="/Users/tony/aws-java-sdk/1.3.32"/>
 
-    <property name="src.dir"           value="com/eucalyptus/tests/awssdk"/>
-    <property name="build.dir"         value="build"/>
-    <property name="classes.dir"       value="${build.dir}/classes"/>
+    <property name="src.dir" value="com/eucalyptus/tests/awssdk"/>
+    <property name="build.dir" value="build"/>
+    <property name="classes.dir" value="${build.dir}/classes"/>
+    <property name="deps.dir" value="dependencies"/>
+    <mkdir dir="${deps.dir}"/>
     <property name="testng.output.dir" value="eutester4j_results"/>
+    <property name="testng.version" value="6.8"/>
+    <property name="testng-jar" value="${deps.dir}/testng-${testng.version}.jar"/>
+    <property name="log4j.version" value="1.2.17"/>
+    <property name="log4j-jar" value="${deps.dir}/log4j-${log4j.version}.jar"/>
+    <property name="aws.dir" value="${deps.dir}/aws-java-sdk"/>
 
+    <!-- download and ready testng and AWS JAVA SDK -->
+    <target name="download-deps">
+        <echo message="installing testng..."/>
+        <get src="http://testng.org/testng-${testng.version}.zip"
+             dest="${deps.dir}/testng-${testng.version}.zip"/>
+        <unzip src="${deps.dir}/testng-${testng.version}.zip" dest="${deps.dir}">
+            <patternset>
+                <include name="**/testng-${testng.version}.jar"/>
+            </patternset>
+            <mapper type="flatten"/>
+        </unzip>
+
+        <echo message="installing log4j..."/>
+        <get src="http://www.eng.lsu.edu/mirrors/apache/logging/log4j/${log4j.version}/log4j-${log4j.version}.zip"
+             dest="${deps.dir}/log4j-${log4j.version}.zip"/>
+        <unzip src="${deps.dir}/log4j-${log4j.version}.zip" dest="${deps.dir}">
+            <patternset>
+                <include name="**/log4j-${log4j.version}.jar"/>
+            </patternset>
+            <mapper type="flatten"/>
+        </unzip>
+
+        <echo message="installing aws java sdk..."/>
+        <get src="http://sdk-for-java.amazonwebservices.com/latest/aws-java-sdk.zip"
+             dest="${deps.dir}/aws-java-sdk.zip"/>
+        <unzip src="${deps.dir}/aws-java-sdk.zip" dest="${aws.dir}">
+            <patternset>
+                <include name="**/*.jar"/>
+            </patternset>
+            <mapper type="flatten"/>
+        </unzip>
+    </target>
+
+    <!-- set classpath to include AWS java sdk, testng.jar and build location -->
     <path id="classpath">
         <fileset dir="${aws.dir}">
             <include name="**/*.jar"/>
@@ -19,6 +57,7 @@
         <dirset dir="${build.dir}">
             <include name="**/classes"/>
         </dirset>
+        <pathelement location="${log4j-jar}"/>
     </path>
 
     <!-- delete build and resutls directories -->
@@ -28,20 +67,22 @@
     </target>
 
     <!-- compile all classes of src.dir -->
-    <target name="compile">
+    <target name="compile" depends="download-deps">
         <mkdir dir="${classes.dir}"/>
-        <javac srcdir="${src.dir}" destdir="${classes.dir}" classpathref="classpath"/>
+        <javac includeantruntime="false" srcdir="${src.dir}" destdir="${classes.dir}" classpathref="classpath"/>
+        <copy file="log4j.properties" todir="${classes.dir}"/>
     </target>
-
-    <taskdef name="testng" classname="org.testng.TestNGAntTask">
-        <classpath>
-            <pathelement location="${testng-jar}"/>
-        </classpath>
-    </taskdef>
 
     <!-- compile all and run tests per testng.xml -->
     <target name="runTestNG" depends="compile">
-        <mkdir dir="${testng.output.dir}"/><!-- Create the output directory. -->
+
+        <taskdef name="testng" classname="org.testng.TestNGAntTask">
+            <classpath>
+                <pathelement location="${testng-jar}"/>
+            </classpath>
+        </taskdef>
+
+        <mkdir dir="${testng.output.dir}"/>
         <testng outputdir="${testng.output.dir}" classpathref="classpath">
             <xmlfileset dir="." includes="testng.xml"/>
         </testng>
