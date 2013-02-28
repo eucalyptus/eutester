@@ -31,18 +31,11 @@
 # Author: matt.clark@eucalyptus.com
 
 from eucaops import Eucaops
-from eutester import euinstance, euvolume
-import logging
-from boto.ec2.snapshot import Snapshot
-from boto.ec2.image import Image
 import re
 import time
 import httplib
 import sys
-import unittest
 from eutester.eutestcase import EutesterTestCase
-from eutester.eutestcase import EutesterTestResult
-from testcases.cloud_user.ebs.ebstestsuite import TestZone
 from eutester.sshconnection import SshCbReturn
 
 
@@ -185,9 +178,7 @@ class ImageUtils(EutesterTestCase):
             cmdargs = cmdargs + " --debug "
         
         cmdargs = cmdargs + " -i " + str(path)
-        
-        
-        
+
         if credpath is not None:
             cmd = 'source '+str(credpath)+'/eucarc && euca-bundle-image ' + str(cmdargs)
         else:
@@ -321,7 +312,33 @@ class ImageUtils(EutesterTestCase):
                        debug=False):
         '''convience method to register an s3 image manifest, calls eutester main method'''
         return self.tester.register_image( manifest, rdn=root_device_name, description=description, bdmdev=block_device_mapping, name=name, ramdisk=ramdisk, kernel=kernel)
-    
+
+
+    def bundle_instance_monitor(self,
+                                instance,
+                                component=None,
+                                component_credpath=None,
+                                bucket_name=None,
+                                prefix=None,
+                                access_key=None,
+                                secret_key=None,
+                                timeout_min=25
+                                ):
+        """
+        REQUIRED PARAMETERS
+        :param instance: boto instance to bundle
+        :param component: the component which the tools are to be executed on
+        :param component_credpath: String, path to creds on machine which tools are executed on
+        :param bucket_name: Name of the bucket to upload. Default='win+ramdom'
+        :param prefix:  The prefix for the image file name:Default='windows-bun + emi + random.'
+        :param access_key:  String, Access Key ID of the owner of the bucket
+        :param secret_key:  String, Secret key used to sign the upload policy
+        :param timeout_min: int, minutes to wait before timing out.
+        """
+        raise Exception('Test method not implemented yet')
+
+
+
     
     def create_emi_from_url(self, 
                             url,
