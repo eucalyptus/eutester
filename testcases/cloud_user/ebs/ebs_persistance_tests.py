@@ -19,9 +19,9 @@
 
 from eutester.eutestcase import EutesterTestCase
 from eutester.eutestcase import TestColor
-from eutester.euinstance import EuInstance
-from eutester.euvolume import EuVolume
-from eutester.eusnapshot import EuSnapshot
+#from eutester.euinstance import EuInstance
+#from eutester.euvolume import EuVolume
+#from eutester.eusnapshot import EuSnapshot
 from eucaops import Eucaops
 import time
 import copy
@@ -41,7 +41,7 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
         self.parser.add_argument('--volsperinstance',
                                  type=int,
                                  help='Number of volumes to create per instance',
-                                 default=5)
+                                 default=2)
         self.parser.add_argument('--snapcount',
                                  type=int,
                                  help='Number of snapshots to create for snap related tests, default:2',
@@ -60,9 +60,6 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
                                  default=120)
         self.get_args()
         # Setup basic eutester object
-        self.tester = Eucaops()
-        print 'remove this line^^'
-        exit(1)
         self.tester = self.do_with_args(Eucaops)
         #replace default eutester debugger with eutestcase's for more verbosity...
         self.tester.debug = lambda msg: self.debug(msg, traceback=2, linebyline=False)
@@ -105,6 +102,10 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
                 self.image = self.tester.get_emi(root_device_type="ebs",not_location='windows')
             if not self.image:
                 raise Exception('"testbfebs" argument was set, but no BFEBS image found or provided')
+        self.volumes = []
+        self.instances = []
+        self.snapshots = []
+        self.timepergig = self.args.timepergig
 
 
 
@@ -121,7 +122,8 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
         try:
             self.tester.cleanup_artifacts()
         except Exception, e:
-            raise Exception('Cleanupfailed:'+str(e))
+            tb = self.tester.get_traceback()
+            raise Exception('Cleanupfailed:'+str(e) + "\n" +str(tb))
 
     def pretest1_pre_service_restart_launch_test_instances(self):
         """
@@ -136,6 +138,8 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
                                                    zone=zone,
                                                    min=count,
                                                    max=count,
+                                                   group=self.group,
+                                                   keypair=self.keypair,
                                                    monitor_to_running=False))
         self.instances = self.tester.monitor_euinstances_to_running(instances)
 
@@ -164,7 +168,7 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
                                                       count=volcount,
                                                       monitor_to_state=None,
                                                       timepergig=timepergig))
-        self.volumes = self.tester.monitor_created_euvolumes_to_state(volumes,timpergig=self.timepergig)
+        self.volumes = self.tester.monitor_created_euvolumes_to_state(volumes,timepergig=timepergig)
         self.status('pre_service_restart_create_volume_resources, done',
                     testcolor=TestColor.get_canned_color('whiteonblue'))
 
@@ -208,7 +212,7 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
             snaps.extend(self.tester.create_snapshots(vol,
                                                       count=1,
                                                       wait_on_progress=wait_on_progress,
-                                                      monitor_to_state=False))
+                                                      monitor_to_completed=False))
         self.snapshots = self.tester.monitor_eusnaps_to_completed(snaps)
 
 
@@ -226,32 +230,28 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
         """
         self.print_all_test_resources()
         #List to delay restart of storage controllers co-located with a cloud controller
-        delayed_restart_list = []
         debug_str = ""
         #first make sure everything is good before we star the test...
         self.tester.service_manager.all_services_operational()
-        cloud_controllers = self.tester.service_manager.get_all_cloud_controllers()
 
         for zone in self.zones:
             storage_controllers = self.tester.service_manager.get_all_storage_controllers()
             for sc in storage_controllers:
-                delay_this_sc = False
-                for clc in cloud_controllers:
-                    if clc.hostname == sc.hostname:
-                        delayed_restart_list = sc
-                        delay_this_sc = True
-                if not delay_this_sc:
-                    sc.machine.reboot()
-        if delayed_restart_list:
-            for sc in delayed_restart_list:
+                debug_str = ""
+                all_services_on_sc = self.tester.service_manager.get_all_services_by_filter(hostname=sc.hostname)
+                for service in all_services_on_sc:
+                    debug_str += str(service.hostname) + ":" + service.type + ","
+                self.status("Now rebooting machine hosting services:"+str(debug_str),
+                            testcolor=TestColor.get_canned_color('whiteonblue'))
                 sc.machine.reboot()
+
         start = time.time()
         elapsed = 0
         waiting = copy.copy(storage_controllers)
         while elapsed < timeout and waiting:
             elapsed = int(time.time()-start)
             for sc in storage_controllers:
-                if self.tester.ping(sc.hostname, pollcount=1):
+                if self.tester.ping(sc.hostname, poll_count=1):
                     waiting.remove(sc)
             if waiting:
                 debug_str = ""
@@ -293,16 +293,21 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
                 break
         if waiting:
             raise("SC machines failed to establish SSH after: "+str(elapsed)+" seconds:"+str(debug_str))
-        self.start_storage_controllers_service(storage_controllers)
+        self.start_all_services_on_storage_controllers(storage_controllers)
 
     def start_tgtd_service(self,sc_list):
         for sc in sc_list:
             sc.machine.sys('service tgtd start', code=0)
 
-    def start_storage_controllers_service(self, sc_list):
+    def start_all_services_on_storage_controllers(self, sc_list):
         self.status("Waiting for storage controller's services to start...")
+        #wait = 10 * 60
         for sc in sc_list:
-            sc.start()
+            all_services_on_sc = self.tester.service_manager.get_all_services_by_filter(hostname=sc.hostname)
+            for service in all_services_on_sc:
+                service.start()
+                #uptime = int(tester.clc.sys('cat /proc/uptime')[0].split()[0])
+
         self.tester.service_manager.all_services_operational()
         for sc in sc_list:
             self.tester.wait_for_service(sc)
@@ -313,15 +318,26 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
         self.status("Checking volumes for attached state post service interruption...",
                     testcolor=TestColor.get_canned_color('whiteonblue'))
         for vol in self.volumes:
-            if vol.status != "attached":
+            vol.update()
+            if vol.status == "in-use" and (vol.attach_data and vol.attach_data.status == 'attached' ):
+                for instance in self.instances:
+                    if instance.id == vol.attach_data.instance_id:
+                        if not vol in instance.attached_vols:
+                            errmsg += "Volume:" + str(vol.id) \
+                                      + " is attached to " + str(instance.id) + ", but not in instance attached list?"
+                        break
+            else:
                 errmsg += "Volume:" + str(vol.id) + ", status:" + str(vol.status) \
                           + " was not attached post service interruption \n"
+
         if errmsg:
             raise Exception(errmsg)
 
         self.status("Attached state passed. Now checking read/write with attached volumes...",
                     testcolor=TestColor.get_canned_color('whiteonblue'))
         for instance in self.instances:
+            instance.update()
+            instance.reset_ssh_connection()
             for vol in instance.attached_vols:
                 try:
                     md5before = vol.md5
@@ -368,20 +384,17 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
     def test3_post_service_interuption_check_volume_attachment_of_new_vols_from_old_snaps(self):
         vols = []
         errmsg = ""
-        self.tester = Eucaops()
         for snap in self.snapshots:
             vols.extend(self.tester.get_volume(snapid=snap.id))
         if not vols:
             raise Exception("No vols were found as created from previous snapshots")
         for instance in self.instances:
-            instance = EuInstance()
             for vol in vols:
                 if vol.zone == instance.placement:
-                    vol = EuVolume()
                     try:
                         instance.attach_volume(vol)
                         for snap in self.snapshots:
-                            snap = EuSnapshot()
+                            snap.update()
                             if vol.snapshot_id == snap.id:
                                 if vol.md5_len != snap.eutest_volume_md5len:
                                     self.debug('Need to adjust md5sum for length of snapshot...')
@@ -437,5 +450,5 @@ if __name__ == "__main__":
         unit_list.append( testcase.create_testunit_by_name(test) )
 
     ### Run the EutesterUnitTest objects
-    result = testcase.run_test_case_list(unit_list,clean_on_exit=True)
+    result = testcase.run_test_case_list(unit_list,eof=True,clean_on_exit=True)
     exit(result)
