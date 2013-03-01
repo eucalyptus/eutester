@@ -30,17 +30,14 @@ Cleanup:
 -remove all volumes, instance, and snapshots created during this test
 
 '''
-from eucaops import Eucaops
-from eutester import euinstance, euvolume, xmlrunner, euconfig
-from boto.ec2.snapshot import Snapshot
-import argparse
 import types
-import re
 import time
 import os
 
+from eucaops import Eucaops
+from eutester import euinstance
 from eutester.eutestcase import EutesterTestCase
-from eutester.eutestcase import EutesterTestResult
+
 
 class TestZone():
     def __init__(self, partition):
@@ -51,28 +48,7 @@ class TestZone():
         
     def __str__(self):
         return self.name
-    
-'''    
-class TestSnap(Snapshot):
-    
-    @classmethod
-    def make_testsnap_from_snap(cls,snap,zone):
-        newsnap = TestSnap(snap.connection)
-        newsnap.__dict__ = snap.__dict__
-        newsnap.name = snap.id
-        newsnap.zone = zone
-        newsnap.eutest_volumes = []
-        newsnap.md5 = newsnap.get_orig_vol_md5()
-        return newsnap
 
-        
-    def get_orig_vol_md5(self):
-        md5 = None
-        for vol in self.zone.volumes:
-            if vol.id == self.volume_id:
-                md5 = vol.md5
-                return md5
-'''
 class EbsTestSuite(EutesterTestCase):
     
     tester = None
@@ -120,8 +96,7 @@ class EbsTestSuite(EutesterTestCase):
         self.zonelist = []
             
         #create some zone objects and append them to the zonelist
-        if self.zone is not None:
-            partition = self.tester.service_manager.partitions.get(zone)
+        if self.zone:
             self.zone = TestZone(zone)
             self.zonelist.append(self.zone)
         else: 
@@ -162,9 +137,8 @@ class EbsTestSuite(EutesterTestCase):
         
         
     def setup_testzones(self):
-        for zone in self.tester.service_manager.partitions.keys():
-                partition = self.tester.service_manager.partitions.get(zone)
-                tzone = TestZone(partition)
+        for zone in self.tester.get_zones():
+                tzone = TestZone(zone)
                 self.zonelist.append(tzone)
                 self.multicluster=True
         if not self.zonelist:
