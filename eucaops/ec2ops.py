@@ -3023,6 +3023,7 @@ class EC2ops(Eutester):
                                     ):
         """
         REQUIRED PARAMETERS
+        :rtype : BundleInstanceTask
         :param instance: boto instance to bundle
         :param bucket_name: Name of the bucket to upload. Default='win+ramdom'
         :param prefix:  The prefix for the image file name:Default='windows-bun + emi + random.'
@@ -3053,7 +3054,7 @@ class EC2ops(Eutester):
 
         """
         Prints formatted output of bundle task attributes.
-        :param bundle: bundle object to be printed
+        :param bundle: BundleInstanceTask object to be printed
         :param header: boolean to print header containing column titles
         :param footer: boolean to print footer containing closing row line
         :param printout: boolean to print output using self.debug, else will return a buffer to be printed later.
@@ -3097,8 +3098,8 @@ class EC2ops(Eutester):
                                              instance,
                                              bucket_name=None,
                                              prefix=None,
-                                             poll_interval_sec=20,
-                                             timeout_min=25):
+                                             poll_interval_seconds=20,
+                                             timeout_minutes=25):
         """
         Attempts to start a bundle task and monitor it to completion.
         :param instance: boto instance to bundle
@@ -3106,9 +3107,9 @@ class EC2ops(Eutester):
         :param prefix:  The prefix for the image file name:Default='windows-bun + emi + random.'
         :param access_key:  String, Access Key ID of the owner of the bucket
         :param secret_key:  String, Secret key used to sign the upload policy
-        :param poll_interval_sec: Seconds to wait between polling for bundle task status
-        :param timeout_min: int, minutes to wait before timing out.
-        :return : image obj
+        :param poll_interval_seconds: Seconds to wait between polling for bundle task status
+        :param timeout_minutes: int, minutes to wait before timing out.
+        :return : image
         """
         return_dict = {}
         return_dict['manifest'] = None
@@ -3118,9 +3119,19 @@ class EC2ops(Eutester):
                                                       bucket_name=bucket_name,
                                                       prefix=prefix,
                                                       )
-        self.monitor_bundle_tasks(bundle_task.id, poll_interval_sec=poll_interval_sec,timeout_min=timeout_min)
+        self.debug("bundle_instance_monitor_and_register: Got bundle task id:" +str(bundle_task.id)
+                   + ", now monitor to completed state")
+        self.monitor_bundle_tasks(bundle_task.id, poll_interval_seconds=poll_interval_seconds,timeout_minutes=timeout_minutes)
+        self.debug("bundle_instance_monitor_and_register:" + str(bundle_task.id)
+                   + " monitored to completed, now get manifest and register...")
         manifest = self.get_manifest_string_from_bundle_task(bundle_task)
-        return self.register_manifest(manifest)
+        image = self.register_manifest(manifest)
+        self.debug("bundle_instance_monitor_and_register:" + str(bundle_task.id)
+                   + ", registered as image:" + str(image.id))
+        self.debug("bundle_instance_monitor_and_register:" + str(bundle_task.id)
+                   + ", now make sure original instance " + (instance.id) + " returns to running state...")
+        self.monitor_euinstances_to_state(instance_list=[instance], state='running', timeout=600)
+        return image
 
 
     def get_bundle_task_by_id(self,bundle_task_id):
@@ -3129,15 +3140,21 @@ class EC2ops(Eutester):
             return bundles[0]
 
     def get_manifest_string_from_bundle_task(self,bundle):
+
+        """
+        Create a manifest string from a BundleInstanceTask obj
+        :param bundle: BundleInstanceTask
+        :return: manifest string
+        """
         return str(bundle.bucket) + "/" + str(bundle.prefix) + ".manifest.xml"
 
-    def monitor_bundle_tasks(self, bundle_list, poll_interval_sec=20, timeout_min=25, eof=True):
+    def monitor_bundle_tasks(self, bundle_list, poll_interval_seconds=20, timeout_minutes=25, eof=True):
         """
         Attempts to monitor the state of the bundle task id provided until completed or failed.
 
         :param bundle_id: string bundle id to poll status for
-        :param poll_interval_sec: sleep period in seconds between polling for bundle task status
-        :param timeout_min: timeout specified in minutes
+        :param poll_interval_seconds: sleep period in seconds between polling for bundle task status
+        :param timeout_minutes: timeout specified in minutes
         :param eof: boolean, end on first failure otherwise delay error until all bundle tasks have completed or failed
         """
         monitor_list = []
@@ -3152,7 +3169,7 @@ class EC2ops(Eutester):
                 monitor_list.append(bundle)
         start = time.time()
         elapsed = 0
-        timeout = timeout_min * 60
+        timeout = timeout_minutes * 60
         while monitor_list and elapsed < timeout:
             for bundle_id in monitor_list:
                 self.debug('Waiting for bundle task:' + str(bundle_id) + ' to finish. Elapsed:' + str(elapsed))
@@ -3178,7 +3195,7 @@ class EC2ops(Eutester):
                     else:
                         monitor_list.remove(bundle_id)
 
-            time.sleep(poll_interval_sec)
+            time.sleep(poll_interval_seconds)
             elapsed = int(time.time()-start)
         if fail_msg:
             raise Exception(fail_msg)
