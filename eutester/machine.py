@@ -352,6 +352,8 @@ class Machine:
         out = self.sys(cmd,code=0)[0]
         out = out.strip()
         split_line = out.split("-")
+        if len(split_line) < 1:
+            split_line.insert(0,0)
         days = int(split_line[0] or 0)
         split_time = split_line[1].split(':')
         hours = int(split_time[0] or 0)
