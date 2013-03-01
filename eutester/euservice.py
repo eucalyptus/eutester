@@ -167,7 +167,7 @@ class Eunode:
         service_state = None
         if self.machine:
             try:
-                self.sys("service eucalyptus-nc status | grep running", code=0)
+                self.sys("service eucalyptus-nc status", code=0)
                 service_state = 'running'
             except sshconnection.CommandExitCodeException:
                 service_state = 'not_running'
@@ -396,9 +396,13 @@ class EuserviceManager(object):
         self.debug("Checking the following CLCs for services/status: " + str(dbg_msg) + "...")
         while good_clc_hosts and not describe_services:
             clc_process_uptimes = []
+            process_uptime = None
             for clc in good_clc_hosts:
                 try:
-                    clc_process_uptimes.append(clc.get_eucalyptus_cloud_process_uptime())
+                    #Save proess uptime for potential debug if request fails.
+                    process_uptime = self.tester.clc.get_eucalyptus_cloud_process_uptime()
+                    #Store all CLC's process uptimes in list, compare for youngest later...
+                    clc_process_uptimes.append(process_uptime)
                     out = clc.sys(self.eucaprefix + "/usr/sbin/euca-describe-services " + str(type), code=0,timeout=15)
                     for line in out:
                         if re.search("SERVICE.+"+str(partition), line):
@@ -413,10 +417,8 @@ class EuserviceManager(object):
                 except Exception, e:
                     self.debug("Did not get a valid response from clc:" + str(clc.hostname) +", err:" +str(e))
                     err_msg += str(e) + "\n"
-                    #Check to make sure the CLC process is evening running on this machine, and if the youngest CLC process
+                    # Check to make sure the CLC process is evening running on this machine, and if the youngest CLC process
                     # has been up for a reasonable amount of time to sync and/or service requests.
-                    process_uptime = self.tester.clc.get_eucalyptus_cloud_process_uptime()
-
                     is_running = self.tester.clc.get_eucalyptus_cloud_is_running_status()
                     if not is_running:
                         good_clc_hosts.remove(self.tester.clc)
