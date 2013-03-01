@@ -2227,6 +2227,25 @@ class EC2ops(Eutester):
                   clean_on_fail=True,
                   monitor_to_running = True,
                   timeout=480):
+        """
+
+        :param image: image object or string image_id to create instances with
+        :param keypair: keypair to create instances with
+        :param group: security group to run instances in
+        :param type: vmtype to run instances as
+        :param zone: availability zone (aka cluster, aka parition) to run instances in
+        :param min: minimum amount of instances to try to run
+        :param max: max amount of instances to try to run
+        :param user_data: user_data to run instances with
+        :param private_addressing: boolean to run instances without public ips
+        :param username: username for connecting ssh to instances
+        :param password: password for connnecting ssh to instances
+        :param auto_connect: boolean flag whether or not ssh connections should be automatically attempted
+        :param clean_on_fail: boolean flag whether or not to attempt to delete/remove failed instances-(not implemented)
+        :param monitor_to_running: boolean flag whether or not to monitor instances to a running state
+        :param timeout: time allowed before failing this operation
+        :return: list of euinstances
+        """
         reservation = None
         try:
             instances = []
