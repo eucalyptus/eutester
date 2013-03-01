@@ -3064,8 +3064,8 @@ class EC2ops(Eutester):
         bucket_len = 36
         prefix_len = 36
         state_len = 15
-        start_time_len = 15
-        update_time_len = 15
+        start_time_len = 36
+        update_time_len = 36
         buf = ""
         line = "-----------------------------------------------------------------------------------------------------" \
                "--------------------------------------------------------------"
@@ -3163,6 +3163,9 @@ class EC2ops(Eutester):
                     else:
                         self.debug(str(bundle_id) + ": Assuming bundle task is complete, fetch came back empty?")
                         monitor_list.remove(bundle_id)
+                    if bundle_task.state is None:
+                        raise Exception(str(bundle_id) + ": Bundle task state err, state is: '"
+                                        + str(bundle_task.state) + "' in monitor")
                     if bundle_task.state == 'failed':
                         raise Exception(str(bundle_id) + ": Bundle task reporting failed state during monitor")
                     if bundle_task.state == 'completed':
