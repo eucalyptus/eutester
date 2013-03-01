@@ -411,7 +411,7 @@ class EuserviceManager(object):
                             self.tester.swap_clc()
                         break
                 except Exception, e:
-                    self.debug()
+                    self.debug("Did not get a valid response from clc:" + str(clc.hostname) +", err:" +str(e))
                     err_msg += str(e) + "\n"
                     #Check to make sure the CLC process is evening running on this machine, and if the youngest CLC process
                     # has been up for a reasonable amount of time to sync and/or service requests.
@@ -429,7 +429,8 @@ class EuserviceManager(object):
                 raise Exception("Could not get services from " + str(clc_hostnames)
                                 + ", after clc process uptime of at least "
                                 + str(allow_clc_start_time) + "\nErrors:"+str(err_msg))
-            time.sleep(poll_interval)
+            if not describe_services:
+                time.sleep(poll_interval)
         #Create euservice objects from command output and return list of euservices.
         for service_line in describe_services:
             services.append(Euservice(service_line, self.tester))
