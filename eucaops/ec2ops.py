@@ -37,6 +37,8 @@ import os
 import copy
 import socket
 import types
+import base64
+from datetime import datetime, timedelta
 import time
 import sys
 from datetime import datetime
@@ -1786,7 +1788,7 @@ class EC2ops(Eutester):
 
 
     @Eutester.printinfo
-    def get_emi(self,
+    def get_images(self,
                 emi=None,
                 root_device_type=None,
                 root_device_name=None,
@@ -1794,9 +1796,10 @@ class EC2ops(Eutester):
                 state="available",
                 arch=None,
                 owner_id=None,
-                not_location=None):
+                not_location=None,
+                max_count=None):
         """
-        Get an emi with name emi, or just grab any emi in the system. Additional 'optional' match criteria can be defined.
+        Get a list of images which match the provided criteria.
 
         :param emi: Partial ID of the emi to return, defaults to the 'emi-" prefix to grab any
         :param root_device_type: example: 'instance-store' or 'ebs'
@@ -1806,13 +1809,14 @@ class EC2ops(Eutester):
         :param arch: example: 'x86_64'
         :param owner_id: owners numeric id
         :param not_location: skip if location string matches this string. Example: not_location='windows'
+        :param max_count: return after finding 'max_count' number of matching images
         :return: image id
         :raise: Exception if image is not found
         """
         if emi is None:
             emi = "mi-"
         self.debug("Looking for image prefix: " + str(emi) )
-            
+        ret_list = []
         images = self.ec2.get_all_images()
         for image in images:
             
@@ -1833,8 +1837,46 @@ class EC2ops(Eutester):
             if (not_location is not None) and (re.search( not_location, image.location)):
                 continue
             self.debug("Returning image:"+str(image.id))
-            return image
+            ret_list.append(image)
+            if len(ret_list) >= max_count:
+                return ret_list
         raise Exception("Unable to find an EMI")
+
+
+    def get_emi(self,
+                   emi=None,
+                   root_device_type=None,
+                   root_device_name=None,
+                   location=None,
+                   state="available",
+                   arch=None,
+                   owner_id=None,
+                   not_location=None,
+                   ):
+        """
+        Get an emi with name emi, or just grab any emi in the system. Additional 'optional' match criteria can be defined.
+
+        :param emi: Partial ID of the emi to return, defaults to the 'emi-" prefix to grab any
+        :param root_device_type: example: 'instance-store' or 'ebs'
+        :param root_device_name: example: '/dev/sdb'
+        :param location: partial on location match example: 'centos'
+        :param state: example: 'available'
+        :param arch: example: 'x86_64'
+        :param owner_id: owners numeric id
+        :param not_location: skip if location string matches this string. Example: not_location='windows'
+        :return: image id
+        :raise: Exception if image is not found
+        """
+        return self.get_images(emi=emi,
+                               root_device_type=root_device_type,
+                               root_device_name=root_device_name,
+                               location=location,
+                               state=state,
+                               arch=arch,
+                               owner_id=owner_id,
+                               not_location=not_location,
+                               max_count=1)
+
 
     
     def get_all_allocated_addresses(self,account_id=None):
@@ -2972,4 +3014,191 @@ class EC2ops(Eutester):
         if self.wait_for_reservation(reservation, state="running", timeout=timeout) is False:
             return False
         return True
+
+    def start_bundle_instance_task( self,
+                                    instance,
+                                    bucket_name = None,
+                                    prefix = None,
+                                    ):
+        """
+        REQUIRED PARAMETERS
+        :param instance: boto instance to bundle
+        :param bucket_name: Name of the bucket to upload. Default='win+ramdom'
+        :param prefix:  The prefix for the image file name:Default='windows-bun + emi + random.'
+        :param access_key:  String, Access Key ID of the owner of the bucket
+        :param secret_key:  String, Secret key used to sign the upload policy
+        :return : bundle task object
+
+        """
+
+        if not bucket_name:
+            # Count images already registered with this instance id for concurrent tests
+            try:
+                id_count = self.get_images(location=instance.id)
+            except:
+                id_count = 0
+            bucket_name =  'win' \
+                           + str(instance.id) + "-" \
+                           + str(id_count)
+        prefix = prefix or 'windows-bundleof-' + str(instance.id)
+        s3_upload_policy = self.generate_default_s3_upload_policy(bucket_name,prefix)
+        bundle_task = self.ec2.bundle_instance(instance.id, bucket_name, prefix, s3_upload_policy)
+        self.print_bundle_task(bundle_task)
+        return bundle_task
+
+
+
+    def print_bundle_task(self,bundle, header=True, footer=True, printout=True):
+
+        """
+        Prints formatted output of bundle task attributes.
+        :param bundle: bundle object to be printed
+        :param header: boolean to print header containing column titles
+        :param footer: boolean to print footer containing closing row line
+        :param printout: boolean to print output using self.debug, else will return a buffer to be printed later.
+        :return: string containing formatted output.
+        """
+        id_len = 15
+        instance_id_len = 12
+        bucket_len = 36
+        prefix_len = 36
+        state_len = 15
+        start_time_len = 15
+        update_time_len = 15
+        buf = ""
+        line = "-----------------------------------------------------------------------------------------------------" \
+               "--------------------------------------------------------------"
+        if header:
+            buf += str("\n" + line +"\n")
+            buf += str('BUNDLE_ID').center(id_len) + '|' \
+                   + str('INSTANCE').center(instance_id_len) + '|' \
+                   + str('BUCKET').center(bucket_len) + '|' \
+                   + str('PREFIX').center(prefix_len) + '|' \
+                   + str('STATE').center(state_len) + '|' \
+                   + str('START_TIME').center(start_time_len) + '|' \
+                   + str('UPDATE_TIME').center(update_time_len) + '\n'
+            buf += str(line + "\n")
+        buf += str(bundle.id).center(id_len) + '|' \
+               + str(bundle.instance_id).center(instance_id_len) + '|' \
+               + str(bundle.bucket).center(bucket_len) + '|' \
+               + str(bundle.prefix).center(prefix_len) + '|' \
+               + str(bundle.state).center(state_len) + '|' \
+               + str(bundle.start_time).center(start_time_len) + '|' \
+               + str(bundle.update_time).center(update_time_len)
+        if footer:
+            buf += str("\n" + line)
+        if printout:
+            self.debug(buf)
+        return buf
+
+
+    def bundle_instance_monitor_and_register(self,
+                                             instance,
+                                             bucket_name=None,
+                                             prefix=None,
+                                             poll_interval_sec=20,
+                                             timeout_min=25):
+        """
+        Attempts to start a bundle task and monitor it to completion.
+        :param instance: boto instance to bundle
+        :param bucket_name: Name of the bucket to upload. Default='win+ramdom'
+        :param prefix:  The prefix for the image file name:Default='windows-bun + emi + random.'
+        :param access_key:  String, Access Key ID of the owner of the bucket
+        :param secret_key:  String, Secret key used to sign the upload policy
+        :param poll_interval_sec: Seconds to wait between polling for bundle task status
+        :param timeout_min: int, minutes to wait before timing out.
+        :return : image obj
+        """
+        return_dict = {}
+        return_dict['manifest'] = None
+        return_dict['image'] = None
+
+        bundle_task = self.start_bundle_instance_task(instance,
+                                                      bucket_name=bucket_name,
+                                                      prefix=prefix,
+                                                      )
+        self.monitor_bundle_task(bundle_task.id, poll_interval_sec=poll_interval_sec,timeout_min=timeout_min)
+        manifest = self.get_manifest_string_from_bundle_task(bundle_task)
+        return self.register_manifest(manifest)
+
+
+    def get_bundle_task_by_id(self,bundle_task_id):
+        bundles = self.ec2.get_all_bundle_tasks(bundle_ids=[bundle_task_id])
+        if bundles:
+            return bundles[0]
+
+    def get_manifest_string_from_bundle_task(self,bundle):
+        return str(bundle.bucket) + "/" + str(bundle.prefix) + ".manifest.xml"
+
+    def monitor_bundle_task(self, bundle_id, poll_interval_sec=20, timeout_min=25):
+        """
+        Attempts to monitor the state of the bundle task id provided until completed or failed.
+
+        :param bundle_id: string bundle id to poll status for
+        :param poll_interval_sec: sleep period in seconds between polling for bundle task status
+        :param timeout_min: timeout specified in minutes
+        """
+        start = time.time()
+        elapsed = 0
+        timeout = timeout_min * 60
+        while elapsed < timeout:
+            self.debug('Waiting for bundle task:' + str(bundle_id) + ' to finish. Elapsed:' + str(elapsed))
+            try:
+                bundle_task = self.get_bundle_task_by_id(bundle_id)
+                if bundle_task:
+                    self.print_bundle_task(bundle_task)
+                else:
+                    self.debug(str(bundle_id) + ": Assuming bundle task is complete, fetch came back empty?")
+                    break
+                if bundle_task.state == 'failed':
+                    raise Exception(str(bundle_id) + ": Bundle task reporting failed state during monitor")
+                if bundle_task.state == 'completed':
+                    self.debug(str(bundle_id) +":  Bundle task reported state is completed during monitor")
+                    break
+            except Exception, e:
+                raise Exception('Monitor_bundle_task ERROR: '+str(e))
+            time.sleep(poll_interval_sec)
+            elapsed = int(time.time()-start)
+
+
+
+    def register_manifest(self,manifest):
+        """
+        Attempts to register the provided manifest and return the image id created by it
+        :param manifest: manifest string to register
+        :return: : image id string
+        """
+        image = self.register_image(manifest)
+        #check to see if really registered by getting image obj to be returned
+        try:
+            image_obj = self.get_emi(emi=image)
+        except Exception, e:
+            raise Exception('Failed to retrieve image after registering. Image:' + str(image) + ", err:" + str(e))
+        self.debug("Registered '" + str(manifest) + "as image:" + str(image))
+        return image_obj
+
+
+    def generate_default_s3_upload_policy(self, bucket, prefix, expiration=24, acl='ec2-bundle-read'):
+        """
+        Generates s3 upload policy for bundle instance operation
+
+        :param bucket: bucket string
+        :param prefix: prefix string
+        :param expiration: int representing hours
+        :param acl: acl to be used
+        :return: s3 upload encoded policy
+        """
+        delta = timedelta(hours=expiration)
+        expiration_time = (datetime.utcnow() + delta).replace(microsecond=0)
+        expiration_str = expiration_time.isoformat()
+
+        policy = '{"expiration": "%s",' % expiration_str + \
+                 '"conditions": [' + \
+                 '{"bucket": "%s" },' % bucket + \
+                 '{"acl": "%s" },' % acl + \
+                 '["starts-with", "$key", "%s"]' % prefix + \
+                 ']' + \
+                 '}'
+        encoded_policy = base64.b64encode(policy)
+        return encoded_policy
     
