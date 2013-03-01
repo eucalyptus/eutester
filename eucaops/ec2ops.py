@@ -3175,11 +3175,11 @@ class EC2ops(Eutester):
                     else:
                         monitor_list.remove(bundle_id)
 
-                time.sleep(poll_interval_sec)
-                elapsed = int(time.time()-start)
+            time.sleep(poll_interval_sec)
+            elapsed = int(time.time()-start)
         if fail_msg:
             raise Exception(fail_msg)
-        
+
 
 
 
