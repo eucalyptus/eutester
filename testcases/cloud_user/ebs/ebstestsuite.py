@@ -42,7 +42,7 @@ from eutester.eutestcase import EutesterTestCase
 class TestZone():
     def __init__(self, partition):
         self.partition = partition 
-        self.name = partition.name
+        self.name = partition
         self.instances = []
         self.volumes = []
         
