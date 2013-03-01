@@ -936,7 +936,7 @@ if __name__ == "__main__":
     #if file was not provided or is not found
     if not os.path.exists(args.config):
         print "Error: Mandatory Config File '"+str(args.config)+"' not found."
-        parser.print_help()
+        tc.parser.print_help()
         exit(1)
     #ebssuite = EbsTestSuite(zone=args.zone, config_file= args.config, password=args.password,credpath=args.credpath, keypair=args.keypair, group=args.group, image=args.emi)
     ebssuite = tc.do_with_args(EbsTestSuite)
