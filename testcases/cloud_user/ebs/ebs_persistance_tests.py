@@ -276,6 +276,7 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
             for sc in storage_controllers:
                 try:
                     sc.machine.refresh_ssh()
+                    sc.machine.cmd(" ")
                     waiting_for_ssh.remove(sc)
                 except Exception, e:
                     self.debug('Failed to refresh ssh to:' + str(sc.hostname) + ', err:'+str(e))

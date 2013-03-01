@@ -33,6 +33,7 @@ import select
 import threading
 import time
 import eulogger
+from eutester import Eutester
 import sshconnection
 import re
 import os
@@ -346,20 +347,31 @@ class Machine:
         seconds_min = 60
         seconds_hour = 3600
         seconds_day = 86400
-        cmd = "ps -eo pid,etime | grep " + str(pid) + " | awk '{print $2}'"
+        try:
+            cmd = "ps -eo pid,etime | grep " + str(pid) + " | awk '{print $2}'"
+            self.debug('starting get pid uptime...')
+            #expected format: days-HH:MM:SS
+            out = self.sys(cmd,code=0)[0]
+            out = out.strip()
+            if re.search("-", out):
+                split_out = out.split("-")
+                days =  int(split_out[0])
+                time_string = split_out[1]
+            else:
+                days = 0
+                time_string = out
 
-        #expected format: days-HH:MM:SS
-        out = self.sys(cmd,code=0)[0]
-        out = out.strip()
-        split_line = out.split("-")
-        if len(split_line) < 1:
-            split_line.insert(0,0)
-        days = int(split_line[0] or 0)
-        split_time = split_line[1].split(':')
-        hours = int(split_time[0] or 0)
-        minutes = int(split_time[1] or 0)
-        seconds = int(split_time[2] or 0)
-        elapsed = seconds + (minutes*seconds_min) + (hours*seconds_hour) + (days*seconds_day)
+            split_time = time_string.split(':')
+            #insert a 0 if hours, and minutes are not present.
+            for x in xrange(len(split_time), 3):
+                split_time.insert(0,0)
+
+            hours = int(split_time[0] or 0)
+            minutes = int(split_time[1] or 0)
+            seconds = int(split_time[2] or 0)
+            elapsed = seconds + (minutes*seconds_min) + (hours*seconds_hour) + (days*seconds_day)
+        except:
+            print Eutester.get_traceback()
         return int(elapsed)
 
 

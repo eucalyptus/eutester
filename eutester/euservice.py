@@ -427,7 +427,9 @@ class EuserviceManager(object):
                                    + ", service_running:"+ str(is_running) + "\n"
             #If we've checked both CLCs and still don't have a valid response to parse, 'and' the youngest CLC
             #process uptime has exceeed 'allow_clc_start_time' then raise error.
-            if not good_clc_hosts or (not describe_services and min(clc_process_uptimes) > allow_clc_start_time):
+            if not good_clc_hosts or \
+                    not clc_process_uptimes or \
+                    (not describe_services and min(clc_process_uptimes) > allow_clc_start_time):
                 raise Exception("Could not get services from " + str(clc_hostnames)
                                 + ", after clc process uptime of at least "
                                 + str(allow_clc_start_time) + "\nErrors:"+str(err_msg))
