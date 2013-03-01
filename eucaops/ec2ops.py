@@ -3034,7 +3034,7 @@ class EC2ops(Eutester):
         if not bucket_name:
             # Count images already registered with this instance id for concurrent tests
             try:
-                id_count = self.get_images(location=instance.id)
+                id_count = len(self.get_images(location=instance.id))
             except:
                 id_count = 0
             bucket_name =  'win' \
