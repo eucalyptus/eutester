@@ -3064,8 +3064,8 @@ class EC2ops(Eutester):
         bucket_len = 36
         prefix_len = 36
         state_len = 15
-        start_time_len = 36
-        update_time_len = 36
+        start_time_len = 25
+        update_time_len = 25
         buf = ""
         line = "-----------------------------------------------------------------------------------------------------" \
                "--------------------------------------------------------------"
@@ -3118,7 +3118,7 @@ class EC2ops(Eutester):
                                                       bucket_name=bucket_name,
                                                       prefix=prefix,
                                                       )
-        self.monitor_bundle_task(bundle_task.id, poll_interval_sec=poll_interval_sec,timeout_min=timeout_min)
+        self.monitor_bundle_tasks(bundle_task.id, poll_interval_sec=poll_interval_sec,timeout_min=timeout_min)
         manifest = self.get_manifest_string_from_bundle_task(bundle_task)
         return self.register_manifest(manifest)
 
@@ -3142,7 +3142,7 @@ class EC2ops(Eutester):
         """
         monitor_list = []
         fail_msg = ""
-        if not EuInstance(bundle_list, types.ListType):
+        if not isinstance(bundle_list, types.ListType):
             bundle_list = [bundle_list]
 
         for bundle in bundle_list:
@@ -3163,7 +3163,7 @@ class EC2ops(Eutester):
                     else:
                         self.debug(str(bundle_id) + ": Assuming bundle task is complete, fetch came back empty?")
                         monitor_list.remove(bundle_id)
-                    if bundle_task.state is None:
+                    if bundle_task.state is None or bundle_task.state == 'none':
                         raise Exception(str(bundle_id) + ": Bundle task state err, state is: '"
                                         + str(bundle_task.state) + "' in monitor")
                     if bundle_task.state == 'failed':
