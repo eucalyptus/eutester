@@ -1876,7 +1876,7 @@ class EC2ops(Eutester):
                                arch=arch,
                                owner_id=owner_id,
                                not_location=not_location,
-                               max_count=1)
+                               max_count=1)[0]
 
 
     
@@ -3121,7 +3121,9 @@ class EC2ops(Eutester):
                                                       )
         self.debug("bundle_instance_monitor_and_register: Got bundle task id:" +str(bundle_task.id)
                    + ", now monitor to completed state")
-        self.monitor_bundle_tasks(bundle_task.id, poll_interval_seconds=poll_interval_seconds,timeout_minutes=timeout_minutes)
+        self.monitor_bundle_tasks(bundle_task.id,
+                                  poll_interval_seconds=poll_interval_seconds,
+                                  timeout_minutes=timeout_minutes)
         self.debug("bundle_instance_monitor_and_register:" + str(bundle_task.id)
                    + " monitored to completed, now get manifest and register...")
         manifest = self.get_manifest_string_from_bundle_task(bundle_task)
@@ -3130,7 +3132,9 @@ class EC2ops(Eutester):
                    + ", registered as image:" + str(image.id))
         self.debug("bundle_instance_monitor_and_register:" + str(bundle_task.id)
                    + ", now make sure original instance " + (instance.id) + " returns to running state...")
-        self.monitor_euinstances_to_state(instance_list=[instance], state='running', timeout=600)
+        self.monitor_euinstances_to_state(instance_list=[instance],
+                                          state='running',
+                                          timeout=600)
         return image
 
 
