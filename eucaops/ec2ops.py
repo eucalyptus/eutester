@@ -47,6 +47,7 @@ from boto.ec2.image import Image
 from boto.ec2.keypair import KeyPair
 from boto.ec2.blockdevicemapping import BlockDeviceMapping, BlockDeviceType
 from boto.ec2.volume import Volume
+from boto.ec2.bundleinstance import BundleInstanceTask
 from boto.exception import EC2ResponseError
 from boto.ec2.regioninfo import RegionInfo
 import boto
@@ -3130,35 +3131,55 @@ class EC2ops(Eutester):
     def get_manifest_string_from_bundle_task(self,bundle):
         return str(bundle.bucket) + "/" + str(bundle.prefix) + ".manifest.xml"
 
-    def monitor_bundle_task(self, bundle_id, poll_interval_sec=20, timeout_min=25):
+    def monitor_bundle_tasks(self, bundle_list, poll_interval_sec=20, timeout_min=25, eof=True):
         """
         Attempts to monitor the state of the bundle task id provided until completed or failed.
 
         :param bundle_id: string bundle id to poll status for
         :param poll_interval_sec: sleep period in seconds between polling for bundle task status
         :param timeout_min: timeout specified in minutes
+        :param eof: boolean, end on first failure otherwise delay error until all bundle tasks have completed or failed
         """
+        monitor_list = []
+        fail_msg = ""
+        if not EuInstance(bundle_list, types.ListType):
+            bundle_list = [bundle_list]
+
+        for bundle in bundle_list:
+            if isinstance(bundle, BundleInstanceTask ):
+                monitor_list.append(bundle.id)
+            else:
+                monitor_list.append(bundle)
         start = time.time()
         elapsed = 0
         timeout = timeout_min * 60
-        while elapsed < timeout:
-            self.debug('Waiting for bundle task:' + str(bundle_id) + ' to finish. Elapsed:' + str(elapsed))
-            try:
-                bundle_task = self.get_bundle_task_by_id(bundle_id)
-                if bundle_task:
-                    self.print_bundle_task(bundle_task)
-                else:
-                    self.debug(str(bundle_id) + ": Assuming bundle task is complete, fetch came back empty?")
-                    break
-                if bundle_task.state == 'failed':
-                    raise Exception(str(bundle_id) + ": Bundle task reporting failed state during monitor")
-                if bundle_task.state == 'completed':
-                    self.debug(str(bundle_id) +":  Bundle task reported state is completed during monitor")
-                    break
-            except Exception, e:
-                raise Exception('Monitor_bundle_task ERROR: '+str(e))
-            time.sleep(poll_interval_sec)
-            elapsed = int(time.time()-start)
+        while monitor_list and elapsed < timeout:
+            for bundle_id in monitor_list:
+                self.debug('Waiting for bundle task:' + str(bundle_id) + ' to finish. Elapsed:' + str(elapsed))
+                try:
+                    bundle_task = self.get_bundle_task_by_id(bundle_id)
+                    if bundle_task:
+                        self.print_bundle_task(bundle_task)
+                    else:
+                        self.debug(str(bundle_id) + ": Assuming bundle task is complete, fetch came back empty?")
+                        monitor_list.remove(bundle_id)
+                    if bundle_task.state == 'failed':
+                        raise Exception(str(bundle_id) + ": Bundle task reporting failed state during monitor")
+                    if bundle_task.state == 'completed':
+                        self.debug(str(bundle_id) +":  Bundle task reported state is completed during monitor")
+                        monitor_list.remove(bundle_id)
+                except Exception, e:
+                    fail_msg += 'Monitor_bundle_task ERROR: '+str(e) + "\n"
+                    if eof:
+                        raise Exception('Monitor_bundle_task ERROR: '+str(e))
+                    else:
+                        monitor_list.remove(bundle_id)
+
+                time.sleep(poll_interval_sec)
+                elapsed = int(time.time()-start)
+        if fail_msg:
+            raise Exception(fail_msg)
+        
 
 
 
