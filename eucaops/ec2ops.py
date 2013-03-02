@@ -884,12 +884,13 @@ class EC2ops(Eutester):
         buf=""
         if not eusnapshots:
             raise Exception('print_eusnapshot_list: EuSnapshot list to print is empty')
-        for snapshot in eusnapshots:
+        print_list = copy.copy(eusnapshots)
+        for snapshot in print_list:
             if not isinstance(snapshot, EuSnapshot):
                 raise Exception("object not of type EuSnapshot. Found type:"+str(type(snapshot)))
-        snapshot = eusnapshots.pop()
+        snapshot = print_list.pop()
         buf = snapshot.printself()
-        for snapshot in eusnapshots:
+        for snapshot in print_list:
             buf += snapshot.printself(title=False)
         self.debug("\n"+str(buf)+"\n")
         
@@ -1501,12 +1502,15 @@ class EC2ops(Eutester):
         """
         retlist =[]
         owner_id = owner_id or self.get_account_id()
-        snapshots = self.test_resources['snapshots']
+        #Start by comparing resources the current test obj is tracking to see if they are still in sync with the system
+        snapshots = copy.copy(self.test_resources['snapshots'])
         snapshot_list = []
         if snapid:
             snapshot_list.append(snapid)
         ec2_snaps =  self.ec2.get_all_snapshots(snapshot_ids=snapshot_list, owner=owner_id)
-        
+        for snap in ec2_snaps:
+            if snap not in snapshots:
+                snapshots.append(snap)
         for snap in snapshots:
             if not snap in ec2_snaps:
                 self.debug('Snapshot:'+str(snap.id)+' no longer found on system')

@@ -210,6 +210,7 @@ class Eunode:
 
 
 class Euservice:
+
     def __init__(self, service_string, tester = None):
         values = service_string.split()
         self.type = values[1]
@@ -248,6 +249,12 @@ class Euservice:
     
     def start(self):
         self.tester.service_manager.start(self)
+
+    def get_service_string(self):
+        if self.type == 'cluster':
+            return 'eucalyptus-cc'
+        else:
+            return 'eucalyptus-cloud'
 
     def print_self(self, header=True, footer=True, printmethod=None):
         part_len = 16 #self.partition
@@ -853,7 +860,8 @@ class EuserviceManager(object):
         if euservice.type == self.node_type_string:
             service_name = "eucalyptus-nc"
         if not euservice.machine.found(self.tester.eucapath + "/etc/init.d/" + service_name + " " + command, "done"):
-            self.tester.fail("Was unable to stop service: " + euservice.name + " on host " + euservice.machine.hostname)
+            self.tester.fail("Was unable to " +str(command) + " service: " + euservice.name + " on host "
+                             + euservice.machine.hostname)
             raise Exception("Did not properly modify service")
     
     def stop(self, euservice):
@@ -864,7 +872,13 @@ class EuserviceManager(object):
         euservice.running = False
         
     def start(self, euservice):
-        self.modify_process(euservice, "start")
+        if euservice.type == 'cluster':
+            if euservice.machine.get_eucalyptus_cc_is_running_status():
+                euservice.running = True
+                return
+        else:
+            if not euservice.machine.get_eucalyptus_cloud_is_running_status():
+                self.modify_process(euservice, "start")
         euservice.running = True
     
     def enable(self,euservice):

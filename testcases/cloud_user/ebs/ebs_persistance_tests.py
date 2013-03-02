@@ -213,8 +213,8 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
                                                       count=1,
                                                       wait_on_progress=wait_on_progress,
                                                       monitor_to_completed=False))
-        self.snapshots = self.tester.monitor_eusnaps_to_completed(snaps)
-
+        self.tester.monitor_eusnaps_to_completed(snaps)
+        self.snapshots = snaps
 
 
     def print_all_test_resources(self):
@@ -240,7 +240,7 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
                 debug_str = ""
                 all_services_on_sc = self.tester.service_manager.get_all_services_by_filter(hostname=sc.hostname)
                 for service in all_services_on_sc:
-                    debug_str += str(service.hostname) + ":" + service.type + ","
+                    debug_str += "(" + str(service.hostname) + ":" + service.type + "), "
                 self.status("Now rebooting machine hosting services:"+str(debug_str),
                             testcolor=TestColor.get_canned_color('whiteonblue'))
                 sc.machine.reboot()
@@ -281,7 +281,7 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
                 except Exception, e:
                     self.debug('Failed to refresh ssh to:' + str(sc.hostname) + ', err:'+str(e))
 
-            if waiting:
+            if waiting_for_ssh:
                 debug_str = ""
                 for sc in waiting:
                     debug_str += " " + str(sc.hostname) + ","
@@ -311,7 +311,7 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
 
         self.tester.service_manager.all_services_operational()
         for sc in sc_list:
-            self.tester.wait_for_service(sc)
+            self.tester.service_manager.wait_for_service(sc)
 
     def test1_post_service_interruption_check_attached_volumes(self):
         write_length = 10000
@@ -374,6 +374,8 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
         self.status("Checking creation of volumes from pre-existing snapshots post service interruption...",
                     testcolor=TestColor.get_canned_color('whiteonblue'))
         vols = []
+        if not self.snapshots:
+            raise Exception("self.snapshots not populated?")
         for snap in self.snapshots:
             for zone in self.zones:
                 vols.append(self.tester.create_volumes(zone, snapshot=snap, monitor_to_state=None))
@@ -389,6 +391,10 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
             vols.extend(self.tester.get_volume(snapid=snap.id))
         if not vols:
             raise Exception("No vols were found as created from previous snapshots")
+        if not self.instances:
+            raise Exception('No instances to use for this test')
+        if not self.snapshots:
+            raise Exception('No snapshots to use for this test')
         for instance in self.instances:
             for vol in vols:
                 if vol.zone == instance.placement:
@@ -424,7 +430,8 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
                     break
         for vol in testvols:
             testsnaps.extend(self.tester.create_snapshots(vol, monitor_to_completed=False))
-        self.snapshots.extend(self.tester.monitor_eusnaps_to_completed(testsnaps))
+        self.tester.monitor_eusnaps_to_completed(testsnaps)
+        self.snapshots.extend(testsnaps)
 
 
 
