@@ -1,3 +1,4 @@
+#!/usr/bin/python
 #
 # Description:  Looks for a set of six images, if found attempts to install the images on the clc. 
 #               If image is not found error is displayed.

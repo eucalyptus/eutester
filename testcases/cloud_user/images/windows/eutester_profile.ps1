@@ -1,3 +1,12 @@
+#ver 03/16/11 - AD record update now directs S2003 domain (bundle-instance test will test Euca against s2003 Ad)
+#ver 03/15/11 - Logging for win instance QA
+#ver 01/28/11 - Eutester-Add-Euca-Domain-Impl to account for x64 registry setting
+#ver 01/27/11 - Retry 5 times for each vm test functions
+#ver 01/14/11 - HyperV deploy support
+#ver 07/05/11 - Some fixes wrt 3.0
+#ver 07/15/11 - added ephmeral disk test and modified EBS test
+#ver 08/10/11 - added EBS scalability test support
+#ver 12/05/11 - make tests more stable
 #### FUNCTIONS RELATED TO ALL TESTS ####
 function Eutester-New-Euca-QA {
      param ($hostname)
@@ -1332,12 +1341,3 @@ function Eutester-Test-Euca-RDP
     
     throw $msg
 }
-#ver 03/16/11 - AD record update now directs S2003 domain (bundle-instance test will test Euca against s2003 Ad)
-#ver 03/15/11 - Logging for win instance QA
-#ver 01/28/11 - Eutester-Add-Euca-Domain-Impl to account for x64 registry setting
-#ver 01/27/11 - Retry 5 times for each vm test functions
-#ver 01/14/11 - HyperV deploy support
-#ver 07/05/11 - Some fixes wrt 3.0
-#ver 07/15/11 - added ephmeral disk test and modified EBS test
-#ver 08/10/11 - added EBS scalability test support
-#ver 12/05/11 - make tests more stable
