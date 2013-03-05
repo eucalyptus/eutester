@@ -247,10 +247,12 @@ class EutesterTestUnit():
             desc = desc+"\n".join(ret)
         return desc
     
-    def run(self):
+    def run(self, eof=None):
         '''
         Description: Wrapper which attempts to run self.method and handle failures, record time.
         '''
+        if eof is None:
+            eof = self.eof
         for count, thing in enumerate(self.args):
             print 'ARG:{0}. {1}'.format(count, thing)
         for name, value in self.kwargs.items():
@@ -272,7 +274,7 @@ class EutesterTestUnit():
             print TestColor.get_canned_color('failred')+buf+TestColor.reset
             self.error = str(e)
             self.result = EutesterTestResult.failed
-            if self.eof:
+            if eof:
                 raise e
             else:
                 pass
@@ -518,13 +520,13 @@ class EutesterTestCase(unittest.TestCase):
         else:
             self.debugmethod("("+str(cur_method)+":"+str(lineno)+"): "+colorprefix+str(msg)+colorreset )
 
-    def run_test_list_by_name(self, list):
+    def run_test_list_by_name(self, list, eof=None):
         unit_list = []
         for test in list:
             unit_list.append( self.create_testunit_by_name(test) )
 
         ### Run the EutesterUnitTest objects
-        return self.run_test_case_list(unit_list)
+        return self.run_test_case_list(unit_list,eof=eof)
 
     def create_testunit_from_method(self,method, *args, **kwargs):
         '''
@@ -667,7 +669,7 @@ class EutesterTestCase(unittest.TestCase):
             buf += "---------------------\n"
         return buf
     
-    def run_test_case_list(self, list, eof=True, clean_on_exit=True, printresults=True):
+    def run_test_case_list(self, list, eof=False, clean_on_exit=True, printresults=True):
         '''
         Desscription: wrapper to execute a list of ebsTestCase objects
         
@@ -695,12 +697,12 @@ class EutesterTestCase(unittest.TestCase):
             for test in list:
                 tests_ran += 1
                 startbuf = ""
-                argbuf =self.get_pretty_args(test)
+                argbuf = self.get_pretty_args(test)
                 startbuf += str(test.description)+str(argbuf)
                 startbuf += 'Running list method: "'+str(self.print_testunit_method_arg_values(test))+'"'
                 self.startmsg(startbuf)
                 try:
-                    test.run()
+                    test.run(eof=eof or test.eof)
                 except Exception, e:
                     self.debug('Testcase:'+ str(test.name)+' error:'+str(e))
                     if eof or (not eof and test.eof):
