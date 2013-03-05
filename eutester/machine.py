@@ -249,10 +249,10 @@ class Machine:
         :return: string representing pid
         """
         pid = None
-        paths = ["/var/run/","/opt/eucalyptus/var/run/eucalyptus/"]
+        paths = ["/var/run/eucalyptus/","/opt/eucalyptus/var/run/eucalyptus/"]
         for path in paths:
             try:
-                pid = int(self.sys('cat /var/run/eucalyptus/'+str(eucalyptus_service), code=0)[0].strip())
+                pid = int(self.sys('cat ' + path + str(eucalyptus_service), code=0)[0].strip())
                 break
             except: pass
         if pid is None:
@@ -349,7 +349,7 @@ class Machine:
         seconds_day = 86400
         try:
             cmd = "ps -eo pid,etime | grep " + str(pid) + " | awk '{print $2}'"
-            self.debug('starting get pid uptime...')
+            self.debug('starting get pid uptime"' + str(cmd) + '"...')
             #expected format: days-HH:MM:SS
             out = self.sys(cmd,code=0)[0]
             out = out.strip()
