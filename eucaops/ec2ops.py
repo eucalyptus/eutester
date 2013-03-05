@@ -841,16 +841,18 @@ class EC2ops(Eutester):
                             good.append(monitor.pop(monitor.index(vol)))
             self.debug('Waiting for '+str(len(monitor))+ " remaining Volumes. Sleeping for poll_interval: "
                        +str(poll_interval)+" seconds ...")
+            self.print_euvolume_list(euvolumes)
             time.sleep(poll_interval)
         self.debug('Done with monitor volumes after '+str(elapsed)+"/"+str(timeout)+"...")
         self.print_euvolume_list(euvolumes)
         if monitor:
             for vol in monitor:
-                failmsg +=  str(vol.id)+" - state:"+str(vol.status)+", TIMED OUT current state/attached_state:'" \
-                        +str(last_attached_status)+"' != '"+str(vol.eutest_attached_status)+"', elapsed:" \
+                failmsg +=  str(vol.id)+" -TIMED OUT current state/attached_state:'" \
+                        +str(vol.status) + "/" + str(vol.eutest_attached_status) + "' ! = '" \
+                        + str(status)+"/" + str(attached_status)+ "', elapsed:" \
                         +str(elapsed)+"/"+str(timeout)+"\n"
             failed.extend(monitor)
-        #finally raise an exception if any failures were detected allong the way...
+        #finally raise an exception if any failures were detected al    long the way...
         if failmsg:
             self.print_euvolume_list(failed)
             raise Exception(failmsg)
