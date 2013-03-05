@@ -19,6 +19,7 @@
 
 from eutester.eutestcase import EutesterTestCase
 from eutester.eutestcase import TestColor
+from eucaops import ec2ops
 #from eutester.euinstance import EuInstance
 #from eutester.euvolume import EuVolume
 #from eutester.eusnapshot import EuSnapshot
@@ -187,8 +188,13 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
             for x in xrange(0,self.args.volsperinstance):
                 for vol in self.volumes:
                     if vol.zone == instance.placement and vol.status == 'available':
-                        instance.attach_volume(vol)
-                        break
+                        try:
+                            instance.attach_volume(vol,timeout=90)
+                        except ec2ops.VolumeStateException, vse:
+                            self.status("This is a temp work around for testing, this is to avoid bug euca-5297"+str(vse),
+                                        testcolor=TestColor.get_canned_color('failred'))
+                            time.sleep(10)
+                            self.tester.monitor_euvolumes_to_status([vol],status='in-use',attached_status='attached',timeout=30)
         self.status("\'pre_service_restart_attach_all_volumes\' done",
                         testcolor=TestColor.get_canned_color('whiteonblue'))
 
@@ -204,16 +210,17 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
         #Add one volume from each zone...
         for zone in self.zones:
             for vol in self.volumes:
-                snapvols.append(vol)
+                if vol.zone == zone:
+                    snapvols.append(vol)
                 break
         #Create a snapshot of each volume...
-        wait_on_progress = len(snapvols)*20
+        wait_on_progress = len(snapvols)*25
         for vol in snapvols:
             snaps.extend(self.tester.create_snapshots(vol,
                                                       count=1,
                                                       wait_on_progress=wait_on_progress,
                                                       monitor_to_completed=False))
-        self.tester.monitor_eusnaps_to_completed(snaps)
+        self.tester.monitor_eusnaps_to_completed(snaps, wait_on_progress=wait_on_progress)
         self.snapshots = snaps
 
 
@@ -236,6 +243,7 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
 
         for zone in self.zones:
             storage_controllers = self.tester.service_manager.get_all_storage_controllers()
+            self.tester.service_manager.print_services_list(storage_controllers)
             for sc in storage_controllers:
                 debug_str = ""
                 all_services_on_sc = self.tester.service_manager.get_all_services_by_filter(hostname=sc.hostname)
@@ -250,7 +258,7 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
         waiting = copy.copy(storage_controllers)
         while elapsed < timeout and waiting:
             elapsed = int(time.time()-start)
-            for sc in storage_controllers:
+            for sc in waiting:
                 if self.tester.ping(sc.hostname, poll_count=1):
                     waiting.remove(sc)
             if waiting:
@@ -273,7 +281,7 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
         debug_str = ""
         while elapsed < 90 and waiting_for_ssh:
             elapsed = int(time.time()-start)
-            for sc in storage_controllers:
+            for sc in waiting_for_ssh:
                 try:
                     sc.machine.refresh_ssh()
                     sc.machine.cmd(" ")
@@ -292,7 +300,7 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
                 self.status("All SC machines have established SSH connections, now wait on services to come back...",
                             testcolor=TestColor.get_canned_color('whiteonblue'))
                 break
-        if waiting:
+        if waiting_for_ssh:
             raise("SC machines failed to establish SSH after: "+str(elapsed)+" seconds:"+str(debug_str))
         self.start_all_services_on_storage_controllers(storage_controllers)
 
@@ -310,14 +318,23 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
                 #uptime = int(tester.clc.sys('cat /proc/uptime')[0].split()[0])
 
         self.tester.service_manager.all_services_operational()
-        for sc in sc_list:
-            self.tester.service_manager.wait_for_service(sc)
+        try:
+            for service in all_services_on_sc:
+                self.tester.service_manager.wait_for_service(service)
+        except Exception, e:
+            dbgout = self.tester.get_traceback()
+            self.tester.service_manager.print_services_list(all_services_on_sc)
+            dbgout += "\nFailed waiting for all services on rebooted machines to recover\n"
+            raise Exception(dbgout + str(e))
+        self.tester.service_manager.print_services_list(all_services_on_sc)
+
 
     def test1_post_service_interruption_check_attached_volumes(self):
         write_length = 10000
         errmsg = ""
         self.status("Checking volumes for attached state post service interruption...",
                     testcolor=TestColor.get_canned_color('whiteonblue'))
+        self.tester.print_euvolume_list(self.volumes)
         for vol in self.volumes:
             vol.update()
             if vol.status == "in-use" and (vol.attach_data and vol.attach_data.status == 'attached' ):
@@ -378,7 +395,7 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
             raise Exception("self.snapshots not populated?")
         for snap in self.snapshots:
             for zone in self.zones:
-                vols.append(self.tester.create_volumes(zone, snapshot=snap, monitor_to_state=None))
+                vols.extend(self.tester.create_volumes(zone, snapshot=snap, monitor_to_state=None))
         self.volumes.extend(self.tester.monitor_created_euvolumes_to_state(vols, state='available'))
         self.status("Done creating volumes from pre-existing snapshots post service interruption.",
                     testcolor=TestColor.get_canned_color('whiteonblue'))
@@ -388,22 +405,29 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
         vols = []
         errmsg = ""
         for snap in self.snapshots:
-            vols.extend(self.tester.get_volume(snapid=snap.id))
+            vols.extend(self.tester.get_volumes(snapid=snap.id))
         if not vols:
             raise Exception("No vols were found as created from previous snapshots")
         if not self.instances:
             raise Exception('No instances to use for this test')
         if not self.snapshots:
             raise Exception('No snapshots to use for this test')
+        self.tester.print_euvolume_list(vols)
         for instance in self.instances:
             for vol in vols:
                 if vol.zone == instance.placement:
                     try:
-                        instance.attach_volume(vol)
+                        try:
+                            instance.attach_volume(vol, timeout=90)
+                        except ec2ops.VolumeStateException, vse:
+                            self.status("This is a temp work around for testing, this is to avoid bug euca-5297"+str(vse),
+                                        testcolor=TestColor.get_canned_color('failred'))
+                            time.sleep(10)
+                            self.tester.monitor_euvolumes_to_status([vol],status='in-use',attached_status='attached',timeout=30)
                         for snap in self.snapshots:
                             snap.update()
                             if vol.snapshot_id == snap.id:
-                                if vol.md5_len != snap.eutest_volume_md5len:
+                                if vol.md5len != snap.eutest_volume_md5len:
                                     self.debug('Need to adjust md5sum for length of snapshot...')
                                     vol.md5len = snap.eutest_volume_md5len
                                     instance.vol_write_random_data_get_md5(vol,length=snap.eutest_volume_md5len)
@@ -430,7 +454,8 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
                     break
         for vol in testvols:
             testsnaps.extend(self.tester.create_snapshots(vol, monitor_to_completed=False))
-        self.tester.monitor_eusnaps_to_completed(testsnaps)
+        wait_on_progress = int(len(testsnaps)*25)
+        self.tester.monitor_eusnaps_to_completed(testsnaps,wait_on_progress=wait_on_progress)
         self.snapshots.extend(testsnaps)
 
 
