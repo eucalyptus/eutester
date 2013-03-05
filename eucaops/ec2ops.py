@@ -824,7 +824,7 @@ class EC2ops(Eutester):
                               +str(last_attached_status)+"' to '"+str(vol.eutest_attached_status)+"', elapsed:" \
                               +str(elapsed)+"/"+str(timeout)+"\n"
                     if eof:
-                        raise Exception(failmsg)
+                        raise VolumeStateException(failmsg)
                     else:
                         failed.append(monitor.pop(monitor.index(vol)))
                         continue
@@ -974,8 +974,7 @@ class EC2ops(Eutester):
         Deletes all volumes on the cloud
         """
         volumes = self.ec2.get_all_volumes()
-        for volume in volumes:
-            self.delete_volume(volume.id)
+        self.delete_volumes(volumes)
 
         
     @Eutester.printinfo    
@@ -998,6 +997,7 @@ class EC2ops(Eutester):
         elapsed = 0  
         volume.update()
         status = ""
+        failmsg = ""
         laststatus=None
         while elapsed < timeout:
             volume.update()
@@ -1012,7 +1012,10 @@ class EC2ops(Eutester):
                     if attach_status:
                         laststatus = attach_status
                     elif laststatus and not attach_status:
-                        raise Exception('Volume status reverted from '+str(laststatus)+' to None, attach failed')
+                        failmsg += str(volume.id)+" - state:"+str(volume.status)+", reverted from attached state:'" \
+                                   +str(laststatus)+"' to '"+str(attach_status)+"', elapsed:" \
+                                   +str(elapsed)+"/"+str(timeout)+"\n"
+                        raise VolumeStateException(failmsg)
             self.debug( str(volume) + ", state:" + volume.status+', attached status:'+str(attach_status) +
                         ", elapsed:"+str(elapsed)+'/'+str(timeout))
             self.sleep(pause)
@@ -1351,7 +1354,7 @@ class EC2ops(Eutester):
         return snapshots
         
         
-    @Eutester.printinfo    
+    @Eutester.printinfo
     def monitor_eusnaps_to_completed(self,
                                      snaps,
                                      mincount=None, 
@@ -3207,7 +3210,7 @@ class EC2ops(Eutester):
             elapsed = int(time.time()-start)
         if fail_msg:
             raise Exception(fail_msg)
-
+        return bundle_list
 
 
 
@@ -3250,4 +3253,11 @@ class EC2ops(Eutester):
                  '}'
         encoded_policy = base64.b64encode(policy)
         return encoded_policy
-    
+
+
+class VolumeStateException(Exception):
+    def __init__(self, value):
+        self.value = value
+
+    def __str__(self):
+        return repr(self.value)
