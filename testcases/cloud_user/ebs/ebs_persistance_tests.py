@@ -194,7 +194,7 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
                             self.status("This is a temp work around for testing, this is to avoid bug euca-5297"+str(vse),
                                         testcolor=TestColor.get_canned_color('failred'))
                             time.sleep(10)
-                            self.tester.monitor_euvolumes_to_status([vol],status='in-use',attached_status='attached',timeout=30)
+                            self.tester.monitor_euvolumes_to_status([vol],status='in-use',attached_status='attached',timeout=60)
         self.status("\'pre_service_restart_attach_all_volumes\' done",
                         testcolor=TestColor.get_canned_color('whiteonblue'))
 
@@ -423,7 +423,7 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
                             self.status("This is a temp work around for testing, this is to avoid bug euca-5297"+str(vse),
                                         testcolor=TestColor.get_canned_color('failred'))
                             time.sleep(10)
-                            self.tester.monitor_euvolumes_to_status([vol],status='in-use',attached_status='attached',timeout=30)
+                            self.tester.monitor_euvolumes_to_status([vol],status='in-use',attached_status='attached',timeout=60)
                         for snap in self.snapshots:
                             snap.update()
                             if vol.snapshot_id == snap.id:
