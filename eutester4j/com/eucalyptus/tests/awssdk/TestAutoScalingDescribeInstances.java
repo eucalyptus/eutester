@@ -52,6 +52,7 @@ public class TestAutoScalingDescribeInstances {
 	@SuppressWarnings("unchecked")
 	@Test
 	public void AutoScalingDescribeInstancesTest() throws Exception {
+        testInfo(this.getClass().getSimpleName());
 		getCloudInfo();
 		final AmazonAutoScaling as = getAutoScalingClient(ACCESS_KEY, SECRET_KEY, AS_ENDPOINT);
 		final AmazonEC2 ec2 = getEc2Client(ACCESS_KEY, SECRET_KEY, EC2_ENDPOINT);

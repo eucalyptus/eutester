@@ -131,7 +131,7 @@ class ASops(Eutester):
             as_connection_args['path'] = path
             as_connection_args['region'] = as_region
             self.debug("Attempting to create auto scale connection to " + as_region.endpoint + ":" + str(port) + path)
-            self.AS = boto.ec2.autoscale.AutoScaleConnection(**as_connection_args)
+            self.autoscale = boto.ec2.autoscale.AutoScaleConnection(**as_connection_args)
         except Exception, e:
             self.critical("Was unable to create auto scale connection because of exception: " + str(e))
 
@@ -160,7 +160,7 @@ class ASops(Eutester):
                                  key_name=key_name,
                                  security_groups=security_groups)
         self.debug("Creating launch config: " + name)
-        self.AS.create_launch_configuration(lc)
+        self.autoscale.create_launch_configuration(lc)
 
     def describe_launch_config(self, names=None):
         """
@@ -169,11 +169,11 @@ class ASops(Eutester):
         :param names: list of names to query (optional) otherwise return all launch configs
         :return:
         """
-        return self.AS.get_all_launch_configurations(names=names)
+        return self.autoscale.get_all_launch_configurations(names=names)
 
     def delete_launch_config(self, launch_config_name):
         self.debug("Deleting launch config: " + launch_config_name)
-        self.AS.delete_launch_configuration(launch_config_name)
+        self.autoscale.delete_launch_configuration(launch_config_name)
 
     def create_as_group(self, group_name=None, load_balancers=None, availability_zones=None, launch_config=None,
                         min_size=None, max_size=None, connection=None):
@@ -196,15 +196,15 @@ class ASops(Eutester):
                                     max_size=max_size,
                                     connection=connection)
         self.debug("Creating Auto Scaling group: " + group_name)
-        self.AS.create_auto_scaling_group(as_group)
+        self.autoscale.create_auto_scaling_group(as_group)
 
     def describe_as_group(self, names=None):
-        return self.AS.get_all_groups(names=names)
+        return self.autoscale.get_all_groups(names=names)
 
     def delete_as_group(self, names=None, force=None):
         self.debug("Deleting Auto Scaling Group: " + names)
         self.debug("Forcing: " + str(force))
-        self.AS.delete_auto_scaling_group(name=names, force_delete=force)
+        self.autoscale.delete_auto_scaling_group(name=names, force_delete=force)
 
     def create_as_policy(self, name=None, adjustment_type=None, as_name=None, scaling_adjustment=None, cooldown=None):
         """
@@ -222,18 +222,18 @@ class ASops(Eutester):
                                        scaling_adjustment=scaling_adjustment,
                                        cooldown=cooldown)
         self.debug("Creating Auto Scaling Policy: " + name)
-        self.AS.create_scaling_policy(scaling_policy)
+        self.autoscale.create_scaling_policy(scaling_policy)
 
     def describe_as_policies(self, as_group=None, policy_names=None):
-        self.AS.get_all_policies(as_group=as_group, policy_names=policy_names)
+        self.autoscale.get_all_policies(as_group=as_group, policy_names=policy_names)
 
     def execute_as_policy(self, policy_name=None, as_group=None, honor_cooldown=None):
         self.debug("Executing Auto Scaling Policy: " + policy_name)
-        self.AS.execute_policy(policy_name=policy_name, as_group=as_group, honor_cooldown=honor_cooldown)
+        self.autoscale.execute_policy(policy_name=policy_name, as_group=as_group, honor_cooldown=honor_cooldown)
 
     def delete_as_policy(self, policy_name=None, autoscale_group=None):
         self.debug("Deleting Policy: " + policy_name + " from group: " + autoscale_group)
-        self.AS.delete_policy(policy_name=policy_name,autoscale_group=autoscale_group)
+        self.autoscale.delete_policy(policy_name=policy_name,autoscale_group=autoscale_group)
 
     def delete_all_autoscaling_groups(self):
         """

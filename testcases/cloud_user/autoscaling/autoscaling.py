@@ -93,7 +93,7 @@ class AutoScalingBasics(EutesterTestCase):
                                     availability_zones=self.tester.get_zones(),
                                     min_size=0,
                                     max_size=5,
-                                    connection=self.tester.AS)
+                                    connection=self.tester.autoscale)
         if len(self.tester.describe_as_group([self.auto_scaling_group_name])) != 1:
             raise Exception('Auto Scaling Group not created')
         self.debug("**** Created Auto Scaling Group: " +
@@ -125,7 +125,7 @@ class AutoScalingBasics(EutesterTestCase):
                                      cooldown=120)
 
         ### Test all policies added to group
-        if len(self.tester.AS.get_all_policies()) != 3:
+        if len(self.tester.autoscale.get_all_policies()) != 3:
             raise Exception('Auto Scaling policies not created')
         self.debug("**** Created Auto Scaling Policies: " + self.up_policy_name + " " + self.down_policy_name + " " +
                    self.exact_policy_name)
@@ -152,9 +152,9 @@ class AutoScalingBasics(EutesterTestCase):
                    str(self.tester.describe_as_group([self.auto_scaling_group_name])[0].desired_capacity))
 
         ### Test Delete all Auto Scaling Policies
-        for policy in self.tester.AS.get_all_policies():
+        for policy in self.tester.autoscale.get_all_policies():
             self.tester.delete_as_policy(policy_name=policy.name, autoscale_group=policy.as_name)
-        if len(self.tester.AS.get_all_policies()) != 0:
+        if len(self.tester.autoscale.get_all_policies()) != 0:
             raise Exception('Auto Scaling policy not deleted')
         self.debug("**** Deleted Auto Scaling Policy: " + self.up_policy_name + " " + self.down_policy_name + " " +
                    self.exact_policy_name)
@@ -189,8 +189,8 @@ class AutoScalingBasics(EutesterTestCase):
             self.launch_config_name = 'Test-Launch-Config-' + str(i + 1)
             self.tester.create_launch_config(name=self.launch_config_name,
                                              image_id=self.image.id)
-        if len(self.tester.describe_launch_config()) > 100:
-            raise Exception("More then 100 launch configs exist in 1 account")
+            if len(self.tester.describe_launch_config()) > 100:
+                raise Exception("More then 100 launch configs exist in 1 account")
         for lc in self.tester.describe_launch_config():
             self.tester.delete_launch_config(lc.name)
 
@@ -206,7 +206,7 @@ class AutoScalingBasics(EutesterTestCase):
                                     availability_zones=self.tester.get_zones(),
                                     min_size=0,
                                     max_size=5,
-                                    connection=self.tester.AS)
+                                    connection=self.tester.autoscale)
         for i in range(26):
             policy_name = "Policy-" + str(i + 1)
             self.tester.create_as_policy(name=policy_name,
@@ -214,7 +214,7 @@ class AutoScalingBasics(EutesterTestCase):
                                          as_name=asg,
                                          scaling_adjustment=0,
                                          cooldown=120)
-        if len(self.tester.AS.get_all_policies()) > 25:
+        if len(self.tester.autoscale.get_all_policies()) > 25:
             raise Exception("More than 25 policies exist for 1 auto scaling group")
         self.tester.delete_as_group(names=asg)
 
@@ -234,7 +234,7 @@ if __name__ == "__main__":
     ### or use a predefined list "AutoScalingGroupBasics", "LaunchConfigBasics", "AutoScalingInstanceBasics"
     # list = testcase.args.tests or ["AutoScalingBasics"] ["clean_groups_and_configs"] too_many_launch_configs_test
     # too_many_policies_test
-    list = testcase.args.tests or ["AutoScalingBasics"]
+    list = testcase.args.tests or ["clear_all"]
 
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]

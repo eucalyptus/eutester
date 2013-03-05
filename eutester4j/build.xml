@@ -14,6 +14,7 @@
     <property name="log4j.version" value="1.2.17"/>
     <property name="log4j-jar" value="${deps.dir}/log4j-${log4j.version}.jar"/>
     <property name="aws.dir" value="${deps.dir}/aws-java-sdk"/>
+    <property name="eucarc" value="eucarc"/>
 
     <!-- download and ready testng and AWS JAVA SDK -->
     <target name="download-deps">
@@ -85,6 +86,7 @@
         <mkdir dir="${testng.output.dir}"/>
         <testng outputdir="${testng.output.dir}" classpathref="classpath">
             <xmlfileset dir="." includes="testng.xml"/>
+            <jvmarg value="-Deucarc=${eucarc}" />
         </testng>
     </target>
 

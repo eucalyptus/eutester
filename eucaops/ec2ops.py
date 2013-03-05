@@ -2241,7 +2241,7 @@ class EC2ops(Eutester):
                            " Private DNS Name: " + str(instance.private_dns_name))
 
             try:
-                self.wait_for_valid_ip(instance)
+                self.wait_for_valid_ip(instance, private_addressing=private_addressing)
             except Exception:
                 self.terminate_instances(reservation)
                 raise Exception("Reservation " +  str(reservation) + " has been terminated because instance " +
@@ -2691,11 +2691,12 @@ class EC2ops(Eutester):
         self.debug("\n"+str(buf)+"\n")
     
     @Eutester.printinfo
-    def wait_for_valid_ip(self, instances, poll_interval=10, timeout = 60):
+    def wait_for_valid_ip(self, instances, private_addressing=False, poll_interval=10, timeout = 60):
         """
         Wait for instance public DNS name to clear from 0.0.0.0
 
         :param instances:
+        :param private_addressing: boolean for whether instance has private addressing enabled
         :param poll_interval:
         :param instance: instance object to check
         :param timeout: Time in seconds to wait for IP to change
@@ -2721,9 +2722,8 @@ class EC2ops(Eutester):
                 else:
                     self.debug(str(instance.id)+": FOUND public ip. Current:"+str(instance.public_dns_name)+
                                ", elapsed:"+str(elapsed)+"/"+str(timeout))
-                    if (instance.ip_address == instance.private_ip_address) or \
-                            (instance.public_dns_name == instance.private_dns_name) and \
-                            not instance.private_addressing:
+                    if ((instance.ip_address == instance.private_ip_address) or \
+                            (instance.public_dns_name == instance.private_dns_name)) and not private_addressing:
                         self.debug("ERROR:"+str(instance.id) + " got Public IP: " + str(instance.ip_address)  +
                                    " Private IP: " + str(instance.private_ip_address) + " Public DNS Name: " +
                                    str(instance.public_dns_name) + " Private DNS Name: " + str(instance.private_dns_name))
