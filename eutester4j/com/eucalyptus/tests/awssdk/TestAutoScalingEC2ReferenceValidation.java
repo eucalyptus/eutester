@@ -55,6 +55,7 @@ public class TestAutoScalingEC2ReferenceValidation {
 
 	@Test
 	public void AutoScalingEC2ReferenceValidationTest() throws Exception {
+        testInfo(this.getClass().getSimpleName());
 		getCloudInfo();
 		final AmazonAutoScaling as = getAutoScalingClient(ACCESS_KEY,
 				SECRET_KEY, AS_ENDPOINT);

@@ -56,6 +56,7 @@ import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancingCli
 
 final class Eutester4j {
 
+    static String eucarc = System.getProperty("eucarc");
     static Logger logger = Logger.getLogger(Eutester4j.class.getCanonicalName());
 	static String EC2_ENDPOINT = null;
 	static String AS_ENDPOINT = null;
@@ -66,7 +67,11 @@ final class Eutester4j {
 	static String INSTANCE_TYPE = "m1.small";
 
 	public static void getCloudInfo() throws Exception {
-		CREDPATH = "eucarc";
+        if (eucarc != null){
+            CREDPATH = eucarc;
+        } else {
+            CREDPATH = "eucarc";
+        }
         logger.info("Getting cloud information from " + CREDPATH);
 		EC2_ENDPOINT = parseEucarc(CREDPATH, "EC2_URL") + "/";
 		AS_ENDPOINT = parseEucarc(CREDPATH, "AWS_AUTO_SCALING_URL") + "/";
@@ -75,6 +80,9 @@ final class Eutester4j {
 		ACCESS_KEY = parseEucarc(CREDPATH, "EC2_ACCESS_KEY").replace("'", "");
 	}
 
+    public static void testInfo(String testName){
+        logger.info("*****TEST NAME: " + testName);
+    }
 	/**
 	 * create ec2 connection based with supplied accessKey and secretKey
 	 * 

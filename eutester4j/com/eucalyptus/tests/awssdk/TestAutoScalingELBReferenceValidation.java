@@ -49,6 +49,7 @@ public class TestAutoScalingELBReferenceValidation {
 
 	@Test
 	public void AutoScalingELBReferenceValidationTest() throws Exception {
+        testInfo(this.getClass().getSimpleName());
 		getCloudInfo();
 		final AmazonAutoScaling as = getAutoScalingClient(ACCESS_KEY,
 				SECRET_KEY, AS_ENDPOINT);

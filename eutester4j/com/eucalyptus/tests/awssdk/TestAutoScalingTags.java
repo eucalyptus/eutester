@@ -53,6 +53,7 @@ public class TestAutoScalingTags {
 
 	@Test
 	public void AutoScalingTagsTest() throws Exception {
+        testInfo(this.getClass().getSimpleName());
 		getCloudInfo();
 		final AmazonAutoScaling as = getAutoScalingClient(ACCESS_KEY,
 				SECRET_KEY, AS_ENDPOINT);
