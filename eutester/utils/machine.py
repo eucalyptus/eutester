@@ -133,9 +133,12 @@ class Machine:
         distro_name = distro_name.lower()
         distro_release = distro_release.lower()
         for distro in Distro.get_distros():
-            if re.search( distro.name, distro_name,re.IGNORECASE) and (re.search( distro.release, distro_release,re.IGNORECASE) or re.search( distro.number, distro_release,re.IGNORECASE)) :
+            if re.search( distro.name, distro_name,re.IGNORECASE) and \
+                    (re.search( distro.release, distro_release,re.IGNORECASE) or
+                         re.search( distro.number, distro_release,re.IGNORECASE)) :
                 return distro
-        raise Exception("Unable to find distro " + str(distro_name) + " and version " + str(distro_release) + " for hostname " + str(self.hostname))
+        raise Exception("Unable to find distro " + str(distro_name) + " and version "
+                        + str(distro_release) + " for hostname " + str(self.hostname))
     
     def refresh_ssh(self):
         self.ssh.refresh_connection()
@@ -174,13 +177,7 @@ class Machine:
         Issues a command against the ssh connection to this instance
         Returns a list of the lines from stdout+stderr as a result of the command
         '''
-        out = self.cmd(cmd, verbose=verbose, timeout=timeout, listformat=listformat)
-        output = out['output']
-        if code is not None:
-            if out['status'] != code:
-                self.debug(output)
-                raise Exception('Cmd:'+str(cmd)+' failed with status code:'+str(out['status']))
-        return output
+        return self.ssh.sys(cmd, verbose=verbose, timeout=timeout,listformat=listformat, code=code)
     
     def cmd(self, cmd, verbose=True, timeout=120, listformat=False, cb=None, cbargs=[]):
         '''
@@ -241,7 +238,131 @@ class Machine:
             return True
         else:
             return False
-    
+
+    def get_eucalyptus_service_pid(self, eucalyptus_service):
+        """
+        Returns the process id or pid of the eucalyptus service running on this machine. Will return None if not found,
+        which may indicate the process is not running or not intended to run on this machine.
+
+        :param eucalyptus_service: eucalyptus-cloud, eucalyptus-cc, eucalyptus-nc
+        :return: string representing pid
+        """
+        pid = None
+        paths = ["/var/run/","/opt/eucalyptus/var/run/eucalyptus/"]
+        for path in paths:
+            try:
+                pid = int(self.sys('cat /var/run/eucalyptus/'+str(eucalyptus_service), code=0)[0].strip())
+                break
+            except: pass
+        if pid is None:
+            self.debug("Pid not found at paths: ".join(paths))
+        return pid
+
+    def get_eucalyptus_cloud_pid(self):
+        """
+        :return: Returns the process id for eucalyptus-cloud running on this machine, or None if not found.
+        """
+        return self.get_eucalyptus_service_pid('eucalyptus-cloud.pid')
+
+    def get_eucalyptus_nc_pid(self):
+        """
+        :return: Returns the process id for eucalyptus-nc running on this machine, or None if not found.
+        """
+        return self.get_eucalyptus_service_pid('eucalyptus-nc.pid')
+
+    def get_eucalyptus_cc_pid(self):
+        """
+        :return: Returns the process id for eucalyptus-cc running on this machine, or None if not found.
+        """
+        return self.get_eucalyptus_service_pid('eucalyptus-cc.pid')
+
+    def get_eucalyptus_cloud_process_uptime(self):
+        """
+        Attempts to look up the elapsed running time of the PID associated with the eucalyptus-cloud process/service.
+        :return: (int) elapsed time in seconds this PID has been running
+        """
+        pid = self.get_eucalyptus_cloud_pid()
+        return self.get_elapsed_seconds_since_pid_started(pid)
+
+    def get_eucalyptus_cc_process_uptime(self):
+        """
+        Attempts to look up the elapsed running time of the PID associated with the eucalyptus-cc process/service.
+        :return: (int) elapsed time in seconds this PID has been running
+        """
+        pid = self.get_eucalyptus_cc_pid()
+        return self.get_elapsed_seconds_since_pid_started(pid)
+
+    def get_eucalyptus_nc_process_uptime(self):
+        """
+        Attempts to look up the elapsed running time of the PID associated with the eucalyptus-nc process/service.
+        :return: (int) elapsed time in seconds this PID has been running
+        """
+        pid = self.get_eucalyptus_nc_pid()
+        return self.get_elapsed_seconds_since_pid_started(pid)
+
+    def get_eucalyptus_cloud_is_running_status(self):
+        """
+        Checks eucalyptus-cloud service status
+        :return: boolean, True if running False if not.
+        """
+        return self.get_service_is_running_status('eucalyptus-cloud')
+
+    def get_eucalyptus_cc_is_running_status(self):
+        """
+        Checks eucalyptus-cc service status
+        :return: boolean, True if running False if not.
+        """
+        return self.get_service_is_running_status('eucalyptus-cc')
+
+    def get_eucalyptus_nc_is_running_status(self):
+        """
+        Checks eucalyptus-nc service status
+        :return: boolean, True if running False if not.
+        """
+        return self.get_service_is_running_status('eucalyptus-nc')
+
+
+    def get_service_is_running_status(self, service, code=0):
+        """
+        Checks status of service 'service' on the machine obj.
+        :param service: string representing service name
+        :return: boolean.
+        """
+        try:
+            self.sys("service " + str(service) + " status", code=0)
+            return True
+        except sshconnection.CommandExitCodeException:
+            return False
+        except Exception, e:
+            self.debug('Could not get service state from node:' + str(self.hostname) + ", err:"+str(e))
+
+    def get_elapsed_seconds_since_pid_started(self, pid):
+        """
+        Attempts to parse ps time elapsed since process/pid has been running and return the presented time in
+        elapsed number of seconds.
+        :param pid: Process id to get elapsed time from
+        :return: Elapsed time in seconds that pid has been running
+        """
+        seconds_min = 60
+        seconds_hour = 3600
+        seconds_day = 86400
+        cmd = "ps -eo pid,etime | grep " + str(pid) + " | awk '{print $2}'"
+
+        #expected format: days-HH:MM:SS
+        out = self.sys(cmd,code=0)[0]
+        out = out.strip()
+        split_line = out.split("-")
+        if len(split_line) < 1:
+            split_line.insert(0,0)
+        days = int(split_line[0] or 0)
+        split_time = split_line[1].split(':')
+        hours = int(split_time[0] or 0)
+        minutes = int(split_time[1] or 0)
+        seconds = int(split_time[2] or 0)
+        elapsed = seconds + (minutes*seconds_min) + (hours*seconds_hour) + (days*seconds_day)
+        return int(elapsed)
+
+
     def get_file_stat(self,path):
         return self.sftp.lstat(path)
         
@@ -311,7 +432,10 @@ class Machine:
         """
         Debug method to provide potentially helpful info from current machine when debugging connectivity issues.
         """
-        self.debug('Attempting to dump network information, args: ip:'+str(ip)+' mac:'+str(mac)+' pass1:'+self.get_masked_pass(pass1,show=True)+' pass2:'+self.get_masked_pass(pass2,show=True))
+        self.debug('Attempting to dump network information, args: ip:' + str(ip)
+                   + ' mac:' + str(mac)
+                   + ' pass1:' + self.get_masked_pass(pass1,show=True)
+                   + ' pass2:' + self.get_masked_pass(pass2,show=True))
         self.ping_cmd(ip,verbose=True)
         self.sys('arp -a')
         self.sys('dmesg | tail -'+str(taillength))
@@ -328,7 +452,7 @@ class Machine:
                 return True
         return False   
     
-    def wget_remote_image(self,url,path=None, user=None, password=None, retryconn=True, timeout=300):
+    def wget_remote_image(self, url,path=None, user=None, password=None, retryconn=True, timeout=300):
         self.debug('wget_remote_image, url:'+str(url)+", path:"+str(path))
         cmd = 'wget '
         if path:

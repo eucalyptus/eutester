@@ -58,13 +58,13 @@ public class TestAutoScalingELBReferenceValidation {
 		final String imageId = findImage(ec2);
 		final String availabilityZone = findAvalablityZone(ec2);
 		final String namePrefix = eucaUUID() + "-";
-		print("Using resource prefix for test: " + namePrefix);
+		logger.info("Using resource prefix for test: " + namePrefix);
 
 		final List<Runnable> cleanupTasks = new ArrayList<Runnable>();
 		try {
 			// Generate a load balancer to use
 			final String loadBalancerName = namePrefix + "ELBReferenceTest";
-			print("Creating a load balancer for test use: " + loadBalancerName);
+			logger.info("Creating a load balancer for test use: " + loadBalancerName);
 			elb.createLoadBalancer(new CreateLoadBalancerRequest()
 					.withLoadBalancerName(loadBalancerName)
 					.withAvailabilityZones(availabilityZone)
@@ -75,7 +75,7 @@ public class TestAutoScalingELBReferenceValidation {
 			cleanupTasks.add(new Runnable() {
 				@Override
 				public void run() {
-					print("Deleting load balancer: " + loadBalancerName);
+					logger.info("Deleting load balancer: " + loadBalancerName);
 					elb.deleteLoadBalancer(new DeleteLoadBalancerRequest()
 							.withLoadBalancerName(loadBalancerName));
 				}
@@ -86,24 +86,24 @@ public class TestAutoScalingELBReferenceValidation {
 			cleanupTasks.add(new Runnable() {
 				@Override
 				public void run() {
-					print("Deleting launch configuration: " + configName);
+					logger.info("Deleting launch configuration: " + configName);
 					as.deleteLaunchConfiguration(new DeleteLaunchConfigurationRequest()
 							.withLaunchConfigurationName(configName));
 				}
 			});
 
 			// Create launch configuration
-			print("Creating launch configuration: " + configName);
+			logger.info("Creating launch configuration: " + configName);
 			as.createLaunchConfiguration(new CreateLaunchConfigurationRequest()
 					.withLaunchConfigurationName(configName)
-					.withImageId(imageId).withInstanceType(instanceType));
+					.withImageId(imageId).withInstanceType(INSTANCE_TYPE));
 
 			// Register cleanup for auto scaling group
 			final String groupName = namePrefix + "ELBReferenceTest";
 			cleanupTasks.add(new Runnable() {
 				@Override
 				public void run() {
-					print("Deleting group: " + groupName);
+					logger.info("Deleting group: " + groupName);
 					as.deleteAutoScalingGroup(new DeleteAutoScalingGroupRequest()
 							.withAutoScalingGroupName(groupName)
 							.withForceDelete(true));
@@ -111,7 +111,7 @@ public class TestAutoScalingELBReferenceValidation {
 			});
 
 			// Create scaling group with invalid availability zone
-			print("Creating auto scaling group with invalid load balancer: "
+			logger.info("Creating auto scaling group with invalid load balancer: "
 					+ groupName);
 			try {
 				as.createAutoScalingGroup(new CreateAutoScalingGroupRequest()
@@ -121,18 +121,18 @@ public class TestAutoScalingELBReferenceValidation {
 						.withLoadBalancerNames("invalid load balancer name"));
 				assertThat(false, "Creation should fail");
 			} catch (AmazonServiceException e) {
-				print("Expected error returned: " + e);
+				logger.info("Expected error returned: " + e);
 			}
 
 			// Create scaling group
-			print("Creating auto scaling group: " + groupName);
+			logger.info("Creating auto scaling group: " + groupName);
 			as.createAutoScalingGroup(new CreateAutoScalingGroupRequest()
 					.withAutoScalingGroupName(groupName)
 					.withLaunchConfigurationName(configName).withMinSize(0)
 					.withMaxSize(1).withAvailabilityZones(availabilityZone)
 					.withLoadBalancerNames(loadBalancerName));
 
-			print("Test complete");
+            logger.info("Test complete");
 		} finally {
 			// Attempt to clean up anything we created
 			Collections.reverse(cleanupTasks);

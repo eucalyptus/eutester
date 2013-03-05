@@ -148,3 +148,18 @@ class CWops(Eutester):
         """Parse the eucarc for the EC2_URL"""
         ec2_url = self.parse_eucarc("AWS_CLOUDWATCH_URL")
         return ec2_url.split("/")[2].split(":")[0]
+
+    def get_namespaces(self):
+        """
+        Convenience function for easily segregating metrics into their namespaces
+
+        :return: Dict where key is the Namespace and the value is a list with all metrics
+        """
+        metrics= self.cw.list_metrics()
+        namespaces = {}
+        for metric in metrics:
+            if not namespaces[metric.namespace]:
+                namespaces[metric.namespace] = [metric]
+            else:
+                namespaces[metric.namespace].append(metric)
+        return namespaces

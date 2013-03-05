@@ -1,5 +1,5 @@
 package com.eucalyptus.tests.awssdk;
-
+import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
@@ -9,7 +9,6 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
-
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.BasicAWSCredentials;
@@ -57,16 +56,18 @@ import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancingCli
 
 final class Eutester4j {
 
+    static Logger logger = Logger.getLogger(Eutester4j.class.getCanonicalName());
 	static String EC2_ENDPOINT = null;
 	static String AS_ENDPOINT = null;
 	static String ELB_ENDPOINT = null;
 	static String SECRET_KEY = null;
 	static String ACCESS_KEY = null;
 	static String CREDPATH = null;
-	static String instanceType = "m1.small";
+	static String INSTANCE_TYPE = "m1.small";
 
 	public static void getCloudInfo() throws Exception {
-		CREDPATH = "/Users/tony/Desktop/as_test_cloud/eucarc";
+		CREDPATH = "eucarc";
+        logger.info("Getting cloud information from " + CREDPATH);
 		EC2_ENDPOINT = parseEucarc(CREDPATH, "EC2_URL") + "/";
 		AS_ENDPOINT = parseEucarc(CREDPATH, "AWS_AUTO_SCALING_URL") + "/";
 		ELB_ENDPOINT = parseEucarc(CREDPATH, "AWS_ELB_URL") + "/";
@@ -140,7 +141,7 @@ final class Eutester4j {
 	}
 
 	public static void print(String text) {
-		System.out.println(text);
+		logger.info(text);
 	}
 
 	/**
@@ -168,7 +169,7 @@ final class Eutester4j {
 			final String instanceId, final String expectedStatus)
 			throws Exception {
 		final long startTime = System.currentTimeMillis();
-		final long timeout = TimeUnit.MINUTES.toMillis(1);
+		final long timeout = TimeUnit.MINUTES.toMillis(3);
 		boolean completed = false;
 		while (!completed && (System.currentTimeMillis() - startTime) < timeout) {
 			Thread.sleep(5000);
@@ -191,7 +192,7 @@ final class Eutester4j {
 		final AutoScalingInstanceDetails details = instancesResult
 				.getAutoScalingInstances().get(0);
 		final String healthStatus = details.getHealthStatus();
-		print("Health status: " + healthStatus);
+		logger.info("Health status: " + healthStatus);
 		return healthStatus;
 	}
 
@@ -211,7 +212,7 @@ final class Eutester4j {
 			}
 			assertThat(completed, "Instances count did not change to "
 					+ expectedCount + " within the expected timeout");
-			print("Instance count changed in "
+			logger.info("Instance count changed in "
 					+ (System.currentTimeMillis() - startTime) + "ms");
 			return instanceIds;
 		} else {
@@ -225,7 +226,7 @@ final class Eutester4j {
 			}
 			assertThat(completed, "Instances count did not change to "
 					+ expectedCount + " within the expected timeout");
-			print("Instance count changed in "
+			logger.info("Instance count changed in "
 					+ (System.currentTimeMillis() - startTime) + "ms");
 			return instances;
 		}
@@ -239,7 +240,7 @@ final class Eutester4j {
 								"tag:aws:autoscaling:groupName").withValues(
 								groupName)));
 		if (asString) {
-			final List<String> instanceIds = new ArrayList<String>();
+			final List<String> instanceIds = new ArrayList<>();
 			for (final Reservation reservation : instancesResult
 					.getReservations()) {
 				for (final Instance instance : reservation.getInstances()) {
@@ -251,7 +252,7 @@ final class Eutester4j {
 			}
 			return instanceIds;
 		} else {
-			final List<Instance> instances = new ArrayList<Instance>();
+			final List<Instance> instances = new ArrayList<>();
 			for (final Reservation reservation : instancesResult
 					.getReservations()) {
 				for (final Instance instance : reservation.getInstances()) {
@@ -277,7 +278,7 @@ final class Eutester4j {
 		assertThat(imagesResult.getImages().size() > 0, "Image not found");
 
 		final String imageId = imagesResult.getImages().get(0).getImageId();
-		print("Using image: " + imageId);
+		logger.info("Using image: " + imageId);
 		return imageId;
 	}
 
@@ -291,7 +292,7 @@ final class Eutester4j {
 
 		final String availabilityZone = azResult.getAvailabilityZones().get(0)
 				.getZoneName();
-		print("Using availability zone: " + availabilityZone);
+		logger.info("Using availability zone: " + availabilityZone);
 		return availabilityZone;
 	}
 
@@ -317,10 +318,10 @@ final class Eutester4j {
 			CreateSecurityGroupRequest securityGroupRequest = new CreateSecurityGroupRequest(
 					name, desc);
 			ec2.createSecurityGroup(securityGroupRequest);
-			System.out.println("Created Security Group: " + name);
+			logger.info("Created Security Group: " + name);
 		} catch (AmazonServiceException ase) {
 			// Likely this means that the group is already created, so ignore.
-			System.out.println(ase.getMessage());
+			logger.info(ase.getMessage());
 		}
 	}
 
@@ -336,7 +337,7 @@ final class Eutester4j {
 					.describeSecurityGroups(describeSecurityGroupsRequest);
 		} catch (AmazonServiceException ase) {
 			// Likely this means that the group is already created, so ignore.
-			System.out.println(ase.getMessage());
+			logger.info(ase.getMessage());
 		}
 		return securityGroupsResult.getSecurityGroups();
 	}
@@ -351,9 +352,9 @@ final class Eutester4j {
 			DeleteSecurityGroupRequest deleteSecurityGroupRequest = new DeleteSecurityGroupRequest(
 					groupName);
 			ec2.deleteSecurityGroup(deleteSecurityGroupRequest);
-			System.out.println("Deleted Security Group: " + groupName);
+			logger.info("Deleted Security Group: " + groupName);
 		} catch (AmazonServiceException ase) {
-			System.out.println(ase.getMessage());
+			logger.info(ase.getMessage());
 		}
 	}
 
@@ -373,7 +374,7 @@ final class Eutester4j {
 				.withMaxCount(maxCount).withSecurityGroups(securityGroups)
 				.withKeyName(keyName);
 		ec2.runInstances(runInstancesRequest);
-		System.out.println("Started instance: "
+		logger.info("Started instance: "
 				+ getLastlaunchedInstance(ec2).get(0).getInstanceId());
 	}
 
@@ -387,7 +388,7 @@ final class Eutester4j {
 				instanceIds);
 		ec2.stopInstances(stopInstancesRequest);
 		for (String instance : instanceIds) {
-			System.out.println("Stopped instance: " + instance);
+			logger.info("Stopped instance: " + instance);
 		}
 	}
 
@@ -401,7 +402,7 @@ final class Eutester4j {
 				instanceIds);
 		ec2.startInstances(startInstancesRequest);
 		for (String instance : instanceIds) {
-			System.out.println("Started instance: " + instance);
+			logger.info("Started instance: " + instance);
 		}
 	}
 
@@ -416,7 +417,7 @@ final class Eutester4j {
 				instanceIds);
 		ec2.terminateInstances(terminateInstancesRequest);
 		for (String instance : instanceIds) {
-			System.out.println("Terminated instance: " + instance);
+			logger.info("Terminated instance: " + instance);
 		}
 	}
 
@@ -426,11 +427,8 @@ final class Eutester4j {
 	 * @return # of reservations
 	 */
 	public static List<Reservation> getInstancesList(AmazonEC2 ec2) {
-		DescribeInstancesResult describeInstancesRequest = ec2
-				.describeInstances();
-		List<Reservation> reservations = describeInstancesRequest
-				.getReservations();
-		return reservations;
+		DescribeInstancesResult describeInstancesRequest = ec2.describeInstances();
+		return describeInstancesRequest.getReservations();
 	}
 
 	/**
@@ -442,7 +440,7 @@ final class Eutester4j {
 		CreateKeyPairRequest createKeyPairRequest = new CreateKeyPairRequest(
 				keyName);
 		ec2.createKeyPair(createKeyPairRequest);
-		System.out.println("Created keypair: " + keyName);
+		logger.info("Created keypair: " + keyName);
 	}
 
 	/**
@@ -466,7 +464,7 @@ final class Eutester4j {
 		DeleteKeyPairRequest deleteKeyPairRequest = new DeleteKeyPairRequest(
 				keyName);
 		ec2.deleteKeyPair(deleteKeyPairRequest);
-		System.out.println("Deelted keypair: " + keyName);
+		logger.info("Delted keypair: " + keyName);
 	}
 
 	/**
@@ -496,7 +494,7 @@ final class Eutester4j {
 				.withImageId(imageId).withInstanceType(type)
 				.withSecurityGroups(securityGroups).withKeyName(keyName);
 		as.createLaunchConfiguration(createLaunchConfigurationRequest);
-		System.out.println("Created Launch Configuration: "
+		logger.info("Created Launch Configuration: "
 				+ launchConfigurationName);
 	}
 
@@ -508,7 +506,7 @@ final class Eutester4j {
 			launchConfigurationsResult = as
 					.describeLaunchConfigurations(describeLaunchConfigurationsRequest);
 		} catch (AmazonServiceException ase) {
-			System.out.println(ase.getMessage());
+			logger.info(ase.getMessage());
 		}
 		return launchConfigurationsResult.getLaunchConfigurations();
 	}
@@ -519,23 +517,25 @@ final class Eutester4j {
 			DeleteLaunchConfigurationRequest deleteLaunchConfigurationRequest = new DeleteLaunchConfigurationRequest()
 					.withLaunchConfigurationName(launchConfigurationName);
 			as.deleteLaunchConfiguration(deleteLaunchConfigurationRequest);
-			System.out.println("Deleted Launch Configuration: "
+			logger.info("Deleted Launch Configuration: "
 					+ launchConfigurationName);
 		} catch (AmazonServiceException ase) {
-			System.out.println(ase.getMessage());
+			logger.info(ase.getMessage());
 		}
 	}
 
 	public static void createAutoScalingGroup(AmazonAutoScaling as,
 			String autoScalingGroupName, String launchConfigurationName,
-			int minSize, int maxSize, String availabilityZones) {
+			int minSize, int maxSize, int desiredCapacity, String availabilityZones) {
 		CreateAutoScalingGroupRequest createAutoScalingGroupRequest = new CreateAutoScalingGroupRequest()
 				.withAutoScalingGroupName(autoScalingGroupName)
 				.withLaunchConfigurationName(launchConfigurationName)
-				.withMinSize(minSize).withMaxSize(maxSize)
+				.withMinSize(minSize)
+                .withMaxSize(maxSize)
+                .withDesiredCapacity(desiredCapacity)
 				.withAvailabilityZones(availabilityZones);
 		as.createAutoScalingGroup(createAutoScalingGroupRequest);
-		System.out.println("Created Auto Scaling Group: "
+		logger.info("Created Auto Scaling Group: "
 				+ autoScalingGroupName);
 	}
 
@@ -547,7 +547,7 @@ final class Eutester4j {
 			autoScalingGroupsResult = as
 					.describeAutoScalingGroups(describeAutoScalingGroupsRequest);
 		} catch (AmazonServiceException ase) {
-			System.out.println(ase.getMessage());
+			logger.info(ase.getMessage());
 		}
 		return autoScalingGroupsResult.getAutoScalingGroups();
 	}
@@ -559,11 +559,43 @@ final class Eutester4j {
 					.withAutoScalingGroupName(autoScalingGroupName)
 					.withForceDelete(true);
 			as.deleteAutoScalingGroup(deleteAutoScalingGroupRequest);
-			System.out.println("Deleted Auto Scaling Group: "
+			logger.info("Deleted Auto Scaling Group: "
 					+ autoScalingGroupName);
 		} catch (AmazonServiceException ase) {
-			System.out.println(ase.getMessage());
+			logger.info(ase.getMessage());
 		}
 	}
+
+    public static String getInstanceState(final AmazonAutoScaling as, final String groupName) {
+        final DescribeAutoScalingGroupsResult groupResult =
+                as.describeAutoScalingGroups(new DescribeAutoScalingGroupsRequest().withAutoScalingGroupNames(groupName));
+        String state = null;
+        for (final AutoScalingGroup group : groupResult.getAutoScalingGroups()) {
+            assertThat(groupName.equals(group.getAutoScalingGroupName()), "Unexpected group: " + group.getAutoScalingGroupName());
+            assertThat(group.getInstances().size() < 2, "Unexpected instance count: " + group.getInstances().size());
+            for (final com.amazonaws.services.autoscaling.model.Instance instance : group.getInstances()) {
+                state = instance.getLifecycleState();
+            }
+        }
+        return state;
+    }
+
+    public static void waitForInstances(final AmazonAutoScaling as,
+                                  final String state,
+                                  final long timeout,
+                                  final String groupName,
+                                  final boolean allowEmpty) throws Exception {
+        final long startTime = System.currentTimeMillis();
+        boolean completed = false;
+        String instanceState = null;
+        while (!completed && (System.currentTimeMillis() - startTime) < timeout) {
+            instanceState = getInstanceState(as, groupName);
+            completed = instanceState == null && allowEmpty || state.equals(instanceState);
+            Thread.sleep(2500);
+        }
+        assertThat(completed, "Instance not found with state " + state + " within the expected timeout");
+        print("Instance found in " + (System.currentTimeMillis() - startTime) + "ms for state: " +
+                state + (instanceState == null ? " (instance terminated before state detected)" : ""));
+    }
 
 }

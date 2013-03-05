@@ -33,6 +33,7 @@
 from boto.ec2.image import Image
 from boto.ec2.volume import Volume
 from cwops import CWops
+from asops import ASops
 from iamops import IAMops
 from ec2ops import EC2ops
 from s3ops import S3ops
@@ -47,10 +48,10 @@ from eutester.utils import eulogger
 import re
 import os
 
-class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops):
-
-    def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,  account="eucalyptus", user="admin", username=None, APIVersion='2011-01-01', region=None, ec2_ip=None, s3_ip=None, download_creds=True,boto_debug=0):
-        self.config_file = config_file
+class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops):
+    
+    def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,  account="eucalyptus", user="admin", username=None, APIVersion='2011-01-01', region=None, ec2_ip=None, s3_ip=None, as_ip=None, download_creds=True,boto_debug=0):
+        self.config_file = config_file 
         self.APIVersion = APIVersion
         self.eucapath = "/opt/eucalyptus"
         self.ssh = None
@@ -92,7 +93,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops):
             ### Private cloud with root access 
             ### Need to get credentials for the user if there arent any passed in
             ### Need to create service manager for user if we have an ssh connection and password
-            if self.password is not None and self.download_creds:
+            if self.download_creds:
                 clc_array = self.get_component_machines("clc")
                 self.clc = clc_array[0]
                 walrus_array = self.get_component_machines("ws")
@@ -116,11 +117,8 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops):
 
                 self.service_manager = EuserviceManager(self)
                 self.clc = self.service_manager.get_enabled_clc().machine
-                self.walrus = self.service_manager.get_enabled_walrus().machine
-        if self.credpath and not ec2_ip:
-            ec2_ip = self.get_ec2_ip()
-        if self.credpath and not s3_ip:
-            s3_ip = self.get_s3_ip()
+                self.walrus = self.service_manager.get_enabled_walrus().machine 
+
 
         if self.credpath and not aws_access_key_id:
             aws_access_key_id = self.get_access_key()
@@ -128,14 +126,32 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops):
             aws_secret_access_key = self.get_secret_key()
         self.test_resources = {}
         if self.download_creds:
-            self.setup_ec2_connection(endpoint=ec2_ip, path="/services/Eucalyptus", port=8773, is_secure=False, region=region, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, APIVersion=APIVersion, boto_debug=boto_debug)
-            self.setup_ec2_resource_trackers()
-            self.setup_s3_connection(endpoint=s3_ip, path="/services/Walrus", port=8773, is_secure=False,aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,  boto_debug=boto_debug)
-            self.setup_s3_resource_trackers()
-            self.setup_iam_connection(endpoint=ec2_ip, path="/services/Euare", port=8773, is_secure=False, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,  boto_debug=boto_debug)
-            self.setup_sts_connection( endpoint=ec2_ip, path="/services/Eucalyptus", port=8773, is_secure=False, region=region, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
-            self.setup_cw_connection( endpoint=ec2_ip, path="/services/CloudWatch", port=8773, is_secure=False, region=region, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
-            self.setup_cw_resource_trackers()
+            try:
+                if self.credpath and not ec2_ip:
+                    ec2_ip = self.get_ec2_ip()
+                self.setup_ec2_connection(endpoint=ec2_ip, path="/services/Eucalyptus", port=8773, is_secure=False, region=region, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, APIVersion=APIVersion, boto_debug=boto_debug)
+                self.setup_ec2_resource_trackers()
+                self.setup_iam_connection(endpoint=ec2_ip, path="/services/Euare", port=8773, is_secure=False, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,  boto_debug=boto_debug)
+                self.setup_sts_connection( endpoint=ec2_ip, path="/services/Eucalyptus", port=8773, is_secure=False, region=region, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
+                self.setup_cw_connection( endpoint=ec2_ip, path="/services/CloudWatch", port=8773, is_secure=False, region=region, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
+                self.setup_cw_resource_trackers()
+            except Exception, e:
+                raise Exception("Unable to create EC2 connection because of: " + str(e) )
+
+            try:
+                if self.credpath and not s3_ip:
+                    s3_ip = self.get_s3_ip()
+                self.setup_s3_connection(endpoint=s3_ip, path="/services/Walrus", port=8773, is_secure=False,aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,  boto_debug=boto_debug)
+                self.setup_s3_resource_trackers()
+            except Exception, e:
+                raise Exception("Unable to create S3 connection because of: " + str(e) )
+
+            try:
+                if self.credpath and not as_ip:
+                    as_ip = self.get_as_ip()
+                self.setup_as_connection(endpoint=as_ip, path="/services/AutoScaling", port=8773, is_secure=False, region=region, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
+            except Exception, e:
+                self.debug("Unable to create AS connection because of: " + str(e) )
 
     def get_available_vms(self, type=None, zone=None):
         """

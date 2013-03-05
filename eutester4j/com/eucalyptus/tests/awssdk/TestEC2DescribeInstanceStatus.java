@@ -27,6 +27,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+
 import org.testng.annotations.Test;
 import com.amazonaws.services.ec2.AmazonEC2;
 import com.amazonaws.services.ec2.model.DescribeInstanceStatusRequest;
@@ -51,33 +52,28 @@ public class TestEC2DescribeInstanceStatus {
 
 	@Test
 	public void EC2DescribeInstanceStatusTest() throws Exception {
-		final String credpath = "/Users/tony/Desktop/as_test_cloud/eucarc";
-		final String ec2Endpoint = parseEucarc(credpath, "EC2_URL") + "/";
-		final String secretKey = parseEucarc(credpath, "EC2_SECRET_KEY")
-				.replace("'", "");
-		final String accessKey = parseEucarc(credpath, "EC2_ACCESS_KEY")
-				.replace("'", "");
-		final AmazonEC2 ec2 = getEc2Client(accessKey, secretKey, ec2Endpoint);
-		final String imageId = findImage(ec2);
-		final String namePrefix = eucaUUID() + "-";
-		print("Using resource prefix for test: " + namePrefix);
+        getCloudInfo();
+        final AmazonEC2 ec2 = getEc2Client(ACCESS_KEY, SECRET_KEY, EC2_ENDPOINT);
+        final String imageId = findImage(ec2);
+        final String namePrefix = eucaUUID() + "-";
+        logger.info("Using resource prefix for test: " + namePrefix);
 
 		// End discovery, start test
 		final List<Runnable> cleanupTasks = new ArrayList<Runnable>();
 		try {
 			// Create launch configuration
-			print("Running instance");
+			logger.info("Running instance");
 			final RunInstancesResult runResult = ec2
 					.runInstances(new RunInstancesRequest()
 							.withImageId(imageId).withMinCount(1)
 							.withMaxCount(1));
 			final String instanceId = getInstancesIds(
 					runResult.getReservation()).get(0);
-			print("Launched instance: " + instanceId);
+			logger.info("Launched instance: " + instanceId);
 			cleanupTasks.add(new Runnable() {
 				@Override
 				public void run() {
-					print("Terminating instance: " + instanceId);
+					logger.info("Terminating instance: " + instanceId);
 					ec2.terminateInstances(new TerminateInstancesRequest()
 							.withInstanceIds(instanceId));
 				}
@@ -127,7 +123,7 @@ public class TestEC2DescribeInstanceStatus {
 				final String filterGoodValue = values[1];
 				final String filterBadValue = values[2];
 
-				print("Testing filter - " + filterName);
+				logger.info("Testing filter - " + filterName);
 				assertThat(
 						describeInstanceStatus(ec2, instanceId, filterName,
 								filterGoodValue, 1), "Expected result for "
@@ -138,7 +134,7 @@ public class TestEC2DescribeInstanceStatus {
 								+ filterName + "=" + filterBadValue);
 			}
 
-			print("Test complete");
+			logger.info("Test complete");
 		} finally {
 			// Attempt to clean up anything we created
 			Collections.reverse(cleanupTasks);
@@ -187,7 +183,7 @@ public class TestEC2DescribeInstanceStatus {
 
 	private String waitForInstance(final AmazonEC2 ec2, final long timeout,
 			final String expectedId, final String state) throws Exception {
-		print("Waiting for instance state " + state);
+		logger.info("Waiting for instance state " + state);
 		String az = null;
 		final long startTime = System.currentTimeMillis();
 		boolean completed = false;
@@ -217,7 +213,7 @@ public class TestEC2DescribeInstanceStatus {
 		}
 		assertThat(completed,
 				"Instance not reported within the expected timeout");
-		print("Instance reported " + state + " in "
+		logger.info("Instance reported " + state + " in "
 				+ (System.currentTimeMillis() - startTime) + "ms");
 		return az;
 	}

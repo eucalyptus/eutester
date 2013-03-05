@@ -65,25 +65,25 @@ public class TestAutoScalingMultipleAvailabilityZones {
 				.getZoneName();
 		final String availabilityZone2 = azResult.getAvailabilityZones().get(1)
 				.getZoneName();
-		print("Using availability zones: "
+		logger.info("Using availability zones: "
 				+ Arrays.asList(availabilityZone1, availabilityZone2));
 
 		// End discovery, start test
 		final String namePrefix = eucaUUID() + "-";
-		print("Using resource prefix for test: " + namePrefix);
+		logger.info("Using resource prefix for test: " + namePrefix);
 
 		final List<Runnable> cleanupTasks = new ArrayList<Runnable>();
 		try {
 			// Create launch configuration
 			final String configName = namePrefix + "MultipleZones";
-			print("Creating launch configuration: " + configName);
+			logger.info("Creating launch configuration: " + configName);
 			as.createLaunchConfiguration(new CreateLaunchConfigurationRequest()
 					.withLaunchConfigurationName(configName)
-					.withImageId(imageId).withInstanceType(instanceType));
+					.withImageId(imageId).withInstanceType(INSTANCE_TYPE));
 			cleanupTasks.add(new Runnable() {
 				@Override
 				public void run() {
-					print("Deleting launch configuration: " + configName);
+					logger.info("Deleting launch configuration: " + configName);
 					as.deleteLaunchConfiguration(new DeleteLaunchConfigurationRequest()
 							.withLaunchConfigurationName(configName));
 				}
@@ -91,7 +91,7 @@ public class TestAutoScalingMultipleAvailabilityZones {
 
 			// Create scaling group
 			final String groupName = namePrefix + "MultipleZones";
-			print("Creating auto scaling group: " + groupName);
+			logger.info("Creating auto scaling group: " + groupName);
 			as.createAutoScalingGroup(new CreateAutoScalingGroupRequest()
 					.withAutoScalingGroupName(groupName)
 					.withLaunchConfigurationName(configName)
@@ -104,7 +104,7 @@ public class TestAutoScalingMultipleAvailabilityZones {
 			cleanupTasks.add(new Runnable() {
 				@Override
 				public void run() {
-					print("Deleting group: " + groupName);
+					logger.info("Deleting group: " + groupName);
 					as.deleteAutoScalingGroup(new DeleteAutoScalingGroupRequest()
 							.withAutoScalingGroupName(groupName)
 							.withForceDelete(true));
@@ -112,52 +112,52 @@ public class TestAutoScalingMultipleAvailabilityZones {
 			});
 
 			// Wait for instances to launch
-			print("Waiting for 2 instances to launch");
+			logger.info("Waiting for 2 instances to launch");
 			final long timeout = TimeUnit.MINUTES.toMillis(2);
 			List<Instance> instances = (List<Instance>) waitForInstances(ec2, timeout, 2, groupName, false);
 			assertBalanced(instances, availabilityZone1, availabilityZone2);
 
 			// Update group desired capacity and wait for instances to launch
-			print("Setting desired capacity to 4 for group: " + groupName);
+			logger.info("Setting desired capacity to 4 for group: " + groupName);
 			as.setDesiredCapacity(new SetDesiredCapacityRequest()
 					.withAutoScalingGroupName(groupName).withDesiredCapacity(4));
 
 			// Wait for instances to launch
-			print("Waiting for 2 instances to launch");
+			logger.info("Waiting for 2 instances to launch");
 			instances = (List<Instance>) waitForInstances(ec2, timeout, 4, groupName, false);
 			assertBalanced(instances, availabilityZone1, availabilityZone2);
 
 			// Update group desired capacity and wait for instances to launch
-			print("Setting desired capacity to 2 for group: " + groupName);
+			logger.info("Setting desired capacity to 2 for group: " + groupName);
 			as.setDesiredCapacity(new SetDesiredCapacityRequest()
 					.withAutoScalingGroupName(groupName).withDesiredCapacity(2));
 
 			// Wait for instances to terminate
-			print("Waiting for 2 instances to terminate");
+			logger.info("Waiting for 2 instances to terminate");
 			instances = (List<Instance>) waitForInstances(ec2, timeout, 2, groupName, false);
 			assertBalanced(instances, availabilityZone1, availabilityZone2);
 
 			// Update group desired capacity and wait for instances to terminate
-			print("Setting desired capacity to 0 for group: " + groupName);
+			logger.info("Setting desired capacity to 0 for group: " + groupName);
 			as.setDesiredCapacity(new SetDesiredCapacityRequest()
 					.withAutoScalingGroupName(groupName).withDesiredCapacity(0));
 
 			// Wait for instances to terminate
-			print("Waiting for 2 instances to terminate");
+			logger.info("Waiting for 2 instances to terminate");
 			waitForInstances(ec2, timeout, 0, groupName, false);
 
 			// Update group desired capacity and wait for instances to launch
-			print("Setting desired capacity to 0 for group: " + groupName);
+			logger.info("Setting desired capacity to 0 for group: " + groupName);
 			as.setDesiredCapacity(new SetDesiredCapacityRequest()
 					.withAutoScalingGroupName(groupName).withDesiredCapacity(4));
 
 			// Wait for instances to launch
-			print("Waiting for 4 instances to launch");
+			logger.info("Waiting for 4 instances to launch");
 			instances = (List<Instance>) waitForInstances(ec2, timeout, 4,
 					groupName, false);
 			assertBalanced(instances, availabilityZone1, availabilityZone2);
 
-			print("Test complete");
+			logger.info("Test complete");
 		} finally {
 			// Attempt to clean up anything we created
 			Collections.reverse(cleanupTasks);

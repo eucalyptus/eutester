@@ -83,7 +83,7 @@ class Qa_214_volume_churn(EutesterTestCase):
         try:
             self.tester.cleanup_artifacts()
         except Exception, e:
-            raise Exception('Cleanupfailed:'+str(err))
+            raise Exception('Cleanupfailed:'+str(e))
     
     def launch_test_instance(self):
         self.reservation = self.tester.run_instance(self.image, keypair=self.keypair, group=self.group,timeout=480)

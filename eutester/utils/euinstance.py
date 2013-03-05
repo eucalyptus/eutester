@@ -882,7 +882,7 @@ class EuInstance(Instance, TaggedResource):
         try:
             voldev = euvolume.guestdev
             timeout = euvolume.size * timepergig
-            md5 = self.get_dev_md5(voldev, length)
+            md5 = self.get_dev_md5(voldev, length,timeout)
             self.debug("Got MD5 for Volume:"+euvolume.id+" dev:"+voldev+" md5:"+md5)
             if updatevol:
                 euvolume.md5=md5

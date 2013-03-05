@@ -120,7 +120,7 @@ public class Eutester4jTest {
 		try {
 			ec2Conn.describeAvailabilityZones();
 		} catch (Exception e) {
-			System.out.println("Got Expected Failure: " +e.getMessage());
+			logger.info("Got Expected Failure: " +e.getMessage());
 			AssertJUnit.assertTrue(e.getMessage().length() > 0);
 		} 
 	}
@@ -137,7 +137,7 @@ public class Eutester4jTest {
 		try {
 			ec2Conn.describeAvailabilityZones();
 		} catch (Exception e) {
-			System.out.println("Got Expected Faiilure: " +e.getMessage());
+			logger.info("Got Expected Faiilure: " +e.getMessage());
 			AssertJUnit.assertTrue(e.getMessage().length() > 0);
 		} 
 	}
@@ -202,15 +202,15 @@ public class Eutester4jTest {
 	@Test(enabled=false)
 	public void testRunInstances(){
 		int initalInstanceCount = getInstancesList(ec2).size();
-		runInstances(ec2, emi, keyName, instanceType, securityGroups, 1, 1);
+		runInstances(ec2, emi, keyName, INSTANCE_TYPE, securityGroups, 1, 1);
 		AssertJUnit.assertTrue(getInstancesList(ec2).size() > initalInstanceCount);
 		
 		// terminate after the test
 		List<String> instanceIds = new ArrayList<String>();
 		instanceIds.add(getLastlaunchedInstance(ec2).get(0).getInstanceId());
-		System.out.println("Going to terminate " + getLastlaunchedInstance(ec2).get(0).getInstanceId());
+		logger.info("Going to terminate " + getLastlaunchedInstance(ec2).get(0).getInstanceId());
 		terminateInstances(ec2, instanceIds);
-		System.out.println("Terminate requested");
+		logger.info("Terminate requested");
 
 	}
 	
@@ -222,7 +222,7 @@ public class Eutester4jTest {
 	 */
 	@Test(enabled=false)
 	public void testStopInstances(){
-		runInstances(ec2, emi, keyName, instanceType, securityGroups, 1, 1);
+		runInstances(ec2, emi, keyName, INSTANCE_TYPE, securityGroups, 1, 1);
 		List<String> instanceIds = new ArrayList<String>();
 		instanceIds.add(getLastlaunchedInstance(ec2).get(0).getInstanceId());
 		
@@ -234,7 +234,7 @@ public class Eutester4jTest {
 		
 		final InstanceStatus status = instanceStatusResult
 				.getInstanceStatuses().get(0);
-		System.out.println("Status: " + status.getInstanceState().toString());
+		logger.info("Status: " + status.getInstanceState().toString());
 		while(!getLastlaunchedInstance(ec2).get(0).getState().getName().equals("running")){}
 		stopInstances(ec2, instanceIds);
 		while(!getLastlaunchedInstance(ec2).get(0).getState().getName().equals("stopped")){}
@@ -251,14 +251,14 @@ public class Eutester4jTest {
 	 */
 	@Test(enabled=false)
 	public void testTerminateInstances(){
-		runInstances(ec2, emi, keyName, instanceType, securityGroups, 1, 1);
+		runInstances(ec2, emi, keyName, INSTANCE_TYPE, securityGroups, 1, 1);
 		List<String> instanceIds = new ArrayList<String>();
 		instanceIds.add(getLastlaunchedInstance(ec2).get(0).getInstanceId());
-		System.out.println("Created instance = " + getLastlaunchedInstance(ec2).get(0).getInstanceId());
-		System.out.println("State: " + getLastlaunchedInstance(ec2).get(0).getState());
-		System.out.println("State before terminate = " + getLastlaunchedInstance(ec2).get(0).getState().getName());
+		logger.info("Created instance = " + getLastlaunchedInstance(ec2).get(0).getInstanceId());
+		logger.info("State: " + getLastlaunchedInstance(ec2).get(0).getState());
+		logger.info("State before terminate = " + getLastlaunchedInstance(ec2).get(0).getState().getName());
 		terminateInstances(ec2, instanceIds);
-		System.out.println("State after terminate = " + getLastlaunchedInstance(ec2).get(0).getState().getName());
+		logger.info("State after terminate = " + getLastlaunchedInstance(ec2).get(0).getState().getName());
 		while(!getLastlaunchedInstance(ec2).get(0).getState().getName().equals("terminated")){}
 		AssertJUnit.assertTrue(getLastlaunchedInstance(ec2).get(0).getState().getName().equals("terminated"));
 	}
@@ -282,7 +282,7 @@ public class Eutester4jTest {
 	public void testBasicLaunchConfig(){
 		String launchConfigurationName = "LC-" + eucaUUID();
 		try {
-			createLaunchConfig(as, launchConfigurationName, emi, instanceType, keyName, securityGroups);
+			createLaunchConfig(as, launchConfigurationName, emi, INSTANCE_TYPE, keyName, securityGroups);
 			
 			List<LaunchConfiguration> launchConfigs = describeLaunchConfigs(as);
 			

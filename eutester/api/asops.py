@@ -29,7 +29,6 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 # Author: tony@eucalyptus.com
-
 from eutester import Eutester
 import re
 import copy
@@ -235,3 +234,61 @@ class ASops(Eutester):
     def delete_as_policy(self, policy_name=None, autoscale_group=None):
         self.debug("Deleting Policy: " + policy_name + " from group: " + autoscale_group)
         self.AS.delete_policy(policy_name=policy_name,autoscale_group=autoscale_group)
+
+    def delete_all_autoscaling_groups(self):
+        """
+        This will attempt to delete all launch configs and all auto scaling groups
+        """
+        ### clear all ASGs
+        for asg in self.describe_as_group():
+            self.debug("Found Auto Scaling Group: " + asg.name)
+            self.delete_as_group(names=asg.name, force=True)
+        if len(self.describe_as_group()) != 0:
+            self.debug("Some AS groups remain")
+            for asg in self.describe_as_group():
+                self.debug("Found Auto Scaling Group: " + asg.name)
+
+    def delete_all_launch_configs(self):
+        ### clear all LCs
+        """
+        Attempt to remove all launch configs
+        """
+        for lc in self.describe_launch_config():
+            self.debug("Found Launch Config:" + lc.name)
+            self.delete_launch_config(lc.name)
+        if len(self.describe_launch_config()) != 0:
+            self.debug("Some Launch Configs Remain")
+            for lc in self.describe_launch_config():
+                self.debug("Found Launch Config:" + lc.name)
+
+    def get_as_ip(self):
+        """Parse the eucarc for the EC2_URL"""
+        as_url = self.parse_eucarc("AWS_AUTO_SCALING_URL")
+        return as_url.split("/")[2].split(":")[0]
+
+    # def wait_for_group(self, as_group=None, state="Successful", poll_count=None, timeout=480):
+    #     """
+    #     conn.get_all_activities(ag)
+    #     autoscale_group, activity_ids=None
+    #      [Activity:Launching a new EC2 instance status:Successful progress:100, ...]
+    #     """
+    #     if poll_count is not None:
+    #         timeout = poll_count * 10
+    #     self.debug("Beginning poll loop for group " + as_group + " to go to " + str(state) )
+    #     start = time.time()
+    #     elapsed = 0
+    #     while(elapsed < timeout) and (self.AS.get_all_activities(as_group)[0].status != state):
+    #         self.debug( "Auto Scaling Group(" + as_group.id + ") State(" + as_group.state + "), elapsed:" +
+    #                     str(elapsed) + "/" + str(timeout))
+    #         time.sleep(10)
+    #         self.AS.get_all_activities(as_group)
+    #         elapsed = int(time.time()- start)
+    #         if self.AS.get_all_activities(as_group).status != instance_original_state:
+    #             break
+    #     self.debug("Instance("+as_group.id+") State("+as_group.state+") time elapsed (" +str(elapsed).split('.')[0]+")")
+    #     #self.debug( "Waited a total o" + str( (self.poll_count - poll_count) * 10 ) + " seconds" )
+    #     if as_group.state != state:
+    #         raise Exception( str(as_group) + " did not enter "+str(state)+" state after elapsed:"+str(elapsed))
+    #
+    #     self.debug( str(as_group) + ' is now in ' + as_group.state )
+    #     return True

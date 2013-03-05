@@ -53,7 +53,7 @@ public class TestAutoScalingEc2InstanceHealthMonitoring {
 		final String imageId = findImage(ec2);
 		final String availabilityZone = findAvalablityZone(ec2);
 		final String namePrefix = eucaUUID() + "-";
-		print("Using resource prefix for test: " + namePrefix);
+		logger.info("Using resource prefix for test: " + namePrefix);
 
 		// End discovery, start test
 		final List<Runnable> cleanupTasks = new ArrayList<Runnable>();
@@ -61,14 +61,14 @@ public class TestAutoScalingEc2InstanceHealthMonitoring {
 			// Create launch configuration
 			final String configName = namePrefix
 					+ "Ec2InstanceHealthMonitoringTest";
-			print("Creating launch configuration: " + configName);
+			logger.info("Creating launch configuration: " + configName);
 			as.createLaunchConfiguration(new CreateLaunchConfigurationRequest()
 					.withLaunchConfigurationName(configName)
-					.withImageId(imageId).withInstanceType(instanceType));
+					.withImageId(imageId).withInstanceType(INSTANCE_TYPE));
 			cleanupTasks.add(new Runnable() {
 				@Override
 				public void run() {
-					print("Deleting launch configuration: " + configName);
+					logger.info("Deleting launch configuration: " + configName);
 					as.deleteLaunchConfiguration(new DeleteLaunchConfigurationRequest()
 							.withLaunchConfigurationName(configName));
 				}
@@ -77,7 +77,7 @@ public class TestAutoScalingEc2InstanceHealthMonitoring {
 			// Create scaling group
 			final String groupName = namePrefix
 					+ "Ec2InstanceHealthMonitoringTest";
-			print("Creating auto scaling group: " + groupName);
+			logger.info("Creating auto scaling group: " + groupName);
 			as.createAutoScalingGroup(new CreateAutoScalingGroupRequest()
 					.withAutoScalingGroupName(groupName)
 					.withLaunchConfigurationName(configName)
@@ -89,7 +89,7 @@ public class TestAutoScalingEc2InstanceHealthMonitoring {
 			cleanupTasks.add(new Runnable() {
 				@Override
 				public void run() {
-					print("Deleting group: " + groupName);
+					logger.info("Deleting group: " + groupName);
 					as.deleteAutoScalingGroup(new DeleteAutoScalingGroupRequest()
 							.withAutoScalingGroupName(groupName)
 							.withForceDelete(true));
@@ -99,42 +99,42 @@ public class TestAutoScalingEc2InstanceHealthMonitoring {
 				@Override
 				public void run() {
 					final List<String> instanceIds = (List<String>) getInstancesForGroup(ec2, groupName, null, true);
-					print("Terminating instances: " + instanceIds);
+					logger.info("Terminating instances: " + instanceIds);
 					ec2.terminateInstances(new TerminateInstancesRequest()
 							.withInstanceIds(instanceIds));
 				}
 			});
 
 			// Wait for instances to launch
-			print("Waiting for instance to launch");
+			logger.info("Waiting for instance to launch");
 			final long timeout = TimeUnit.MINUTES.toMillis(2);
 			final String instanceId = (String) waitForInstances(ec2, timeout, 1, groupName, true).get(0);
 
 			// Verify initial health status
-			print("Verifying initial instance status");
+			logger.info("Verifying initial instance status");
 			verifyInstanceHealthStatus(as, instanceId, "Healthy");
 
 			// Terminate via EC2
-			print("Terminating instance via EC2 : " + instanceId);
+			logger.info("Terminating instance via EC2 : " + instanceId);
 			ec2.terminateInstances(new TerminateInstancesRequest()
 					.withInstanceIds(instanceId));
 
 			// Verify initial health status
-			print("Waiting for auto scaling instance health to change : "
+			logger.info("Waiting for auto scaling instance health to change : "
 					+ instanceId);
 			waitForHealthStatus(as, instanceId, "Unhealthy");
 
 			// Delay to allow for health status to be acted on
-			print("Waiting for unhealthy instance replacement : " + instanceId);
+			logger.info("Waiting for unhealthy instance replacement : " + instanceId);
 			Thread.sleep(TimeUnit.SECONDS.toMillis(30));
 
 			// Wait for replacement instance
-			print("Waiting for replacement instance to launch");
+			logger.info("Waiting for replacement instance to launch");
 			final String replacementInstanceId = (String) waitForInstances(ec2, timeout, 1, groupName, true).get(0);
 			assertThat(!replacementInstanceId.equals(instanceId),
 					"Instance not replaced");
 
-			print("Test complete");
+			logger.info("Test complete");
 		} finally {
 			// Attempt to clean up anything we created
 			Collections.reverse(cleanupTasks);
