@@ -167,7 +167,7 @@ class Eunode:
         service_state = None
         if self.machine:
             try:
-                self.sys("service eucalyptus-nc status | grep running", code=0)
+                self.sys("service eucalyptus-nc status", code=0)
                 service_state = 'running'
             except sshconnection.CommandExitCodeException:
                 service_state = 'not_running'
@@ -210,6 +210,7 @@ class Eunode:
 
 
 class Euservice:
+
     def __init__(self, service_string, tester = None):
         values = service_string.split()
         self.type = values[1]
@@ -248,6 +249,12 @@ class Euservice:
     
     def start(self):
         self.tester.service_manager.start(self)
+
+    def get_service_string(self):
+        if self.type == 'cluster':
+            return 'eucalyptus-cc'
+        else:
+            return 'eucalyptus-cloud'
 
     def print_self(self, header=True, footer=True, printmethod=None):
         part_len = 16 #self.partition
@@ -396,9 +403,13 @@ class EuserviceManager(object):
         self.debug("Checking the following CLCs for services/status: " + str(dbg_msg) + "...")
         while good_clc_hosts and not describe_services:
             clc_process_uptimes = []
+            process_uptime = None
             for clc in good_clc_hosts:
                 try:
-                    clc_process_uptimes.append(clc.get_eucalyptus_cloud_process_uptime())
+                    #Save proess uptime for potential debug if request fails.
+                    process_uptime = self.tester.clc.get_eucalyptus_cloud_process_uptime()
+                    #Store all CLC's process uptimes in list, compare for youngest later...
+                    clc_process_uptimes.append(process_uptime)
                     out = clc.sys(self.eucaprefix + "/usr/sbin/euca-describe-services " + str(type), code=0,timeout=15)
                     for line in out:
                         if re.search("SERVICE.+"+str(partition), line):
@@ -413,10 +424,8 @@ class EuserviceManager(object):
                 except Exception, e:
                     self.debug("Did not get a valid response from clc:" + str(clc.hostname) +", err:" +str(e))
                     err_msg += str(e) + "\n"
-                    #Check to make sure the CLC process is evening running on this machine, and if the youngest CLC process
+                    # Check to make sure the CLC process is evening running on this machine, and if the youngest CLC process
                     # has been up for a reasonable amount of time to sync and/or service requests.
-                    process_uptime = self.tester.clc.get_eucalyptus_cloud_process_uptime()
-
                     is_running = self.tester.clc.get_eucalyptus_cloud_is_running_status()
                     if not is_running:
                         good_clc_hosts.remove(self.tester.clc)
@@ -425,7 +434,9 @@ class EuserviceManager(object):
                                    + ", service_running:"+ str(is_running) + "\n"
             #If we've checked both CLCs and still don't have a valid response to parse, 'and' the youngest CLC
             #process uptime has exceeed 'allow_clc_start_time' then raise error.
-            if not good_clc_hosts or (not describe_services and min(clc_process_uptimes) > allow_clc_start_time):
+            if not good_clc_hosts or \
+                    not clc_process_uptimes or \
+                    (not describe_services and min(clc_process_uptimes) > allow_clc_start_time):
                 raise Exception("Could not get services from " + str(clc_hostnames)
                                 + ", after clc process uptime of at least "
                                 + str(allow_clc_start_time) + "\nErrors:"+str(err_msg))
@@ -849,7 +860,8 @@ class EuserviceManager(object):
         if euservice.type == self.node_type_string:
             service_name = "eucalyptus-nc"
         if not euservice.machine.found(self.tester.eucapath + "/etc/init.d/" + service_name + " " + command, "done"):
-            self.tester.fail("Was unable to stop service: " + euservice.name + " on host " + euservice.machine.hostname)
+            self.tester.fail("Was unable to " +str(command) + " service: " + euservice.name + " on host "
+                             + euservice.machine.hostname)
             raise Exception("Did not properly modify service")
     
     def stop(self, euservice):
@@ -860,7 +872,13 @@ class EuserviceManager(object):
         euservice.running = False
         
     def start(self, euservice):
-        self.modify_process(euservice, "start")
+        if euservice.type == 'cluster':
+            if euservice.machine.get_eucalyptus_cc_is_running_status():
+                euservice.running = True
+                return
+        else:
+            if not euservice.machine.get_eucalyptus_cloud_is_running_status():
+                self.modify_process(euservice, "start")
         euservice.running = True
     
     def enable(self,euservice):

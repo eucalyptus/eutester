@@ -307,40 +307,36 @@ class ImageUtils(EutesterTestCase):
                        name=None,
                        architecture=None,
                        root_device_name=None,
+                       description="None",
                        block_device_mapping=None,
                        destination=None,
                        debug=False):
-        '''convience method to register an s3 image manifest, calls eutester main method'''
-<<<<<<< HEAD
-        return self.tester.register_image( manifest, rdn=root_device_name, description=description, bdmdev=block_device_mapping, name=name, ramdisk=ramdisk, kernel=kernel)
+        '''convience method to register an s3 image manifest, calls eutester main method
+        :param manifest: manfest to register
+        :param prefix:
+        :param kernel:
+        :param ramdisk:
+        :param name:
+        :param architecture:
+        :param root_device_name:
+        :param description:
+        :param block_device_mapping:
+        :param destination:
+        :param debug:
+        '''
+        return self.tester.register_image( manifest,
+                                           rdn=root_device_name,
+                                           description=description,
+                                           bdmdev=block_device_mapping,
+                                           name=name,
+                                           ramdisk=ramdisk,
+                                           kernel=kernel)
 
 
-    def bundle_instance_monitor(self,
-                                instance,
-                                component=None,
-                                component_credpath=None,
-                                bucket_name=None,
-                                prefix=None,
-                                access_key=None,
-                                secret_key=None,
-                                timeout_min=25
-                                ):
-        """
-        REQUIRED PARAMETERS
-        :param instance: boto instance to bundle
-        :param component: the component which the tools are to be executed on
-        :param component_credpath: String, path to creds on machine which tools are executed on
-        :param bucket_name: Name of the bucket to upload. Default='win+ramdom'
-        :param prefix:  The prefix for the image file name:Default='windows-bun + emi + random.'
-        :param access_key:  String, Access Key ID of the owner of the bucket
-        :param secret_key:  String, Secret key used to sign the upload policy
-        :param timeout_min: int, minutes to wait before timing out.
-        """
-        raise Exception('Test method not implemented yet')
 
 
-    
-    def create_emi_from_url(self, 
+
+    def create_emi_from_url(self,
                             url,
                             component=None,
                             bucketname=None, 
