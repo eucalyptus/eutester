@@ -35,15 +35,17 @@ if __name__ == "__main__":
     ## If given command line arguments, use them as test names to launch
 
     testcase= EutesterTestCase(name='multi_node_churn')    
-    testcase.setup_parser(description="Attempts to test and provide info on focused areas related to Eucalyptus EBS related functionality.", 
-                          testlist=False)
-    testcase.parser.add_argument('--count', type=int, help='Number of times to run attach/detach churn',default=None)
-    testcase.parser.add_argument('--nodecount', type=int, help='Number of nodes in env',default=None)
-    testcase.parser.add_argument('--fof', dest='fof', help="Freeze test on fail, do not remove or tear down test items",action='store_true', default=None)
+    testcase.setup_parser(description="Attempts to test and provide info on focused areas related to Eucalyptus EBS "
+                                      "related functionality.", testlist=False)
+    testcase.parser.add_argument('--count', type=int, help='Number of times to run attach/detach churn, default:10',
+                                 default=10)
+    testcase.parser.add_argument('--nodecount', type=int, help='Number of nodes in env, default:2',default=2)
+    testcase.parser.add_argument('--fof', dest='fof', help="Freeze test on fail, do not remove or tear down test items",
+                                 action='store_true', default=None)
     testcase.get_args()
-    count = testcase.args.count or 10
+    count = testcase.args.count
     fof =  testcase.args.fof if testcase.args.fof is not None else False
-    nodecount = testcase.args.nodecount or 2
+    nodecount = testcase.args.nodecount
     ebstestsuite= testcase.do_with_args(EbsTestSuite)
     if testcase.args.fof:
         testcase.clean_method = lambda: testcase.status("Freeze on fail flag is set, not cleaning!")

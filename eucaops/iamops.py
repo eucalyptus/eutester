@@ -36,7 +36,11 @@ import boto
 class IAMops(Eutester):
 
     def __init__(self,credpath=None, endpoint="iam.amazonaws.com", aws_access_key_id=None,aws_secret_access_key=None, is_secure=True, port=443, path='/', boto_debug=0 ):
-        super(IAMops, self).__init__(credpath=credpath, aws_access_key_id=aws_access_key_id ,aws_secret_access_key=aws_secret_access_key)
+        self.aws_access_key_id = aws_access_key_id
+        self.aws_secret_access_key = aws_secret_access_key
+        self.user_id = None
+        self.account_id = None
+        super(IAMops, self).__init__(credpath=credpath)
         self.setup_iam_connection(endpoint=endpoint, aws_access_key_id=self.aws_access_key_id ,aws_secret_access_key=self.aws_secret_access_key, is_secure=is_secure, port=port,path=path, boto_debug=boto_debug )
 
     def setup_iam_connection(self, endpoint="iam.amazonaws.com", aws_access_key_id=None,aws_secret_access_key=None, is_secure=True, port=443, path='/', boto_debug=0 ):
@@ -437,6 +441,61 @@ class IAMops(Eutester):
             retlist.append(group)
         return retlist
         
+    def get_group_policy_names(self, group_name, policy_name=None,delegate_account=None, search=False):
+        """
+        Returns list of policy names associated with a given group, and match given criteria.
+
+        :param group_name: string - group to get policies for.
+        :param policy_name: regex - to match/filter returned policies
+        :param delegate_account: string - used for group lookup
+        :param search: specify whether to use match or search when filtering the returned list
+        :return: list of policy names
+        """
+        retlist = []
+        params = {}
+        if search:
+            re_meth = re.search
+        else:
+            re_meth = re.match
+        params = {'GroupName': group_name}
+        if delegate_account:
+            params['DelegateAccount'] = delegate_account
+        response = self.euare.get_response('ListGroupPolicies',params, list_marker='PolicyNames')
+        for name in response['list_group_policies_response']['list_group_policies_result']['policy_names']:
+            if policy_name is not None and not re_meth(policy_name, name):
+                continue
+            retlist.append(name)
+        return retlist
+
+    def get_group_policies(self, group_name, policy_name=None,delegate_account=None, doc=None, search=False):
+        """
+        Returns list of policy dicts associated with a given group, and match given criteria.
+
+        :param group_name: string - group to get policies for.
+        :param policy_name: regex - to match/filter returned policies
+        :param delegate_account: string - used for group lookup
+        :param doc: policy document to use as a filter
+        :param search: boolean - specify whether to use match or search when filtering the returned list
+        :return:
+        """
+        retlist = []
+        params = {}
+        if search:
+            re_meth = re.search
+        else:
+            re_meth = re.match
+        names = self.get_group_policy_names(group_name, policy_name=policy_name, delegate_account=delegate_account, search=search)
+
+        for p_name in names:
+            params = {'GroupName': group_name,
+                      'PolicyName': p_name}
+            if delegate_account:
+                params['DelegateAccount'] = delegate_account
+            policy = self.euare.get_response('GetGroupPolicy', params, verb='POST')['get_group_policy_response']['get_group_policy_result']
+            if doc is not None and not re_meth(doc, policy['policy_document']):
+                continue
+            retlist.append(policy)
+        return retlist
     
     def create_group(self, group_name,path="/", delegate_account=None):
         """
