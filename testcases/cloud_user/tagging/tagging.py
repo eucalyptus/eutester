@@ -273,12 +273,12 @@ class TaggingBasics(EutesterTestCase):
         ### Test non-tag Filtering
         ### Filters can be found here, most will be tested manually, but a spot check should be added
         ### http://docs.aws.amazon.com/AWSEC2/latest/CommandLineReference/ApiReference-cmd-DescribeSecurityGroups.html
+        group_name = "filter-test"
         group_description = "group-filtering"
-        filter_group = self.tester.add_group(group_name="filter-test", description=group_description)
+        filter_group = self.tester.add_group(group_name=group_name, description=group_description)
 
         description_filter = {u'description': group_description }
         owner_filter = {u'owner-id': filter_group.owner_id}
-
         description_match = self.tester.ec2.get_all_security_groups(filters=description_filter)
         self.debug("Groups matching description:" + str(description_match))
         owner_match = self.tester.ec2.get_all_security_groups(filters=owner_filter)
