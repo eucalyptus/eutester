@@ -2400,7 +2400,7 @@ class EC2ops(Eutester):
     def monitor_euinstances_to_running(self,instances, poll_interval=10, timeout=480):
         self.debug("("+str(len(instances))+") Monitor_instances_to_running starting...")
         #Wait for instances to go to running state...
-        self.monitor_euinstances_to_state(instances,timeout=timeout)
+        self.monitor_euinstances_to_state(instances, failstates=['terminated','shutting-down'],timeout=timeout)
         #Wait for instances in list to get valid ips, check for duplicates, etc...
         self.wait_for_valid_ip(instances, timeout)
         #Now attempt to connect to instances if connect flag is set in the instance...
@@ -2577,6 +2577,7 @@ class EC2ops(Eutester):
                                      state='running',
                                      min=None,
                                      poll_interval=10,
+                                     failstates=[],
                                      timeout=120,
                                      eof=True):
         """
@@ -2637,7 +2638,11 @@ class EC2ops(Eutester):
                         #This instance is in the correct state, remove from monitor list
                         good.append(instance)
                     else:
-                        self.debug("WAITING for "+dbgmsg)
+                        for failed_state in failstates:
+                            if instance.state == failed_state:
+                                raise Exception('FAILED STATE:'+ dbgmsg )
+
+                    self.debug("WAITING for "+dbgmsg)
                 except Exception, e:
                     failed.append(instance)
                     tb = self.get_traceback()
