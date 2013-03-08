@@ -157,7 +157,7 @@ class EuInstance(Instance, TaggedResource):
         if newins.root_device_type == 'ebs':
             try:
                 volume = newins.tester.get_volume(volume_id = newins.block_device_mapping.current_value.volume_id)
-                newins.bdm_vol = EuVolume.make_euvol_from_vol(volume, tester=newins.tester,cmdstart=news.cmdstart)
+                newins.bdm_vol = EuVolume.make_euvol_from_vol(volume, tester=newins.tester,cmdstart=newins.cmdstart)
             except:pass
                 
         if newins.auto_connect:
@@ -523,6 +523,7 @@ class EuInstance(Instance, TaggedResource):
                         time.sleep(5)
             
             if self.attached_vols or bad_vols:
+                attached_vol_error = ""
                 if bad_vols:
                     bad_vol_error = 'ERROR: Unsynced volumes found prior to issuing terminate, check test code:'+",".join(bad_vol_ids)
                 if self.attached_vols:
@@ -620,7 +621,7 @@ class EuInstance(Instance, TaggedResource):
                 fsize = randint(1048576,10485760)
         if not length:
             timeout = int(euvolume.size) * timepergig
-            return self.dd_monitor(ddif=str(srcdev), ddof=str(voldev), ddbs=bs,timeout=timeout)
+            return self.dd_monitor(ddif=str(srcdev), ddof=str(voldev), ddbs=fsize,timeout=timeout)
         else:
             timeout = timepergig * ((length/gb) or 1) 
             #write the volume id into the volume for starters
@@ -959,10 +960,10 @@ class EuInstance(Instance, TaggedResource):
             dev = self.get_free_scsi_dev()
             if euvol.md5:
                 #Monitor volume to attached, dont write/read head for md5 use existing. Check md5 sum later in get_unsynced_volumes. 
-                if (self.tester.attach_volume(self, euvolume, dev, pause=10,timeout=timepervol)):
+                if (self.tester.attach_volume(self, euvol, dev, pause=10,timeout=timepervol)):
                     self.attached_vols.append(euvol)
                 else:
-                    raise Exception('attach_euvolume_list: Test Failed to attach volume:'+str(euvolume.id))
+                    raise Exception('attach_euvolume_list: Test Failed to attach volume:'+str(euvol.id))
             else:
                 #monitor volume to attached and write unique string to head and record it's md5sum 
                 self.attach_euvolume(euvol, dev, timeout=timepervol)
@@ -1256,8 +1257,68 @@ class EuInstance(Instance, TaggedResource):
             return groups
         except Exception, e:
             self.debug("No group found for user:"+str(username)+", err:"+str(e))
-    
-    
+
+
+
+    def mount_attached_volume(self,
+                           volume,
+                           mkfs_cmd="mkfs.ext3",
+                           mountdir="/mnt",
+                           name=None):
+        """
+        Attempts to mount a block device associated with an attached volume.
+        Attempts to mkfs, and mkdir for mount if needed.
+
+        :param volume: euvolume obj
+        :param mkfs_cmd: string representing mkfs cmd, defaults to 'mkfs.ext3'
+        :param mountdir: dir to mount, defaults to '/mnt'
+        :param name: name of dir create within mountdir to mount volume, defaults to volume's id
+        :return: string representing path to volume's mounted dir
+        """
+        dev = volume.guestdev
+        name = name or volume.id
+        mountdir = mountdir.rstrip("/")+"/"
+        if not dev:
+            raise Exception(str(volume.id) + ': Volume guest device was not set, is this volume attached?')
+        mounted_dir = self.get_volume_mounted_dir(volume)
+        if mounted_dir:
+            return mounted_dir
+        try:
+            self.sys('blkid -o value -s TYPE ' + str(dev) + '*', code=0)
+        except:
+            self.sys(mkfs_cmd + " " + dev, code=0)
+        mount_point = mountdir+name
+        try:
+            self.assertFilePresent(mount_point)
+        except:
+            self.sys('mkdir -p ' + mount_point, code=0)
+        self.sys('mount ' + dev + ' ' + mount_point, code = 0)
+        return mount_point
+
+
+
+
+
+    def get_volume_mounted_dir(self, volume):
+        """
+        Attempts to fetch the dir/mount point for a given block-guestdev or a euvolume that contains attached guestdev
+        information.
+
+        :param volume: attached euvolume
+        :param guestdev: local block device path
+        :return: string representing path to mounted dir, or None if not found
+        """
+        mount_dir = None
+        guestdev = volume.guestdev
+        if not guestdev:
+            raise Exception('No guest device found or provided for to check for mounted state')
+        try:
+            mount_dir = self.sys('mount | grep ' + str(guestdev), code=0)[0].split()[2]
+        except Exception, e:
+            self.debug('Mount point for ' + str(guestdev) + 'not found:' + str(e))
+            return mount_dir
+        return mount_dir
+
     
     
     
