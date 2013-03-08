@@ -139,7 +139,7 @@ class Mpath_Monkey(EutesterTestCase):
             self.timer.start()
         except KeyboardInterrupt, k:
             if self.timer:
-                timer.cancel()
+                self.timer.cancel()
                 raise Exception('Caught keyboard interrupt...')
         nqstr = 'Running for: '+str(int(time.time()-self.start))+' seconds'
         my_queue.put(nqstr)
