@@ -31,24 +31,28 @@
  * 
  * @author tony
  */
+
+package com.eucalyptus.tests.awssdk;
+
+import static com.eucalyptus.tests.awssdk.Eutester4j.*;
+
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.Test;
 import org.testng.annotations.BeforeClass;
 import org.testng.AssertJUnit;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 import com.amazonaws.auth.AWSCredentials;
-import com.amazonaws.auth.PropertiesCredentials;
+import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.services.autoscaling.AmazonAutoScaling;
-import com.amazonaws.services.autoscaling.AmazonAutoScalingClient;
-import com.amazonaws.services.autoscaling.model.CreateLaunchConfigurationRequest;
-import com.amazonaws.services.autoscaling.model.InstanceMonitoring;
-import com.amazonaws.services.ec2.AmazonEC2Client;
 import com.amazonaws.services.ec2.AmazonEC2;
+import com.amazonaws.services.ec2.AmazonEC2Client;
 import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesResult;
+import com.amazonaws.services.ec2.model.DescribeInstanceStatusRequest;
+import com.amazonaws.services.ec2.model.DescribeInstanceStatusResult;
+import com.amazonaws.services.ec2.model.InstanceStatus;
 import com.amazonaws.services.ec2.model.SecurityGroup;
 import com.amazonaws.services.autoscaling.model.LaunchConfiguration;
 
@@ -58,67 +62,34 @@ import com.amazonaws.services.autoscaling.model.LaunchConfiguration;
  * To test AWS or Euca comment out the lines for the one you do not want to 
  * test ie. "//euca" lines and uncomment the one you do ie. the "//AWS" lines
  */
-public class Eutester4jTest extends Eutester4j {
+public class Eutester4jTest {
 	
 	private static AmazonEC2 ec2;
 	private static AmazonAutoScaling as;
-	private static String ec2Endpoint = null;
-	private static String asEndpoint = null;
-	private static String secretKey = null;
-	private static String accessKey= null;
-	private static String credpath = null;
-	
-	private static String secGroupName = "TestGroup-" + genRandomString();
-	private static String secGroupDesc = "TestDesc-" + genRandomString();
-	private static String keyName = "TestKey-" + genRandomString();
+	private static String emi;
+	private static String secGroupName = "TestGroup-" + eucaUUID();
+	private static String secGroupDesc = "TestDesc-" + eucaUUID();
+	private static String keyName = "TestKey-" + eucaUUID();
 	private static ArrayList<String> securityGroups = new ArrayList<String>();
+	
+//	private static String emi = "emi-8A1144D2"; //euca an emi you have access to
 
-	/*
-	 * for testing against euca cloud
-	 */
-	private static String emi = "emi-69E73A37"; //euca an emi you have access to
-	private static String type = "m1.small"; //euca
-	
-	/*
-	 * for testing against AWS
-	 */
-//	private static String type = "t1.micro"; //AWS
-//	private static String emi = "ami-921f3fd7"; //AWS an ami you have access to
-	
 	/**
 	 * Called once, before the first test is run. Creates an ec2 connection.
      * 
 	 * @throws java.lang.Exception
 	 */
 	@BeforeClass
-	public static void setUpBeforeClass() throws Exception {
+	public void setUpBeforeClass() throws Exception {
+        testInfo(this.getClass().getSimpleName());
+		getCloudInfo();
+		as = getAutoScalingClient(ACCESS_KEY, SECRET_KEY, AS_ENDPOINT);
+		ec2 = getEc2Client(ACCESS_KEY, SECRET_KEY, EC2_ENDPOINT);
+		emi = findImage(ec2);
 		
-		/*
-		 * For testing against Eucacloud
-		 */
-		credpath = "/Users/tony/Desktop/as_test_cloud/eucarc"; //euca
-		secretKey = parseEucarc(credpath, "EC2_SECRET_KEY").replace("'", ""); //euca
-		accessKey = parseEucarc(credpath, "EC2_ACCESS_KEY").replace("'", ""); //euca
-		ec2Endpoint = parseEucarc(credpath, "EC2_URL")+"/"; //euca
-		asEndpoint = parseEucarc(credpath, "AUTO_SCALING_URL") + "/"; //euca
-		System.out.println("DEBUG: got Auto Sclaing endpoint: " + asEndpoint); //euca
-		ec2 = ec2Connection(accessKey,secretKey); //euca
-		as = asConnection(accessKey, secretKey); //euca
-		
-		/*
-		 * For testing against AWS
-		 */
-//		AWSCredentials credentials = new PropertiesCredentials(
-//                Eutester4j.class.getResourceAsStream("AwsCredentials.properties")); //AWS
-//		ec2 = new AmazonEC2Client(credentials); //AWS
-//		as = new AmazonAutoScalingClient(credentials); //AWS
 //		ec2Endpoint = "http://ec2.us-west-1.amazonaws.com"; //AWS
 //		asEndpoint = "http://autoscaling.us-west-1.amazonaws.com"; //AWS
-//		secretKey = credentials.getAWSSecretKey(); //AWS
-//		accessKey = credentials.getAWSAccessKeyId(); //AWS
-		
-		ec2.setEndpoint(ec2Endpoint);
-		as.setEndpoint(asEndpoint);
+
 		createSecurityGoup(ec2, secGroupName, secGroupDesc);
 		createKeyPair(ec2, keyName);
 		securityGroups.add(secGroupName);
@@ -130,16 +101,12 @@ public class Eutester4jTest extends Eutester4j {
 	 * @throws java.lang.Exception
 	 */
 	@AfterClass
-	public static void tearDownAfterClass() throws Exception {
-		sleep(60); // give the system a chance to complete test actions
+	public void tearDownAfterClass() throws Exception {
+//		sleep(60); // give the system a chance to complete test actions
 		deleteKeyPair(ec2, keyName);
 		deleteSecurityGroup(ec2, secGroupName);
 		ec2 = null;
 		as=null;
-		secretKey = null;
-		accessKey = null;
-		ec2Endpoint = null;
-		asEndpoint = null;
 	}
 
 	/*
@@ -148,14 +115,15 @@ public class Eutester4jTest extends Eutester4j {
 	 */
 	@Test(enabled=true)
 	public void testInvalidAccessKey() {
-		ec2Connection("badAccessKey", secretKey);
+		AWSCredentials creds = new BasicAWSCredentials("badAccessKey",SECRET_KEY);
+		AmazonEC2 ec2Conn = new AmazonEC2Client(creds);
+		ec2Conn.setEndpoint(EC2_ENDPOINT);
 		try {
-			ec2.describeAvailabilityZones();
+			ec2Conn.describeAvailabilityZones();
 		} catch (Exception e) {
+			logger.info("Got Expected Failure: " +e.getMessage());
 			AssertJUnit.assertTrue(e.getMessage().length() > 0);
-		} finally {
-			ec2Connection(accessKey, secretKey);
-		}
+		} 
 	}
 	
 	/*
@@ -164,14 +132,15 @@ public class Eutester4jTest extends Eutester4j {
 	 */
 	@Test(enabled=true)
 	public void testInvalidSecretKey() {
-		ec2Connection(accessKey, "badSecretKey");
+		AWSCredentials creds = new BasicAWSCredentials(ACCESS_KEY,"badSecretKey");
+		AmazonEC2 ec2Conn = new AmazonEC2Client(creds);
+		ec2Conn.setEndpoint(EC2_ENDPOINT);
 		try {
-			ec2.describeAvailabilityZones();
+			ec2Conn.describeAvailabilityZones();
 		} catch (Exception e) {
+			logger.info("Got Expected Faiilure: " +e.getMessage());
 			AssertJUnit.assertTrue(e.getMessage().length() > 0);
-		} finally {
-			ec2Connection(accessKey, secretKey);
-		}
+		} 
 	}
 	
 	/*
@@ -189,8 +158,8 @@ public class Eutester4jTest extends Eutester4j {
 	 */
 	@Test(enabled=true)
 	public void testCreateSecurityGroup() {
-		String name = genRandomString();
-		String desc = genRandomString();
+		String name = eucaUUID();
+		String desc = eucaUUID();
 		
 		List<SecurityGroup> secGroups = describeSecurityGroups(ec2);
 		int initialSize = secGroups.size();
@@ -211,8 +180,8 @@ public class Eutester4jTest extends Eutester4j {
 	 */
 	@Test(enabled=true)
 	public void testDeleteSecurityGroup() {
-		String name = genRandomString();
-		String desc = genRandomString();
+		String name = eucaUUID();
+		String desc = eucaUUID();
 	
 		try {
 			createSecurityGoup(ec2, name, desc);
@@ -231,18 +200,18 @@ public class Eutester4jTest extends Eutester4j {
 	/**
 	 * Test running instances also tests get instance count
 	 */
-	@Test(enabled=true)
+	@Test(enabled=false)
 	public void testRunInstances(){
 		int initalInstanceCount = getInstancesList(ec2).size();
-		runInstances(ec2, emi, keyName, type, securityGroups, 1, 1);
+		runInstances(ec2, emi, keyName, INSTANCE_TYPE, securityGroups, 1, 1);
 		AssertJUnit.assertTrue(getInstancesList(ec2).size() > initalInstanceCount);
 		
 		// terminate after the test
 		List<String> instanceIds = new ArrayList<String>();
 		instanceIds.add(getLastlaunchedInstance(ec2).get(0).getInstanceId());
-		System.out.println("Going to terminate " + getLastlaunchedInstance(ec2).get(0).getInstanceId());
+		logger.info("Going to terminate " + getLastlaunchedInstance(ec2).get(0).getInstanceId());
 		terminateInstances(ec2, instanceIds);
-		System.out.println("Terminate requested");
+		logger.info("Terminate requested");
 
 	}
 	
@@ -254,20 +223,25 @@ public class Eutester4jTest extends Eutester4j {
 	 */
 	@Test(enabled=false)
 	public void testStopInstances(){
-		runInstances(ec2, emi, keyName, type, securityGroups, 1, 1);
+		runInstances(ec2, emi, keyName, INSTANCE_TYPE, securityGroups, 1, 1);
 		List<String> instanceIds = new ArrayList<String>();
 		instanceIds.add(getLastlaunchedInstance(ec2).get(0).getInstanceId());
-		System.out.println("State Check 1: " + getInstanceStateName(ec2, instanceIds));
+		
+		String instance = getLastlaunchedInstance(ec2).get(0).getInstanceId();
+		
+		final DescribeInstanceStatusResult instanceStatusResult = ec2
+				.describeInstanceStatus(new DescribeInstanceStatusRequest()
+						.withInstanceIds(instance));
+		
+		final InstanceStatus status = instanceStatusResult
+				.getInstanceStatuses().get(0);
+		logger.info("Status: " + status.getInstanceState().toString());
 		while(!getLastlaunchedInstance(ec2).get(0).getState().getName().equals("running")){}
-		System.out.println("State Check 2: " + getInstanceStateName(ec2, instanceIds));
 		stopInstances(ec2, instanceIds);
-		System.out.println("State Check 3: " + getInstanceStateName(ec2, instanceIds));
 		while(!getLastlaunchedInstance(ec2).get(0).getState().getName().equals("stopped")){}
-		System.out.println("State Check 4: " + getInstanceStateName(ec2, instanceIds));
 		AssertJUnit.assertTrue(getLastlaunchedInstance(ec2).get(0).getState().getName().equals("stopped"));
 		// after test terminate the instance
 		terminateInstances(ec2, instanceIds);
-		System.out.println("State Check 6: " + getInstanceStateName(ec2, instanceIds));
 	}
 	
 	/**
@@ -278,14 +252,14 @@ public class Eutester4jTest extends Eutester4j {
 	 */
 	@Test(enabled=false)
 	public void testTerminateInstances(){
-		runInstances(ec2, emi, keyName, type, securityGroups, 1, 1);
+		runInstances(ec2, emi, keyName, INSTANCE_TYPE, securityGroups, 1, 1);
 		List<String> instanceIds = new ArrayList<String>();
 		instanceIds.add(getLastlaunchedInstance(ec2).get(0).getInstanceId());
-		System.out.println("Created instance = " + getLastlaunchedInstance(ec2).get(0).getInstanceId());
-		System.out.println("State: " + getLastlaunchedInstance(ec2).get(0).getState());
-		System.out.println("State before terminate = " + getLastlaunchedInstance(ec2).get(0).getState().getName());
+		logger.info("Created instance = " + getLastlaunchedInstance(ec2).get(0).getInstanceId());
+		logger.info("State: " + getLastlaunchedInstance(ec2).get(0).getState());
+		logger.info("State before terminate = " + getLastlaunchedInstance(ec2).get(0).getState().getName());
 		terminateInstances(ec2, instanceIds);
-		System.out.println("State after terminate = " + getLastlaunchedInstance(ec2).get(0).getState().getName());
+		logger.info("State after terminate = " + getLastlaunchedInstance(ec2).get(0).getState().getName());
 		while(!getLastlaunchedInstance(ec2).get(0).getState().getName().equals("terminated")){}
 		AssertJUnit.assertTrue(getLastlaunchedInstance(ec2).get(0).getState().getName().equals("terminated"));
 	}
@@ -300,5 +274,26 @@ public class Eutester4jTest extends Eutester4j {
 		createKeyPair(ec2, keyName);
 		AssertJUnit.assertTrue(getKeyPairCount(ec2) > initialKeyPairCount);
 		deleteKeyPair(ec2, keyName);
+	}
+	
+	/**
+	 * Tests create, describe and delete launch configurations
+	 */
+	@Test(enabled=true)
+	public void testBasicLaunchConfig(){
+		String launchConfigurationName = "LC-" + eucaUUID();
+		try {
+			createLaunchConfig(as, launchConfigurationName, emi, INSTANCE_TYPE, keyName, securityGroups);
+			
+			List<LaunchConfiguration> launchConfigs = describeLaunchConfigs(as);
+			
+			int initialSize = launchConfigs.size();
+			deleteLaunchConfig(as, "LC-3fd0d59cd39bf7fc");
+			deleteLaunchConfig(as, launchConfigurationName);
+			launchConfigs = describeLaunchConfigs(as);
+			AssertJUnit.assertTrue(launchConfigs.size() < initialSize);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
 	}
 }

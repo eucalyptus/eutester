@@ -46,12 +46,13 @@ class TaggedResource():
         elapsed = 0
         while elapsed < timeout:
             self.update()
-            self.tester.debug("Current tags: " + str(self.tags))
+            applied_tags =  self.convert_tag_list_to_dict(self.tester.ec2.get_all_tags(filters={u'resource_id':self.id}))
+            self.tester.debug("Current tags: " + str(applied_tags))
             found_keys = 0
             for key, value in tags.iteritems():
-                if key in self.tags:
-                    self.tester.debug("Found key:" + key)
+                if key in applied_tags:
                     found_keys += 1
+                    self.tester.debug("Found key # " + str(found_keys)  + " out of " + str(len(tags))  + ":" + key)
             if creation:
                 if found_keys == len(tags):
                     return True
@@ -65,6 +66,12 @@ class TaggedResource():
             elapsed = int(time.time() - start)
             time.sleep(5)
         raise Exception("Did not apply tags within " + str(timeout) + " seconds")
+
+    def convert_tag_list_to_dict(self, list):
+        new_dict = {}
+        for tag in list:
+            new_dict[tag.name] = tag.value
+        return new_dict
 
     def delete_tags(self, tags, timeout=600):
         self.tester.debug("Current tags: " + str(self.tags))

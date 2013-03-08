@@ -30,49 +30,25 @@ Cleanup:
 -remove all volumes, instance, and snapshots created during this test
 
 '''
-from eucaops import Eucaops
-from eutester import euinstance, euvolume, xmlrunner, euconfig
-from boto.ec2.snapshot import Snapshot
-import argparse
 import types
-import re
 import time
 import os
 
+from eucaops import Eucaops
+from eutester import euinstance
 from eutester.eutestcase import EutesterTestCase
-from eutester.eutestcase import EutesterTestResult
+
 
 class TestZone():
     def __init__(self, partition):
         self.partition = partition 
-        self.name = partition.name
+        self.name = partition
         self.instances = []
         self.volumes = []
         
     def __str__(self):
         return self.name
-    
-'''    
-class TestSnap(Snapshot):
-    
-    @classmethod
-    def make_testsnap_from_snap(cls,snap,zone):
-        newsnap = TestSnap(snap.connection)
-        newsnap.__dict__ = snap.__dict__
-        newsnap.name = snap.id
-        newsnap.zone = zone
-        newsnap.eutest_volumes = []
-        newsnap.md5 = newsnap.get_orig_vol_md5()
-        return newsnap
 
-        
-    def get_orig_vol_md5(self):
-        md5 = None
-        for vol in self.zone.volumes:
-            if vol.id == self.volume_id:
-                md5 = vol.md5
-                return md5
-'''
 class EbsTestSuite(EutesterTestCase):
     
     tester = None
@@ -95,7 +71,8 @@ class EbsTestSuite(EutesterTestCase):
                  volumes=None, 
                  keypair=None, 
                  group=None, 
-                 emi=None, 
+                 emi=None,
+                 root_device_type='instance-store',
                  vmtype='c1.medium',
                  eof=1):
         
@@ -112,15 +89,14 @@ class EbsTestSuite(EutesterTestCase):
         if emi:
             self.image = self.tester.get_emi(emi=emi)
         else:
-            self.image = self.tester.get_emi(not_location='windows')
+            self.image = self.tester.get_emi(root_device_type=root_device_type, not_location='windows')
         
         self.vmtype = vmtype
         self.zone = None    
         self.zonelist = []
             
         #create some zone objects and append them to the zonelist
-        if self.zone is not None:
-            partition = self.tester.service_manager.partitions.get(zone)
+        if self.zone:
             self.zone = TestZone(zone)
             self.zonelist.append(self.zone)
         else: 
@@ -137,10 +113,11 @@ class EbsTestSuite(EutesterTestCase):
             group_name='EbsTestGroup'
             
             try:
-                self.group = self.tester.add_group(group_name)
+                self.group = self.tester.add_group(group_name,fail_if_exists=False)
                 self.tester.authorize_group_by_name(self.group.name)
                 self.tester.authorize_group_by_name(self.group.name,protocol="icmp",port=-1)
-            except Exception, e:    
+            except Exception, e:  
+                self.debug(self.tester.get_traceback())  
                 raise Exception("Error when setting up group:"+str(group_name)+", Error:"+str(e))   
         
     
@@ -160,9 +137,8 @@ class EbsTestSuite(EutesterTestCase):
         
         
     def setup_testzones(self):
-        for zone in self.tester.service_manager.partitions.keys():
-                partition = self.tester.service_manager.partitions.get(zone)
-                tzone = TestZone(partition)
+        for zone in self.tester.get_zones():
+                tzone = TestZone(zone)
                 self.zonelist.append(tzone)
                 self.multicluster=True
         if not self.zonelist:
@@ -237,8 +213,17 @@ class EbsTestSuite(EutesterTestCase):
             
         for testzone in zonelist:
             zone = testzone.name
-            res = self.tester.run_instance(image=image, keypair=keyname, group=group, username=username, password=inst_pass, type=vmtype, zone=zone, min=count, max=count)
-            for inst in res.instances:
+            instances = self.tester.run_image( image=image,
+                                                keypair=keyname,
+                                                group=group,
+                                                username=username,
+                                                password=inst_pass,
+                                                type=vmtype,
+                                                zone=zone,
+                                                min=count,
+                                                max=count)
+
+            for inst in instances:
                 testzone.instances.append(inst)
             self.debug('Created instance: ' + str(inst.id)+" in zone:"+str(zone))
         #self.endsuccess()
@@ -661,8 +646,8 @@ class EbsTestSuite(EutesterTestCase):
             self.debug('Finished creating '+str(count)+' snapshots in zone:'+str(zone.name)+', now creating vols from them')
             try:
                 for snap in snaps:
-                    createdvols.append(self.tester.create_volumes(zone,snapshot=snap,timepergig=tpg, monitor_to_state=False))
-                vols.append(self.tester.monitor_created_euvolumes_to_state(createdvols, timepergig=tpg))
+                    createdvols.extend(self.tester.create_volumes(zone,snapshot=snap,timepergig=tpg, monitor_to_state=False))
+                vols.extend(self.tester.monitor_created_euvolumes_to_state(createdvols, timepergig=tpg))
                 self.tester.print_euvolume_list(vols)
                 self.status("Attempting to attach new vols from new snapshots to instance:"+str(instance.id)+" to verify md5s...")
                 for newvol in vols:
@@ -931,9 +916,10 @@ class EbsTestSuite(EutesterTestCase):
         self.clean_created_resources(zonelist=self.zonelist, timeout=360)
     
     def clean_created_resources(self, zonelist=None, timeout=360):
-        self.terminate_test_instances_for_zones(zonelist=zonelist, timeout=timeout)
-        self.delete_volumes_in_zones(zonelist=zonelist, timeout=timeout)
-        self.delete_snapshots_in_zones(zonelist=zonelist,  timeout=timeout)
+        self.tester.cleanup_artifacts()
+        #self.terminate_test_instances_for_zones(zonelist=zonelist, timeout=timeout)
+        #self.delete_volumes_in_zones(zonelist=zonelist, timeout=timeout)
+        #self.delete_snapshots_in_zones(zonelist=zonelist,  timeout=timeout)
    
             
     
@@ -950,7 +936,7 @@ if __name__ == "__main__":
     #if file was not provided or is not found
     if not os.path.exists(args.config):
         print "Error: Mandatory Config File '"+str(args.config)+"' not found."
-        parser.print_help()
+        tc.parser.print_help()
         exit(1)
     #ebssuite = EbsTestSuite(zone=args.zone, config_file= args.config, password=args.password,credpath=args.credpath, keypair=args.keypair, group=args.group, image=args.emi)
     ebssuite = tc.do_with_args(EbsTestSuite)

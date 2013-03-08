@@ -87,11 +87,11 @@ class ResourceGeneration(EutesterTestCase):
             resource_tester.associate_address(instance=instance, address=address)
             resource_tester.disassociate_address_from_instance(instance)
             resource_tester.release_address(address)
-            volume = resource_tester.create_volume(size=1, azone=zone)
+            volume = resource_tester.create_volume(size=1, zone=zone)
             if isinstance(instance, EuInstance):
                 instance.attach_volume(volume)
             snapshot = resource_tester.create_snapshot(volume_id=volume.id)
-            volume_from_snap = resource_tester.create_volume(snapshot=snapshot, azone=zone)
+            volume_from_snap = resource_tester.create_volume(snapshot=snapshot, zone=zone)
             bucket = resource_tester.create_bucket(resource_tester.id_generator(12, string.ascii_lowercase  + string.digits))
             key = resource_tester.upload_object(bucket_name= bucket.name, key_name= resource_tester.id_generator(12, string.ascii_lowercase  + string.digits), contents= resource_tester.id_generator(200))
             resource_tester.terminate_instances(reservation)

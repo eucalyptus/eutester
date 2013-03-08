@@ -72,9 +72,10 @@ class Euproperty_type():
     www = 'www'
     
     @classmethod
-    def get_type_by_string(cls,str):
+    def get_type_by_string(cls, typestring):
         try:
-            return getattr(self, str)
+            if hasattr(cls, str(typestring)):
+                return getattr(cls, str(typestring))
         except AttributeError, ae:
             self.debug('Property type:'+str(str)+" not defined, new property type?")
             raise ae
@@ -87,8 +88,8 @@ class Euproperty():
         self.name = name
         self.value = value
         self.property_string = str(servicetype)+"."+str(partition)+"."+str(name)
-        self.utils = Euproperty_utils()
-        self.utils = prop_mgr
+        #self.utils = Euproperty_utils()
+        self.prop_mgr = prop_mgr
         self.lastvalue = value
         self.mandatory=mandatory
         
@@ -103,7 +104,7 @@ class Euproperty_manager():
     
     def __init__(self, tester, verbose=False, debugmethod=None):
         self.tester = tester
-        self.debugmethod = debugmethod
+        self.debugmethod = debugmethod or tester.debug
         self.verbose = verbose
         self.clc = self.get_clc()
         self.access_key = self.tester.aws_access_key_id
@@ -143,6 +144,7 @@ class Euproperty_manager():
         else:
             raise EuPropertiesException("describe properties returned null for "+prop)
         '''
+        self.debug('get_property_value:'+str(prop))
         prop = self.get_euproperty_by_name(prop)
         return prop.value
         
@@ -151,40 +153,57 @@ class Euproperty_manager():
         self.debug("Getting property list...")
         cmdout = self.clc.sys(self.cmdpath+'euca-describe-properties -U '+str(self.service_url)+' -I '+str(self.access_key)+' -S '+ str(self.secret_key) +' | grep PROPERTY', code=0)
         for propstring in cmdout:
-            newlist.append(parse_euproperty_from_string(propstring))
+            newlist.append(self.parse_euproperty_from_string(propstring))
         self.properties = newlist
         
                 
-    def parse_euproperty_from_string(self, str):
+    def parse_euproperty_from_string(self, propstring):
         '''
         Intended to convert a line of ouptut from euca-describe-properties into
         a euproperty. 
         :param str: line of output, example: "PROPERTY    walrus.storagemaxbucketsizeinmb    5120"
         :returns euproperty
         '''
-        toss, ret_property_string, ret_value = str.split()
+        self.debug('parse_euproperty_from_string, string:'+str(propstring))
+        ret_servicetype = None
+        ret_partition = None
+        splitstring = propstring.split()
+        toss = splitstring.pop(0)
+        ret_property_string = splitstring.pop(0)
+        ret_value = " ".join(splitstring)
+        #toss, ret_property_string, ret_value = propstring.split()
         for prop in self.properties:
             #if this property is in our list, update the value and return
             if prop.property_string == ret_property_string:
                 prop.lastvalue = prop.value
                 prop.value = ret_value
                 return prop
+        ret_name = ret_property_string
         #else this property is not in our list yet, create a new property
         propattrs = ret_property_string.split('.')
-        try:
-            ret_type = Euproperty_type.get_type_by_string(propattrs[0])
-            propattrs.remove(propattrs[0])
-        except AttributeError:
-            ret_servicetype = Euproperty_type.get_type_by_string(propatters[1])
-            ret_partition = propatters[0]
-            propattrs.remove(propattrs[0])
-            propattrs.remove(propattrs[1])
-        ret_name = str(".").join(propattrs)
+        #Move along items in list until we reach a service type
+        index = 0
+        while ( index < 2 ) and ( not ret_servicetype ):
+            try:
+                ret_servicetype = Euproperty_type.get_type_by_string(propattrs[index])
+                propattrs.remove(propattrs[index])
+            except AttributeError:
+                index += 1
+        self.debug("ret_servicetype: "+str(ret_servicetype))
+        if not ret_servicetype:
+            raise Exception("Could not find service type for property line:"+str(propstr))
+        #If this is the last value assume this is not a value pertaining to a partition and store the service type instead
+        if len(propattrs) > 1:
+            ret_partition = propattrs.pop(0)
+        else:
+            ret_partition = ret_servicetype
+        #Store the name of the property
+        ret_name = ".".join(propattrs)
         newprop = Euproperty(self, ret_property_string, ret_servicetype,  ret_partition, ret_name, ret_value)
-        self.properties.append(newprop)
+        return newprop
             
         
-    def get_euproperty_by_name(self,name):
+    def get_euproperty_by_name(self,name, partition='PARTI00'):
         for prop in self.properties:
             if prop.name == name:
                 return prop

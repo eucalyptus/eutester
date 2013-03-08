@@ -126,7 +126,6 @@ class WindowsProxyTests():
             else:
                 print(msg)
     def reset_ssh(self):
-        self.ssh.close()
         self.ssh.refresh_connection()
 
     

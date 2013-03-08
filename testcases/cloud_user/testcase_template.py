@@ -20,7 +20,7 @@ class InstanceBasics(EutesterTestCase):
         if self.args.region:
             self.tester = EC2ops( credpath=self.args.credpath, region=self.args.region)
         else:
-            self.tester = Eucaops( credpath=self.args.credpath)
+            self.tester = Eucaops( credpath=self.args.credpath, config_file=self.args.config,password=self.args.password)
         self.tester.poll_count = 120
 
         ### Add and authorize a group for the instance
