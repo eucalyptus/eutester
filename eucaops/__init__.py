@@ -137,7 +137,8 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops):
                 self.setup_cw_connection( endpoint=ec2_ip, path="/services/CloudWatch", port=8773, is_secure=False, region=region, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
                 self.setup_cw_resource_trackers()
             except Exception, e:
-                raise Exception("Unable to create EC2 connection because of: " + str(e) )
+                tb = self.get_traceback()
+                raise Exception(tb + "\nUnable to create EC2 connection because of: " + str(e) )
 
             try:
                 if self.credpath and not s3_ip:
