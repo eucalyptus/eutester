@@ -36,12 +36,12 @@ class Qa_214_volume_churn(EutesterTestCase):
         #### Pre-conditions
         self.setuptestcase()
         self.setup_parser()
-        self.parser.add_argument('--testcount', type=int, help='Number of times to repeat each test',default=5)
-        self.parser.add_argument('--volcount', type=int, help='Number of volumes to create per test',default=5)
-        self.parser.add_argument('--snapcount', type=int, help='Number of snapshots to create for snap related tests',default=2)
-        self.parser.add_argument('--size', type=int, help='Size in GB for created volumes',default=1)
-        self.parser.add_argument('--timepergig', type=int, help='Time allowed per gig size of volume during volume creation',default=120)
-        self.parser.add_argument('--deletetimeout', type=int, help='Time allowed for volume to transition from deleting to deleted',default=120)
+        self.parser.add_argument('--testcount', type=int, help='Number of times to repeat each test, default:5',default=5)
+        self.parser.add_argument('--volcount', type=int, help='Number of volumes to create per test, default:5',default=5)
+        self.parser.add_argument('--snapcount', type=int, help='Number of snapshots to create for snap related tests, default:2',default=2)
+        self.parser.add_argument('--size', type=int, help='Size in GB for created volumes, default:1',default=1)
+        self.parser.add_argument('--timepergig', type=int, help='Time allowed per gig size of volume during volume creation, default:120',default=120)
+        self.parser.add_argument('--deletetimeout', type=int, help='Time allowed for volume to transition from deleting to deleted, default:120',default=120)
         self.get_args()
         # Setup basic eutester object
         self.tester = self.do_with_args(Eucaops)
@@ -83,7 +83,7 @@ class Qa_214_volume_churn(EutesterTestCase):
         try:
             self.tester.cleanup_artifacts()
         except Exception, e:
-            raise Exception('Cleanupfailed:'+str(err))
+            raise Exception('Cleanupfailed:'+str(e))
     
     def launch_test_instance(self):
         self.reservation = self.tester.run_instance(self.image, keypair=self.keypair, group=self.group,timeout=480)

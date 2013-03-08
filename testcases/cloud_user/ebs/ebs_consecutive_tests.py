@@ -42,7 +42,10 @@ import os
 if __name__ == "__main__":
     ## If given command line arguments, use them as test names to launch
 
-    testcase= EutesterTestCase(name='ebs_extended_test')    
+    #create a eutester testcase object...
+    testcase= EutesterTestCase(name='ebs_extended_test')
+
+    #add/remove arguements to the default cli and config file argument list, see testcase class for all default cli args
     testcase.setup_parser(description="Attempts to test and provide info on focused areas related to Eucalyptus EBS related functionality.", 
                           testlist=False)
     testcase.parser.add_argument('--snap_count', type=int, help='Number of snapshots to create per zone',default=5)
@@ -51,9 +54,18 @@ if __name__ == "__main__":
     testcase.parser.add_argument('--timepergig', type=int, help='Time allowed per gig size of volume during volume creation',default=300)
     testcase.parser.add_argument('--snap_attached', dest='snap_attached', action='store_true', default=False)
     testcase.parser.add_argument('--delete_to', type=int, help="Timeout for volume deletion",  default=120)
+    testcase.parser.add_argument('--root_device_type', help="Type of instance to run, 'ebs' or 'instance-store'",  default='instance-store')
+
+    #Get arguments passed in through cli and/or config file(s), these will be stored in testcase.args
     testcase.get_args()
+
+    #create the EbsTestSuite object, use 'do_with_args' to auto populate the object's init with testcase.args
     ebstestsuite= testcase.do_with_args(EbsTestSuite)
+
+    #register a test cleanup method with the testcase...
     testcase.clean_method = ebstestsuite.clean_created_resources
+
+    #add test methods and their arguments to be run to a list...
     testlist = ebstestsuite.test_consecutive_concurrent(run=False, 
                                                     count=int(testcase.args.snap_count),
                                                     delay=testcase.args.snap_delay,
@@ -61,6 +73,8 @@ if __name__ == "__main__":
                                                     snap_attached = testcase.args.snap_attached,
                                                     delete_to = testcase.args.delete_to,
                                                     poll_progress=testcase.args.snap_progress)
+
+    #finally, execute the list of test methods from the test case wrapper...
     ret = testcase.run_test_case_list(testlist)
     print "ebs_extended_test exiting:("+str(ret)+")"
     exit(ret)

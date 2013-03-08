@@ -78,12 +78,12 @@ class PopulateUpgrade(EutesterTestCase):
         instance_4 = self.tester.run_instance(test_image, keypair=self.keypair.name, group=self.group.name).instances[0]
         instance_4_address = self.tester.allocate_address()
         self.tester.associate_address(instance=instance_4, address=instance_4_address)
-        volume = self.tester.create_volume(azone=self.zone)
+        volume = self.tester.create_volume(zone=self.zone)
         instance_4.attach_volume(volume=volume)
 
         # Test: INSTANCESTORE VOLATTACH:yes ADDR:system
         instance_5 = self.tester.run_instance(test_image, keypair=self.keypair.name, group=self.group.name).instances[0]
-        volume = self.tester.create_volume(azone=self.zone)
+        volume = self.tester.create_volume(zone=self.zone)
         instance_5.attach_volume(volume=volume)
 
         self.group = self.tester.add_group(group_name="group-" + str(time.time()))
