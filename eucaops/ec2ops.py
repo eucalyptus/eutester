@@ -370,7 +370,7 @@ class EC2ops(Eutester):
             else:
                 self.debug(  "Group " + group_name + " already exists")
                 group = self.ec2.get_all_security_groups(group_name)[0]
-            return group
+            return self.get_security_group(name=group_name)
         else:
             self.debug( 'Creating Security Group: %s' % group_name)
             # Create a security group to control access to instance via SSH.
@@ -378,7 +378,7 @@ class EC2ops(Eutester):
                 description = group_name
             group = self.ec2.create_security_group(group_name, description)
             self.test_resources["security-groups"].append(group)
-        return group
+        return self.get_security_group(name=group_name)
 
     def delete_group(self, group):
         """
