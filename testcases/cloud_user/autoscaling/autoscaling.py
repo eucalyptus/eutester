@@ -37,7 +37,6 @@ import os
 from eucaops import Eucaops
 from eutester.eutestcase import EutesterTestCase
 
-
 class AutoScalingBasics(EutesterTestCase):
     def __init__(self, extra_args= None):
         self.setuptestcase()
@@ -52,7 +51,7 @@ class AutoScalingBasics(EutesterTestCase):
         else:
             self.tester = Eucaops(credpath=self.args.credpath)
 
-       ### Add and authorize a group for the instance
+        ### Add and authorize a group for the instance
         self.group = self.tester.add_group(group_name="group-" + str(time.time()))
         self.tester.authorize_group_by_name(group_name=self.group.name )
         self.tester.authorize_group_by_name(group_name=self.group.name, port=-1, protocol="icmp" )
@@ -74,54 +73,45 @@ class AutoScalingBasics(EutesterTestCase):
         os.remove(self.keypath)
 
     def AutoScalingBasics(self):
-        ### test create  and describe launch config
+        ### create launch configuration
         self.launch_config_name = 'Test-Launch-Config-' + str(time.time())
         self.tester.create_launch_config(name=self.launch_config_name,
                                          image_id=self.image.id,
+                                         instance_type="m1.small",
                                          key_name=self.keypair.name,
                                          security_groups=[self.group.name])
-        if len(self.tester.describe_launch_config([self.launch_config_name])) != 1:
-            raise Exception('Launch Config not created')
-        self.debug('**** Created Launch Config: ' +
-                   self.tester.describe_launch_config([self.launch_config_name])[0].name)
 
-        ### test create and describe auto scale group
-        self.initial_size = len(self.tester.describe_as_group())
+        ### create auto scale group
         self.auto_scaling_group_name = 'ASG-' + str(time.time())
         self.tester.create_as_group(group_name=self.auto_scaling_group_name,
-                                    launch_config=self.launch_config_name,
                                     availability_zones=self.tester.get_zones(),
+                                    launch_config=self.launch_config_name,
                                     min_size=0,
-                                    max_size=5,
-                                    connection=self.tester.autoscale)
-        if len(self.tester.describe_as_group([self.auto_scaling_group_name])) != 1:
-            raise Exception('Auto Scaling Group not created')
-        self.debug("**** Created Auto Scaling Group: " +
-                   self.tester.describe_as_group([self.auto_scaling_group_name])[0].name)
+                                    max_size=5)
 
         ### Test Create and describe Auto Scaling Policy
         self.up_policy_name = "Up-Policy-" + str(time.time())
         self.up_size = 4
         self.tester.create_as_policy(name=self.up_policy_name,
                                      adjustment_type="ChangeInCapacity",
-                                     as_name=self.auto_scaling_group_name,
                                      scaling_adjustment=4,
+                                     as_name=self.auto_scaling_group_name,
                                      cooldown=120)
 
         self.down_policy_name = "Down-Policy-" + str(time.time())
         self.down_size = -50
         self.tester.create_as_policy(name=self.down_policy_name,
                                      adjustment_type="PercentChangeInCapacity",
-                                     as_name=self.auto_scaling_group_name,
                                      scaling_adjustment=self.down_size,
+                                     as_name=self.auto_scaling_group_name,
                                      cooldown=120)
 
         self.exact_policy_name = "Exact-Policy-" + str(time.time())
         self.exact_size = 0
         self.tester.create_as_policy(name=self.exact_policy_name,
                                      adjustment_type="ExactCapacity",
-                                     as_name=self.auto_scaling_group_name,
                                      scaling_adjustment=self.exact_size,
+                                     as_name=self.auto_scaling_group_name,
                                      cooldown=120)
 
         ### Test all policies added to group
@@ -152,28 +142,13 @@ class AutoScalingBasics(EutesterTestCase):
                    str(self.tester.describe_as_group([self.auto_scaling_group_name])[0].desired_capacity))
 
         ### Test Delete all Auto Scaling Policies
-        for policy in self.tester.autoscale.get_all_policies():
-            self.tester.delete_as_policy(policy_name=policy.name, autoscale_group=policy.as_name)
-        if len(self.tester.autoscale.get_all_policies()) != 0:
-            raise Exception('Auto Scaling policy not deleted')
-        self.debug("**** Deleted Auto Scaling Policy: " + self.up_policy_name + " " + self.down_policy_name + " " +
-                   self.exact_policy_name)
+        self.tester.delete_all_policies()
 
         ### Test Delete Auto Scaling Group
         self.tester.delete_as_group(names=self.auto_scaling_group_name)
-        if len(self.tester.describe_as_group([self.auto_scaling_group_name])) != 0:
-            raise Exception('Auto Scaling Group not deleted')
-        self.debug('**** Deleted Auto Scaling Group: ' + self.auto_scaling_group_name)
-
-        ### pause for Auto scaling group to be deleted
-        # TODO write wait/poll op for auto scaling groups
-        # time.sleep(5)
 
         ### Test delete launch config
         self.tester.delete_launch_config(self.launch_config_name)
-        if len(self.tester.describe_launch_config([self.launch_config_name])) != 0:
-            raise Exception('Launch Config not deleted')
-        self.debug('**** Deleted Launch Config: ' + self.launch_config_name)
 
     def AutoScalingInstanceBasics(self):
         """
@@ -195,9 +170,13 @@ class AutoScalingBasics(EutesterTestCase):
             self.tester.delete_launch_config(lc.name)
 
     def too_many_policies_test(self):
+        """
+        AWS enforces a 25 policy per account limit this tests what happens if we create more
+        """
         launch_config_name = 'LC-' + str(time.time())
         self.tester.create_launch_config(name=launch_config_name,
                                          image_id=self.image.id,
+                                         instance_type="m1.small",
                                          key_name=self.keypair.name,
                                          security_groups=[self.group.name])
         asg = 'ASG-' + str(time.time())
@@ -205,8 +184,7 @@ class AutoScalingBasics(EutesterTestCase):
                                     launch_config=launch_config_name,
                                     availability_zones=self.tester.get_zones(),
                                     min_size=0,
-                                    max_size=5,
-                                    connection=self.tester.autoscale)
+                                    max_size=5)
         for i in range(26):
             policy_name = "Policy-" + str(i + 1)
             self.tester.create_as_policy(name=policy_name,
@@ -225,16 +203,58 @@ class AutoScalingBasics(EutesterTestCase):
         pass
 
     def clear_all(self):
+        """
+
+        remove ALL scaling policies, auto scaling groups and launch configs
+        """
+        self.tester.delete_all_policies()
         self.tester.delete_all_autoscaling_groups()
         self.tester.delete_all_launch_configs()
+
+    def change_launch_config(self):
+        ### create initial launch configuration
+        first_launch_config = 'First-Launch-Config-' + str(time.time())
+        self.tester.create_launch_config(name=first_launch_config, image_id=self.image.id, instance_type="m1.small")
+
+        # create a replacement LC with different instance type
+        second_launch_config = 'Second-Launch-Config-' + str(time.time())
+        self.tester.create_launch_config(name=second_launch_config, image_id=self.image.id, instance_type="m1.large")
+
+        ### create auto scale group
+        auto_scaling_group_name = 'ASG-' + str(time.time())
+        self.tester.create_as_group(group_name=auto_scaling_group_name,
+                                    launch_config=first_launch_config,
+                                    availability_zones=self.tester.get_zones(),
+                                    min_size=1,
+                                    max_size=4,
+                                    desired_capacity=1)
+        #wait briefly before changing capacity
+        # TODO get new instance ID and get it's type verify correct type
+        self.tester.sleep(10)
+        self.tester.update_as_group(group_name=auto_scaling_group_name,
+                                    launch_config=second_launch_config,
+                                    min_size=1,
+                                    max_size=4,
+                                    desired_capacity=2)
+        # wait for new instance
+        self.tester.sleep(10)
+        # TODO  get new instance ID and get it's type verify correct type
+        last_instance_id = self.tester.get_last_instance_id()
+        self.debug("LAST ID: " + str(last_instance_id))
+        ### Delete Auto Scaling Group
+        self.tester.delete_as_group(names=auto_scaling_group_name, force=True)
+
+        ### delete launch configs
+        self.tester.delete_launch_config(first_launch_config)
+        self.tester.delete_launch_config(second_launch_config)
 
 if __name__ == "__main__":
     testcase = AutoScalingBasics()
     ### Use the list of tests passed from config/command line to determine what subset of tests to run
     ### or use a predefined list "AutoScalingGroupBasics", "LaunchConfigBasics", "AutoScalingInstanceBasics"
     # list = testcase.args.tests or ["AutoScalingBasics"] ["clean_groups_and_configs"] too_many_launch_configs_test
-    # too_many_policies_test
-    list = testcase.args.tests or ["clear_all"]
+    # too_many_policies_test, change_launch_config, clear_all
+    list = testcase.args.tests or ["change_launch_config"]
 
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
