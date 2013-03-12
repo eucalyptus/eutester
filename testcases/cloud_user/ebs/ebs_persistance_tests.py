@@ -27,7 +27,7 @@ from eucaops import Eucaops
 import time
 import copy
 
-class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
+class Ebs_Persistance_Tests(EutesterTestCase):
     def __init__(self):
         #### Pre-conditions
         self.setuptestcase()
