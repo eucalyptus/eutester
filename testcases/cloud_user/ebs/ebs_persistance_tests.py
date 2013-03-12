@@ -179,8 +179,6 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
         Definition: Attach all volumes created in this test to all instances created in this test.
         This tests should be completed per zone prior to restarting services.
         '''
-
-
         self.status("\'pre_service_restart_attach_all_volumes\' starting...",
                     testcolor=TestColor.get_canned_color('whiteonblue'))
 
