@@ -65,6 +65,7 @@
     <target name="clean">
         <delete dir="${build.dir}"/>
         <delete dir="${testng.output.dir}"/>
+        <delete dir="${deps.dir}"/>
     </target>
 
     <!-- compile all classes of src.dir -->

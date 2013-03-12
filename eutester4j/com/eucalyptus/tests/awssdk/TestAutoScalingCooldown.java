@@ -19,9 +19,7 @@
  ************************************************************************/
 package com.eucalyptus.tests.awssdk;
 
-import com.amazonaws.services.autoscaling.AmazonAutoScaling;
 import com.amazonaws.services.autoscaling.model.*;
-import com.amazonaws.services.ec2.AmazonEC2;
 import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
 import org.testng.annotations.Test;
 
@@ -43,71 +41,60 @@ public class TestAutoScalingCooldown {
 	@SuppressWarnings("unchecked")
 	@Test
 	public void AutoScalingCooldownTest() throws Exception {
+        testInfo(this.getClass().getSimpleName());
         getCloudInfo();
-		final AmazonAutoScaling as = getAutoScalingClient(ACCESS_KEY, SECRET_KEY, AS_ENDPOINT);
-		final AmazonEC2 ec2 = getEc2Client(ACCESS_KEY, SECRET_KEY, EC2_ENDPOINT);
-		final String imageId = findImage(ec2);
-		final String availabilityZone = findAvalablityZone(ec2);
-		final String namePrefix = eucaUUID() + "-";
-		logger.info("Using resource prefix for test: " + namePrefix);
 
 		// End discovery, start test		
 		final List<Runnable> cleanupTasks = new ArrayList<Runnable>();
 		try {
 			// Create launch configuration
-			final String configName = namePrefix + "DescribeGroupsInstances";
-			logger.info("Creating launch configuration: " + configName);
-			as.createLaunchConfiguration(new CreateLaunchConfigurationRequest()
-					.withLaunchConfigurationName(configName)
-					.withImageId(imageId).withInstanceType(INSTANCE_TYPE));
+            final String launchConfig = NAME_PREFIX + "DescribeGroupsInstances";
+			print("Creating launch configuration: " + launchConfig);
+            createLaunchConfig(launchConfig,IMAGE_ID,INSTANCE_TYPE,null,null,null,null,null,null,null,null);
 			cleanupTasks.add(new Runnable() {
 				@Override
 				public void run() {
-					logger.info("Deleting launch configuration: " + configName);
-					as.deleteLaunchConfiguration(new DeleteLaunchConfigurationRequest()
-							.withLaunchConfigurationName(configName));
+					print("Deleting launch configuration: " + launchConfig);
+                    deleteLaunchConfig(launchConfig);
 				}
 			});
 
 			// Create scaling group
-			final String groupName = namePrefix + "DescribeGroupsInstances";
-			logger.info("Creating auto scaling group: " + groupName);
-			as.createAutoScalingGroup(new CreateAutoScalingGroupRequest()
-					.withAutoScalingGroupName(groupName)
-					.withLaunchConfigurationName(configName).withMinSize(0)
-					.withMaxSize(2).withDefaultCooldown(10)
-					.withAvailabilityZones(availabilityZone));
+            final String groupName = NAME_PREFIX + "DescribeGroupsInstances";
+			print("Creating auto scaling group: " + groupName);
+            Integer minSize = 0;
+            Integer maxSize = 2;
+            Integer cooldown = 10;
+            createAutoScalingGroup(groupName,launchConfig,minSize,maxSize,null, AVAILABILITY_ZONE, cooldown, null, null, null, null,null);
 			cleanupTasks.add(new Runnable() {
 				@Override
 				public void run() {
-					logger.info("Deleting group: " + groupName);
-					as.deleteAutoScalingGroup(new DeleteAutoScalingGroupRequest()
-							.withAutoScalingGroupName(groupName)
-							.withForceDelete(true));
+					print("Deleting group: " + groupName);
+                    deleteAutoScalingGroup(groupName,true);
 				}
 			});
 			cleanupTasks.add(new Runnable() {
 				@Override
 				public void run() {
-					final List<String> instanceIds = (List<String>) getInstancesForGroup(ec2, groupName, null, true);
-					logger.info("Terminating instances: " + instanceIds);
+					final List<String> instanceIds = (List<String>) getInstancesForGroup(groupName, null, true);
+					print("Terminating instances: " + instanceIds);
 					ec2.terminateInstances(new TerminateInstancesRequest()
 							.withInstanceIds(instanceIds));
 				}
 			});
 
 			//
-			logger.info("Waiting for initial cooldown to expire");
+			print("Waiting for initial cooldown to expire");
 			Thread.sleep(10000);
 
 			// Set desired capacity
-			logger.info("Setting desired capacity to 1");
+			print("Setting desired capacity to 1");
 			as.setDesiredCapacity(new SetDesiredCapacityRequest()
 					.withAutoScalingGroupName(groupName)
 					.withHonorCooldown(true).withDesiredCapacity(1));
 
 			try {
-				logger.info("Setting desired capacity to 0 (will fail)");
+				print("Setting desired capacity to 0 (will fail)");
 				as.setDesiredCapacity(new SetDesiredCapacityRequest()
 						.withAutoScalingGroupName(groupName)
 						.withHonorCooldown(true).withDesiredCapacity(0));
@@ -117,13 +104,13 @@ public class TestAutoScalingCooldown {
 				// expected failure
 			}
 
-			logger.info("Setting desired capacity to 0");
+			print("Setting desired capacity to 0");
 			as.setDesiredCapacity(new SetDesiredCapacityRequest()
 					.withAutoScalingGroupName(groupName)
 					.withHonorCooldown(false).withDesiredCapacity(0));
 
 			Thread.sleep(10000);
-			logger.info("Setting desired capacity to 1 after cooldown expiry");
+			print("Setting desired capacity to 1 after cooldown expiry");
 			as.setDesiredCapacity(new SetDesiredCapacityRequest()
 					.withAutoScalingGroupName(groupName)
 					.withHonorCooldown(true).withDesiredCapacity(1));
@@ -132,20 +119,20 @@ public class TestAutoScalingCooldown {
 					.withHonorCooldown(false).withDesiredCapacity(0));
 
 			// Create / execute policy
-			logger.info("Creating scaling policy");
-			final String policyName = namePrefix + "DescribeGroupsInstances";
+			print("Creating scaling policy");
+			final String policyName = NAME_PREFIX + "DescribeGroupsInstances";
 			as.putScalingPolicy(new PutScalingPolicyRequest()
 					.withAutoScalingGroupName(groupName)
 					.withPolicyName(policyName)
 					.withAdjustmentType("ChangeInCapacity").withCooldown(5)
 					.withScalingAdjustment(1));
 
-			logger.info("Executing policy");
+			print("Executing policy");
 			as.executePolicy(new ExecutePolicyRequest()
 					.withAutoScalingGroupName(groupName)
 					.withPolicyName(policyName).withHonorCooldown(false));
 			try {
-				logger.info("Executing policy (will fail)");
+				print("Executing policy (will fail)");
 				as.executePolicy(new ExecutePolicyRequest()
 						.withAutoScalingGroupName(groupName)
 						.withPolicyName(policyName).withHonorCooldown(true));
@@ -156,15 +143,15 @@ public class TestAutoScalingCooldown {
 			}
 
 			Thread.sleep(5000);
-			logger.info("Executing policy after cooldown expiry");
+			print("Executing policy after cooldown expiry");
 			as.executePolicy(new ExecutePolicyRequest()
 					.withAutoScalingGroupName(groupName)
 					.withPolicyName(policyName).withHonorCooldown(true));
 
-			logger.info("Waiting for scaling to complete");
-			waitForInstances(ec2, TimeUnit.MINUTES.toMillis(2), 2, groupName,true);
+			print("Waiting for scaling to complete");
+			waitForInstances(TimeUnit.MINUTES.toMillis(2), 2, groupName,true);
 
-			logger.info("Test complete");
+			print("Test complete");
 		} finally {
 			// Attempt to clean up anything we created
 			Collections.reverse(cleanupTasks);

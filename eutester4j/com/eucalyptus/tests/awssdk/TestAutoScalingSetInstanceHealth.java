@@ -20,21 +20,16 @@
 
 package com.eucalyptus.tests.awssdk;
 
-import static com.eucalyptus.tests.awssdk.Eutester4j.*;
-
+import com.amazonaws.services.autoscaling.model.*;
+import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
 import org.testng.annotations.Test;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
-import com.amazonaws.services.autoscaling.AmazonAutoScaling;
-import com.amazonaws.services.autoscaling.model.CreateAutoScalingGroupRequest;
-import com.amazonaws.services.autoscaling.model.CreateLaunchConfigurationRequest;
-import com.amazonaws.services.autoscaling.model.DeleteAutoScalingGroupRequest;
-import com.amazonaws.services.autoscaling.model.DeleteLaunchConfigurationRequest;
-import com.amazonaws.services.autoscaling.model.SetInstanceHealthRequest;
-import com.amazonaws.services.ec2.AmazonEC2;
-import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
+
+import static com.eucalyptus.tests.awssdk.Eutester4j.*;
 
 /**
  * This application tests manually setting instance health for auto scaling.
@@ -48,97 +43,84 @@ public class TestAutoScalingSetInstanceHealth {
 	@Test
 	public void AutoScalingSetInstanceHealthTest() throws Exception {
         testInfo(this.getClass().getSimpleName());
-		getCloudInfo();
-		final AmazonAutoScaling as = getAutoScalingClient(ACCESS_KEY, SECRET_KEY, AS_ENDPOINT);
-		final AmazonEC2 ec2 = getEc2Client(ACCESS_KEY, SECRET_KEY, EC2_ENDPOINT);
-		final String imageId = findImage(ec2);
-		final String availabilityZone = findAvalablityZone(ec2);
-		final String namePrefix = eucaUUID() + "-";
-		logger.info("Using resource prefix for test: " + namePrefix);
-		
-		// End discovery, start test
-		final List<Runnable> cleanupTasks = new ArrayList<Runnable>();
-		try {
-			// Create launch configuration
-			final String configName = namePrefix + "SetInstanceHealthTest";
-			logger.info("Creating launch configuration: " + configName);
-			as.createLaunchConfiguration(new CreateLaunchConfigurationRequest()
-					.withLaunchConfigurationName(configName)
-					.withImageId(imageId).withInstanceType(INSTANCE_TYPE));
-			cleanupTasks.add(new Runnable() {
-				@Override
-				public void run() {
-					logger.info("Deleting launch configuration: " + configName);
-					as.deleteLaunchConfiguration(new DeleteLaunchConfigurationRequest()
-							.withLaunchConfigurationName(configName));
-				}
-			});
+        getCloudInfo();
+        final List<Runnable> cleanupTasks = new ArrayList<Runnable>();
+        try {
+            // Create launch configuration
+            final String configName = NAME_PREFIX + "SetInstanceHealthTest";
+            print( "Creating launch configuration: " + configName );
+            as.createLaunchConfiguration( new CreateLaunchConfigurationRequest()
+                    .withLaunchConfigurationName( configName )
+                    .withImageId( IMAGE_ID )
+                    .withInstanceType( INSTANCE_TYPE ) );
+            cleanupTasks.add( new Runnable() {
+                @Override
+                public void run() {
+                    print( "Deleting launch configuration: " + configName );
+                    deleteLaunchConfig(configName);
+                }
+            } );
 
-			// Create scaling group
-			final String groupName = namePrefix + "SetInstanceHealthTest";
-			logger.info("Creating auto scaling group: " + groupName);
-			as.createAutoScalingGroup(new CreateAutoScalingGroupRequest()
-					.withAutoScalingGroupName(groupName)
-					.withLaunchConfigurationName(configName)
-					.withDesiredCapacity(1).withMinSize(0).withMaxSize(1)
-					.withHealthCheckType("EC2").withHealthCheckGracePeriod(600)
-					// 10 minutes
-					.withAvailabilityZones(availabilityZone)
-					.withTerminationPolicies("OldestInstance"));
-			cleanupTasks.add(new Runnable() {
-				@Override
-				public void run() {
-					logger.info("Deleting group: " + groupName);
-					as.deleteAutoScalingGroup(new DeleteAutoScalingGroupRequest()
-							.withAutoScalingGroupName(groupName)
-							.withForceDelete(true));
-				}
-			});
-			cleanupTasks.add(new Runnable() {
-				@Override
-				public void run() {
-					final List<String> instanceIds = (List<String>) getInstancesForGroup(ec2, groupName, null, true);
-					logger.info("Terminating instances: " + instanceIds);
-					ec2.terminateInstances(new TerminateInstancesRequest()
-							.withInstanceIds(instanceIds));
-				}
-			});
+            // Create scaling group
+            final String groupName = NAME_PREFIX + "SetInstanceHealthTest";
+            print( "Creating auto scaling group: " + groupName );
+            as.createAutoScalingGroup( new CreateAutoScalingGroupRequest()
+                    .withAutoScalingGroupName( groupName )
+                    .withLaunchConfigurationName( configName )
+                    .withDesiredCapacity( 1 )
+                    .withMinSize( 0 )
+                    .withMaxSize( 1 )
+                    .withHealthCheckType( "EC2" )
+                    .withHealthCheckGracePeriod( 600 ) // 10 minutes
+                    .withAvailabilityZones( AVAILABILITY_ZONE )
+                    .withTerminationPolicies( "OldestInstance" ) );
+            cleanupTasks.add( new Runnable() {
+                @Override
+                public void run() {
+                    print( "Deleting group: " + groupName );
+                    deleteAutoScalingGroup(groupName,true);
+                }
+            } );
+            cleanupTasks.add( new Runnable() {
+                @Override
+                public void run() {
+                    final List<String> instanceIds = (List<String>) getInstancesForGroup(groupName, null,true );
+                    print( "Terminating instances: " + instanceIds );
+                    ec2.terminateInstances( new TerminateInstancesRequest().withInstanceIds( instanceIds ) );
+                }
+            } );
 
-			// Wait for instances to launch
-			logger.info("Waiting for instance to launch");
-			final long timeout = TimeUnit.MINUTES.toMillis(2);
-			final String instanceId = (String) waitForInstances(ec2, timeout, 1, groupName, true).get(0);
+            // Wait for instances to launch
+            print( "Waiting for instance to launch" );
+            final long timeout = TimeUnit.MINUTES.toMillis( 2 );
+            String instanceId = (String) waitForInstances(timeout,1,groupName,true).get(0);
 
-			// Verify initial health status
-			verifyInstanceHealthStatus(as, instanceId, "Healthy");
+            // Verify initial health status
+            verifyInstanceHealthStatus(instanceId, "Healthy" );
 
-			// Set respecting health check grace period, should be ignored
-			as.setInstanceHealth(new SetInstanceHealthRequest()
-					.withInstanceId(instanceId).withHealthStatus("Unhealthy")
-					.withShouldRespectGracePeriod(true));
+            // Set respecting health check grace period, should be ignored
+            as.setInstanceHealth( new SetInstanceHealthRequest().withInstanceId( instanceId ).withHealthStatus( "Unhealthy" ).withShouldRespectGracePeriod( true ) );
 
-			// Verify health status is the same
-			verifyInstanceHealthStatus(as, instanceId, "Healthy");
+            // Verify health status is the same
+            verifyInstanceHealthStatus(instanceId, "Healthy" );
 
-			// Set health status
-			as.setInstanceHealth(new SetInstanceHealthRequest()
-					.withInstanceId(instanceId).withHealthStatus("Unhealthy")
-					.withShouldRespectGracePeriod(false));
+            // Set health status
+            as.setInstanceHealth( new SetInstanceHealthRequest().withInstanceId( instanceId ).withHealthStatus( "Unhealthy" ).withShouldRespectGracePeriod( false ) );
 
-			// Verify health status changed
-			verifyInstanceHealthStatus(as, instanceId, "Unhealthy");
+            // Verify health status changed
+            verifyInstanceHealthStatus(instanceId, "Unhealthy" );
 
-			logger.info("Test complete");
-		} finally {
-			// Attempt to clean up anything we created
-			Collections.reverse(cleanupTasks);
-			for (final Runnable cleanupTask : cleanupTasks) {
-				try {
-					cleanupTask.run();
-				} catch (Exception e) {
-					e.printStackTrace();
-				}
-			}
-		}
+            print( "Test complete" );
+        } finally {
+            // Attempt to clean up anything we created
+            Collections.reverse( cleanupTasks );
+            for ( final Runnable cleanupTask : cleanupTasks ) {
+                try {
+                    cleanupTask.run();
+                } catch ( Exception e ) {
+                    e.printStackTrace();
+                }
+            }
+        }
 	}
 }

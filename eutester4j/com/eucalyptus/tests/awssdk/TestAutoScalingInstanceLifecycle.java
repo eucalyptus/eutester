@@ -19,9 +19,8 @@
  ************************************************************************/
 package com.eucalyptus.tests.awssdk;
 
-import com.amazonaws.services.autoscaling.AmazonAutoScaling;
-import com.amazonaws.services.autoscaling.model.*;
-import com.amazonaws.services.ec2.AmazonEC2;
+import com.amazonaws.services.autoscaling.model.ScalingActivityInProgressException;
+import com.amazonaws.services.autoscaling.model.SetDesiredCapacityRequest;
 import org.testng.annotations.Test;
 
 import java.util.ArrayList;
@@ -40,50 +39,48 @@ public class TestAutoScalingInstanceLifecycle {
     public void AutoScalingInstanceLifecycleTest() throws Exception {
         testInfo(this.getClass().getSimpleName());
         getCloudInfo();
-        final AmazonAutoScaling as = getAutoScalingClient(ACCESS_KEY, SECRET_KEY, AS_ENDPOINT);
-        final AmazonEC2 ec2 = getEc2Client(ACCESS_KEY, SECRET_KEY, EC2_ENDPOINT);
-        final String imageId = findImage(ec2);
-        final String availabilityZone = findAvalablityZone(ec2);
-        final String namePrefix = eucaUUID() + "-";
-        print("Using resource prefix for test: " + namePrefix);
-        // End discovery, start test
 
         final List<Runnable> cleanupTasks = new ArrayList<>();
         try {
             // Register cleanup for launch config
-            final String configName = namePrefix + "InstanceLifecycleTest";
+            final String launchConfig = NAME_PREFIX + "InstanceLifecycleTest";
             cleanupTasks.add(new Runnable() {
                 @Override
                 public void run() {
-                    print("Deleting launch configuration: " + configName);
-                    deleteLaunchConfig(as, configName);
+                    print("Deleting launch configuration: " + launchConfig);
+                    deleteLaunchConfig(launchConfig);
                 }
             });
 
             // Create launch configuration
-            print("Creating launch configuration: " + configName);
-            createLaunchConfig(as, configName, imageId, INSTANCE_TYPE, null, null);
+            print("Creating launch configuration: " + launchConfig);
+            createLaunchConfig(launchConfig,IMAGE_ID,INSTANCE_TYPE,null,null,null,null,null,null,null,null);
 
             // Register cleanup for auto scaling group
-            final String groupName = namePrefix + "InstanceLifecycleTest";
+            final String groupName = NAME_PREFIX + "InstanceLifecycleTest";
             cleanupTasks.add(new Runnable() {
                 @Override
                 public void run() {
                     print("Deleting group: " + groupName);
-                    deleteAutoScalingGroup(as, groupName);
+                    deleteAutoScalingGroup(groupName, true);
                 }
             });
 
             // Create scaling group
+            Integer minSize = 0;
+            Integer maxSize = 1;
+            Integer desiredCapacity = 1;
+            Integer cooldown =0;
             print("Creating auto scaling group: " + groupName);
-            createAutoScalingGroup(as, groupName, configName, 0, 1, 1, availabilityZone);
+            createAutoScalingGroup(groupName,launchConfig,minSize,maxSize,desiredCapacity,AVAILABILITY_ZONE,cooldown,
+                    null,null,null,null,null);
 
             // Wait for instance to start
             print("Waiting for Pending instance: " + groupName);
-            waitForInstances(as, "Pending", TimeUnit.MINUTES.toMillis(1), groupName, false);
+            waitForInstances("Pending", TimeUnit.MINUTES.toMillis(1), groupName, false);
 
             print("Waiting for InService instance: " + groupName);
-            waitForInstances(as, "InService", TimeUnit.MINUTES.toMillis(5), groupName, false);
+            waitForInstances("InService", TimeUnit.MINUTES.toMillis(5), groupName, false);
 
             // Terminate instance
             print("Terminating instance");
@@ -94,7 +91,7 @@ public class TestAutoScalingInstanceLifecycle {
 
             // Wait for instance to terminate
             print("Waiting for Terminating instance: " + groupName);
-            waitForInstances(as, "Terminating", TimeUnit.MINUTES.toMillis(1), groupName, true);
+            waitForInstances("Terminating", TimeUnit.MINUTES.toMillis(1), groupName, true);
 
             print("Test complete");
         } finally {
