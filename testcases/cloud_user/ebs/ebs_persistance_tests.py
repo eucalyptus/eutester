@@ -460,7 +460,7 @@ class Ebs_Persistance_Tests(EutesterTestCase):
 
 
 if __name__ == "__main__":
-    testcase = Ebs_Multi_Node_Multi_Cluster_Persistance_Tests()
+    testcase = Ebs_Persistance_Tests()
 
     ### Use the list of tests passed from config/command line to determine what subset of tests to run
     ### or use a predefined list
