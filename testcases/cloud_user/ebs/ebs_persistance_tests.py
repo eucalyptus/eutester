@@ -24,6 +24,7 @@ from eucaops import ec2ops
 #from eutester.euvolume import EuVolume
 #from eutester.eusnapshot import EuSnapshot
 from eucaops import Eucaops
+import eutester
 import time
 import copy
 
@@ -72,16 +73,20 @@ class Ebs_Persistance_Tests(EutesterTestCase):
             self.zones = str(self.args.zone).split(',')
         else:
             self.zones = self.tester.get_zones()
+        if not self.zones:
+            raise Exception('No zones found for test?')
+
+        self.debug('Using zones for testing: ' + ",".join(self.zones))
         self.groupname = 'jenkins'
         self.group = self.tester.add_group(self.groupname)
         self.tester.authorize_group(self.group)
         self.tester.authorize_group(self.group, protocol='icmp',port='-1')
         try:
             keys = self.tester.get_all_current_local_keys()
-            if keys != []:
+            if keys:
                 self.keypair = keys[0]
             else:
-                self.keypair = keypair = self.tester.add_keypair('qa214volumechurn')
+                self.keypair = keypair = self.tester.add_keypair('qa214volumechurn'+str(time.time()))
         except Exception, ke:
             raise Exception("Failed to find/create a keypair, error:" + str(ke))
 
@@ -238,19 +243,24 @@ class Ebs_Persistance_Tests(EutesterTestCase):
         debug_str = ""
         #first make sure everything is good before we star the test...
         self.tester.service_manager.all_services_operational()
-
+        storage_controllers = []
+        self.zones = self.zones or self.tester.get_zones()
         for zone in self.zones:
-            storage_controllers = self.tester.service_manager.get_all_storage_controllers()
-            self.tester.service_manager.print_services_list(storage_controllers)
-            for sc in storage_controllers:
-                debug_str = ""
-                all_services_on_sc = self.tester.service_manager.get_all_services_by_filter(hostname=sc.hostname)
-                for service in all_services_on_sc:
-                    debug_str += "(" + str(service.hostname) + ":" + service.type + "), "
-                self.status("Now rebooting machine hosting services:"+str(debug_str),
-                            testcolor=TestColor.get_canned_color('whiteonblue'))
-                sc.machine.reboot()
-
+            self.debug('Getting storage controllers for :' + str(zone))
+            storage_controllers.extend(self.tester.service_manager.get_all_storage_controllers(partition=zone))
+        self.tester.service_manager.print_services_list(storage_controllers)
+        if not storage_controllers:
+            raise Exception('Storage controller list was not populated for zones:' + ",".join(self.zones))
+        for sc in storage_controllers:
+            debug_str = ""
+            all_services_on_sc = self.tester.service_manager.get_all_services_by_filter(hostname=sc.hostname)
+            for service in all_services_on_sc:
+                debug_str += "(" + str(service.hostname) + ":" + service.type + "), "
+            self.status("Now rebooting machine hosting services:"+str(debug_str),
+                        testcolor=TestColor.get_canned_color('whiteonblue'))
+            sc.machine.reboot()
+        if not storage_controllers:
+            raise Exception('Storage controller list post reboot was not populated for zones:' + ",".join(self.zones))
         start = time.time()
         elapsed = 0
         waiting = copy.copy(storage_controllers)
@@ -272,7 +282,8 @@ class Ebs_Persistance_Tests(EutesterTestCase):
                 break
         if waiting:
             raise("SC machines were not reachable after: "+str(elapsed)+" seconds:"+str(debug_str))
-
+        if not storage_controllers:
+            raise Exception('Storage controller list was not populated after waiting for reachable')
         start = time.time()
         elapsed = 0
         waiting_for_ssh = copy.copy(storage_controllers)
@@ -300,21 +311,28 @@ class Ebs_Persistance_Tests(EutesterTestCase):
                 break
         if waiting_for_ssh:
             raise("SC machines failed to establish SSH after: "+str(elapsed)+" seconds:"+str(debug_str))
+        if not storage_controllers:
+            raise Exception('Storage controller list was not populated after waiting for ssh')
         self.start_all_services_on_storage_controllers(storage_controllers)
 
     def start_tgtd_service(self,sc_list):
         for sc in sc_list:
             sc.machine.sys('service tgtd start', code=0)
 
+    @eutester.Eutester.printinfo
     def start_all_services_on_storage_controllers(self, sc_list):
-        self.status("Waiting for storage controller's services to start...")
+        self.status("Waiting for storage controller's services to start...",
+                    testcolor=TestColor.get_canned_color('whiteonblue'))
+        if not sc_list:
+            raise Exception("sc_list was empty in: start_all_services_on_storage_controllers")
         #wait = 10 * 60
         for sc in sc_list:
+            self.debug('Getting all services co-existing on sc: ' + str(sc.hostname))
             all_services_on_sc = self.tester.service_manager.get_all_services_by_filter(hostname=sc.hostname)
             for service in all_services_on_sc:
                 service.start()
                 #uptime = int(tester.clc.sys('cat /proc/uptime')[0].split()[0])
-
+        self.debug('Issued start to all services, now wait for: all_services_operational')
         self.tester.service_manager.all_services_operational()
         try:
             for service in all_services_on_sc:

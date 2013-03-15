@@ -33,6 +33,8 @@
 import re
 import time
 from eutester import sshconnection
+import eutester
+import copy
 from eutester import machine
 
 
@@ -450,9 +452,10 @@ class EuserviceManager(object):
 
     def print_services_list(self, services=None):
         services = services or self.all_services
-        service1 = services.pop(0)
+        services_list = copy.copy(services)
+        service1 = services_list.pop(0)
         buf = service1.print_self()
-        for service in services:
+        for service in services_list:
             buf += service.print_self(header=False,)
         self.debug(buf)
 
@@ -529,6 +532,7 @@ class EuserviceManager(object):
     def update_service_list(self):
         return self.get()
 
+    @eutester.Eutester.printinfo
     def get_all_services_by_filter(self,
                                    type=None,
                                    partition=None,
