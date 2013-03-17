@@ -335,7 +335,8 @@ class Machine:
         except sshconnection.CommandExitCodeException:
             return False
         except Exception, e:
-            self.debug('Could not get service state from node:' + str(self.hostname) + ", err:"+str(e))
+            self.debug('Could not get "'+ str(service) + '" service state from machine:'
+                       + str(self.hostname) + ", err:"+str(e))
 
     def get_elapsed_seconds_since_pid_started(self, pid):
         """
