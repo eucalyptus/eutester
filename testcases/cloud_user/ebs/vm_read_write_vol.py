@@ -25,10 +25,10 @@ try:
         wlength = 0
         start = time.time()
         for x in xrange(0, bytes):
-            debug_string = "\nWRITE_VALUE:" + str(x) + "\n" + \
-                           "WRITE_RATE:" + writerate + " Bytes/Sec" + "\n" + \
-                           "LAST_READ:" + str(lr) + "\n" + \
-                           "READ_RATE:" + readrate + " Bytes/sec"
+            debug_string = "\nWRITE_VALUE: ".ljust(15) + str(x).ljust(15) + "\n" + \
+                           "WRITE_RATE: ".ljust(15) + writerate.ljust(15) + " Bytes/Sec" + "\n" + \
+                           "LAST_READ: ".ljust(15) + str(lr).ljust(15) + "\n" + \
+                           "READ_RATE: ".ljust(15) + str(readrate + " Bytes/Sec").rjust(15)
             #print "\r\x1b[K Writing:" + str(x) + ", Rate:" + writerate + " bytes/sec, Lastread:" \
             #      + str(lr) + ", READ Rate:" + readrate + " bytes/sec",
             print "\r\x1b[K " + debug_string,

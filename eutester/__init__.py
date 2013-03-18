@@ -49,7 +49,6 @@ from functools import wraps
 
 
 
-
 class TimeoutFunctionException(Exception): 
     """Exception to raise on a timeout""" 
     pass 

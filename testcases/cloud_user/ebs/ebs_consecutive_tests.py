@@ -51,8 +51,8 @@ if __name__ == "__main__":
     testcase.parser.add_argument('--snap_count', type=int, help='Number of snapshots to create per zone',default=5)
     testcase.parser.add_argument('--snap_delay', type=int, help='Delay in seconds between each snapshot created',default=0)
     testcase.parser.add_argument('--snap_progress', type=int, help='Number of 10 second polls to allow without increase in snapshot progress',default=60)
-    testcase.parser.add_argument('--timepergig', type=int, help='Time allowed per gig size of volume during volume creation',default=300)
-    testcase.parser.add_argument('--snap_attached', dest='snap_attached', action='store_true', default=False)
+    testcase.parser.add_argument('--timepergig', type=int, help='Time allowed per gig size of volume during volume creation',default=500)
+    testcase.parser.add_argument('--snap_attached', dest='snap_attached', action='store_true', default=True)
     testcase.parser.add_argument('--delete_to', type=int, help="Timeout for volume deletion",  default=120)
     testcase.parser.add_argument('--root_device_type', help="Type of instance to run, 'ebs' or 'instance-store'",  default='instance-store')
 

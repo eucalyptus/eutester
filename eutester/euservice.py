@@ -33,6 +33,8 @@
 import re
 import time
 from eutester import sshconnection
+import eutester
+import copy
 from eutester import machine
 
 
@@ -350,7 +352,7 @@ class EuserviceManager(object):
             raise AttributeError("Tester object does not have CLC machine to use for SSH")
         self.update()
 
-    
+    @eutester.Eutester.printinfo
     def get(self, type=None, partition=None, attempt_both=True, poll_interval=15, allow_clc_start_time=300):
         """
         Method attempts to 'get' euservices by parsing euca-describe-services on the CLC(s). The method
@@ -450,9 +452,10 @@ class EuserviceManager(object):
 
     def print_services_list(self, services=None):
         services = services or self.all_services
-        service1 = services.pop(0)
+        services_list = copy.copy(services)
+        service1 = services_list.pop(0)
         buf = service1.print_self()
-        for service in services:
+        for service in services_list:
             buf += service.print_self(header=False,)
         self.debug(buf)
 
@@ -529,6 +532,7 @@ class EuserviceManager(object):
     def update_service_list(self):
         return self.get()
 
+    @eutester.Eutester.printinfo
     def get_all_services_by_filter(self,
                                    type=None,
                                    partition=None,
@@ -907,12 +911,15 @@ class EuserviceManager(object):
             raise Exception("Service: " + euservice.name + " did not enter "  + state + " state")
         
     def all_services_operational(self):
+        self.debug('all_services_operational starting...')
         all_services_to_check = self.get_all_services()
+        self.print_services_list(all_services_to_check)
         while all_services_to_check:
             ha_counterpart = None
             service = all_services_to_check.pop()
+            self.debug('Checking for operational state of services type:' + str(service.type))
             for serv in all_services_to_check:
-                if serv.type == service.type and serv.partition == serv.partition:
+                if serv.type == service.type and serv.partition == service.partition:
                     ha_counterpart = serv
                     break
             if ha_counterpart:
@@ -921,7 +928,7 @@ class EuserviceManager(object):
                 self.wait_for_service(service,"DISABLED")
             else:
                 self.wait_for_service(service,"ENABLED")
-    
+
     def get_enabled_clc(self):
         clc = self.get_enabled(self.clcs)
         if clc is None:
