@@ -37,7 +37,7 @@ import os
 from eucaops import Eucaops
 from eutester import euinstance
 from eutester.eutestcase import EutesterTestCase
-import ec2ops
+from eucaops import ec2ops
 
 class TestZone():
     def __init__(self, partition):
