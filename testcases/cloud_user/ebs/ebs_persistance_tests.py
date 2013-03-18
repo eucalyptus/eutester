@@ -197,6 +197,8 @@ class Ebs_Persistance_Tests(EutesterTestCase):
                             self.status("This is a temp work around for testing, this is to avoid bug euca-5297"+str(vse),
                                         testcolor=TestColor.get_canned_color('failred'))
                             time.sleep(10)
+                            self.debug('Monitoring volume post VolumeStateException...')
+                            vol.eutest_attached_status = None
                             self.tester.monitor_euvolumes_to_status([vol],status='in-use',attached_status='attached',timeout=60)
         self.status("\'pre_service_restart_attach_all_volumes\' done",
                         testcolor=TestColor.get_canned_color('whiteonblue'))
@@ -421,17 +423,26 @@ class Ebs_Persistance_Tests(EutesterTestCase):
         vols = []
         errmsg = ""
         for snap in self.snapshots:
-            vols.extend(self.tester.get_volumes(snapid=snap.id))
+            vols.extend(self.tester.get_volumes(status='available', snapid=snap.id))
+
         if not vols:
             raise Exception("No vols were found as created from previous snapshots")
         if not self.instances:
             raise Exception('No instances to use for this test')
         if not self.snapshots:
             raise Exception('No snapshots to use for this test')
-        self.tester.print_euvolume_list(vols)
+        for vol in vols:
+            vol.update()
+        availvols = copy.copy(vols)
+        self.status('Attempting to attach the following volumes:',testcolor=TestColor.get_canned_color('whiteonblue'))
+        self.tester.print_euvolume_list(availvols)
+        #Iterate through the volumes, and attach them all to at least one instance in each zone.
         for instance in self.instances:
-            for vol in vols:
+            if not availvols:
+                break
+            for vol in availvols:
                 if vol.zone == instance.placement:
+                    availvols.remove(vol)
                     try:
                         try:
                             instance.attach_volume(vol, timeout=90)
@@ -453,7 +464,9 @@ class Ebs_Persistance_Tests(EutesterTestCase):
                                               + " --vs volmd5:-- " + str(vol.md5)
                     except Exception, e:
                         errmsg += str(instance.id) +"Volume:" + str(vol.id) \
-                                  + " error when attaching and comparing md5, err:" + str(e)
+                              + " error when attaching and comparing md5, err:" + str(e)
+        self.status('Volume status post attachment operation:',testcolor=TestColor.get_canned_color('whiteonblue'))
+        self.tester.print_euvolume_list(vols)
         if errmsg:
             raise Exception(errmsg)
 
@@ -461,6 +474,8 @@ class Ebs_Persistance_Tests(EutesterTestCase):
 
 
     def test4_post_service_interuption_check_snapshot_creation(self):
+        self.status('Attempting to verify snapshot creation post reboot',\
+                    testcolor=TestColor.get_canned_color('whiteonblue'))
         testvols = []
         testsnaps = []
         for zone in self.zones:
