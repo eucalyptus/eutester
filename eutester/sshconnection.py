@@ -321,7 +321,7 @@ class SshConnection():
         return output
 
 
-    def cmd(self, cmd, verbose=None, timeout=120, listformat=False, cb=None, cbargs=[], get_pty=False):
+    def cmd(self, cmd, verbose=None, timeout=120, listformat=False, cb=None, cbargs=[], get_pty=True):
         """ 
         Runs a command 'cmd' within an ssh connection. 
         Upon success returns dict representing outcome of the command.
@@ -338,13 +338,13 @@ class SshConnection():
         :param timeout: - optional - integer used to timeout the overall cmd() operation in case of remote blocking
         :param listformat: - optional - boolean, if set returns output as list of lines, else a single buffer/string
         :param cb: - optional - callback, method that can be used to handle output as it's rx'd instead of...
-                        waiting for the cmd to finish and return buffer. 
+                        waiting for the cmd to finish and return buffer. Called like: cb(ssh_cmd_out_buffer, *cbargs)
                         Must accept string buffer, and return an integer to be used as cmd status. 
                         Must return type 'sshconnection.SshCbReturn'
                         If cb returns stop, recv loop will end, and channel will be closed.
                         if cb settimer is > 0, timer timeout will be adjusted for this time
                         if cb statuscode is != -1 cmd status will return with this value
-                        if cb nextargs is set, the next time cb is called these args will be passed instead
+                        if cb nextargs is set, the next time cb is called these args will be passed instead of cbargs
         :param cbargs: - optional - list of arguments to be appended to output buffer and passed to cb
 
         """
@@ -661,6 +661,33 @@ class SshConnection():
             show = password[0]+show
             show += password[len(password)-1]
         return show
+
+    def sftp_put(self,localfilepath,remotefilepath):
+        """
+        sftp transfer file from localfilepath to remote system at remotefilepath
+        :param localfilepath: path to file on local system
+        :param remotefilepath: destination path for put on remote system
+        """
+        if not self.connection._transport:
+            self.refresh_connection()
+        transport = self.connection._transport
+        sftp = paramiko.SFTPClient.from_transport(transport)
+        sftp.put(remotepath=remotefilepath, localpath=localfilepath)
+        sftp.close()
+
+    def sftp_get(self, localfilepath, remotefilepath):
+        """
+        sftp transfer file from remotefilepath to remote system at localfilepath
+        :param localfilepath: path where remote file 'get' will place file on local system
+        :param remotefilepath: destination path for file to 'get' on remote system
+        """
+        if not self.connection._transport:
+            self.refresh_connection()
+        transport = self.connection._transport
+        sftp = paramiko.SFTPClient.from_transport(transport)
+        sftp.get(remotepath=remotefilepath, localpath=localfilepath)
+        sftp.close()
+
 
     def close(self):
         self.connection.close()

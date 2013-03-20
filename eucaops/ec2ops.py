@@ -2244,10 +2244,12 @@ class EC2ops(Eutester):
 
             try:
                 self.wait_for_valid_ip(instance, private_addressing=private_addressing)
-            except Exception:
-                self.terminate_instances(reservation)
-                raise Exception("Reservation " +  str(reservation) + " has been terminated because instance " +
-                                str(instance) + " did not receive a valid IP")
+            except Exception, e:
+                ip_err = "WARNING in wait_for_valid_ip: "+str(e)
+                self.debug(ip_err)
+                #self.terminate_instances(reservation)
+                #raise Exception("Reservation " +  str(reservation) + " has been terminated because instance " +
+                #                str(instance) + " did not receive a valid IP")
 
             if is_reachable:
                 self.ping(instance.public_dns_name, 20)
@@ -2399,10 +2401,15 @@ class EC2ops(Eutester):
     @Eutester.printinfo 
     def monitor_euinstances_to_running(self,instances, poll_interval=10, timeout=480):
         self.debug("("+str(len(instances))+") Monitor_instances_to_running starting...")
+        ip_err = ""
         #Wait for instances to go to running state...
-        self.monitor_euinstances_to_state(instances,timeout=timeout)
+        self.monitor_euinstances_to_state(instances, failstates=['terminated','shutting-down'],timeout=timeout)
         #Wait for instances in list to get valid ips, check for duplicates, etc...
-        self.wait_for_valid_ip(instances, timeout)
+        try:
+            self.wait_for_valid_ip(instances, timeout)
+        except Exception, e:
+            ip_err = "WARNING in wait_for_valid_ip: "+str(e)
+            self.debug(ip_err)
         #Now attempt to connect to instances if connect flag is set in the instance...
         waiting = copy.copy(instances)
         good = []
@@ -2442,6 +2449,7 @@ class EC2ops(Eutester):
                 
         if waiting:
             buf = "Timed out waiting to connect to the following instances:\n"
+            buf += ip_err + "\n"
             for instance in waiting:
                 buf += str(instance.id)+":"+str(instance.public_dns_name)+","
             raise Exception(buf)
@@ -2577,6 +2585,7 @@ class EC2ops(Eutester):
                                      state='running',
                                      min=None,
                                      poll_interval=10,
+                                     failstates=[],
                                      timeout=120,
                                      eof=True):
         """
@@ -2629,7 +2638,7 @@ class EC2ops(Eutester):
                             if state != "stopped" and ( instance.laststate == 'pending' and instance.state == "stopped"):
                                 raise Exception("Instance:"+str(instance.id)+" illegal state transition from "
                                                 +str(instance.laststate)+" to "+str(instance.state))
-                    dbgmsg = (str(state)+": "+str(instance.id)+' state:'+str(instance.state)+', type:'+
+                    dbgmsg = ("Intended state:" + str(state)+": "+str(instance.id)+' Current state:'+str(instance.state)+', type:'+
                               str(instance.root_device_type) + ', backing volume:'+str(bdm_vol_id)+' status:'+
                               str(bdm_vol_status)+", elapsed:"+ str(elapsed)+"/"+str(timeout))
                     if instance.state == state:
@@ -2637,7 +2646,11 @@ class EC2ops(Eutester):
                         #This instance is in the correct state, remove from monitor list
                         good.append(instance)
                     else:
-                        self.debug("WAITING for "+dbgmsg)
+                        for failed_state in failstates:
+                            if instance.state == failed_state:
+                                raise Exception('FAILED STATE:'+ dbgmsg )
+
+                    self.debug("WAITING for "+dbgmsg)
                 except Exception, e:
                     failed.append(instance)
                     tb = self.get_traceback()
