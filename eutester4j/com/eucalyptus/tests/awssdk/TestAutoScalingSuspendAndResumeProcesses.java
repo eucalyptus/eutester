@@ -78,7 +78,7 @@ public class TestAutoScalingSuspendAndResumeProcesses {
 
             // Check process types
             print("Verifying process types.");
-            final Set<String> expectedProcessTypes = new HashSet<>();
+            final Set<String> expectedProcessTypes = new HashSet<String>();
             expectedProcessTypes.add("Launch");
             expectedProcessTypes.add("Terminate");
             expectedProcessTypes.add("HealthCheck");
@@ -90,7 +90,7 @@ public class TestAutoScalingSuspendAndResumeProcesses {
             final DescribeScalingProcessTypesResult scalingProcessTypesResult = as.describeScalingProcessTypes();
             assertThat(scalingProcessTypesResult.getProcesses() != null, "Expected processes");
             assertThat(scalingProcessTypesResult.getProcesses().size() == 8, "Expected 8 processes, but got " + scalingProcessTypesResult.getProcesses().size());
-            final Set<String> foundProcessTypes = new HashSet<>();
+            final Set<String> foundProcessTypes = new HashSet<String>();
             for (final ProcessType processType : scalingProcessTypesResult.getProcesses()) {
                 foundProcessTypes.add(processType.getProcessName());
             }

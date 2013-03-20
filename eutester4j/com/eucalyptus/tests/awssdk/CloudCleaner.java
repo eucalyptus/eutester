@@ -54,7 +54,7 @@ public class CloudCleaner {
         getCloudInfo();
 
         //Terminate All instances
-        List<String> instancesToTerminate = new ArrayList<>();
+        List<String> instancesToTerminate = new ArrayList<String>();
         DescribeInstancesResult result =ec2.describeInstances();
         List<Reservation> reservations = result.getReservations();
         if (reservations.size() > 0){
