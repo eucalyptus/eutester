@@ -91,7 +91,7 @@ class EuInstance(Instance, TaggedResource):
     cmdstart = 0
     auto_connect = True
     security_groups = []
-
+    vmtype_info = None
    
     @classmethod
     def make_euinstance_from_instance(cls, 
@@ -153,6 +153,7 @@ class EuInstance(Instance, TaggedResource):
         newins.cmdstart = cmdstart
         newins.auto_connect = auto_connect
         newins.set_last_status()
+        newins.update_vm_type_info()
         #newins.set_block_device_prefix()
         if newins.root_device_type == 'ebs':
             try:
@@ -1319,8 +1320,78 @@ class EuInstance(Instance, TaggedResource):
             return mount_dir
         return mount_dir
 
-    
-    
+
+
+    def update_vm_type_info(self):
+        self.vmtype_info =  self.tester.get_vm_type_from_zone(self.placement,self.instance_type)
+        return self.vmtype_info
+
+    def get_ephemeral_dev(self):
+        """
+        Attempts to find the block device path on this instance
+
+        :return: string representing path to ephemeral block device
+        """
+        ephem_name = None
+        dev_prefixs = ['s','v','xd','xvd']
+        if not self.root_device_type == 'ebs':
+            try:
+                self.assertFilePresent('/dev/' + str(self.rootfs_device))
+                return self.rootfs_device
+            except:
+                ephem_name = 'da'
+        else:
+            ephem_name = 'db'
+        devs = self.get_dev_dir()
+        for prefix in dev_prefixs:
+            if str(prefix+ephem_name) in devs:
+                return str(prefix+ephem_name)
+        raise Exception('Could not find ephemeral device?')
+
+    def get_blockdev_size_in_bytes(self,devpath):
+        bytes = self.sys('blockdev --getsize64 ' + str(devpath), code=0)[0]
+        return int(bytes)
+
+
+    def check_ephemeral_against_vmtype(self):
+        gb = 1073741824
+        size = self.vmtype_info.disk
+        ephemeral_dev = self.get_ephemeral_dev()
+        block_size = self.get_blockdev_size_in_bytes('/dev/' + ephemeral_dev)
+        gbs = block_size / gb
+        self.debug('Ephemeral check: ephem_dev:'
+                   + str(ephemeral_dev)
+                   + ", bytes:"
+                   + str(block_size)
+                   + ", gbs:"
+                   + str(gbs)
+                   + ", vmtype size:"
+                   + str(size))
+        if gbs != size:
+            raise Exception('Ephemeral check failed. ' + str(ephemeral_dev) + ' Blocksize: '
+                            + str(gbs) + "gb (" + str(block_size) + "bytes)"
+                            + ' != vmtype size:' +str(size) + "gb")
+        else:
+            self.debug('check_ephemeral_against_vmtype, passed')
+
+
+    def get_memtotal_in_mb(self):
+        kb_to_mb = 1024
+        return long(self.sys('cat /proc/meminfo | grep MemTotal',code=0)[0].split()[1]) / kb_to_mb
+
+    def check_ram_against_vmtype(self, pad=32):
+        total_ram = self.get_memtotal_in_mb()
+        self.debug('Ram check: vm_ram:' + str(self.vmtype_info.ram)
+                   + "mb vs memtotal:" + str(total_ram)
+                   + "mb. Diff:" + str(self.vmtype_info.ram - total_ram)
+                   + "mb, pad:" + str(pad) + "mb")
+        if not ((self.vmtype_info.ram - total_ram) <= pad):
+            raise Exception('Ram check failed. vm_ram:' + str(self.vmtype_info.ram)
+                            + " vs memtotal:" + str(total_ram) + ". Diff is greater than allowed pad:" + str(pad) + "mb")
+        else:
+            self.debug('check_ram_against_vmtype, passed')
+
+
     
         
         
