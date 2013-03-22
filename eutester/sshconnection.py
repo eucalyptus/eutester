@@ -93,6 +93,7 @@ import re
 import select
 import socket
 import time
+import types
 
 
 
@@ -131,8 +132,8 @@ class SshConnection():
                  proxy_password=None,
                  proxy_keyname=None,
                  proxy_keypath=None,
-                 pub_key_file=None,
-                 use_pub_keys=True,
+                 key_files=None,
+                 find_keys=True,
                  enable_ipv6_dns=False,
                  timeout=60,
                  retry=1,
@@ -140,8 +141,6 @@ class SshConnection():
                  verbose=False,
                  debug_connect=False):
         """
-
-
         :param host: -mandatory - string, hostname or ip address to establish ssh connection to
         :param username: - optional - string, username used to establish ssh session when keypath is not provided
         :param password: - optional - string, password used to establish ssh session when keypath is not provided
@@ -151,6 +150,7 @@ class SshConnection():
         :param proxy_username:  - optional ssh username of proxy host for authentication
         :param proxy_password: - optional ssh password of proxy host for authentication
         :param proxy_keypath: - optional path to ssh key to use for proxy authentication
+        :param key_files: - optional ',' comma delimited list of key file paths
         :param proxy_keyname: - optional keyname for proxy authentication, will attempt to derive keypath from this
         :param enable_ipv6_dns: - optional - boolean to allow ipv6 dns hostname resolution
         :param timeout: - optional - integer, tcp timeout in seconds
@@ -170,13 +170,15 @@ class SshConnection():
         self.proxy_password = proxy_password
         self.proxy_keyname = proxy_keyname
         self.proxy_keypath = proxy_keypath
-        self.use_pub_keys = use_pub_keys
         self.enable_ipv6_dns = enable_ipv6_dns
         self.timeout = timeout
         self.retry = retry
         self.debugmethod = debugmethod
         self.verbose = verbose
-        self.pub_key_file = pub_key_file
+        self.key_files = key_files or []
+        if not isinstance(self.key_files, types.ListType):
+            self.key_files = str(self.key_files).split(',')
+        self.find_keys = find_keys
         self.debug_connect = debug_connect
 
         #Used to store the last cmd attempted and it's exit code
@@ -201,7 +203,7 @@ class SshConnection():
                 self.debug("SSH proxy has hostname:" + str(self.proxy) + " user:" +
                            str(proxy_username) + " password:" + str(self.mask_password(proxy_password)))
 
-        if self.use_pub_keys or \
+        if self.find_keys or \
                 self.keypath is not None or \
                 ((self.username is not None) and (self.password is not None)):
             self.connection = self.get_ssh_connection(self.host,
@@ -225,12 +227,12 @@ class SshConnection():
                             proxy_username='root',
                             proxy_password=None,
                             proxy_keypath=None,
-                            pub_key_file=None,
+                            key_files=None,
                             verbose=True):
         """
 
 
-        :param pub_key_file: pubkey file. If 'None' will check global self.pub_key_file default:'~/.ssh/authorized_keys'
+        :param key_files: pubkey file. If 'None' will check global self.key_files default:'~/.ssh/authorized_keys'
         :param verbose: print debug
         :param proxy_host: hostname of ssh proxy
         :param port: ssh proxy port
@@ -245,12 +247,14 @@ class SshConnection():
         proxy_username = proxy_username or self.proxy_username
         proxy_password = proxy_password or self.proxy_password
         proxy_keypath = proxy_keypath or self.proxy_keypath
+        key_files = key_files or self.key_files or []
+        if key_files and not isinstance(key_files, types.ListType):
+            key_files = key_files.split(',')
 
         #Make sure there is at least one likely way to authenticate...
         ssh = paramiko.SSHClient()
-        if self.use_pub_keys or \
-                        proxy_keypath is not None or \
-                        ((proxy_username is not None) and (proxy_password is not None)):
+        if (proxy_username is not None) and (key_files or self.find_keys or proxy_keypath is not None or \
+                         proxy_password is not None ):
             p_transport = paramiko.Transport(proxy_host)
             ssh._transport = p_transport
             p_transport.start_client()
@@ -259,13 +263,10 @@ class SshConnection():
                 p_transport.auth_publickey(proxy_username,priv_key)
             elif proxy_password:
                 p_transport.auth_password(proxy_username, proxy_password)
-            else:
-                file = pub_key_file or self.pub_key_file or os.path.expanduser('~/.ssh/authorized_keys')
-                if not os.path.isfile(file):
-                    raise Exception('No way to authenticate, need key, password, or file of keys, etc..')
-                self.debug("Proxy auth -Using local keys, no keypath/password provided, trying:" + str(file),
+            elif self.find_keys:
+                self.debug("Proxy auth -Using local keys, no keypath/password provided",
                            verbose=verbose)
-                ssh._auth(proxy_username, None,None,[file], True, True)
+                ssh._auth(proxy_username, None,None,key_files, True, True)
                 p_transport = ssh._transport
             #forward from 127.0.0.1:<free_random_port> to |dest_host|
             channel = p_transport.open_channel('direct-tcpip', dest_host, ('127.0.0.1', 0))
@@ -478,7 +479,7 @@ class SshConnection():
                            proxy_username=None,
                            proxy_password=None,
                            proxy_keypath=None,
-                           use_pub_keys=None,
+                           key_files=None,
                            enable_ipv6_dns=None,
                            port=22,
                            timeout=60,
@@ -509,11 +510,12 @@ class SshConnection():
         connected = False
         iplist = []
         ip = None
-        if use_pub_keys is None:
-            use_pub_keys = self.use_pub_keys
+        key_files = key_files or self.key_files or []
+        if key_files and not isinstance(key_files, types.ListType):
+            key_files = key_files.split(',')
         proxy_ip = None
-        if not use_pub_keys and password is None and keypath is None:
-            raise Exception("ssh_connect: both password and keypath were set to None")
+        if not key_files and password is None and keypath is None and not self.find_keys:
+            raise Exception("ssh_connect: Need to set password, keypath, keyfiles, or find_keys")
         if enable_ipv6_dns is None:
             enable_ipv6_dns = self.enable_ipv6_dns
         proxy = proxy or self.proxy
@@ -579,12 +581,9 @@ class SshConnection():
                         #ssh.connect(ip, port=port, username=username, key_filename=keypath, timeout=timeout)
                         connected = True
                         break
-                    else:
-                        file = self.pub_key_file or os.path.expanduser('~/.ssh/authorized_keys')
-                        if not os.path.isfile(file):
-                            raise Exception('No way to authenticate, need key, password, or file of keys, etc..')
-                        self.debug("Using local keys, no keypath/password provided, trying:" + str(file), verbose=verbose)
-                        ssh._auth(username, password,None,[file], True, True)
+                    elif key_files or self.find_keys:
+                        self.debug("Using local keys, no keypath/password provided.", verbose=verbose)
+                        ssh._auth(username, password,None,key_files, True, True)
                         #ssh.connect(ip, port=port, username=username, key_filename=keypath, timeout=timeout)
                         connected = True
 
