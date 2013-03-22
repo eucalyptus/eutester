@@ -56,7 +56,7 @@ from eutester import Eutester
 from eutester.euinstance import EuInstance
 from eutester.euvolume import EuVolume
 from eutester.eusnapshot import EuSnapshot
-
+from eutester.euzone import EuZone
 
 EC2RegionData = {
     'us-east-1' : 'ec2.us-east-1.amazonaws.com',
@@ -3269,6 +3269,32 @@ class EC2ops(Eutester):
         encoded_policy = base64.b64encode(policy)
         return encoded_policy
 
+
+    def get_euzones(self, zones=None):
+        ret_list = []
+
+        if zones is not None and not isinstance(zones, types.ListType):
+            get_zones = [zones]
+        else:
+            get_zones = zones
+        myzones = self.ec2.get_all_zones(zones=get_zones)
+        for zone in myzones:
+            ret_list.append(EuZone.make_euzone_from_zone(zone, self))
+        return ret_list
+
+
+    def get_vm_type_list_from_zone(self, zone):
+        euzone = self.get_euzones(zone)[0]
+        return euzone.vm_types
+
+    def get_vm_type_from_zone(self,zone, vmtype_name):
+        vm_type = None
+        type_list = self.get_vm_type_list_from_zone(zone)
+        for type in type_list:
+            if type.name == vmtype_name:
+                vm_type = type
+                break
+        return vm_type
 
 class VolumeStateException(Exception):
     def __init__(self, value):
