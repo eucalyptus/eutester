@@ -1124,6 +1124,8 @@ class EC2ops(Eutester):
         """
         #instance.update()
         #get timestamp from launch data
+        if not instance.launch_time:
+            return None
         launch_time = cls.get_datetime_from_resource_string(instance.launch_time)
         #return the elapsed time in seconds
         return time.mktime(datetime.utcnow().utctimetuple()) - time.mktime(launch_time.utctimetuple())
@@ -2904,7 +2906,7 @@ class EC2ops(Eutester):
         
         reservations = self.ec2.get_all_instances(instance_ids=instance_ids)
         for res in reservations:
-            if ( reservation is None ) or (re.search(reservation, res.id)):
+            if ( reservation is None ) or (re.search(str(reservation), str(res.id))):
                 for i in res.instances:
                     #if (idstring is not None) and (not re.search(idstring, i.id)) :
                     #   continue
