@@ -15,10 +15,12 @@ import random
 
 
 class InstanceRestore(EutesterTestCase):
-    def __init__(self, config_file=None, password=None):
+    def __init__(self):
         self.setuptestcase()
+        self.setup_parser()
+        self.get_args()
         # Setup basic eutester object
-        self.tester = Eucaops( config_file=config_file, password=password)
+        self.tester = Eucaops( config_file=self.args.config_file, password=self.args.password)
         self.tester.poll_count = 120
 
         ### Add and authorize a group for the instance
@@ -28,7 +30,7 @@ class InstanceRestore(EutesterTestCase):
         ### Generate a keypair for the instance
         self.keypair = self.tester.add_keypair( "keypair-" + str(time.time()))
         self.keypath = '%s/%s.pem' % (os.curdir, self.keypair.name)
-        self.image = self.tester.get_emi(root_device_type="instance-store")
+        self.image = self.tester.get_emi()
         self.reservation = None
         self.private_addressing = False
         zones = self.tester.ec2.get_all_zones()
@@ -69,12 +71,10 @@ class InstanceRestore(EutesterTestCase):
 
         ### Wait for instance to show up as terminating
         self.tester.wait_for_reservation(self.reservation, state="terminated", timeout=600)
+        for instance in self.reservation.instances:
+            instance.terminate()
 
-        ### Wait for reservation to disappear
-        while len(self.tester.get_instances(reservation=self.reservation)) > 0:
-            self.tester.sleep(30)
-
-        self.tester.deregister_image(self.image, clear=True)
+        self.tester.deregister_image(self.image, delete=True)
 
         for nc in self.ncs:
             nc.sys("service eucalyptus-nc start")

@@ -81,10 +81,14 @@ class Install(EutesterTestCase):
         for machine in self.tester.get_component_machines("sc"):
             machine.package_manager.install("eucalyptus-sc")
         for machine in self.tester.get_component_machines("nc"):
+            if machine.distro.name is "vmware":
+                continue
             machine.package_manager.install("eucalyptus-nc")
 
     def start_components(self):
         for machine in self.tester.get_component_machines("nc"):
+            if machine.distro.name is "vmware":
+                continue
             machine.sys("service eucalyptus-nc start", timeout=480)
         for machine in self.tester.get_component_machines("cc"):
             machine.sys("service eucalyptus-cc start", timeout=480)
@@ -103,8 +107,10 @@ class Install(EutesterTestCase):
         for machine in self.tester.get_component_machines("ws"):
             machine.sys("service eucalyptus-cloud stop", timeout=480)
         for machine in self.tester.get_component_machines("cc"):
-            machine.sys("service eucalyptus-cc stop", timeout=480)
+            machine.sys("service eucalyptus-cc cleanstop", timeout=480)
         for machine in self.tester.get_component_machines("nc"):
+            if machine.distro.name is "vmware":
+                continue
             machine.sys("service eucalyptus-nc stop", timeout=480)
 
     def initialize_db(self):
@@ -115,6 +121,8 @@ class Install(EutesterTestCase):
         nc_machines = self.tester.get_component_machines("nc")
         bridge_interface = "em1"
         for nc in nc_machines:
+            if nc.distro.name is "vmware":
+                return
             nc.sys("echo 'DEVICE=br0\nBOOTPROTO=dhcp\nONBOOT=yes\nTYPE=Bridge' > /etc/sysconfig/network-scripts/ifcfg-br0")
             nc.sys("echo 'DEVICE=" + bridge_interface +"\nTYPE=Ethernet\nBRIDGE=br0' > /etc/sysconfig/network-scripts/ifcfg-" + bridge_interface)
             nc.sys("service network restart")

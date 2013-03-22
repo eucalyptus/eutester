@@ -20,22 +20,16 @@
 
 package com.eucalyptus.tests.awssdk;
 
-import static com.eucalyptus.tests.awssdk.Eutester4j.*;
-
+import com.amazonaws.services.autoscaling.model.*;
+import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
 import org.testng.annotations.Test;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
-import com.amazonaws.services.autoscaling.AmazonAutoScaling;
-import com.amazonaws.services.autoscaling.model.CreateAutoScalingGroupRequest;
-import com.amazonaws.services.autoscaling.model.CreateLaunchConfigurationRequest;
-import com.amazonaws.services.autoscaling.model.DeleteAutoScalingGroupRequest;
-import com.amazonaws.services.autoscaling.model.DeleteLaunchConfigurationRequest;
-import com.amazonaws.services.autoscaling.model.ResourceInUseException;
-import com.amazonaws.services.autoscaling.model.TerminateInstanceInAutoScalingGroupRequest;
-import com.amazonaws.services.ec2.AmazonEC2;
-import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
+
+import static com.eucalyptus.tests.awssdk.Eutester4j.*;
 
 /**
  * This application tests manually terminating instances with auto scaling.
@@ -50,73 +44,62 @@ public class TestAutoScalingTerminateInstances {
 	@Test
 	public void AutoScalingTerminateInstancesTest() throws Exception {
         testInfo(this.getClass().getSimpleName());
-		getCloudInfo();
-		final AmazonAutoScaling as = getAutoScalingClient(ACCESS_KEY, SECRET_KEY, AS_ENDPOINT);
-		final AmazonEC2 ec2 = getEc2Client(ACCESS_KEY, SECRET_KEY, EC2_ENDPOINT);
-		final String imageId = findImage(ec2);
-		final String availabilityZone = findAvalablityZone(ec2);
-		final String namePrefix = eucaUUID() + "-";
-		logger.info("Using resource prefix for test: " + namePrefix);
+        getCloudInfo();
 		
 		// End discovery, start test
 		final List<Runnable> cleanupTasks = new ArrayList<Runnable>();
 		try {
 			// Create launch configuration
-			final String configName = namePrefix + "TerminateTest";
-			logger.info("Creating launch configuration: " + configName);
-			as.createLaunchConfiguration(new CreateLaunchConfigurationRequest()
-					.withLaunchConfigurationName(configName)
-					.withImageId(imageId).withInstanceType(INSTANCE_TYPE));
+            final String launchConfig = NAME_PREFIX + "TerminateTest";
+			print("Creating launch configuration: " + launchConfig);
+            createLaunchConfig(launchConfig,IMAGE_ID,INSTANCE_TYPE,null,null,null,null,null,null,null,null);
 			cleanupTasks.add(new Runnable() {
 				@Override
 				public void run() {
-					logger.info("Deleting launch configuration: " + configName);
-					as.deleteLaunchConfiguration(new DeleteLaunchConfigurationRequest()
-							.withLaunchConfigurationName(configName));
+					print("Deleting launch configuration: " + launchConfig);
+					deleteLaunchConfig(launchConfig);
 				}
 			});
 
 			// Create scaling group
-			final String groupName = namePrefix + "TerminateTest";
-			logger.info("Creating auto scaling group: " + groupName);
-			as.createAutoScalingGroup(new CreateAutoScalingGroupRequest()
-					.withAutoScalingGroupName(groupName)
-					.withLaunchConfigurationName(configName)
-					.withDesiredCapacity(2).withMinSize(0).withMaxSize(2)
-					.withHealthCheckType("EC2")
-					.withAvailabilityZones(availabilityZone)
-					.withTerminationPolicies("OldestInstance"));
+            final String asGroupName = NAME_PREFIX + "TerminateTest";
+            Integer minSize = 0;
+            Integer maxSize = 2;
+            Integer desiredCapacity =2;
+            String healthCheckType = "EC2";
+            String terminationPolicy = "OldestInstance";
+			print("Creating auto scaling group: " + asGroupName);
+            createAutoScalingGroup(asGroupName,launchConfig,minSize,maxSize,desiredCapacity,AVAILABILITY_ZONE, null,
+                    null, healthCheckType, null, null, terminationPolicy);
 			cleanupTasks.add(new Runnable() {
 				@Override
 				public void run() {
-					logger.info("Deleting group: " + groupName);
-					as.deleteAutoScalingGroup(new DeleteAutoScalingGroupRequest()
-							.withAutoScalingGroupName(groupName)
-							.withForceDelete(true));
+					print("Deleting group: " + asGroupName);
+					deleteAutoScalingGroup(asGroupName,true);
 				}
 			});
 			cleanupTasks.add(new Runnable() {
 				@Override
 				public void run() {
-					final List<String> instanceIds = (List<String>) getInstancesForGroup(ec2, groupName, null, true);
-					logger.info("Terminating instances: " + instanceIds);
+					final List<String> instanceIds = (List<String>) getInstancesForGroup(asGroupName, null, true);
+					print("Terminating instances: " + instanceIds);
 					ec2.terminateInstances(new TerminateInstancesRequest()
 							.withInstanceIds(instanceIds));
 				}
 			});
 
 			// Wait for instances to launch
-			logger.info("Waiting for instances to launch");
+			print("Waiting for instances to launch");
 			final long timeout = TimeUnit.MINUTES.toMillis(2);
-			List<String> instanceIds = (List<String>) waitForInstances(ec2, timeout, 2, groupName, true);
+			List<String> instanceIds = (List<String>) waitForInstances(timeout, 2, asGroupName, true);
 
 			// Terminate instance with capacity decrement
 			final String instanceToTerminate = instanceIds.get(1);
 			as.terminateInstanceInAutoScalingGroup(new TerminateInstanceInAutoScalingGroupRequest()
 					.withInstanceId(instanceToTerminate)
 					.withShouldDecrementDesiredCapacity(true));
-			logger.info("Waiting for instance to terminate");
-			List<String> remainingInstances = (List<String>) waitForInstances(ec2, timeout, 1, groupName, true);
+			print("Waiting for instance to terminate");
+			List<String> remainingInstances = (List<String>) waitForInstances(timeout, 1, asGroupName, true);
 			assertThat(!remainingInstances.contains(instanceToTerminate),
 					"Expected instance terminated");
 			assertThat(remainingInstances.contains(instanceIds.get(0)),
@@ -126,19 +109,19 @@ public class TestAutoScalingTerminateInstances {
 			as.terminateInstanceInAutoScalingGroup(new TerminateInstanceInAutoScalingGroupRequest()
 					.withInstanceId(remainingInstances.get(0))
 					.withShouldDecrementDesiredCapacity(false));
-			logger.info("Waiting for instance to be replaced");
+			print("Waiting for instance to be replaced");
 			Thread.sleep(10000); // We sleep to ensure the first instance has a
 									// chance to start terminating ...
-			List<String> remainingInstances2 = (List<String>) waitForInstances(ec2, timeout, 1, groupName, true);
+			List<String> remainingInstances2 = (List<String>) waitForInstances(timeout, 1, asGroupName, true);
 			assertThat(
 					!remainingInstances2.contains(remainingInstances.get(0)),
 					"Instance replaced");
 
 			// Delete group without force, should fail due to existing instance
-			logger.info("Deleting group without force, error expected");
+			print("Deleting group without force, error expected");
 			try {
 				as.deleteAutoScalingGroup(new DeleteAutoScalingGroupRequest()
-						.withAutoScalingGroupName(groupName).withForceDelete(
+						.withAutoScalingGroupName(asGroupName).withForceDelete(
 								false));
 				assertThat(false, "Expected resource in use error");
 			} catch (final ResourceInUseException e) {
@@ -146,12 +129,12 @@ public class TestAutoScalingTerminateInstances {
 			}
 
 			// Delete group with force to remove remaining instances
-			logger.info("Deleting group with force, instances should be terminated.");
+			print("Deleting group with force, instances should be terminated.");
 			as.deleteAutoScalingGroup(new DeleteAutoScalingGroupRequest()
-					.withAutoScalingGroupName(groupName).withForceDelete(true));
-			waitForInstances(ec2, timeout, 0, groupName, true);
+					.withAutoScalingGroupName(asGroupName).withForceDelete(true));
+			waitForInstances(timeout, 0, asGroupName, true);
 
-			logger.info("Test complete");
+			print("Test complete");
 		} finally {
 			// Attempt to clean up anything we created
 			Collections.reverse(cleanupTasks);

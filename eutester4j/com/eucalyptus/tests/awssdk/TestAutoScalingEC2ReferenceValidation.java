@@ -20,28 +20,14 @@
 
 package com.eucalyptus.tests.awssdk;
 
-import static com.eucalyptus.tests.awssdk.Eutester4j.*;
-
+import com.amazonaws.AmazonServiceException;
 import org.testng.annotations.Test;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import com.amazonaws.AmazonServiceException;
-import com.amazonaws.services.autoscaling.AmazonAutoScaling;
-import com.amazonaws.services.autoscaling.model.CreateAutoScalingGroupRequest;
-import com.amazonaws.services.autoscaling.model.CreateLaunchConfigurationRequest;
-import com.amazonaws.services.autoscaling.model.DeleteAutoScalingGroupRequest;
-import com.amazonaws.services.autoscaling.model.DeleteLaunchConfigurationRequest;
-import com.amazonaws.services.ec2.AmazonEC2;
-import com.amazonaws.services.ec2.model.CreateKeyPairRequest;
-import com.amazonaws.services.ec2.model.CreateSecurityGroupRequest;
-import com.amazonaws.services.ec2.model.DeleteKeyPairRequest;
-import com.amazonaws.services.ec2.model.DeleteSecurityGroupRequest;
-import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesResult;
-import com.amazonaws.services.ec2.model.DescribeImagesRequest;
-import com.amazonaws.services.ec2.model.DescribeImagesResult;
-import com.amazonaws.services.ec2.model.Filter;
+
+import static com.eucalyptus.tests.awssdk.Eutester4j.*;
 
 /**
  * This application tests reference validation for launch configurations and
@@ -57,194 +43,122 @@ public class TestAutoScalingEC2ReferenceValidation {
 	public void AutoScalingEC2ReferenceValidationTest() throws Exception {
         testInfo(this.getClass().getSimpleName());
 		getCloudInfo();
-		final AmazonAutoScaling as = getAutoScalingClient(ACCESS_KEY,
-				SECRET_KEY, AS_ENDPOINT);
-		final AmazonEC2 ec2 = getEc2Client(ACCESS_KEY, SECRET_KEY, EC2_ENDPOINT);
-		final String imageId = findImage(ec2);
-		final String availabilityZone = findAvalablityZone(ec2);
-		final String namePrefix = eucaUUID() + "-";
-		logger.info("Using resource prefix for test: " + namePrefix);
-
-		// Find an appropriate image to launch
-		final DescribeImagesResult imagesResult = ec2
-				.describeImages(new DescribeImagesRequest()
-						.withFilters(
-								new Filter().withName("image-type").withValues(
-										"machine"),
-								new Filter().withName("root-device-type")
-										.withValues("instance-store"),
-								new Filter().withName("kernel-id").withValues(
-										"eki-*"),
-								new Filter().withName("ramdisk-id").withValues(
-										"eri-*")));
-
-		assertThat(imagesResult.getImages().size() > 0,
-				"Image not found (image with explicit kernel and ramdisk required)");
-
-		final String kernelId = imagesResult.getImages().get(0).getKernelId();
-		final String ramdiskId = imagesResult.getImages().get(0).getRamdiskId();
-		logger.info("Using image: " + imageId);
-		logger.info("Using kernel: " + kernelId);
-		logger.info("Using ramdisk: " + ramdiskId);
-
-		// Find an AZ to use
-		final DescribeAvailabilityZonesResult azResult = ec2
-				.describeAvailabilityZones();
-
-		assertThat(azResult.getAvailabilityZones().size() > 0,
-				"Availability zone not found");
 
 		final List<Runnable> cleanupTasks = new ArrayList<Runnable>();
 		try {
 			// Generate a key to use
-			final String keyName = namePrefix + "EC2ReferenceTest";
-			logger.info("Generating an SSH key for test use: " + keyName);
-			ec2.createKeyPair(new CreateKeyPairRequest().withKeyName(keyName));
+			final String keyName = NAME_PREFIX + "EC2ReferenceTest";
+			print("Generating an SSH key for test use: " + keyName);
+            createKeyPair(keyName);
 			cleanupTasks.add(new Runnable() {
 				@Override
 				public void run() {
-					logger.info("Deleting SSH key: " + keyName);
-					ec2.deleteKeyPair(new DeleteKeyPairRequest()
-							.withKeyName(keyName));
+					print("Deleting SSH key: " + keyName);
+					deleteKeyPair(keyName);
 				}
 			});
 
 			// Generate a security group to use
-			final String securityGroupName = namePrefix + "EC2ReferenceTest";
-			logger.info("Creating a security group for test use: "
+			final String securityGroupName = NAME_PREFIX + "EC2ReferenceTest";
+			print("Creating a security group for test use: "
 					+ securityGroupName);
-			ec2.createSecurityGroup(new CreateSecurityGroupRequest()
-					.withGroupName(securityGroupName).withDescription(
-							securityGroupName));
+            createSecurityGoup(securityGroupName, securityGroupName);
 			cleanupTasks.add(new Runnable() {
 				@Override
 				public void run() {
-					logger.info("Deleting security group: " + securityGroupName);
-					ec2.deleteSecurityGroup(new DeleteSecurityGroupRequest()
-							.withGroupName(securityGroupName));
+					print("Deleting security group: " + securityGroupName);
+					deleteSecurityGroup(securityGroupName);
 				}
 			});
 
 			// Register cleanup for launch config
-			final String configName = namePrefix + "EC2ReferenceTest";
+			final String launchConfig = NAME_PREFIX + "EC2ReferenceTest";
 			cleanupTasks.add(new Runnable() {
 				@Override
 				public void run() {
-					logger.info("Deleting launch configuration: " + configName);
-					as.deleteLaunchConfiguration(new DeleteLaunchConfigurationRequest()
-							.withLaunchConfigurationName(configName));
+					print("Deleting launch configuration: " + launchConfig);
+					deleteLaunchConfig(launchConfig);
 				}
 			});
 
 			// Create scaling group with invalid image id
-			logger.info("Creating launch configuration with invalid image id: "
-					+ configName);
+			print("Creating launch configuration with invalid image id: " + launchConfig);
 			try {
-				as.createLaunchConfiguration(new CreateLaunchConfigurationRequest()
-						.withLaunchConfigurationName(configName)
-						.withImageId("emi-00000000")
-						.withInstanceType(INSTANCE_TYPE));
-				assertThat(false, "Creation should fail");
+                createLaunchConfig(launchConfig,"emi-00000000",INSTANCE_TYPE,null,null,null,null,null,null,null,null);
+                assertThat(false, "Creation should fail");
 			} catch (AmazonServiceException e) {
-				logger.info("Expected error returned: " + e);
+				print("Expected error returned: " + e);
 			}
 
 			// Create scaling group with invalid kernel id
-			logger.info("Creating launch configuration with invalid kernel id: "
-					+ configName);
+			print("Creating launch configuration with invalid kernel id: " + launchConfig);
 			try {
-				as.createLaunchConfiguration(new CreateLaunchConfigurationRequest()
-						.withLaunchConfigurationName(configName)
-						.withImageId(imageId).withKernelId("eki-00000000")
-						.withInstanceType(INSTANCE_TYPE));
+                createLaunchConfig(launchConfig,IMAGE_ID,INSTANCE_TYPE,null,null,"eki-00000000",null,null,null,null,null);
 				assertThat(false, "Creation should fail");
 			} catch (AmazonServiceException e) {
-				logger.info("Expected error returned: " + e);
+				print("Expected error returned: " + e);
 			}
 
 			// Create scaling group with invalid ramdisk id
-			logger.info("Creating launch configuration with invalid ramdisk id: "
-					+ configName);
+			print("Creating launch configuration with invalid ramdisk id: " + launchConfig);
 			try {
-				as.createLaunchConfiguration(new CreateLaunchConfigurationRequest()
-						.withLaunchConfigurationName(configName)
-						.withImageId(imageId).withRamdiskId("eri-00000000")
-						.withInstanceType(INSTANCE_TYPE));
+                createLaunchConfig(launchConfig,IMAGE_ID,INSTANCE_TYPE,null,null,null,"eri-00000000",null,null,null,null);
 				assertThat(false, "Creation should fail");
 			} catch (AmazonServiceException e) {
-				logger.info("Expected error returned: " + e);
+				print("Expected error returned: " + e);
 			}
 
 			// Create scaling group with invalid key name
-			logger.info("Creating launch configuration with invalid key name: "
-					+ configName);
+			print("Creating launch configuration with invalid key name: " + launchConfig);
 			try {
-				as.createLaunchConfiguration(new CreateLaunchConfigurationRequest()
-						.withLaunchConfigurationName(configName)
-						.withImageId(imageId).withKeyName("invalid key name")
-						.withInstanceType(INSTANCE_TYPE));
+                createLaunchConfig(launchConfig,IMAGE_ID,INSTANCE_TYPE,"invalid key name",null,null,null,null,null,null,null);
 				assertThat(false, "Creation should fail");
 			} catch (AmazonServiceException e) {
-				logger.info("Expected error returned: " + e);
+				print("Expected error returned: " + e);
 			}
 
 			// Create scaling group with invalid security group
-			logger.info("Creating launch configuration with invalid security group: "
-					+ configName);
+			print("Creating launch configuration with invalid security group: " + launchConfig);
 			try {
-				as.createLaunchConfiguration(new CreateLaunchConfigurationRequest()
-						.withLaunchConfigurationName(configName)
-						.withImageId(imageId)
-						.withSecurityGroups("invalid group name")
-						.withInstanceType(INSTANCE_TYPE));
+                createLaunchConfig(launchConfig,IMAGE_ID,INSTANCE_TYPE,null,"invalid group name",null,null,null,null,null,null);
 				assertThat(false, "Creation should fail");
 			} catch (AmazonServiceException e) {
-				logger.info("Expected error returned: " + e);
+				print("Expected error returned: " + e);
 			}
 
 			// Create launch configuration
-			logger.info("Creating launch configuration: " + configName);
-			as.createLaunchConfiguration(new CreateLaunchConfigurationRequest()
-					.withLaunchConfigurationName(configName)
-					.withImageId(imageId).withKernelId(kernelId)
-					.withRamdiskId(ramdiskId).withKeyName(keyName)
-					.withSecurityGroups(securityGroupName)
-					.withInstanceType(INSTANCE_TYPE));
-
+			print("Creating launch configuration: " + launchConfig);
+            createLaunchConfig(launchConfig,IMAGE_ID,INSTANCE_TYPE,keyName,securityGroupName,KERNEL_ID,RAMDISK_ID,null,
+                    null,null,null);
 			// Register cleanup for auto scaling group
-			final String groupName = namePrefix + "EC2ReferenceTest";
+            final String groupName = NAME_PREFIX + "EC2ReferenceTest";
 			cleanupTasks.add(new Runnable() {
 				@Override
 				public void run() {
-					logger.info("Deleting group: " + groupName);
-					as.deleteAutoScalingGroup(new DeleteAutoScalingGroupRequest()
-							.withAutoScalingGroupName(groupName)
-							.withForceDelete(true));
+					print("Deleting group: " + groupName);
+					deleteAutoScalingGroup(groupName,true);
 				}
 			});
 
 			// Create scaling group with invalid availability zone
-			logger.info("Creating auto scaling group with invalid availability zone: "
-					+ groupName);
+			print("Creating auto scaling group with invalid availability zone: " + groupName);
 			try {
-				as.createAutoScalingGroup(new CreateAutoScalingGroupRequest()
-						.withAutoScalingGroupName(groupName)
-						.withLaunchConfigurationName(configName).withMinSize(0)
-						.withMaxSize(2)
-						.withAvailabilityZones("invalid availability zone"));
+                Integer minSize = 0;
+                Integer maxSize = 2;
+                createAutoScalingGroup(groupName,launchConfig,minSize,maxSize,null,"invalid availability zone",null,
+                        null,null,null,null,null);
 				assertThat(false, "Creation should fail");
 			} catch (AmazonServiceException e) {
-				logger.info("Expected error returned: " + e);
+				print("Expected error returned: " + e);
 			}
 
 			// Create scaling group
-			logger.info("Creating auto scaling group: " + groupName);
-			as.createAutoScalingGroup(new CreateAutoScalingGroupRequest()
-					.withAutoScalingGroupName(groupName)
-					.withLaunchConfigurationName(configName).withMinSize(0)
-					.withMaxSize(2).withAvailabilityZones(availabilityZone));
-
-			logger.info("Test complete");
+			print("Creating auto scaling group: " + groupName);
+            Integer minSize = 0;
+            Integer maxSize = 2;
+            createAutoScalingGroup(groupName,launchConfig,minSize,maxSize,null,AVAILABILITY_ZONE,null,null,null,null,
+                    null,null);
+			print("Test complete");
 		} finally {
 			// Attempt to clean up anything we created
 			Collections.reverse(cleanupTasks);
@@ -255,6 +169,6 @@ public class TestAutoScalingEC2ReferenceValidation {
 					e.printStackTrace();
 				}
 			}
-		}
+        }
 	}
 }

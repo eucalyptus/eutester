@@ -7,7 +7,6 @@
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingCooldown"/>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingEc2InstanceHealthMonitoring"/>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingDescribeInstances"/>
-            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingDescribeGroupsInstances"/>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingSetInstanceHealth"/>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingTerminateInstances"/>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingMultipleAvailabilityZones"/>
@@ -16,6 +15,7 @@
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingELBReferenceValidation"/>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingTags"/>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingInstanceLifecycle"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingSuspendAndResumeProcesses"/>
         </classes>
     </test> <!-- Test -->
     <test name="Eutester4j Sanity Tests">

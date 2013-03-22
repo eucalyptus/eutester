@@ -20,12 +20,11 @@ class Upgrade(Install):
     def upgrade_packages(self):
         for machine in self.tester.config["machines"]:
             if machine.distro.name is "vmware":
-                self.add_enterprise_repo()
                 continue
             if self.args.nogpg:
                 machine.upgrade(nogpg=True)
             else:
-                machine.upgrade()
+                machine.upgrade("eucalyptus")
             ## IF its a CLC and we have a SAN we need to install the san package after upgrade before service start
             if re.search("^3.1", self.old_version):
                 if hasattr(self.args, 'ebs_storage_manager'):

@@ -19,24 +19,14 @@
  ************************************************************************/
 package com.eucalyptus.tests.awssdk;
 
-import static com.eucalyptus.tests.awssdk.Eutester4j.*;
-
+import com.amazonaws.AmazonServiceException;
 import org.testng.annotations.Test;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import com.amazonaws.AmazonServiceException;
-import com.amazonaws.services.autoscaling.AmazonAutoScaling;
-import com.amazonaws.services.autoscaling.model.CreateAutoScalingGroupRequest;
-import com.amazonaws.services.autoscaling.model.CreateLaunchConfigurationRequest;
-import com.amazonaws.services.autoscaling.model.DeleteAutoScalingGroupRequest;
-import com.amazonaws.services.autoscaling.model.DeleteLaunchConfigurationRequest;
-import com.amazonaws.services.ec2.AmazonEC2;
-import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancing;
-import com.amazonaws.services.elasticloadbalancing.model.CreateLoadBalancerRequest;
-import com.amazonaws.services.elasticloadbalancing.model.DeleteLoadBalancerRequest;
-import com.amazonaws.services.elasticloadbalancing.model.Listener;
+
+import static com.eucalyptus.tests.awssdk.Eutester4j.*;
 
 /**
  * This application tests reference validation for auto scaling groups with ELB.
@@ -50,90 +40,65 @@ public class TestAutoScalingELBReferenceValidation {
 	@Test
 	public void AutoScalingELBReferenceValidationTest() throws Exception {
         testInfo(this.getClass().getSimpleName());
-		getCloudInfo();
-		final AmazonAutoScaling as = getAutoScalingClient(ACCESS_KEY,
-				SECRET_KEY, AS_ENDPOINT);
-		final AmazonEC2 ec2 = getEc2Client(ACCESS_KEY, SECRET_KEY, EC2_ENDPOINT);
-		final AmazonElasticLoadBalancing elb = getElbClient(ACCESS_KEY,
-				SECRET_KEY, ELB_ENDPOINT);
-		final String imageId = findImage(ec2);
-		final String availabilityZone = findAvalablityZone(ec2);
-		final String namePrefix = eucaUUID() + "-";
-		logger.info("Using resource prefix for test: " + namePrefix);
+        getCloudInfo();
 
 		final List<Runnable> cleanupTasks = new ArrayList<Runnable>();
 		try {
-			// Generate a load balancer to use
-			final String loadBalancerName = namePrefix + "ELBReferenceTest";
-			logger.info("Creating a load balancer for test use: " + loadBalancerName);
-			elb.createLoadBalancer(new CreateLoadBalancerRequest()
-					.withLoadBalancerName(loadBalancerName)
-					.withAvailabilityZones(availabilityZone)
-					.withListeners(
-							new Listener().withInstancePort(8888)
-									.withLoadBalancerPort(8888)
-									.withProtocol("HTTP")));
-			cleanupTasks.add(new Runnable() {
-				@Override
-				public void run() {
-					logger.info("Deleting load balancer: " + loadBalancerName);
-					elb.deleteLoadBalancer(new DeleteLoadBalancerRequest()
-							.withLoadBalancerName(loadBalancerName));
-				}
-			});
+            // Generate a load balancer to use
+            final String loadBalancer = NAME_PREFIX + "ELBReferenceTest";
+            print("Creating a load balancer for test use: " + loadBalancer);
+            createLoadBalancer(loadBalancer);
+            cleanupTasks.add(new Runnable() {
+                @Override
+                public void run() {
+                    print("Deleting load balancer: " + loadBalancer);
+                    deleteLoadBlancer(loadBalancer);
+                }
+            });
 
 			// Register cleanup for launch config
-			final String configName = namePrefix + "ELBReferenceTest";
+            final String launchConfig = NAME_PREFIX + "ELBReferenceTest";
 			cleanupTasks.add(new Runnable() {
 				@Override
 				public void run() {
-					logger.info("Deleting launch configuration: " + configName);
-					as.deleteLaunchConfiguration(new DeleteLaunchConfigurationRequest()
-							.withLaunchConfigurationName(configName));
+					print("Deleting launch configuration: " + launchConfig);
+					deleteLaunchConfig(launchConfig);
 				}
 			});
 
 			// Create launch configuration
-			logger.info("Creating launch configuration: " + configName);
-			as.createLaunchConfiguration(new CreateLaunchConfigurationRequest()
-					.withLaunchConfigurationName(configName)
-					.withImageId(imageId).withInstanceType(INSTANCE_TYPE));
+			print("Creating launch configuration: " + launchConfig);
+            createLaunchConfig(launchConfig,IMAGE_ID,INSTANCE_TYPE,null,null,null,null,null,null,null,null);
 
 			// Register cleanup for auto scaling group
-			final String groupName = namePrefix + "ELBReferenceTest";
+            final String groupName = NAME_PREFIX + "ELBReferenceTest";
 			cleanupTasks.add(new Runnable() {
 				@Override
 				public void run() {
-					logger.info("Deleting group: " + groupName);
-					as.deleteAutoScalingGroup(new DeleteAutoScalingGroupRequest()
-							.withAutoScalingGroupName(groupName)
-							.withForceDelete(true));
+					print("Deleting group: " + groupName);
+					deleteAutoScalingGroup(groupName,true);
 				}
 			});
 
-			// Create scaling group with invalid availability zone
-			logger.info("Creating auto scaling group with invalid load balancer: "
-					+ groupName);
+			// Create scaling group with invalid load balancer
+			print("Creating auto scaling group with invalid load balancer: " + groupName);
 			try {
-				as.createAutoScalingGroup(new CreateAutoScalingGroupRequest()
-						.withAutoScalingGroupName(groupName)
-						.withLaunchConfigurationName(configName).withMinSize(0)
-						.withMaxSize(2).withAvailabilityZones(availabilityZone)
-						.withLoadBalancerNames("invalid load balancer name"));
+                Integer minSize = 0;
+                Integer maxSize = 2;
+                createAutoScalingGroup(groupName,launchConfig, minSize, maxSize,null,AVAILABILITY_ZONE,null,null,null,
+                        "invalid load balancer name", null,null);
 				assertThat(false, "Creation should fail");
 			} catch (AmazonServiceException e) {
-				logger.info("Expected error returned: " + e);
+				print("Expected error returned: " + e);
 			}
 
 			// Create scaling group
-			logger.info("Creating auto scaling group: " + groupName);
-			as.createAutoScalingGroup(new CreateAutoScalingGroupRequest()
-					.withAutoScalingGroupName(groupName)
-					.withLaunchConfigurationName(configName).withMinSize(0)
-					.withMaxSize(1).withAvailabilityZones(availabilityZone)
-					.withLoadBalancerNames(loadBalancerName));
-
-            logger.info("Test complete");
+			print("Creating auto scaling group: " + groupName);
+            Integer minSize = 0;
+            Integer maxSize = 1;
+            createAutoScalingGroup(groupName, launchConfig,minSize,maxSize,null,AVAILABILITY_ZONE,null,null,null,
+                    loadBalancer,null,null);
+            print("Test complete");
 		} finally {
 			// Attempt to clean up anything we created
 			Collections.reverse(cleanupTasks);
@@ -144,6 +109,6 @@ public class TestAutoScalingELBReferenceValidation {
 					e.printStackTrace();
 				}
 			}
-		}
+        }
 	}
 }
