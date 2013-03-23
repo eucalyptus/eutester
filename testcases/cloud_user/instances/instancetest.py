@@ -101,7 +101,7 @@ class InstanceBasics(EutesterTestCase):
             self.assertTrue( self.tester.ping(instance.public_dns_name), "Could not ping after dissassociate")
         return self.reservation
 
-    def MaxSmallInstances(self, available_small=None,zone = None):
+    def MultipleInstances(self, available_small=None,zone = None):
         """
         This case was developed to test the maximum number of m1.small vm types a configured
         cloud can run.  The test runs the maximum number of m1.small vm types allowed, then
@@ -114,7 +114,7 @@ class InstanceBasics(EutesterTestCase):
             available_small = self.tester.get_available_vms()
         if zone is None:
             zone = self.zone
-        self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name,min=available_small, max=available_small, zone=zone)
+        self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name,min=2, max=2, zone=zone)
         self.assertTrue( self.tester.wait_for_reservation(self.reservation) ,'Not all instances  went to running')
         return self.reservation
 
@@ -306,10 +306,12 @@ class InstanceBasics(EutesterTestCase):
             - When a test finishes, rerun BasicInstanceChecks test case.
         If any of these tests fail, the test case will error out; logging the results.
         """
+        available_instances_before = self.tester.get_available_vms(zone=self.zone)
         if self.reservation:
             self.tester.terminate_instances(self.reservation)
+            self.reservation = None
         ## Run through count iterations of test
-        count = self.tester.get_available_vms("m1.small") / 2
+        count = 4
         future_instances =[]
 
         with ThreadPoolExecutor(max_workers=count) as executor:
@@ -326,6 +328,11 @@ class InstanceBasics(EutesterTestCase):
             ## Run 5 basic instance check instances 10s apart
             for reservation in reservations:
                 future_instances.append(executor.submit(self.tester.terminate_instances,reservation))
+
+        self.tester.sleep(20)
+
+        if available_instances_before > self.tester.get_available_vms(zone=self.zone):
+            raise Exception("Number of instances available before was greater than number of instances after churn")
 
     def PrivateIPAddressing(self, zone = None):
         """
@@ -381,8 +388,8 @@ class InstanceBasics(EutesterTestCase):
 if __name__ == "__main__":
     testcase = InstanceBasics()
     ### Either use the list of tests passed from config/command line to determine what subset of tests to run
-    list = testcase.args.tests or [ "BasicInstanceChecks",  "ElasticIps", "MaxSmallInstances" , "LargestInstance",
-                                    "MetaData", "Reboot","PrivateIPAddressing"]
+    list = testcase.args.tests or [ "BasicInstanceChecks",  "ElasticIps", "MultipleInstances" , "LargestInstance",
+                                    "MetaData", "Reboot","PrivateIPAddressing", "Churn"]
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
     for test in list:
