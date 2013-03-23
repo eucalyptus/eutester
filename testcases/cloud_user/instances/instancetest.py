@@ -316,7 +316,7 @@ class InstanceBasics(EutesterTestCase):
 
         with ThreadPoolExecutor(max_workers=count) as executor:
             ## Start asynchronous activity
-            ## Run 5 basic instance check instances 10s apart
+            ## Run 5 basic instance check instances 5s apart
             for i in xrange(count):
                 future_instances.append(executor.submit(self.BasicInstanceChecks))
                 self.tester.sleep(5)
@@ -325,7 +325,7 @@ class InstanceBasics(EutesterTestCase):
 
         with ThreadPoolExecutor(max_workers=count) as executor:
             ## Start asynchronous activity
-            ## Run 5 basic instance check instances 10s apart
+            ## Terminate all instances
             for reservation in reservations:
                 future_instances.append(executor.submit(self.tester.terminate_instances,reservation))
 
