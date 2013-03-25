@@ -243,7 +243,7 @@ class Eutester4j {
                                 .withName("tag:aws:autoscaling:groupName")
                                 .withValues(groupName)));
 		if (asString) {
-			final List<String> instanceIds = new ArrayList<>();
+			final List<String> instanceIds = new ArrayList<String>();
 			for (final Reservation reservation : instancesResult.getReservations()) {
 				for (final Instance instance : reservation.getInstances()) {
 					if (status == null || instance.getState() == null
@@ -254,7 +254,7 @@ class Eutester4j {
 			}
 			return instanceIds;
 		} else {
-			final List<Instance> instances = new ArrayList<>();
+			final List<Instance> instances = new ArrayList<Instance>();
 			for (final Reservation reservation : instancesResult.getReservations()) {
 				for (final Instance instance : reservation.getInstances()) {
 					if (status == null || instance.getState() == null
@@ -668,7 +668,7 @@ class Eutester4j {
         final long startTime = System.currentTimeMillis();
         boolean completed = false;
         while (!completed && (System.currentTimeMillis() - startTime) < timeout) {
-            final List<String> elbInstances = new ArrayList<>();
+            final List<String> elbInstances = new ArrayList<String>();
             final DescribeLoadBalancersResult balancersResult = elb.describeLoadBalancers(new DescribeLoadBalancersRequest().withLoadBalancerNames(elbName));
             for (final LoadBalancerDescription description : balancersResult.getLoadBalancerDescriptions()) {
                 for (final com.amazonaws.services.elasticloadbalancing.model.Instance instance : description.getInstances()) {

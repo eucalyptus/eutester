@@ -199,8 +199,8 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops):
         property        Property to modify
         value           Value to set it too
         """
-        command = self.eucapath + "/usr/sbin/euca-modify-property -p " + property + "=" + value
-        if self.found(command, property):
+        command = "source " + self.credpath + "/eucarc && " + self.eucapath + "/usr/sbin/euca-modify-property -p " + property + "=" + value
+        if self.clc.found(command, property):
             self.debug("Properly modified property " + property)
         else:
             raise Exception("Setting property " + property + " failed")

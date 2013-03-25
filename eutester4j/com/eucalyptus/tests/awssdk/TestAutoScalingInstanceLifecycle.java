@@ -40,7 +40,7 @@ public class TestAutoScalingInstanceLifecycle {
         testInfo(this.getClass().getSimpleName());
         getCloudInfo();
 
-        final List<Runnable> cleanupTasks = new ArrayList<>();
+        final List<Runnable> cleanupTasks = new ArrayList<Runnable>();
         try {
             // Register cleanup for launch config
             final String launchConfig = NAME_PREFIX + "InstanceLifecycleTest";

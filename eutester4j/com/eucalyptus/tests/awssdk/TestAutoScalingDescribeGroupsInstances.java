@@ -42,6 +42,7 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import static com.eucalyptus.tests.awssdk.Eutester4j.*;
+import static com.eucalyptus.tests.awssdk.Eutester4j.waitForInstances;
 
 /**
  * This application tests the inclusion of instance data when describing groups
@@ -77,12 +78,13 @@ public class TestAutoScalingDescribeGroupsInstances {
             // Create scaling group
             final String groupName = NAME_PREFIX + "DescribeGroupsInstances";
             print( "Creating auto scaling group: " + groupName );
-            as.createAutoScalingGroup( new CreateAutoScalingGroupRequest()
-                    .withAutoScalingGroupName( groupName )
-                    .withLaunchConfigurationName( configName )
-                    .withMinSize( 1 )
-                    .withMaxSize( 1 )
-                    .withAvailabilityZones( AVAILABILITY_ZONE ) );
+            as.createAutoScalingGroup(new CreateAutoScalingGroupRequest()
+                    .withAutoScalingGroupName(groupName)
+                    .withLaunchConfigurationName(configName)
+                    .withMinSize(1)
+                    .withMaxSize(1)
+                    .withHealthCheckGracePeriod(30)
+                    .withAvailabilityZones(AVAILABILITY_ZONE));
             cleanupTasks.add( new Runnable() {
                 @Override
                 public void run() {
@@ -93,7 +95,7 @@ public class TestAutoScalingDescribeGroupsInstances {
             cleanupTasks.add( new Runnable() {
                 @Override
                 public void run() {
-                    final List<String> instanceIds = getInstancesForGroup( ec2, groupName, null );
+                    final List<String> instanceIds = (List<String>) getInstancesForGroup(groupName, null, true);
                     print( "Terminating instances: " + instanceIds );
                     ec2.terminateInstances( new TerminateInstancesRequest().withInstanceIds( instanceIds ) );
                 }
@@ -102,7 +104,7 @@ public class TestAutoScalingDescribeGroupsInstances {
             // Wait for instances to launch
             print( "Waiting for instance to launch" );
             final long timeout = TimeUnit.MINUTES.toMillis( 2 );
-            final String instanceId = waitForInstances( ec2, timeout, 1, groupName ).get( 0 );
+            final String instanceId = (String) waitForInstances(timeout, 1, groupName,true).get( 0 );
 
             // Verify instances are included when describing the group
             print( "Describing group" );
@@ -121,10 +123,10 @@ public class TestAutoScalingDescribeGroupsInstances {
             assertThat(asInstance != null, "Instance is null");
             print("Verifying instance information: " + asInstance);
             assertThat( instanceId.equals( asInstance.getInstanceId() ), "Unexpected instance id: " + asInstance.getInstanceId() );
-            assertThat( configName.equals( asInstance.getLaunchConfigurationName() ), "Unexpected launch configuration name: " + asInstance.getLaunchConfigurationName() );
-            assertThat( AVAILABILITY_ZONE.equals(asInstance.getAvailabilityZone()), "Unexpected availability zone: " + asInstance.getAvailabilityZone() );
+            assertThat( configName.equals(asInstance.getLaunchConfigurationName()), "Unexpected launch configuration name: " + asInstance.getLaunchConfigurationName() );
+            assertThat(AVAILABILITY_ZONE.equals(asInstance.getAvailabilityZone()), "Unexpected availability zone: " + asInstance.getAvailabilityZone());
             assertThat("Healthy".equals(asInstance.getHealthStatus()), "Unexpected health status: " + asInstance.getHealthStatus());
-            assertThat( "InService".equals( asInstance.getLifecycleState() ), "Unexpected lifecycle state: " + asInstance.getLifecycleState() );
+            waitForInstances("InService", TimeUnit.MINUTES.toMillis(5), groupName, false);
             print( "Test complete" );
         } finally {
             // Attempt to clean up anything we created
@@ -138,141 +140,4 @@ public class TestAutoScalingDescribeGroupsInstances {
             }
         }
     }
-
-    private List<String> waitForInstances( final AmazonEC2 ec2,
-                                           final long timeout,
-                                           final int expectedCount,
-                                           final String groupName ) throws Exception {
-        final long startTime = System.currentTimeMillis( );
-        boolean completed = false;
-        List<String> instanceIds = Collections.emptyList();
-        while ( !completed && ( System.currentTimeMillis() - startTime ) < timeout ) {
-            Thread.sleep( 5000 );
-            instanceIds = getInstancesForGroup( ec2, groupName, "running" );
-            completed = instanceIds.size() == expectedCount;
-        }
-        assertThat( completed, "Instances count did not change to " + expectedCount + " within the expected timeout" );
-        print( "Instance count changed in " + ( System.currentTimeMillis()-startTime ) + "ms" );
-        return instanceIds;
-    }
-
-    private List<String> getInstancesForGroup( final AmazonEC2 ec2,
-                                               final String groupName,
-                                               final String status ) {
-        final DescribeInstancesResult instancesResult = ec2.describeInstances( new DescribeInstancesRequest().withFilters(
-                new Filter().withName( "tag:aws:autoscaling:groupName" ).withValues( groupName )
-        ) );
-        final List<String> instanceIds = new ArrayList<String>();
-        for ( final Reservation reservation : instancesResult.getReservations() ) {
-            for ( final Instance instance : reservation.getInstances() ) {
-                if ( status == null || instance.getState()==null || status.equals( instance.getState().getName() ) ) {
-                    instanceIds.add( instance.getInstanceId() );
-                }
-            }
-        }
-        return instanceIds;
-    }
-
-        /*
-
-         */
-//		// End discovery, start test
-//		final List<Runnable> cleanupTasks = new ArrayList<Runnable>();
-//		try {
-//			// Create launch configuration
-//            final String launchConfig = NAME_PREFIX + "DescribeGroupsInstances";
-//			print("Creating launch configuration: " + launchConfig);
-//            createLaunchConfig(launchConfig,IMAGE_ID,INSTANCE_TYPE,null,null,null,null,null,null,null,null);
-//			cleanupTasks.add(new Runnable() {
-//				@Override
-//				public void run() {
-//					print("Deleting launch configuration: " + launchConfig);
-//                    deleteLaunchConfig(launchConfig);
-//				}
-//			});
-//
-//			// Create scaling group
-//            final String groupName = NAME_PREFIX + "DescribeGroupsInstances";
-//			print("Creating auto scaling group: " + groupName);
-//            Integer minSize = 1;
-//            Integer maxSize = 1;
-//            Integer desiredCapacity = 1;
-//            createAutoScalingGroup(groupName,launchConfig,minSize,maxSize,desiredCapacity,AVAILABILITY_ZONE,null,null,null,null,
-//                    null,null);
-//			cleanupTasks.add(new Runnable() {
-//				@Override
-//				public void run() {
-//					print("Deleting group: " + groupName);
-//                    deleteAutoScalingGroup(groupName,true);
-//				}
-//			});
-//			cleanupTasks.add(new Runnable() {
-//                @Override
-//                public void run() {
-//                    final List<String> instanceIds = (List<String>) getInstancesForGroup(groupName, null, true);
-//                    print("Terminating instances: " + instanceIds);
-//                    ec2.terminateInstances(new TerminateInstancesRequest()
-//                            .withInstanceIds(instanceIds));
-//                }
-//            });
-//
-//			// Wait for instances to launch
-//			print("Waiting for instance to launch");
-//			final long timeout = TimeUnit.MINUTES.toMillis(2);
-//			final String instanceId = (String) waitForInstances(timeout, 1, groupName, true).get(0);
-//
-//			// Verify instances are included when describing the group
-//			print("Describing group");
-//			final DescribeAutoScalingGroupsResult describeGroupsResult = as
-//					.describeAutoScalingGroups(new DescribeAutoScalingGroupsRequest()
-//							.withAutoScalingGroupNames(groupName));
-//			assertThat(describeGroupsResult.getAutoScalingGroups() != null,
-//					"Groups null");
-//			assertThat(describeGroupsResult.getAutoScalingGroups().size() == 1,
-//					"Unexpected group count: "
-//							+ describeGroupsResult.getAutoScalingGroups()
-//									.size());
-//			final AutoScalingGroup group = describeGroupsResult
-//					.getAutoScalingGroups().get(0);
-//			assertThat(group != null, "Group is null");
-//			assertThat(groupName.equals(group.getAutoScalingGroupName()),
-//					"Unexpected group name: " + group.getAutoScalingGroupName());
-//			assertThat(group.getInstances() != null, "Group instances are null");
-//			assertThat(group.getInstances().size() == 1,
-//					"Unexpected instance count for group: "
-//							+ group.getInstances().size());
-//			final com.amazonaws.services.autoscaling.model.Instance asInstance = group
-//					.getInstances().get(0);
-//			assertThat(asInstance != null, "Instance is null");
-//			print("Verifying instance information: " + asInstance);
-//			assertThat(instanceId.equals(asInstance.getInstanceId()),
-//					"Unexpected instance id: " + asInstance.getInstanceId());
-//			assertThat(
-//                    launchConfig.equals(asInstance.getLaunchConfigurationName()),
-//					"Unexpected launch configuration name: "
-//							+ asInstance.getLaunchConfigurationName());
-//			assertThat(
-//                    AVAILABILITY_ZONE.equals(asInstance.getAvailabilityZone()),
-//					"Unexpected availability zone: "
-//							+ asInstance.getAvailabilityZone());
-//			assertThat("Healthy".equals(asInstance.getHealthStatus()),
-//					"Unexpected health status: " + asInstance.getHealthStatus());
-//			assertThat(
-//					"InService".equals(asInstance.getLifecycleState()),
-//					"Unexpected lifecycle state: "
-//							+ asInstance.getLifecycleState());
-//
-//			print("Test complete");
-//		} finally {
-//			// Attempt to clean up anything we created
-//			Collections.reverse(cleanupTasks);
-//			for (final Runnable cleanupTask : cleanupTasks) {
-//				try {
-//					cleanupTask.run();
-//				} catch (Exception e) {
-//					e.printStackTrace();
-//				}
-//			}
-//        }
-
 }
