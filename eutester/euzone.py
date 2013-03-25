@@ -35,6 +35,7 @@ Created on Mar 21, 2013
 Place holder for availability zone test specific convenience methods+objects to extend boto's zone class
 
 '''
+import eutester
 from boto.ec2.zone import Zone
 import re
 
@@ -59,41 +60,48 @@ class EuZone(Zone):
         newzone.vm_types = newzone.get_all_vm_type_info()
         return newzone
 
+    def debug(self,msg):
+        self.tester.debug(msg)
+
     def update(self):
         super(EuZone, self).update()
         self.vm_types = self.get_all_vm_type_info()
 
+    @eutester.Eutester.printinfo
     def get_all_vm_type_info(self):
         vm_types = []
         get_zone = [str(self.name)]
         get_zone.append('verbose')
+        found = False
         try:
             myzone = self.tester.ec2.get_all_zones(zones=get_zone)
         except Exception, e:
             tb = self.tester.get_traceback()
             raise Exception(str(tb) + '\n Could not get zone:' + str(self.name) + "\n" + str(e))
         for zone in myzone:
-            name_split = zone.name.split()
-            if '|-' in name_split and len(name_split) == 2:
-                type_name = str(name_split[1])
-                state_split = zone.state.split()
-                if '/' in state_split:
-                    state_split.remove('/')
-                free = int(state_split[0])
-                max  = int(state_split[1])
-                cpu = int(state_split[2])
-                ram = int(state_split[3])
-                disk = int(state_split[4])
-                it = Vm_Type(type_name,free,max,cpu,ram,disk)
-                vm_types.append(it)
-                #Remove the setattr part after dev/debug?
-                self.__setattr__('vmtype_' + str(type_name.replace('.','_')), it)
-            elif not re.search('vm types', zone.name) and zone.name != self.name:
-                raise Exception(str(self.name) + 'Hit unknown while parsing zone info:' + str(zone.name))
-            else:
-                continue
+            if zone.name == self.name:
+                found = True
+            if found:
+                name_split = zone.name.split()
+                if '|-' in name_split and len(name_split) == 2:
+                    type_name = str(name_split[1])
+                    state_split = zone.state.split()
+                    if '/' in state_split:
+                        state_split.remove('/')
+                    free = int(state_split[0])
+                    max  = int(state_split[1])
+                    cpu = int(state_split[2])
+                    ram = int(state_split[3])
+                    disk = int(state_split[4])
+                    it = Vm_Type(type_name,free,max,cpu,ram,disk)
+                    vm_types.append(it)
+                    #Remove the setattr part after dev/debug?
+                    self.__setattr__('vmtype_' + str(type_name.replace('.','_')), it)
+            if found and not re.search('vm types', zone.name) and  zone.name != self.name:
+                break
         return vm_types
 
+    @eutester.Eutester.printinfo
     def get_vm_types(self, name=None, free=None, max=None, cpu=None, ram=None, disk=None, refresh_types=False):
         ret_list = []
         if refresh_types or not self.vm_types:
