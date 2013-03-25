@@ -1339,7 +1339,7 @@ class EC2ops(Eutester):
                 time.sleep(delay)
         #If we have failed snapshots,
         # but still met our minimum clean up the failed and continue (this might be better as a thread?)...
-        if delete_failed:
+        if failed and delete_failed:
                 try:
                     self.delete_snapshots(failed)
                 except: pass
