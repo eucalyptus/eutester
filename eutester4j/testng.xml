@@ -7,6 +7,8 @@
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingCooldown"/>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingDescribeGroupsInstances"/>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingDescribeInstances"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingDescribePolicyAlarms"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingDescribeTags"/>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingInstanceLifecycle"/>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingLaunchAndTerminate"/>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingMultipleAvailabilityZones"/>
@@ -14,6 +16,8 @@
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingSuspendAndResumeProcesses"/>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingTags"/>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingTerminateInstances"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingUnsupportedOptions"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingValidation"/>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingVMTypeReferenceValidation"/>
         </classes>
     </test>
@@ -29,11 +33,15 @@
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingEc2InstanceHealthMonitoring"/>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingEC2ReferenceValidation"/>
             <class name="com.eucalyptus.tests.awssdk.TestEC2DescribeInstanceStatus"/>
+            <class name="com.eucalyptus.tests.awssdk.TestEC2RunInstancesClientToken"/>
         </classes>
     </test>
     <test name="IAM Tests">
         <classes>
+            <class name="com.eucalyptus.tests.awssdk.TestIAMInstanceProfileManagement"/>
             <class name="com.eucalyptus.tests.awssdk.TestIAMInstanceProfiles"/>
+            <class name="com.eucalyptus.tests.awssdk.TestIAMRoleManagement"/>
+            <class name="com.eucalyptus.tests.awssdk.TestSTSAssumeRole"/>
         </classes>
     </test>
     <test name="Eutester4j Sanity Test">
