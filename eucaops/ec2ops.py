@@ -691,9 +691,10 @@ class EC2ops(Eutester):
                     if volume.status == 'failed' or volume.status == 'timed-out':
                         if eof:
                             #Clean up any volumes from this operation and raise exception
+                            self.debug(str(volume.id) + " - Failed current status:" + str(volume.status))
                             if deletefailed:
+                                self.debug('Failure caught in monitor volumes, attempting to delete all volumes...')
                                 for vol in origlist:
-                                    self.debug('Failure caught in monitor volumes, attempting to delete all volumes...')
                                     try:
                                         self.delete_volume(vol)
                                     except Exception, e:
