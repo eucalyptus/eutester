@@ -207,6 +207,10 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops):
     
    
     def cleanup_artifacts(self):
+        """
+        Description: Attempts to remove artifacts created during and through this eutester's lifespan.
+        """
+
         self.debug("Starting cleanup of artifacts")
         for res in self.test_resources["reservations"]:
             self.terminate_instances(res)
