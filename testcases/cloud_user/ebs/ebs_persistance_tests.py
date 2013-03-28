@@ -120,12 +120,7 @@ class Ebs_Persistance_Tests(EutesterTestCase):
 
     def cleanup(self, instances=True):
         '''
-        if instances:
-            try:
-                if self.reservation:
-                    self.tester.terminate_instances(self.reservation)
-            except Exception, e:
-                err = str(e)
+        Attempts to clean up test artifacts...
         '''
         try:
             self.tester.cleanup_artifacts()
