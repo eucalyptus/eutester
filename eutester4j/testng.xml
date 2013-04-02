@@ -3,6 +3,7 @@
 <suite name="Eutester4j Test Suite">
     <test name="Auto Scaling Tests">
         <classes>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingActivities"/>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingAvailabilityZoneRebalancing"/>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingCooldown"/>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingDescribeGroupsInstances"/>
@@ -11,6 +12,8 @@
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingDescribeTags"/>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingInstanceLifecycle"/>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingLaunchAndTerminate"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingMetricsManagement"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingMetricsSubmission"/>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingMultipleAvailabilityZones"/>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingSetInstanceHealth"/>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingSuspendAndResumeProcesses"/>
