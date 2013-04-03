@@ -93,6 +93,7 @@ class Eunode:
                  partition,
                  name=None,
                  instance_ids=None,
+                 state = None,
                  machine = None,
                  debugmethod = None,
                  ):
@@ -112,6 +113,7 @@ class Eunode:
         self.part_name = partition.name
         self.name = name or self.hostname
         self.instance_ids = instance_ids or []
+        self.state = state
         self.tester = tester
         self.machine = machine
         self.service_state = None
@@ -472,6 +474,37 @@ class EuserviceManager(object):
             self.partitions[k].vbs = []
 
 
+    def compare_versions(self, version1, version2):
+        '''
+        :param version1:
+        :param version2:
+        :returns: 1 - if version1 is newer than version2
+        :returns: 0 - if versions are equal
+        :returns: -1 - if version1 is older than version2
+        '''
+        ver1 = str(version1).split('.')
+        ver2 = str(version2).split('.')
+        if not ver1 or not ver2:
+            raise Exception('Failed to parse versions from strings:' + str(version1) + ", " + str(version2))
+        while ver1:
+            if not len(ver2):
+                return 1
+            sub_ver1 = int(ver1.pop(0))
+            sub_ver2 = int(ver2.pop(0))
+            if sub_ver1 > sub_ver2:
+                return 1
+            if sub_ver1 < sub_ver2:
+                return -1
+        #version 1 has no additional sub release ids, and until this point ver1 == ver2...
+        if len(ver2):
+            while ver2:
+                if int(ver2.pop(0)) != 0:
+                    #ver2 has a none '0' sub release id so it is > than ver1
+                    return -1
+        #versions are equal
+        return 0
+
+
     def populate_nodes(self, enabled_clc=None):
         """
         Sort output of 'list nodes cmd' on clc, create/update eunode objects.
@@ -481,7 +514,98 @@ class EuserviceManager(object):
                             also be used to test nc lookup on disabled CLC by providing this component obj instead.
         :return: list of eunode objects
         """
-        #name = 0
+        return_list = []
+        #to avoid update() loop allow enabled_clc to be provided as arg
+        clc = enabled_clc or self.get_enabled_clc()
+        clc_version = clc.machine.get_eucalyptus_version()
+        if self.compare_versions(clc_version,'3.3') >= 0:
+            return self.populate_nodes_3_3(enabled_clc)
+        else:
+            return self.populate_nodes_pre_3_3(enabled_clc)
+
+
+    def populate_nodes_3_3(self, enabled_clc=None):
+        """
+        Sort output of 'list nodes cmd' on clc, create/update eunode objects.
+        Returned list is used to update:'service_manager.node_list'
+
+        :param enabled_clc: To avoid an update() or update() loop the current enabled clc can be provided. This can
+                            also be used to test nc lookup on disabled CLC by providing this component obj instead.
+        :return: list of eunode objects
+
+        version >= 3.3.0 output (note state and instances on lines to follow node(s)
+        [type]  [partition]     [node hostname] [state]
+        NODE    PARTI00         192.168.51.15   ENABLED
+        NODE    PARTI00         192.168.51.13   ENABLED
+        [type]           [instances per line]
+        INSTANCE        i-A1BE4281
+        """
+        type_loc = 0
+        partition_loc = 1
+        hostname_loc = 2
+        state_loc = 3
+        instance_id_loc = 1
+        return_list = []
+        instance_list = []
+        last_node = None
+        #to avoid update() loop allow enabled_clc to be provided as arg
+        clc = enabled_clc or self.get_enabled_clc()
+        nodes_strings = clc.machine.sys(self.eucaprefix + \
+                                        "/usr/sbin/euca_conf --list-nodes 2>1 | grep -v warning")
+        for node_string in nodes_strings:
+            #handle/skip any blank lines first...
+            node_string = node_string.strip()
+            if not node_string:
+                continue
+            partition = None
+            #sort out the node string...
+            split_string = node_string.split()
+            if split_string[type_loc] == 'INSTANCE':
+                instance_list.append(split_string[instance_id_loc])
+            else:
+                if instance_list and last_node:
+                    last_node.instance_ids = copy.copy(instance_list)
+                    instance_list = []
+                hostname = split_string[hostname_loc]
+                partition_name = split_string[partition_loc]
+                state = split_string[state_loc]
+                # grab the list of instances if any found in the string
+                #Try to match the part_name to the partition name it resides in
+                for part in self.get_all_partitions():
+                    if part.name == partition_name:
+                            partition = part
+                            break
+                if not partition:
+                    raise Exception('populate_nodes: Node:' + str(hostname) + ' Failed to find partition for name: '
+                                    + str(partition_name))
+                node = Eunode(self.tester,
+                              hostname,
+                              partition,
+                              state = state)
+                last_node = node
+                return_list.append(node)
+                if node in part.ncs:
+                    part.ncs[part.ncs.index(node)]=node
+                else:
+                    part.ncs.append(node)
+        self.node_list = return_list
+        return return_list
+
+
+    def populate_nodes_pre_3_3(self,enabled_clc=None):
+        """
+        Sort output of 'list nodes cmd' on clc, create/update eunode objects.
+        Returned list is used to update:'service_manager.node_list'
+
+        :param enabled_clc: To avoid an update() or update() loop the current enabled clc can be provided. This can
+                            also be used to test nc lookup on disabled CLC by providing this component obj instead.
+        :return: list of eunode objects
+
+        output for <= 3.2.2
+        [type]  [node hostname] [cc_name] [instances....]
+        NODE	192.168.51.72	CC_71	i-9A293E9B
+        """
+        type_loc = 0
         hostname_loc = 1
         cc_name_loc = 2
         instances_loc = 3
@@ -505,7 +629,7 @@ class EuserviceManager(object):
             # grab the list of instances if any found in the string
             if len(split_string) > instances_loc:
                 instance_list = split_string[instances_loc:]
-            #Try to match the part_name to the partition name it resides in
+                #Try to match the part_name to the partition name it resides in
             for part in self.get_all_partitions():
                 for cc in part.ccs:
                     if cc.name == cc_name:
@@ -517,7 +641,8 @@ class EuserviceManager(object):
             node = Eunode(self.tester,
                           hostname,
                           partition,
-                          instance_ids = instance_list)
+                          instance_ids = instance_list,
+                          state = 'ENABLED')
             return_list.append(node)
             if node in part.ncs:
                 part.ncs[part.ncs.index(node)]=node
@@ -525,6 +650,7 @@ class EuserviceManager(object):
                 part.ncs.append(node)
         self.node_list = return_list
         return return_list
+
 
     def update_node_list(self, enabled_clc=None):
         self.populate_nodes(enabled_clc=enabled_clc)

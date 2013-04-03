@@ -375,6 +375,21 @@ class Machine:
             print Eutester.get_traceback()
         return int(elapsed)
 
+    def get_eucalyptus_version(self,versionpath='/etc/eucalyptus/eucalyptus-version'):
+        return self.sys('cat ' + versionpath, code=0)[0]
+
+
+    def is_file_present(self, filepath):
+        try:
+            self.get_file_stat(filepath)
+        except IOError, io:
+            #IOError: [Errno 2] No such file
+            if io.errno == 2:
+                return False
+            else:
+                raise io
+        return True
+
 
     def get_file_stat(self,path):
         return self.sftp.lstat(path)
