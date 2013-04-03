@@ -38,6 +38,7 @@ from eucaops import Eucaops
 from eutester import euinstance
 from eutester.eutestcase import EutesterTestCase
 from eucaops import ec2ops
+from eutester.eutestcase import TestColor
 
 class TestZone():
     def __init__(self, partition):
@@ -321,8 +322,8 @@ class EbsTestSuite(EutesterTestCase):
                                         testcolor=TestColor.get_canned_color('failred'))
                             time.sleep(10)
                             self.debug('Monitoring volume post VolumeStateException...')
-                            vol.eutest_attached_status = None
-                            self.tester.monitor_euvolumes_to_status([vol],status='in-use',attached_status='attached',timeout=60)
+                            volume.eutest_attached_status = None
+                            self.tester.monitor_euvolumes_to_status([volume],status='in-use',attached_status='attached',timeout=60)
                         except Exception, e:
                             self.debug("attach_all_vols_to_instances_in_zones failed to attach volume")
                             raise e
