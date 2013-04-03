@@ -920,9 +920,18 @@ class EbsTestSuite(EutesterTestCase):
         if zones is None or zones == []:
             zones = self.zones
     def clean_method(self):
+        """
+        Definition:
+        Attempts to clean up test artifacts created during this test
+        """
+
         self.clean_created_resources(zonelist=self.zonelist, timeout=360)
     
     def clean_created_resources(self, zonelist=None, timeout=360):
+        """
+        Definition:
+        Attempts to clean up test artifacts created during this test
+        """
         self.tester.cleanup_artifacts()
         #self.terminate_test_instances_for_zones(zonelist=zonelist, timeout=timeout)
         #self.delete_volumes_in_zones(zonelist=zonelist, timeout=timeout)

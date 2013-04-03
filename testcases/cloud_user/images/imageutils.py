@@ -325,7 +325,7 @@ class ImageUtils(EutesterTestCase):
         :param debug:
         '''
         return self.tester.register_image( manifest,
-                                           rdn=root_device_name,
+                                           root_device_name=root_device_name,
                                            description=description,
                                            bdmdev=block_device_mapping,
                                            name=name,

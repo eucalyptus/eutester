@@ -9,6 +9,8 @@ import sys
 import os
 import types
 import traceback
+import random
+import string
 from eutester.eulogger import Eulogger
 from eutester.euconfig import EuConfig
 import StringIO
@@ -179,10 +181,17 @@ class EutesterTestUnit():
         self.name = str(method.__name__)
         self.result=EutesterTestResult.not_run
         self.time_to_run=0
+        self.anchor_id = str(str(time.ctime())
+                            + self.name
+                            + "_"
+                            + str( ''.join(random.choice(string.ascii_uppercase + string.ascii_lowercase + string.digits) for x in range(3)))
+                            + "_"
+                            ).replace(" ","_")
+        self.error_anchor_id = "ERROR_" + self.anchor_id
         self.description=self.get_test_method_description()
         self.eof=False
         self.error = ""
-        print "Creating testunit:"+str(self.name)+", args:"
+        print "Creating testunit:" + str(self.name)+", args:"
         for count, thing in enumerate(args):
             print '{0}. {1}'.format(count, thing)
         for name, value in kwargs.items():
@@ -214,7 +223,8 @@ class EutesterTestUnit():
         a blank line or the string "EndDescription". This is used in debug output when providing info to the
         user as to the method being run as a testunit's intention/description.  
         '''
-        desc = "\nMETHOD:"+str(self.name)+", TEST DESCRIPTION:\n"
+
+        desc = "\nMETHOD:"+str(self.name) + ", TEST DESCRIPTION:\n"
         ret = []
         add = False
         try:
@@ -267,11 +277,14 @@ class EutesterTestUnit():
             self.result=EutesterTestResult.passed
             return ret
         except Exception, e:
+            buf = "<font color=red> Error in test unit '" + self.name + "':\n"
             out = StringIO.StringIO()
             traceback.print_exception(*sys.exc_info(),file=out)
             out.seek(0)
-            buf = out.read()
-            print TestColor.get_canned_color('failred')+buf+TestColor.reset
+            buf = buf + out.read()
+            buf = buf + ' </font>'
+            print '<a name="' + str(self.error_anchor_id) + '"></a>'
+            print TestColor.get_canned_color('failred') + buf + TestColor.reset
             self.error = str(e)
             self.result = EutesterTestResult.failed
             if eof:
@@ -298,6 +311,8 @@ class EutesterTestCase(unittest.TestCase):
         self.debugmethod = debugmethod
         if not self.debugmethod:
             self.setup_debugmethod()
+        #For QA output add preformat tag
+        self.debug('<pre>')
         if not hasattr(self,'testlist'): self.testlist = []
         self.list = None
         if not hasattr(self,'configfiles'): self.configfiles=[]
@@ -603,7 +618,6 @@ class EutesterTestCase(unittest.TestCase):
         self.debug(out, traceback=traceback, color=testcolor,linebyline=False)  
         
     def startmsg(self,msg=""):
-        msg = "- STARTING TESTUNIT:  - " + msg
         self.status(msg, traceback=3,testcolor=TestColor.get_canned_color('whiteonblue'))
         
     def endsuccess(self,msg=""):
@@ -696,11 +710,7 @@ class EutesterTestCase(unittest.TestCase):
         try:
             for test in list:
                 tests_ran += 1
-                startbuf = ""
-                argbuf = self.get_pretty_args(test)
-                startbuf += str(test.description)+str(argbuf)
-                startbuf += 'Running list method: "'+str(self.print_testunit_method_arg_values(test))+'"'
-                self.startmsg(startbuf)
+                self.print_test_unit_startmsg(test)
                 try:
                     test.run(eof=eof or test.eof)
                 except Exception, e:
@@ -730,6 +740,7 @@ class EutesterTestCase(unittest.TestCase):
                     cleanunit = self.create_testunit_from_method(self.clean_method)
                     list.append(cleanunit)
                     try:
+                        self.print_test_unit_startmsg(cleanunit)
                         cleanunit.run()
                     except:
                         pass
@@ -746,10 +757,21 @@ class EutesterTestCase(unittest.TestCase):
                 if test.result == EutesterTestResult.passed:
                     passed += 1
             print "passed:"+str(passed)+" out of total:"+str(total)
+            self.debug('</pre>')
             if total != passed:
                 return(1)
             else:
                 return(0)
+
+    def print_test_unit_startmsg(self,test):
+        link = '<a name="' + str(test.anchor_id) + '"></a>'
+        startbuf = '<div id="myDiv" name="myDiv" title="Example Div Element" style="color: #0900C4; font: Helvetica 12pt;border: 1px solid black;">'
+        startbuf += str(link) +"\n- STARTING TESTUNIT:  - "
+        argbuf = self.get_pretty_args(test)
+        startbuf += str(test.description)+str(argbuf)
+        startbuf += 'Running list method: "'+str(self.print_testunit_method_arg_values(test))+'"'
+        startbuf += '\n </div>'
+        self.startmsg(startbuf)
     
     def has_arg(self,arg):
         '''
@@ -838,7 +860,8 @@ class EutesterTestCase(unittest.TestCase):
         :type printmethod: method
         :param printmethod: method to use for printing test result output. Default is self.debug
         '''
-        buf =  "TESTUNIT LIST SUMMARY FOR '"+str(self.name)+"'\n"
+
+        buf =  "\nTESTUNIT LIST SUMMARY FOR '"+str(self.name) + "'\n"
         if list is None:
             list=self.testlist
         if not list:
@@ -849,13 +872,28 @@ class EutesterTestCase(unittest.TestCase):
 
         for testunit in list:
             buf += self.resultdefault("\n"+ self.getline(80)+"\n", printout=False)
+            #Ascii mark up errors using pmethod() so errors are in bold/red, etc...
             pmethod = self.resultfail if not testunit.result == EutesterTestResult.passed else self.resultdefault
-            buf += pmethod(str("TEST: "+str(testunit.name)).ljust(50)+str(" RESULT:"+testunit.result).ljust(10)+str(' Time:'+str(testunit.time_to_run)).ljust(0),printout=False)
-            buf += pmethod("\nVALUES: "+str(self.print_testunit_method_arg_values(testunit)), printout=False) 
+            test_summary_line = str(" ").ljust(20) + '|TEST LINK: <a href="#' + str(testunit.anchor_id) + '">GO TO TEST</a> \n' \
+                                + str("RESULT: " + str(testunit.result)).ljust(20)  \
+                                + "| TEST NAME: " + str(testunit.name) + "\n" \
+                                + str(" ").ljust(20) + str("| TIME TO TEST: " + str(testunit.time_to_run))
+
+
+            buf += pmethod(str(test_summary_line),printout=False)
+            buf += pmethod("\n" + str(" ").ljust(20) + "| VALUES PROVIDED: "
+                           + str(self.print_testunit_method_arg_values(testunit)), printout=False)
+            #Print additional line showing error in the failed case...
             if testunit.result == EutesterTestResult.failed:
-                    buf += "\n"+str(self.resulterr('ERROR('+str(testunit.name)+'): '+str(testunit.error), printout=False))
+                    err_sum = "\n".join(str(testunit.error).splitlines()[0:3])
+                    test_error_line = '<font color=red>ERROR:('+str(testunit.name)+'): '\
+                                      + str(err_sum) \
+                                      + str('</font>') \
+                                      + '\n <a href="#' + str(testunit.error_anchor_id) + '">GO TO ERROR</a>'
+                    buf += "\n"+str(self.resulterr(test_error_line, printout=False))
         buf += self.resultdefault("\n"+ self.getline(80)+"\n", printout=False)
         buf += str(self.print_test_list_short_stats(list))
+        buf += "\n"
         if printout:
             printmethod(buf)
         else:
