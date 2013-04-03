@@ -36,7 +36,7 @@ import boto
 from eutester import Eutester
 
 
-EC2RegionData = {
+CWRegionData = {
     'us-east-1': 'monitoring.us-east-1.amazonaws.com',
     'us-west-1': 'monitoring.us-west-1.amazonaws.com',
     'eu-west-1': 'monitoring.eu-west-1.amazonaws.com',
@@ -99,42 +99,42 @@ class CWops(Eutester):
         :param boto_debug:
         :raise:
         """
-        ec2_region = RegionInfo()
+        cw_region = RegionInfo()
         if region:
             self.debug("Check region: " + str(region))
             try:
                 if not endpoint:
-                    ec2_region.endpoint = EC2RegionData[region]
+                    cw_region.endpoint = CWRegionData[region]
                 else:
-                    ec2_region.endpoint = endpoint
+                    cw_region.endpoint = endpoint
             except KeyError:
                 raise Exception('Unknown region: %s' % region)
         else:
-            ec2_region.name = 'eucalyptus'
+            cw_region.name = 'eucalyptus'
             if not host:
                 if endpoint:
-                    ec2_region.endpoint = endpoint
+                    cw_region.endpoint = endpoint
                 else:
-                    ec2_region.endpoint = self.get_cw_ip()
+                    cw_region.endpoint = self.get_cw_ip()
         connection_args = {'aws_access_key_id': aws_access_key_id,
                            'aws_secret_access_key': aws_secret_access_key,
                            'is_secure': is_secure,
                            'debug': boto_debug,
                            'port': port,
                            'path': path,
-                           'region': ec2_region}
+                           'region': cw_region}
 
         if re.search('2.6', boto.__version__):
             connection_args['validate_certs'] = False
 
         try:
-            ec2_connection_args = copy.copy(connection_args)
-            ec2_connection_args['path'] = path
-            ec2_connection_args['region'] = ec2_region
-            self.debug("Attempting to create cloud watch connection to " + ec2_region.endpoint + str(port) + path)
-            self.cw = boto.connect_cloudwatch(**ec2_connection_args)
+            cw_connection_args = copy.copy(connection_args)
+            cw_connection_args['path'] = path
+            cw_connection_args['region'] = cw_region
+            self.debug("Attempting to create cloud watch connection to " + cw_region.endpoint + str(port) + path)
+            self.cw = boto.connect_cloudwatch(**cw_connection_args)
         except Exception, e:
-            self.critical("Was unable to create ec2 connection because of exception: " + str(e))
+            self.critical("Was unable to create Cloud Watch connection because of exception: " + str(e))
 
     def setup_cw_resource_trackers(self):
         """
@@ -145,9 +145,9 @@ class CWops(Eutester):
         self.test_resources["datapoint"] = []
 
     def get_cw_ip(self):
-        """Parse the eucarc for the EC2_URL"""
-        ec2_url = self.parse_eucarc("AWS_CLOUDWATCH_URL")
-        return ec2_url.split("/")[2].split(":")[0]
+        """Parse the eucarc for the AWS_CLOUDWATCH_URL"""
+        cw_url = self.parse_eucarc("AWS_CLOUDWATCH_URL")
+        return cw_url.split("/")[2].split(":")[0]
 
     def get_namespaces(self):
         """
