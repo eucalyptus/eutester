@@ -36,15 +36,16 @@ import boto
 from eutester import Eutester
 
 
-CWRegionData = {
-    'us-east-1': 'monitoring.us-east-1.amazonaws.com',
-    'us-west-1': 'monitoring.us-west-1.amazonaws.com',
-    'eu-west-1': 'monitoring.eu-west-1.amazonaws.com',
-    'ap-northeast-1': 'monitoring.ap-northeast-1.amazonaws.com',
-    'ap-southeast-1': 'monitoring.ap-southeast-1.amazonaws.com'}
+ELBRegionData = {
+    'us-east-1': 'elasticloadbalancing.us-east-1.amazonaws.com',
+    'us-west-1': 'elasticloadbalancing.us-west-1.amazonaws.com',
+    'us-west-2': 'elasticloadbalancing.us-west-2.amazonaws.com',
+    'eu-west-1': 'elasticloadbalancing.eu-west-1.amazonaws.com',
+    'ap-northeast-1': 'elasticloadbalancing.ap-northeast-1.amazonaws.com',
+    'ap-southeast-1': 'elasticloadbalancing.ap-southeast-1.amazonaws.com'}
 
 
-class CWops(Eutester):
+class ELBops(Eutester):
     @Eutester.printinfo
     def __init__(self, host=None, credpath=None, endpoint=None, aws_access_key_id=None, aws_secret_access_key=None,
                  username="root", region=None, is_secure=False, path='/', port=80, boto_debug=0):
@@ -66,9 +67,9 @@ class CWops(Eutester):
         self.aws_secret_access_key = aws_secret_access_key
         self.account_id = None
         self.user_id = None
-        super(CWops, self).__init__(credpath=credpath)
+        super(ELBops, self).__init__(credpath=credpath)
 
-        self.setup_cw_connection(host=host,
+        self.setup_elb_connection(host=host,
                                  region=region,
                                  endpoint=endpoint,
                                  aws_access_key_id=self.aws_access_key_id,
@@ -80,10 +81,10 @@ class CWops(Eutester):
         self.poll_count = 48
         self.username = username
         self.test_resources = {}
-        self.setup_cw_resource_trackers()
+        self.setup_elb_resource_trackers()
 
     @Eutester.printinfo
-    def setup_cw_connection(self, endpoint=None, aws_access_key_id=None, aws_secret_access_key=None, is_secure=True,
+    def setup_elb_connection(self, endpoint=None, aws_access_key_id=None, aws_secret_access_key=None, is_secure=True,
                             host=None,
                             region=None, path="/", port=443, boto_debug=0):
         """
@@ -99,67 +100,50 @@ class CWops(Eutester):
         :param boto_debug:
         :raise:
         """
-        cw_region = RegionInfo()
+        elb_region = RegionInfo()
         if region:
             self.debug("Check region: " + str(region))
             try:
                 if not endpoint:
-                    cw_region.endpoint = CWRegionData[region]
+                    elb_region.endpoint = ELBRegionData[region]
                 else:
-                    cw_region.endpoint = endpoint
+                    elb_region.endpoint = endpoint
             except KeyError:
                 raise Exception('Unknown region: %s' % region)
         else:
-            cw_region.name = 'eucalyptus'
+            elb_region.name = 'eucalyptus'
             if not host:
                 if endpoint:
-                    cw_region.endpoint = endpoint
+                    elb_region.endpoint = endpoint
                 else:
-                    cw_region.endpoint = self.get_cw_ip()
+                    elb_region.endpoint = self.get_elb_ip()
         connection_args = {'aws_access_key_id': aws_access_key_id,
                            'aws_secret_access_key': aws_secret_access_key,
                            'is_secure': is_secure,
                            'debug': boto_debug,
                            'port': port,
                            'path': path,
-                           'region': cw_region}
+                           'region': elb_region}
 
         if re.search('2.6', boto.__version__):
             connection_args['validate_certs'] = False
 
         try:
-            cw_connection_args = copy.copy(connection_args)
-            cw_connection_args['path'] = path
-            cw_connection_args['region'] = cw_region
-            self.debug("Attempting to create cloud watch connection to " + cw_region.endpoint + str(port) + path)
-            self.cw = boto.connect_cloudwatch(**cw_connection_args)
+            elb_connection_args = copy.copy(connection_args)
+            elb_connection_args['path'] = path
+            elb_connection_args['region'] = elb_region
+            self.debug("Attempting to create cloud watch connection to " + elb_region.endpoint + str(port) + path)
+            self.cw = boto.connect_elb(**elb_connection_args)
         except Exception, e:
-            self.critical("Was unable to create Cloud Watch connection because of exception: " + str(e))
+            self.critical("Was unable to create elb connection because of exception: " + str(e))
 
-    def setup_cw_resource_trackers(self):
+    def setup_elb_resource_trackers(self):
         """
         Setup keys in the test_resources hash in order to track artifacts created
         """
-        self.test_resources["alarms"] = []
-        self.test_resources["metric"] = []
-        self.test_resources["datapoint"] = []
+        self.test_resources["load_balancers"] = []
 
-    def get_cw_ip(self):
-        """Parse the eucarc for the AWS_CLOUDWATCH_URL"""
-        cw_url = self.parse_eucarc("AWS_CLOUDWATCH_URL")
-        return cw_url.split("/")[2].split(":")[0]
-
-    def get_namespaces(self):
-        """
-        Convenience function for easily segregating metrics into their namespaces
-
-        :return: Dict where key is the Namespace and the value is a list with all metrics
-        """
-        metrics= self.cw.list_metrics()
-        namespaces = {}
-        for metric in metrics:
-            if not namespaces[metric.namespace]:
-                namespaces[metric.namespace] = [metric]
-            else:
-                namespaces[metric.namespace].append(metric)
-        return namespaces
+    def get_elb_ip(self):
+        """Parse the eucarc for the AWS_ELB_URL"""
+        elb_url = self.parse_eucarc("AWS_ELB_URL")
+        return elb_url.split("/")[2].split(":")[0]
