@@ -496,11 +496,10 @@ class EuserviceManager(object):
             if sub_ver1 < sub_ver2:
                 return -1
         #version 1 has no additional sub release ids, and until this point ver1 == ver2...
-        if len(ver2):
-            while ver2:
-                if int(ver2.pop(0)) != 0:
-                    #ver2 has a none '0' sub release id so it is > than ver1
-                    return -1
+        while ver2:
+            if int(ver2.pop(0)) != 0:
+                #ver2 has a none '0' sub release id so it is > than ver1
+                return -1
         #versions are equal
         return 0
 
