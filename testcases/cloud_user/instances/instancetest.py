@@ -5,12 +5,11 @@
 #               features for Eucalyptus.  The test cases/modules that are executed can be 
 #               found in the script under the "tests" list.
 
-import unittest
 import time
-from boto.ec2.address import Address
+from concurrent.futures import ThreadPoolExecutor
 from eucaops import Eucaops
 from eutester.eutestcase import EutesterTestCase
-from eutester.euvolume import EuVolume
+from eucaops import EC2ops
 import os
 import re
 import random
@@ -25,7 +24,10 @@ class InstanceBasics(EutesterTestCase):
                 self.parser.add_argument(arg)
         self.get_args()
         # Setup basic eutester object
-        self.tester = Eucaops( credpath=self.args.credpath)
+        if self.args.region:
+            self.tester = EC2ops( credpath=self.args.credpath, region=self.args.region)
+        else:
+            self.tester = Eucaops(config_file=self.args.config, password=self.args.password, credpath=self.args.credpath)
         self.tester.poll_count = 120
 
         ### Add and authorize a group for the instance
@@ -46,16 +48,7 @@ class InstanceBasics(EutesterTestCase):
         self.reservation = None
 
     def clean_method(self):
-        if self.reservation:
-            self.assertTrue(self.tester.terminate_instances(self.reservation), "Unable to terminate instance(s)")
-        if self.address:
-            assert isinstance(self.address,Address)
-            self.tester.release_address(self.address)
-        if self.volume:
-            self.tester.delete_volume(self.volume)
-        self.tester.delete_group(self.group)
-        self.tester.delete_keypair(self.keypair)
-        os.remove(self.keypath)
+        self.tester.cleanup_artifacts()
 
 
     def BasicInstanceChecks(self, zone = None):
@@ -108,7 +101,7 @@ class InstanceBasics(EutesterTestCase):
             self.assertTrue( self.tester.ping(instance.public_dns_name), "Could not ping after dissassociate")
         return self.reservation
 
-    def MaxSmallInstances(self, available_small=None,zone = None):
+    def MultipleInstances(self, available_small=None,zone = None):
         """
         This case was developed to test the maximum number of m1.small vm types a configured
         cloud can run.  The test runs the maximum number of m1.small vm types allowed, then
@@ -121,7 +114,7 @@ class InstanceBasics(EutesterTestCase):
             available_small = self.tester.get_available_vms()
         if zone is None:
             zone = self.zone
-        self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name,min=available_small, max=available_small, zone=zone)
+        self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name,min=2, max=2, zone=zone)
         self.assertTrue( self.tester.wait_for_reservation(self.reservation) ,'Not all instances  went to running')
         return self.reservation
 
@@ -302,7 +295,7 @@ class InstanceBasics(EutesterTestCase):
                 self.tester.terminate_instances(reservation)
             return 1
 
-    def Churn(self,image_id=None):
+    def Churn(self):
         """
         This case was developed to test robustness of Eucalyptus by starting instances,
         stopping them before they are running, and increase the time to terminate on each
@@ -313,49 +306,33 @@ class InstanceBasics(EutesterTestCase):
             - When a test finishes, rerun BasicInstanceChecks test case.
         If any of these tests fail, the test case will error out; logging the results.
         """
-        if not image_id:
-            image_id = self.image
-        from eutester.process_manager import ProcessManager
-        process_manager = ProcessManager()
-        ### Increase time to terminate by step seconds on each iteration
-        step = 1
+        available_instances_before = self.tester.get_available_vms(zone=self.zone)
         if self.reservation:
             self.tester.terminate_instances(self.reservation)
-            ## Run through count iterations of test
-        count = self.tester.get_available_vms("m1.small") / 2
+            self.reservation = None
+        ## Run through count iterations of test
+        count = 4
+        future_instances =[]
 
-        ## Start asynchronous activity
-        ## Run 5 basic instance check instances 10s apart
-        process_ids =[]
-        for i in xrange(count):
-            self.tester.debug("Starting Thread " + str(i) +" in " + str(step))
-            self.tester.sleep(step)
-            tester = Eucaops( credpath=self.args.credpath)
-            process_ids.append(process_manager.run_method_as_process(tester.run_instance,image=image_id, is_reachable=False))
+        with ThreadPoolExecutor(max_workers=count) as executor:
+            ## Start asynchronous activity
+            ## Run 5 basic instance check instances 5s apart
+            for i in xrange(count):
+                future_instances.append(executor.submit(self.BasicInstanceChecks))
+                self.tester.sleep(5)
 
-        ### While the other tests are running, run and terminate count instances with a 10s sleep in between
-        for i in xrange(count):
-            self.reservation = self.image.run()
-            self.tester.debug("Sleeping for " + str(step) + " seconds before terminating instances")
-            self.tester.sleep(step)
-            for instance in self.reservation.instances:
-                instance.terminate()
-                self.assertTrue(self.tester.wait_for_instance(instance, "terminated"), "Instance did not go to terminated")
+        reservations = [future.result() for future in future_instances]
 
-        results = []
-        ### Block until the script returns a result
-        for id in process_ids:
-            results.append(process_manager.wait_for_process(id))
+        with ThreadPoolExecutor(max_workers=count) as executor:
+            ## Start asynchronous activity
+            ## Terminate all instances
+            for reservation in reservations:
+                future_instances.append(executor.submit(self.tester.terminate_instances,reservation))
 
-        process_ids =[]
-        for return_value in results:
-            if isinstance(return_value, Exception):
-                raise result
-            else:
-                process_ids.append(process_manager.run_method_as_process(self.tester.terminate_instances,return_value))
+        self.tester.sleep(20)
 
-        for id in process_ids:
-            results.append(process_manager.wait_for_process(id))
+        if available_instances_before > self.tester.get_available_vms(zone=self.zone):
+            raise Exception("Number of instances available before was greater than number of instances after churn")
 
     def PrivateIPAddressing(self, zone = None):
         """
@@ -411,8 +388,8 @@ class InstanceBasics(EutesterTestCase):
 if __name__ == "__main__":
     testcase = InstanceBasics()
     ### Either use the list of tests passed from config/command line to determine what subset of tests to run
-    list = testcase.args.tests or [ "BasicInstanceChecks",  "ElasticIps", "MaxSmallInstances" , "LargestInstance",
-                                    "MetaData", "Reboot","PrivateIPAddressing"]
+    list = testcase.args.tests or [ "BasicInstanceChecks",  "ElasticIps", "MultipleInstances" , "LargestInstance",
+                                    "MetaData", "Reboot","PrivateIPAddressing", "Churn"]
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
     for test in list:

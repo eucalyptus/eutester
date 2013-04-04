@@ -31,10 +31,8 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 # Author: vic.iglesias@eucalyptus.com
-import copy
 
-
-__version__ = '0.0.5'
+__version__ = '0.0.7'
 
 import re
 import os
@@ -43,7 +41,11 @@ import time
 import string
 import socket
 import sys
+import traceback
+import StringIO
 import eulogger
+import types
+from functools import wraps
 
 
 
@@ -53,7 +55,7 @@ class TimeoutFunctionException(Exception):
 
 
 class Eutester(object):
-    def __init__(self, credpath=None, aws_access_key_id=None, aws_secret_access_key = None):
+    def __init__(self, credpath=None):
         """This class is intended to setup boto connections for the various services that the *ops classes will use.
         :param credpath: Path to a valid eucarc file.
         :param aws_access_key_id: Used in conjuction with aws_secret_access_key allows for creation of connections without needing a credpath.
@@ -79,40 +81,39 @@ class Eutester(object):
             self.debug("Extracting keys from " + self.credpath)         
             self.aws_access_key_id = self.get_access_key()
             self.aws_secret_access_key = self.get_secret_key()
+            self.account_id = self.get_account_id()
+            self.user_id = self.get_user_id()
         else:
-            self.aws_access_key_id = aws_access_key_id
-            self.aws_secret_access_key = aws_secret_access_key
+            raise Exception("Please provide credpath argument")
 
     def get_access_key(self):
-        """Parse the eucarc for the EC2_ACCESS_KEY"""
-        return self.parse_eucarc("EC2_ACCESS_KEY")   
+        if not self.aws_access_key_id:     
+            """Parse the eucarc for the EC2_ACCESS_KEY"""
+            self.aws_access_key_id = self.parse_eucarc("EC2_ACCESS_KEY")  
+        return self.aws_access_key_id 
     
     def get_secret_key(self):
-        """Parse the eucarc for the EC2_SECRET_KEY"""
-        return self.parse_eucarc("EC2_SECRET_KEY")
+        if not self.aws_secret_access_key: 
+            """Parse the eucarc for the EC2_SECRET_KEY"""
+            self.aws_secret_access_key = self.parse_eucarc("EC2_SECRET_KEY")
+        return self.aws_secret_access_key
     
     def get_account_id(self):
-        """Parse the eucarc for the EC2_ACCOUNT_NUMBER"""
-        return self.parse_eucarc("EC2_ACCOUNT_NUMBER")
+        if not self.account_id:
+            """Parse the eucarc for the EC2_ACCOUNT_NUMBER"""
+            self.account_id = self.parse_eucarc("EC2_ACCOUNT_NUMBER")
+        return self.account_id
     
     def get_user_id(self):
+        if not self.user_id:
+            self.user_id = self.parse_eucarc("EC2_USER_ID")
         """Parse the eucarc for the EC2_ACCOUNT_NUMBER"""
-        return self.parse_eucarc("EC2_USER_ID")
+        return self.user_id 
 
     def get_port(self):
         """Parse the eucarc for the EC2_ACCOUNT_NUMBER"""
         ec2_url = self.parse_eucarc("EC2_URL")
         return ec2_url.split(':')[1].split("/")[0]
-    
-    def get_s3_ip(self):
-        """Parse the eucarc for the S3_URL"""
-        walrus_url = self.parse_eucarc("S3_URL")
-        return walrus_url.split("/")[2].split(":")[0]
-    
-    def get_ec2_ip(self):
-        """Parse the eucarc for the EC2_URL"""
-        ec2_url = self.parse_eucarc("EC2_URL")
-        return ec2_url.split("/")[2].split(":")[0]
 
     def parse_eucarc(self, field):
         with open( self.credpath + "/eucarc") as eucarc:
@@ -219,7 +220,7 @@ class Eutester(object):
         """ Remove the strings from the list that do not match the regex string"""
         expr = re.compile(string)
         return filter(expr.search,list)
-        
+
     def diff(self, list1, list2):
         """Return the diff of the two lists"""
         return list(set(list1)-set(list2))
@@ -256,8 +257,91 @@ class Eutester(object):
              chars   Array of characters to use in generation of the string
         """
         return ''.join(random.choice(chars) for x in range(size))
+    
+    @classmethod
+    def printinfo(cls, func):
+        '''
+        Decorator to print method positional and keyword args when decorated method is called
+        usage:
+        @printinfo
+        def myfunction(self, arg1, arg2, kwarg1=defaultval):
+            stuff = dostuff(arg1, arg2, kwarg1)
+            return stuff
+        When the method is run it will produce debug output showing info as to how the method was called, example:
         
+        myfunction(arg1=123, arg2='abc', kwarg='words)
+        
+        2013-02-07 14:46:58,928] [DEBUG]:(mydir/myfile.py:1234) - Starting method: myfunction()
+        2013-02-07 14:46:58,928] [DEBUG]:---> myfunction(self, arg1=123, arg2=abc, kwarg='words')
+        '''
+
+        @wraps(func)
+        def methdecor(*func_args, **func_kwargs):
+            try:
+                defaults = func.func_defaults
+                kw_count = len(defaults or [])
+                selfobj = None
+                arg_count = func.func_code.co_argcount - kw_count
+                var_names = func.func_code.co_varnames[:func.func_code.co_argcount]
+                arg_names = var_names[:arg_count]
+                kw_names =  var_names[arg_count:func.func_code.co_argcount]
+                kw_defaults = {}
+                for kw_name in kw_names: 
+                    kw_defaults[kw_name] = defaults[kw_names.index(kw_name)]
+                arg_string=''
+                #iterate on func_args instead of arg_names to make sure we pull out self object if present
+                for count, arg in enumerate(func_args):
+                    if count == 0 and var_names[0] == 'self': #and if hasattr(arg, func.func_name):
+                        #self was passed don't print obj addr, and save obj for later
+                        arg_string += 'self'
+                        selfobj = arg
+                    elif count >= arg_count:
+                        #Handle case where kw args are passed w/o key word as a positional arg add 
+                        #Add it to the kw_defaults so it gets printed later
+                        kw_defaults[var_names[count]] = arg
+                    else:
+                        #This is a positional arg so grab name from arg_names list
+                        arg_string += ', '
+                        arg_string += str(arg_names[count])+'='+str(arg)
+                kw_string = ""
+                for kw in kw_names:
+                    kw_string += ', '+str(kw)+'='
+                    if kw in func_kwargs:
+                        kw_string += str(func_kwargs[kw])
+                    else:
+                        kw_string += str(kw_defaults[kw])
+                debugstring = '\n--->('+str(os.path.basename(func.func_code.co_filename))+":"+str(func.func_code.co_firstlineno)+")Starting method: "+str(func.func_name)+'('+arg_string+kw_string+')'
+                debugmethod = None
+                if selfobj and hasattr(selfobj,'debug'):
+                    debug = getattr(selfobj, 'debug')
+                    if isinstance(debug, types.MethodType):
+                        debugmethod = debug
+                if debugmethod:    
+                    debugmethod(debugstring)
+                else:
+                    print debugstring
+            except Exception, e:
+                print Eutester.get_traceback()
+                print 'printinfo method decorator error:'+str(e)
+            return func(*func_args, **func_kwargs)
+        return methdecor
+    
+    @classmethod
+    def get_traceback(cls):
+        '''
+        Returns a string buffer with traceback, to be used for debug/info purposes. 
+        '''
+        try:
+            out = StringIO.StringIO()
+            traceback.print_exception(*sys.exc_info(),file=out)
+            out.seek(0)
+            buf = out.read()
+        except Exception, e:
+                buf = "Could not get traceback"+str(e)
+        return str(buf) 
+    
     def __str__(self):
+        return 'got self'
         """
         Prints informations about configuration of Eucateser as configuration file,
         how many errors, the path of the Eucalyptus, and the path of the user credentials
@@ -265,10 +349,12 @@ class Eutester(object):
         s  = "+++++++++++++++++++++++++++++++++++++++++++++++++++++\n"
         s += "+" + "Eucateser Configuration" + "\n"
         s += "+" + "+++++++++++++++++++++++++++++++++++++++++++++++\n"
-        s += "+" + "Config File: " + self.config_file +"\n"
+        s += "+" + "Config File: " + str(self.config_file) +"\n"
         s += "+" + "Fail Count: " +  str(self.fail_count) +"\n"
         s += "+" + "Eucalyptus Path: " +  str(self.eucapath) +"\n"
         s += "+" + "Credential Path: " +  str(self.credpath) +"\n"
         s += "+++++++++++++++++++++++++++++++++++++++++++++++++++++\n"
         return s
+    
+
 

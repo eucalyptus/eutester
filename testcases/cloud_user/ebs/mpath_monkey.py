@@ -16,7 +16,7 @@ class Mpath_Monkey(EutesterTestCase):
     #a unique comment to add to iptables rules to signify the rule was added by this test
     ipt_msg = "eutester block data to san"
     
-    def __init__(self):
+    def __init__(self, **kwargs):
         self.setuptestcase()
         self.setup_parser(testname='Mpath_monkey', vmtype=False,zone=False, keypair=False,emi=False,credpath=False,
                           description='Run multipath failover script')
@@ -30,9 +30,16 @@ class Mpath_Monkey(EutesterTestCase):
         self.parser.add_argument('--sp_ip_list', help='String with SP addrs, comma delimited',default="10.109.25.186,192.168.25.182")
         
         self.get_args()
-        
-        self.ssh = SshConnection( self.args.host, keypath=self.args.keypath, password=self.args.password, username=self.args.username, 
-                                  debugmethod=self.debug, verbose=True)
+
+        for kw in kwargs:
+            print 'Setting kwarg:' + str(kw) + " to " + str(kwargs[kw])
+            self.set_arg(kw ,kwargs[kw])
+        self.ssh = SshConnection( self.args.host,
+                                  keypath=self.args.keypath,
+                                  password=self.args.password,
+                                  username=self.args.username,
+                                  debugmethod=self.debug,
+                                  verbose=True)
         self.sys = self.ssh.sys
         self.cmd = self.ssh.cmd
         self.interval = int(self.args.interval)
@@ -139,7 +146,7 @@ class Mpath_Monkey(EutesterTestCase):
             self.timer.start()
         except KeyboardInterrupt, k:
             if self.timer:
-                timer.cancel()
+                self.timer.cancel()
                 raise Exception('Caught keyboard interrupt...')
         nqstr = 'Running for: '+str(int(time.time()-self.start))+' seconds'
         my_queue.put(nqstr)

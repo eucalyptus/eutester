@@ -9,7 +9,6 @@ class Upgrade(Install):
     def __init__(self):
         super(Upgrade, self).__init__(download_creds=True)
         self.clc_service = self.tester.service_manager.get_enabled_clc()
-        self.zones = self.tester.get_zones()
         machine = self.tester.get_component_machines("clc")[0]
         self.old_version = machine.sys("cat /etc/eucalyptus/eucalyptus-version")[0]
         for machine in self.tester.config["machines"]:
@@ -20,12 +19,11 @@ class Upgrade(Install):
     def upgrade_packages(self):
         for machine in self.tester.config["machines"]:
             if machine.distro.name is "vmware":
-                self.add_enterprise_repo()
                 continue
             if self.args.nogpg:
                 machine.upgrade(nogpg=True)
             else:
-                machine.upgrade()
+                machine.upgrade("eucalyptus")
             ## IF its a CLC and we have a SAN we need to install the san package after upgrade before service start
             if re.search("^3.1", self.old_version):
                 if hasattr(self.args, 'ebs_storage_manager'):
@@ -54,6 +52,7 @@ class Upgrade(Install):
         self.add_euca_repo()
         if hasattr(self.args, 'ebs_storage_manager'):
             self.add_enterprise_repo()
+        self.stop_components()
         self.upgrade_packages()
         self.start_components()
         if re.search("^3.1", self.old_version):

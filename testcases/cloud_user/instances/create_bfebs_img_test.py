@@ -248,22 +248,17 @@ if __name__ == '__main__':
             pmsg("The md5sum of the remote image: "+str(md5sum))
             
         #Download the remote image, write it directly to our volume
-        cmd="curl "+url+" > "+attached_block_dev+" && echo 'GOOD' && sync"
+        cmd="curl "+url+" > "+attached_block_dev+" && sync"
         try:
             pmsg("Issuing cmd:"+cmd+" , timeout:"+str(timeout))
-            output=instance.sys(cmd,  timeout=timeout)
+            output=instance.sys(cmd,  timeout=timeout, code=0)
             pmsg("Curl output:"+"".join(output))
             result = output[len(output)-1]
             result = result.split(' ')[0]
             pmsg("curl cmd's parsed result:"+result)
         except Exception, e:
             raise Exception("failed to curl image into block dev: "+str(e))
-        #Make sure the curl command did not return error
-        if (re.match('GOOD',result)):
-            pmsg("Our write to volume returned GOOD")
-        else:
-            raise Exception("Our write to volume failed:"+str(result))
-      
+        
         #Get the md5sum of the volume to compare to our previous md5         
         cmd="head -c "+str(fbytes)+" "+attached_block_dev+" | md5sum "
         md5sum2=instance.sys(cmd ,  timeout=timeout)[0]

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="Eutester4j Test Suite">
+    <test name="Auto Scaling Tests">
+        <classes>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingAvailabilityZoneRebalancing"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingCooldown"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingDescribeGroupsInstances"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingDescribeInstances"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingInstanceLifecycle"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingLaunchAndTerminate"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingMultipleAvailabilityZones"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingSetInstanceHealth"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingSuspendAndResumeProcesses"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingTags"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingTerminateInstances"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingVMTypeReferenceValidation"/>
+        </classes>
+    </test>
+    <test name="ELB Tests">
+        <classes>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingELBAddRemoveInstances"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingELBInstanceHealthMonitoring"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingELBReferenceValidation"/>
+        </classes>>
+    </test>
+    <test name="EC2 Tests">
+        <classes>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingEc2InstanceHealthMonitoring"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingEC2ReferenceValidation"/>
+            <class name="com.eucalyptus.tests.awssdk.TestEC2DescribeInstanceStatus"/>
+        </classes>
+    </test>
+    <test name="IAM Tests">
+        <classes>
+            <class name="com.eucalyptus.tests.awssdk.TestIAMInstanceProfiles"/>
+        </classes>
+    </test>
+    <test name="Eutester4j Sanity Test">
+        <classes>
+            <class name="com.eucalyptus.tests.awssdk.Eutester4jTest"/>
+        </classes>
+    </test>
+</suite>

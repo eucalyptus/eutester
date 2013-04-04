@@ -59,12 +59,8 @@ class ChangeVLAN(EutesterTestCase):
         Change VLAN range to a given subset
         '''
         clc = self.tester.get_component_machines("clc")[0]
-        clc.sys("source " + self.tester.credpath + "/eucarc && euca-modify-property -p cloud.network.global_max_network_tag=" + str(self.args.max_vlan))
-        clc.sys("source " + self.tester.credpath + "/eucarc && euca-modify-property -p cloud.network.global_min_network_tag=" + str(self.args.min_vlan))
-        cc_list = self.tester.get_component_machines("cc")
-        cc_list[0].sys("service eucalyptus-cc cleanrestart")
-        if len(cc_list) > 1:
-            cc_list[1].sys("service eucalyptus-cc cleanrestart")
+        clc.sys("source " + self.tester.credpath + "/eucarc && " + self.tester.eucapath + "/usr/sbin/euca-modify-property -p cloud.network.global_max_network_tag=" + str(self.args.max_vlan))
+        clc.sys("source " + self.tester.credpath + "/eucarc && " + self.tester.eucapath + "/usr/sbin/euca-modify-property -p cloud.network.global_min_network_tag=" + str(self.args.min_vlan))
 
 if __name__ == "__main__":
     testcase = ChangeVLAN()

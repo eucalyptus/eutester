@@ -60,7 +60,11 @@ class S3ops(Eutester):
              }
 
     def __init__(self, endpoint=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, is_secure=False, path="/", port=80, boto_debug=0):
-        super(S3ops, self).__init__( credpath=credpath, aws_access_key_id=aws_access_key_id ,aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
+        self.aws_access_key_id = aws_access_key_id
+        self.aws_secret_access_key = aws_secret_access_key
+        self.user_id = None
+        self.account_id = None
+        super(S3ops, self).__init__(credpath=credpath)
         self.setup_s3_connection(endpoint=endpoint, aws_access_key_id=self.aws_access_key_id ,aws_secret_access_key=self.aws_secret_access_key, is_secure=is_secure, path=path, port=port, boto_debug=boto_debug)
         self.test_resources = {}
         self.setup_s3_resource_trackers()
@@ -89,7 +93,12 @@ class S3ops(Eutester):
         """
         self.test_resources["keys"] = []
         self.test_resources["buckets"] = []
-        
+
+    def get_s3_ip(self):
+        """Parse the eucarc for the S3_URL"""
+        walrus_url = self.parse_eucarc("S3_URL")
+        return walrus_url.split("/")[2].split(":")[0]
+
     def create_bucket(self,bucket_name):
         """
         Create a bucket.  If the bucket already exists and you have

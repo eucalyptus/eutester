@@ -11,7 +11,6 @@ class TaggingBasics(EutesterTestCase):
     def __init__(self, extra_args= None):
         self.setuptestcase()
         self.setup_parser()
-        self.parser.add_argument("--region", default=None)
         if extra_args:
             for arg in extra_args:
                 self.parser.add_argument(arg)
@@ -20,7 +19,7 @@ class TaggingBasics(EutesterTestCase):
         if self.args.region:
             self.tester = EC2ops( credpath=self.args.credpath, region=self.args.region)
         else:
-            self.tester = Eucaops( credpath=self.args.credpath)
+            self.tester = Eucaops(config_file=self.args.config, password=self.args.password, credpath=self.args.credpath)
         self.tester.poll_count = 120
 
         ### Add and authorize a group for the instance
@@ -71,13 +70,10 @@ class TaggingBasics(EutesterTestCase):
         tags = { u'name': 'instance-tag-test', u'location' : 'over there'}
         for instance in self.reservation.instances:
             instance.create_tags(tags)
-            instance.update()
-            if instance.tags != tags:
-                raise Exception('Tags were not set properly for the instance resource')
             test_instance = instance
 
-        ### Test Filtering
-        tag_filter = { u'tag:name': 'instance-tag-test', u'tag:location' : 'over there'}
+        ### Test Filtering , u'tag:location' : 'over there'
+        tag_filter = { u'tag:name': u'instance-tag-test'}
         reservations = self.tester.ec2.get_all_instances(filters=tag_filter)
         if len(reservations) != 1:
             raise Exception('Filter for instances returned too many results')
@@ -85,16 +81,36 @@ class TaggingBasics(EutesterTestCase):
         if self.reservation.id not in reservation.id:
             raise Exception('Wrong instance id returned after filtering, Expected: ' + self.reservation.id  + ' Received: ' + reservation.id )
 
+        ### Test non-tag Filtering
+        ### Filters can be found here, most will be tested manually, but a spot check should be added
+        ### http://docs.aws.amazon.com/AWSEC2/latest/CommandLineReference/ApiReference-cmd-DescribeInstances.html
+        new_group = self.tester.add_group("filter-test")
+        self.tester.authorize_group_by_name(group_name=new_group.name )
+        self.tester.authorize_group_by_name(group_name=new_group.name, port=-1, protocol="icmp" )
+        filter_test_reservation = self.tester.run_instance(self.image, keypair=self.keypair.name, group=new_group.name)
+        keypair_filter = {u'key-name': self.keypair.name}
+        group_filter = {u'group-name': new_group.name}
+
+        keypair_match = self.tester.ec2.get_all_instances(filters=keypair_filter)
+        group_match = self.tester.ec2.get_all_instances(filters=group_filter)
+        self.tester.terminate_instances(filter_test_reservation)
+        self.tester.delete_group(new_group)
+        self.tester.delete_keypair(self.keypair)
+
+        if len(group_match) != 1:
+            raise Exception("Non-tag Filtering of instances by group name: " + str(len(group_match))  + " expected: 1")
+        if len(keypair_match) != 2:
+            raise Exception("Non-tag Filtering of instances by keypair name: " + str(len(keypair_match))  + " expected: 2")
+
         ### Test Deletion
         test_instance.delete_tags(tags)
-        test_instance.update()
         instances = self.tester.ec2.get_all_instances(filters=tag_filter)
         if len(instances) != 0:
             raise Exception('Filter returned instances when there shouldnt be any')
         if test_instance.tags != {}:
             raise Exception('Tags still returned after deletion')
-        self.test_restrictions(test_instance)
-        self.test_in_series(test_instance)
+        #self.test_restrictions(test_instance)
+        #self.test_in_series(test_instance)
         self.tester.terminate_instances(self.reservation)
         self.reservation = None
 
@@ -102,15 +118,12 @@ class TaggingBasics(EutesterTestCase):
         """
         This case was developed to exercise tagging of an instance resource
         """
-        self.volume = self.tester.create_volume(azone=self.zone)
+        self.volume = self.tester.create_volume(zone=self.zone)
         tags = { u'name': 'volume-tag-test', u'location' : 'datacenter'}
         self.volume.create_tags(tags)
-        self.volume.update()
-        if self.volume.tags != tags:
-            raise Exception('Tags were not set properly for the volume resource')
 
         ### Test Filtering
-        tag_filter = { u'tag:name': 'volume-tag-test', u'tag:location' : 'datacenter'}
+        tag_filter = { u'tag:name': u'volume-tag-test'}
         volumes = self.tester.ec2.get_all_volumes(filters=tag_filter)
         if len(volumes) is 0:
             raise Exception('Filter for instances returned no results ' + str(volumes))
@@ -119,6 +132,24 @@ class TaggingBasics(EutesterTestCase):
         if volumes[0].id != self.volume.id:
             raise Exception('Wrong volume ID returned after filtering ' + str(volumes) )
 
+        ### Test non-tag Filtering
+        ### Filters can be found here, most will be tested manually, but a spot check should be added
+        ### http://docs.aws.amazon.com/AWSEC2/latest/CommandLineReference/ApiReference-cmd-DescribeImages.html
+        vol_size = 3
+        filter_test_volume = self.tester.create_volume(zone=self.zone, size=vol_size)
+        size_filter = {u'size': vol_size }
+        zone_filter = {u'availability-zone': self.zone}
+
+        size_match = self.tester.ec2.get_all_volumes(filters=size_filter)
+        zone_match = self.tester.ec2.get_all_volumes(filters=zone_filter)
+
+        self.tester.delete_volume(filter_test_volume)
+
+        if len(size_match) != 1:
+            raise Exception("Non-tag Filtering of volumes by size: " + str(len(size_match))  + " expected: 1")
+        if len(zone_match) != 2:
+            raise Exception("Non-tag Filtering of volumes by zone: " + str(len(zone_match))  + " expected: 2")
+
         ### Test Deletion
         self.volume.delete_tags(tags)
         instances = self.tester.ec2.get_all_instances(filters=tag_filter)
@@ -126,40 +157,56 @@ class TaggingBasics(EutesterTestCase):
             raise Exception('Filter returned volumes when there shouldnt be any')
         if self.volume.tags != {}:
             raise Exception('Tags still returned after deleting them from volume')
-        self.test_restrictions(self.volume)
-        self.test_in_series(self.volume)
+        #self.test_restrictions(self.volume)
+        #self.test_in_series(self.volume)
 
     def SnapshotTagging(self):
         """
         This case was developed to exercise tagging of an instance resource
         """
         if not self.volume:
-            self.volume = self.tester.create_volume(azone=self.zone)
+            self.volume = self.tester.create_volume(zone=self.zone)
         self.snapshot = self.tester.create_snapshot_from_volume(self.volume)
         tags = { u'name': 'snapshot-tag-test', u'location' : 'over there'}
         self.snapshot.create_tags(tags)
-        self.snapshot.update()
-        if self.snapshot.tags != tags:
-            raise Exception('Tags were not set properly for the snapshot resource')
 
-        ### Test Filtering
-        tag_filter = { u'tag:name': 'snapshot-tag-test', u'tag:location' : 'over there'}
+        ### Test Filtering , u'tag:location' : 'over there'
+        tag_filter = { u'tag:name': 'snapshot-tag-test'}
         snapshots = self.tester.ec2.get_all_snapshots(filters=tag_filter)
         if len(snapshots) != 1:
             raise Exception('Filter for instances returned too many results')
         if snapshots[0].id != self.snapshot.id:
             raise Exception('Wrong instance id returned after filtering')
 
+        ### Test non-tag Filtering
+        ### Filters can be found here, most will be tested manually, but a spot check should be added
+        ### http://docs.aws.amazon.com/AWSEC2/latest/CommandLineReference/ApiReference-cmd-DescribeSnapshots.html
+        filter_description = "filtering" + str(int(time.time()))
+        filter_test_snapshot = self.tester.create_snapshot_from_volume(self.volume, description=filter_description)
+
+        description_filter = {u'description': filter_description }
+        volume_filter = {u'volume-id': self.volume.id}
+
+        description_match = self.tester.ec2.get_all_snapshots(filters=description_filter)
+        volume_match = self.tester.ec2.get_all_snapshots(filters=volume_filter)
+
+        self.tester.delete_snapshot(filter_test_snapshot)
+
+        if len(description_match) != 1:
+            raise Exception("Non-tag Filtering of snapshots by volume description: " + str(len(description_match))  + " expected: 1")
+
+        if len(volume_match) != 2:
+            raise Exception("Non-tag Filtering of snapshots by volume id returned: " + str(len(volume_match))  + " expected: 2")
+
         ### Test Deletion
         self.snapshot.delete_tags(tags)
-        self.snapshot.update()
         instances = self.tester.ec2.get_all_instances(filters=tag_filter)
         if len(instances) != 0:
-            raise Exception('Filter returned volumes when there shouldnt be any')
+            raise Exception('Filter returned snapshots when there shouldnt be any')
         if self.snapshot.tags != {}:
             raise Exception('Tags still returned after deleting them from volume')
-        self.test_restrictions(self.snapshot)
-        self.test_in_series(self.snapshot)
+        #self.test_restrictions(self.snapshot)
+        #self.test_in_series(self.snapshot)
         self.tester.delete_snapshot(self.snapshot)
         self.snapshot = None
 
@@ -169,29 +216,88 @@ class TaggingBasics(EutesterTestCase):
         """
         tags = { u'name': 'image-tag-test', u'location' : 'over there'}
         self.tester.create_tags([self.image.id], tags)
-        self.image.update()
-        if self.image.tags != tags:
-            raise Exception('Tags were not set properly for the snapshot resource')
 
-        ### Test Filtering
-        tag_filter = { u'tag:name': 'image-tag-test', u'tag:location' : 'over there'}
+        ### Test Tag Filtering , u'tag:location' : 'over there'
+        tag_filter = { u'tag:name': 'image-tag-test'}
         images = self.tester.ec2.get_all_images(filters=tag_filter)
         if len(images) != 1:
             raise Exception('Filter for instances returned too many results')
         if images[0].id != self.image.id:
             raise Exception('Wrong instance id returned after filtering')
 
+        ### Test non-tag Filtering
+        ### Filters can be found here, most will be tested manually, but a spot check should be added
+        ### http://docs.aws.amazon.com/AWSEC2/latest/CommandLineReference/ApiReference-cmd-DescribeImages.html
+        image_description = "image-filtering"
+        filter_image_id = self.tester.register_image(image_location=self.image.location,description=image_description)
+
+        description_filter = {u'description': image_description }
+        location_filter = {u'manifest-location': self.image.location}
+
+        description_match = self.tester.ec2.get_all_images(filters=description_filter)
+        location_match = self.tester.ec2.get_all_images(filters=location_filter)
+        filter_image = self.tester.get_emi(emi=filter_image_id)
+        self.tester.deregister_image(filter_image)
+
+        if len(description_match) != 1:
+            raise Exception("Non-tag Filtering of volumes by size: " + str(len(description_match))  + " expected: 1")
+        if len(location_match) != 2:
+            raise Exception("Non-tag Filtering of volumes by zone: " + str(len(location_match))  + " expected: 2")
+
         ### Test Deletion
         self.tester.delete_tags([self.image.id], tags)
-        self.image.update()
         images = self.tester.ec2.get_all_images(filters=tag_filter)
         if len(images) != 0:
             raise Exception('Filter returned volumes when there shouldnt be any')
         if self.image.tags != {}:
+            raise Exception('Tags still returned after deleting them from image: ' + str(self.image.tags) )
+        #self.test_restrictions(self.image)
+        #self.test_in_series(self.image)
+
+    def SecurityGroupTagging(self):
+        """
+        This case was developed to exercise tagging of an security group resource
+        """
+        tags = { u'name': 'security-tag-test', u'location' : 'over there'}
+        self.debug("Security group ID: " + self.group.id)
+        self.tester.create_tags([self.group.id], tags)
+
+        ### Test Tag Filtering , u'tag:location' : 'over there'
+        tag_filter = { u'tag:name': 'security-tag-test'}
+        groups = self.tester.ec2.get_all_security_groups(filters=tag_filter)
+        if len(groups) != 1:
+            raise Exception('Filter for groups returned too many results')
+        if groups[0].id != self.group.id:
+            raise Exception('Wrong group id returned after filtering')
+
+        ### Test non-tag Filtering
+        ### Filters can be found here, most will be tested manually, but a spot check should be added
+        ### http://docs.aws.amazon.com/AWSEC2/latest/CommandLineReference/ApiReference-cmd-DescribeSecurityGroups.html
+        group_name = "filter-test"
+        group_description = "group-filtering"
+        filter_group = self.tester.add_group(group_name=group_name, description=group_description)
+
+        description_filter = {u'description': group_description }
+        owner_filter = {u'owner-id': filter_group.owner_id}
+        description_match = self.tester.ec2.get_all_security_groups(filters=description_filter)
+        self.debug("Groups matching description:" + str(description_match))
+        owner_match = self.tester.ec2.get_all_security_groups(filters=owner_filter)
+        self.debug("Groups matching owner-id (" + owner_filter[u'owner-id']  + "):" + str(owner_match))
+
+        self.tester.delete_group(filter_group)
+
+        if len(description_match) != 1 or len(owner_match) != 3:
+            raise Exception("Non-tag Filtering of images did not return the proper number of resources")
+
+        ### Test Deletion
+        self.tester.delete_tags([self.group.id], tags)
+        groups = self.tester.ec2.get_all_security_groups(filters=tag_filter)
+        if len(groups) != 0:
+            raise Exception('Filter returned volumes when there shouldnt be any')
+        if self.image.tags != {}:
             raise Exception('Tags still returned after deleting them from volume')
-        self.test_restrictions(self.image)
-        self.test_in_series(self.image)
-        self.tester.delete_snapshot(self.image)
+        #self.test_restrictions(self.group)
+        #self.test_in_series(self.group)
 
 
     def test_restrictions(self, resource):
@@ -279,7 +385,7 @@ if __name__ == "__main__":
     testcase = TaggingBasics()
     ### Use the list of tests passed from config/command line to determine what subset of tests to run
     ### or use a predefined list  "VolumeTagging", "InstanceTagging", "SnapshotTagging", "ImageTagging"
-    list = testcase.args.tests or ["SnapshotTagging"]
+    list = testcase.args.tests or ["VolumeTagging", "SnapshotTagging","ImageTagging", "InstanceTagging", "SecurityGroupTagging"]
 
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
