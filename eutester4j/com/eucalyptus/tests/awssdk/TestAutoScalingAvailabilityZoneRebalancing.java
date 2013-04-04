@@ -38,7 +38,7 @@ import static com.eucalyptus.tests.awssdk.Eutester4j.*;
  */
 public class TestAutoScalingAvailabilityZoneRebalancing {
     @Test
-    public void test() throws Exception {
+    public void AutoScalingAvailabilityZoneRebalancingTest() throws Exception {
         testInfo(this.getClass().getSimpleName());
         getCloudInfo();
 

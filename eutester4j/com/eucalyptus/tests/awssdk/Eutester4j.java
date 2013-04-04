@@ -9,6 +9,8 @@ import com.amazonaws.services.autoscaling.model.*;
 import com.amazonaws.services.autoscaling.model.BlockDeviceMapping;
 import com.amazonaws.services.autoscaling.model.InstanceMonitoring;
 import com.amazonaws.services.autoscaling.model.Tag;
+import com.amazonaws.services.cloudwatch.AmazonCloudWatch;
+import com.amazonaws.services.cloudwatch.AmazonCloudWatchClient;
 import com.amazonaws.services.ec2.AmazonEC2;
 import com.amazonaws.services.ec2.AmazonEC2Client;
 import com.amazonaws.services.ec2.model.*;
@@ -40,6 +42,8 @@ class Eutester4j {
 	static String AS_ENDPOINT = null;
 	static String ELB_ENDPOINT = null;
     static String IAM_ENDPOINT = null;
+    static String CW_ENDPOINT = null;
+    static String TOKENS_ENDPOINT = null;
 	static String SECRET_KEY = null;
 	static String ACCESS_KEY = null;
 	static String CREDPATH = null;
@@ -49,6 +53,7 @@ class Eutester4j {
     static AmazonEC2 ec2;
     static AmazonElasticLoadBalancing elb;
     static AmazonIdentityManagement iam;
+    static AmazonCloudWatch cw;
 
 
     static String IMAGE_ID = null;
@@ -67,7 +72,9 @@ class Eutester4j {
 		EC2_ENDPOINT = parseEucarc(CREDPATH, "EC2_URL") + "/";
 		AS_ENDPOINT = parseEucarc(CREDPATH, "AWS_AUTO_SCALING_URL") + "/";
 		ELB_ENDPOINT = parseEucarc(CREDPATH, "AWS_ELB_URL") + "/";
+        CW_ENDPOINT = parseEucarc(CREDPATH, "AWS_CLOUDWATCH_URL") + "/";
         IAM_ENDPOINT = parseEucarc(CREDPATH, "EUARE_URL") + "/";
+        TOKENS_ENDPOINT = parseEucarc(CREDPATH, "TOKEN_URL") + "/";
 		SECRET_KEY = parseEucarc(CREDPATH, "EC2_SECRET_KEY").replace("'", "");
 		ACCESS_KEY = parseEucarc(CREDPATH, "EC2_ACCESS_KEY").replace("'", "");
 
@@ -76,6 +83,7 @@ class Eutester4j {
         ec2 = getEc2Client(ACCESS_KEY, SECRET_KEY, EC2_ENDPOINT);
         elb = getElbClient(ACCESS_KEY, SECRET_KEY, ELB_ENDPOINT);
         iam = getIamClient(ACCESS_KEY,SECRET_KEY, IAM_ENDPOINT);
+        cw = getCwClient(ACCESS_KEY, SECRET_KEY, CW_ENDPOINT);
         IMAGE_ID = findImage();
         KERNEL_ID = findKernel();
         RAMDISK_ID = finadRamdisk();
@@ -125,6 +133,14 @@ class Eutester4j {
         final AmazonIdentityManagement iam = new AmazonIdentityManagementClient(creds);
         iam.setEndpoint(endpoint);
         return iam;
+    }
+
+    public static AmazonCloudWatch getCwClient(String accessKey, String secretKey,
+                                               String endpoint) {
+        AWSCredentials creds = new BasicAWSCredentials(accessKey, secretKey);
+        final AmazonCloudWatch cw = new AmazonCloudWatchClient(creds);
+        cw.setEndpoint(endpoint);
+        return cw;
     }
 	/**
 	 * 
