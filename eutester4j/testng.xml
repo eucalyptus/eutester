@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
 <suite name="Eutester4j Test Suite">
-    <test name="Cloud Watch Tests">
+    <test name="Cloud_Watch_Tests">
         <classes>
             <class name="com.eucalyptus.tests.awssdk.CloudWatchDeleteMetricAlarmTest"/>
             <class name="com.eucalyptus.tests.awssdk.CloudWatchDescribeAlarmHistoryTest"/>
@@ -16,7 +16,7 @@
             <class name="com.eucalyptus.tests.awssdk.CloudWatchStateChangeTest"/>
         </classes>
     </test>
-    <test name="Auto Scaling Tests">
+    <test name="Auto_Scaling_Tests">
         <classes>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingActivities"/>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingAvailabilityZoneRebalancing"/>
@@ -43,14 +43,14 @@
             <class name="com.eucalyptus.tests.awssdk.TestEC2RunInstancesClientToken"/>
         </classes>
     </test>
-    <test name="ELB Tests">
+    <test name="ELB_Tests">
         <classes>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingELBAddRemoveInstances"/>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingELBInstanceHealthMonitoring"/>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingELBReferenceValidation"/>
         </classes>>
     </test>
-    <test name="IAM Roles">
+    <test name="IAM_Roles">
         <classes>
             <class name="com.eucalyptus.tests.awssdk.TestIAMInstanceProfileManagement"/>
             <class name="com.eucalyptus.tests.awssdk.TestIAMInstanceProfiles"/>
@@ -58,7 +58,7 @@
             <class name="com.eucalyptus.tests.awssdk.TestSTSAssumeRole"/>
         </classes>
     </test>
-    <test name="Eutester4j Sanity Test">
+    <test name="Eutester4j_Sanity_Test">
         <classes>
             <class name="com.eucalyptus.tests.awssdk.Eutester4jTest"/>
         </classes>
