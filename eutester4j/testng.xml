@@ -1,6 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
 <suite name="Eutester4j Test Suite">
+    <test name="Cloud Watch Tests">
+        <classes>
+            <class name="com.eucalyptus.tests.awssdk.CloudWatchDeleteMetricAlarmTest"/>
+            <class name="com.eucalyptus.tests.awssdk.CloudWatchDescribeAlarmHistoryTest"/>
+            <class name="com.eucalyptus.tests.awssdk.CloudWatchDescribeAlarmsForMetricTest"/>
+            <class name="com.eucalyptus.tests.awssdk.CloudWatchDescribeAlarmsTest"/>
+            <class name="com.eucalyptus.tests.awssdk.CloudWatchDisableAlarmActionsTest"/>
+            <class name="com.eucalyptus.tests.awssdk.CloudWatchEnableAlarmActionsTest"/>
+            <class name="com.eucalyptus.tests.awssdk.CloudWatchGetMetricStatisticsTest"/>
+            <class name="com.eucalyptus.tests.awssdk.CloudWatchListMetricsTest"/>
+            <class name="com.eucalyptus.tests.awssdk.CloudWatchPutMetricAlarmTest"/>
+            <class name="com.eucalyptus.tests.awssdk.CloudWatchPutMetricDataTest"/>
+            <class name="com.eucalyptus.tests.awssdk.CloudWatchStateChangeTest"/>
+        </classes>
+    </test>
     <test name="Auto Scaling Tests">
         <classes>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingActivities"/>
