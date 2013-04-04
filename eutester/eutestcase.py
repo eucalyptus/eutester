@@ -247,10 +247,12 @@ class EutesterTestUnit():
             desc = desc+"\n".join(ret)
         return desc
     
-    def run(self):
+    def run(self, eof=None):
         '''
         Description: Wrapper which attempts to run self.method and handle failures, record time.
         '''
+        if eof is None:
+            eof = self.eof
         for count, thing in enumerate(self.args):
             print 'ARG:{0}. {1}'.format(count, thing)
         for name, value in self.kwargs.items():
@@ -272,7 +274,7 @@ class EutesterTestUnit():
             print TestColor.get_canned_color('failred')+buf+TestColor.reset
             self.error = str(e)
             self.result = EutesterTestResult.failed
-            if self.eof:
+            if eof:
                 raise e
             else:
                 pass
@@ -283,10 +285,10 @@ class EutesterTestUnit():
 class EutesterTestCase(unittest.TestCase):
     color = TestColor()
 
-    def __init__(self,name=None, debugmethod=None, use_default_file=True, default_config='eutester.conf'):
-        return self.setuptestcase(name=name, debugmethod=debugmethod, use_default_file=use_default_file, default_config=default_config)
+    def __init__(self,name=None, debugmethod=None):
+        return self.setuptestcase(name=name, debugmethod=debugmethod)
         
-    def setuptestcase(self, name=None, debugmethod=None, use_default_file=True, default_config='eutester.conf' ):
+    def setuptestcase(self, name=None, debugmethod=None, use_default_file=False, default_config='eutester.conf' ):
         self.name = self._testMethodName = name 
         if not self.name:
             callerfilename=inspect.getouterframes(inspect.currentframe())[1][1]
@@ -326,7 +328,11 @@ class EutesterTestCase(unittest.TestCase):
                    configblocks=True,
                    ignoreblocks=True,
                    color=True,
-                   testlist=True):
+                   testlist=True,
+                   userdata=True,
+                   instance_user=True,
+                   instance_password=True,
+                   region=True):
         '''
         Description: Convenience method to setup argparse parser and some canned default arguments, based
         upon the boolean values provided. For each item marked as 'True' this method will add pre-defined 
@@ -374,6 +380,15 @@ class EutesterTestCase(unittest.TestCase):
         :type testlist: string list
         :param testlist: Flag to present the testlist command line argument/option for providing a list of testnames to run
         
+        :type userdata: boolean
+        :param userdata: Flag to present the userdata command line argument/option for providing userdata to instance(s) within test
+        
+        :type instance_user: boolean
+        :param instance_user: Flag to present the instance_user command line argument/option for providing an ssh username for instance login via the cli
+        
+        :type instance_password: boolean
+        :param instance_password: Flag to present the instance_password command line argument/option for providing a ssh password for instance login via the cli
+        
         :type use_color: flag
         :param use_color: Flag to enable/disable use of ascci color codes in debug output. 
         '''
@@ -392,10 +407,10 @@ class EutesterTestCase(unittest.TestCase):
                                 help="path to credentials", default=None)
         if password:
             parser.add_argument('--password', 
-                                help="password to use for machine root ssh access", default='foobar')
+                                help="password to use for machine root ssh access", default=None)
         if config:
             parser.add_argument('--config',
-                                help='path to config file', default='../input/2b_tested.lst')   
+                                help='path to config file', default=None)
         if configblocks:
             parser.add_argument('--configblocks', nargs='+',
                                 help="Config sections/blocks in config file to read in", default=[])
@@ -414,7 +429,19 @@ class EutesterTestCase(unittest.TestCase):
         if vmtype:
             parser.add_argument('--vmtype',
                                 help="Virtual Machine Type to use in this test", default='c1.medium')
-        if color: 
+        if userdata:
+            parser.add_argument('--userdata',
+                                help="User data string to provide instance run within this test", default=None)
+        if instance_user:
+            parser.add_argument('--instance_user',
+                                help="Username used for ssh login. Default:'root'", default='root')
+        if instance_password:
+            parser.add_argument('--instance_passsword',
+                                help="Password used for ssh login. When value is 'None' ssh keypair will be used and not username/password, default:'None'", default=None)
+        if region:
+            parser.add_argument('--region',
+                help="Use AWS region instead of Eucalyptus", default=None)
+        if color:
             parser.add_argument('--use_color', dest='use_color', action='store_true', default=False)
         self.parser = parser  
         return parser
@@ -493,13 +520,13 @@ class EutesterTestCase(unittest.TestCase):
         else:
             self.debugmethod("("+str(cur_method)+":"+str(lineno)+"): "+colorprefix+str(msg)+colorreset )
 
-    def run_test_list_by_name(self, list):
+    def run_test_list_by_name(self, list, eof=None):
         unit_list = []
         for test in list:
             unit_list.append( self.create_testunit_by_name(test) )
 
         ### Run the EutesterUnitTest objects
-        return self.run_test_case_list(unit_list)
+        return self.run_test_case_list(unit_list,eof=eof)
 
     def create_testunit_from_method(self,method, *args, **kwargs):
         '''
@@ -580,7 +607,7 @@ class EutesterTestCase(unittest.TestCase):
         self.status(msg, traceback=3,testcolor=TestColor.get_canned_color('whiteonblue'))
         
     def endsuccess(self,msg=""):
-        msg = "- SUCCESS ENDED - " + msg
+        msg = "- UNIT ENDED - " + msg
         self.status(msg, traceback=2,a=1, testcolor=TestColor.get_canned_color('whiteongreen'))
       
     def endfailure(self,msg="" ):
@@ -642,7 +669,7 @@ class EutesterTestCase(unittest.TestCase):
             buf += "---------------------\n"
         return buf
     
-    def run_test_case_list(self, list, eof=True, clean_on_exit=True, printresults=True):
+    def run_test_case_list(self, list, eof=False, clean_on_exit=True, printresults=True):
         '''
         Desscription: wrapper to execute a list of ebsTestCase objects
         
@@ -670,12 +697,12 @@ class EutesterTestCase(unittest.TestCase):
             for test in list:
                 tests_ran += 1
                 startbuf = ""
-                argbuf =self.get_pretty_args(test)
+                argbuf = self.get_pretty_args(test)
                 startbuf += str(test.description)+str(argbuf)
                 startbuf += 'Running list method: "'+str(self.print_testunit_method_arg_values(test))+'"'
                 self.startmsg(startbuf)
                 try:
-                    test.run()
+                    test.run(eof=eof or test.eof)
                 except Exception, e:
                     self.debug('Testcase:'+ str(test.name)+' error:'+str(e))
                     if eof or (not eof and test.eof):
@@ -685,6 +712,7 @@ class EutesterTestCase(unittest.TestCase):
                         self.endfailure(str(test.name))
                 else:
                     self.endsuccess(str(test.name))
+                self.debug(self.print_test_list_short_stats(list))
                         
         finally:
             elapsed = int(time.time()-start)
@@ -794,7 +822,7 @@ class EutesterTestCase(unittest.TestCase):
     
     
     def clean_method(self):
-        raise Exception("Clean_method needs not implemented. Was run_list using clean_on_exit?")
+        raise Exception("Clean_method was not implemented. Was run_list using clean_on_exit?")
 
     def print_test_list_results(self,list=None, printout=True, printmethod=None):
         '''
@@ -949,6 +977,10 @@ class EutesterTestCase(unittest.TestCase):
         '''
         eof=False
         autoarg=True
+        obj = obj or self
+        meth = getattr(obj,name)
+        methvars = self.get_meth_arg_names(meth)
+
 
         
         #Pull out value relative to this method, leave in any that are intended to be passed through
@@ -967,12 +999,10 @@ class EutesterTestCase(unittest.TestCase):
                 obj = kwargs['obj']
             else:
                 obj = kwargs.pop('obj')
-                
-        obj = obj or self
-        meth = getattr(obj,name)
-        methvars = self.get_meth_arg_names(meth)       
+
         testunit = EutesterTestUnit(meth, *args, **kwargs)
         testunit.eof = eof
+
         #if autoarg, auto populate testunit arguements from local testcase.args namespace values
         if autoarg:
             self.populate_testunit_with_args(testunit)
@@ -1005,7 +1035,8 @@ class EutesterTestCase(unittest.TestCase):
         cf = argparse.Namespace()
         
         
-        if self.use_default_file and self.default_config:
+        if (hasattr(self, 'use_default_file') and self.use_default_file) and \
+                (hasattr(self, 'use_default_config') and self.default_config):
             try:
                 configfiles.append(self.default_config)
             except Exception, e:

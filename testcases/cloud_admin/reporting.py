@@ -73,7 +73,7 @@ class ReportingBasics(EutesterTestCase):
         file_size_in_mb = 500
         for instance in self.reservation.instances:
             assert isinstance(instance, EuInstance)
-            self.volume = self.tester.create_volume(azone=self.zone, size=4)
+            self.volume = self.tester.create_volume(zone=self.zone, size=4)
             device_path = instance.attach_volume(self.volume)
             instance.sys("mkfs.ext3 -F " + device_path)
             instance.sys("mount " + device_path + " /mnt")

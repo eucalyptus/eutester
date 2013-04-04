@@ -126,7 +126,6 @@ class WindowsProxyTests():
             else:
                 print(msg)
     def reset_ssh(self):
-        self.ssh.close()
         self.ssh.refresh_connection()
 
     
@@ -277,7 +276,7 @@ class WindowsProxyTests():
         return out
             
     
-    def ps_ephemeral_test(self, host=None, password=None, retries=1, retryinterval=15, cmdtimeout=15, timeout=360):
+    def ps_ephemeral_test(self, host=None, win_password=None, retries=1, retryinterval=15, cmdtimeout=15, timeout=360):
         '''
         Description: ps_phemeral_test  Intends to verify the ephemeral storage on a windows instance by executing 
                      remote powershell cmdlets against a running instance. 
@@ -302,7 +301,7 @@ class WindowsProxyTests():
         '''
         self.debug('Running command ps_ephemeral_test...')
         host = host or self.win_instance.public_dns_name
-        password = password or self.win_password
+        password = win_password or self.win_password
         cmd='Eutester-Test-Euca-EphemeralDisk'
         out = self.ps_cmd(host, 
                           password,
@@ -315,7 +314,7 @@ class WindowsProxyTests():
         return out
     
     
-    def ps_ebs_test(self, host=None, password=None, retries=1, retryinterval=5, cmdtimeout=300, timeout=360):
+    def ps_ebs_test(self, host=None, win_password=None, retries=1, retryinterval=5, cmdtimeout=300, timeout=360):
         '''
         Description: Attempts to validate the attached EBS volume state and format on the remote windows guest.
         
@@ -340,7 +339,7 @@ class WindowsProxyTests():
         self.debug('Running command ps_ebs_test...')
         self.debug("Warning, ebs_test may not work on a 32bit guest...")
         host = host or self.win_instance.public_dns_name
-        password = password or self.win_password
+        password = win_password or self.win_password
         cmd='Eutester-Test-Euca-EBS'
         out = self.ps_cmd(host, 
                           password,
@@ -352,7 +351,7 @@ class WindowsProxyTests():
         self.debug('ps_ebs_test passed.')
         return out
 
-    def ps_get_euca_log(self,host=None, password=None, retries=1, retryinterval=5, cmdtimeout=300, timeout=360):
+    def ps_get_euca_log(self,host=None, win_password=None, retries=1, retryinterval=5, cmdtimeout=300, timeout=360):
         '''
         Description: Execute powershell command to get related Eucalyptus test logs
         
@@ -376,7 +375,7 @@ class WindowsProxyTests():
         '''
         self.debug('Running command ps_get_euca_log...')
         host = host or self.win_instance.public_dns_name
-        password = password or self.win_password
+        password = win_password or self.win_password
         cmd='Get-Euca-Log'
         out = self.ps_cmd(host, 
                           password, 
@@ -389,7 +388,7 @@ class WindowsProxyTests():
         return out
         
     
-    def ps_hostname_test(self, iname = None, host=None, password=None, retries=1, retryinterval=5, cmdtimeout=300, timeout=360):
+    def ps_hostname_test(self, iname = None, host=None, win_password=None, retries=1, retryinterval=5, cmdtimeout=300, timeout=360):
         '''
         Description: Verify that a hostname on the Windows instance has been set via eucalyptus
         
@@ -413,7 +412,7 @@ class WindowsProxyTests():
         '''
         self.debug('Running command ps_hostname_test...')
         host = host or self.win_instance.public_dns_name
-        password = password or self.win_password
+        password = win_password or self.win_password
         iname = iname or self.win_instance.id
         if iname is not None:
             cmd='Eutester-Test-Euca-Hostname -hostname '+str(iname)
@@ -428,7 +427,7 @@ class WindowsProxyTests():
         self.debug('ps_hostname_test passed.')
         return out
     
-    def ps_login_test(self,host=None, password=None, retries=1, retryinterval=5, cmdtimeout=30, timeout=360):
+    def ps_login_test(self,host=None, win_password=None, retries=1, retryinterval=5, cmdtimeout=30, timeout=360):
         '''
         Description: Verify that the windows instance can be logged into using user Administrator and 
                     the Cloud generated password
@@ -453,7 +452,7 @@ class WindowsProxyTests():
         '''
         self.debug('Running command ps_login_test...')
         host = host or self.win_instance.public_dns_name
-        password = password or self.win_password
+        password = win_password or self.win_password
         cmd=None
         out = self.ps_cmd(host, 
                           password, 
@@ -466,7 +465,7 @@ class WindowsProxyTests():
         return out
     
     
-    def ps_virtio_test(self,host=None, password=None, retries=1, retryinterval=5, cmdtimeout=300, timeout=360):
+    def ps_virtio_test(self,host=None, win_password=None, retries=1, retryinterval=5, cmdtimeout=300, timeout=360):
         '''
         Description: Run Powershell Virtio Test on remote Windows instance
         
@@ -490,7 +489,7 @@ class WindowsProxyTests():
         '''
         self.debug('Running command ps_virtio_test...')
         host = host or self.win_instance.public_dns_name
-        password = password or self.win_password
+        password = win_password or self.win_password
         cmd='Eutester-Test-Euca-VirtIO'
         out = self.ps_cmd(host, 
                           password, 
@@ -503,7 +502,7 @@ class WindowsProxyTests():
         return out
         
     
-    def ps_xenpv_test(self,host=None, password=None, retries=1, retryinterval=5, cmdtimeout=300, timeout=360):
+    def ps_xenpv_test(self,host=None, win_password=None, retries=1, retryinterval=5, cmdtimeout=300, timeout=360):
         '''
         Description:Run Xen powershell test on remote Windows instance 
         
@@ -527,7 +526,7 @@ class WindowsProxyTests():
         '''
         self.debug('Running command ps_xenpv_test...')
         host = host or self.win_instance.public_dns_name
-        password = password or self.win_password
+        password = win_password or self.win_password
         cmd='Eutester-Test-Euca-XenPV'
         out = self.ps_cmd(host, 
                           password, 
@@ -539,7 +538,7 @@ class WindowsProxyTests():
         self.debug('ps_get_xenpv_test passed.')
         return out
         
-    def ps_admembership_test(self,host=None, password=None, retries=1, retryinterval=5, cmdtimeout=300, timeout=360):
+    def ps_admembership_test(self,host=None, win_password=None, retries=1, retryinterval=5, cmdtimeout=300, timeout=360):
         '''
         Description:Run Active Dir. Memberhsip powershell test on remote Windows instance 
         
@@ -563,7 +562,7 @@ class WindowsProxyTests():
         '''
         self.debug('Running command Eutester-Test-Euca-ADMembership...')
         host = host or self.win_instance.public_dns_name
-        password = password or self.win_password
+        password = win_password or self.win_password
         cmd='Eutester-Test-Euca-ADMembership'
         out = self.ps_cmd(host, 
                           password, 
@@ -576,7 +575,7 @@ class WindowsProxyTests():
         return out
     
     
-    def ps_eucaadkey_test(self,host=None, password=None, retries=1, retryinterval=5, cmdtimeout=300, timeout=360):
+    def ps_eucaadkey_test(self,host=None, win_password=None, retries=1, retryinterval=5, cmdtimeout=300, timeout=360):
         '''
         Description:Run Active Dir. Memberhsip powershell test on remote Windows instance 
         
@@ -600,7 +599,7 @@ class WindowsProxyTests():
         '''
         self.debug('Running command Eutester-Test-Euca-ADKey...')
         host = host or self.win_instance.public_dns_name
-        password = password or self.win_password
+        password = win_password or self.win_password
         cmd='Eutester-Test-Euca-ADKey'
         out = self.ps_cmd(host, 
                           password, 
@@ -613,7 +612,7 @@ class WindowsProxyTests():
         return out
     
     
-    def ps_rdpermission_test(self,host=None, password=None, retries=1, retryinterval=5, cmdtimeout=300, timeout=360):
+    def ps_rdpermission_test(self,host=None, win_password=None, retries=1, retryinterval=5, cmdtimeout=300, timeout=360):
         '''
         Description:Run Remote Desktop Permission powershell test on remote Windows instance 
         
@@ -637,7 +636,7 @@ class WindowsProxyTests():
         '''
         self.debug('Running command Test-Euca-RDPermission...')
         host = host or self.win_instance.public_dns_name
-        password = password or self.win_password
+        password = win_password or self.win_password
         cmd='Eutester-Test-Euca-RDPermission'
         out = self.ps_cmd(host, 
                           password, 

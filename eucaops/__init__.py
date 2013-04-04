@@ -32,7 +32,8 @@
 # Author: matt.clark@eucalyptus.com
 from boto.ec2.image import Image
 from boto.ec2.volume import Volume
-
+from cwops import CWops
+from asops import ASops
 from iamops import IAMops
 from ec2ops import EC2ops
 from s3ops import S3ops
@@ -42,14 +43,16 @@ from eutester.euservice import EuserviceManager
 from boto.ec2.instance import Reservation
 from eutester.euconfig import EuConfig
 from eutester.machine import Machine
+from eutester.euvolume import EuVolume
 from eutester import eulogger
 import re
 import os
 
-class Eucaops(EC2ops,S3ops,IAMops,STSops):
+class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops):
     
-    def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,  account="eucalyptus", user="admin", username=None, region=None, ec2_ip=None, s3_ip=None, download_creds=True,boto_debug=0):
+    def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,  account="eucalyptus", user="admin", username=None, APIVersion='2011-01-01', region=None, ec2_ip=None, s3_ip=None, as_ip=None, download_creds=True,boto_debug=0):
         self.config_file = config_file 
+        self.APIVersion = APIVersion
         self.eucapath = "/opt/eucalyptus"
         self.ssh = None
         self.sftp = None
@@ -62,15 +65,18 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops):
         self.fail_count = 0
         self.start_time = time.time()
         self.key_dir = "./"
-        self.hypervisor = None
         self.clc_index = 0
         self.credpath = credpath
         self.download_creds = download_creds
-        self.logger = eulogger.Eulogger(identifier="EUTESTER")
+        self.logger = eulogger.Eulogger(identifier="EUCAOPS")
         self.debug = self.logger.log.debug
         self.critical = self.logger.log.critical
         self.info = self.logger.log.info
-        
+        self.username = username
+        self.account_id = None
+        self.aws_access_key_id = aws_access_key_id
+        self.aws_secret_access_key = aws_secret_access_key 
+
         if self.config_file is not None:
             ## read in the config file
             self.debug("Reading config file: " + config_file)
@@ -87,7 +93,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops):
             ### Private cloud with root access 
             ### Need to get credentials for the user if there arent any passed in
             ### Need to create service manager for user if we have an ssh connection and password
-            if self.password is not None and self.download_creds:
+            if self.download_creds:
                 clc_array = self.get_component_machines("clc")
                 self.clc = clc_array[0]
                 walrus_array = self.get_component_machines("ws")
@@ -112,11 +118,42 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops):
                 self.service_manager = EuserviceManager(self)
                 self.clc = self.service_manager.get_enabled_clc().machine
                 self.walrus = self.service_manager.get_enabled_walrus().machine 
-        EC2ops.__init__(self, credpath=self.credpath, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, username=username, region=region, ec2_ip=ec2_ip, s3_ip=s3_ip, boto_debug=boto_debug)
+
+
+
+        if self.credpath and not aws_access_key_id:
+            aws_access_key_id = self.get_access_key()
+        if self.credpath and not aws_secret_access_key:
+            aws_secret_access_key = self.get_secret_key()
         self.test_resources = {}
-        self.setup_s3_resource_trackers()
-        self.setup_ec2_resource_trackers()
-    
+        if self.download_creds:
+            try:
+                if self.credpath and not ec2_ip:
+                    ec2_ip = self.get_ec2_ip()
+                self.setup_ec2_connection(endpoint=ec2_ip, path="/services/Eucalyptus", port=8773, is_secure=False, region=region, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, APIVersion=APIVersion, boto_debug=boto_debug)
+                self.setup_ec2_resource_trackers()
+                self.setup_iam_connection(endpoint=ec2_ip, path="/services/Euare", port=8773, is_secure=False, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,  boto_debug=boto_debug)
+                self.setup_sts_connection( endpoint=ec2_ip, path="/services/Eucalyptus", port=8773, is_secure=False, region=region, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
+                self.setup_cw_connection( endpoint=ec2_ip, path="/services/CloudWatch", port=8773, is_secure=False, region=region, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
+                self.setup_cw_resource_trackers()
+            except Exception, e:
+                raise Exception("Unable to create EC2 connection because of: " + str(e) )
+
+            try:
+                if self.credpath and not s3_ip:
+                    s3_ip = self.get_s3_ip()
+                self.setup_s3_connection(endpoint=s3_ip, path="/services/Walrus", port=8773, is_secure=False,aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,  boto_debug=boto_debug)
+                self.setup_s3_resource_trackers()
+            except Exception, e:
+                raise Exception("Unable to create S3 connection because of: " + str(e) )
+
+            try:
+                if self.credpath and not as_ip:
+                    as_ip = self.get_as_ip()
+                self.setup_as_connection(endpoint=as_ip, path="/services/AutoScaling", port=8773, is_secure=False, region=region, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
+            except Exception, e:
+                self.debug("Unable to create AS connection because of: " + str(e) )
+
     def get_available_vms(self, type=None, zone=None):
         """
         Get available VMs of a certain type or return a dictionary with all types and their available vms
@@ -170,6 +207,11 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops):
    
     def cleanup_artifacts(self):
         self.debug("Starting cleanup of artifacts")
+        for res in self.test_resources["reservations"]:
+            self.terminate_instances(res)
+        self.clean_up_test_volumes()
+        self.cleanup_test_snapshots()
+
         for key,array in self.test_resources.iteritems():
             for item in array:
                 try:
@@ -189,6 +231,72 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops):
                         item.delete()
                 except Exception, e:
                     self.fail("Unable to delete item: " + str(item) + "\n" + str(e))
+
+    def cleanup_test_snapshots(self,snaps=None, clean_images=False, add_time_per_snap=10, wait_for_valid_state=120, base_timeout=120):
+        """
+        :param snaps: optional list of snapshots, else will attempt to delete from test_resources[]
+        :param clean_images: Boolean, if set will attempt to delete registered images referencing the snapshots first.
+                             Images referencing the snapshot may prevent snapshot deletion to protect the image.
+        :param add_time_per_snap:  int number of seconds to append to base_timeout per snapshot
+        :param wait_for_valid_state: int seconds to wait for snapshot(s) to enter a 'deletable' state
+        :param base_timeout: base timeout to use before giving up, and failing operation.
+        """
+        snaps = snaps or self.test_resources['snapshots']
+        if not snaps:
+            return
+        if clean_images:
+            for snap in snaps:
+                for image in self.test_resources['images']:
+                    for dev in image.block_device_mapping:
+                        if image.block_device_mapping[dev].snapshot_id == snap.id:
+                            self.delete_image(image)
+        return self.delete_snapshots(snaps,base_timeout=base_timeout, add_time_per_snap=add_time_per_snap, wait_for_valid_state=wait_for_valid_state)
+
+
+
+
+    def clean_up_test_volumes(self, volumes=None):
+        """
+        Definition: cleaup helper method intended to clean up volumes created within a test, after the test has ran.
+
+        :param volumes: optional list of volumes to delete from system, otherwise will use test_resources['volumes']
+        """
+        euvolumes = []
+        detaching = []
+        vol_str = volumes or "test_resources['volumes']"
+        self.debug('clean_up_test_volumes starting, volumes:'+str(vol_str))
+
+        volumes = volumes or  self.test_resources['volumes']
+        if not volumes:
+            return
+
+        for vol in volumes:
+            try:
+                vol.update()
+                if not isinstance(vol, EuVolume):
+                    vol = EuVolume.make_euvol_from_vol(vol, self)
+                euvolumes.append(vol)
+            except:
+                print self.get_traceback()
+        try:
+            self.print_euvolume_list(euvolumes)
+        except: pass
+        self.debug('Clean_up_volumes: Detaching any attached volumes to be deleted...')
+        for vol in volumes:
+            try:
+                if vol.status == 'in-use':
+                    if vol.attach_data and vol.attach_data.status != 'detaching':
+                        vol.detach()
+                    detaching.append(vol)
+            except:
+                print self.get_traceback()
+        if detaching:
+            self.monitor_euvolumes_to_status(detaching, status='available', attached_status=None)
+        self.debug('clean_up_volumes: Deleteing volumes now...')
+        self.delete_volumes(euvolumes)
+
+
+
                     
     def get_current_resources(self,verbose=False):
         '''Return a dictionary with all known resources the system has. Optional pass the verbose=True flag to print this info to the logs

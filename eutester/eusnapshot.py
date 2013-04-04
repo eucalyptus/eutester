@@ -36,12 +36,13 @@ Place holder for snapshot test specific convenience methods+objects to extend bo
 
 '''
 from boto.ec2.snapshot import Snapshot
+from eutester.taggedresource import TaggedResource
 import eucaops
 import time
 
 
 
-class EuSnapshot(Snapshot):  
+class EuSnapshot(Snapshot, TaggedResource):
     eutest_volume_md5 = None
     eutest_volume_md5len = None
     eutest_volume_zone = None
@@ -58,10 +59,11 @@ class EuSnapshot(Snapshot):
     
         
     @classmethod
-    def make_eusnap_from_snap(cls,snapshot,cmdstart=None):
+    def make_eusnap_from_snap(cls, snapshot, tester=None, cmdstart=None):
         newsnap = EuSnapshot(snapshot.connection)
         newsnap.__dict__ = snapshot.__dict__
         newsnap.eutest_volume_md5 = None
+        newsnap.tester = tester
         newsnap.eutest_volume_md5len = None
         newsnap.eutest_volume_zone = None
         newsnap.eutest_volumes = []
@@ -73,7 +75,7 @@ class EuSnapshot(Snapshot):
         newsnap.eutest_cmdtime = None
         newsnap.eutest_polls = 0
         newsnap.eutest_poll_count = 0
-        newsnap.eutest_last_progress = int(newsnap.progress.replace('%',''))
+        newsnap.eutest_last_progress = int(newsnap.progress.replace('%','')  or 0)
         newsnap.eutest_timeintest = 0
         return newsnap
     
@@ -89,18 +91,18 @@ class EuSnapshot(Snapshot):
     def printself(self,title=True, printmethod=None):
         buf = "\n"
         if title:
-             buf = "\n-----------------------------------------------------------------------------------------------------------------------\n"
-             buf += str('SNAP_ID').center(15)+'|'+str('ORDER').center(5)+'|'+str('CMDTIME').center(8)+'|'+str('ELAPSED').center(8)+'|'+str('%').center(4)+'|'+str('STATUS').center(12)+'|'+str('SRC_VOL_MD5').center(33)+'|'+str('VOLZONE').center(15)+'|'+str('INFO-MSG')+"\n"
+             buf = "\n-------------------------------------------------------------------------------------------------------------------------------------\n"
+             buf += str('SNAP_ID').ljust(15)+'|'+str('ORDER').center(5)+'|'+str('CMDTIME').center(8)+'|'+str('ELAPSED').center(8)+'|'+str('%').center(4)+'|'+str('STATUS').center(12)+'|'+str('SRC_VOL').center(15)+'|'+str('SRC_VOL_MD5').center(33)+'|'+str('VOLZONE').center(15)+'|'+str('INFO-MSG')+"\n"
              buf += '-----------------------------------------------------------------------------------------------------------------------\n'     
-        buf += str(self.id).center(15)+'|'+str(self.eutest_createorder).center(5)+'|'+str(self.eutest_cmdtime).center(8)+'|'+str(self.eutest_timeintest).center(8)+'|'+str(self.eutest_last_progress).center(4)+'|'+str(self.eutest_laststatus).center(12)+'|'+str(self.eutest_volume_md5).center(33)+'|'+str(self.eutest_volume_zone).center(15)+'|'+str(self.eutest_failmsg)+"\n"
-        buf += '-----------------------------------------------------------------------------------------------------------------------\n'
+        buf += str(self.id).ljust(15)+'|'+str(self.eutest_createorder).center(5)+'|'+str(self.eutest_cmdtime).center(8)+'|'+str(self.eutest_timeintest).center(8)+'|'+str(self.eutest_last_progress).center(4)+'|'+str(self.eutest_laststatus).center(12)+'|'+str(self.volume_id).center(15)+'|'+str(self.eutest_volume_md5).center(33)+'|'+str(self.eutest_volume_zone).center(15)+'|'+str(self.eutest_failmsg)+"\n"
+        buf += '-------------------------------------------------------------------------------------------------------------------------------------\n'
         if printmethod:
             printmethod(buf)
         return buf
     
         
         
-        
+    
         
         
         

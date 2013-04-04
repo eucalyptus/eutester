@@ -31,25 +31,22 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 # Author: vic.iglesias@eucalyptus.com
-import copy
 
-
-__version__ = '0.0.5'
+__version__ = '0.0.7'
 
 import re
 import os
-import boto
 import random
 import time
 import string
 import socket
 import sys
-
-from boto.ec2.regioninfo import RegionInfo
-from boto.s3.connection import OrdinaryCallingFormat
-
-
+import traceback
+import StringIO
 import eulogger
+import types
+from functools import wraps
+
 
 
 
@@ -57,38 +54,24 @@ class TimeoutFunctionException(Exception):
     """Exception to raise on a timeout""" 
     pass 
 
-EC2RegionData = {
-    'us-east-1' : 'ec2.us-east-1.amazonaws.com',
-    'us-west-1' : 'ec2.us-west-1.amazonaws.com',
-    'eu-west-1' : 'ec2.eu-west-1.amazonaws.com',
-    'ap-northeast-1' : 'ec2.ap-northeast-1.amazonaws.com',
-    'ap-southeast-1' : 'ec2.ap-southeast-1.amazonaws.com'}
 
 class Eutester(object):
-    def __init__(self, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, region=None, ec2_ip=None, s3_ip=None, boto_debug=0):
+    def __init__(self, credpath=None):
         """This class is intended to setup boto connections for the various services that the *ops classes will use.
-
         :param credpath: Path to a valid eucarc file.
         :param aws_access_key_id: Used in conjuction with aws_secret_access_key allows for creation of connections without needing a credpath.
         :param aws_secret_access_key: Used in conjuction with aws_access_key_id allows for creation of connections without needing a credpath.
-        :param region: When connecting to Amazon EC2 allows you to point to a specific region.
-        :param ec2_ip: Hostname or IP of the EC2 endpoint to connect to. Can be used in the absence of region.
-        :param s3_ip: Hostname or IP of the S3 endpoint to connect to.
-        :param boto_debug: Hostname or IP of the S3 endpoint to connect to.
         :rtype: :class:`eutester.Eutester` or ``None``
         :returns: A Eutester object with all connections that were able to be created. Currently EC2, S3, IAM, and STS.
         """
         ### Default values for configuration
-        self.boto_debug = boto_debug
         self.credpath = credpath
-        self.region = RegionInfo()
         
         ### Eutester logs
-        if self.logger is None:
-            self.logger = eulogger.Eulogger(identifier="EUTESTER")
-            self.debug = self.logger.log.debug
-            self.critical = self.logger.log.critical
-            self.info = self.logger.log.info
+        self.logger = eulogger.Eulogger(identifier="EUTESTER")
+        self.debug = self.logger.log.debug
+        self.critical = self.logger.log.critical
+        self.info = self.logger.log.info
         
         ### LOGS to keep for printing later
         self.fail_log = []
@@ -99,127 +82,46 @@ class Eutester(object):
             self.debug("Extracting keys from " + self.credpath)         
             self.aws_access_key_id = self.get_access_key()
             self.aws_secret_access_key = self.get_secret_key()
+            self.account_id = self.get_account_id()
+            self.user_id = self.get_user_id()
         else:
-            self.aws_access_key_id = aws_access_key_id
-            self.aws_secret_access_key = aws_secret_access_key
-        
-        ### If you have credentials for the boto connections, create them
-        if (self.aws_access_key_id is not None) and (self.aws_secret_access_key is not None):
-            if not boto.config.has_section('Boto'):
-                boto.config.add_section('Boto')
-            boto.config.set('Boto', 'num_retries', '2')
-            self.setup_boto_connections(region=region,ec2_ip=ec2_ip,s3_ip=s3_ip)
-
-    def setup_boto_connections(self, region=None, aws_access_key_id=None, aws_secret_access_key=None, ec2_ip=None, s3_ip=None, is_secure=False):
-        
-        if aws_access_key_id is None:
-            aws_access_key_id = self.aws_access_key_id
-        if aws_secret_access_key is None:
-            aws_secret_access_key = self.aws_secret_access_key     
-        port = 443
-        ec2_service_path = "/"
-        APIVersion = '2009-11-30'
-
-        if region is not None:
-            self.debug("Check region: " + str(region))        
-            try:
-                self.region.endpoint = EC2RegionData[region]
-            except KeyError:
-                raise Exception( 'Unknown region: %s' % region)
-        
-        if not self.region.endpoint:
-            self.region.name = 'eucalyptus'
-            if ec2_ip is None:
-                self.region.endpoint = self.get_ec2_ip()       
-            else:
-                self.region.endpoint = ec2_ip
-            port = 8773
-            ec2_service_path="/services/Eucalyptus"
-        connection_args = { 'aws_access_key_id' :aws_access_key_id,
-                            'aws_secret_access_key': aws_secret_access_key,
-                            'is_secure': is_secure,
-                            'debug': self.boto_debug,
-                            'port' : port }
-
-        if re.search('2.6', boto.__version__):
-            connection_args['validate_certs'] = False
-
-        try:
-            ec2_connection_args = copy.copy(connection_args)
-            ec2_connection_args['path'] = ec2_service_path
-            ec2_connection_args['api_version'] = APIVersion
-            ec2_connection_args['region'] = self.region
-            self.debug("Attempting to create ec2 connection to " + self.region.endpoint)
-            self.ec2 = boto.connect_ec2(**ec2_connection_args)
-        except Exception, e:
-            self.critical("Was unable to create ec2 connection because of exception: " + str(e))
-
-        try:
-            if s3_ip is not None:
-                walrus_endpoint = s3_ip
-            else:
-                walrus_endpoint = self.get_s3_ip()
-            walrus_path = "/services/Walrus"
-            s3_connection_args = copy.copy(connection_args)
-            s3_connection_args['path'] = walrus_path
-            s3_connection_args['host'] = walrus_endpoint
-            s3_connection_args['calling_format'] = OrdinaryCallingFormat()
-            self.debug("Attempting to create S3 connection to " + walrus_endpoint)
-            self.s3 = boto.connect_s3(**s3_connection_args)
-        except Exception, e:
-            self.critical("Was unable to create S3 connection because of exception: " + str(e))
-        
-        try:
-            euare_connection_args = copy.copy(connection_args)
-            euare_connection_args['path'] = "/services/Euare"
-            euare_connection_args['host'] = self.get_ec2_ip()
-            self.debug("Attempting to create IAM connection to " + self.get_ec2_ip())
-            self.euare = boto.connect_iam(**euare_connection_args)
-        except Exception, e:
-            self.critical("Was unable to create IAM connection because of exception: " + str(e))
-
-        try:
-            sts_connection_args = copy.copy(connection_args)
-            sts_connection_args['path'] = "/services/Tokens"
-            sts_connection_args['region'] = self.region
-            ec2_connection_args['api_version'] = APIVersion
-            self.debug("Attempting to create STS connection to " + self.get_ec2_ip())
-            self.tokens = boto.connect_sts(**sts_connection_args)
-        except Exception, e:
-            self.critical("Was unable to create STS connection because of exception: " + str(e))
+            raise Exception("Please provide credpath argument")
 
     def get_access_key(self):
-        """Parse the eucarc for the EC2_ACCESS_KEY"""
-        return self.parse_eucarc("EC2_ACCESS_KEY")   
+        if not self.aws_access_key_id:     
+            """Parse the eucarc for the EC2_ACCESS_KEY"""
+            self.aws_access_key_id = self.parse_eucarc("EC2_ACCESS_KEY")  
+        return self.aws_access_key_id 
     
     def get_secret_key(self):
-        """Parse the eucarc for the EC2_SECRET_KEY"""
-        return self.parse_eucarc("EC2_SECRET_KEY")
+        if not self.aws_secret_access_key: 
+            """Parse the eucarc for the EC2_SECRET_KEY"""
+            self.aws_secret_access_key = self.parse_eucarc("EC2_SECRET_KEY")
+        return self.aws_secret_access_key
     
     def get_account_id(self):
-        """Parse the eucarc for the EC2_ACCOUNT_NUMBER"""
-        return self.parse_eucarc("EC2_ACCOUNT_NUMBER")
+        if not self.account_id:
+            """Parse the eucarc for the EC2_ACCOUNT_NUMBER"""
+            self.account_id = self.parse_eucarc("EC2_ACCOUNT_NUMBER")
+        return self.account_id
     
     def get_user_id(self):
+        if not self.user_id:
+            self.user_id = self.parse_eucarc("EC2_USER_ID")
         """Parse the eucarc for the EC2_ACCOUNT_NUMBER"""
-        return self.parse_eucarc("EC2_USER_ID")
-        
+        return self.user_id 
+
+    def get_port(self):
+        """Parse the eucarc for the EC2_ACCOUNT_NUMBER"""
+        ec2_url = self.parse_eucarc("EC2_URL")
+        return ec2_url.split(':')[1].split("/")[0]
+
     def parse_eucarc(self, field):
-        with open( self.credpath + "/eucarc") as eucarc: 
+        with open( self.credpath + "/eucarc") as eucarc:
             for line in eucarc.readlines():
                 if re.search(field, line):
                     return line.split("=")[1].strip().strip("'")
             raise Exception("Unable to find " +  field + " id in eucarc")
-    
-    def get_s3_ip(self):
-        """Parse the eucarc for the S3_URL"""
-        walrus_url = self.parse_eucarc("S3_URL")
-        return walrus_url.split("/")[2].split(":")[0]
-    
-    def get_ec2_ip(self):
-        """Parse the eucarc for the EC2_URL"""
-        ec2_url = self.parse_eucarc("EC2_URL")
-        return ec2_url.split("/")[2].split(":")[0]        
     
     def handle_timeout(self, signum, frame): 
         raise TimeoutFunctionException()
@@ -319,14 +221,14 @@ class Eutester(object):
         """ Remove the strings from the list that do not match the regex string"""
         expr = re.compile(string)
         return filter(expr.search,list)
-        
+
     def diff(self, list1, list2):
         """Return the diff of the two lists"""
         return list(set(list1)-set(list2))
     
     def fail(self, message):
         self.critical(message)
-        self.fail_log.append(message)
+        #self.fail_log.append(message)
         self.fail_count += 1
         if self.exit_on_fail == 1:
             raise Exception("Test step failed: "+str(message))
@@ -356,8 +258,91 @@ class Eutester(object):
              chars   Array of characters to use in generation of the string
         """
         return ''.join(random.choice(chars) for x in range(size))
+    
+    @classmethod
+    def printinfo(cls, func):
+        '''
+        Decorator to print method positional and keyword args when decorated method is called
+        usage:
+        @printinfo
+        def myfunction(self, arg1, arg2, kwarg1=defaultval):
+            stuff = dostuff(arg1, arg2, kwarg1)
+            return stuff
+        When the method is run it will produce debug output showing info as to how the method was called, example:
         
+        myfunction(arg1=123, arg2='abc', kwarg='words)
+        
+        2013-02-07 14:46:58,928] [DEBUG]:(mydir/myfile.py:1234) - Starting method: myfunction()
+        2013-02-07 14:46:58,928] [DEBUG]:---> myfunction(self, arg1=123, arg2=abc, kwarg='words')
+        '''
+
+        @wraps(func)
+        def methdecor(*func_args, **func_kwargs):
+            try:
+                defaults = func.func_defaults
+                kw_count = len(defaults or [])
+                selfobj = None
+                arg_count = func.func_code.co_argcount - kw_count
+                var_names = func.func_code.co_varnames[:func.func_code.co_argcount]
+                arg_names = var_names[:arg_count]
+                kw_names =  var_names[arg_count:func.func_code.co_argcount]
+                kw_defaults = {}
+                for kw_name in kw_names: 
+                    kw_defaults[kw_name] = defaults[kw_names.index(kw_name)]
+                arg_string=''
+                #iterate on func_args instead of arg_names to make sure we pull out self object if present
+                for count, arg in enumerate(func_args):
+                    if count == 0 and var_names[0] == 'self': #and if hasattr(arg, func.func_name):
+                        #self was passed don't print obj addr, and save obj for later
+                        arg_string += 'self'
+                        selfobj = arg
+                    elif count >= arg_count:
+                        #Handle case where kw args are passed w/o key word as a positional arg add 
+                        #Add it to the kw_defaults so it gets printed later
+                        kw_defaults[var_names[count]] = arg
+                    else:
+                        #This is a positional arg so grab name from arg_names list
+                        arg_string += ', '
+                        arg_string += str(arg_names[count])+'='+str(arg)
+                kw_string = ""
+                for kw in kw_names:
+                    kw_string += ', '+str(kw)+'='
+                    if kw in func_kwargs:
+                        kw_string += str(func_kwargs[kw])
+                    else:
+                        kw_string += str(kw_defaults[kw])
+                debugstring = '\n--->('+str(os.path.basename(func.func_code.co_filename))+":"+str(func.func_code.co_firstlineno)+")Starting method: "+str(func.func_name)+'('+arg_string+kw_string+')'
+                debugmethod = None
+                if selfobj and hasattr(selfobj,'debug'):
+                    debug = getattr(selfobj, 'debug')
+                    if isinstance(debug, types.MethodType):
+                        debugmethod = debug
+                if debugmethod:    
+                    debugmethod(debugstring)
+                else:
+                    print debugstring
+            except Exception, e:
+                print Eutester.get_traceback()
+                print 'printinfo method decorator error:'+str(e)
+            return func(*func_args, **func_kwargs)
+        return methdecor
+    
+    @classmethod
+    def get_traceback(cls):
+        '''
+        Returns a string buffer with traceback, to be used for debug/info purposes. 
+        '''
+        try:
+            out = StringIO.StringIO()
+            traceback.print_exception(*sys.exc_info(),file=out)
+            out.seek(0)
+            buf = out.read()
+        except Exception, e:
+                buf = "Could not get traceback"+str(e)
+        return str(buf) 
+    
     def __str__(self):
+        return 'got self'
         """
         Prints informations about configuration of Eucateser as configuration file,
         how many errors, the path of the Eucalyptus, and the path of the user credentials
@@ -365,10 +350,12 @@ class Eutester(object):
         s  = "+++++++++++++++++++++++++++++++++++++++++++++++++++++\n"
         s += "+" + "Eucateser Configuration" + "\n"
         s += "+" + "+++++++++++++++++++++++++++++++++++++++++++++++\n"
-        s += "+" + "Config File: " + self.config_file +"\n"
+        s += "+" + "Config File: " + str(self.config_file) +"\n"
         s += "+" + "Fail Count: " +  str(self.fail_count) +"\n"
         s += "+" + "Eucalyptus Path: " +  str(self.eucapath) +"\n"
         s += "+" + "Credential Path: " +  str(self.credpath) +"\n"
         s += "+++++++++++++++++++++++++++++++++++++++++++++++++++++\n"
         return s
+    
+
 

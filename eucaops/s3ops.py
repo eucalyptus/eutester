@@ -52,18 +52,46 @@ class S3opsException(Exception):
         print self.msg
 
 class S3ops(Eutester):
-    def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,account="eucalyptus",user="admin", username="root",region=None, clc_ip=None, boto_debug=0):
-        super(S3ops, self).__init__(config_file=config_file,password=password, keypath=keypath, credpath=credpath, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,account=account, user=user, region=region,clc_ip=clc_ip, boto_debug=boto_debug)
+    def __init__(self, endpoint=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, is_secure=False, path="/", port=80, boto_debug=0):
+        self.aws_access_key_id = aws_access_key_id
+        self.aws_secret_access_key = aws_secret_access_key
+        self.user_id = None
+        self.account_id = None
+        super(S3ops, self).__init__(credpath=credpath)
+        self.setup_s3_connection(endpoint=endpoint, aws_access_key_id=self.aws_access_key_id ,aws_secret_access_key=self.aws_secret_access_key, is_secure=is_secure, path=path, port=port, boto_debug=boto_debug)
         self.test_resources = {}
         self.setup_s3_resource_trackers()
-        
+
+    def setup_s3_connection(self, endpoint=None, aws_access_key_id=None, aws_secret_access_key=None, is_secure=False, path="/", port=80, boto_debug=0):
+        try:
+            if not endpoint:
+                endpoint = self.get_s3_ip()
+            s3_connection_args = { 'aws_access_key_id' :aws_access_key_id,
+                                   'aws_secret_access_key': aws_secret_access_key,
+                                   'is_secure': is_secure,
+                                   'host' : endpoint,
+                                   'path'  : path,
+                                   'port' : port,
+                                   'debug':boto_debug,
+                                   'calling_format':OrdinaryCallingFormat(),
+                                   }
+            self.debug("Attempting to create S3 connection to " + endpoint + ':' + str(port) + path)
+            self.s3 = boto.connect_s3(**s3_connection_args)
+        except Exception, e:
+            raise Exception("Was unable to create S3 connection because of exception: " + str(e))
+
     def setup_s3_resource_trackers(self):
         """
         Setup keys in the test_resources hash in order to track artifacts created
         """
         self.test_resources["keys"] = []
         self.test_resources["buckets"] = []
-        
+
+    def get_s3_ip(self):
+        """Parse the eucarc for the S3_URL"""
+        walrus_url = self.parse_eucarc("S3_URL")
+        return walrus_url.split("/")[2].split(":")[0]
+
     def create_bucket(self,bucket_name):
         """
         Create a bucket.  If the bucket already exists and you have

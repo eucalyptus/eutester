@@ -1,7 +1,4 @@
 #!/usr/bin/python
-from Queue import Queue
-import unittest
-import re
 from instancetest import InstanceBasics
 
 class BFEBSBasics(InstanceBasics):
@@ -28,30 +25,36 @@ class BFEBSBasics(InstanceBasics):
         if not self.reservation:
             self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name, zone=zone)
         for instance in self.reservation.instances:
-            self.volume = self.tester.create_volume(azone=self.zone, size=2)
+            self.volume = self.tester.create_volume(zone=self.zone, size=2)
             self.volume_device = instance.attach_volume(self.volume)
             instance.sys("curl " +  self.args.imgurl + " > " + self.volume_device, timeout=800)
             snapshot = self.tester.create_snapshot(self.volume.id)
             image_id = self.tester.register_snapshot(snapshot)
         self.image = self.tester.get_emi(image_id)
-
-    def LaunchImage(self, zone= None):
-        '''Launch a BFEBS image'''
-        if zone is None:
-            zone = self.zone
-        self.image = self.tester.get_emi(root_device_type="ebs")
-        self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name, zone=zone)
-        self.assertTrue( self.tester.ping(self.reservation.instances[0].public_dns_name), 'Could not ping instance')
+        self.tester.terminate_instances(self.reservation)
+        self.reservation = None
 
     def StopStart(self, zone = None):
         '''Launch a BFEBS instance, stop it then start it again'''
         if zone is None:
             zone = self.zone
-        self.image = self.tester.get_emi(root_device_type="ebs")
-        if not self.reservation:
-            self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name, zone=zone)
+        try:
+            self.image = self.tester.get_emi(root_device_type="ebs")
+        except Exception,e:
+            self.RegisterImage()
+            self.image = self.tester.get_emi(root_device_type="ebs")
+        if not self.volume:
+            self.volume = self.tester.create_volume(zone=self.zone, size=2)
+        if self.reservation:
+            self.tester.terminate_instances(self.reservation)
+        self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name, zone=zone)
+        ## Ensure that we can attach and use a volume
+        for instance in self.reservation.instances:
+            vol_dev = instance.attach_volume(self.volume)
         self.assertTrue(self.tester.stop_instances(self.reservation))
-        self.assertFalse( self.tester.ping(self.reservation.instances[0].public_dns_name, poll_count=2), 'Was able to ping stopped instance')
+        for instance in self.reservation.instances:
+            if instance.ip_address or instance.private_ip_address:
+                raise Exception("Instance had a public " + str(instance.ip_address) + " private " + str(instance.private_ip_address) )
         self.assertTrue(self.tester.start_instances(self.reservation))
         self.assertTrue( self.tester.ping(self.reservation.instances[0].public_dns_name, poll_count=30), 'Could not ping instance')
 
@@ -72,7 +75,7 @@ class BFEBSBasics(InstanceBasics):
 if __name__ == "__main__":
     testcase = BFEBSBasics()
     ### Either use the list of tests passed from config/command line to determine what subset of tests to run
-    list = testcase.args.tests or [ "RegisterImage",  "LaunchImage", "StopStart", "MultipleBFEBSInstances", "ChurnBFEBS" ]
+    list = testcase.args.tests or [ "RegisterImage",  "StopStart", "MultipleBFEBSInstances", "ChurnBFEBS" ]
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
     for test in list:
