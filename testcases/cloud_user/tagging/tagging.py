@@ -43,8 +43,6 @@ class TaggingBasics(EutesterTestCase):
     def clean_method(self):
         ### Terminate the reservation if it is still up
         if self.reservation:
-            for instance in self.reservation.instances:
-                instance.delete_tags(instance.tags)
             self.assertTrue(self.tester.terminate_instances(self.reservation), "Unable to terminate instance(s)")
 
         if self.volume:
