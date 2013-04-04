@@ -174,11 +174,11 @@ class IAMops(Eutester):
         """
         list = self.get_all_accounts(account_name=account_name, account_id=account_id, search=search)
         self.debug('-----------------------------------------------------------------------')
-        self.debug(str('ACCOUNT_NAME:').ljust(25) + str('ACCT_ID:'))
+        self.debug(str('ACCOUNT_NAME:').ljust(25) + "|" + str('ACCT_ID:'))
         self.debug('-----------------------------------------------------------------------')
         for account in list:
-            self.debug(str(account['account_name']).ljust(25)+str(account['account_id']))
-
+            self.debug(str(account['account_name']).ljust(25) + "|" +str(account['account_id']))
+            self.debug('-----------------------------------------------------------------------')
 
     def show_all_groups(self, account_name=None,  account_id=None,  path=None, group_name=None,  group_id=None,  search=False):
         """
@@ -193,11 +193,11 @@ class IAMops(Eutester):
         """
         list = self.get_all_groups(account_name=account_name, account_id=account_id, path=path, group_name=group_name, group_id=group_id, search=search)
         self.debug('-----------------------------------------------------------------------')
-        self.debug(str('ACCOUNT:').ljust(25) + str('GROUPNAME:').ljust(15) + str('GROUP_ID:').ljust(25)  )
+        self.debug(str('ACCOUNT:').ljust(25) + "|" + str('GROUPNAME:').ljust(15) + "|" + str('GROUP_ID:').ljust(25)  )
         self.debug('-----------------------------------------------------------------------')
         for group in list:
-            self.debug(str(group['account_name']).ljust(25)+str(group['group_name']).ljust(15)+str(group['group_id']))
-
+            self.debug(str(group['account_name']).ljust(25) + "|" + str(group['group_name']).ljust(15) + "|" + str(group['group_id']))
+            self.debug('-----------------------------------------------------------------------')
 
     def show_all_users(self, account_name=None, account_id=None,  path=None, user_name=None,  user_id=None, search=False ):
         """
@@ -212,11 +212,11 @@ class IAMops(Eutester):
         """
         list = self.get_all_users(account_name=account_name, account_id=account_id, path=path, user_name=user_name, user_id=user_id, search=search)
         self.debug('-----------------------------------------------------------------------')
-        self.debug(str('ACCOUNT:').ljust(25) + str('USERNAME:').ljust(15) + str('USER_ID').ljust(25) + str('ACCT_ID') )
+        self.debug(str('ACCOUNT:').ljust(25) + "|" + str('USERNAME:').ljust(15) + "|" + str('USER_ID').ljust(25) + "|" + str('ACCT_ID') )
         self.debug('-----------------------------------------------------------------------')
         for user in list:
-            self.debug(str(user['account_name']).ljust(25)+str(user['user_name']).ljust(15)+str(user['user_id']).ljust(25)+str(user['account_id']))
-
+            self.debug(str(user['account_name']).ljust(25) + "|" + str(user['user_name']).ljust(15) + "|" + str(user['user_id']).ljust(25) + "|" + str(user['account_id']))
+            self.debug('-----------------------------------------------------------------------')
     def get_euare_username(self):
         """
         Get all users in the current users account
@@ -321,10 +321,10 @@ class IAMops(Eutester):
         policies = self.get_user_policies(user_name, policy_name=policy_name, delegate_account=delegate_account, doc=doc, search=search)
         for policy in policies:
             self.debug('-------------------------------------')
-            self.debug("\tPOLICY NAME: "+str(policy['policy_name'])  )   
+            self.debug("\tPOLICY NAME: "+str(policy['policy_name']) +", USER_NAME: " +str(user_name))
             self.debug('-------------------------------------')
             for line in str(policy['policy_document']).splitlines():
-                self.debug(" "+line)
+                self.debug("\t"+line)
     
     def show_user_summary(self,user_name, delegate_account=None, account_id=None):
         """
