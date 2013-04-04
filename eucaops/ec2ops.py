@@ -898,7 +898,7 @@ class EC2ops(Eutester):
         self.debug("\n"+str(buf)+"\n")
         
 
-    def delete_volume(self, volume, poll_interval=10, timeout=120):
+    def delete_volume(self, volume, poll_interval=10, timeout=180):
         """
         Delete the EBS volume then check that it no longer exists
 
@@ -934,7 +934,7 @@ class EC2ops(Eutester):
             return False
         return True
     
-    def delete_volumes(self, volume_list, poll_interval=10, timeout=120):
+    def delete_volumes(self, volume_list, poll_interval=10, timeout=180):
         """
         Deletes a list of EBS volumes then checks for proper state transition
 
