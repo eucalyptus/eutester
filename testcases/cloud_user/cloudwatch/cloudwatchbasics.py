@@ -7,6 +7,7 @@ from eutester.eutestcase import EutesterTestCase
 from boto.ec2.cloudwatch import Metric
 import datetime
 
+
 class CloudWatchBasics(EutesterTestCase):
     def __init__(self, extra_args= None):
         self.setuptestcase()
@@ -48,7 +49,7 @@ class CloudWatchBasics(EutesterTestCase):
             self.tester.sleep(1)
         start = datetime.datetime.utcnow()
         for i in xrange(seconds_to_put_data):
-            self.tester.debug("Adding metric: {metric} to namescace: {namespace} with value {value}".format(
+            self.tester.debug("Adding metric: {metric} to namespace: {namespace} with value {value}".format(
                 metric=metric_name, namespace = self.namespace, value=metric_data))
             self.tester.cw.put_metric_data(self.namespace, [metric_name],[metric_data])
             if metric_data == 600 or metric_data == 0:

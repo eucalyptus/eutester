@@ -37,6 +37,10 @@
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingUnsupportedOptions"/>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingValidation"/>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingVMTypeReferenceValidation"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingEc2InstanceHealthMonitoring"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingEC2ReferenceValidation"/>
+            <class name="com.eucalyptus.tests.awssdk.TestEC2DescribeInstanceStatus"/>
+            <class name="com.eucalyptus.tests.awssdk.TestEC2RunInstancesClientToken"/>
         </classes>
     </test>
     <test name="ELB Tests">
@@ -46,15 +50,7 @@
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingELBReferenceValidation"/>
         </classes>>
     </test>
-    <test name="EC2 Tests">
-        <classes>
-            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingEc2InstanceHealthMonitoring"/>
-            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingEC2ReferenceValidation"/>
-            <class name="com.eucalyptus.tests.awssdk.TestEC2DescribeInstanceStatus"/>
-            <class name="com.eucalyptus.tests.awssdk.TestEC2RunInstancesClientToken"/>
-        </classes>
-    </test>
-    <test name="IAM Tests">
+    <test name="IAM Roles">
         <classes>
             <class name="com.eucalyptus.tests.awssdk.TestIAMInstanceProfileManagement"/>
             <class name="com.eucalyptus.tests.awssdk.TestIAMInstanceProfiles"/>
