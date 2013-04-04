@@ -133,7 +133,7 @@ class ELBops(Eutester):
             elb_connection_args['path'] = path
             elb_connection_args['region'] = elb_region
             self.debug("Attempting to create cloud watch connection to " + elb_region.endpoint + str(port) + path)
-            self.cw = boto.connect_elb(**elb_connection_args)
+            self.elb = boto.connect_elb(**elb_connection_args)
         except Exception, e:
             self.critical("Was unable to create elb connection because of exception: " + str(e))
 
@@ -147,3 +147,11 @@ class ELBops(Eutester):
         """Parse the eucarc for the AWS_ELB_URL"""
         elb_url = self.parse_eucarc("AWS_ELB_URL")
         return elb_url.split("/")[2].split(":")[0]
+
+    def create_load_balancer(self, name="test"):
+        self.elb.create_load_balancer(name)
+        ### VALIdate the creation of the load balancer
+        load_balancer = self.elb.get_all_load_balancers(load_balancer_names=[name])
+        if not load_balancer:
+            raise Exception("Unable to retrieve load balancer after creation")
+        return load_balancer
