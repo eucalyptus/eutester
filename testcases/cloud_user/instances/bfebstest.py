@@ -13,8 +13,6 @@ class BFEBSBasics(InstanceBasics):
             self.tester.terminate_instances(self.reservation)
             self.reservation = None
         self.tester.sleep(10)
-        super(BFEBSBasics, self).clean_method()
-
 
     def RegisterImage(self, zone= None):
         '''Register a BFEBS snapshot'''
