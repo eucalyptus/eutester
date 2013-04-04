@@ -1,0 +1,35 @@
+<html> 
+  <head>
+    <title>S3 POST Form</title> 
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  </head>
+
+  <body> 
+    <form action="http://192.168.51.144:8773/services/Walrus/postbucket00" method="post" enctype="multipart/form-data">
+      <input type="hidden" name="key" value="posttest_${filename}">
+      <input type="hidden" name="AWSAccessKeyId" value="CILEJ9O4RIDKI0VTUKFVO">
+      <input type="hidden" name="acl" value="public-read"> 
+      <input type="hidden" name="success_action_redirect" value="http://localhost">
+      <!--Policy is as follows but is base64 encoded. The signature is a signing of the policy doc using the secret key:
+	  { "expiration": "2013-12-01T12:00:00.000Z",
+	      "conditions": [
+	        {"bucket": "postbucket00"},
+	        ["starts-with", "$key", "posttest"],
+	        {"acl": "public-read"},
+	        {"success_action_redirect": "http://localhost"},
+	        ["starts-with", "$Content-Type", "text/"],
+	      ]
+	  }
+	  -->
+      <input type="hidden" name="policy" value="eyAiZXhwaXJhdGlvbiI6ICIyMDEzLTEyLTAxVDEyOjAwOjAwLjAwMFoiLAogICJjb25kaXRpb25zIjogWwogICAgeyJidWNrZXQiOiAicG9zdGJ1Y2tldDAwIn0sCiAgICBbInN0YXJ0cy13aXRoIiwgIiRrZXkiLCAicG9zdHRlc3QiXSwKICAgIHsiYWNsIjogInB1YmxpYy1yZWFkIn0sCiAgICB7InN1Y2Nlc3NfYWN0aW9uX3JlZGlyZWN0IjogImh0dHA6Ly9sb2NhbGhvc3QifSwKICAgIFsic3RhcnRzLXdpdGgiLCAiJENvbnRlbnQtVHlwZSIsICJ0ZXh0LyJdLAogIF0KfQo="/>
+      <input type="hidden" name="signature" value="Mz+vUOEzNaoycF1Du0dGUq9eDIM=">
+      <input type="hidden" name="Content-Type" value="text/plain">
+      <!-- Include any additional input fields here -->
+
+      File to upload to S3: 
+      <input name="file" type="file"> 
+      <br> 
+      <input type="submit" value="Upload File to Walrus Via Post"> 
+    </form> 
+  </body>
+</html>
