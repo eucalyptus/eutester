@@ -11,7 +11,6 @@ class InstanceBasics(EutesterTestCase):
     def __init__(self, extra_args= None):
         self.setuptestcase()
         self.setup_parser()
-        self.parser.add_argument("--region", default=None)
         if extra_args:
             for arg in extra_args:
                 self.parser.add_argument(arg)
