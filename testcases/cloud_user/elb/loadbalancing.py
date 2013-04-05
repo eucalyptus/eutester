@@ -35,6 +35,7 @@
 import time
 from eucaops import Eucaops
 from eucaops import ELBops
+from boto.ec2.elb import LoadBalancer
 from eutester.eutestcase import EutesterTestCase
 import os
 import random
@@ -43,7 +44,6 @@ class LoadBalancing(EutesterTestCase):
     def __init__(self, extra_args= None):
         self.setuptestcase()
         self.setup_parser()
-        self.parser.add_argument("--region", default=None)
         if extra_args:
             for arg in extra_args:
                 self.parser.add_argument(arg)
@@ -73,6 +73,18 @@ class LoadBalancing(EutesterTestCase):
         zones = self.tester.ec2.get_all_zones()
         self.zone = random.choice(zones).name
 
+        self.load_balancer_port = 80
+
+        (self.web_servers, self.filename) = self.tester.create_web_servers(keypair=self.keypair,
+                                                                          group=self.group,
+                                                                          zone=self.zone,
+                                                                          port=self.load_balancer_port)
+
+        self.load_balancer = self.tester.create_load_balancer(zones= [self.zone],
+                                                              name="test-" + str(time.time()),
+                                                              load_balancer_port=self.load_balancer_port)
+        assert isinstance(self.load_balancer, LoadBalancer)
+
         ### Populate resources we will use and cleanup
         self.address = None
         self.volume = None
@@ -83,36 +95,20 @@ class LoadBalancing(EutesterTestCase):
 
     def clean_method(self):
         ### Terminate the reservation if it is still up
-        if self.reservation:
-            self.assertTrue(self.tester.terminate_instances(self.reservation), "Unable to terminate instance(s)")
+        self.tester.cleanup_artifacts()
 
-        ### DELETE group
-        self.tester.delete_group(self.group)
-
-        ### Delete keypair in cloud and from filesystem
-        self.tester.delete_keypair(self.keypair)
-        os.remove(self.keypath)
-
-    def MyTest(self):
+    def GenerateRequests(self):
         """
-        This case was developed to run through a series of basic instance tests.
-             The tests are as follows:
-                   - execute run_instances command
-                   - make sure that public DNS name and private IP aren't the same
-                       (This is for Managed/Managed-NOVLAN networking modes)
-                   - test to see if instance is ping-able
-                   - test to make sure that instance is accessible via ssh
-                       (ssh into instance and run basic ls command)
-             If any of these tests fail, the test case will error out, logging the results.
+        This will test the most basic use case for a load balancer. Uses to backend instances with httpd servers
         """
-        self.load_balancer = self.tester.create_load_balancer(name="vic")
-
+        lb_url = self.load_balancer.dns_name + ":" + self.load_balancer_port
+        self.tester.generate_http_requests(url=lb_url, count=100)
 
 if __name__ == "__main__":
     testcase = LoadBalancing()
     ### Use the list of tests passed from config/command line to determine what subset of tests to run
     ### or use a predefined list
-    list = testcase.args.tests or ["MyTest"]
+    list = testcase.args.tests or ["GenerateRequests"]
 
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
