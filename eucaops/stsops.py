@@ -24,9 +24,56 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 from eutester import Eutester
-from boto.sts.credentials import Credentials
+import boto
+from boto.ec2.regioninfo import RegionInfo
+
+EC2RegionData = {
+    'us-east-1' : 'ec2.us-east-1.amazonaws.com',
+    'us-west-1' : 'ec2.us-west-1.amazonaws.com',
+    'eu-west-1' : 'ec2.eu-west-1.amazonaws.com',
+    'ap-northeast-1' : 'ec2.ap-northeast-1.amazonaws.com',
+    'ap-southeast-1' : 'ec2.ap-southeast-1.amazonaws.com'}
 
 class STSops(Eutester):
+
+    def __init__(self, endpoint=None, region=None, credpath=None, aws_access_key_id=None, aws_secret_access_key=None):
+        self.aws_access_key_id = aws_access_key_id
+        self.aws_secret_access_key = aws_secret_access_key
+        self.user_id = None
+        self.account_id = None
+        super(STSops, self).__init__(credpath=credpath)
+        self.setup_sts_connection(endpoint=endpoint, region=region, aws_access_key_id=self.aws_access_key_id, aws_secret_access_key=self.aws_secret_access_key)
+
+    def setup_sts_connection(self, endpoint=None, region=None, aws_access_key_id=None, aws_secret_access_key=None, path="/",port=443, is_secure=True, boto_debug=0):
+        sts_region = RegionInfo()
+        if region:
+            self.debug("Check region: " + str(region))
+            try:
+                if not endpoint:
+                    sts_region.endpoint = EC2RegionData[region]
+                else:
+                    sts_region.endpoint = endpoint
+            except KeyError:
+                raise Exception( 'Unknown region: %s' % region)
+        else:
+            sts_region.name = 'eucalyptus'
+            if endpoint:
+                sts_region.endpoint = endpoint
+            else:
+                sts_region.endpoint = self.get_ec2_ip()
+
+        try:
+            sts_connection_args = { 'aws_access_key_id' : aws_access_key_id,
+                                    'aws_secret_access_key': aws_secret_access_key,
+                                    'is_secure': is_secure,
+                                    'debug':boto_debug,
+                                    'port' : port,
+                                    'path' : path,
+                                    'region' : sts_region}
+            self.debug("Attempting to create STS connection to " + self.get_ec2_ip() + str(port) + path)
+            self.tokens = boto.connect_sts(**sts_connection_args)
+        except Exception, e:
+            self.critical("Was unable to create STS connection because of exception: " + str(e))
 
     def get_session_token( self, duration=None ):
         '''

@@ -1,4 +1,4 @@
-eutester version 0.0.4
+Eutester
 ======================
 
 [Intro to Eutester](http://testingclouds.wordpress.com/2012/03/04/test1/)
@@ -21,8 +21,8 @@ Installation
 ------
 If easy_install is not available in your environment use your package manager to install python-setuptools
     
-    yum install python-setuptools gcc python-devel
-    apt-get install python-setuptools gcc python-dev
+    yum install python-setuptools gcc python-devel git
+    apt-get install python-setuptools gcc python-dev git
 
 Installing eutester and its dependencies is as easy as:
 
@@ -37,7 +37,7 @@ For development purposes you can then clone the code from github and then reinst
 
 Main Classes
 ------
-eutester contains the framework pieces like parsing config/creds, setting up connections and providing test primatives.  
+eutester contains the framework pieces like parsing config/creds, setting up connections and providing test primitives.
 eucaops uses the framework provided by eutester to provide validated higher order operations on those cloud connections.
 For more information regarding the module structure of eutester, please refer to the [Eutester Python Module Documentation Index](http://packages.python.org/eutester/py-modindex.html).
 

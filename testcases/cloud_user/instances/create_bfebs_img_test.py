@@ -1,4 +1,4 @@
-
+#!/usr/bin/python
 #
 # Description:  Creates an image instance based on the image argument passed in. Then 
 #               attempts to download a remote image and store it on an attached volume.
@@ -32,6 +32,9 @@ if __name__ == '__main__':
     
     parser.add_option("-i", "--i", dest="img", type="string",
                       help="Instance store image id to run initial instance from", default="emi-")
+
+    parser.add_option("-v", "--vmtype", dest="vmtype", type="string",
+                      help="Vmtype to run initial instance with", default="c1.medium")
     
     parser.add_option("-u", "--user", type="string", dest="user",
                       help="User to run script against", default="admin")
@@ -94,6 +97,7 @@ if __name__ == '__main__':
         exit(1)
     
     img = options.img
+    vmtype = options.vmtype
     user = options.user
     account = options.account
     zone = options.zone
@@ -164,27 +168,15 @@ if __name__ == '__main__':
         except Exception, e:
             pmsg("Failed to get remote file size...")
             raise e
-        try:
-            instance = None    
-            keys = tester.get_all_current_local_keys()
-            
-            if keys != []:
-                pmsg("Looks like we had some local keys looking through them now...")
-                for keypair in keys:
-                    pmsg('looking for instances using keypair:'+keypair.name)
-                    instances = tester.get_instances(state='running',key=keypair.name)
-                    if instances != []:
-                        instance = EuInstance(instances[0])
-                        pmsg('Found usable instance:'+instance.id+'using key:'+keypair.name)
-                        break
-        except Exception, e:
-            pmsg("Failed to find a pre-existing isntance we can connect to:"+str(e))
-            pass
-        
+    
+         
+        keys = tester.get_all_current_local_keys()
+        if keys:
+            keypair = keys[0]
                 
         if instance is None:   
             #Create a new keypair to use for this test if we didn't find one
-            if keypair is None:
+            if not keypair:
                 try:
                     keypair = tester.add_keypair(prefix + "-" + str(time.time()))
                 except Exception, e:
@@ -193,17 +185,17 @@ if __name__ == '__main__':
             pmsg("Attempting to launch initial instance now...")
             try:
                 #Grab an emi based on our given criteria
-                image=tester.get_emi(emi=img, root_device_type=itype)
+                image=tester.get_emi(emi=img, root_device_type=itype,not_location='windows')
                 pmsg("Got emi to use:"+image.id)
             
                 #Launch an instance from the emi we've retrieved, instance is returned in the running state
                 tester.poll_count = 96 
-                reservation=tester.run_instance(image, keypair=keypair.name, group=group_name,zone=zone, )
-                if (reservation is not None):
-                    instance = reservation.instances[0]
-                    pmsg("Launched instance:"+instance.id)
-                else:
-                    raise Exception("Failed to run an instance using emi:"+image.id)
+                instance=tester.run_image(image, keypair=keypair.name, type=vmtype, group=group_name,zone=zone, )[0]
+                #if (reservation is not None):
+                #    instance = reservation.instances[0]
+                #    pmsg("Launched instance:"+instance.id)
+                #else:
+                #    raise Exception("Failed to run an instance using emi:"+image.id)
             except Exception, e:
                 pmsg("Doh, error while trying to run instance using emi:"+image.id)
                 raise e
@@ -256,22 +248,17 @@ if __name__ == '__main__':
             pmsg("The md5sum of the remote image: "+str(md5sum))
             
         #Download the remote image, write it directly to our volume
-        cmd="curl "+url+" > "+attached_block_dev+" && echo 'GOOD' && sync"
+        cmd="curl "+url+" > "+attached_block_dev+" && sync"
         try:
             pmsg("Issuing cmd:"+cmd+" , timeout:"+str(timeout))
-            output=instance.sys(cmd,  timeout=timeout)
+            output=instance.sys(cmd,  timeout=timeout, code=0)
             pmsg("Curl output:"+"".join(output))
             result = output[len(output)-1]
             result = result.split(' ')[0]
             pmsg("curl cmd's parsed result:"+result)
         except Exception, e:
             raise Exception("failed to curl image into block dev: "+str(e))
-        #Make sure the curl command did not return error
-        if (re.match('GOOD',result)):
-            pmsg("Our write to volume returned GOOD")
-        else:
-            raise Exception("Our write to volume failed:"+str(result))
-      
+        
         #Get the md5sum of the volume to compare to our previous md5         
         cmd="head -c "+str(fbytes)+" "+attached_block_dev+" | md5sum "
         md5sum2=instance.sys(cmd ,  timeout=timeout)[0]

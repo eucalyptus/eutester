@@ -31,18 +31,11 @@
 # Author: matt.clark@eucalyptus.com
 
 from eucaops import Eucaops
-from eutester import euinstance, euvolume
-import logging
-from boto.ec2.snapshot import Snapshot
-from boto.ec2.image import Image
 import re
 import time
 import httplib
 import sys
-import unittest
 from eutester.eutestcase import EutesterTestCase
-from eutester.eutestcase import EutesterTestResult
-from testcases.cloud_user.ebs.ebstestsuite import TestZone
 from eutester.sshconnection import SshCbReturn
 
 
@@ -185,9 +178,7 @@ class ImageUtils(EutesterTestCase):
             cmdargs = cmdargs + " --debug "
         
         cmdargs = cmdargs + " -i " + str(path)
-        
-        
-        
+
         if credpath is not None:
             cmd = 'source '+str(credpath)+'/eucarc && euca-bundle-image ' + str(cmdargs)
         else:
@@ -316,14 +307,36 @@ class ImageUtils(EutesterTestCase):
                        name=None,
                        architecture=None,
                        root_device_name=None,
+                       description="None",
                        block_device_mapping=None,
                        destination=None,
                        debug=False):
-        '''convience method to register an s3 image manifest, calls eutester main method'''
-        return self.tester.register_image( manifest, rdn=root_device_name, description=description, bdmdev=block_device_mapping, name=name, ramdisk=ramdisk, kernel=kernel)
-    
-    
-    def create_emi_from_url(self, 
+        '''convience method to register an s3 image manifest, calls eutester main method
+        :param manifest: manfest to register
+        :param prefix:
+        :param kernel:
+        :param ramdisk:
+        :param name:
+        :param architecture:
+        :param root_device_name:
+        :param description:
+        :param block_device_mapping:
+        :param destination:
+        :param debug:
+        '''
+        return self.tester.register_image( manifest,
+                                           root_device_name=root_device_name,
+                                           description=description,
+                                           bdmdev=block_device_mapping,
+                                           name=name,
+                                           ramdisk=ramdisk,
+                                           kernel=kernel)
+
+
+
+
+
+    def create_emi_from_url(self,
                             url,
                             component=None,
                             bucketname=None, 
@@ -373,7 +386,7 @@ class ImageUtils(EutesterTestCase):
                                                  timeout=upload_timeout, uniquebucket=uniquebucket)
         
         self.debug('create_emi_from_url: Now registering...')
-        emi = self.tester.register_image(image_location=upload_manifest, rdn=root_device_name, 
+        emi = self.tester.register_image(image_location=upload_manifest, root_device_name=root_device_name,
                                          description=description, bdmdev=block_device_mapping, 
                                          name=name, ramdisk=ramdisk, kernel=kernel)
         elapsed= int(time.time()-start)

@@ -64,6 +64,7 @@ if __name__ == "__main__":
     testcase= EutesterTestCase(name='ebs_basic_test')    
     testcase.setup_parser(description="Attempts to test and provide info on focused areas related to Eucalyptus EBS related functionality.", 
                           testlist=False)
+    testcase.parser.add_argument('--instance_password',dest='inst_pass', help='String representing root password for instance, will replace keypair ssh login',default=None)
     testcase.get_args()
     ebstestsuite= testcase.do_with_args(EbsTestSuite)
     testcase.clean_method = ebstestsuite.clean_created_resources
