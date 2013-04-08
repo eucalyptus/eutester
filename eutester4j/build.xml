@@ -92,7 +92,7 @@
         </taskdef>
 
         <mkdir dir="${testng.output.dir}"/>
-        <testng outputdir="${testng.output.dir}" classpathref="classpath" testnames="${tests}">
+        <testng outputdir="${testng.output.dir}" classpathref="classpath" testnames="${tests}" haltonfailure="true">
             <xmlfileset dir="." includes="testng.xml"/>
             <jvmarg value="-Deucarc=${eucarc}" />
         </testng>
