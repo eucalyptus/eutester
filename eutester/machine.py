@@ -375,8 +375,17 @@ class Machine:
             print Eutester.get_traceback()
         return int(elapsed)
 
-    def get_eucalyptus_version(self,versionpath='/etc/eucalyptus/eucalyptus-version'):
-        return self.sys('cat ' + versionpath, code=0)[0]
+    def get_eucalyptus_version(self,versionpath="/etc/eucalyptus/eucalyptus-version"):
+        """
+
+        :param versionpath: path to version file
+        :return: eucalyptus version string
+        """
+        try:
+            return self.sys('cat ' + versionpath, code=0)[0]
+        except Exception, e:
+            return self.sys('cat /opt/eucalyptus' + versionpath, code=0)[0]
+
 
 
     def is_file_present(self, filepath):

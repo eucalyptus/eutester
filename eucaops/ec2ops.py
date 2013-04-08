@@ -53,6 +53,7 @@ from boto.ec2.regioninfo import RegionInfo
 import boto
 
 from eutester import Eutester
+import eutester
 from eutester.euinstance import EuInstance
 from eutester.euvolume import EuVolume
 from eutester.eusnapshot import EuSnapshot
@@ -898,7 +899,7 @@ class EC2ops(Eutester):
         self.debug("\n"+str(buf)+"\n")
         
 
-    def delete_volume(self, volume, poll_interval=10, timeout=120):
+    def delete_volume(self, volume, poll_interval=10, timeout=180):
         """
         Delete the EBS volume then check that it no longer exists
 
@@ -934,7 +935,7 @@ class EC2ops(Eutester):
             return False
         return True
     
-    def delete_volumes(self, volume_list, poll_interval=10, timeout=120):
+    def delete_volumes(self, volume_list, poll_interval=10, timeout=180):
         """
         Deletes a list of EBS volumes then checks for proper state transition
 
@@ -1638,7 +1639,7 @@ class EC2ops(Eutester):
     @Eutester.printinfo
     def register_snapshot(self,
                           snapshot,
-                          root_device_name="/dev/sda1",
+                          root_device_name="/dev/sda",
                           description="bfebs",
                           windows=False,
                           bdmdev=None,
@@ -3246,6 +3247,29 @@ class EC2ops(Eutester):
             raise Exception('Failed to retrieve image after registering. Image:' + str(image) + ", err:" + str(e))
         self.debug("Registered '" + str(manifest) + "as image:" + str(image))
         return image_obj
+
+
+    def create_web_servers(self, keypair, group, zone, port=80, count=2, image=None, filename="test-file"):
+        if not image:
+            image = self.get_emi()
+        reservation = self.run_instance(image, keypair=keypair, group=group, zone=zone, min=count, max=count)
+        self.authorize_group(group=group,port=port)
+
+        ### TODO edit this so that the proper port is open on the apache instance
+        for instance in reservation.instances:
+            assert isinstance(instance, EuInstance)
+            try:
+                instance.sys("which apt-get",code=0)
+                ## Debian based Linux
+                instance.sys("apt-get install -y apache2")
+                instance.sys("echo \"" + instance.id +"\" > /var/www/" + filename)
+            except eutester.sshconnection.CommandExitCodeException, e:
+                ### Enterprise Linux
+                instance.sys("yum install -y httpd")
+                instance.sys("service httpd start")
+                instance.sys("chkconfig httpd on")
+                instance.sys("echo \"" + instance.id +"\" > /var/www/html/" + filename)
+        return (reservation, filename)
 
 
     def generate_default_s3_upload_policy(self, bucket, prefix, expiration=24, acl='ec2-bundle-read'):

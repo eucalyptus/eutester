@@ -33,8 +33,10 @@ import re
 import copy
 from boto.ec2.regioninfo import RegionInfo
 import boto
+from concurrent.futures import ThreadPoolExecutor
+import urllib2
 from eutester import Eutester
-
+from boto.ec2.elb.listener import Listener
 
 ELBRegionData = {
     'us-east-1': 'elasticloadbalancing.us-east-1.amazonaws.com',
@@ -133,7 +135,7 @@ class ELBops(Eutester):
             elb_connection_args['path'] = path
             elb_connection_args['region'] = elb_region
             self.debug("Attempting to create cloud watch connection to " + elb_region.endpoint + str(port) + path)
-            self.cw = boto.connect_elb(**elb_connection_args)
+            self.elb = boto.connect_elb(**elb_connection_args)
         except Exception, e:
             self.critical("Was unable to create elb connection because of exception: " + str(e))
 
@@ -147,3 +149,41 @@ class ELBops(Eutester):
         """Parse the eucarc for the AWS_ELB_URL"""
         elb_url = self.parse_eucarc("AWS_ELB_URL")
         return elb_url.split("/")[2].split(":")[0]
+
+    def create_listner(self, load_balancer_port=80, protocol="HTTP", instance_port=80, load_balancer=None):
+        self.debug("Creating ELB Listner for protocol " + protocol + " and port " + str(load_balancer_port) + "->" + str(instance_port))
+        listner = Listener(load_balancer=load_balancer,
+                           protocol=protocol,
+                           load_balancer_port=load_balancer_port,
+                           instance_port=instance_port)
+        return listner
+
+    def generate_http_requests(self, url, count=100):
+        response_futures = []
+        with ThreadPoolExecutor(max_workers=count / 2 ) as executor:
+            response_futures.append(executor.submit(urllib2.urlopen, url))
+
+        responses = []
+        for response in response_futures:
+            http_response = response.result()
+            http_error_code = http_response.getcode()
+            if http_error_code == 200:
+                responses.append(http_response)
+            else:
+                raise Exception("Error code " + http_error_code +" found when sending " +
+                                str(count/2) + " concurrent requests to " + url)
+        return responses
+
+    def create_load_balancer(self, zones, name="test", load_balancer_port=80):
+        self.debug("Creating load balancer: " + name + " on port " + str(load_balancer_port))
+        listener = self.create_listner(load_balancer_port=load_balancer_port)
+        self.elb.create_load_balancer(name, zones=zones, listeners=[listener])
+
+        ### Validate the creation of the load balancer
+        load_balancer = self.elb.get_all_load_balancers(load_balancer_names=[name])
+        if len(load_balancer) == 1:
+            return load_balancer[0]
+        else:
+            raise Exception("Unable to retrieve load balancer after creation")
+
+

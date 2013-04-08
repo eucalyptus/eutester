@@ -1,0 +1,9 @@
+{ "expiration": "2013-12-01T12:00:00.000Z",
+  "conditions": [
+    {"bucket": "postbucket00"},
+    ["starts-with", "$key", "posttest"],
+    {"acl": "public-read"},
+    {"success_action_redirect": "http://localhost"},
+    ["starts-with", "$Content-Type", "text/"],
+  ]
+}

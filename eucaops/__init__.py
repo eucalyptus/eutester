@@ -34,6 +34,7 @@ from boto.ec2.image import Image
 from boto.ec2.volume import Volume
 from cwops import CWops
 from asops import ASops
+from eucaops.elbops import ELBops
 from iamops import IAMops
 from ec2ops import EC2ops
 from s3ops import S3ops
@@ -48,9 +49,11 @@ from eutester import eulogger
 import re
 import os
 
-class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops):
+class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
     
-    def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,  account="eucalyptus", user="admin", username=None, APIVersion='2011-01-01', region=None, ec2_ip=None, s3_ip=None, as_ip=None, download_creds=True,boto_debug=0):
+    def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None,
+                 aws_secret_access_key = None,  account="eucalyptus", user="admin", username=None, APIVersion='2011-01-01',
+                 region=None, ec2_ip=None, s3_ip=None, as_ip=None, elb_ip=None, download_creds=True,boto_debug=0):
         self.config_file = config_file 
         self.APIVersion = APIVersion
         self.eucapath = "/opt/eucalyptus"
@@ -155,6 +158,13 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops):
                 self.setup_as_connection(endpoint=as_ip, path="/services/AutoScaling", port=8773, is_secure=False, region=region, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
             except Exception, e:
                 self.debug("Unable to create AS connection because of: " + str(e) )
+
+            try:
+                if self.credpath and not elb_ip:
+                    elb_ip = self.get_elb_ip()
+                self.setup_elb_connection(endpoint=elb_ip, path="/services/LoadBalancing", port=8773, is_secure=False, region=region, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
+            except Exception, e:
+                self.debug("Unable to create ELB connection because of: " + str(e) )
 
     def get_available_vms(self, type=None, zone=None):
         """

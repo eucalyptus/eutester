@@ -90,6 +90,7 @@ class ASops(Eutester):
         self.test_resources = {}
         self.setup_as_resource_trackers()
 
+    @Eutester.printinfo
     def setup_as_connection(self, endpoint=None, aws_access_key_id=None, aws_secret_access_key=None, is_secure=True,
                             host=None, region=None, path="/", port=443, boto_debug=0):
         """

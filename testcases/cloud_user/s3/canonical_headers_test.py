@@ -52,7 +52,7 @@ class WalrusBasics(unittest.TestCase):
 
         protocol = "http://"
         self.server = protocol + self.tester.s3.server_name() + self.tester.s3.path
-        self.auth = Auth(self.tester.aws_access_key_id, self.tester.aws_secret_access_key)
+        self.auth = Auth(self.tester.get_access_key(), self.tester.get_secret_key())
         """
         Create auth and attempt to authenticate to Walrus via S3Connection
         """
