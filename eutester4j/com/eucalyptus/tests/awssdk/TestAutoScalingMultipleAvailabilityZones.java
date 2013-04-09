@@ -53,8 +53,11 @@ public class TestAutoScalingMultipleAvailabilityZones {
 		final DescribeAvailabilityZonesResult azResult = ec2
 				.describeAvailabilityZones();
 
-		assertThat(azResult.getAvailabilityZones().size() > 1,
-				"Multiple availability zones required");
+        // If only 1 AZ then do not run test but pass w/ a message
+        if (azResult.getAvailabilityZones().size() < 2) {
+            print("Test Skipped: Multiple Availability Zones Required");
+            return;
+        }
 
 		final String availabilityZone1 = azResult.getAvailabilityZones().get(0)
 				.getZoneName();
@@ -103,7 +106,7 @@ public class TestAutoScalingMultipleAvailabilityZones {
 
 			// Wait for instances to launch
 			print("Waiting for 2 instances to launch");
-			final long timeout = TimeUnit.MINUTES.toMillis(2);
+			final long timeout = TimeUnit.MINUTES.toMillis(3);
 			List<Instance> instances = (List<Instance>) waitForInstances(timeout, 2, groupName, false);
 			assertBalanced(instances, availabilityZone1, availabilityZone2);
 
@@ -137,7 +140,7 @@ public class TestAutoScalingMultipleAvailabilityZones {
 			waitForInstances(timeout, 0, groupName, false);
 
 			// Update group desired capacity and wait for instances to launch
-			print("Setting desired capacity to 0 for group: " + groupName);
+			print("Setting desired capacity to 4 for group: " + groupName);
 			as.setDesiredCapacity(new SetDesiredCapacityRequest()
 					.withAutoScalingGroupName(groupName).withDesiredCapacity(4));
 
