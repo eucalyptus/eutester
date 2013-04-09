@@ -108,7 +108,7 @@ class SshCbReturn():
         :param settimer: if cb settimer is > 0, timer timeout will be adjusted for this time
         :param statuscode: if cb statuscode is != -1 cmd status will return with this value
         :param nextargs: if cb nextargs is set, the next time cb is called these args will be passed instead
-        :param buf: if cb buf is not None, the cmd['output'] buffer will be appended with this buf
+        :param buf: if cb buf is not None, the cmd['output'] buffer will be appended with this buf instead of std-out/err
         """
         self.stop = stop
         self.statuscode = statuscode
@@ -398,6 +398,8 @@ class SshConnection():
                                 cbreturn = cb(new, *cbargs)
                                 #Let the callback control whether or not to continue
                                 if cbreturn.stop:
+                                    if cbreturn.buf:
+                                        output += cbreturn.buf
                                     cbfired = True
                                     #Let the callback dictate the return code, otherwise -1 for connection err may occur
                                     if cbreturn.statuscode != -1:
