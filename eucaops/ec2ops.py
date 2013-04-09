@@ -2153,20 +2153,6 @@ class EC2ops(Eutester):
                 raise e
         return vol
 
-    def check_for_same_public_private_address(self, instance, private_addressing):
-        if (instance.ip_address == instance.private_ip_address) or \
-                        (instance.public_dns_name == instance.private_dns_name) and \
-                        ( private_addressing is False ):
-            self.debug(str(instance) + " got Public IP: " + str(instance.ip_address) + " Private IP: " +
-                       str(instance.private_ip_address) + " Public DNS Name: " + str(instance.public_dns_name) +
-                       " Private DNS Name: " + str(instance.private_dns_name))
-            self.critical(
-                "Instance " + instance.id + " has he same public and private IPs of " + str(instance.ip_address))
-        else:
-            self.debug(str(instance) + " got Public IP: " + str(instance.ip_address) + " Private IP: " +
-                       str(instance.private_ip_address) + " Public DNS Name: " + str(instance.public_dns_name) +
-                       " Private DNS Name: " + str(instance.private_dns_name))
-
     @Eutester.printinfo
     def run_instance(self,
                      image=None,
@@ -2248,7 +2234,17 @@ class EC2ops(Eutester):
             #    
             # check to see if public and private DNS names and IP addresses are the same
             #
-            #self.check_for_same_public_private_address(instance, private_addressing)
+            if (instance.ip_address == instance.private_ip_address) or \
+                    (instance.public_dns_name == instance.private_dns_name) and \
+                    ( private_addressing is False ):
+                self.debug(str(instance) + " got Public IP: " + str(instance.ip_address)  + " Private IP: " +
+                           str(instance.private_ip_address) + " Public DNS Name: " + str(instance.public_dns_name) +
+                           " Private DNS Name: " + str(instance.private_dns_name))
+                self.critical("Instance " + instance.id + " has he same public and private IPs of " + str(instance.ip_address))
+            else:
+                self.debug(str(instance) + " got Public IP: " + str(instance.ip_address)  + " Private IP: " +
+                           str(instance.private_ip_address) + " Public DNS Name: " + str(instance.public_dns_name) +
+                           " Private DNS Name: " + str(instance.private_dns_name))
 
             try:
                 self.wait_for_valid_ip(instance, private_addressing=private_addressing)
