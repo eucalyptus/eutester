@@ -425,7 +425,9 @@ class EC2ops(Eutester):
         :return:
 
         """
+        old_api_version = self.ec2.APIVersion
         try:
+            self.ec2.APIVersion = "2009-10-31"
             self.debug( "Attempting authorization of " + group_name + " on port " + str(port) + " " + protocol )
             self.ec2.authorize_security_group_deprecated(group_name,ip_protocol=protocol, from_port=port, to_port=port, cidr_ip=cidr_ip)
             return True
@@ -434,6 +436,8 @@ class EC2ops(Eutester):
                 self.debug( 'Security Group: %s already authorized' % group_name )
             else:
                 raise
+        finally:
+            self.ec2.APIVersion = old_api_version
 
 
     def authorize_group(self, group, port=22, protocol="tcp", cidr_ip="0.0.0.0/0"):
