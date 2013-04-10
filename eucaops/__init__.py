@@ -110,10 +110,11 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
                         self.credpath = self.get_credentials(account,user)
                         self.debug("Successfully downloaded and synced credentials")
                     except Exception, e:
+                        tb = self.get_traceback()
                         self.debug("Caught an exception when getting credentials from first CLC: " + str(e))
                         ### If i only have one clc this is a critical failure, else try on the other clc
                         if len(clc_array) < 2:
-                            raise Exception("Could not get credentials from first CLC and no other to try")
+                            raise Exception(str(tb) + "\nCould not get credentials from first CLC and no other to try")
                         self.swap_clc()
                         self.sftp = self.clc.ssh.connection.open_sftp()
                         self.get_credentials(account,user)
@@ -524,7 +525,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
         
     
     def download_creds_from_clc(self, admin_cred_dir):
-        self.debug("Downloading credentials from " + self.clc.hostname)
+        self.debug("Downloading credentials from " + self.clc.hostname + ", path:" + admin_cred_dir + "/creds.zip")
         self.sftp.get(admin_cred_dir + "/creds.zip" , admin_cred_dir + "/creds.zip")
         os.system("unzip -o " + admin_cred_dir + "/creds.zip -d " + admin_cred_dir )
     
