@@ -48,42 +48,183 @@ import time
 
 #This class basically sets up a debugger for testing purposes. It allows the user to set up a new logger object and pass different debug arguments to create "breakpoints" in the code.
 class Eulogger(object):
-    
+
     #constructor for the Eulogger
-    def __init__(self,identifier="eulogger",log_level="debug",fdebug='%(message)s',ferr='%(funcName)s():%(lineno)d: %(message)',logfile = "",clear = False):
-        
-        self.setupLogging(identifier, log_level, fdebug, ferr, logfile, clear)
-        #now add the locations will log to by adding handlers to our logger...
-        self.log.addHandler(self.outhdlr) 
-        
-        if (self.logfile != ""):
-            #to log to a file as well add another handler to the logger...
-            if (self.clear):
-                os.remove(self.logfile)
-            filehdlr = logging.FileHandler(self.logfile)
-            filehdlr.setFormatter(str(self.ferr))
-            self.log.addHandler(filehdlr)
+    def __init__(self,
+                 parent_logger_name = 'eutester',
+                 identifier="eulogger",
+                 stdout_level="debug",
+                 stdout_format = None,
+                 logfile = "",
+                 logfile_level="debug",
+                 make_log_file_global=True,
+                 use_global_log_files=True,
+                 file_format = None,
+                 clear_file = False):
+        """
 
+        :param parent_logger_name:
+        :param identifier:
+        :param stdout_level:
+        :param stdout_format:
+        :param logfile:
+        :param logfile_level:
+        :param make_log_file_global:
+        :param use_global_log_files:
+        :param file_format:
+        :param clear_file:
+        """
+        print ( "-----------------------------------------------" \
+                + "\nparent_logger_name:" + str(parent_logger_name) \
+                + "\neulogger init:" \
+                + "\nidentifier:" + str(identifier) \
+                + "\nstdout_level:" + str(stdout_level) \
+                + "\nstdout_format:" + str(stdout_format) \
+                + "\nlogfile:" + str(logfile) \
+                + "\nlogfile_level:" + str(logfile_level) \
+                + "\nfile_format:" + str(file_format) \
+                + "\nclear_file:" + str(clear_file) \
+                + "\n-----------------------------------------------" )
 
-    #This function sets up all of the logger properties
-    def setupLogging(self, identifier, log_level, fdebug, ferr, logfile, clear): 
-        self.log_level = logging.__dict__.get(log_level.upper(),logging.DEBUG)
         self.logfile = os.path.join(logfile)
-        self.ferr = ferr
-        self.fdebug = fdebug
-        self.clear = clear
+        self.clear_file = clear_file
+
+        #Create of fetch existing logger of name 'logger_name
+        self.parent_logger_name = parent_logger_name
+        self.identifier = identifier
         self.name = identifier + str(time.time())
-        
-        self.default_format = logging.Formatter('[%(asctime)s] [' + identifier + '] [%(levelname)s]: %(message)s')
-        self.formatter2 = logging.Formatter('[%(asctime)s] [' + identifier + '] [%(levelname)s] [%(filename)s:%(funcName)s():%(lineno)d]: %(message)s')
-        self.formatter3 = logging.Formatter( identifier +':%(funcName)s():%(lineno)d: %(message)s')
+        self.parent_logger = logging.getLogger(self.parent_logger_name)
+        self.log = self.parent_logger.getChild(self.name)
+        self.file_info_list = []
+
+        #map string for log level to 'logging' class type or default to logging.DEBUG if string isn't found
+        self.stdout_level = logging.__dict__.get(stdout_level.upper(),logging.DEBUG)
+        self.logfile_level = logging.__dict__.get(logfile_level.upper(),logging.DEBUG)
+
+        #set the parent and child logger levels to the lowest of the two handler levels
+        if self.stdout_level < self.logfile_level:
+            self.logger_level = self.stdout_level
+        else:
+            self.logger_level = self.logfile_level
+        if self.log.level > self.logger_level or self.log.level == 0:
+            self.log.setLevel(self.logfile_level)
+        if self.parent_logger > self.logger_level or self.log.level == 0:
+            self.parent_logger.setLevel(self.logfile_level)
+
+
+        #set some default and canned formatters for logging output
+        self.default_format = stdout_format or logging.Formatter('[%(asctime)s] [' + self.identifier + '] [%(levelname)s]: %(message)s')
+        self.file_format = file_format or self.default_format
+
+        #Add a few canned formatters for reference/convenience
+        self.formatter2 = logging.Formatter('[%(asctime)s] [' + self.identifier + '] [%(levelname)s] [%(filename)s:%(funcName)s():%(lineno)d]: %(message)s')
+        self.formatter3 = logging.Formatter( self.identifier +':%(funcName)s():%(lineno)d: %(message)s')
         self.formatter4 = logging.Formatter('%(message)s')
 
-        self.log = logging.getLogger(self.name)
-        self.log.setLevel(self.log_level)
-        self.outhdlr = logging.StreamHandler(sys.stdout)
-        self.outhdlr.setFormatter(self.default_format)
-        for handler in self.log.handlers:
-            if handler is self.outhdlr:
-                return
+        self.stdout_handler = logging.StreamHandler(sys.stdout)
+        self.stdout_handler.setFormatter(self.default_format)
+        self.stdout_handler.setLevel(self.stdout_level)
+        #Add filter so only log records from this child logger are handled
+        self.stdout_handler.addFilter(Allow_Logger_By_Name(self.log.name))
+        if self.stdout_handler not in self.log.handlers:
+            self.log.addHandler(self.stdout_handler)
+        else:
+            print "Not adding stdout handler for this eulogger:" +str(self.identifier)
+
+        #Now add the file handlers...
+        if use_global_log_files:
+            self.file_info_list = self.get_parent_logger_files()
+        if (self.logfile):
+            self.file_info_list.append(File_Handler_Info(self.logfile,self.logfile_level))
+            #If the clear flag is set remove the file first...
+            if (self.clear_file):
+                try:
+                    os.remove(self.logfile)
+                except Exception, e:
+                    print "Error while attempting to remove log file '" + self.logfile + "', err:" + str(e)
+            if make_log_file_global:
+                self.add_muted_file_handler_to_parent_logger(self.logfile,self.logfile_level)
+        for fileinfo in self.file_info_list:
+            file_hdlr = logging.FileHandler(fileinfo.filepath)
+            file_hdlr.setFormatter(self.file_format)
+            file_hdlr.setLevel(fileinfo.level)
+            #Add filter so only log records from this child logger are handled
+            file_hdlr.addFilter(Allow_Logger_By_Name(self.log.name))
+            #Make sure this is not a duplicate handler or this file is a dup of another handler
+            if file_hdlr not in self.log.handlers:
+                add = True
+                for h in self.log.handlers:
+                    if h.stream.name == file_hdlr.stream.name:
+                        add = False
+                        self.log.debug('File already has log handler:' + str(logfile.filepath))
+                        break
+                if add:
+                    self.log.addHandler(file_hdlr)
+            else:
+                print "Not adding logfile handler for this eulogger:" +str(self.identifier)
+
+        self.log.debug(str(self.identifier) + ": Eulogger init test message. Init complete !!!!!!!!!!!!!!!!!!!!!!!")
+        print (str(self.identifier) + ": Printed message, Init complete")
+
+    def add_muted_file_handler_to_parent_logger(self,filepath, level):
+        file_handler = logging.FileHandler(filepath)
+        file_handler.setLevel(level)
+        file_handler.addFilter(Mute_Filter())
+
+
+
+    def get_parent_logger_files(self):
+        files= []
+        for h in self.parent_logger.handlers:
+            if isinstance(h, logging.FileHandler):
+                files.append(File_Handler_Info(h.stream.name, h.level))
+        return files
+
+class File_Handler_Info():
+    def __init__(self, filepath, level):
+        if not filepath or not level:
+            raise Exception("File_Handler_Info None option not allowed, filepath:"+str(filepath)+",level:"+str(level))
+        self.filepath = filepath
+        self.level = level
+
+class Allow_Logger_By_Name(logging.Filter):
+    """
+    Only messages from this logger are allow through to prevent duplicates from other loggers of same level, etc..
+    """
+    def __init__(self, name=""):
+        logging.Filter.__init__(self, name)
+
+    def filter(self, record):
+        return record.name == self.name
+
+class Mute_Filter(logging.Filter):
+    def filter(self, record):
+        return False
+
+
+#Another filter for unique single messages w multiple child loggers...
+class Unique(logging.Filter):
+    """Messages are allowed through just once.
+    The 'message' includes substitutions, but is not formatted by the
+    handler. If it were, then practically all messages would be unique!
+    """
+    def __init__(self, name=""):
+        logging.Filter.__init__(self, name)
+        self.reset()
+    def reset(self):
+        """Act as if nothing has happened."""
+        self.__logged = {}
+    def filter(self, rec):
+        """logging.Filter.filter performs an extra filter on the name."""
+        return logging.Filter.filter(self, rec) and self.__is_first_time(rec)
+    def __is_first_time(self, rec):
+        """Emit a message only once."""
+        msg = rec.msg %(rec.args)
+        if msg in self.__logged:
+            self.__logged[msg] += 1
+            return False
+        else:
+            self.__logged[msg] = 1
+            return True
+
  
