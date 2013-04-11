@@ -73,7 +73,7 @@ class Eulogger(object):
         :param use_global_log_files:
         :param file_format:
         :param clear_file:
-        """
+
         print ( "-----------------------------------------------" \
                 + "\nparent_logger_name:" + str(parent_logger_name) \
                 + "\neulogger init:" \
@@ -85,7 +85,7 @@ class Eulogger(object):
                 + "\nfile_format:" + str(file_format) \
                 + "\nclear_file:" + str(clear_file) \
                 + "\n-----------------------------------------------" )
-
+        """
         self.logfile = os.path.join(logfile)
         self.clear_file = clear_file
 
@@ -164,7 +164,6 @@ class Eulogger(object):
                 print "Not adding logfile handler for this eulogger:" +str(self.identifier)
 
         self.log.debug(str(self.identifier) + ": Eulogger init test message. Init complete !!!!!!!!!!!!!!!!!!!!!!!")
-        print (str(self.identifier) + ": Printed message, Init complete")
 
     def add_muted_file_handler_to_parent_logger(self,filepath, level):
         file_handler = logging.FileHandler(filepath)
