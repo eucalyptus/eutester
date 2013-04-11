@@ -46,9 +46,7 @@ import sys
 import logging
 import time
 
-#This class basically sets up a debugger for testing purposes. It allows the user to set up a new logger object and pass different debug arguments to create "breakpoints" in the code.
 class Eulogger(object):
-
     #constructor for the Eulogger
     def __init__(self,
                  parent_logger_name = 'eutester',
@@ -62,18 +60,25 @@ class Eulogger(object):
                  file_format = None,
                  clear_file = False):
         """
+        This class basically sets up a child debugger for testing purposes.
+        It allows the user to set up a new logger object and pass different logging formats and levels so different
+        objects and modules can log with unique identifiers and logging levels.
 
-        :param parent_logger_name:
-        :param identifier:
-        :param stdout_level:
-        :param stdout_format:
-        :param logfile:
-        :param logfile_level:
-        :param make_log_file_global:
-        :param use_global_log_files:
-        :param file_format:
-        :param clear_file:
 
+        :param parent_logger_name: Name of root/parent logger
+        :param identifier: identifier used for log formatting and child logger name
+        :param stdout_level: log level (see 'logging' class) for std out handler under this child logger
+        :param stdout_format: logging format used by this child logger's stdout handler
+        :param logfile: file path to use for this child logger's logging file handler
+        :param logfile_level: log level (see 'logging' class) for file handler under this child logger
+        :param file_format: logging formate used by this child logger's file handler
+        :param clear_file: will attempt to remove 'logfile' before creating handler. Will not remove parent's files.
+        :param make_log_file_global: boolean, will add this logfile to parent so other child loggers create afterward
+                                     will attempt to create a handler that writes to this file as well.
+        :param use_global_log_files: boolean, will query the parent logger for any file handlers and will attemp to
+                                     create a handler for this child logger using the same file
+
+        #Debug for init...
         print ( "-----------------------------------------------" \
                 + "\nparent_logger_name:" + str(parent_logger_name) \
                 + "\neulogger init:" \
@@ -94,7 +99,7 @@ class Eulogger(object):
         self.identifier = identifier
         self.name = identifier + str(time.time())
         self.parent_logger = logging.getLogger(self.parent_logger_name)
-        self.log = self.parent_logger.getChild(self.name)
+        self.log = self.getChild(self.parent_logger, self.name)
         self.file_info_list = []
 
         #map string for log level to 'logging' class type or default to logging.DEBUG if string isn't found
@@ -163,7 +168,7 @@ class Eulogger(object):
             else:
                 print "Not adding logfile handler for this eulogger:" +str(self.identifier)
 
-        self.log.debug(str(self.identifier) + ": Eulogger init test message. Init complete !!!!!!!!!!!!!!!!!!!!!!!")
+        self.log.debug(str(self.identifier) + ": Eulogger init test message. Init complete")
 
     def add_muted_file_handler_to_parent_logger(self,filepath, level):
         file_handler = logging.FileHandler(filepath)
@@ -171,11 +176,23 @@ class Eulogger(object):
         file_handler.addFilter(Mute_Filter())
 
     def get_parent_logger_files(self):
-        files= []
+        files = []
         for h in self.parent_logger.handlers:
             if isinstance(h, logging.FileHandler):
                 files.append(File_Handler_Info(h.stream.name, h.level))
         return files
+
+    def getChild(self, logger, suffix):
+        """
+        ## Add this for 2.6 support, this was implemented in 2.7...###
+        """
+        if hasattr(logger,'getChild'):
+            return logger.getChild(suffix)
+        else:
+            if logger.root is not logger:
+                suffix = '.'.join((logger.name, suffix))
+            return logger.manager.getLogger(suffix)
+
 
 class File_Handler_Info():
     def __init__(self, filepath, level):
