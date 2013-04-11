@@ -254,7 +254,7 @@ if __name__ == "__main__":
     ### or use a predefined list "AutoScalingGroupBasics", "LaunchConfigBasics", "AutoScalingInstanceBasics"
     # list = testcase.args.tests or ["AutoScalingBasics"] ["clean_groups_and_configs"] too_many_launch_configs_test
     # too_many_policies_test, change_launch_config, clear_all
-    list = testcase.args.tests or ["change_launch_config"]
+    list = testcase.args.tests or ["AutoScalingBasics", "change_launch_config"]
 
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]

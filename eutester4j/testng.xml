@@ -55,7 +55,8 @@
             <class name="com.eucalyptus.tests.awssdk.TestIAMInstanceProfileManagement"/>
             <class name="com.eucalyptus.tests.awssdk.TestIAMInstanceProfiles"/>
             <class name="com.eucalyptus.tests.awssdk.TestIAMRoleManagement"/>
-            <class name="com.eucalyptus.tests.awssdk.TestSTSAssumeRole"/>
+            <!-- TestSTSAssumeRole must be run as non-admin user -->
+            <!-- <class name="com.eucalyptus.tests.awssdk.TestSTSAssumeRole"/> -->
         </classes>
     </test>
     <test name="Eutester4j_Sanity_Test">

@@ -109,7 +109,7 @@ public class TestAutoScalingCooldown {
 					.withAutoScalingGroupName(groupName)
 					.withHonorCooldown(false).withDesiredCapacity(0));
 
-			Thread.sleep(10000);
+			Thread.sleep(15000);
 			print("Setting desired capacity to 1 after cooldown expiry");
 			as.setDesiredCapacity(new SetDesiredCapacityRequest()
 					.withAutoScalingGroupName(groupName)
@@ -142,7 +142,7 @@ public class TestAutoScalingCooldown {
 				// expected failure
 			}
 
-			Thread.sleep(5000);
+			Thread.sleep(7000);
 			print("Executing policy after cooldown expiry");
 			as.executePolicy(new ExecutePolicyRequest()
 					.withAutoScalingGroupName(groupName)
