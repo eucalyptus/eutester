@@ -518,7 +518,10 @@ class EuserviceManager(object):
         clc = enabled_clc or self.get_enabled_clc()
         clc_version = clc.machine.get_eucalyptus_version()
         if self.compare_versions(clc_version,'3.3') >= 0:
-            return self.populate_nodes_3_3(enabled_clc)
+            try:
+                return self.populate_nodes_3_3(enabled_clc)
+            except:
+                return self.populate_nodes_pre_3_3(enabled_clc)
         else:
             return self.populate_nodes_pre_3_3(enabled_clc)
 
