@@ -298,19 +298,30 @@ class EutesterTestUnit():
 class EutesterTestCase(unittest.TestCase):
     color = TestColor()
 
-    def __init__(self,name=None, debugmethod=None):
-        return self.setuptestcase(name=name, debugmethod=debugmethod)
+    def __init__(self,name=None, debugmethod=None, log_level='debug', logfile=None, logfile_level='debug'):
+        return self.setuptestcase(name=name, debugmethod=debugmethod, logfile=logfile, logfile_level=logfile_level)
         
-    def setuptestcase(self, name=None, debugmethod=None, use_default_file=False, default_config='eutester.conf' ):
-        self.name = self._testMethodName = name 
+    def setuptestcase(self,
+                      name=None,
+                      debugmethod=None,
+                      use_default_file=False,
+                      default_config='eutester.conf',
+                      log_level='debug',
+                      logfile=None,
+                      logfile_level='debug'):
+        self.name = self._testMethodName = name
+        self.log_level = log_level
+        self.logfile = logfile
+        self.logfile_level = logfile_level
         if not self.name:
             callerfilename=inspect.getouterframes(inspect.currentframe())[1][1]
             self.name = os.path.splitext(os.path.basename(callerfilename))[0]  
             self._testMethodName = self.name
             print "setuptestname:"+str(name)
+        if not hasattr(self,'args'): self.args=argparse.Namespace()
         self.debugmethod = debugmethod
         if not self.debugmethod:
-            self.setup_debugmethod()
+            self.setup_debugmethod(logfile=self.logfile, logfile_level=self.logfile_level)
         #For QA output add preformat tag
         self.debug('<pre>')
         if not hasattr(self,'testlist'): self.testlist = []
@@ -323,12 +334,13 @@ class EutesterTestCase(unittest.TestCase):
             self.default_config=self.get_default_userhome_config(fname=default_config)
             if self.default_config:
                 self.configfiles.append(self.default_config)
-        if not hasattr(self,'args'): self.args=argparse.Namespace()
         self.show_self()
                 
     def compile_all_args(self):
         self.setup_parser()
         self.get_args()
+
+
                                    
     def setup_parser(self,
                    testname=None, 
@@ -346,6 +358,9 @@ class EutesterTestCase(unittest.TestCase):
                    testlist=True,
                    userdata=True,
                    instance_user=True,
+                   stdout_log_level=True,
+                   logfile_level=True,
+                   logfile=True,
                    instance_password=True,
                    region=True):
         '''
@@ -405,7 +420,15 @@ class EutesterTestCase(unittest.TestCase):
         :param instance_password: Flag to present the instance_password command line argument/option for providing a ssh password for instance login via the cli
         
         :type use_color: flag
-        :param use_color: Flag to enable/disable use of ascci color codes in debug output. 
+        :param use_color: Flag to enable/disable use of ascci color codes in debug output.
+
+        :param stdout_log_level: boolean flag to present the --log_leveel command line option to set stdout log level
+
+        :param logfile_level: boolean flag to present the --logfile_level command line option to set the log file log level
+
+        :param logfile: boolean flag to present the --logfile command line option to set the log file path to log to
+
+        :param region: boolean flag to present the --region command line option to set the region for the test to use
         '''
         
         testname = testname or self.name 
@@ -458,6 +481,15 @@ class EutesterTestCase(unittest.TestCase):
                 help="Use AWS region instead of Eucalyptus", default=None)
         if color:
             parser.add_argument('--use_color', dest='use_color', action='store_true', default=False)
+        if stdout_log_level:
+            parser.add_argument('--log_level',
+                                help="log level for stdout logging", default='debug')
+        if logfile:
+            parser.add_argument('--logfile',
+                                help="file path to log to (in addtion to stdout", default=None)
+        if logfile_level:
+            parser.add_argument('--logfile_level',
+                                help="log level for log file logging", default='debug')
         self.parser = parser  
         return parser
     
@@ -469,18 +501,43 @@ class EutesterTestCase(unittest.TestCase):
         self.set_arg('use_color', True)
         self.use_color = True
         
-        
-    def setup_debugmethod(self, testcasename=None):
-        name = testcasename
-        print "Starting setup_debugmethod"+str(name)
+
+    def setup_debugmethod(self, testcasename=None, log_level=None, logfile=None, logfile_level=None):
+        print "setup_debugmethod: \ntestcasename:"+ str(testcasename) \
+                                + '\nlog_level:'+str(log_level) \
+                                + '\nlogfile:' +str(logfile) \
+                                + '\nlogfile_level:' +str(logfile_level)
+        name = testcasename or self.name
+
+        if not logfile and self.has_arg('logfile'):
+            logfile = self.args.logfile
+        logfile = logfile or self.logfile
+
+        if self.has_arg('logfile_level'):
+            logfile_level = self.args.logfile_level
+        logfile_level = logfile_level or self.logfile_level or 'debug'
+
+        if not log_level and self.has_arg('log_level'):
+            log_level = self.args.log_level
+        log_level = log_level or self.log_level or 'debug'
+
+        print "Starting setup_debugmethod, name:"+str(name)
+        print "After populating... setup_debugmethod: testcasename:"+ str(testcasename) \
+              + 'log_level:'+str(log_level) \
+              + 'logfile:' +str(logfile) \
+              + 'logfile_level:' +str(logfile_level)
         if not name:
             if hasattr(self,'name'):
                 if isinstance(self.name, types.StringType):
                     name = self.name
             else:
                 name = 'EutesterTestCase'
-        logger = Eulogger(identifier=str(name))
-        self.debugmethod = logger.log.debug
+        self.logger = Eulogger(identifier=str(name),stdout_level=log_level, logfile=logfile, logfile_level='debug')
+        self.debugmethod = self.logger.log.debug
+        if not self.has_arg('logger'):
+            self.add_arg('logger',self.logger)
+        if not self.has_arg('debug_method'):
+            self.add_arg('debug_method', self.debug)
 
     def debug(self,msg,traceback=1,color=None, linebyline=True):
         '''
@@ -1161,6 +1218,8 @@ class EutesterTestCase(unittest.TestCase):
         self.args = args
         #finally add the namespace args to args for populating other testcase objs from this one
         if not self.has_arg('args'): args.__setattr__('args',copy.copy(args))
+        #Refresh our debug method(s) in the case the args provided give instruction on logging
+        self.setup_debugmethod()
         self.show_self()
         return args
     
