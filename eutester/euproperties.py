@@ -37,25 +37,36 @@ Intention is to reduce the time in looking up property names, and values outside
 Note: Debug output for the tester.sys command are controled by the eutester/eucaops object 
 
 Sample:
-    
-    props = EucaProperties(myeutesterobject)
-    #get some property values 
-    mysanhost = props.get_storage_sanhost()[0]
-    mysanhostp1 = props.get_storage_sanhost(zone='PARTI01')[0]
-    
-    #use a convenience method to set a property
-    prop.set_storage_sanhost('192.168.1.1',zone='PARTI01')
-    
-    #get the property string value for a given property
-    sanhostp1propertystring = props.get_storage_sanhost(zone=PARTI01)[1]
-    
-    #reset a cloud property to it's default value
-    props.reset_property_to_default(sanhostp1propertystring)
-    
-    
-    
+cat my_cloud.conf
+>   192.168.1.76	CENTOS	6.3	64	REPO	[CLC WS]
+>   192.168.1.77	CENTOS	6.3	64	REPO	[SC00 CC00]
+>   192.168.1.78	CENTOS	6.3	64	REPO	[NC00]
+
+
+    from eucaops import Eucaops
+    from eutester import euproperties
+    Eucaops(config_file='my_cloud.conf', password='mypassword')
+
+    ep_mgr = euproperties.Euproperty_Manager(tester,verbose=True, debugmethod=tester.debug)
+
+
+#get some storage service properties, and some property values...
+
+    #Get/Set value from dynamic method created in Euproperty_Manager...
+        san_host_prop_value = ep_mgr.get_storage_sanhost_value()
+        ep_mgr.set_storage_sanhost_value('192.168.1.200')
+
+    #Get/set value from euproperty directly...
+        san_host_prop = ep_mgr.get_property('san_host', 'storage', 'PARTI00')
+        san_host_prop_value = san_host_prop.get()
+        san_host_prop_set('192.168.1.200'
+
+    #Get multiple properties at once based on certain filters...
+        storage_properties = ep_mgr.get_properties(service_type='storage')
+        partition1_properties = ep_mgr.get_properties(partition='partition1')
 
 '''
+
 import types
 import re
 import copy
@@ -148,17 +159,17 @@ class Euproperty_Manager():
         ret_props = []
         if not self.properties or force_update:
             self.update_property_list()
-        all = self.properties
+        properties = copy.copy(self.properties)
         if partition:
-            all = self.get_all_properties_for_partition(partition, list=all)
+            properties = self.get_all_properties_for_partition(partition, list=properties)
         if service_type:
-            all = self.get_all_properties_for_service(service_type,list=all)
+            properties = self.get_all_properties_for_service(service_type,list=properties)
         if value:
-            for prop in all:
+            for prop in properties:
                 if prop.value == value:
                     ret_props.append(prop)
         else:
-            ret_props = ret_props.extend(all)
+            ret_props.extend(properties)
         return ret_props
 
     def get_property(self,name,service_type, partition, force_update=False):
@@ -249,8 +260,8 @@ class Euproperty_Manager():
 
     def create_dynamic_property_methods_from_property(self, euproperty):
         method_name_string = str(euproperty.service_type).replace('.','_') + "_" + str(euproperty.name).replace('.','_')
-        set_method_name = "set_" + str(method_name_string)
-        get_method_name = "get_" + str(method_name_string)
+        set_method_name = "set_" + str(method_name_string) + "_value"
+        get_method_name = "get_" + str(method_name_string) + "_value"
 
         get_method_doc = "Attempts to get property: " + str(method_name_string) \
                                                       + "\nparam partitions: partition for this property"
