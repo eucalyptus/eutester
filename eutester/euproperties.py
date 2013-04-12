@@ -116,6 +116,35 @@ class Euproperty():
     def set(self, value):
         return self.set_property(self,value)
 
+    def print_self(self, include_header=True, print_method=None):
+        name_len = 50
+        service_len = 20
+        part_len = 20
+        value_len = 30
+        line_len = 120
+
+        header = str('NAME').ljust(name_len)
+        header += "|" + str('SERVICE TYPE').center(service_len)
+        header += "|" + str('PARTITION').center(part_len)
+        header += "|" + str('VALUE LEN').center(value_len)
+        header += "\n"
+
+        out = str(self.name).ljust(name_len)
+        out += "|" + str(self.service_type).center(service_len)
+        out += "|" + str(self.partition).center(part_len)
+        out += "|" + str(self.value).center(value_len)
+        out += "\n"
+        line="-"
+        for x in xrange(0,line_len):
+            line += "-"
+        line += "\n"
+        if include_header:
+            ret = "\n"+line+header+line+line+out
+        else:
+            ret = line+out
+        if print_method:
+            print_method(ret)
+        return ret
 
     
 class Euproperty_Manager():
@@ -150,8 +179,23 @@ class Euproperty_Manager():
             else:
                 self.debugmethod(msg)
     
+    def show_all_properties(self, list=None, debug_method=None):
+        debug_method = debug_method or self.debug
+        list = list or self.properties
+        first = list.pop(0)
+        buf = first.print_self(include_header=True)
+        count = 1
+        for prop in list:
+            count += 1
+            if not(count % 20):
+                print_header = True
+            else:
+                print_header = False
+            buf += prop.print_self(include_header=print_header)
+        debug_method(buf)
 
-    def get_properties(self, partition=None, service_type=None, value=None, force_update=False):
+
+    def get_properties(self, partition=None, service_type=None, value=None, search_string=None, force_update=False):
         self.debug('get_property_value by partition:' + str(partition) \
                                        + ", service_type:" + str(service_type) \
                                        + ", value:" + str(value) \
@@ -164,6 +208,8 @@ class Euproperty_Manager():
             properties = self.get_all_properties_for_partition(partition, list=properties)
         if service_type:
             properties = self.get_all_properties_for_service(service_type,list=properties)
+        if search_string:
+            properties = self.get_all_properties_by_search_string(search_string, list=properties)
         if value:
             for prop in properties:
                 if prop.value == value:
@@ -334,11 +380,11 @@ class Euproperty_Manager():
                 props.append(property)
         return props
 
-    def get_all_properties_by_search_string(self,searchstring, list=None):
+    def get_all_properties_by_search_string(self,search_string, list=None):
         props = []
         list = list or self.properties
         for property in list:
-            if re.search(searchstring,property.property_string):
+            if re.search(search_string,property.property_string):
                 props.append(property)
         return props
 
