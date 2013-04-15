@@ -53,7 +53,8 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
     
     def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None,
                  aws_secret_access_key = None,  account="eucalyptus", user="admin", username=None, APIVersion='2011-01-01',
-                 region=None, ec2_ip=None, s3_ip=None, as_ip=None, elb_ip=None, download_creds=True,boto_debug=0):
+                 region=None, ec2_ip=None, s3_ip=None, as_ip=None, elb_ip=None, download_creds=True,boto_debug=0,
+                 debug_method=None):
         self.config_file = config_file 
         self.APIVersion = APIVersion
         self.eucapath = "/opt/eucalyptus"
@@ -72,13 +73,14 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
         self.credpath = credpath
         self.download_creds = download_creds
         self.logger = eulogger.Eulogger(identifier="EUCAOPS")
-        self.debug = self.logger.log.debug
+        self.debug = debug_method or self.logger.log.debug
         self.critical = self.logger.log.critical
         self.info = self.logger.log.info
         self.username = username
         self.account_id = None
         self.aws_access_key_id = aws_access_key_id
-        self.aws_secret_access_key = aws_secret_access_key 
+        self.aws_secret_access_key = aws_secret_access_key
+
 
         if self.config_file is not None:
             ## read in the config file
@@ -312,13 +314,10 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
         self.debug('clean_up_volumes: Deleteing volumes now...')
         self.delete_volumes(euvolumes)
 
-
-
                     
     def get_current_resources(self,verbose=False):
         '''Return a dictionary with all known resources the system has. Optional pass the verbose=True flag to print this info to the logs
            Included resources are: addresses, images, instances, key_pairs, security_groups, snapshots, volumes, zones
-        
         '''
         current_artifacts = dict()
         current_artifacts["addresses"] = self.ec2.get_all_addresses()

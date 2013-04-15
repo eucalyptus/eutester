@@ -105,7 +105,8 @@ class TaggingBasics(EutesterTestCase):
         instances = self.tester.ec2.get_all_instances(filters=tag_filter)
         if len(instances) != 0:
             raise Exception('Filter returned instances when there shouldnt be any')
-        if test_instance.tags != {}:
+
+        if all(item in test_instance.tags.items() for item in tags.items()):
             raise Exception('Tags still returned after deletion')
         #self.test_restrictions(test_instance)
         #self.test_in_series(test_instance)
