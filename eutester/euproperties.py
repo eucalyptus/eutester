@@ -179,14 +179,6 @@ class Euproperty_Manager():
             else:
                 self.debugmethod(msg)
 
-
-
-
-
-
-
-
-    
     def show_all_properties(self,
                             partition=None,
                             service_type=None,
@@ -214,7 +206,13 @@ class Euproperty_Manager():
         debug_method(buf)
 
 
-    def get_properties(self, partition=None, service_type=None, value=None, search_string=None, force_update=False):
+    def get_properties(self,
+                       name=None,
+                       partition=None,
+                       service_type=None,
+                       value=None,
+                       search_string=None,
+                       force_update=False):
         self.debug('get_property_value by partition:' + str(partition) \
                                        + ", service_type:" + str(service_type) \
                                        + ", value:" + str(value) \
@@ -423,7 +421,6 @@ class Euproperty_Manager():
         eucaops - optional - the eucaops/eutester object to set the property at
         '''
         value = str(value)
-        property = None
         if not isinstance(property,Euproperty):
             try:
                 property = self.get_all_properties_by_search_string(property)
@@ -461,7 +458,7 @@ class Euproperty_Manager():
         prop.lastvalue = prop.value
         ret_string = str(self.clc.sys(self.cmdpath+'euca-modify-property -U '+str(self.service_url)+' -I '+str(self.access_key)+' -S '+ str(self.secret_key) +' -r '+str(property_string),code=0)[0])
         ret_value= ret_string.split()[2]
-        self.debug('Reset property('+prop+') to default value('+str(ret_value)+')')
+        self.debug('Reset property('+str(prop.name)+') to default value('+str(ret_value)+')')
         return ret_value
         
     def get_property_default_value(self, prop, ireadthewarning=False):
