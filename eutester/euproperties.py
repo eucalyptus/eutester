@@ -114,7 +114,7 @@ class Euproperty():
         return self.value
 
     def set(self, value):
-        return self.set_property(self,value)
+        return self.prop_mgr.set_property(self,value)
 
     def print_self(self, include_header=True, print_method=None):
         name_len = 50
@@ -178,16 +178,35 @@ class Euproperty_Manager():
                 print (str(msg))
             else:
                 self.debugmethod(msg)
+
+
+
+
+
+
+
+
     
-    def show_all_properties(self, list=None, debug_method=None):
+    def show_all_properties(self,
+                            partition=None,
+                            service_type=None,
+                            value=None,
+                            search_string=None,
+                            list=None,
+                            debug_method=None):
         debug_method = debug_method or self.debug
-        list = list or self.properties
+        list = list or self.get_properties(partition=partition,
+                                           service_type=service_type,
+                                           value=value,
+                                           search_string=search_string)
         first = list.pop(0)
         buf = first.print_self(include_header=True)
         count = 1
+        last_service_type = first.service_type
         for prop in list:
             count += 1
-            if not(count % 20):
+            if prop.service_type != last_service_type:
+                last_service_type = prop.service_type
                 print_header = True
             else:
                 print_header = False
@@ -390,11 +409,12 @@ class Euproperty_Manager():
 
     def set_property(self, property, value):
         if isinstance(property,Euproperty):
+
             return self.set_property_by_property_string(property.property_string, value)
         else:
             return self.set_property_by_property_string(str(property), value)
 
-    def set_property_by_property_string(self,  property_string, value):
+    def set_property(self,  property, value):
         '''
         Sets the property 'prop' at eucaops/eutester object 'tester' to 'value'    
         Returns new value  
@@ -404,17 +424,18 @@ class Euproperty_Manager():
         '''
         value = str(value)
         property = None
-        try:
-            property = self.get_all_properties_by_search_string(property_string)
-            if len(property) > 1:
-                raise Exception('More than one euproperty found for property string:' +str(property_string))
-            else:
-                property = property[0]
-        except Exception, e:
-            raise Exception('Could not fetch property to set. Using string:' +str(property_string))
-
-        self.debug('Setting property('+property_string+') to value:'+str(value))
-        ret_string = self.clc.sys(self.cmdpath+'euca-modify-property -U '+str(self.service_url)+' -I '+str(self.access_key)+' -S '+ str(self.secret_key) +' -p '+property_string+'='+str(value), code=0)[0]
+        if not isinstance(property,Euproperty):
+            try:
+                property = self.get_all_properties_by_search_string(property)
+                if len(property) > 1:
+                    raise Exception('More than one euproperty found for property string:' +str(property))
+                else:
+                    property = property[0]
+            except Exception, e:
+                raise Exception('Could not fetch property to set. Using string:' +str(property))
+        property.lastvalue = property.value
+        self.debug('Setting property('+property.property_string+') to value:'+str(value))
+        ret_string = self.clc.sys(self.cmdpath+'euca-modify-property -U '+str(self.service_url)+' -I '+str(self.access_key)+' -S '+ str(self.secret_key) +' -p '+property.property_string+'='+str(value), code=0)[0]
 
         if (ret_string):
             ret_value= str(ret_string).split()[2]
@@ -422,7 +443,7 @@ class Euproperty_Manager():
             raise EupropertiesException("set_property output from modify was None")
         
         if (ret_value != value):
-            raise EupropertiesException("set property("+property_string+") to value("+str(value)+") failed.Ret Value ("+str(ret_value)+")\nRet String\n"+ret_string)
+            raise EupropertiesException("set property("+property.property_string+") to value("+str(value)+") failed.Ret Value ("+str(ret_value)+")\nRet String\n"+ret_string)
         property.value = ret_value
         return ret_value
         
@@ -433,7 +454,12 @@ class Euproperty_Manager():
         prop - mandatory - string representing the property to set
         ucaops - optional - the eucaops/eutester object to set the property at
         '''
-        ret_string = str(self.clc.sys(self.cmdpath+'euca-modify-property -U '+str(self.service_url)+' -I '+str(self.access_key)+' -S '+ str(self.secret_key) +' -r '+prop,code=0)[0])
+
+        if not isinstance(prop, Euproperty):
+               prop = self.get_all_properties_by_search_string(prop)[0]
+        property_string = prop.property_string
+        prop.lastvalue = prop.value
+        ret_string = str(self.clc.sys(self.cmdpath+'euca-modify-property -U '+str(self.service_url)+' -I '+str(self.access_key)+' -S '+ str(self.secret_key) +' -r '+str(property_string),code=0)[0])
         ret_value= ret_string.split()[2]
         self.debug('Reset property('+prop+') to default value('+str(ret_value)+')')
         return ret_value
@@ -448,9 +474,9 @@ class Euproperty_Manager():
         if (ireadthewarning is False):
             raise EupropertiesException("ireadthewarning is set to false in get_property_default_value")
     
-        original = self.get_property_value(prop)
+        original = prop.get()
         default = self.reset_property_to_default(prop)
-        self.set_property(prop, original)
+        prop.set(original)
         return default
     
         
