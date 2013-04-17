@@ -43,6 +43,7 @@ import time
 from eutester.euservice import EuserviceManager
 from boto.ec2.instance import Reservation
 from eutester.euconfig import EuConfig
+from eutester.euproperties import Euproperty_Manager
 from eutester.machine import Machine
 from eutester.euvolume import EuVolume
 from eutester import eulogger
@@ -167,6 +168,8 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
                 self.setup_elb_connection(endpoint=elb_ip, path="/services/LoadBalancing", port=8773, is_secure=False, region=region, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
             except Exception, e:
                 self.debug("Unable to create ELB connection because of: " + str(e) )
+        if self.clc:
+            self.update_property_manager()
 
     def get_available_vms(self, type=None, zone=None):
         """
@@ -413,7 +416,11 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
         #f.close()   
         config_hash["machines"] = machines 
         return config_hash
-    
+
+    def update_property_manager(self,machine=None):
+        machine = machine or self.clc
+        self.property_manager = Euproperty_Manager(self,debugmethod=self.debug)
+
     def swap_clc(self):
         all_clcs = self.get_component_machines("clc")
         if self.clc is all_clcs[0]:
