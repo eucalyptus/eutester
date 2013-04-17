@@ -555,7 +555,7 @@ class EuserviceManager(object):
         #to avoid update() loop allow enabled_clc to be provided as arg
         clc = enabled_clc or self.get_enabled_clc()
         nodes_strings = clc.machine.sys(self.eucaprefix + \
-                                        "/usr/sbin/euca_conf --list-nodes 2>1 | grep -v warning")
+                                        "/usr/sbin/euca_conf --list-nodes 2>1 | grep 'NODE\|INSTANCE'")
         for node_string in nodes_strings:
             #handle/skip any blank lines first...
             node_string = node_string.strip()
@@ -858,6 +858,7 @@ class EuserviceManager(object):
                 continue
             return_list.append(node)
         return return_list
+
 
     def get_all_partitions(self):
         return_list = []
