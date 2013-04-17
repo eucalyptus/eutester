@@ -93,6 +93,7 @@ class Eunode:
                  partition,
                  name=None,
                  instance_ids=None,
+                 instances=None,
                  state = None,
                  machine = None,
                  debugmethod = None,
@@ -127,6 +128,7 @@ class Eunode:
                 self.debug("Failed to get machine for this node:" + str(hostname) + ", err:" + str(e))
         #if self.machine:
             #self.hypervisor =
+
 
     def debug(self, msg):
         """
@@ -563,11 +565,8 @@ class EuserviceManager(object):
             #sort out the node string...
             split_string = node_string.split()
             if split_string[type_loc] == 'INSTANCE':
-                instance_list.append(split_string[instance_id_loc])
-            else:
-                if instance_list and last_node:
-                    last_node.instance_ids = copy.copy(instance_list)
-                    instance_list = []
+                node.instance_ids.append(split_string[instance_id_loc])
+            elif(split_string[type_loc] == 'NODE'):
                 hostname = split_string[hostname_loc]
                 partition_name = split_string[partition_loc]
                 state = split_string[state_loc]
@@ -584,7 +583,6 @@ class EuserviceManager(object):
                               hostname,
                               partition,
                               state = state)
-                last_node = node
                 return_list.append(node)
                 if node in part.ncs:
                     part.ncs[part.ncs.index(node)]=node
