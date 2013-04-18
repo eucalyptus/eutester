@@ -34,6 +34,7 @@ import threading
 import time
 import eulogger
 from eutester import Eutester
+from eutester.euconfig import EuConfig
 import sshconnection
 import re
 import os
@@ -129,6 +130,7 @@ class Machine:
                                                     debugmethod=self.debugmethod,
                                                     verbose=True)
             self.sftp = self.ssh.connection.open_sftp()
+        self.get_eucalyptus_conf()
             
     def convert_to_distro(self, distro_name, distro_release):
         distro_name = distro_name.lower()
@@ -628,8 +630,29 @@ class Machine:
         """Save log buffers to a file"""
         for log_file in self.log_buffers.keys():
             self.save_log(log_file,path)
-    
-    
+
+    def get_eucalyptus_conf(self,eof=False,verbose=False):
+        out = None
+        paths = ["","/opt/eucalyptus/"]
+        for path in paths:
+            try:
+                out = self.sys('cat ' + str(path) + '/etc/eucalyptus/eucalyptus.conf', code=0, verbose=verbose)
+            except:
+                pass
+        if not out:
+            if not eof:
+                self.debug('eucalyptus.conf not found on this machine')
+                return None
+            else:
+                raise Exception('eucalyptus.conf not found on this machine')
+        if not re.search('^\[',"\n".join(out)):
+            out.insert(0,'[eucalyptus_conf]\n')
+        config = EuConfig(config_lines=out)
+        self.config = config
+        if hasattr(config,'eucalyptus_conf'):
+            self.eucalyptus_conf = config.eucalyptus_conf
+        return config
+
             
         
     
