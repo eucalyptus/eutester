@@ -25,7 +25,7 @@ class BFEBSBasics(InstanceBasics):
         for instance in self.reservation.instances:
             self.volume = self.tester.create_volume(zone=self.zone, size=2)
             self.volume_device = instance.attach_volume(self.volume)
-            instance.sys("curl " +  self.args.imgurl + " > " + self.volume_device, timeout=800)
+            instance.sys("curl " +  self.args.imgurl + " > " + self.volume_device, timeout=800, code=0)
             snapshot = self.tester.create_snapshot(self.volume.id)
             image_id = self.tester.register_snapshot(snapshot)
         self.image = self.tester.get_emi(image_id)
