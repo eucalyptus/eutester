@@ -12,7 +12,6 @@ class BFEBSBasics(InstanceBasics):
         if self.reservation:
             self.tester.terminate_instances(self.reservation)
             self.reservation = None
-        self.tester.sleep(10)
 
     def RegisterImage(self, zone= None):
         '''Register a BFEBS snapshot'''
@@ -36,25 +35,9 @@ class BFEBSBasics(InstanceBasics):
         '''Launch a BFEBS instance, stop it then start it again'''
         if zone is None:
             zone = self.zone
-        try:
-            self.image = self.tester.get_emi(root_device_type="ebs")
-        except Exception,e:
-            self.RegisterImage()
-            self.image = self.tester.get_emi(root_device_type="ebs")
-        if not self.volume:
-            self.volume = self.tester.create_volume(zone=self.zone, size=2)
-        if self.reservation:
-            self.tester.terminate_instances(self.reservation)
-        self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name, zone=zone)
-        ## Ensure that we can attach and use a volume
-        for instance in self.reservation.instances:
-            vol_dev = instance.attach_volume(self.volume)
-        self.assertTrue(self.tester.stop_instances(self.reservation))
-        for instance in self.reservation.instances:
-            if instance.ip_address or instance.private_ip_address:
-                raise Exception("Instance had a public " + str(instance.ip_address) + " private " + str(instance.private_ip_address) )
-        self.assertTrue(self.tester.start_instances(self.reservation))
-        self.assertTrue( self.tester.ping(self.reservation.instances[0].public_dns_name, poll_count=30), 'Could not ping instance')
+        self.RunStop(zone)
+        self.StartTerminate(zone)
+
 
     def MultipleBFEBSInstances(self):
         """Run half of the available m1.small instances with a BFEBS image"""
@@ -69,6 +52,46 @@ class BFEBSBasics(InstanceBasics):
             self.tester.terminate_instances(self.reservation)
         self.image = self.tester.get_emi(root_device_type="ebs")
         self.Churn(self.image.id)
+
+    def RunStop(self, zone=None):
+        """Run instance then stop them without starting them again"""
+        if zone is None:
+            zone = self.zone
+        try:
+            self.image = self.tester.get_emi(root_device_type="ebs")
+        except Exception,e:
+            self.RegisterImage()
+            self.image = self.tester.get_emi(root_device_type="ebs")
+        if not self.volume:
+            self.volume = self.tester.create_volume(zone=self.zone, size=2)
+        if self.reservation:
+            self.tester.terminate_instances(self.reservation)
+        self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name, zone=zone)
+        ## Ensure that we can attach and use a volume
+        for instance in self.reservation.instances:
+            vol_dev = instance.attach_volume(self.volume)
+        self.tester.stop_instances(self.reservation)
+        for instance in self.reservation.instances:
+            if instance.ip_address or instance.private_ip_address:
+                raise Exception("Instance had a public " + str(instance.ip_address) + " private " + str(instance.private_ip_address) )
+        self.reservation = None
+
+    def StartTerminate(self, zone = None):
+        instances = self.tester.get_instances(state="stopped",zone=zone)
+        if len(instances) == 0:
+            raise Exception("Did not find any stopped instances to start and terminate")
+        try:
+            for instance in instances:
+                self.assertTrue(self.tester.start_instances(instances))
+                if self.keypair.name == instance.key_name:
+                    instance = self.tester.convert_instance_to_euisntance(instance, keypair=self.keypair)
+                    instance.sys("uname -r", code=0)
+                else:
+                    self.assertTrue(self.tester.ping(instance.ip_address))
+        finally:
+            self.tester.terminate_instances(instances)
+
+
 
 if __name__ == "__main__":
     testcase = BFEBSBasics()
