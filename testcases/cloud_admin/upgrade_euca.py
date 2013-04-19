@@ -9,8 +9,8 @@ class Upgrade(Install):
     def __init__(self):
         super(Upgrade, self).__init__(download_creds=True)
         self.clc_service = self.tester.service_manager.get_enabled_clc()
-        machine = self.tester.get_component_machines("clc")[0]
-        self.old_version = machine.sys("cat /etc/eucalyptus/eucalyptus-version")[0]
+        self.clc = self.clc_service.machine
+        self.old_version = self.clc.sys("cat /etc/eucalyptus/eucalyptus-version")[0]
         for machine in self.tester.config["machines"]:
             if re.search(machine.distro.name, "vmware"):
                 self.add_enterprise_repo()
@@ -50,8 +50,11 @@ class Upgrade(Install):
 
     def UpgradeAll(self):
         self.add_euca_repo()
-        if hasattr(self.args, 'ebs_storage_manager'):
+        try:
+            self.clc.sys("rpm -qa | grep eucalyptus-enterprise", code=0)
             self.add_enterprise_repo()
+        except Exception, e:
+            pass
         self.stop_components()
         self.upgrade_packages()
         self.start_components()
