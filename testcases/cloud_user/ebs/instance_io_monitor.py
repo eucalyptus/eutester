@@ -14,6 +14,8 @@ from eucaops import ec2ops
 #from eutester.euvolume import EuVolume
 #from eutester.eusnapshot import EuSnapshot
 from eutester.sshconnection import SshCbReturn
+from eutester.euproperties import Euproperty_Type
+from testcases.cloud_user.ebs.mpath_monkey import Mpath_Monkey
 from eucaops import Eucaops
 import eutester
 import time
@@ -25,7 +27,7 @@ import re
 import curses
 
 class Instance_Io_Monitor(EutesterTestCase):
-    def __init__(self, **kwargs):
+    def __init__(self, tester=None,**kwargs):
         #### Pre-conditions
         self.setuptestcase()
         self.setup_parser()
@@ -56,6 +58,12 @@ class Instance_Io_Monitor(EutesterTestCase):
                                  type=int,
                                  help='Time allowed for volume to transition from deleting to deleted, default:120',
                                  default=120)
+        self.parser.add_argument('--cycle_paths',
+                                 action='store_true', default=False,
+                                 help='Time allowed for volume to transition from deleting to deleted, default:120')
+
+
+        self.tester = tester
         self.get_args()
         # Allow __init__ to get args from __init__'s kwargs or through command line parser...
         for kw in kwargs:
@@ -64,11 +72,13 @@ class Instance_Io_Monitor(EutesterTestCase):
         #if self.args.config:
         #    setattr(self.args, 'config_file',self.args.config)
         # Setup basic eutester object
-        try:
-            self.tester = self.do_with_args(Eucaops)
-        except Exception, e:
-            raise Exception('Couldnt create Eucaops tester object, make sure credpath, '
-                            'or config_file and password was provided, err:' + str(e))
+        if not self.tester:
+            try:
+                self.tester = self.do_with_args(Eucaops)
+            except Exception, e:
+                raise Exception('Couldnt create Eucaops tester object, make sure credpath, '
+                                'or config_file and password was provided, err:' + str(e))
+
         #replace default eutester debugger with eutestcase's for more verbosity...
         self.tester.debug = lambda msg: self.debug(msg, traceback=2, linebyline=False)
         self.reservation = None
@@ -107,6 +117,8 @@ class Instance_Io_Monitor(EutesterTestCase):
         self.volumes = None
         self.remote_script_path = None
         self.longest_wait_period = 0
+        self.mpath_monkey = None
+
 
 
 
@@ -115,6 +127,12 @@ class Instance_Io_Monitor(EutesterTestCase):
         Attempts to clean up resources created during this test...
         '''
         try:
+            if self.mpath_monkey:
+                try:
+                    node = self.mpath_monkey.host
+                    self.mpath_monkey.clear_all_eutester_rules()
+                except Exception, e:
+                    self.debug('Error cleaning up iptables rules on NC:' + str(node) +', Err:'+str(e))
             self.tester.cleanup_artifacts()
         except Exception, e:
             tb = self.tester.get_traceback()
@@ -137,6 +155,47 @@ class Instance_Io_Monitor(EutesterTestCase):
                                                    keypair=self.keypair,
                                                    monitor_to_running=True)[0]
 
+
+    def get_nc_paths_for_instance(self,instance=None, iface=False):
+        paths = []
+        instance = instance or self.instance
+        partition = instance.placement
+        ncpaths_property = self.tester.property_manager.get_property(service_type=Euproperty_Type.storage,partition=partition,name='ncpaths')
+        for path in str(ncpaths_property.value).split(','):
+            for part in path.split(':'):
+                if re.search('iface', part):
+                    if iface:
+                        paths.append(part)
+                elif not iface:
+                    paths.append(part)
+        return paths
+
+
+    def get_node_instance_is_running_on(self, instance=None):
+        instance = instance or self.instance
+        nodes = self.tester.service_manager.get_all_node_controllers(instance_id=self.instance.id,use_cached_list=False)
+        if not nodes:
+            raise Exception('Could not find node that instance:'+str(instance.id)+" is running on")
+        if len(nodes) > 1:
+            nodes_string = ""
+            for node in nodes:
+                nodes_string += ", " +str(node.hostname)
+            raise Exception('Multiple nodes found for instance:'+str(instance.id)+' ' +str(nodes_string))
+        node = nodes[0]
+        self.debug('Got node:' + str(node.hostname) + ", for instance:" + str(instance.id))
+        return node
+
+
+    def create_mpath_monkey(self,instance=None):
+        instance = instance or self.instance
+        paths = self.get_nc_paths_for_instance(instance=instance)
+        node = self.get_node_instance_is_running_on(instance=instance)
+        mm = Mpath_Monkey(node=node, sp_ip_list=paths)
+        self.mpath_monkey = mm
+        return mm
+
+
+
     def create_and_attach_volume(self):
         if self.args.volume_id:
             self.volume  = self.tester.get_volume(volume_id=self.args.volume_id)
@@ -144,7 +203,16 @@ class Instance_Io_Monitor(EutesterTestCase):
                 raise Exception('Faild to fetch volume from id provided:' +str(self.args.volume_id))
         else:
             self.volume = self.tester.create_volume(self.zone, size=self.size)
-        self.instance.attach_volume(self.volume, timeout=90)
+        try:
+            self.instance.attach_volume(self.volume, timeout=90)
+        except ec2ops.VolumeStateException, vse:
+            self.status("This is a temp work around for testing, this is to avoid bug euca-5297"+str(vse),
+                        testcolor=TestColor.get_canned_color('failred'))
+            time.sleep(10)
+            self.debug('Monitoring volume post VolumeStateException...')
+            self.volume.eutest_attached_status = None
+            self.tester.monitor_euvolumes_to_status([self.volume],status='in-use',attached_status='attached',timeout=90)
+
 
     def mount_volume_and_create_test_file(self):
         mount_point = self.instance.mount_attached_volume(volume=self.volume)
@@ -165,7 +233,10 @@ class Instance_Io_Monitor(EutesterTestCase):
         self.launch_test_instance()
         self.create_and_attach_volume()
         self.mount_volume_and_create_test_file()
+        if self.args.cycle_paths:
+            self.create_mpath_monkey()
         self.sftp_test_io_script_to_instance()
+
 
     def run_remote_script_and_monitor(self):
         tb = None
@@ -215,6 +286,8 @@ class Instance_Io_Monitor(EutesterTestCase):
                                         last_time):
         ret = SshCbReturn(stop=False, settimer=self.inter_io_timeout)
         return_buf = ""
+        blocked_paths ="BLOCKED_PATHS:"
+        previous_blocked_path = "PREVIOUS_BLOCKED_PATH:"
         write_rate = write_rate or 'WRITE_RATE:'
         write_value = write_value or 'WRITE_VALUE'
         read_rate = read_rate or 'READ_RATE'
@@ -222,6 +295,14 @@ class Instance_Io_Monitor(EutesterTestCase):
         last_time = last_time or time.time()
         waited = int(time.time()- last_time)
         waited_str = "INTER_IO_SECONDS_WAITED: "+ str(waited)
+
+        if  self.mpath_monkey:
+            if not self.mpath_monkey.blocked:
+                self.mpath_monkey.block_single_path_cycle()
+            else:
+                blocked_paths += self.mpath_monkey.get_blocked_string()
+                previous_blocked_path += str(self.mpath_monkey.lastblocked)
+
         if waited > self.longest_wait_period:
             self.longest_wait_period = waited
         longest_wait_period_str = "LONGEST_PERIOD_WAITED:" +str(self.longest_wait_period)
@@ -246,6 +327,8 @@ class Instance_Io_Monitor(EutesterTestCase):
                            + last_read.ljust(20) + "\n" \
                            + waited_str.ljust(20) + "\n" \
                            + str(longest_wait_period_str).ljust(20) + "\n" \
+                           + str(blocked_paths) + "\n" \
+                           +str(previous_blocked_path) + "\n" \
                            + "ret buf:" + str(return_buf) \
                            + "\n-------------------------------------------------\n"
             #print "\r\x1b[K"+str(debug_string),

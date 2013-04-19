@@ -94,7 +94,8 @@ class Euproperty_Type():
         except AttributeError, ae:
             print ('Property type:'+str(str)+" not defined, new property type?")
             raise ae
-            
+
+
 class Euproperty():
     def __init__(self, prop_mgr, property_string, service_type,  partition, name, value, mandatory=False):
         self.prop_mgr = prop_mgr
@@ -152,17 +153,18 @@ class Euproperty_Manager():
     verbose = False
     debugmethod = None
     
-    def __init__(self, tester, verbose=False, debugmethod=None):
+    def __init__(self, tester, verbose=False, machine=None, debugmethod=None):
         self.tester = tester
         self.debugmethod = debugmethod or tester.debug
         self.verbose = verbose
-        self.clc = self.get_clc()
+        self.work_machine =  machine or self.get_clc()
         self.access_key = self.tester.aws_access_key_id
         self.secret_key = self.tester.aws_secret_access_key
         self.service_url = 'http://'+str(self.tester.get_ec2_ip())+':8773/services/Eucalytpus'
         self.cmdpath = self.tester.eucapath+'/usr/sbin/'
         self.properties = []
         self.update_property_list()
+        self.tester.property_manager = self
         
     def get_clc(self):
         return self.tester.service_manager.get_enabled_clc().machine   
@@ -173,11 +175,10 @@ class Euproperty_Manager():
         msg - mandatory - string to be printed
         method - optional - callback to over ride default printing method 
         '''
-        if (self.verbose is True):
-            if (self.debugmethod is None):
-                print (str(msg))
-            else:
-                self.debugmethod(msg)
+        if (self.debugmethod is None):
+            print (str(msg))
+        else:
+            self.debugmethod(msg)
 
     def show_all_authentication_properties(self,partition=None,debug_method=None):
         return self.show_all_properties(service_type=Euproperty_Type.authentication, partition=partition,debug_method=debug_method)
@@ -247,62 +248,46 @@ class Euproperty_Manager():
 
 
     def get_properties(self,
-                       name=None,
                        partition=None,
                        service_type=None,
                        value=None,
                        search_string=None,
                        force_update=False):
-        self.debug('get_property_value by partition:' + str(partition) \
-                                       + ", service_type:" + str(service_type) \
-                                       + ", value:" + str(value) \
-                                       + ", force_update:" +str(force_update))
+        self.debug('get_properties: partition:' + str(partition) \
+                                                + ", service_type:" + str(service_type) \
+                                                + ", value:" + str(value) \
+                                                + ", force_update:" +str(force_update))
         ret_props = []
         if not self.properties or force_update:
             self.update_property_list()
         properties = copy.copy(self.properties)
-        if partition:
+        if partition and properties:
             properties = self.get_all_properties_for_partition(partition, list=properties)
-        if service_type:
+        if service_type and properties:
             properties = self.get_all_properties_for_service(service_type,list=properties)
-        if search_string:
+        if search_string and properties:
             properties = self.get_all_properties_by_search_string(search_string, list=properties)
-        if value:
-            for prop in properties:
-                if prop.value == value:
-                    ret_props.append(prop)
-        else:
-            ret_props.extend(properties)
+        if properties:
+            if value:
+                for prop in properties:
+                    if prop.value == value:
+                        ret_props.append(prop)
+            else:
+                ret_props.extend(properties)
         return ret_props
 
     def get_property(self,name,service_type, partition, force_update=False):
         self.debug('Get Property:' + str(name))
+        ret_prop = None
         list = self.get_properties(partition=partition,service_type=service_type,force_update=force_update)
-        return self.get_euproperty_by_name(name, list=list)
+        if list:
+            ret_prop =  self.get_euproperty_by_name(name, list=list)
+        return ret_prop
 
-            
-    def get_property_value(self, partition, service_type, name):
-        '''
-        Returns a tuple containing the current property value plus the property string. 
-        prop - mandatory - string representing the property to fetch. 
-        ecuaops -optional - the eucaops/eutester object to fetch the property from
-        
-        self.debug("Getting property:"+prop)
-        prop_string = self.clc.sys(self.cmdpath+'euca-describe-properties -U '+str(self.service_url)+' -I '+str(self.access_key)+' -S '+ str(self.secret_key) +' | grep ' + prop, code=0)
-        if (prop_string != []):
-            value = str(prop_string[0]).split()[2]
-        else:
-            raise EuPropertiesException("describe properties returned null for "+prop)
-        '''
-        self.debug('get_property_value partition:'+str(partition)+ ", name:"+str(name))
-#        props = self.get_all_properties_for_service(Eupropert)
-
- #       return prop.value
-        
     def update_property_list(self):
         newlist = []
-        self.debug("Getting property list...")
-        cmdout = self.clc.sys(self.cmdpath+'euca-describe-properties -U '+str(self.service_url)+' -I '+str(self.access_key)+' -S '+ str(self.secret_key) +' | grep PROPERTY', code=0)
+        self.debug("updating property list...")
+        cmdout = self.work_machine.sys(self.cmdpath+'euca-describe-properties -U '+str(self.service_url)+' -I '+str(self.access_key)+' -S '+ str(self.secret_key) +' | grep PROPERTY', code=0, verbose=self.verbose)
         for propstring in cmdout:
             newlist.append(self.parse_euproperty_from_string(propstring))
         self.properties = newlist
@@ -316,14 +301,14 @@ class Euproperty_Manager():
         :param str: line of output, example: "PROPERTY    walrus.storagemaxbucketsizeinmb    5120"
         :returns euproperty
         '''
-        self.debug('parse_euproperty_from_string, string:'+str(propstring))
+        #self.debug('parse_euproperty_from_string, string:'+str(propstring))
         ret_service_type = None
         ret_partition = None
         splitstring = propstring.split()
         toss = splitstring.pop(0)
         ret_property_string = splitstring.pop(0)
         ret_value = " ".join(splitstring)
-        self.debug('ret_property_string:'+str(ret_property_string)+", ret_value:"+str(ret_value))
+        #self.debug('ret_property_string:'+str(ret_property_string)+", ret_value:"+str(ret_value))
         #toss, ret_property_string, ret_value = propstring.split()
         for prop in self.properties:
             #if this property is in our list, update the value and return
@@ -353,7 +338,7 @@ class Euproperty_Manager():
                 pass
             except IndexError:
                 raise Exception('No service type found for: ' + str(ret_property_string))
-        self.debug("ret_service_type: "+str(ret_service_type))
+        #self.debug("ret_service_type: "+str(ret_service_type))
 
         #Store the name of the property
         ret_name = ".".join(propattrs)
@@ -373,6 +358,7 @@ class Euproperty_Manager():
         prop_mgr=self
         self.debug('Creating dynamic methods for property:'+str(method_name_string))
         #Add a set method for this property to this euproperty manager
+
         if not hasattr(self,set_method_name):
             def set_method(self, value, partition=None):
                 self.debug('Starting set Method for property:' + str(method_name_string))
@@ -385,7 +371,6 @@ class Euproperty_Manager():
                                     + ', type:' + str(service_type) \
                                     + ', partition:' + str(partition))
                 return self.set_property(prop,value)
-
             setattr(self, set_method_name, lambda value: set_method(self,value,partition=euproperty.partition))
             new_set_method = getattr(self, set_method_name)
             new_set_method.__doc__ = set_method_doc
@@ -394,23 +379,22 @@ class Euproperty_Manager():
         #Add a get method for this property to this euproperty manager
         if not hasattr(self,get_method_name):
             def get_method(self, partition=None):
-                self.debug('Starting get Method for property:' + str(method_name_string))
                 service_type = euproperty.service_type
                 prop_name = euproperty.name
+                self.debug("get method:"+str(prop_name)+", Partition:"+str(partition)+", service_type:"+str(service_type))
                 try:
                     prop = self.get_property(name=prop_name,service_type=service_type,partition=partition)
                 except IndexError:
                     raise Exception('Property not found. name:' + str(prop_name) \
                                     + ', type:' + str(service_type) \
                                     + ', partition:' + str(partition))
+                if not prop:
+                    raise Exception('property:'+str(prop_name) + ", not found for partition:"+str(partition))
                 return prop.value
-            setattr(self, get_method_name, lambda: get_method(self,partition=euproperty.partition))
+            setattr(self, get_method_name, lambda partition=None: get_method(self,partition=partition))
             new_get_method = getattr(self, get_method_name)
             new_get_method.__name__ = get_method_name
             new_get_method.__doc__ =  get_method_doc
-
-
-
 
 
     def get_euproperty_by_name(self,name, list=None):
@@ -422,11 +406,14 @@ class Euproperty_Manager():
         raise Exception('Property not found by name:'+str(name))
         
     def get_all_properties_for_partition(self, partition, list=None):
+        self.debug('Get all properties for partition:'+str(partition))
         props = []
         list = list or self.properties
         for property in list:
             if property.partition == partition:
+                self.debug('property:'+str(property.name)+", prop.partition:"+str(property.partition) +",partition:"+str(partition))
                 props.append(property)
+        self.debug('Returning list of len:'+str(len(props))+', props:'+str(props) )
         return props
 
     def get_all_properties_for_service(self,service, list=None):
@@ -472,7 +459,7 @@ class Euproperty_Manager():
                 raise Exception('Could not fetch property to set. Using string:' +str(property))
         property.lastvalue = property.value
         self.debug('Setting property('+property.property_string+') to value:'+str(value))
-        ret_string = self.clc.sys(self.cmdpath+'euca-modify-property -U '+str(self.service_url)+' -I '+str(self.access_key)+' -S '+ str(self.secret_key) +' -p '+property.property_string+'='+str(value), code=0)[0]
+        ret_string = self.work_machine.sys(self.cmdpath+'euca-modify-property -U '+str(self.service_url)+' -I '+str(self.access_key)+' -S '+ str(self.secret_key) +' -p '+property.property_string+'='+str(value), code=0)[0]
 
         if (ret_string):
             ret_value= str(ret_string).split()[2]
@@ -496,7 +483,7 @@ class Euproperty_Manager():
                prop = self.get_all_properties_by_search_string(prop)[0]
         property_string = prop.property_string
         prop.lastvalue = prop.value
-        ret_string = str(self.clc.sys(self.cmdpath+'euca-modify-property -U '+str(self.service_url)+' -I '+str(self.access_key)+' -S '+ str(self.secret_key) +' -r '+str(property_string),code=0)[0])
+        ret_string = str(self.work_machine.sys(self.cmdpath+'euca-modify-property -U '+str(self.service_url)+' -I '+str(self.access_key)+' -S '+ str(self.secret_key) +' -r '+str(property_string),code=0)[0])
         ret_value= ret_string.split()[2]
         self.debug('Reset property('+str(prop.name)+') to default value('+str(ret_value)+')')
         return ret_value
