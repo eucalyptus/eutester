@@ -329,7 +329,9 @@ class InstanceBasics(EutesterTestCase):
             for reservation in reservations:
                 future_instances.append(executor.submit(self.tester.terminate_instances,reservation))
 
-        self.tester.wait_for_result(self.tester.get_available_vms, result=available_instances_before, timeout=180)
+        def available_after_greater():
+            return self.tester.get_available_vms() >= available_instances_before
+        self.tester.wait_for_result(available_after_greater, result=True, timeout=180)
 
     def PrivateIPAddressing(self, zone = None):
         """
