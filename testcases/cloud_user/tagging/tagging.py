@@ -135,19 +135,21 @@ class TaggingBasics(EutesterTestCase):
         ### Filters can be found here, most will be tested manually, but a spot check should be added
         ### http://docs.aws.amazon.com/AWSEC2/latest/CommandLineReference/ApiReference-cmd-DescribeImages.html
         vol_size = 3
-        filter_test_volume = self.tester.create_volume(zone=self.zone, size=vol_size)
+        filter_test_volume_1 = self.tester.create_volume(zone=self.zone, size=vol_size)
+        filter_test_volume_2 = self.tester.create_volume(zone=self.zone, size=vol_size)
         size_filter = {u'size': vol_size }
-        zone_filter = {u'availability-zone': self.zone}
+        id_filter = {u'volume-id': self.volume.id}
 
         size_match = self.tester.ec2.get_all_volumes(filters=size_filter)
-        zone_match = self.tester.ec2.get_all_volumes(filters=zone_filter)
+        id_match = self.tester.ec2.get_all_volumes(filters=id_filter)
 
-        self.tester.delete_volume(filter_test_volume)
+        self.tester.delete_volume(filter_test_volume_1)
+        self.tester.delete_volume(filter_test_volume_2)
 
-        if len(size_match) != 1:
-            raise Exception("Non-tag Filtering of volumes by size: " + str(len(size_match))  + " expected: 1")
-        if len(zone_match) != 2:
-            raise Exception("Non-tag Filtering of volumes by zone: " + str(len(zone_match))  + " expected: 2")
+        if len(size_match) != 2:
+            raise Exception("Non-tag Filtering of volumes by size: " + str(len(size_match))  + " expected: 2")
+        if len(id_match) != 1:
+            raise Exception("Non-tag Filtering of volumes by id: " + str(len(id_match))  + " expected: 1")
 
         ### Test Deletion
         self.volume.delete_tags(tags)
