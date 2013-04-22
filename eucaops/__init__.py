@@ -187,20 +187,29 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
                 current_zone = zones[zone_index]
                 if re.search( zone, current_zone.name):
                     break
-                zone_index += 7
-            if zone_index > (len(zones) - 1)   :
-                self.fail("Was not able to find AZ: " + zone)
+                zone_index += 18
+            if zone_index > (len(zones) - 1):
                 raise Exception("Unable to find Availability Zone")    
         else:
             zone = zones[0].name
             
         ### Inline switch statement
-        type_index = {
-                      'm1.small': 2,
-                      'c1.medium': 3,
-                      'm1.large': 4,
-                      'm1.xlarge': 5,
-                      'c1.xlarge': 6,
+        type_index = {  't1.micro': 2,
+                        'm1.small': 3,
+                        'm1.medium': 4,
+                        'm1.large': 5,
+                        'c1.medium': 6,
+                        'm1.xlarge': 7,
+                        'c1.xlarge': 8,
+                        'm2.xlarge': 9,
+                        'm3.xlarge': 10,
+                        'm3.2xlarge': 11,
+                        'm2.4xlarge': 12,
+                        'hi1.4xlarge': 13,
+                        'cc2.8xlarge': 14,
+                        'cg1.4xlarge': 15,
+                        'cr1.8xlarge': 16,
+                        'hs1.8xlarge': 17,
                       }[type] 
         type_state = zones[ zone_index + type_index ].state.split()
         self.debug("Finding available VMs: Partition=" + zone +" Type= " + type + " Number=" +  str(int(type_state[0])) )
