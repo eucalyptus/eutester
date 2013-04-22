@@ -277,18 +277,22 @@ class TaggingBasics(EutesterTestCase):
         group_name = "filter-test"
         group_description = "group-filtering"
         filter_group = self.tester.add_group(group_name=group_name, description=group_description)
+        filter_group_2 = self.tester.add_group(group_name=group_name + "2", description=group_description)
 
         description_filter = {u'description': group_description }
-        owner_filter = {u'owner-id': filter_group.owner_id}
+        group_id_filter = {u'group-id': filter_group.id}
         description_match = self.tester.ec2.get_all_security_groups(filters=description_filter)
         self.debug("Groups matching description:" + str(description_match))
-        owner_match = self.tester.ec2.get_all_security_groups(filters=owner_filter)
-        self.debug("Groups matching owner-id (" + owner_filter[u'owner-id']  + "):" + str(owner_match))
+        group_id_match = self.tester.ec2.get_all_security_groups(filters=group_id_filter)
+        self.debug("Groups matching owner-id (" + group_id_filter[u'group-id']  + "):" + str(group_id_match))
 
         self.tester.delete_group(filter_group)
+        self.tester.delete_group(filter_group_2)
 
-        if len(description_match) != 1 or len(owner_match) != 3:
-            raise Exception("Non-tag Filtering of images did not return the proper number of resources")
+        if len(description_match) != 2:
+            raise Exception("Non-tag Filtering of security groups by description: " + str(len(description_match))  + " expected: 2")
+        if len(group_id_match) != 1:
+            raise Exception("Non-tag Filtering of security groups by id: " + str(len(group_id_match))  + " expected: 1")
 
         ### Test Deletion
         self.tester.delete_tags([self.group.id], tags)
