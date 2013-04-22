@@ -49,10 +49,10 @@ class ResourceGeneration(EutesterTestCase):
                 self.parser.add_argument(arg)
         self.get_args()
         # Setup basic eutester object
-        self.tester = Eucaops( credpath=self.args.credpath)
+        self.tester = Eucaops( credpath=self.args.credpath, config_file=self.args.config, password=self.args.password)
 
     def clean_method(self):
-        pass
+        self.tester.cleanup_artifacts()
 
     def CreateResources(self):
         users = self.tester.get_all_users() 
@@ -83,13 +83,15 @@ class ResourceGeneration(EutesterTestCase):
             resource_tester.authorize_group_by_name(group_name=group.name, port=-1, protocol="icmp" )
             reservation = resource_tester.run_instance(keypair=keypair.name,group=group.name,zone=zone)
             instance = reservation.instances[0]
+            assert isinstance(instance, EuInstance)
             address = resource_tester.allocate_address()
             resource_tester.associate_address(instance=instance, address=address)
             resource_tester.disassociate_address_from_instance(instance)
             resource_tester.release_address(address)
+            instance.update()
+            instance.reset_ssh_connection()
             volume = resource_tester.create_volume(size=1, zone=zone)
-            if isinstance(instance, EuInstance):
-                instance.attach_volume(volume)
+            instance.attach_volume(volume)
             snapshot = resource_tester.create_snapshot(volume_id=volume.id)
             volume_from_snap = resource_tester.create_volume(snapshot=snapshot, zone=zone)
             bucket = resource_tester.create_bucket(resource_tester.id_generator(12, string.ascii_lowercase  + string.digits))
