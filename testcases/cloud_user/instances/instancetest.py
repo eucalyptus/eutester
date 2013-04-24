@@ -348,12 +348,13 @@ class InstanceBasics(EutesterTestCase):
         if zone is None:
             zone = self.zone
         if self.reservation:
+            for instance in self.reservation:
+                if instance.public_dns_name == instance.private_ip_address:
+                    self.tester.debug("WARNING: System or Static mode detected, skipping PrivateIPAddressing")
+                    return self.reservation
             self.tester.terminate_instances(self.reservation)
         self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name, private_addressing=True, zone=zone)
         for instance in self.reservation.instances:
-            if instance.public_dns_name == instance.private_ip_address:
-                self.tester.debug("WARNING: System or Static mode detected, skipping PrivateIPAddressing")
-                return self.reservation
             address = self.tester.allocate_address()
             self.assertTrue(address,'Unable to allocate address')
             self.tester.associate_address(instance, address)
