@@ -348,7 +348,7 @@ class InstanceBasics(EutesterTestCase):
         if zone is None:
             zone = self.zone
         if self.reservation:
-            for instance in self.reservation:
+            for instance in self.reservation.instances:
                 if instance.public_dns_name == instance.private_ip_address:
                     self.tester.debug("WARNING: System or Static mode detected, skipping PrivateIPAddressing")
                     return self.reservation
