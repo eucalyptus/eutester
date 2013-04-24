@@ -69,7 +69,7 @@ class InstanceBasics(EutesterTestCase):
             self.reservation = self.tester.run_instance(self.image, keypair=self.keypair.name, group=self.group.name, zone=zone)
         for instance in self.reservation.instances:
             self.assertTrue( self.tester.wait_for_reservation(self.reservation) ,'Instance did not go to running')
-            #self.assertNotEqual( instance.public_dns_name, instance.private_ip_address, 'Public and private IP are the same')
+            self.assertNotEqual( instance.public_dns_name, instance.private_ip_address, 'Public and private IP are the same')
             self.assertTrue( self.tester.ping(instance.public_dns_name), 'Could not ping instance')
             self.assertFalse( instance.found("ls -1 /dev/" + instance.rootfs_device + "2",  "No such file or directory"),  'Did not find ephemeral storage at ' + instance.rootfs_device + "2")
         return self.reservation
@@ -89,6 +89,9 @@ class InstanceBasics(EutesterTestCase):
         if not self.reservation:
             self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name,zone=zone)
         for instance in self.reservation.instances:
+            if instance.public_dns_name == instance.private_ip_address:
+                self.tester.debug("WARNING: System or Static mode detected, skipping ElasticIps")
+                return self.reservation
             self.address = self.tester.allocate_address()
             self.assertTrue(self.address,'Unable to allocate address')
             self.tester.associate_address(instance, self.address)
@@ -348,6 +351,9 @@ class InstanceBasics(EutesterTestCase):
             self.tester.terminate_instances(self.reservation)
         self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name, private_addressing=True, zone=zone)
         for instance in self.reservation.instances:
+            if instance.public_dns_name == instance.private_ip_address:
+                self.tester.debug("WARNING: System or Static mode detected, skipping PrivateIPAddressing")
+                return self.reservation
             address = self.tester.allocate_address()
             self.assertTrue(address,'Unable to allocate address')
             self.tester.associate_address(instance, address)
