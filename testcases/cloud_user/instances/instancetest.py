@@ -331,7 +331,7 @@ class InstanceBasics(EutesterTestCase):
 
         def available_after_greater():
             return self.tester.get_available_vms(zone=self.zone) >= available_instances_before
-        self.tester.wait_for_result(available_after_greater, result=True, timeout=180)
+        self.tester.wait_for_result(available_after_greater, result=True, timeout=240)
 
     def PrivateIPAddressing(self, zone = None):
         """
