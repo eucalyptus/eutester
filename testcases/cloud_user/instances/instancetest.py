@@ -329,10 +329,9 @@ class InstanceBasics(EutesterTestCase):
             for reservation in reservations:
                 future_instances.append(executor.submit(self.tester.terminate_instances,reservation))
 
-        self.tester.sleep(20)
-
-        if available_instances_before > self.tester.get_available_vms(zone=self.zone):
-            raise Exception("Number of instances available before was greater than number of instances after churn")
+        def available_after_greater():
+            return self.tester.get_available_vms(zone=self.zone) >= available_instances_before
+        self.tester.wait_for_result(available_after_greater, result=True, timeout=180)
 
     def PrivateIPAddressing(self, zone = None):
         """

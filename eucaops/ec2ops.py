@@ -44,6 +44,7 @@ import sys
 from datetime import datetime
 
 from boto.ec2.image import Image
+from boto.ec2.instance import Reservation, Instance
 from boto.ec2.keypair import KeyPair
 from boto.ec2.blockdevicemapping import BlockDeviceMapping, BlockDeviceType
 from boto.ec2.volume import Volume
@@ -509,9 +510,12 @@ class EC2ops(Eutester):
         :param timeout: How long in seconds to wait for state
         :return: True on success
         """
-        self.debug( "Beginning poll loop for the " + str(len(reservation.instances))   + " found in " + str(reservation) )
         aggregate_result = True
-        for instance in reservation.instances:
+        instance_list = reservation
+        if isinstance(reservation, Reservation):
+            instance_list = reservation.instances
+        self.debug( "Beginning poll loop for the " + str(len(instance_list))   + " instance found in " + str(instance_list) )
+        for instance in instance_list:
             if not self.wait_for_instance(instance, state, timeout=timeout):
                 aggregate_result = False
         return aggregate_result
@@ -2847,7 +2851,26 @@ class EC2ops(Eutester):
                 euinstance_list.append(instance)
         reservation.instances = euinstance_list
         return reservation
-   
+
+    def convert_instance_to_euisntance(self, instance, keypair=None, username="root", password=None, timeout=120):
+        return EuInstance.make_euinstance_from_instance(instance, self, keypair=keypair, username = username, password=password, timeout=timeout )
+
+    def get_console_output(self, instance):
+        """
+        Retrieve console output from an instance
+
+        :param instance:  Instance ID or Instance object
+        :return: string
+        :raise: Exception on failure to get console output
+        """
+        self.debug("Attempting to get console output from: " + str(instance))
+        if isinstance(instance, Instance):
+            instance = instance.id
+        output = self.ec2.get_console_output(instance_id=instance)
+        self.debug(output)
+        return output
+
+
     def get_keypair(self, name):
         """
         Retrieve a boto.ec2.keypair object by its name
@@ -3011,9 +3034,12 @@ class EC2ops(Eutester):
                     aggregate_result = False
         ### Otherwise just kill this reservation
         else:
-            for instance in reservation.instances:
-                    self.debug( "Sending terminate for " + str(instance) )
-                    instance.terminate()
+            instance_list = reservation
+            if isinstance(reservation, Reservation):
+                instance_list = reservation.instances
+            for instance in instance_list:
+                self.debug( "Sending terminate for " + str(instance) )
+                instance.terminate()
             if self.wait_for_reservation(reservation, state="terminated", timeout=timeout) is False:
                 aggregate_result = False
         return aggregate_result
@@ -3025,21 +3051,27 @@ class EC2ops(Eutester):
         :param reservation: boto.ec2.reservation object
         :raise: Exception when instance does not reach stopped state
         """
-        for instance in reservation.instances:
+        instance_list = reservation
+        if isinstance(reservation, Reservation):
+            instance_list = reservation.instances
+        for instance in instance_list:
             self.debug( "Sending stop for " + str(instance) )
             instance.stop()
         if self.wait_for_reservation(reservation, state="stopped", timeout=timeout) is False:
             return False
         return True
     
-    def start_instances(self,reservation, timeout=480):
+    def start_instances(self, reservation, timeout=480):
         """
         Start all instances in a reservation
 
-        :param reservation: boto.ec2.reservation object
+        :param reservation: boto.ec2.reservation object or list of instances
         :raise: Exception when instance does not reach running state
         """
-        for instance in reservation.instances:
+        instance_list = reservation
+        if isinstance(reservation, Reservation):
+            instance_list = reservation.instances
+        for instance in instance_list:
             self.debug( "Sending start for " + str(instance) )
             instance.start()
         if self.wait_for_reservation(reservation, state="running", timeout=timeout) is False:
