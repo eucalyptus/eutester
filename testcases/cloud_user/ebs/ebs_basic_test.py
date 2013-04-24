@@ -40,12 +40,10 @@
 #
 #    @author: clarkmatthew
 
-import unittest
+
 from eutester.eutestcase import EutesterTestCase
-from eutester.eutestcase import EutesterTestResult
 from ebstestsuite import EbsTestSuite
-import argparse
-import os
+
 
 ebssuite = None
 zone = None
