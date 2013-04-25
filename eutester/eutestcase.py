@@ -181,13 +181,14 @@ class EutesterTestUnit():
         self.name = str(method.__name__)
         self.result=EutesterTestResult.not_run
         self.time_to_run=0
-        self.anchor_id = str(str(time.ctime())
-                            + self.name
-                            + "_"
-                            + str( ''.join(random.choice(string.ascii_uppercase + string.ascii_lowercase + string.digits) for x in range(3)))
-                            + "_"
-                            ).replace(" ","_")
-        self.error_anchor_id = "ERROR_" + self.anchor_id
+        if self.kwargs.get('html_anchors', False):
+            self.anchor_id = str(str(time.ctime())
+                                + self.name
+                                + "_"
+                                + str( ''.join(random.choice(string.ascii_uppercase + string.ascii_lowercase + string.digits) for x in range(3)))
+                                + "_"
+                                ).replace(" ","_")
+            self.error_anchor_id = "ERROR_" + self.anchor_id
         self.description=self.get_test_method_description()
         self.eof=False
         self.error = ""
@@ -277,13 +278,15 @@ class EutesterTestUnit():
             self.result=EutesterTestResult.passed
             return ret
         except Exception, e:
-            buf = "<font color=red> Error in test unit '" + self.name + "':\n"
+            if self.kwargs.get('html_anchors',False):
+                buf = "<font color=red> Error in test unit '" + self.name + "':\n"
             out = StringIO.StringIO()
             traceback.print_exception(*sys.exc_info(),file=out)
             out.seek(0)
-            buf = buf + out.read()
-            buf = buf + ' </font>'
-            print '<a name="' + str(self.error_anchor_id) + '"></a>'
+            buf += out.read()
+            if self.kwargs.get('html_anchors',False):
+                buf += ' </font>'
+                print '<a name="' + str(self.error_anchor_id) + '"></a>'
             print TestColor.get_canned_color('failred') + buf + TestColor.reset
             self.error = str(e)
             self.result = EutesterTestResult.failed
@@ -471,10 +474,10 @@ class EutesterTestCase(unittest.TestCase):
             parser.add_argument('--userdata',
                                 help="User data string to provide instance run within this test", default=None)
         if instance_user:
-            parser.add_argument('--instance_user',
+            parser.add_argument('--instance-user',
                                 help="Username used for ssh login. Default:'root'", default='root')
         if instance_password:
-            parser.add_argument('--instance_passsword',
+            parser.add_argument('--instance-passsword',
                                 help="Password used for ssh login. When value is 'None' ssh keypair will be used and not username/password, default:'None'", default=None)
         if region:
             parser.add_argument('--region',
@@ -490,6 +493,8 @@ class EutesterTestCase(unittest.TestCase):
         if logfile_level:
             parser.add_argument('--logfile_level',
                                 help="log level for log file logging", default='debug')
+        parser.add_argument('--html-anchors', dest='html_anchors', action='store_true',
+                                help="Print HTML anchors for jumping through test results", default=False)
         self.parser = parser  
         return parser
     
@@ -637,8 +642,11 @@ class EutesterTestCase(unittest.TestCase):
                 eof = kwargs['eof']
             else:
                 eof = kwargs.pop('eof')
-        
-        testunit = EutesterTestUnit(method, *args, **kwargs)
+        ## Only pass the arg if we need it otherwise it will print with all methods/testunits
+        if self.args.html_anchors:
+            testunit = EutesterTestUnit(method, *args, html_anchors=self.args.html_anchors ,**kwargs)
+        else:
+            testunit = EutesterTestUnit(method, *args, **kwargs)
         testunit.eof = eof
         #if autoarg, auto populate testunit arguements from local testcase.args namespace values
         if autoarg:
@@ -821,13 +829,17 @@ class EutesterTestCase(unittest.TestCase):
                 return(0)
 
     def print_test_unit_startmsg(self,test):
-        link = '<a name="' + str(test.anchor_id) + '"></a>'
-        startbuf = '<div id="myDiv" name="myDiv" title="Example Div Element" style="color: #0900C4; font: Helvetica 12pt;border: 1px solid black;">'
-        startbuf += str(link) +"\n- STARTING TESTUNIT:  - "
+        startbuf = ''
+        if self.args.html_anchors:
+            link = '<a name="' + str(test.anchor_id) + '"></a>\n'
+            startbuf += '<div id="myDiv" name="myDiv" title="Example Div Element" style="color: #0900C4; font: Helvetica 12pt;border: 1px solid black;">'
+            startbuf += str(link)
+        startbuf += "STARTING TESTUNIT: " + test.name
         argbuf = self.get_pretty_args(test)
         startbuf += str(test.description)+str(argbuf)
         startbuf += 'Running list method: "'+str(self.print_testunit_method_arg_values(test))+'"'
-        startbuf += '\n </div>'
+        if self.args.html_anchors:
+            startbuf += '\n </div>'
         self.startmsg(startbuf)
     
     def has_arg(self,arg):
