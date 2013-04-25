@@ -43,6 +43,7 @@ import time
 from eutester.euservice import EuserviceManager
 from boto.ec2.instance import Reservation
 from eutester.euconfig import EuConfig
+from eutester.euproperties import Euproperty_Manager
 from eutester.machine import Machine
 from eutester.euvolume import EuVolume
 from eutester import eulogger
@@ -167,6 +168,8 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
                 self.setup_elb_connection(endpoint=elb_ip, path="/services/LoadBalancing", port=8773, is_secure=False, region=region, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
             except Exception, e:
                 self.debug("Unable to create ELB connection because of: " + str(e) )
+        if self.clc:
+            self.update_property_manager()
 
     def get_available_vms(self, type=None, zone=None):
         """
@@ -184,20 +187,29 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
                 current_zone = zones[zone_index]
                 if re.search( zone, current_zone.name):
                     break
-                zone_index += 7
-            if zone_index > (len(zones) - 1)   :
-                self.fail("Was not able to find AZ: " + zone)
+                zone_index += 18
+            if zone_index > (len(zones) - 1):
                 raise Exception("Unable to find Availability Zone")    
         else:
             zone = zones[0].name
             
         ### Inline switch statement
-        type_index = {
-                      'm1.small': 2,
-                      'c1.medium': 3,
-                      'm1.large': 4,
-                      'm1.xlarge': 5,
-                      'c1.xlarge': 6,
+        type_index = {  't1.micro': 2,
+                        'm1.small': 3,
+                        'm1.medium': 4,
+                        'm1.large': 5,
+                        'c1.medium': 6,
+                        'm1.xlarge': 7,
+                        'c1.xlarge': 8,
+                        'm2.xlarge': 9,
+                        'm3.xlarge': 10,
+                        'm3.2xlarge': 11,
+                        'm2.4xlarge': 12,
+                        'hi1.4xlarge': 13,
+                        'cc2.8xlarge': 14,
+                        'cg1.4xlarge': 15,
+                        'cr1.8xlarge': 16,
+                        'hs1.8xlarge': 17,
                       }[type] 
         type_state = zones[ zone_index + type_index ].state.split()
         self.debug("Finding available VMs: Partition=" + zone +" Type= " + type + " Number=" +  str(int(type_state[0])) )
@@ -413,7 +425,11 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
         #f.close()   
         config_hash["machines"] = machines 
         return config_hash
-    
+
+    def update_property_manager(self,machine=None):
+        machine = machine or self.clc
+        self.property_manager = Euproperty_Manager(self,debugmethod=self.debug)
+
     def swap_clc(self):
         all_clcs = self.get_component_machines("clc")
         if self.clc is all_clcs[0]:

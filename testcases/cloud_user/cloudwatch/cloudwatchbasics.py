@@ -47,19 +47,20 @@ class CloudWatchBasics(EutesterTestCase):
         while datetime.datetime.now().second != 0:
             self.tester.debug("Waiting for minute edge")
             self.tester.sleep(1)
-        start = datetime.datetime.utcnow()
+        start = datetime.datetime.utcnow() - datetime.timedelta(seconds=seconds_to_put_data)
         for i in xrange(seconds_to_put_data):
-            self.tester.debug("Adding metric: {metric} to namespace: {namespace} with value {value}".format(
-                metric=metric_name, namespace = self.namespace, value=metric_data))
-            self.tester.cw.put_metric_data(self.namespace, [metric_name],[metric_data])
+            timestamp = start + datetime.timedelta(seconds=i)
+            self.tester.debug("Adding metric: {metric} to namespace: {namespace} with value {value} at {timestamp}".format(
+                metric=metric_name, namespace = self.namespace, value=metric_data, timestamp=timestamp))
+            self.tester.cw.put_metric_data(self.namespace, [metric_name],[metric_data],timestamp=timestamp )
             if metric_data == 600 or metric_data == 0:
                 incrementing = not incrementing
             if incrementing:
                 metric_data += 1
             else:
                 metric_data -= 1
-            self.tester.sleep(1)
-        end = start + datetime.timedelta(minutes=2)
+        end = start + datetime.timedelta(seconds=seconds_to_put_data)
+        self.tester.sleep(60)
         metric = self.tester.cw.list_metrics(namespace=self.namespace)[0]
         assert isinstance(metric,Metric)
         stats_array = metric.query(start_time=start, end_time=end, statistics=['Average', 'Sum', 'Maximum', 'Minimum','SampleCount'] )
@@ -73,14 +74,14 @@ class CloudWatchBasics(EutesterTestCase):
         print stats_array
 
         ##Check sample 1
-        assert first_sample['Maximum'] < 60 and first_sample['Minimum'] > 0
+        assert first_sample['Maximum'] <= 60 and first_sample['Minimum'] > 0
         assert first_sample['Average'] < 34 and first_sample['Average'] > 26
-        assert first_sample['Sum'] < 1800 and first_sample['Sum'] > 1500
+        assert first_sample['Sum'] < 1900 and first_sample['Sum'] > 1500
         assert first_sample['SampleCount'] > 50
         ##Check sample 2
-        assert second_sample['Maximum'] < 120 and second_sample['Minimum'] > 50
-        assert second_sample['Average'] < 90 and second_sample['Average'] > 80
-        assert second_sample['Sum'] < 6000 and second_sample['Sum'] > 4600
+        assert second_sample['Maximum'] <= 120 and second_sample['Minimum'] > 50
+        assert second_sample['Average'] < 95 and second_sample['Average'] > 80
+        assert second_sample['Sum'] < 6100 and second_sample['Sum'] > 4600
         assert second_sample['SampleCount'] > 50
 
         assert first_sample['Average'] < second_sample['Average']

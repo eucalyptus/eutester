@@ -135,19 +135,21 @@ class TaggingBasics(EutesterTestCase):
         ### Filters can be found here, most will be tested manually, but a spot check should be added
         ### http://docs.aws.amazon.com/AWSEC2/latest/CommandLineReference/ApiReference-cmd-DescribeImages.html
         vol_size = 3
-        filter_test_volume = self.tester.create_volume(zone=self.zone, size=vol_size)
+        filter_test_volume_1 = self.tester.create_volume(zone=self.zone, size=vol_size)
+        filter_test_volume_2 = self.tester.create_volume(zone=self.zone, size=vol_size)
         size_filter = {u'size': vol_size }
-        zone_filter = {u'availability-zone': self.zone}
+        id_filter = {u'volume-id': self.volume.id}
 
         size_match = self.tester.ec2.get_all_volumes(filters=size_filter)
-        zone_match = self.tester.ec2.get_all_volumes(filters=zone_filter)
+        id_match = self.tester.ec2.get_all_volumes(filters=id_filter)
 
-        self.tester.delete_volume(filter_test_volume)
+        self.tester.delete_volume(filter_test_volume_1)
+        self.tester.delete_volume(filter_test_volume_2)
 
-        if len(size_match) != 1:
-            raise Exception("Non-tag Filtering of volumes by size: " + str(len(size_match))  + " expected: 1")
-        if len(zone_match) != 2:
-            raise Exception("Non-tag Filtering of volumes by zone: " + str(len(zone_match))  + " expected: 2")
+        if len(size_match) != 2:
+            raise Exception("Non-tag Filtering of volumes by size: " + str(len(size_match))  + " expected: 2")
+        if len(id_match) != 1:
+            raise Exception("Non-tag Filtering of volumes by id: " + str(len(id_match))  + " expected: 1")
 
         ### Test Deletion
         self.volume.delete_tags(tags)
@@ -275,18 +277,22 @@ class TaggingBasics(EutesterTestCase):
         group_name = "filter-test"
         group_description = "group-filtering"
         filter_group = self.tester.add_group(group_name=group_name, description=group_description)
+        filter_group_2 = self.tester.add_group(group_name=group_name + "2", description=group_description)
 
         description_filter = {u'description': group_description }
-        owner_filter = {u'owner-id': filter_group.owner_id}
+        group_id_filter = {u'group-id': filter_group.id}
         description_match = self.tester.ec2.get_all_security_groups(filters=description_filter)
         self.debug("Groups matching description:" + str(description_match))
-        owner_match = self.tester.ec2.get_all_security_groups(filters=owner_filter)
-        self.debug("Groups matching owner-id (" + owner_filter[u'owner-id']  + "):" + str(owner_match))
+        group_id_match = self.tester.ec2.get_all_security_groups(filters=group_id_filter)
+        self.debug("Groups matching owner-id (" + group_id_filter[u'group-id']  + "):" + str(group_id_match))
 
         self.tester.delete_group(filter_group)
+        self.tester.delete_group(filter_group_2)
 
-        if len(description_match) != 1 or len(owner_match) != 3:
-            raise Exception("Non-tag Filtering of images did not return the proper number of resources")
+        if len(description_match) != 2:
+            raise Exception("Non-tag Filtering of security groups by description: " + str(len(description_match))  + " expected: 2")
+        if len(group_id_match) != 1:
+            raise Exception("Non-tag Filtering of security groups by id: " + str(len(group_id_match))  + " expected: 1")
 
         ### Test Deletion
         self.tester.delete_tags([self.group.id], tags)

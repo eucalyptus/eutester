@@ -69,7 +69,7 @@ class InstanceBasics(EutesterTestCase):
             self.reservation = self.tester.run_instance(self.image, keypair=self.keypair.name, group=self.group.name, zone=zone)
         for instance in self.reservation.instances:
             self.assertTrue( self.tester.wait_for_reservation(self.reservation) ,'Instance did not go to running')
-            self.assertNotEqual( instance.public_dns_name, instance.private_ip_address, 'Public and private IP are the same')
+            #self.assertNotEqual( instance.public_dns_name, instance.private_ip_address, 'Public and private IP are the same')
             self.assertTrue( self.tester.ping(instance.public_dns_name), 'Could not ping instance')
             self.assertFalse( instance.found("ls -1 /dev/" + instance.rootfs_device + "2",  "No such file or directory"),  'Did not find ephemeral storage at ' + instance.rootfs_device + "2")
         return self.reservation
@@ -329,10 +329,9 @@ class InstanceBasics(EutesterTestCase):
             for reservation in reservations:
                 future_instances.append(executor.submit(self.tester.terminate_instances,reservation))
 
-        self.tester.sleep(20)
-
-        if available_instances_before > self.tester.get_available_vms(zone=self.zone):
-            raise Exception("Number of instances available before was greater than number of instances after churn")
+        def available_after_greater():
+            return self.tester.get_available_vms(zone=self.zone) >= available_instances_before
+        self.tester.wait_for_result(available_after_greater, result=True, timeout=240)
 
     def PrivateIPAddressing(self, zone = None):
         """
