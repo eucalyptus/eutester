@@ -20,7 +20,7 @@ class BFEBSBasics(InstanceBasics):
         if not self.args.imgurl:
             raise Exception("No imgurl passed to run BFEBS tests")
         if not self.reservation:
-            self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name, zone=zone)
+            self.reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, zone=zone)
         for instance in self.reservation.instances:
             self.volume = self.tester.create_volume(zone=self.zone, size=2)
             self.volume_device = instance.attach_volume(self.volume)
@@ -66,7 +66,7 @@ class BFEBSBasics(InstanceBasics):
             self.volume = self.tester.create_volume(zone=self.zone, size=2)
         if self.reservation:
             self.tester.terminate_instances(self.reservation)
-        self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name, zone=zone)
+        self.reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, zone=zone)
         ## Ensure that we can attach and use a volume
         for instance in self.reservation.instances:
             vol_dev = instance.attach_volume(self.volume)
