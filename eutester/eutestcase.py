@@ -278,8 +278,9 @@ class EutesterTestUnit():
             self.result=EutesterTestResult.passed
             return ret
         except Exception, e:
+            buf = ''
             if self.kwargs.get('html_anchors',False):
-                buf = "<font color=red> Error in test unit '" + self.name + "':\n"
+                buf += "<font color=red> Error in test unit '" + self.name + "':\n"
             out = StringIO.StringIO()
             traceback.print_exception(*sys.exc_info(),file=out)
             out.seek(0)
