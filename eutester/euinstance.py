@@ -137,7 +137,7 @@ class EuInstance(Instance, TaggedResource):
                 keypair = tester.get_keypair(keyname)
             else:
                 keyname = keypair.name
-            keypath = os.getcwd() + "/" + keyname + ".pem" 
+            keypath = os.getcwd() + "/" + keyname + ".pem"
         newins.keypair = keypair
         newins.keypath = keypath
         newins.password = password
@@ -213,7 +213,7 @@ class EuInstance(Instance, TaggedResource):
                 self.ssh.close()
             self.debug('Connecting ssh '+str(self.id))
             self.ssh = sshconnection.SshConnection(
-                                                    self.public_dns_name, 
+                                                    self.ip_address,
                                                     keypair=self.keypair, 
                                                     keypath=self.keypath,          
                                                     password=self.password, 
