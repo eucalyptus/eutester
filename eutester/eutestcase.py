@@ -808,8 +808,11 @@ class EutesterTestCase(unittest.TestCase):
                     try:
                         self.print_test_unit_startmsg(cleanunit)
                         cleanunit.run()
-                    except:
-                        pass
+                    except Exception, e:
+                        out = StringIO.StringIO()
+                        traceback.print_exception(*sys.exc_info(),file=out)
+                        out.seek(0)
+                        self.debug("Failure in cleanup: " + str(e) + "\n" + out.read())
                     if printresults:
                         msgout = self.print_test_list_results(list=list,printout=False)
                         self.status(msgout)
@@ -931,7 +934,7 @@ class EutesterTestCase(unittest.TestCase):
         :param printmethod: method to use for printing test result output. Default is self.debug
         '''
 
-        buf =  "\nTESTUNIT LIST SUMMARY FOR '"+str(self.name) + "'\n"
+        buf =  "\nTESTUNIT LIST SUMMARY FOR "+str(self.name) + "\n"
         if list is None:
             list=self.testlist
         if not list:
