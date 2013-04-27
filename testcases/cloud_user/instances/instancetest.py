@@ -70,7 +70,6 @@ class InstanceBasics(EutesterTestCase):
             self.reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, zone=zone)
         for instance in self.reservation.instances:
             self.assertTrue( self.tester.wait_for_reservation(self.reservation) ,'Instance did not go to running')
-            self.assertNotEqual( instance.public_dns_name, instance.private_ip_address, 'Public and private IP are the same')
             self.assertTrue( self.tester.ping(instance.public_dns_name), 'Could not ping instance')
             self.assertFalse( instance.found("ls -1 /dev/" + instance.rootfs_device + "2",  "No such file or directory"),  'Did not find ephemeral storage at ' + instance.rootfs_device + "2")
         return self.reservation
