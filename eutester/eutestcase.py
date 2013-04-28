@@ -934,7 +934,7 @@ class EutesterTestCase(unittest.TestCase):
         :param printmethod: method to use for printing test result output. Default is self.debug
         '''
 
-        buf =  "\nTESTUNIT LIST SUMMARY FOR "+str(self.name) + "\n"
+        buf = "\nTESTUNIT LIST SUMMARY FOR " + str(self.name) + "\n"
         if list is None:
             list=self.testlist
         if not list:
@@ -947,22 +947,21 @@ class EutesterTestCase(unittest.TestCase):
             buf += self.resultdefault("\n"+ self.getline(80)+"\n", printout=False)
             #Ascii mark up errors using pmethod() so errors are in bold/red, etc...
             pmethod = self.resultfail if not testunit.result == EutesterTestResult.passed else self.resultdefault
-            test_summary_line = str(" ").ljust(20) + '|TEST LINK: <a href="#' + str(testunit.anchor_id) + '">GO TO TEST</a> \n' \
+            test_summary_line = str(" ").ljust(20) \
                                 + str("RESULT: " + str(testunit.result)).ljust(20)  \
                                 + "| TEST NAME: " + str(testunit.name) + "\n" \
-                                + str(" ").ljust(20) + str("| TIME TO TEST: " + str(testunit.time_to_run))
+                                + str(" ").ljust(20) + str("| TIME : " + str(testunit.time_to_run))
 
 
             buf += pmethod(str(test_summary_line),printout=False)
-            buf += pmethod("\n" + str(" ").ljust(20) + "| VALUES PROVIDED: "
+            buf += pmethod("\n" + str(" ").ljust(20) + "| ARGS: "
                            + str(self.print_testunit_method_arg_values(testunit)), printout=False)
             #Print additional line showing error in the failed case...
             if testunit.result == EutesterTestResult.failed:
                     err_sum = "\n".join(str(testunit.error).splitlines()[0:3])
-                    test_error_line = '<font color=red>ERROR:('+str(testunit.name)+'): '\
+                    test_error_line = 'ERROR:('+str(testunit.name)+'): '\
                                       + str(err_sum) \
-                                      + str('</font>') \
-                                      + '\n <a href="#' + str(testunit.error_anchor_id) + '">GO TO ERROR</a>'
+                                      + '\n'
                     buf += "\n"+str(self.resulterr(test_error_line, printout=False))
         buf += self.resultdefault("\n"+ self.getline(80)+"\n", printout=False)
         buf += str(self.print_test_list_short_stats(list))
