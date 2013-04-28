@@ -298,11 +298,11 @@ class InstanceBasics(EutesterTestCase):
             - When a test finishes, rerun BasicInstanceChecks test case.
         If any of these tests fail, the test case will error out; logging the results.
         """
-        available_instances_before = self.tester.get_available_vms(zone=self.zone)
         if self.reservation:
             self.tester.terminate_instances(self.reservation)
             self.reservation = None
         ## Run through count iterations of test
+        available_instances_before = self.tester.get_available_vms(zone=self.zone)
         count = 4
         future_instances =[]
 
