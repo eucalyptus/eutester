@@ -2270,7 +2270,7 @@ class EC2ops(Eutester):
                 #                str(instance) + " did not receive a valid IP")
 
             if is_reachable:
-                self.ping(instance.public_dns_name, 20)
+                self.ping(instance.ip_address, 20)
                 
         #calculate remaining time to wait for establishing an ssh session/euinstance     
         timeout -= int(time.time() - start)

@@ -26,11 +26,12 @@ class ConfigureLoadBalancer(EutesterTestCase):
             raise Exception("Unable to find a CLC")
         first_clc = clcs[0]
         assert isinstance(first_clc,Machine)
-        first_clc.add_repo(url=self.args.img_repo, "EucaLoadBalancer")
+        first_clc.add_repo(url=self.args.img_repo, name="EucaLoadBalancer")
         first_clc.install("eucalyptus-load-balancer-image-devel")
 
         load_balancer_bucket = "loadbalancer_vm"
-        first_clc.sys("eustore-install-image -t /usr/share/eucalyptus-load-balancer-image-devel/eucalyptus-load-balancer-image-devel.tgz"
+        first_clc.sys("source " + self.tester.credpath  + "/eucarc && eustore-install-image "
+                      "-t /usr/share/eucalyptus-load-balancer-image-devel/eucalyptus-load-balancer-image-devel.tgz "
                       "-a x86_64 -s loadbalancer -b " + load_balancer_bucket , code=0)
         load_balancer_emi = self.tester.get_emi(location=load_balancer_bucket)
         self.tester.modify_property("loadbalancing.loadbalancer_emi",load_balancer_emi.id)

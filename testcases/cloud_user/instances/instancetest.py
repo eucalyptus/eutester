@@ -22,6 +22,7 @@ class InstanceBasics(EutesterTestCase):
         if extra_args:
             for arg in extra_args:
                 self.parser.add_argument(arg)
+        self.parser.add_argument("--user-data")
         self.get_args()
         # Setup basic eutester object
         if self.args.region:
@@ -66,10 +67,9 @@ class InstanceBasics(EutesterTestCase):
         if zone is None:
             zone = self.zone
         if not self.reservation:
-            self.reservation = self.tester.run_instance(self.image, keypair=self.keypair.name, group=self.group.name, zone=zone)
+            self.reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, zone=zone)
         for instance in self.reservation.instances:
             self.assertTrue( self.tester.wait_for_reservation(self.reservation) ,'Instance did not go to running')
-            self.assertNotEqual( instance.public_dns_name, instance.private_ip_address, 'Public and private IP are the same')
             self.assertTrue( self.tester.ping(instance.public_dns_name), 'Could not ping instance')
             self.assertFalse( instance.found("ls -1 /dev/" + instance.rootfs_device + "2",  "No such file or directory"),  'Did not find ephemeral storage at ' + instance.rootfs_device + "2")
         return self.reservation
@@ -87,7 +87,7 @@ class InstanceBasics(EutesterTestCase):
         if zone is None:
             zone = self.zone
         if not self.reservation:
-            self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name,zone=zone)
+            self.reservation = self.tester.run_instance(username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name,zone=zone)
         for instance in self.reservation.instances:
             if instance.public_dns_name == instance.private_ip_address:
                 self.tester.debug("WARNING: System or Static mode detected, skipping ElasticIps")
@@ -117,7 +117,7 @@ class InstanceBasics(EutesterTestCase):
             available_small = self.tester.get_available_vms()
         if zone is None:
             zone = self.zone
-        self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name,min=2, max=2, zone=zone)
+        self.reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user,keypair=self.keypair.name, group=self.group.name,min=2, max=2, zone=zone)
         self.assertTrue( self.tester.wait_for_reservation(self.reservation) ,'Not all instances  went to running')
         return self.reservation
 
@@ -132,7 +132,7 @@ class InstanceBasics(EutesterTestCase):
             zone = self.zone
         if self.reservation:
             self.tester.terminate_instances(self.reservation)
-        self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name,type="c1.xlarge",zone=zone)
+        self.reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user,keypair=self.keypair.name, group=self.group.name,type="c1.xlarge",zone=zone)
         self.assertTrue( self.tester.wait_for_reservation(self.reservation) ,'Not all instances  went to running')
         return self.reservation
 
@@ -163,7 +163,7 @@ class InstanceBasics(EutesterTestCase):
         if zone is None:
             zone = self.zone
         if not self.reservation:
-            self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name, zone=zone)
+            self.reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user,keypair=self.keypair.name, group=self.group.name, zone=zone)
         for instance in self.reservation.instances:
             ## Need to verify  the public key (could just be checking for a string of a certain length)
             self.assertTrue(re.match(instance.get_metadata("public-keys/0/openssh-key")[0].split('eucalyptus.')[-1], self.keypair.name), 'Incorrect public key in metadata')
@@ -204,7 +204,7 @@ class InstanceBasics(EutesterTestCase):
         if zone is None:
             zone = self.zone
         if not self.reservation:
-            self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name, zone=zone)
+            self.reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user,keypair=self.keypair.name, group=self.group.name, zone=zone)
         for instance in self.reservation.instances:
 
             # Test to see if Dynamic DNS has been configured # 
@@ -248,7 +248,7 @@ class InstanceBasics(EutesterTestCase):
         if zone is None:
             zone = self.zone
         if not self.reservation:
-            self.reservation = self.tester.run_instance(self.image,keypair=self.keypair.name, group=self.group.name, zone=zone)
+            self.reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user,keypair=self.keypair.name, group=self.group.name, zone=zone)
         for instance in self.reservation.instances:
 
             # Test to see if Dynamic DNS has been configured # 
@@ -275,7 +275,7 @@ class InstanceBasics(EutesterTestCase):
         if zone is None:
             zone = self.zone
         if not self.reservation:
-            self.reservation = self.tester.run_instance(self.image, keypair=self.keypair.name, group=self.group.name, zone=zone)
+            self.reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, zone=zone)
         for instance in self.reservation.instances:
             ### Create 1GB volume in first AZ
             self.volume = self.tester.create_volume(instance.placement, 1)
@@ -286,17 +286,6 @@ class InstanceBasics(EutesterTestCase):
             self.tester.delete_volume(self.volume)
             self.volume = None
         return self.reservation
-
-    def run_terminate(self):
-        reservation = None
-        try:
-            reservation = self.tester.run_instance(image=self.image,zone=self.zone, keypair=self.keypair.name, group=self.group.name)
-            self.tester.terminate_instances(reservation)
-            return 0
-        except Exception, e:
-            if reservation:
-                self.tester.terminate_instances(reservation)
-            return 1
 
     def Churn(self):
         """
@@ -334,7 +323,7 @@ class InstanceBasics(EutesterTestCase):
 
         def available_after_greater():
             return self.tester.get_available_vms(zone=self.zone) >= available_instances_before
-        self.tester.wait_for_result(available_after_greater, result=True, timeout=240)
+        self.tester.wait_for_result(available_after_greater, result=True, timeout=360)
 
     def PrivateIPAddressing(self, zone = None):
         """
@@ -353,7 +342,7 @@ class InstanceBasics(EutesterTestCase):
                     self.tester.debug("WARNING: System or Static mode detected, skipping PrivateIPAddressing")
                     return self.reservation
             self.tester.terminate_instances(self.reservation)
-        self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name, private_addressing=True, zone=zone)
+        self.reservation = self.tester.run_instance(username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, private_addressing=True, zone=zone)
         for instance in self.reservation.instances:
             address = self.tester.allocate_address()
             self.assertTrue(address,'Unable to allocate address')
@@ -384,7 +373,7 @@ class InstanceBasics(EutesterTestCase):
         if self.reservation:
             self.tester.terminate_instances(self.reservation)
         for i in xrange(5):
-            self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group.name, zone=zone)
+            self.reservation = self.tester.run_instance(username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, zone=zone)
             for instance in self.reservation.instances:
                 if prev_address is not None:
                     self.assertTrue(re.search(str(prev_address) ,str(instance.public_dns_name)), str(prev_address) +" Address did not get reused but rather  " + str(instance.public_dns_name))
