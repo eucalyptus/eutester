@@ -948,7 +948,7 @@ class EutesterTestCase(unittest.TestCase):
             #Ascii mark up errors using pmethod() so errors are in bold/red, etc...
             pmethod = self.resultfail if not testunit.result == EutesterTestResult.passed else self.resultdefault
             test_summary_line = str(" ").ljust(20) \
-                                + str("RESULT: " + str(testunit.result)).ljust(20)  \
+                                + str("| RESULT: " + str(testunit.result)).ljust(20) + "\n" \
                                 + "| TEST NAME: " + str(testunit.name) + "\n" \
                                 + str(" ").ljust(20) + str("| TIME : " + str(testunit.time_to_run))
 
