@@ -326,7 +326,7 @@ class Eutester(object):
             return func(*func_args, **func_kwargs)
         return methdecor
 
-    def wait_for_result(self, callback, result , timeout=60, **callback_kwargs):
+    def wait_for_result(self, callback, result, timeout=60, **callback_kwargs):
         """
         Wait for the instance to enter the state
 

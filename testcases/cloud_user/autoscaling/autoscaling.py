@@ -46,10 +46,10 @@ class AutoScalingBasics(EutesterTestCase):
                 self.parser.add_argument(arg)
         self.get_args()
         # Setup basic eutester object
-        if self.args.emi:
+        if self.args.region:
             self.tester = Eucaops(credpath=self.args.credpath, region=self.args.region)
         else:
-            self.tester = Eucaops(credpath=self.args.credpath)
+            self.tester = Eucaops(credpath=self.args.credpath, config_file=self.args.config, password=self.args.password)
 
         ### Add and authorize a group for the instance
         self.group = self.tester.add_group(group_name="group-" + str(time.time()))
@@ -65,12 +65,7 @@ class AutoScalingBasics(EutesterTestCase):
         self.address = None
 
     def clean_method(self):
-        ### DELETE group
-        self.tester.delete_group(self.group)
-
-        ### Delete keypair in cloud and from filesystem
-        self.tester.delete_keypair(self.keypair)
-        os.remove(self.keypath)
+        self.tester.cleanup_artifacts()
 
     def AutoScalingBasics(self):
         ### create launch configuration
@@ -97,6 +92,8 @@ class AutoScalingBasics(EutesterTestCase):
                                      scaling_adjustment=4,
                                      as_name=self.auto_scaling_group_name,
                                      cooldown=120)
+        if len(self.tester.autoscale.get_all_policies(policy_names=[self.up_policy_name])) != 1:
+            raise Exception('Auto Scaling policies: ' + self.up_policy_name +' not created')
 
         self.down_policy_name = "Down-Policy-" + str(time.time())
         self.down_size = -50
@@ -106,6 +103,9 @@ class AutoScalingBasics(EutesterTestCase):
                                      as_name=self.auto_scaling_group_name,
                                      cooldown=120)
 
+        if len(self.tester.autoscale.get_all_policies(policy_names=[self.down_policy_name])) != 1:
+            raise Exception('Auto Scaling policies: ' + self.down_policy_name +' not created')
+
         self.exact_policy_name = "Exact-Policy-" + str(time.time())
         self.exact_size = 0
         self.tester.create_as_policy(name=self.exact_policy_name,
@@ -114,9 +114,9 @@ class AutoScalingBasics(EutesterTestCase):
                                      as_name=self.auto_scaling_group_name,
                                      cooldown=120)
 
-        ### Test all policies added to group
-        if len(self.tester.autoscale.get_all_policies()) != 3:
-            raise Exception('Auto Scaling policies not created')
+        if len(self.tester.autoscale.get_all_policies(policy_names=[self.exact_policy_name])) != 1:
+            raise Exception('Auto Scaling policies: ' + self.exact_policy_name +' not created')
+
         self.debug("**** Created Auto Scaling Policies: " + self.up_policy_name + " " + self.down_policy_name + " " +
                    self.exact_policy_name)
 
