@@ -7,6 +7,7 @@
 
 import time
 from concurrent.futures import ThreadPoolExecutor
+import threading
 from eucaops import Eucaops
 from eutester.eutestcase import EutesterTestCase
 from eucaops import EC2ops
@@ -47,10 +48,15 @@ class InstanceBasics(EutesterTestCase):
         zones = self.tester.ec2.get_all_zones()
         self.zone = random.choice(zones).name
         self.reservation = None
+        self.reservation_lock = threading.Lock()
+
+    def set_reservation(self, reservation):
+        self.reservation_lock.acquire()
+        self.reservation = reservation
+        self.reservation_lock.release()
 
     def clean_method(self):
         self.tester.cleanup_artifacts()
-
 
     def BasicInstanceChecks(self, zone = None):
         """
@@ -67,12 +73,15 @@ class InstanceBasics(EutesterTestCase):
         if zone is None:
             zone = self.zone
         if not self.reservation:
-            self.reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, zone=zone)
-        for instance in self.reservation.instances:
-            self.assertTrue( self.tester.wait_for_reservation(self.reservation) ,'Instance did not go to running')
+            reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, zone=zone)
+        else:
+            reservation = self.reservation
+        for instance in reservation.instances:
+            self.assertTrue( self.tester.wait_for_reservation(reservation) ,'Instance did not go to running')
             self.assertTrue( self.tester.ping(instance.public_dns_name), 'Could not ping instance')
             self.assertFalse( instance.found("ls -1 /dev/" + instance.rootfs_device + "2",  "No such file or directory"),  'Did not find ephemeral storage at ' + instance.rootfs_device + "2")
-        return self.reservation
+        self.set_reservation(reservation)
+        return reservation
 
     def ElasticIps(self, zone = None):
         """
@@ -88,10 +97,13 @@ class InstanceBasics(EutesterTestCase):
             zone = self.zone
         if not self.reservation:
             self.reservation = self.tester.run_instance(username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name,zone=zone)
-        for instance in self.reservation.instances:
+        else:
+            reservation = self.reservation
+
+        for instance in reservation.instances:
             if instance.public_dns_name == instance.private_ip_address:
                 self.tester.debug("WARNING: System or Static mode detected, skipping ElasticIps")
-                return self.reservation
+                return reservation
             self.address = self.tester.allocate_address()
             self.assertTrue(self.address,'Unable to allocate address')
             self.tester.associate_address(instance, self.address)
@@ -102,7 +114,8 @@ class InstanceBasics(EutesterTestCase):
             self.address = None
             instance.update()
             self.assertTrue( self.tester.ping(instance.public_dns_name), "Could not ping after dissassociate")
-        return self.reservation
+        self.set_reservation(reservation)
+        return reservation
 
     def MultipleInstances(self, available_small=None,zone = None):
         """
@@ -113,13 +126,17 @@ class InstanceBasics(EutesterTestCase):
         """
         if self.reservation:
             self.tester.terminate_instances(self.reservation)
+            self.set_reservation(None)
+
         if available_small is None:
             available_small = self.tester.get_available_vms()
+
         if zone is None:
             zone = self.zone
-        self.reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user,keypair=self.keypair.name, group=self.group.name,min=2, max=2, zone=zone)
-        self.assertTrue( self.tester.wait_for_reservation(self.reservation) ,'Not all instances  went to running')
-        return self.reservation
+        reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user,keypair=self.keypair.name, group=self.group.name,min=2, max=2, zone=zone)
+        self.assertTrue( self.tester.wait_for_reservation(reservation) ,'Not all instances  went to running')
+        self.set_reservation(reservation)
+        return reservation
 
     def LargestInstance(self, zone = None):
         """
@@ -132,9 +149,11 @@ class InstanceBasics(EutesterTestCase):
             zone = self.zone
         if self.reservation:
             self.tester.terminate_instances(self.reservation)
-        self.reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user,keypair=self.keypair.name, group=self.group.name,type="c1.xlarge",zone=zone)
-        self.assertTrue( self.tester.wait_for_reservation(self.reservation) ,'Not all instances  went to running')
-        return self.reservation
+            self.set_reservation(None)
+        reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user,keypair=self.keypair.name, group=self.group.name,type="c1.xlarge",zone=zone)
+        self.assertTrue( self.tester.wait_for_reservation(reservation) ,'Not all instances  went to running')
+        self.set_reservation(reservation)
+        return reservation
 
     def MetaData(self, zone=None):
         """
@@ -163,8 +182,10 @@ class InstanceBasics(EutesterTestCase):
         if zone is None:
             zone = self.zone
         if not self.reservation:
-            self.reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user,keypair=self.keypair.name, group=self.group.name, zone=zone)
-        for instance in self.reservation.instances:
+            reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user,keypair=self.keypair.name, group=self.group.name, zone=zone)
+        else:
+            reservation = self.reservation
+        for instance in reservation.instances:
             ## Need to verify  the public key (could just be checking for a string of a certain length)
             self.assertTrue(re.match(instance.get_metadata("public-keys/0/openssh-key")[0].split('eucalyptus.')[-1], self.keypair.name), 'Incorrect public key in metadata')
             self.assertTrue(re.match(instance.get_metadata("security-groups")[0], self.group.name), 'Incorrect security group in metadata')
@@ -186,7 +207,8 @@ class InstanceBasics(EutesterTestCase):
             BAD_META_DATA_KEYS = ['foobar']
             for key in BAD_META_DATA_KEYS:
                 self.assertTrue(re.search("Not Found", "".join(instance.get_metadata(key))), 'No fail message on invalid meta-data node')
-        return self.reservation
+        self.set_reservation(reservation)
+        return reservation
 
     def DNSResolveCheck(self, zone=None):
         """
@@ -204,8 +226,10 @@ class InstanceBasics(EutesterTestCase):
         if zone is None:
             zone = self.zone
         if not self.reservation:
-            self.reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user,keypair=self.keypair.name, group=self.group.name, zone=zone)
-        for instance in self.reservation.instances:
+            reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user,keypair=self.keypair.name, group=self.group.name, zone=zone)
+        else:
+            reservation = self.reservation
+        for instance in reservation.instances:
 
             # Test to see if Dynamic DNS has been configured # 
             if re.match("internal", instance.private_dns_name.split('eucalyptus.')[-1]):
@@ -232,8 +256,8 @@ class InstanceBasics(EutesterTestCase):
                 self.assertTrue(re.search('answer\:', instance.sys("nslookup " +  instance.get_metadata("public-ipv4")[0])[3]), "DNS lookup failed for public IP address.")
                 # Since nslookup was able to resolve, now check to see if nslookup on public-ipv4 address returns public-hostname
                 self.assertTrue(re.search(instance.get_metadata("public-hostname")[0], instance.sys("nslookup " +  instance.get_metadata("public-ipv4")[0])[4]), "Incorrect DNS resolution for public IP address")
-
-        return self.reservation
+        self.set_reservation(reservation)
+        return reservation
 
     def DNSCheck(self, zone=None):
         """
@@ -248,17 +272,18 @@ class InstanceBasics(EutesterTestCase):
         if zone is None:
             zone = self.zone
         if not self.reservation:
-            self.reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user,keypair=self.keypair.name, group=self.group.name, zone=zone)
-        for instance in self.reservation.instances:
-
+            reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user,keypair=self.keypair.name, group=self.group.name, zone=zone)
+        else:
+            reservation = self.reservation
+        for instance in reservation.instances:
             # Test to see if Dynamic DNS has been configured # 
             if re.match("internal", instance.private_dns_name.split('eucalyptus.')[-1]):
                 # Make sure that private_ip_address is not the same as local-hostname
                 self.assertFalse(re.match(instance.private_ip_address, instance.private_dns_name), 'local-ipv4 and local-hostname are the same with DNS on')
                 # Make sure that ip_address is not the same as public-hostname
                 self.assertFalse(re.match(instance.ip_address, instance.public_dns_name), 'public-ipv4 and public-hostname are the same with DNS on')
-
-        return self.reservation
+        self.set_reservation(reservation)
+        return reservation
 
     def Reboot(self, zone=None):
         """
@@ -275,17 +300,19 @@ class InstanceBasics(EutesterTestCase):
         if zone is None:
             zone = self.zone
         if not self.reservation:
-            self.reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, zone=zone)
-        for instance in self.reservation.instances:
+            reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, zone=zone)
+        else:
+            reservation = self.reservation
+        for instance in reservation.instances:
             ### Create 1GB volume in first AZ
-            self.volume = self.tester.create_volume(instance.placement, 1)
-            self.volume_device = instance.attach_volume(self.volume)
+            volume = self.tester.create_volume(instance.placement, 1)
+            volume_device = instance.attach_volume(volume)
             ### Reboot instance
             instance.reboot_instance_and_verify(waitconnect=20)
-            instance.detach_euvolume(self.volume)
-            self.tester.delete_volume(self.volume)
-            self.volume = None
-        return self.reservation
+            instance.detach_euvolume(volume)
+            self.tester.delete_volume(volume)
+        self.set_reservation(reservation)
+        return reservation
 
     def Churn(self):
         """
@@ -300,26 +327,26 @@ class InstanceBasics(EutesterTestCase):
         """
         if self.reservation:
             self.tester.terminate_instances(self.reservation)
-            self.reservation = None
-        ## Run through count iterations of test
+            self.set_reservation(None)
+
         available_instances_before = self.tester.get_available_vms(zone=self.zone)
+
+        ## Run through count iterations of test
         count = 4
         future_instances =[]
 
         with ThreadPoolExecutor(max_workers=count) as executor:
             ## Start asynchronous activity
-            ## Run 5 basic instance check instances 5s apart
+            ## Run 5 basic instance check instances 10s apart
             for i in xrange(count):
                 future_instances.append(executor.submit(self.BasicInstanceChecks))
-                self.tester.sleep(5)
-
-        reservations = [future.result() for future in future_instances]
+                self.tester.sleep(10)
 
         with ThreadPoolExecutor(max_workers=count) as executor:
             ## Start asynchronous activity
             ## Terminate all instances
-            for reservation in reservations:
-                future_instances.append(executor.submit(self.tester.terminate_instances,reservation))
+            for future in future_instances:
+                executor.submit(self.tester.terminate_instances,future.result())
 
         def available_after_greater():
             return self.tester.get_available_vms(zone=self.zone) >= available_instances_before
@@ -342,8 +369,9 @@ class InstanceBasics(EutesterTestCase):
                     self.tester.debug("WARNING: System or Static mode detected, skipping PrivateIPAddressing")
                     return self.reservation
             self.tester.terminate_instances(self.reservation)
-        self.reservation = self.tester.run_instance(username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, private_addressing=True, zone=zone)
-        for instance in self.reservation.instances:
+            self.set_reservation(None)
+        reservation = self.tester.run_instance(username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, private_addressing=True, zone=zone)
+        for instance in reservation.instances:
             address = self.tester.allocate_address()
             self.assertTrue(address,'Unable to allocate address')
             self.tester.associate_address(instance, address)
@@ -357,7 +385,8 @@ class InstanceBasics(EutesterTestCase):
             address.release()
             if instance.public_dns_name != instance.private_dns_name:
                 self.fail("Instance received a new public IP: " + instance.public_dns_name)
-        return self.reservation
+        self.set_reservation(None)
+        return reservation
 
     def ReuseAddresses(self, zone = None):
         """
@@ -372,19 +401,20 @@ class InstanceBasics(EutesterTestCase):
             ### Run the test 5 times in a row
         if self.reservation:
             self.tester.terminate_instances(self.reservation)
+            self.set_reservation(None)
         for i in xrange(5):
-            self.reservation = self.tester.run_instance(username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, zone=zone)
-            for instance in self.reservation.instances:
+            reservation = self.tester.run_instance(username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, zone=zone)
+            for instance in reservation.instances:
                 if prev_address is not None:
                     self.assertTrue(re.search(str(prev_address) ,str(instance.public_dns_name)), str(prev_address) +" Address did not get reused but rather  " + str(instance.public_dns_name))
                 prev_address = instance.public_dns_name
-            self.tester.terminate_instances(self.reservation)
+            self.tester.terminate_instances(reservation)
 
 if __name__ == "__main__":
     testcase = InstanceBasics()
     ### Either use the list of tests passed from config/command line to determine what subset of tests to run
-    list = testcase.args.tests or [ "BasicInstanceChecks",  "ElasticIps", "MultipleInstances" , "LargestInstance",
-                                    "MetaData", "Reboot","PrivateIPAddressing", "Churn"]
+    list = testcase.args.tests or [ "BasicInstanceChecks",  "Reboot", "MetaData", "ElasticIps", "MultipleInstances" , "LargestInstance",
+                                   "PrivateIPAddressing", "Churn"]
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
     for test in list:
