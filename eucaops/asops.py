@@ -39,6 +39,7 @@ from boto.ec2.autoscale import Tag
 from boto.ec2.autoscale import LaunchConfiguration
 from boto.ec2.autoscale import AutoScalingGroup
 from boto.ec2.regioninfo import RegionInfo
+import time
 
 from eutester import Eutester
 
@@ -244,6 +245,7 @@ class ASops(Eutester):
     def delete_as_group(self, names=None, force=None):
         self.debug("Deleting Auto Scaling Group: " + names)
         self.debug("Forcing: " + str(force))
+        # self.autoscale.set_desired_capacity(group_name=names, desired_capacity=0)
         self.autoscale.delete_auto_scaling_group(name=names, force_delete=force)
         if len(self.describe_as_group([names])) != 0:
             raise Exception('Auto Scaling Group not deleted')
@@ -316,7 +318,26 @@ class ASops(Eutester):
         as_url = self.parse_eucarc("AWS_AUTO_SCALING_URL")
         return as_url.split("/")[2].split(":")[0]
 
-    # TODO write wait/poll op for auto scaling groups
+    def wait_for_scaling(self, callback, result, timeout=60, **callback_kwargs):
+        self.debug("Beginning poll loop for scaling activity")
+        start = time.time()
+        elapsed = 0
+        current_state = callback(**callback_kwargs)
+        ### If the instance changes state or goes to the desired state before my poll count is complete
+        while(elapsed < timeout) and (current_state != result):
+            current_state = callback(**callback_kwargs)
+            self.debug("Result of " + str(callback.func_name) + ": " + str(current_state))
+            if current_state:
+                self.debug("Most Recent Activity: " + str(current_state))
+            self.sleep(10)
+            elapsed = int(time.time() - start)
+        self.debug("Result of " + str(callback.func_name) + ": " + str(current_state))
+        if current_state != result:
+            raise Exception(str(callback.func_name) + " did not return "+str(result)+" after elapsed:"+str(elapsed))
+
+        self.debug(str(callback.func_name) + ' is now: ' + str(result))
+        return True
+
     def get_last_instance_id(self):
         reservations = self.ec2.get_all_instances()
         instances = [i for r in reservations for i in r.instances]
