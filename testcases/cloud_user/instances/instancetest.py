@@ -72,10 +72,7 @@ class InstanceBasics(EutesterTestCase):
         """
         if zone is None:
             zone = self.zone
-        if not self.reservation:
-            reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, zone=zone)
-        else:
-            reservation = self.reservation
+        reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, zone=zone)
         for instance in reservation.instances:
             self.assertTrue( self.tester.wait_for_reservation(reservation) ,'Instance did not go to running')
             self.assertTrue( self.tester.ping(instance.public_dns_name), 'Could not ping instance')
@@ -332,7 +329,7 @@ class InstanceBasics(EutesterTestCase):
         available_instances_before = self.tester.get_available_vms(zone=self.zone)
 
         ## Run through count iterations of test
-        count = 4
+        count = available_instances_before
         future_instances =[]
 
         with ThreadPoolExecutor(max_workers=count) as executor:
