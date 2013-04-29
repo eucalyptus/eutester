@@ -92,6 +92,8 @@ class AutoScalingBasics(EutesterTestCase):
                                      scaling_adjustment=4,
                                      as_name=self.auto_scaling_group_name,
                                      cooldown=120)
+        if len(self.tester.autoscale.get_all_policies(policy_names=[self.up_policy_name])) != 1:
+            raise Exception('Auto Scaling policies: ' + self.up_policy_name +' not created')
 
         self.down_policy_name = "Down-Policy-" + str(time.time())
         self.down_size = -50
@@ -101,6 +103,9 @@ class AutoScalingBasics(EutesterTestCase):
                                      as_name=self.auto_scaling_group_name,
                                      cooldown=120)
 
+        if len(self.tester.autoscale.get_all_policies(policy_names=[self.down_policy_name])) != 1:
+            raise Exception('Auto Scaling policies: ' + self.down_policy_name +' not created')
+
         self.exact_policy_name = "Exact-Policy-" + str(time.time())
         self.exact_size = 0
         self.tester.create_as_policy(name=self.exact_policy_name,
@@ -109,9 +114,9 @@ class AutoScalingBasics(EutesterTestCase):
                                      as_name=self.auto_scaling_group_name,
                                      cooldown=120)
 
-        ### Test all policies added to group
-        if len(self.tester.autoscale.get_all_policies()) != 3:
-            raise Exception('Auto Scaling policies not created')
+        if len(self.tester.autoscale.get_all_policies(policy_names=[self.exact_policy_name])) != 1:
+            raise Exception('Auto Scaling policies: ' + self.exact_policy_name +' not created')
+
         self.debug("**** Created Auto Scaling Policies: " + self.up_policy_name + " " + self.down_policy_name + " " +
                    self.exact_policy_name)
 
