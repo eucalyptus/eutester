@@ -309,7 +309,7 @@ if __name__ == '__main__':
     testcase = CloudWatchBasics()
     ### Use the list of tests passed from config/command line to determine what subset of tests to run
     ### or use a predefined list  'ListMetricsTest', 'GetInstanceMetricTest', 'MetricAlarmsTest'
-    test_list = testcase.args.tests or ['PutDataGetStats', 'MetricAlarmsTest']
+    test_list = testcase.args.tests or ['PutDataGetStats']
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
     for test in test_list:
