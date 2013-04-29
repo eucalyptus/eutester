@@ -46,10 +46,10 @@ class AutoScalingBasics(EutesterTestCase):
                 self.parser.add_argument(arg)
         self.get_args()
         # Setup basic eutester object
-        if self.args.emi:
+        if self.args.region:
             self.tester = Eucaops(credpath=self.args.credpath, region=self.args.region)
         else:
-            self.tester = Eucaops(credpath=self.args.credpath)
+            self.tester = Eucaops(credpath=self.args.credpath, config_file=self.args.config, password=self.args.password)
 
         ### Add and authorize a group for the instance
         self.group = self.tester.add_group(group_name="group-" + str(time.time()))
@@ -65,12 +65,7 @@ class AutoScalingBasics(EutesterTestCase):
         self.address = None
 
     def clean_method(self):
-        ### DELETE group
-        self.tester.delete_group(self.group)
-
-        ### Delete keypair in cloud and from filesystem
-        self.tester.delete_keypair(self.keypair)
-        os.remove(self.keypath)
+        self.tester.cleanup_artifacts()
 
     def AutoScalingBasics(self):
         ### create launch configuration
