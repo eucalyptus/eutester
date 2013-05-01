@@ -48,6 +48,7 @@ Sample usage:
 from boto.ec2.volume import Volume
 from boto.ec2.instance import Instance
 #from eutester import euvolume
+from eutester import Eutester
 from eutester.euvolume import EuVolume
 from eutester import eulogger
 from eutester.taggedresource import TaggedResource
@@ -470,7 +471,7 @@ class EuInstance(Instance, TaggedResource):
         
     
     
-    def terminate_and_verify(self,verify_vols=True,volto=30, timeout=300):
+    def terminate_and_verify(self,verify_vols=True, volto=30, timeout=300):
         '''
         Attempts to terminate the instance and verify delete on terminate state of an ebs root block dev if any. 
         If flagged will attempt to verify the correct
@@ -593,7 +594,8 @@ class EuInstance(Instance, TaggedResource):
         self.assertFilePresent(voldev)
         fillcmd = "dd if=/dev/zero of="+str(voldev)+"; sync"
         return self.time_dd(fillcmd)
-    
+
+    @Eutester.printinfo
     def random_fill_volume(self,euvolume,srcdev=None, length=None, timepergig=90):
         '''
         Attempts to fill the entie given euvolume with unique non-zero data.
@@ -629,12 +631,15 @@ class EuInstance(Instance, TaggedResource):
             ddcmd = 'echo '+str(euvolume.id)+' | dd of='+str(voldev)
             dd_res_for_id = self.dd_monitor(ddcmd=ddcmd, timeout=timeout)
             len_remaining = length - int(dd_res_for_id['dd_bytes'])
-            if len_remaining <= length:
+            if len_remaining <= 0:
                 return dd_res_for_id
+            ddbs = 1024
+            if len_remaining < ddbs:
+                ddbs = len_remaining
             if length < mb:
-                return self.dd_monitor(ddif=str(srcdev), ddof=str(voldev), ddbs=length, ddseek=int(dd_res_for_id['dd_bytes']), timeout=timeout)
+                return self.dd_monitor(ddif=str(srcdev), ddof=str(voldev), ddbs=ddbs, ddbytes=len_remaining, ddseek=int(dd_res_for_id['dd_bytes']), timeout=timeout)
             else:
-                return self.dd_monitor(ddif=str(srcdev), ddof=str(voldev), ddbytes=length, ddseek=int(dd_res_for_id['dd_bytes']), timeout=timeout)
+                return self.dd_monitor(ddif=str(srcdev), ddof=str(voldev), ddbytes=ddbs, ddseek=int(dd_res_for_id['dd_bytes']), timeout=timeout)
                 
             
     
@@ -643,8 +648,20 @@ class EuInstance(Instance, TaggedResource):
         (Added for legacy support, use dd_monitor instead) Executes dd command on instance, parses and returns stats on dd outcome
         '''
         return self.dd_monitor(ddcmd=ddcmd, poll_interval=poll_interval, tmpfile=tmpfile)
-        
-    def dd_monitor(self, ddif=None, ddof=None, ddcount=None, ddbs=1024, ddbytes=None, ddcmd=None, ddseek=None, timeout=300, poll_interval=1, tmpfile=None):
+
+
+    @Eutester.printinfo
+    def dd_monitor(self,
+                   ddif=None,
+                   ddof=None,
+                   ddcount=None,
+                   ddbs=1024,
+                   ddbytes=None,
+                   ddcmd=None,
+                   ddseek=None,
+                   timeout=300,
+                   poll_interval=1,
+                   tmpfile=None):
         '''
         Executes dd command on instance, monitors and displays ongoing status, and returns stats dict for dd outcome
         :type ddif: str
@@ -718,7 +735,7 @@ class EuInstance(Instance, TaggedResource):
             if ddcount:
                 ddcount_str = str(' count='+str(ddcount)+' ')
             elif ddbytes and ddbs:
-                ddcount_str = str(' count='+str(ddbytes/ddbs)+' ')
+                ddcount_str = str(' count='+str((ddbytes/ddbs) or 1)+' ')
             else:
                 ddcount_str = ''
             if ddseek:
@@ -816,7 +833,7 @@ class EuInstance(Instance, TaggedResource):
             buf += '|'+str(ret['test_time']).center(10)
             buf += '|'+str(str(ret['dd_rate'])+" "+str(ret['dd_units'])).center(12)
             buf += '|'+str(str(ret['test_rate'])+" "+str('MB/s')).center(12)
-            buf += '|'+str("F:"+str(ret['dd_full_rec_in'])+" P:"+str(ret['dd_partial_rec_in'])+" ").center(18)
+            buf += '|'+str("F:"+str(ret['dd_full_rec_in'])+" P:"+str(ret['dd_partial_rec_in'])).center(18)
             buf += '|'+str("F:"+str(ret['dd_full_rec_out'])+" P:"+str(ret['dd_partial_rec_out'])).center(18)
             sys.stdout.write("\r\x1b[K"+str(buf))
             sys.stdout.flush()
