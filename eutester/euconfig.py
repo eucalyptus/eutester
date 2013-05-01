@@ -331,11 +331,7 @@ class Config_Item():
         self.config_section = config_section
 
     def update(self):
-        self.value = None
         self.config_section = self.config_section.update()
-        try:
-            self.value = self.config_section.get_item(self.name).value
-        except:pass
 
 
     def config_file_set_this_line(self,value, quoted=True):
