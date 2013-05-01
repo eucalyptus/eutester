@@ -60,8 +60,11 @@ class Instance_Io_Monitor(EutesterTestCase):
                                  default=120)
         self.parser.add_argument('--cycle_paths',
                                  action='store_true', default=False,
-                                 help='Time allowed for volume to transition from deleting to deleted, default:120')
+                                 help='Boolean used to cycle paths during basic run instance monitor io')
 
+        self.parser.add_argument('--run_suite',
+                                action='store_true', default=False,
+                                help='Boolean, will run all test methods in testsuite()')
 
         self.tester = tester
         self.get_args()
@@ -69,6 +72,7 @@ class Instance_Io_Monitor(EutesterTestCase):
         for kw in kwargs:
             print 'Setting kwarg:'+str(kw)+" to "+str(kwargs[kw])
             self.set_arg(kw ,kwargs[kw])
+        self.show_args()
         #if self.args.config:
         #    setattr(self.args, 'config_file',self.args.config)
         # Setup basic eutester object
@@ -118,6 +122,7 @@ class Instance_Io_Monitor(EutesterTestCase):
         self.remote_script_path = None
         self.longest_wait_period = 0
         self.mpath_monkey = None
+        self.cycle_paths =self.args.cycle_paths
 
 
 
@@ -130,7 +135,7 @@ class Instance_Io_Monitor(EutesterTestCase):
             if self.mpath_monkey:
                 try:
                     node = self.mpath_monkey.host
-                    self.mpath_monkey.clear_all_eutester_rules()
+                    self.mpath_monkey.clear_all_eutester_rules(timeout=120)
                 except Exception, e:
                     self.debug('Error cleaning up iptables rules on NC:' + str(node) +', Err:'+str(e))
             self.tester.cleanup_artifacts()
@@ -196,22 +201,25 @@ class Instance_Io_Monitor(EutesterTestCase):
 
 
 
-    def create_and_attach_volume(self):
+    def create_test_volume(self):
         if self.args.volume_id:
             self.volume  = self.tester.get_volume(volume_id=self.args.volume_id)
             if not self.volume:
                 raise Exception('Faild to fetch volume from id provided:' +str(self.args.volume_id))
         else:
             self.volume = self.tester.create_volume(self.zone, size=self.size)
+
+    def attach_test_volume(self,volume=None):
+        volume = volume or self.volume
         try:
-            self.instance.attach_volume(self.volume, timeout=90)
+            self.instance.attach_volume(volume, timeout=90)
         except ec2ops.VolumeStateException, vse:
             self.status("This is a temp work around for testing, this is to avoid bug euca-5297"+str(vse),
                         testcolor=TestColor.get_canned_color('failred'))
             time.sleep(10)
             self.debug('Monitoring volume post VolumeStateException...')
             self.volume.eutest_attached_status = None
-            self.tester.monitor_euvolumes_to_status([self.volume],status='in-use',attached_status='attached',timeout=90)
+            self.tester.monitor_euvolumes_to_status([volume],status='in-use',attached_status='attached',timeout=90)
 
 
     def mount_volume_and_create_test_file(self):
@@ -231,20 +239,31 @@ class Instance_Io_Monitor(EutesterTestCase):
 
     def setup_instance_volume_and_script(self):
         self.launch_test_instance()
-        self.create_and_attach_volume()
+        self.create_test_volume()
+        self.attach_test_volume()
         self.mount_volume_and_create_test_file()
-        if self.args.cycle_paths:
+        if self.cycle_paths:
             self.create_mpath_monkey()
         self.sftp_test_io_script_to_instance()
 
 
-    def run_remote_script_and_monitor(self):
+
+
+
+
+
+    def run_remote_script_and_monitor(self,timed_run=0):
         tb = None
         err = None
         exit_value = None
         exit_lines = ""
+        original_inter_io_timeout = self.inter_io_timeout
+        if timed_run:
+            original_inter_io_timeout = self.inter_io_timeout
 
-        cmd = 'python ' + self.remote_script_path + " -f " + self.test_file_path
+
+
+        cmd = 'python ' + self.remote_script_path + " -f " + self.test_file_path + ' -t ' + str(timed_run)
         self.stdscr = curses.initscr()
         try:
             signal.signal(signal.SIGWINCH, self.sigwinch_handler)
@@ -288,6 +307,7 @@ class Instance_Io_Monitor(EutesterTestCase):
         return_buf = ""
         blocked_paths ="BLOCKED_PATHS:"
         previous_blocked_path = "PREVIOUS_BLOCKED_PATH:"
+        remaining_iterations = "REMAINING_ITERATIONS:"
         write_rate = write_rate or 'WRITE_RATE:'
         write_value = write_value or 'WRITE_VALUE'
         read_rate = read_rate or 'READ_RATE'
@@ -295,8 +315,15 @@ class Instance_Io_Monitor(EutesterTestCase):
         last_time = last_time or time.time()
         waited = int(time.time()- last_time)
         waited_str = "INTER_IO_SECONDS_WAITED: "+ str(waited)
+        time_remaining = "TIME_REMAINING:"
 
-        if  self.mpath_monkey:
+        if self.mpath_monkey:
+            remaining_iterations += str(self.mpath_monkey.remaining_iterations)
+            if not self.mpath_monkey.remaining_iterations:
+                self.stdscr.addstr(0, 0, 'MPATH MONKEY FINSIHED SUCCESSFULLY')
+                self.stdscr.refresh()
+                ret.stop = True
+                self.mpath_monkey.timer.cancel()
             if not self.mpath_monkey.blocked:
                 self.mpath_monkey.block_single_path_cycle()
             else:
@@ -316,6 +343,8 @@ class Instance_Io_Monitor(EutesterTestCase):
                     read_rate = line
                 elif re.match('LAST_READ', line):
                     last_read = line
+                elif re.match('TIME_REMAINING', line):
+                    time_remaining = line
                 elif re.search('err', line, re.IGNORECASE):
                     return_buf += line
 
@@ -328,7 +357,9 @@ class Instance_Io_Monitor(EutesterTestCase):
                            + waited_str.ljust(20) + "\n" \
                            + str(longest_wait_period_str).ljust(20) + "\n" \
                            + str(blocked_paths) + "\n" \
-                           +str(previous_blocked_path) + "\n" \
+                           + str(previous_blocked_path) + "\n" \
+                           + str(remaining_iterations) + "\n" \
+                           + str(time_remaining) + "\n" \
                            + "ret buf:" + str(return_buf) \
                            + "\n-------------------------------------------------\n"
             #print "\r\x1b[K"+str(debug_string),
@@ -346,6 +377,8 @@ class Instance_Io_Monitor(EutesterTestCase):
             ret.stop = True
             ret.nextargs = [ write_value, write_rate,read_rate, last_read, time.time()]
             ret.buf = return_buf
+            if self.mpath_monkey:
+                self.mpath_monkey.timer.cancel()
             time.sleep(10)
             pass
         finally:
@@ -358,20 +391,91 @@ class Instance_Io_Monitor(EutesterTestCase):
             curses.endwin()
             self.stdscr = curses.initscr()
 
+    def check_mpath_iterations(self):
+        if self.mpath_monkey and self.mpath_monkey.remaining_iterations:
+            remaining = self.mpath_monkey.remaining_iterations
+            raise Exception('Mpath monkey did not complete its iterations. Remaining:'+str(remaining))
 
+    def test1_run_instance_monitor_io_and_cycle_all_paths_on_nc(self):
+        test_list = []
+        #Setup and connect to instance, create + attach vol, format vol, scp io script, create test dir/file.
+        self.setup_instance_volume_and_script()
+
+        #Run the remote io script on the test instance, monitor all script output via local call back method
+        self.run_remote_script_and_monitor()
+
+        #Check to make sure our script actually iterated through all the paths, if not something went wrong
+        self.check_mpath_iterations()
+
+
+
+    def test2_run_instance_attach_volume_while_a_single_path_is_down(self):
+        single_path = None
+        self.launch_test_instance()
+        if self.volume:
+            self.volume.update()
+            if not self.volume.status == 'available':
+                self.debug('Test volume:' + str(self.volume.id) + ", not in available state. Creating a new one")
+                self.create_test_volume()
+        if self.cycle_paths:
+            self.create_mpath_monkey()
+        self.mpath_monkey.clear_all_eutester_rules(timeout=120)
+        if len(self.mpath_monkey.sp_ip_list) > 1:
+            single_path = self.mpath_monkey.sp_ip_list[0]
+        else:
+            raise Exception('Not enough paths to shut one down for test')
+        self.mpath_monkey.block_path(single_path)
+        time.sleep(2)
+        self.attach_test_volume()
+        self.mount_volume_and_create_test_file()
+        self.run_remote_script_and_monitor(timed_run=10)
+
+
+    def test3_run_instance_attach_vol_detach_vol_while_single_path_is_down(self):
+        single_path = None
+        self.launch_test_instance()
+        if self.volume:
+            self.volume.update()
+            if not self.volume.status == 'available':
+                self.debug('Test volume:' + str(self.volume.id) + ", not in available state. Creating a new one")
+                self.create_test_volume()
+        if self.cycle_paths:
+            self.create_mpath_monkey()
+        self.mpath_monkey.clear_all_eutester_rules(timeout=120)
+        time.sleep(2)
+        self.attach_test_volume()
+        if len(self.mpath_monkey.sp_ip_list) > 1:
+            single_path = self.mpath_monkey.sp_ip_list[0]
+        else:
+            raise Exception('Not enough paths to shut one down for test')
+        self.mpath_monkey.block_path(single_path)
+        self.mount_volume_and_create_test_file()
+        self.run_remote_script_and_monitor(timed_run=10)
+        self.instance.detach_euvolume(self.volume)
+
+    def testsuite(self):
+        self.cycle_paths = True
+        test_list = []
+        test_list.append(self.create_testunit_from_method(self.test1_run_instance_monitor_io_and_cycle_all_paths_on_nc))
+        test_list.append(self.create_testunit_from_method(self.test2_run_instance_attach_volume_while_a_single_path_is_down))
+        test_list.append(self.create_testunit_from_method(self.test3_run_instance_attach_vol_detach_vol_while_single_path_is_down))
+        return test_list
 
 if __name__ == "__main__":
     testcase = Instance_Io_Monitor()
 
     ### Use the list of tests passed from config/command line to determine what subset of tests to run
     ### or use a predefined list
-    list = testcase.args.tests or [ 'setup_instance_volume_and_script',
-                                    'run_remote_script_and_monitor']
-
-    ### Convert test suite methods to EutesterUnitTest objects
-    unit_list = [ ]
-    for test in list:
-        unit_list.append( testcase.create_testunit_by_name(test) )
+    if testcase.args.run_suite:
+        unit_list = testcase.testsuite()
+    else:
+        list = testcase.args.tests or [ 'setup_instance_volume_and_script',
+                                        'run_remote_script_and_monitor',
+                                        'check_mpath_iterations']
+        ### Convert test suite methods to EutesterUnitTest objects
+        unit_list = [ ]
+        for test in list:
+            unit_list.append( testcase.create_testunit_by_name(test) )
 
     ### Run the EutesterUnitTest objects
     result = testcase.run_test_case_list(unit_list,eof=True,clean_on_exit=True)

@@ -8,10 +8,12 @@ import select
 parser = optparse.OptionParser(prog='write_volume.py', description='write data to file to verify data integrity')
 parser.add_option('-f', dest='testfile', help="file to read", default="/root/testfile")
 parser.add_option('-b', dest='bytes', help="bytes to write", default=1000)
+parser.add_option('-t', dest='timed_run', help="Number of seconds to run this script, 0 will run forever", default=0)
 
 (args, stuff) = parser.parse_args()
 bytes = int(args.bytes)
 testfile = args.testfile
+timed_run = int(args.timed_run)
 readrate = "0"
 writerate = "0"
 lr = ""
@@ -20,15 +22,21 @@ procfile = "/proc/sys/vm/drop_caches"
 print "Starting read/write test, bytes:" + str(bytes) + ", file:" + str(testfile)
 time.sleep(1)
 f = open(testfile, 'w')
+start = time.time()
+elapsed = 0
+time_remaining = timed_run - elapsed
 try:
-    while True:
+    while ( timed_run == 0 or time_remaining > 0 ):
+        elapsed = time.time() - start
+        time_remaining = int(timed_run - elapsed)
         wlength = 0
         start = time.time()
         for x in xrange(0, bytes):
             debug_string = "\nWRITE_VALUE: ".ljust(15) + str(x).ljust(15) + "\n" + \
                            "WRITE_RATE: ".ljust(15) + writerate.ljust(15) + " Bytes/Sec" + "\n" + \
                            "LAST_READ: ".ljust(15) + str(lr).ljust(15) + "\n" + \
-                           "READ_RATE: ".ljust(15) + str(readrate + " Bytes/Sec").rjust(15)
+                           "READ_RATE: ".ljust(15) + str(readrate + " Bytes/Sec").rjust(15) + "\n" + \
+                           "TIME_REMAINING: ".ljust(15) + str(time_remaining)
             #print "\r\x1b[K Writing:" + str(x) + ", Rate:" + writerate + " bytes/sec, Lastread:" \
             #      + str(lr) + ", READ Rate:" + readrate + " bytes/sec",
             print "\r\x1b[K " + debug_string,
