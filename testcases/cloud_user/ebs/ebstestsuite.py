@@ -73,12 +73,14 @@ class EbsTestSuite(EutesterTestCase):
                  keypair=None, 
                  group=None, 
                  emi=None,
+                 wait_on_progress=20,
                  root_device_type='instance-store',
                  vmtype='c1.medium',
                  eof=1):
         
         self.args = args
         self.setuptestcase(name)
+        self.wait_on_progress = wait_on_progress
         if tester is None:
             self.tester = Eucaops( config_file=config_file,password=password,credpath=credpath)
         else:
@@ -503,13 +505,14 @@ class EbsTestSuite(EutesterTestCase):
                 
         
         
-    def create_snapshots_all_vols_in_zone(self, zonelist=None, volstate="all", wait_on_progress=20):
+    def create_snapshots_all_vols_in_zone(self, zonelist=None, volstate="all", wait_on_progress=None):
         """
         Description:
                     Attempts to iterate through each zone in zonelist, and create a snapshot from each volume
                     in the zone's volume list who's state matches volstate
                     
         """
+        wait_on_progress = wait_on_progress or self.wait_on_progress
         zonelist = zonelist or self.zonelist
         if not zonelist:
             raise Exception("Zone list was empty")
@@ -519,7 +522,7 @@ class EbsTestSuite(EutesterTestCase):
             for volume in zone.volumes:
                 volume.update()
                 if volstate == "all" or volume.status == volstate:
-                    self.snaps.append(self.tester.create_snapshot_from_volume(volume, description="ebstest", wait_on_progress=20))
+                    self.snaps.append(self.tester.create_snapshot_from_volume(volume, description="ebstest", wait_on_progress=wait_on_progress))
         #self.endsuccess()
         
         
