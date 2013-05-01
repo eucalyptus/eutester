@@ -376,7 +376,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
         f = None
         try:
             #f = open(filepath, 'r')
-            self.testconf = EuConfig(filepath)
+            self.testconf = EuConfig(filepath, legacy_qa_config=True)
             f = self.testconf.legacybuf.splitlines()
         except IOError as (errno, strerror):
             self.debug( "ERROR: Could not find config file " + self.config_file)
