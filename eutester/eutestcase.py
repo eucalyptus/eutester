@@ -181,13 +181,14 @@ class EutesterTestUnit():
         self.name = str(method.__name__)
         self.result=EutesterTestResult.not_run
         self.time_to_run=0
-        self.anchor_id = str(str(time.ctime())
-                            + self.name
-                            + "_"
-                            + str( ''.join(random.choice(string.ascii_uppercase + string.ascii_lowercase + string.digits) for x in range(3)))
-                            + "_"
-                            ).replace(" ","_")
-        self.error_anchor_id = "ERROR_" + self.anchor_id
+        if self.kwargs.get('html_anchors', False):
+            self.anchor_id = str(str(time.ctime())
+                                + self.name
+                                + "_"
+                                + str( ''.join(random.choice(string.ascii_uppercase + string.ascii_lowercase + string.digits) for x in range(3)))
+                                + "_"
+                                ).replace(" ","_")
+            self.error_anchor_id = "ERROR_" + self.anchor_id
         self.description=self.get_test_method_description()
         self.eof=False
         self.error = ""
@@ -277,13 +278,16 @@ class EutesterTestUnit():
             self.result=EutesterTestResult.passed
             return ret
         except Exception, e:
-            buf = "<font color=red> Error in test unit '" + self.name + "':\n"
+            buf = '\nTESTUNIT FAILED: ' + self.name
+            if self.kwargs.get('html_anchors',False):
+                buf += "<font color=red> Error in test unit '" + self.name + "':\n"
             out = StringIO.StringIO()
             traceback.print_exception(*sys.exc_info(),file=out)
             out.seek(0)
-            buf = buf + out.read()
-            buf = buf + ' </font>'
-            print '<a name="' + str(self.error_anchor_id) + '"></a>'
+            buf += out.read()
+            if self.kwargs.get('html_anchors',False):
+                buf += ' </font>'
+                print '<a name="' + str(self.error_anchor_id) + '"></a>'
             print TestColor.get_canned_color('failred') + buf + TestColor.reset
             self.error = str(e)
             self.result = EutesterTestResult.failed
@@ -471,10 +475,10 @@ class EutesterTestCase(unittest.TestCase):
             parser.add_argument('--userdata',
                                 help="User data string to provide instance run within this test", default=None)
         if instance_user:
-            parser.add_argument('--instance_user',
+            parser.add_argument('--instance-user',
                                 help="Username used for ssh login. Default:'root'", default='root')
         if instance_password:
-            parser.add_argument('--instance_passsword',
+            parser.add_argument('--instance-passsword',
                                 help="Password used for ssh login. When value is 'None' ssh keypair will be used and not username/password, default:'None'", default=None)
         if region:
             parser.add_argument('--region',
@@ -490,6 +494,8 @@ class EutesterTestCase(unittest.TestCase):
         if logfile_level:
             parser.add_argument('--logfile_level',
                                 help="log level for log file logging", default='debug')
+        parser.add_argument('--html-anchors', dest='html_anchors', action='store_true',
+                                help="Print HTML anchors for jumping through test results", default=False)
         self.parser = parser  
         return parser
     
@@ -637,8 +643,11 @@ class EutesterTestCase(unittest.TestCase):
                 eof = kwargs['eof']
             else:
                 eof = kwargs.pop('eof')
-        
-        testunit = EutesterTestUnit(method, *args, **kwargs)
+        ## Only pass the arg if we need it otherwise it will print with all methods/testunits
+        if self.args.html_anchors:
+            testunit = EutesterTestUnit(method, *args, html_anchors=self.args.html_anchors ,**kwargs)
+        else:
+            testunit = EutesterTestUnit(method, *args, **kwargs)
         testunit.eof = eof
         #if autoarg, auto populate testunit arguements from local testcase.args namespace values
         if autoarg:
@@ -799,8 +808,11 @@ class EutesterTestCase(unittest.TestCase):
                     try:
                         self.print_test_unit_startmsg(cleanunit)
                         cleanunit.run()
-                    except:
-                        pass
+                    except Exception, e:
+                        out = StringIO.StringIO()
+                        traceback.print_exception(*sys.exc_info(),file=out)
+                        out.seek(0)
+                        self.debug("Failure in cleanup: " + str(e) + "\n" + out.read())
                     if printresults:
                         msgout = self.print_test_list_results(list=list,printout=False)
                         self.status(msgout)
@@ -821,13 +833,17 @@ class EutesterTestCase(unittest.TestCase):
                 return(0)
 
     def print_test_unit_startmsg(self,test):
-        link = '<a name="' + str(test.anchor_id) + '"></a>'
-        startbuf = '<div id="myDiv" name="myDiv" title="Example Div Element" style="color: #0900C4; font: Helvetica 12pt;border: 1px solid black;">'
-        startbuf += str(link) +"\n- STARTING TESTUNIT:  - "
+        startbuf = ''
+        if self.args.html_anchors:
+            link = '<a name="' + str(test.anchor_id) + '"></a>\n'
+            startbuf += '<div id="myDiv" name="myDiv" title="Example Div Element" style="color: #0900C4; font: Helvetica 12pt;border: 1px solid black;">'
+            startbuf += str(link)
+        startbuf += "STARTING TESTUNIT: " + test.name
         argbuf = self.get_pretty_args(test)
         startbuf += str(test.description)+str(argbuf)
         startbuf += 'Running list method: "'+str(self.print_testunit_method_arg_values(test))+'"'
-        startbuf += '\n </div>'
+        if self.args.html_anchors:
+            startbuf += '\n </div>'
         self.startmsg(startbuf)
     
     def has_arg(self,arg):
@@ -918,7 +934,7 @@ class EutesterTestCase(unittest.TestCase):
         :param printmethod: method to use for printing test result output. Default is self.debug
         '''
 
-        buf =  "\nTESTUNIT LIST SUMMARY FOR '"+str(self.name) + "'\n"
+        buf = "\nTESTUNIT LIST SUMMARY FOR " + str(self.name) + "\n"
         if list is None:
             list=self.testlist
         if not list:
@@ -931,22 +947,20 @@ class EutesterTestCase(unittest.TestCase):
             buf += self.resultdefault("\n"+ self.getline(80)+"\n", printout=False)
             #Ascii mark up errors using pmethod() so errors are in bold/red, etc...
             pmethod = self.resultfail if not testunit.result == EutesterTestResult.passed else self.resultdefault
-            test_summary_line = str(" ").ljust(20) + '|TEST LINK: <a href="#' + str(testunit.anchor_id) + '">GO TO TEST</a> \n' \
-                                + str("RESULT: " + str(testunit.result)).ljust(20)  \
-                                + "| TEST NAME: " + str(testunit.name) + "\n" \
-                                + str(" ").ljust(20) + str("| TIME TO TEST: " + str(testunit.time_to_run))
+            test_summary_line = str(" ").ljust(20) + str("| RESULT: " + str(testunit.result)).ljust(20) + "\n" +\
+                                str(" ").ljust(20) + "| TEST NAME: " + str(testunit.name) + "\n" + \
+                                str(" ").ljust(20) + str("| TIME : " + str(testunit.time_to_run))
 
 
             buf += pmethod(str(test_summary_line),printout=False)
-            buf += pmethod("\n" + str(" ").ljust(20) + "| VALUES PROVIDED: "
+            buf += pmethod("\n" + str(" ").ljust(20) + "| ARGS: "
                            + str(self.print_testunit_method_arg_values(testunit)), printout=False)
             #Print additional line showing error in the failed case...
             if testunit.result == EutesterTestResult.failed:
                     err_sum = "\n".join(str(testunit.error).splitlines()[0:3])
-                    test_error_line = '<font color=red>ERROR:('+str(testunit.name)+'): '\
+                    test_error_line = 'ERROR:('+str(testunit.name)+'): '\
                                       + str(err_sum) \
-                                      + str('</font>') \
-                                      + '\n <a href="#' + str(testunit.error_anchor_id) + '">GO TO ERROR</a>'
+                                      + '\n'
                     buf += "\n"+str(self.resulterr(test_error_line, printout=False))
         buf += self.resultdefault("\n"+ self.getline(80)+"\n", printout=False)
         buf += str(self.print_test_list_short_stats(list))

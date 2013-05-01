@@ -2175,6 +2175,7 @@ class EC2ops(Eutester):
                      username="root",
                      password=None,
                      is_reachable=True,
+                     monitoring_enabled=False,
                      timeout=480):
         """
         Run instance/s and wait for them to go to the running state
@@ -2213,12 +2214,17 @@ class EC2ops(Eutester):
         if keypair:
             if isinstance(keypair, KeyPair):
                 keypair = keypair.name
-        
+
+        if monitoring_enabled :
+            enabled=True
+        else:
+            enabled=False
         start = time.time()
             
         self.debug( "Attempting to run "+ str(image.root_device_type)  +" image " + str(image) + " in group " + str(group))
         reservation = image.run(key_name=keypair,security_groups=[group],instance_type=type, placement=zone,
-                                min_count=min, max_count=max, user_data=user_data, addressing_type=addressing_type)
+                                min_count=min, max_count=max, user_data=user_data, addressing_type=addressing_type,
+                                monitoring_enabled=enabled)
         self.test_resources["reservations"].append(reservation)
         
         if (len(reservation.instances) < min) or (len(reservation.instances) > max):
@@ -2264,7 +2270,7 @@ class EC2ops(Eutester):
                 #                str(instance) + " did not receive a valid IP")
 
             if is_reachable:
-                self.ping(instance.public_dns_name, 20)
+                self.ping(instance.ip_address, 20)
                 
         #calculate remaining time to wait for establishing an ssh session/euinstance     
         timeout -= int(time.time() - start)
