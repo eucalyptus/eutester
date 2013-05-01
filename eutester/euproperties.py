@@ -356,7 +356,7 @@ class Euproperty_Manager():
         set_method_doc = "Attempts to set property: " + str(method_name_string) \
                                                       + "\nparam partitions: partition for this property"
         prop_mgr=self
-        self.debug('Creating dynamic methods for property:'+str(method_name_string))
+        #self.debug('Creating dynamic methods for property:'+str(method_name_string))
         #Add a set method for this property to this euproperty manager
 
         if not hasattr(self,set_method_name):
