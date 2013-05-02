@@ -398,5 +398,5 @@ if __name__ == '__main__':
         unit_list.append( testcase.create_testunit_by_name(test) )
 
     ### Run the EutesterUnitTest objects
-    result = testcase.run_test_case_list(unit_list,clean_on_exit=True)
+    result = testcase.run_test_case_list(unit_list,clean_on_exit=False)
     exit(result)
