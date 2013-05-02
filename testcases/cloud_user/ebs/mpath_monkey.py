@@ -21,7 +21,8 @@ class Mpath_Monkey(EutesterTestCase):
                  queue=None,
                  interval=None,
                  restore_time=None,
-                 sp_ip_list=None):
+                 sp_ip_list=None,
+                 path_iterations=None):
         self.queue = queue or my_queue
         self.setuptestcase()
         if not (node or queue or sp_ip_list):
@@ -35,8 +36,9 @@ class Mpath_Monkey(EutesterTestCase):
             self.parser.add_argument('--interval', help='Integer representing seconds between path failover',default=30)
             self.parser.add_argument('--restore_time', help='Integer representing seconds to allow path recovery',default=15)
             self.parser.add_argument('--sp_ip_list', help='String with SP addrs, comma delimited',default=None)
+            self.parser.add_argument('--path_iterations', help='Number of times to iterate through sp_ip_list when \
+                                     blocking paths. "0" loops forever', default=2)
             self.get_args()
-
 
         # Allow __init__ to get args from __init__'s kwargs or through command line parser...
         """
@@ -45,6 +47,11 @@ class Mpath_Monkey(EutesterTestCase):
             self.set_arg(kw ,kwargs[kw])
         """
 
+        if self.has_arg('path_iterations'):
+            self.path_iterations =  self.args.path_iterations
+        else:
+            self.path_iterations =  path_iterations or 2
+        self.remaining_iterations = self.path_iterations or -1
         self.node = node
         if self.node:
             self.host = node.hostname
@@ -193,6 +200,8 @@ class Mpath_Monkey(EutesterTestCase):
             if not self.sp_ip_list:
                 return
             self.clear_all_eutester_rules()
+            if self.remaining_iterations == 0:
+                return
             #self.restore_paths(self.sp_ip_list)
             blocked_paths = self.get_blocked_paths()
             if blocked_paths:
@@ -212,6 +221,7 @@ class Mpath_Monkey(EutesterTestCase):
             else:
                 block = self.sp_ip_list[0]
             self.debug("block_single_path_cycle, attempting to block path:"+str(block)+", set timer to:"+str(self.interval))
+            self.remaining_iterations -= 1
             self.block_path(block)
             args = [block,wait_for_clear]
             self.set_timer(self.interval, self.block_single_path_cycle, args)

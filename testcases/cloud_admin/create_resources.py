@@ -54,8 +54,6 @@ class ResourceGeneration(EutesterTestCase):
 
     def clean_method(self):
         self.tester.cleanup_artifacts()
-        for tester in self.testers:
-            tester.cleanup_artifacts()
 
     def CreateResources(self):
         users = self.tester.get_all_users()

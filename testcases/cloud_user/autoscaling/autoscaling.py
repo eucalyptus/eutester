@@ -92,6 +92,8 @@ class AutoScalingBasics(EutesterTestCase):
                                      scaling_adjustment=4,
                                      as_name=self.auto_scaling_group_name,
                                      cooldown=120)
+        if len(self.tester.autoscale.get_all_policies(policy_names=[self.up_policy_name])) != 1:
+            raise Exception('Auto Scaling policies: ' + self.up_policy_name +' not created')
 
         self.down_policy_name = "Down-Policy-" + str(time.time())
         self.down_size = -50
@@ -101,6 +103,9 @@ class AutoScalingBasics(EutesterTestCase):
                                      as_name=self.auto_scaling_group_name,
                                      cooldown=120)
 
+        if len(self.tester.autoscale.get_all_policies(policy_names=[self.down_policy_name])) != 1:
+            raise Exception('Auto Scaling policies: ' + self.down_policy_name +' not created')
+
         self.exact_policy_name = "Exact-Policy-" + str(time.time())
         self.exact_size = 0
         self.tester.create_as_policy(name=self.exact_policy_name,
@@ -109,38 +114,57 @@ class AutoScalingBasics(EutesterTestCase):
                                      as_name=self.auto_scaling_group_name,
                                      cooldown=120)
 
-        ### Test all policies added to group
-        if len(self.tester.autoscale.get_all_policies()) != 3:
-            raise Exception('Auto Scaling policies not created')
+        if len(self.tester.autoscale.get_all_policies(policy_names=[self.exact_policy_name])) != 1:
+            raise Exception('Auto Scaling policies: ' + self.exact_policy_name +' not created')
+
         self.debug("**** Created Auto Scaling Policies: " + self.up_policy_name + " " + self.down_policy_name + " " +
                    self.exact_policy_name)
 
+        ### check progress of most recent scaling activity
+        def scaling_activity():
+            activities = self.tester.autoscale.get_all_activities(autoscale_group=self.auto_scaling_group_name)
+            if len(activities) == 0:
+                return 0
+            else:
+                return activities[-1].progress
+
         ### Test Execute ChangeInCapacity Auto Scaling Policy
-        self.tester.execute_as_policy(policy_name=self.up_policy_name, as_group=self.auto_scaling_group_name)
+        self.tester.execute_as_policy(policy_name=self.up_policy_name,
+                                      as_group=self.auto_scaling_group_name,
+                                      honor_cooldown=False)
         if self.tester.describe_as_group([self.auto_scaling_group_name])[0].desired_capacity != self.up_size:
             raise Exception("Auto Scale Up not executed")
         self.debug("Executed  ChangeInCapacity policy, increased desired capacity to: " +
                    str(self.tester.describe_as_group([self.auto_scaling_group_name])[0].desired_capacity))
+        self.tester.wait_for_result(scaling_activity, result="100", timeout=60)
 
         ### Test Execute PercentChangeInCapacity Auto Scaling Policy
-        self.tester.execute_as_policy(policy_name=self.down_policy_name, as_group=self.auto_scaling_group_name)
+        self.tester.execute_as_policy(policy_name=self.down_policy_name,
+                                      as_group=self.auto_scaling_group_name,
+                                      honor_cooldown=False)
         if self.tester.describe_as_group([self.auto_scaling_group_name])[0].desired_capacity != 0.5 * self.up_size:
             raise Exception("Auto Scale down percentage not executed")
         self.debug("Executed PercentChangeInCapacity policy, decreased desired capacity to: " +
                    str(self.tester.describe_as_group([self.auto_scaling_group_name])[0].desired_capacity))
+        self.tester.wait_for_result(scaling_activity, result="100", timeout=60)
 
         ### Test Execute ExactCapacity Auto Scaling Policy
-        self.tester.execute_as_policy(policy_name=self.exact_policy_name, as_group=self.auto_scaling_group_name)
+        self.tester.execute_as_policy(policy_name=self.exact_policy_name,
+                                      as_group=self.auto_scaling_group_name,
+                                      honor_cooldown=False)
         if self.tester.describe_as_group([self.auto_scaling_group_name])[0].desired_capacity != self.exact_size:
             raise Exception("Auto Scale down percentage not executed")
         self.debug("Executed ExactCapacity policy, exact capacity is: " +
                    str(self.tester.describe_as_group([self.auto_scaling_group_name])[0].desired_capacity))
+        self.tester.wait_for_result(scaling_activity, result="100", timeout=60)
 
         ### Test Delete all Auto Scaling Policies
         self.tester.delete_all_policies()
 
         ### Test Delete Auto Scaling Group
-        self.tester.delete_as_group(names=self.auto_scaling_group_name)
+        self.tester.delete_as_group(names=self.auto_scaling_group_name, force=True)
+
+        self.tester.sleep(10)
 
         ### Test delete launch config
         self.tester.delete_launch_config(self.launch_config_name)
@@ -228,6 +252,7 @@ class AutoScalingBasics(EutesterTestCase):
         self.tester.sleep(10)
         self.tester.update_as_group(group_name=auto_scaling_group_name,
                                     launch_config=second_launch_config,
+                                    availability_zones=self.tester.get_zones(),
                                     min_size=1,
                                     max_size=4,
                                     desired_capacity=2)
