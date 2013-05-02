@@ -3365,6 +3365,14 @@ class EC2ops(Eutester):
                 break
         return vm_type
 
+    def monitor_instances(self, instance_ids):
+        self.debug('Enabling monitoring for instance(s) ' + str(instance_ids))
+        self.ec2.monitor_instances(instance_ids)
+
+    def unmonitor_instances(self, instance_ids):
+        self.debug('Disabling monitoring for instance(s) ' + str(instance_ids))
+        self.ec2.unmonitor_instances(instance_ids)
+
 class VolumeStateException(Exception):
     def __init__(self, value):
         self.value = value
