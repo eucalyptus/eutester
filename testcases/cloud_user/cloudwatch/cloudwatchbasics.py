@@ -167,8 +167,8 @@ class CloudWatchBasics(EutesterTestCase):
     def IsMetricsListPopulated(self):
         end          = datetime.datetime.utcnow()
         start        = end - datetime.timedelta(minutes=6)
-        metrics1=self.tester.cw.get_metric_statistics(60,start,end,'DiskReadOps','AWS/EC2','Sum',dimensions=self.instanceDimension,unit='Count')
-        metrics2=self.tester.cw.get_metric_statistics(60,start,end,'VolumeReadOps','AWS/EBS','Sum',dimensions=self.volumeDimension,unit='Count')
+        metrics1=self.tester.cw.get_metric_statistics(60,start,end,'CPUUtilization','AWS/EC2','Average',dimensions=self.instanceDimension,unit='Percent')
+        metrics2=self.tester.cw.get_metric_statistics(60,start,end,'VolumeReadBytes','AWS/EBS','Average',dimensions=self.volumeDimension,unit='Bytes')
         if len(metrics1) > 0 and len(metrics2) > 0 :
             return True
         else:
@@ -386,10 +386,10 @@ class CloudWatchBasics(EutesterTestCase):
         pass
 
     def GetMetricStatisticsTest(self):
-        ### tests instance metrics
-        self.GetMetricStatistics(self.tester.get_instance_metrics_array(),'AWS/EC2', self.instanceDimension )
         ### tests EBS metrics
         self.GetMetricStatistics(self.tester.get_ebs_metrics_array(),'AWS/EBS', self.volumeDimension )
+        ### tests instance metrics
+        self.GetMetricStatistics(self.tester.get_instance_metrics_array(),'AWS/EC2', self.instanceDimension )
         pass
 
 if __name__ == '__main__':
