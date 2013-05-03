@@ -282,7 +282,7 @@ class CWops(Eutester):
         self.debug('Calling disable_alarm_actions( ' + str(alarm_names) + ' )')
         self.cw.disable_alarm_actions(alarm_names)
 
-    def validateStats(self, values, volumeData=False):
+    def validateStats(self, values):
         average = float(values[0])
         theSum  = float(values[1])
         maximum = float(values[2])
@@ -291,7 +291,5 @@ class CWops(Eutester):
         assert average <= maximum and average >= minimum
         assert maximum >= minimum
         assert minimum <= maximum
-        if not volumeData:
-            assert theSum > 0
         assert sample > 0
 

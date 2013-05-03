@@ -192,9 +192,6 @@ class CloudWatchBasics(EutesterTestCase):
                 statisticValue = str(metrics[0][statisticName])
                 self.debug(metricName + ' : ' + statisticName + '=' + statisticValue + ' ' + unitType)
                 values.append(statisticValue)
-            if len(metricNames):
-                self.tester.validateStats(values,volumeData=True)
-            else :
                 self.tester.validateStats(values)
 
 
