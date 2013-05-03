@@ -192,7 +192,7 @@ class CloudWatchBasics(EutesterTestCase):
                 statisticValue = str(metrics[0][statisticName])
                 self.debug(metricName + ' : ' + statisticName + '=' + statisticValue + ' ' + unitType)
                 values.append(statisticValue)
-                self.tester.validateStats(values)
+        self.tester.validateStats(values)
 
 
     def setUpAutoscaling(self):
@@ -393,7 +393,7 @@ if __name__ == '__main__':
     testcase = CloudWatchBasics()
     ### Use the list of tests passed from config/command line to determine what subset of tests to run
     ### or use a predefined list  'PutDataGetStats', 'ListMetricsTest', 'GetMetricStatisticsTest', 'MetricAlarmsTest', 'MonitorInstancesTest'
-    test_list = testcase.args.tests or ['PutDataGetStats']
+    test_list = testcase.args.tests or ['ListMetricsTest', 'GetMetricStatisticsTest']
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
     for test in test_list:
