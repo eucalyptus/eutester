@@ -28,20 +28,20 @@ class CloudWatchBasics(EutesterTestCase):
         self.keypair = self.tester.add_keypair()
         self.group = self.tester.add_group()
         ### Set up autoscaling config, group and policys, this will start one instance
-        self.SetUpAutoscaling()
+        self.setUpAutoscaling()
         ## Create Dimensions used in tests
         self.instanceDimension = newDimension('InstanceId', self.instanceid)
         self.volumeDimension = newDimension('VolumeId', self.volume.id)
+        self.autoScalingDimension = newDimension('AutoScalingGroupName', self.auto_scaling_group_name)
         ### setup Alarms
         self.setUpAlarms()
-        ### Wait for metrics to populate, timeout 20 minutes
-        self.tester.wait_for_result(self.IsMetricsListPopulated, result=True, timeout=1200)
+        ### Wait for metrics to populate, timeout 30 minutes
+        #self.tester.wait_for_result(self.IsMetricsListPopulated, result=True, timeout=1800)
 
     def clean_method(self):
         self.tester.cleanup_artifacts()
         self.cleanUpAutoscaling()
         self.tester.delete_keypair(self.keypair)
-        self.tester.local('rm ' + self.keypair.name + '.pem')
         pass
 
     def get_time_window(self, end=None, **kwargs):
@@ -154,9 +154,8 @@ class CloudWatchBasics(EutesterTestCase):
         assert len(metricList) > 0
         metricList = self.tester.list_metrics(dimensions=newDimension('InstanceType','NonExistent-InstanceType'))
         assert len(metricList) == 0
-        metricList = self.tester.list_metrics(dimensions=newDimension('AutoScalingGroupName', self.auto_scaling_group_name))
-        ### https://eucalyptus.atlassian.net/browse/EUCA-5952
-        #assert len(metricList) > 0
+        metricList = self.tester.list_metrics(dimensions=self.autoScalingDimension)
+        assert len(metricList) > 0
         metricList = self.tester.list_metrics(dimensions=newDimension('AutoScalingGroupName','NonExistent-AutoScalingGroupName'))
         assert len(metricList) == 0
         metricList = self.tester.list_metrics(dimensions=self.volumeDimension)
@@ -167,7 +166,7 @@ class CloudWatchBasics(EutesterTestCase):
 
     def IsMetricsListPopulated(self):
         end          = datetime.datetime.utcnow()
-        start        = end - datetime.timedelta(minutes=5)
+        start        = end - datetime.timedelta(minutes=6)
         metrics1=self.tester.cw.get_metric_statistics(60,start,end,'DiskReadOps','AWS/EC2','Sum',dimensions=self.instanceDimension,unit='Count')
         metrics2=self.tester.cw.get_metric_statistics(60,start,end,'VolumeReadOps','AWS/EBS','Sum',dimensions=self.volumeDimension,unit='Count')
         if len(metrics1) > 0 and len(metrics2) > 0 :
@@ -178,10 +177,11 @@ class CloudWatchBasics(EutesterTestCase):
     def GetMetricStatistics(self, metricNames, namespace, dimension):
         period       = 60
         end          = datetime.datetime.utcnow()
-        start        = end - datetime.timedelta(minutes=5)
+        start        = end - datetime.timedelta(minutes=6)
         stats        = self.tester.get_stats_array()
         ###Check to make sure we are getting all namespace metrics and statistics
         for i in range(len(metricNames)):
+            values = []
             for j in range(len(stats)):
                 metricName = metricNames[i]['name']
                 statisticName = stats[j]
@@ -191,8 +191,14 @@ class CloudWatchBasics(EutesterTestCase):
                 assert int(len(metrics)) > 0
                 statisticValue = str(metrics[0][statisticName])
                 self.debug(metricName + ' : ' + statisticName + '=' + statisticValue + ' ' + unitType)
+                values.append(statisticValue)
+            if len(metricNames):
+                self.tester.validateStats(values,volumeData=True)
+            else :
+                self.tester.validateStats(values)
 
-    def SetUpAutoscaling(self):
+
+    def setUpAutoscaling(self):
         ### setup autoscaling variables:s
         self.debug('Setting up AutoScaling, starting 1 instance')
         self.instance_type = 'm1.small'
@@ -307,8 +313,9 @@ class CloudWatchBasics(EutesterTestCase):
     def testDesribeAlarms(self):
         self.debug(self.tester.describe_alarms())
         assert len(self.tester.describe_alarms()) >= 3
-        ### test describe_alarms_for_metric
+        ### test describe_alarms_for_metric for created alarms
         assert len(self.tester.describe_alarms_for_metric('CPUUtilization','AWS/EC2',dimensions=self.instanceDimension)) == 3
+        ### There are not be any alarms created for 'DiskReadOps'
         assert len(self.tester.describe_alarms_for_metric('DiskReadOps','AWS/EC2',dimensions=self.instanceDimension)) == 0
         ### test describe_alarm_history
         self.debug(self.tester.describe_alarm_history())
@@ -329,7 +336,7 @@ class CloudWatchBasics(EutesterTestCase):
         self.debug('The number of running ' + self.auto_scaling_group_name + ' instances = 1')
         ### The number of running instances should equal the desired_capacity + scaling_adjustment = (2)
         self.tester.set_alarm_state('change')
-        self.tester.sleep(30)
+        self.tester.sleep(15)
         self.tester.wait_for_result(self.isInService,result=True, timeout=240)
         group = self.tester.describe_as_group(names=[self.auto_scaling_group_name]).pop()
         self.debug(len(group.instances))
@@ -384,14 +391,12 @@ class CloudWatchBasics(EutesterTestCase):
         ### tests EBS metrics
         self.GetMetricStatistics(self.tester.get_ebs_metrics_array(),'AWS/EBS', self.volumeDimension )
         pass
-        ### TODO: verify statistics
-        ### TODO: Put read/write IO on volumes
 
 if __name__ == '__main__':
     testcase = CloudWatchBasics()
     ### Use the list of tests passed from config/command line to determine what subset of tests to run
     ### or use a predefined list  'PutDataGetStats', 'ListMetricsTest', 'GetMetricStatisticsTest', 'MetricAlarmsTest', 'MonitorInstancesTest'
-    test_list = testcase.args.tests or ['PutDataGetStats']
+    test_list = testcase.args.tests or ['ListMetricsTest', 'GetMetricStatisticsTest', 'MetricAlarmsTest', 'MonitorInstancesTest']
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
     for test in test_list:

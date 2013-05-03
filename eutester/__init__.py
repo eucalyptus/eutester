@@ -351,7 +351,7 @@ class Eutester(object):
         if current_state != result:
             raise Exception( str(callback.func_name) + " did not return "+str(result)+" after elapsed:"+str(elapsed))
 
-        self.debug(  str(callback.func_name) + ' is now: ' + str(result) )
+        self.debug(  str(callback.func_name) + ' is now: ' + str(result)+" after "+str(elapsed) + " seconds.")
         return True
 
     @classmethod

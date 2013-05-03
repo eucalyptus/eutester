@@ -35,6 +35,7 @@ import time
 import datetime
 from boto.ec2.regioninfo import RegionInfo
 import boto.ec2.cloudwatch
+from eutester.euinstance import EuInstance
 from eutester import Eutester
 
 
@@ -280,4 +281,17 @@ class CWops(Eutester):
     def disable_alarm_actions(self, alarm_names ):
         self.debug('Calling disable_alarm_actions( ' + str(alarm_names) + ' )')
         self.cw.disable_alarm_actions(alarm_names)
+
+    def validateStats(self, values, volumeData=False):
+        average = float(values[0])
+        theSum  = float(values[1])
+        maximum = float(values[2])
+        minimum = float(values[3])
+        sample = float(values[4])
+        assert average <= maximum and average >= minimum
+        assert maximum >= minimum
+        assert minimum <= maximum
+        if not volumeData:
+            assert theSum > 0
+        assert sample > 0
 
