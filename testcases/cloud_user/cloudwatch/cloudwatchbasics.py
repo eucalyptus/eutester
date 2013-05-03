@@ -166,7 +166,7 @@ class CloudWatchBasics(EutesterTestCase):
 
     def IsMetricsListPopulated(self):
         end          = datetime.datetime.utcnow()
-        start        = end - datetime.timedelta(minutes=6)
+        start        = end - datetime.timedelta(minutes=20)
         metrics1=self.tester.cw.get_metric_statistics(60,start,end,'CPUUtilization','AWS/EC2','Average',dimensions=self.instanceDimension,unit='Percent')
         metrics2=self.tester.cw.get_metric_statistics(60,start,end,'VolumeReadBytes','AWS/EBS','Average',dimensions=self.volumeDimension,unit='Bytes')
         if len(metrics1) > 0 and len(metrics2) > 0 :
@@ -177,7 +177,7 @@ class CloudWatchBasics(EutesterTestCase):
     def GetMetricStatistics(self, metricNames, namespace, dimension):
         period       = 60
         end          = datetime.datetime.utcnow()
-        start        = end - datetime.timedelta(minutes=6)
+        start        = end - datetime.timedelta(minutes=20)
         stats        = self.tester.get_stats_array()
         ###Check to make sure we are getting all namespace metrics and statistics
         for i in range(len(metricNames)):
