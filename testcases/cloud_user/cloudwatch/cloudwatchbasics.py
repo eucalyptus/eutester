@@ -36,7 +36,7 @@ class CloudWatchBasics(EutesterTestCase):
         ### setup Alarms
         self.setUpAlarms()
         ### Wait for metrics to populate, timeout 30 minutes
-        #self.tester.wait_for_result(self.IsMetricsListPopulated, result=True, timeout=1800)
+        self.tester.wait_for_result(self.IsMetricsListPopulated, result=True, timeout=1800)
 
     def clean_method(self):
         self.tester.cleanup_artifacts()
