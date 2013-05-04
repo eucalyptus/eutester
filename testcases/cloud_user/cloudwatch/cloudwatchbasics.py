@@ -56,6 +56,7 @@ class CloudWatchBasics(EutesterTestCase):
                       str((datapoint['Timestamp'] - datetime.datetime(1970,1,1)).total_seconds())
 
     def PutDataGetStats(self):
+        assert self.testAwsReservedNamspaces()
         seconds_to_put_data = 120
         metric_data = 1
         time_string =  str(int(time.time()))
@@ -193,7 +194,6 @@ class CloudWatchBasics(EutesterTestCase):
                 self.debug(metricName + ' : ' + statisticName + '=' + statisticValue + ' ' + unitType)
                 values.append(statisticValue)
         self.tester.validateStats(values)
-
 
     def setUpAutoscaling(self):
         ### setup autoscaling variables:s
@@ -352,6 +352,16 @@ class CloudWatchBasics(EutesterTestCase):
         assert group.instances == None
         self.debug('Success the number of running ' + self.auto_scaling_group_name + ' instances is exactly 0')
         pass
+
+    def testAwsReservedNamspaces(self):
+        try:
+            self.tester.put_metric_data('AWS/AnyName', 'TestMetricName',1)
+        except Exception, e:
+            if str(e).count('The value AWS/ for parameter Namespace is invalid.'):
+                self.tester.debug('testAwsReservedNamspaces generated expected InvalidParameterValue error.')
+                return True
+        self.tester.debug('testAwsReservedNamspaces did not throw expected InvalidParameterValue error.' )
+        return False
 
     def MonitorInstancesTest(self):
         self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group, is_reachable=False)
