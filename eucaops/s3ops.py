@@ -186,7 +186,7 @@ class S3ops(Eutester):
         bucket = self.get_bucket_by_name(bucket_name)
         keys = bucket.get_all_keys(prefix=prefix)
         if len(keys) <= 1:
-            self.fail("Unable to find any keys with prefix " + prefix + " in " + bucket )
+            self.fail("Unable to find any keys with prefix " + prefix + " in " + str(bucket) )
         if len(keys) == 2:
             return keys[0]
         return keys
