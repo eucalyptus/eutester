@@ -130,6 +130,8 @@ class Machine:
                                                     debugmethod=self.debugmethod,
                                                     verbose=True)
             self.sftp = self.ssh.connection.open_sftp()
+        # If we were given a conf file, and have an ssh/sftp session, attempt to populate eucalyptus_conf into
+        # a euconfig object for this machine...
         self.get_eucalyptus_conf()
             
     def convert_to_distro(self, distro_name, distro_release):
@@ -633,24 +635,33 @@ class Machine:
 
     def get_eucalyptus_conf(self,eof=False,verbose=False):
         out = None
-        paths = ["","/opt/eucalyptus/"]
+        config = None
+        paths = [ "" , "/opt/eucalyptus" ]
         for path in paths:
             try:
-                out = self.sys('cat ' + str(path) + '/etc/eucalyptus/eucalyptus.conf', code=0, verbose=verbose)
+                self.sys('ls '+ str(path) + '/etc/eucalyptus/eucalyptus.conf', code=0, verbose=verbose)
+                use_path = path + '/etc/eucalyptus/eucalyptus.conf'
+                break
             except:
                 pass
-        if not out:
-            if not eof:
-                self.debug('eucalyptus.conf not found on this machine')
-                return None
+        if not use_path:
+            out = 'eucalyptus.conf not found on this system'
+            if eof:
+                raise Exception(eof)
             else:
-                raise Exception('eucalyptus.conf not found on this machine')
-        if not re.search('^\[',"\n".join(out)):
-            out.insert(0,'[eucalyptus_conf]\n')
-        config = EuConfig(config_lines=out)
-        self.config = config
-        if hasattr(config,'eucalyptus_conf'):
-            self.eucalyptus_conf = config.eucalyptus_conf
+                self.debug(out)
+        else:
+            try:
+                config = EuConfig(filename=use_path, ssh=self.ssh, default_section_name='eucalyptus_conf')
+                self.config = config
+                if hasattr(config, 'eucalyptus_conf'):
+                    self.eucalyptus_conf = config.eucalyptus_conf
+            except Exception, e:
+                out = 'Error while trying to create euconfig from eucalyptus_conf:' + str(e)
+                if eof:
+                    raise Exception(out)
+                else:
+                    self.debug(out)
         return config
 
             

@@ -32,18 +32,20 @@
 import re
 import copy
 import time
+import datetime
 from boto.ec2.regioninfo import RegionInfo
 import boto.ec2.cloudwatch
+from eutester.euinstance import EuInstance
 from eutester import Eutester
 
 
-CWRegionData =       {
+CWRegionData =        {
                       'us-east-1': 'monitoring.us-east-1.amazonaws.com',
                       'us-west-1': 'monitoring.us-west-1.amazonaws.com',
                       'eu-west-1': 'monitoring.eu-west-1.amazonaws.com',
                       'ap-northeast-1': 'monitoring.ap-northeast-1.amazonaws.com',
                       'ap-southeast-1': 'monitoring.ap-southeast-1.amazonaws.com'
-                     }
+                      }
 
 DimensionArray      = ['AutoScalingGroupName', 'ImageId', 'InstanceId', 'InstanceType']
 
@@ -247,19 +249,15 @@ class CWops(Eutester):
                    p4=max_records, p5=state_value, p6=next_token))
         return self.cw.describe_alarms(action_prefix, alarm_name_prefix, alarm_names, max_records, state_value, next_token)
 
-    def describe_alarms_for_metric(self):
-        return
+    def describe_alarms_for_metric(self, metric_name, namespace, period=None, statistic=None, dimensions=None, unit=None):
+        self.debug('Calling describe_alarms_for_metric( {p1}, {p2}, {p3}, {p4}, {p5}, {p6} )'.format(p1=metric_name, p2=namespace, p3=period, p4=statistic,
+                   p5=dimensions, p6=unit))
+        return self.cw.describe_alarms_for_metric(metric_name, namespace, period, statistic, dimensions, unit)
 
-    def describe_alarm_history(self):
-        return
-
-    def wait_for_monitoring(self, total):
-        while (total > 0):
-            minutes=total/60
-            seconds=total%60
-            self.debug('Waiting for metrics to populate ' + str(minutes) + ' Minutes ' + str(seconds) + ' Seconds remaining.')
-            time.sleep(20)
-            total= total - 20
+    def describe_alarm_history(self, alarm_name=None, start_date=None, end_date=None, max_records=None, history_item_type=None, next_token=None):
+        self.debug('Calling describe_alarm_history( {p1}, {p2}, {p3}, {p4}, {p5}, {p6} )'.format(p1=alarm_name, p2=start_date, p3=end_date, p4=max_records, 
+                  p5=history_item_type, p6=next_token))
+        return self.cw.describe_alarm_history(alarm_name, start_date, end_date, max_records, history_item_type, next_token)
 
     def get_dimension_array(self):
         return DimensionArray
@@ -273,5 +271,25 @@ class CWops(Eutester):
     def get_status_metric_array(self):
         return StatusMetricArray
 
-    def get_ebs_metric_array(self):
+    def get_ebs_metrics_array(self):
         return EbsMetricsArray
+
+    def enable_alarm_actions(self, alarm_names ):
+        self.debug('Calling enable_alarm_actions( ' + str(alarm_names) + ' )')
+        self.cw.enable_alarm_actions(alarm_names)
+
+    def disable_alarm_actions(self, alarm_names ):
+        self.debug('Calling disable_alarm_actions( ' + str(alarm_names) + ' )')
+        self.cw.disable_alarm_actions(alarm_names)
+
+    def validateStats(self, values):
+        average = float(values[0])
+        theSum  = float(values[1])
+        maximum = float(values[2])
+        minimum = float(values[3])
+        sample = float(values[4])
+        assert average <= maximum and average >= minimum
+        assert maximum >= minimum
+        assert minimum <= maximum
+        assert sample > 0
+

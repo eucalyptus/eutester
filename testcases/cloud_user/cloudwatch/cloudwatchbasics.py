@@ -27,16 +27,21 @@ class CloudWatchBasics(EutesterTestCase):
         self.namespace = 'Namespace-' + self.start_time
         self.keypair = self.tester.add_keypair()
         self.group = self.tester.add_group()
-        ### Set up autoscaling config, group and policys
+        ### Set up autoscaling config, group and policys, this will start one instance
         self.setUpAutoscaling()
-        ### How long to wait in seconds for monitoring to populate.
-        self.tester.wait_for_monitoring(260)
+        ## Create Dimensions used in tests
+        self.instanceDimension = newDimension('InstanceId', self.instanceid)
+        self.volumeDimension = newDimension('VolumeId', self.volume.id)
+        self.autoScalingDimension = newDimension('AutoScalingGroupName', self.auto_scaling_group_name)
+        ### setup Alarms
+        self.setUpAlarms()
+        ### Wait for metrics to populate, timeout 30 minutes
+        self.tester.wait_for_result(self.IsMetricsListPopulated, result=True, timeout=1800)
 
     def clean_method(self):
         self.tester.cleanup_artifacts()
         self.cleanUpAutoscaling()
         self.tester.delete_keypair(self.keypair)
-        self.tester.local('rm ' + self.keypair.name + '.pem')
         pass
 
     def get_time_window(self, end=None, **kwargs):
@@ -51,6 +56,7 @@ class CloudWatchBasics(EutesterTestCase):
                       str((datapoint['Timestamp'] - datetime.datetime(1970,1,1)).total_seconds())
 
     def PutDataGetStats(self):
+        assert self.testAwsReservedNamspaces()
         seconds_to_put_data = 120
         metric_data = 1
         time_string =  str(int(time.time()))
@@ -101,81 +107,97 @@ class CloudWatchBasics(EutesterTestCase):
         assert first_sample['Maximum'] < second_sample['Maximum']
         assert first_sample['Minimum'] < second_sample['Minimum']
 
-
-    def ListMetricsTest(self):
+    def ListMetrics(self, metricNames, dimension):
         self.debug('Get Metric list')
-        outList = self.tester.list_metrics()
+        metricList = self.tester.list_metrics(dimensions=dimension)
         self.debug('Checking to see if list is populated at all.')
-        assert len(outList) > 0
-        expectedMetricList = self.tester.get_instance_metrics_array()
-        print expectedMetricList
-        self.debug('Checking to see if we get all the expected instance metrics.')
-        for metric in expectedMetricList :
-            assert str(outList).count(metric['name']) > 0
-            self.debug('Metric ' + metric['name'])
-        self.debug('Make sure all Instance dimensions are listed.')
+        assert len(metricList) > 0
+        self.debug('Make sure dimensions are listed.')
         found=False
-        for metric in outList:
+        for metric in metricList:
             self.debug(metric.dimensions)
-            if str(metric.dimensions).count(self.instanceid) :
-                self.debug('Dimension ' + str(metric.dimensions))
+            if str(metric.dimensions).count(dimension[dimension.keys().pop()]) :
+                self.debug('Dimension ' + dimension[dimension.keys().pop()])
                 found=True
                 break
         assert found
-        found=False
+        self.debug('Checking to see if we get all the expected instance metrics.')
+        for metric in  metricNames:
+            assert str(metricList).count(metric['name']) > 0
+            self.debug('Metric ' + metric['name'])
+        pass
 
+    def checkMetricFilters(self):
         self.debug('Check list_metrics filtering parameters')
-        outList = self.tester.list_metrics(namespace='AWS/EC2')
-        assert len(outList) > 0
-        outList = self.tester.list_metrics(namespace='NonExistent-NameSpace')
-        assert len(outList) == 0
-        outList = self.tester.list_metrics(metric_name=expectedMetricList.pop()['name'])
-        assert len(outList) > 0
-        outList = self.tester.list_metrics(metric_name='NonExistent-Metric-Name')
-        assert len(outList) == 0
-        outList = self.tester.list_metrics(dimensions=newDimension('InstanceId', self.instanceid))
-        assert len(outList) > 0
-        outList = self.tester.list_metrics(dimensions=newDimension('InstanceId','NonExistent-InstanceId'))
-        assert len(outList) == 0
-        outList = self.tester.list_metrics(dimensions=newDimension('ImageId', self.image.id))
-        assert len(outList) > 0
-        outList = self.tester.list_metrics(dimensions=newDimension('ImageId','NonExistent-imageId'))
-        assert len(outList) == 0
-        outList = self.tester.list_metrics(dimensions=newDimension('InstanceType', self.instance_type))
-        assert len(outList) > 0
-        outList = self.tester.list_metrics(dimensions=newDimension('InstanceType','NonExistent-InstanceType'))
-        assert len(outList) == 0
-        outList = self.tester.list_metrics(dimensions=newDimension('AutoScalingGroupName', self.auto_scaling_group_name))
-        ### https://eucalyptus.atlassian.net/browse/EUCA-5952
-        #assert len(outList) > 0
-        outList = self.tester.list_metrics(dimensions=newDimension('AutoScalingGroupName','NonExistent-AutoScalingGroupName'))
-        assert len(outList) == 0
+        metricList = self.tester.list_metrics(namespace='AWS/EC2')
+        assert len(metricList) > 0
+        metricList = self.tester.list_metrics(namespace='AWS/EBS')
+        assert len(metricList) > 0
+        metricList = self.tester.list_metrics(namespace='NonExistent-NameSpace')
+        assert len(metricList) == 0
+        metricList = self.tester.list_metrics(metric_name='CPUUtilization')
+        assert len(metricList) > 0
+        metricList = self.tester.list_metrics(metric_name='NonExistent-Metric-Name')
+        assert len(metricList) == 0
+        metricList = self.tester.list_metrics(dimensions=self.instanceDimension)
+        assert len(metricList) > 0
+        metricList = self.tester.list_metrics(dimensions=newDimension('InstanceId','NonExistent-InstanceId'))
+        assert len(metricList) == 0
+        metricList = self.tester.list_metrics(dimensions=self.volumeDimension)
+        assert len(metricList) > 0
+        metricList = self.tester.list_metrics(dimensions=newDimension('VolumeId','NonExistent-VolumeId'))
+        assert len(metricList) == 0
+        metricList = self.tester.list_metrics(dimensions=newDimension('ImageId', self.image.id))
+        assert len(metricList) > 0
+        metricList = self.tester.list_metrics(dimensions=newDimension('ImageId','NonExistent-imageId'))
+        assert len(metricList) == 0
+        metricList = self.tester.list_metrics(dimensions=newDimension('InstanceType', self.instance_type))
+        assert len(metricList) > 0
+        metricList = self.tester.list_metrics(dimensions=newDimension('InstanceType','NonExistent-InstanceType'))
+        assert len(metricList) == 0
+        metricList = self.tester.list_metrics(dimensions=self.autoScalingDimension)
+        assert len(metricList) > 0
+        metricList = self.tester.list_metrics(dimensions=newDimension('AutoScalingGroupName','NonExistent-AutoScalingGroupName'))
+        assert len(metricList) == 0
+        metricList = self.tester.list_metrics(dimensions=self.volumeDimension)
+        assert len(metricList) > 0
+        metricList = self.tester.list_metrics(dimensions=newDimension('VolumeId', 'NonExistent-VolumeId'))
+        assert len(metricList) == 0
+        pass
 
-    def GetInstanceMetricTest(self):
-        ###get_metric_statistics parameters
+    def IsMetricsListPopulated(self):
+        end          = datetime.datetime.utcnow()
+        start        = end - datetime.timedelta(minutes=20)
+        metrics1=self.tester.cw.get_metric_statistics(60,start,end,'CPUUtilization','AWS/EC2','Average',dimensions=self.instanceDimension,unit='Percent')
+        metrics2=self.tester.cw.get_metric_statistics(60,start,end,'VolumeReadBytes','AWS/EBS','Average',dimensions=self.volumeDimension,unit='Bytes')
+        if len(metrics1) > 0 and len(metrics2) > 0 :
+            return True
+        else:
+            return False
+
+    def GetMetricStatistics(self, metricNames, namespace, dimension):
         period       = 60
         end          = datetime.datetime.utcnow()
-        start        = end - datetime.timedelta(minutes=5)
+        start        = end - datetime.timedelta(minutes=20)
         stats        = self.tester.get_stats_array()
-        metricNames  = self.tester.get_instance_metrics_array()
-        namespace    = 'AWS/EC2'
-        dimension    = newDimension('InstanceId', self.instanceid)
-
-        ###Check to make sure we are getting all metrics and statistics
+        ###Check to make sure we are getting all namespace metrics and statistics
         for i in range(len(metricNames)):
+            values = []
             for j in range(len(stats)):
                 metricName = metricNames[i]['name']
                 statisticName = stats[j]
                 unitType =  metricNames[i]['unit']
                 metrics = self.tester.get_metric_statistics(period, start, end, metricName, namespace, statisticName , dimensions=dimension, unit=unitType)
-                ### This assures we are getting all statistics for all Instance metrics.
+                ### This assures we are getting all statistics for all dimension metrics.
                 assert int(len(metrics)) > 0
                 statisticValue = str(metrics[0][statisticName])
                 self.debug(metricName + ' : ' + statisticName + '=' + statisticValue + ' ' + unitType)
+                values.append(statisticValue)
+        self.tester.validateStats(values)
 
     def setUpAutoscaling(self):
-        ### setup autoscaling variables:
-        self.debug('Setting up AutoScaling, running 1 instance')
+        ### setup autoscaling variables:s
+        self.debug('Setting up AutoScaling, starting 1 instance')
         self.instance_type = 'm1.small'
         self.image = self.tester.get_emi(root_device_type='instance-store')
         self.launch_config_name='ASConfig'
@@ -184,14 +206,16 @@ class CloudWatchBasics(EutesterTestCase):
         self.change = 'ChangeInCapacity'
         self.percent = 'PercentChangeInCapacity'
         self.cleanUpAutoscaling()
-
+        diskWrite = 'while [ 1 ];do dd if=/dev/zero of=/root/testFile bs=1M count=1; done &'
+        diskRead  = 'while [ 1 ];do dd if=/root/testFile of=/dev/null bs=1M count=1; done &'
         ### create launch configuration
         self.tester.create_launch_config(name= self.launch_config_name,
                                          image_id=self.image.id,
                                          instance_type=self.instance_type,
                                          key_name=self.keypair.name,
                                          security_groups=[self.group.name],
-                                         instance_monitoring=True)
+                                         instance_monitoring=True,
+                                         user_data=diskWrite + ' ' + diskRead)
         ### create auto scale group
         self.tester.create_as_group(group_name=self.auto_scaling_group_name,
                                     availability_zones=self.tester.get_zones(),
@@ -208,7 +232,7 @@ class CloudWatchBasics(EutesterTestCase):
 
         self.tester.create_as_policy(name=self.change,
                                      adjustment_type=self.change,
-                                     scaling_adjustment=3,
+                                     scaling_adjustment=1,
                                      as_name=self.auto_scaling_group_name,
                                      cooldown=0)
 
@@ -221,12 +245,17 @@ class CloudWatchBasics(EutesterTestCase):
         ## Wait for the last instance to go to running state.
         state=None
         while not (str(state).endswith('running')):
-            self.debug('Waiting for instance to go to running state')
-            self.tester.sleep(10)
+            self.debug('Waiting for AutoScaling instance to go to running state ...')
+            self.tester.sleep(15)
             self.instanceid = self.tester.get_last_instance_id()
-            instance = self.tester.get_instances(idstring=self.instanceid)
-            state = instance.pop().state
+            instance_list = self.tester.get_instances(idstring=self.instanceid)
+            self.instance = instance_list.pop()
+            state = self.instance.state
         self.debug(self.instanceid + ' is now running.')
+        ### Create and attach a volume
+        self.zone = self.tester.get_zones().pop()
+        self.volume = self.tester.create_volume(self.zone)
+        self.tester.attach_volume(self.instance, self.volume, '/dev/sdf' )
         ### Get the newly created policies.
         self.policy_exact = self.tester.autoscale.get_all_policies(policy_names=[self.exact])
         self.policy_change = self.tester.autoscale.get_all_policies(policy_names=[self.change])
@@ -239,19 +268,16 @@ class CloudWatchBasics(EutesterTestCase):
         self.tester.delete_as_group(names=self.auto_scaling_group_name,force=True)
         self.tester.delete_launch_config(self.launch_config_name)
 
-    def VerifyMetricStatValues(self):
-        '''
-        TODO: Verify we are getting correct Metric statistic values ????
-        '''
-        pass
+    def isInService(self):
+        group = self.tester.describe_as_group(names=[self.auto_scaling_group_name]).pop()
+        allInService = True
+        for instance in group.instances:
+            if not str(instance.lifecycle_state).endswith('InService'):
+                    allInService = False
+                    break
+        return allInService
 
-    def GetEbsMetricStats(self):
-        '''
-        TODO: Will these be in 3.0??
-        '''
-        pass
-
-    def MetricAlarmsTest(self):
+    def setUpAlarms(self):
         metric            = 'CPUUtilization'
         comparison        = '>'
         threshold         = 0
@@ -262,53 +288,121 @@ class CloudWatchBasics(EutesterTestCase):
         alarm_exact = self.tester.metric_alarm( 'exact', metric, comparison, threshold ,period, evaluation_periods, statistic,
                                          description='TEST',
                                          namespace='AWS/EC2',
-                                         dimensions=newDimension('InstanceId', self.instanceid),
+                                         dimensions=self.instanceDimension,
                                          alarm_actions=self.policy_exact.pop().policy_arn)
-        ### This alarm sets the number of running instances to + 3
+        ### This alarm sets the number of running instances to + 1
         alarm_change = self.tester.metric_alarm( 'change', metric, comparison, threshold ,period, evaluation_periods, statistic,
                                          description='TEST',
                                          namespace='AWS/EC2',
-                                         dimensions=newDimension('InstanceId', self.instanceid),
+                                         dimensions=self.instanceDimension,
                                          alarm_actions=self.policy_change.pop().policy_arn)
-        ### This alarm sets the number of running instances to -50
+        ### This alarm sets the number of running instances to -50%
         alarm_percent = self.tester.metric_alarm( 'percent', metric, comparison, threshold ,period, evaluation_periods, statistic,
                                          description='TEST',
                                          namespace='AWS/EC2',
-                                         dimensions=newDimension('InstanceId', self.instanceid),
+                                         dimensions=self.instanceDimension,
                                          alarm_actions=self.policy_percent.pop().policy_arn)
-        ## put all the alrams
+        ### put all the alarms
         self.tester.put_metric_alarm(alarm_change)
         self.tester.put_metric_alarm(alarm_percent)
         self.tester.put_metric_alarm(alarm_exact)
 
+    def testDesribeAlarms(self):
+        self.debug(self.tester.describe_alarms())
+        assert len(self.tester.describe_alarms()) >= 3
+        ### test describe_alarms_for_metric for created alarms
+        assert len(self.tester.describe_alarms_for_metric('CPUUtilization','AWS/EC2',dimensions=self.instanceDimension)) == 3
+        ### There are not be any alarms created for 'DiskReadOps'
+        assert len(self.tester.describe_alarms_for_metric('DiskReadOps','AWS/EC2',dimensions=self.instanceDimension)) == 0
+        ### test describe_alarm_history
+        self.debug(self.tester.describe_alarm_history())
+        assert len(self.tester.describe_alarm_history()) >= 3
+        pass
+
+    def testAlarms(self):
         ### The number of running instances should equal the desired_capacity for the auto_scaling_group = (1)
         group = self.tester.describe_as_group(names=[self.auto_scaling_group_name]).pop()
         assert len(group.instances) == 1
+        ### The number of running instances should still be 1 with 'exact' disabled
+        self.tester.disable_alarm_actions('exact')
+        self.tester.set_alarm_state('exact')
+        self.tester.sleep(15)
+        group = self.tester.describe_as_group(names=[self.auto_scaling_group_name]).pop()
+        assert len(group.instances) == 1
+        self.tester.enable_alarm_actions('exact')
         self.debug('The number of running ' + self.auto_scaling_group_name + ' instances = 1')
-        ### The number of running instances should equal the desired_capacity + scaling_adjustment = (4)
+        ### The number of running instances should equal the desired_capacity + scaling_adjustment = (2)
         self.tester.set_alarm_state('change')
-        self.tester.sleep(60)
+        self.tester.sleep(15)
+        self.tester.wait_for_result(self.isInService,result=True, timeout=240)
         group = self.tester.describe_as_group(names=[self.auto_scaling_group_name]).pop()
-        assert len(group.instances) == 4
-        self.debug('Success the number of running ' + self.auto_scaling_group_name + ' instances changed to 4')
-        ### The number of running instances should equal the total from the previous scaling_adjustment (4) - 50% = (2)
-        self.tester.set_alarm_state('percent')
-        self.tester.sleep(60)
-        group = self.tester.describe_as_group(names=[self.auto_scaling_group_name]).pop()
+        self.debug(len(group.instances))
         assert len(group.instances) == 2
+        self.debug('Success the number of running ' + self.auto_scaling_group_name + ' instances changed to 2')
+        ### The number of running instances should equal the total from the previous scaling_adjustment (2) - 50% = (1)
+        self.tester.set_alarm_state('percent')
+        self.tester.sleep(15)
+        group = self.tester.describe_as_group(names=[self.auto_scaling_group_name]).pop()
+        assert len(group.instances) == 1
         self.debug('Success the number of running ' + self.auto_scaling_group_name + ' instances decreased by 50%')
         ### This should terminate all instances in the auto_scaling_group. 
         self.tester.set_alarm_state('exact')
-        self.tester.sleep(60)
+        self.tester.sleep(15)
         group = self.tester.describe_as_group(names=[self.auto_scaling_group_name]).pop()
         assert group.instances == None
         self.debug('Success the number of running ' + self.auto_scaling_group_name + ' instances is exactly 0')
         pass
 
+    def testAwsReservedNamspaces(self):
+        try:
+            self.tester.put_metric_data('AWS/AnyName', 'TestMetricName',1)
+        except Exception, e:
+            if str(e).count('The value AWS/ for parameter Namespace is invalid.'):
+                self.tester.debug('testAwsReservedNamspaces generated expected InvalidParameterValue error.')
+                return True
+        self.tester.debug('testAwsReservedNamspaces did not throw expected InvalidParameterValue error.' )
+        return False
+
+    def MonitorInstancesTest(self):
+        self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group, is_reachable=False)
+        instanceid = self.tester.get_last_instance_id()
+        ### Enable Monitoring
+        self.tester.monitor_instances([instanceid])
+        instance = self.tester.get_instances(idstring=instanceid).pop()
+        assert instance.monitored
+        ### Disble Monitoring
+        self.tester.unmonitor_instances([instanceid])
+        instance = self.tester.get_instances(idstring=instanceid).pop()
+        assert not instance.monitored
+        self.tester.terminate_single_instance(instance)
+
+    def MetricAlarmsTest(self):
+        ## Describe Alarms/History with and without Filters
+        self.testDesribeAlarms()
+        ## Test alarm actions
+        self.testAlarms()
+        pass
+
+    def ListMetricsTest(self):
+        ### List instance metrics
+        self.ListMetrics(self.tester.get_instance_metrics_array(),self.instanceDimension)
+        ### List EBS Metrics
+        self.ListMetrics(self.tester.get_ebs_metrics_array(),self.volumeDimension)
+        ### List EBS/Instance metrics with filters
+        self.checkMetricFilters()
+        pass
+
+    def GetMetricStatisticsTest(self):
+        ### tests EBS metrics
+        self.GetMetricStatistics(self.tester.get_ebs_metrics_array(),'AWS/EBS', self.volumeDimension )
+        ### tests instance metrics
+        self.GetMetricStatistics(self.tester.get_instance_metrics_array(),'AWS/EC2', self.instanceDimension )
+        pass
+
 if __name__ == '__main__':
     testcase = CloudWatchBasics()
     ### Use the list of tests passed from config/command line to determine what subset of tests to run
-    ### or use a predefined list  'ListMetricsTest', 'GetInstanceMetricTest', 'MetricAlarmsTest'
+    ### or use a predefined list  'PutDataGetStats', 'ListMetricsTest', 'GetMetricStatisticsTest', 'MetricAlarmsTest', 'MonitorInstancesTest'
     test_list = testcase.args.tests or ['PutDataGetStats']
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
