@@ -187,29 +187,31 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
                 current_zone = zones[zone_index]
                 if re.search( zone, current_zone.name):
                     break
-                zone_index += 18
+                zone_index += 20
             if zone_index > (len(zones) - 1):
                 raise Exception("Unable to find Availability Zone")    
         else:
             zone = zones[0].name
             
         ### Inline switch statement
-        type_index = {  't1.micro': 2,
-                        'm1.small': 3,
-                        'm1.medium': 4,
-                        'm1.large': 5,
-                        'c1.medium': 6,
-                        'm1.xlarge': 7,
-                        'c1.xlarge': 8,
-                        'm2.xlarge': 9,
-                        'm3.xlarge': 10,
-                        'm3.2xlarge': 11,
-                        'm2.4xlarge': 12,
-                        'hi1.4xlarge': 13,
-                        'cc2.8xlarge': 14,
-                        'cg1.4xlarge': 15,
-                        'cr1.8xlarge': 16,
-                        'hs1.8xlarge': 17,
+        type_index = {  "t1.micro": 2,
+                        "m1.small": 3,
+                        "m1.large": 4,
+                        "m1.xlarge" : 5,
+                        "c1.xlarge" : 6,
+                        "m2.xlarge" : 7,
+                        "c1.medium" : 8,
+                        "m1.medium" : 9,
+                        "m3.xlarge" : 10,
+                        "m2.2xlarge" : 11,
+                        "m3.2xlarge" : 12,
+                        "m2.4xlarge" : 13,
+                        "cc1.4xlarge" : 14,
+                        "hi1.4xlarge" : 15,
+                        "cc2.8xlarge" : 16,
+                        "cg1.4xlarge" : 17,
+                        "cr1.8xlarge" : 18,
+                        "hs1.8xlarge" : 19
                       }[type] 
         type_state = zones[ zone_index + type_index ].state.split()
         self.debug("Finding available VMs: Partition=" + zone +" Type= " + type + " Number=" +  str(int(type_state[0])) )
