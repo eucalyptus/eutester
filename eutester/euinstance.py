@@ -58,6 +58,7 @@ import sys
 import os
 import re
 import time
+import copy
 import types
 
 
@@ -471,7 +472,7 @@ class EuInstance(Instance, TaggedResource):
         
     
     
-    def terminate_and_verify(self,verify_vols=True, volto=30, timeout=300):
+    def terminate_and_verify(self,verify_vols=True, volto=180, timeout=300, poll_interval=10):
         '''
         Attempts to terminate the instance and verify delete on terminate state of an ebs root block dev if any. 
         If flagged will attempt to verify the correct
@@ -488,51 +489,65 @@ class EuInstance(Instance, TaggedResource):
         '''
         bad_vols = []
         bad_vol_ids = []
-        start = time.time()
+        all_vols = []
+        err_buff = ""
+        elapsed = 0
         if verify_vols:
-            self.debug('Checking euinstance attached volumes states are in sync with clouds...')
+            self.debug('Checking euinstance attached volumes states are in sync with clouds, mainly to alter to errors in test script...')
             for vol in self.attached_vols:
                 try:
                     self.verify_attached_vol_cloud_status(vol)
-                except Exception, e: 
-                    self.debug('Caught exception verifying attached status for:'+str(vol.id)+", adding to list for post terminate info. Error:"+str(e))
-                    bad_vols.append(vol)
-                    bad_vol_ids.append(vol.id)
-        self.tester.terminate_single_instance(self, timeout=timeout)
-        elapsed = int(time.time()-start)
-        if self.bdm_vol:
-            #check for bfebs backing volume state
-            if self.block_device_mapping.current_value.delete_on_termination:
-                vol_state='deleted'
-            else:
-                vol_state='available'
-            self.bdm_vol.update()
-            while self.bdm_vol.status != vol_state and elapsed < timeout:
-                elapsed = int(time.time()-start)
-                self.debug('Delete on terminate:'+str(self.block_device_mapping.current_value.delete_on_termination)+', expected state:'+str(vol_state)+', '+str(self.bdm_vol.id)+" in state:"+str(self.bdm_vol.status)+", elapsed:"+str(elapsed)+"/"+str(timeout))
-                self.bdm_vol.update()
-                time.sleep(5)
+                except Exception, e:
+                    err_buff += "ERROR: Unsynced volumes found prior to issuing terminate, check test code:"
+                    err_buff += '\n'+str(self.id)+':Caught exception verifying attached status for:'+str(vol.id)+", Error:"+str(e)
         if verify_vols:
-            self.debug('Waiting for attached volumes to go to available...')
-            while self.attached_vols and (elapsed < timeout): 
-                for vol in self.attached_vols:
-                    elapsed = int(time.time()-start)
-                    vol.update()
-                    self.debug(str(self.id)+' terminated, waiting for attached volume:'+str(vol.id)+ ', status:'+str(vol.status))
-                    if vol.status == 'available':
+            all_vols = self.tester.get_volumes(attached_instance=self.id)
+            for device in self.block_device_mapping:
+                dev_map = self.block_device_mapping[device]
+                self.debug(str(self.id) + ", has volume:" + str(dev_map.volume_id) +" mapped at device:" + str(device))
+                for volume in all_vols:
+                    if volume.id == dev_map.volume_id:
+                        volume.delete_on_termination = dev_map.delete_on_termination
+
+        self.tester.terminate_single_instance(self, timeout=timeout)
+        start = time.time()
+        while all_vols and elapsed < volto:
+            elapsed = int(time.time()-start)
+            loop_vols = copy.copy(all_vols)
+            for vol in loop_vols:
+                vol_status = 'available'
+                fail_fast_status = 'deleted'
+                if hasattr(vol, 'delete_on_termination'):
+                    if vol.delete_on_termination:
+                        vol_status='deleted'
+                        fail_fast_status = 'available'
+                    self.debug('volume:' + str(vol.id) + "/" + str(vol.status) +", from BDM, D.O.T.:" +
+                               str(vol.delete_on_termination) + ", waiting on status:" + str(vol_status) + ", elapsed:"
+                               + str(elapsed) + "/" + str(volto) )
+                else:
+                    self.debug('volume:' + str(vol.id) + "/" + str(vol.status) +", was attached, waiting on status:" +
+                               str(vol_status) + ", elapsed:" + str(elapsed) + "/" + str(volto) )
+                vol.expected_status = vol_status
+                vol.update()
+                if vol.status == vol_status:
+                    self.debug(str(self.id)+' terminated, ' + str(vol.id) + "/" + str(vol.status) +
+                               ": volume entered expected state:" + str(vol_status))
+                    all_vols.remove(vol)
+                    if vol in self.attached_vols:
                         self.attached_vols.remove(vol)
-                if self.attached_vols and (elapsed < timeout):
-                        time.sleep(5)
-            
-            if self.attached_vols or bad_vols:
-                attached_vol_error = ""
-                if bad_vols:
-                    bad_vol_error = 'ERROR: Unsynced volumes found prior to issuing terminate, check test code:'+",".join(bad_vol_ids)
-                if self.attached_vols:
-                    attached_vol_error += 'ERROR: Volumes did not become available after instance was terminated:'
-                    for vol in self.attached_vols:
-                        attached_vol_error += str(vol.id)+':'+str(vol.status)+", "                        
-                raise Exception(str(self.id)+", volume errors found during instance terminate:\n"+bad_vol_error+"\n"+attached_vol_error )
+                if vol.status == fail_fast_status and elapsed >= 30:
+                    self.debug('illegal status for volume:' + str(vol.id) + ', status:' + str(vol.status))
+                    all_vols.remove(vol)
+                    err_buff += "\n" + str(self.id) + ":" +str(vol.id) + " Volume incorrect status:" + str(vol.status) + \
+                                ", expected status:" + str(vol.expected_status) + ", elapsed:" + str(elapsed)
+            if all_vols:
+                time.sleep(poll_interval)
+        for vol in all_vols:
+            err_buff += "\n" + str(self.id) + ":" +str(vol.id) + " Volume timeout on current status:" + str(vol.status) + \
+                        ", expected status:" + str(vol.expected_status) + ", elapsed:" + str(elapsed)
+
+        if err_buff:
+            raise Exception(str(self.id)+", volume errors found during instance terminate_and_verify:\n"+  str(err_buff))
                 
                 
         
@@ -1087,7 +1102,30 @@ class EuInstance(Instance, TaggedResource):
                     bad_list.append(vol)
                     pass
         return bad_list
-        
+
+    def find_blockdev_by_md5(self, md5=None, md5len=None, euvolume=None):
+        guestdev = None
+
+        md5 = md5 or euvolume.md5
+        md5len = md5len or euvolume.md5len
+        for vdev in  self.get_dev_dir():
+            self.debug('Checking '+str(vdev)+" for a matching block device")
+            block_md5 = self.get_dev_md5(vdev, md5len )
+            self.debug('comparing local'+str(block_md5)+' vs '+str(md5))
+            if block_md5 == md5:
+                self.debug('Found match at dev:'+str(vdev))
+                if (euvolume):
+                    if (euvolume.guestdev != vdev ):
+                        self.debug("("+str(euvolume.id)+")Found dev match. Guest dev changed! Updating from previous:'"+str(euvolume.guestdev)+"' to:'"+str(vdev)+"'")
+                    else:
+                        self.debug("("+str(euvolume.id)+")Found dev match. Previous dev:'"+str(euvolume.guestdev)+"', Current dev:'"+str(vdev)+"'")
+                    euvolume.guestdev = vdev
+                guestdev = vdev
+                break
+        return guestdev
+
+
+
     def verify_attached_vol_cloud_status(self,euvolume ):
         '''
         Confirm that the cloud is showing the state for this euvolume as attached to this instance
