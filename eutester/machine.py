@@ -636,7 +636,8 @@ class Machine:
     def get_eucalyptus_conf(self,eof=False,verbose=False):
         out = None
         config = None
-        paths = [ "" , "/opt/eucalyptus" ]
+        use_path = None
+        paths = [ "/" , "/opt/eucalyptus" ]
         for path in paths:
             try:
                 self.sys('ls '+ str(path) + '/etc/eucalyptus/eucalyptus.conf', code=0, verbose=verbose)
