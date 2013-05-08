@@ -1654,7 +1654,8 @@ class EC2ops(Eutester):
                           name=None,
                           ramdisk=None,
                           kernel=None,
-                          dot=True):
+                          dot=True,
+                          block_device_map=None):
         """Convience function for passing a snapshot instead of its id. See register_snapshot_by_id
         :param snapshot: Snapshot object to use as an image
         :param root_device_name: root device name to use when registering
@@ -1665,8 +1666,18 @@ class EC2ops(Eutester):
         :param ramdisk: Ramdisk ID to use
         :param kernel: Kernel ID to use
         :param dot: Delete on terminate flag
+        :param block_device_map: existing block device map to append snapshot block dev to
         """
-        return self.register_snapshot_by_id( snapshot.id, root_device_name, description, windows, bdmdev, name, ramdisk, kernel, dot)
+        return self.register_snapshot_by_id( snap_id=snapshot.id,
+                                             root_device_name=root_device_name,
+                                             description=description,
+                                             windows=windows,
+                                             bdmdev=bdmdev,
+                                             name=name,
+                                             ramdisk=ramdisk,
+                                             kernel=kernel,
+                                             dot=dot,
+                                             block_device_map=block_device_map)
     
     @Eutester.printinfo
     def register_snapshot_by_id( self,
@@ -1678,7 +1689,9 @@ class EC2ops(Eutester):
                                  name=None,
                                  ramdisk=None,
                                  kernel=None,
-                                 dot=True ):
+                                 size=None,
+                                 dot=True,
+                                 block_device_map=None):
         """
         Register an image snapshot
 
@@ -1691,6 +1704,7 @@ class EC2ops(Eutester):
         :param ramdisk: ramdisk id
         :param kernel: kernel id (note for windows this name should be "windows")
         :param dot: Delete On Terminate boolean
+        :param block_device_map: existing block device map to add the snapshot block dev type to
         :return: emi id of registered image
         """
         if bdmdev is None:
@@ -1700,10 +1714,11 @@ class EC2ops(Eutester):
         if ( windows is True ) and ( kernel is not None):
             kernel="windows"     
             
-        bdmap = BlockDeviceMapping()
+        bdmap = block_device_map or BlockDeviceMapping()
         block_dev_type = BlockDeviceType()
         block_dev_type.snapshot_id = snap_id
         block_dev_type.delete_on_termination = dot
+        block_dev_type.size = size
         bdmap[bdmdev] = block_dev_type
             
         self.debug("Register image with: snap_id:"+str(snap_id)+", root_device_name:"+str(root_device_name)+", desc:"+str(description)+
@@ -2290,7 +2305,8 @@ class EC2ops(Eutester):
                   type=None, 
                   zone=None, 
                   min=1, 
-                  max=1, 
+                  max=1,
+                  block_device_map=None,
                   user_data=None,
                   private_addressing=False, 
                   username="root", 
@@ -2343,7 +2359,8 @@ class EC2ops(Eutester):
             #self.debug( "Attempting to run "+ str(image.root_device_type)  +" image " + str(image) + " in group " + str(group))
             cmdstart=time.time()
             reservation = image.run(key_name=keypair,security_groups=[group],instance_type=type, placement=zone,
-                                    min_count=min, max_count=max, user_data=user_data, addressing_type=addressing_type)
+                                    min_count=min, max_count=max, user_data=user_data, addressing_type=addressing_type,
+                                    block_device_map=block_device_map)
             self.test_resources["reservations"].append(reservation)
             
             if (len(reservation.instances) < min) or (len(reservation.instances) > max):
