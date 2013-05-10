@@ -1505,6 +1505,7 @@ class EC2ops(Eutester):
                       volume_id=None,
                       volume_size=None,
                       volume_md5=None,
+                      filters=None,
                       maxcount=None,
                       owner_id=None):
         """
@@ -1524,7 +1525,7 @@ class EC2ops(Eutester):
         snapshot_list = []
         if snapid:
             snapshot_list.append(snapid)
-        ec2_snaps =  self.ec2.get_all_snapshots(snapshot_ids=snapshot_list, owner=owner_id)
+        ec2_snaps =  self.ec2.get_all_snapshots(snapshot_ids=snapshot_list, filters=filters, owner=owner_id)
         for snap in ec2_snaps:
             if snap not in snapshots:
                 snapshots.append(snap)
@@ -1833,6 +1834,7 @@ class EC2ops(Eutester):
                 state="available",
                 arch=None,
                 owner_id=None,
+                filters=None,
                 not_location=None,
                 max_count=None):
         """
@@ -1854,7 +1856,7 @@ class EC2ops(Eutester):
             emi = "mi-"
         self.debug("Looking for image prefix: " + str(emi) )
         ret_list = []
-        images = self.ec2.get_all_images()
+        images = self.ec2.get_all_images(filters=filters)
         for image in images:
             
             if not re.search(emi, image.id):      
@@ -1888,6 +1890,7 @@ class EC2ops(Eutester):
                    state="available",
                    arch=None,
                    owner_id=None,
+                   filters=None,
                    not_location=None,
                    ):
         """
@@ -1911,6 +1914,7 @@ class EC2ops(Eutester):
                                state=state,
                                arch=arch,
                                owner_id=owner_id,
+                               filters=filters,
                                not_location=not_location,
                                max_count=1)[0]
 
@@ -2088,7 +2092,8 @@ class EC2ops(Eutester):
                     attached_instance=None, 
                     attached_dev=None, 
                     snapid=None, 
-                    zone=None, 
+                    zone=None,
+                    filters=None,
                     minsize=1, 
                     maxsize=None,
                     md5=None, 
@@ -2111,7 +2116,7 @@ class EC2ops(Eutester):
         retlist = []
         if (attached_instance is not None) or (attached_dev is not None):
             status='in-use'
-        volumes = self.ec2.get_all_volumes()             
+        volumes = self.ec2.get_all_volumes(filters=filters)
         for volume in volumes:
             if not hasattr(volume,'md5'):
                 volume = EuVolume.make_euvol_from_vol(volume, tester=self)
@@ -3381,6 +3386,52 @@ class EC2ops(Eutester):
                 vm_type = type
                 break
         return vm_type
+
+    def print_block_device_map(self,block_device_map, printmethod=None ):
+        printmethod = printmethod or self.debug
+        buf = '\n'
+        device_w = 16
+        snap_w = 15
+        volume_w = 15
+        dot_w = 7
+        size_w = 6
+        status_w = 7
+        ephemeral_name_w = 12
+        attach_time_w = 12
+        no_device_w = 7
+        line = ''
+        titles = str('DEVICE').ljust(device_w) + "|" + \
+                 str('VOLUME_ID').center(volume_w) + "|" + \
+                 str('SNAP_ID').center(snap_w) + "|" + \
+                 str('D.O.T.').center(dot_w) + "|" + \
+                 str('SIZE').center(size_w) + "|" + \
+                 str('EPHEMERAL').center(ephemeral_name_w) + "|" + \
+                 str('NO DEV').center(no_device_w) + "|" + \
+                 str('ATTACH TM').center(attach_time_w) + "|" + \
+                 str('STATUS').center(status_w) + "\n"
+
+        for x in titles:
+            if x == '|':
+                line += '|'
+            else:
+                line += "-"
+        line = line+"\n"
+        header = str('BLOCK DEVICE MAP').center(len(line)) + "\n"
+        buf += line + header + line + titles + line
+        for device in block_device_map:
+            bdm = block_device_map[device]
+            buf += str(device).center(device_w) + "|" + \
+                   str(bdm.volume_id).center(volume_w) + "|" + \
+                   str(bdm.snapshot_id).center(snap_w) + "|" + \
+                   str(bdm.delete_on_termination).center(dot_w) + "|" + \
+                   str(bdm.size).center(size_w) + "|" + \
+                   str(bdm.ephemeral_name).center(ephemeral_name_w) + "|" + \
+                   str(bdm.no_device).center(no_device_w) + "|" + \
+                   str(bdm.attach_time).center(attach_time_w) + "|" + \
+                   str(bdm.status).center(status_w) + "\n"
+        buf += line
+        printmethod(buf)
+
 
     def monitor_instances(self, instance_ids):
         self.debug('Enabling monitoring for instance(s) ' + str(instance_ids))
