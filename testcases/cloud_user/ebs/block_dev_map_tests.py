@@ -14,14 +14,16 @@ This command maps /dev/sda to a EBS root volume based on a snapshot, /dev/sdb to
 
 from eucaops import Eucaops
 from eutester.eutestcase import EutesterTestCase
+
 from boto.ec2.blockdevicemapping import BlockDeviceMapping, BlockDeviceType
 import time
 import types
 import httplib
+import copy
 
 
 
-class Block_Device_Mapping_Test(EutesterTestCase):
+class Block_Device_Mapping_Tests(EutesterTestCase):
     #Define the bytes per gig
     gig = 1073741824
 
@@ -68,10 +70,22 @@ class Block_Device_Mapping_Test(EutesterTestCase):
         self.image_bytes = None
         self.image_gigs = None
         self.build_image_volume = None
+        self.build_image_volume_tag_name = 'block_dev_map_tests_build_image_volume'
         self.build_image_snapshot = None
+        self.build_image_snapshot_tag_name = 'block_dev_map_tests_build_image_snapshot'
         self.block_device_map = None
         self.base_test_volume = None
+        self.base_test_volume_tag_name = 'block_dev_map_tests_base_test_volume'
         self.base_test_snapshot = None
+        self.base_test_snaphot_tag_name = 'block_dev_map_tests_base_test_snap'
+        self.teste_image1 = None
+        self.test_image1_tag_name = 'block_dev_map_tests_image1'
+        self.test_image2 = None
+        self.test_image2_tag_name = 'block_dev_map_tests_image2'
+        self.test_image3 = None
+        self.test_image3_tag_name = 'block_dev_map_tests_image3'
+        self.test_image4 = None
+        self.test_image4_tag_name = 'block_dev_map_tests_image4'
         self.snapshots = []
         self.images = []
         self.size = int(self.args.size)
@@ -126,51 +140,79 @@ class Block_Device_Mapping_Test(EutesterTestCase):
         except Exception, e:
             self.debug("Failed to get remote file size...")
             raise e
+        self.status('URL:' + str(url) + "\ncontent-length:" + str(image_bytes))
         return image_bytes
 
-    def pmsg(self, msg):
-        self.debug( "\n---------------PROGRESS MESSAGE----------\n")
-        self.debug( msg )
-        self.debug("\n-----------------------------------------\n")
+
+    def get_existing_test_snapshot_by_tag_key(self, tagkey):
+        snapshots = self.tester.get_snapshots(filters={'tag-key':str(tagkey)})
+        if snapshots:
+            return snapshots[0]
+        return None
+
+    def get_existing_test_volume_by_tag_key(self, tagkey):
+        volumes = self.tester.get_volumes(filters={'tag-key':str(tagkey)})
+        if volumes:
+            return volumes[0]
+        return None
+
+    def get_existing_test_image_by_tag_key(self, tagkey):
+        try:
+            return self.tester.get_emi(filters={'tag-key':str(tagkey)})
+        except:
+            return None
+
+
 
 
     def setup_bfebs_instance_volume_and_snapshots_from_url(self, url=None, create_test_vol=True):
 
         url = url or self.url
         volumes = []
-        from eutester.euvolume import EuVolume
-        from eutester.euinstance import EuInstance
-        self.volume = EuVolume
-        self.tester = Eucaops()
-        self.instance = EuInstance
-        exit(1) #get rid of this stuff above
         self.image_bytes = self.get_remote_file_size_via_http(url=url)
-        self.image_gigs = ( ((self.image_bytes/gig)+1) or 1)
-        self.debug("Remote file size: "+ str(self.image_gigs) + "g")
+        self.image_gigs = ( ((self.image_bytes/self.gig)+1) or 1)
+
+        self.status('Attempting to launch instance store instance...')
         self.instance = self.tester.run_image(self.image,
                                               keypair=self.keypair.name,
                                               type=self.args.vmtype,
                                               group=self.group.name,
                                               zone=self.zone)[0]
-        self.debug('create test volume(s)...')
-        self.build_image_volume = self.tester.create_volume(self.zone, size = self.image_gigs,monitor_to_state=None)
+        self.status('create test volume(s)...')
+        self.build_image_volume = self.tester.create_volumes(self.zone, size = self.image_gigs,monitor_to_state=None)[0]
         volumes.append(self.build_image_volume)
+        self.build_image_volume.add_tag(self.build_image_volume_tag_name)
+
         if create_test_vol:
-            self.base_test_volume = self.tester.create_volume(self.zone, size = 1, monitor_to_state=None )
+            self.base_test_volume = self.tester.create_volumes(self.zone, size = 1, monitor_to_state=None )[0]
             volumes.append(self.base_test_volume)
+            self.base_test_volume.add_tag(self.base_test_volume_tag_name)
         self.tester.monitor_created_euvolumes_to_state(volumes=volumes)
-        self.debug('Copy the remote bfebs image into a volume and create snapshot from it...')
+        self.status('Copy the remote bfebs image into a volume and create snapshot from it...')
         self.instance.attach_volume(self.build_image_volume)
         self.instance.sys("curl "+url+" > "+ self.build_image_volume.guestdev+" && sync")
         self.instance.md5_attached_euvolume(self.build_image_volume,length=1024)
         self.build_image_snapshot = self.tester.create_snapshots(volume=self.build_image_volume)[0]
-        self.debug('Done creating bfebs snapshot and md5ing volume')
+        #update test resources with tags...
+        self.build_image_snapshot.add_tag(self.build_image_snapshot_tag_name)
+        self.build_image_snapshot.add_tag('md5',self.build_image_volume.md5)
+        self.build_image_snapshot.add_tag('md5len',self.build_image_volume.md5len)
+        self.build_image_volume.add_tag('md5', self.build_image_volume.md5)
+        self.build_image_volume.add_tag('md5len', self.build_image_volume.md5len)
+
+
+        self.status('Done creating bfebs snapshot and md5ing volume')
         if create_test_vol:
-            self.debug('Attaching test volume, writing random data into it and gathering md5...')
+            self.status('Attaching test volume, writing random data into it and gathering md5...')
             self.instance.attach_volume(self.base_test_volume)
-            self.instance.write
-            self.instance. vol_write_random_data_get_md5(self.base_test_volume,length=1024, overwrite=True)
+            self.instance.vol_write_random_data_get_md5(self.base_test_volume,length=1024, overwrite=True)
             self.base_test_snapshot = self.tester.create_snapshots(volume=self.base_test_volume)[0]
+            self.base_test_snapshot.add_tag(self.base_test_snaphot_tag_name)
+            self.base_test_volume.add_tag('md5', self.base_test_volume.md5)
+            self.base_test_volume.add_tag('md5len', self.base_test_volume.md5len)
+            self.base_test_snapshot.add_tag('md5', self.base_test_volume.md5)
+            self.base_test_snapshot.add_tag('md5len', self.base_test_volume.md5len)
+
         return self.build_image_snapshot
 
 
@@ -208,15 +250,40 @@ class Block_Device_Mapping_Test(EutesterTestCase):
             snapshot_id = snapshot
         else:
             snapshot_id = snapshot.id
-        new_image = self.tester.register_snapshot_by_id(snap_id=snapshot_id,
+        image_id = self.tester.register_snapshot_by_id(snap_id=snapshot_id,
                                                         root_device_name=root_device_name,
                                                         size=size,
                                                         dot=delete_on_terminate,
                                                         block_device_map=block_device_map
                                                         )
+        new_image = self.tester.get_emi(emi=image_id)
         self.images.append(new_image)
         return new_image
 
+
+    def populate_self_from_existing_test_resources(self,build_image=True, base_test=True):
+        if build_image:
+            self.build_image_snapshot = self.get_existing_test_snapshot_by_tag_key(tagkey=self.build_image_snapshot_tag_name)
+            if self.build_image_snapshot:
+                self.build_image_snapshot.eutest_volume_md5 = self.build_image_snapshot.tags.get('md5')
+                self.build_image_snapshot.eutest_volume_md5len = int(self.build_image_snapshot.tags.get('md5len'))
+            self.build_image_volume = self.get_existing_test_volume_by_tag_key(tagkey=self.build_image_volume_tag_name)
+            if self.build_image_volume:
+                self.build_image_volume.md5 = self.build_image_volume.tags.get('md5')
+                self.build_image_volume.md5len = int(self.build_image_volume.tags.get('md5len'))
+        if base_test:
+            self.base_test_snapshot = self.get_existing_test_snapshot_by_tag_key(tagkey=self.base_test_snaphot_tag_name)
+            if self.base_test_snapshot:
+                self.base_test_snapshot.eutest_volume_md5 = self.base_test_snapshot.tags.get('md5')
+                self.base_test_snapshot.eutest_volume_md5len = int(self.base_test_snapshot.tags.get('md5len'))
+            self.base_test_volume = self.get_existing_test_volume_by_tag_key(self.base_test_volume_tag_name)
+            if self.base_test_volume:
+                self.base_test_volume.md5 = self.base_test_volume.tags.get('md5')
+                self.base_test_volume.md5len = int(self.base_test_volume.tags.get('md5len'))
+        self.test_image1 = self.get_existing_test_image_by_tag_key(self.test_image1_tag_name)
+        self.test_image2 = self.get_existing_test_image_by_tag_key(self.test_image2_tag_name)
+        self.test_image3 = self.get_existing_test_image_by_tag_key(self.test_image3_tag_name)
+        self.test_image4 = self.get_existing_test_image_by_tag_key(self.test_image4_tag_name)
 
 
     def find_volume_on_euinstance(self, euvolume, euinstance):
@@ -229,7 +296,7 @@ class Block_Device_Mapping_Test(EutesterTestCase):
         return euinstance.find_blockdev_by_md5(md5=euvolume.md5, md5len=euvolume.md5len)
 
 
-    def register_test1_default_bfebs_image_plus_dot_is_true(self):
+    def register_n_run_test1_bfebs_image_w_dot_is_true(self):
         '''
         Will test running a default bfebs image. Additional tests here:
         -will verify a portion of the root device's md5sum against the original volume's/snapshot's
@@ -237,19 +304,25 @@ class Block_Device_Mapping_Test(EutesterTestCase):
         -will look for 'no' ephemeral
         '''
         image = self.create_bfebs_image(snapshot=self.build_image_snapshot, delete_on_terminate=True)
-        self.dot_yes_image = image
-        instance = self.tester.run_image(image=image)[0]
-        self.find_volumes_on_euinstance([self.build_image_volume], instance)
+        self.status('Created image:'+str(image.id)+', now running instance from it...')
+        self.test_image1 = image
+        self.test_image1.add_tag(self.test_image1_tag_name)
+        instance = self.tester.run_image(image=image, keypair=self.keypair, group=self.group)[0]
+        self.current_test_instance = instance
+        self.status('Checking instance devices for md5sums which match original volume/snapshots...')
+        self.find_volume_on_euinstance(self.build_image_volume, instance)
+        self.status('Checking instance for to make sure ephemeral is not present...')
         try:
             instance.get_ephemeral_dev()
         except:
             self.debug('Ephemeral was not found, passing...')
         else:
             raise Exception('Ephemeral device found, but none provided?')
+        self.status('Terminating instance, checking for delete on termination status for ebs block devs...')
         instance.terminate_and_verify()
 
 
-    def register_test2_default_bfebs_image_plus_dot_is_false(self):
+    def register_n_run_test2_bfebs_image_w_dot_is_false(self):
         '''
         Will test running a default bfebs image. Additional tests here:
         -will verify a portion of the root device's md5sum against the original volume's/snapshot's
@@ -257,29 +330,182 @@ class Block_Device_Mapping_Test(EutesterTestCase):
         -will look for 'no' ephemeral
         '''
         image = self.create_bfebs_image(snapshot=self.build_image_snapshot, delete_on_terminate=False)
-        self.dot_no_image = image
-        instance = self.tester.run_image(image=image)[0]
-        self.find_volumes_on_euinstance([self.build_image_volume], instance)
+        self.status('Created image:'+str(image.id)+', now running instance from it...')
+        self.test_image2 = image
+        self.test_image2.add_tag(self.test_image2_tag_name)
+        instance = self.tester.run_image(image=image, keypair=self.keypair, group=self.group)[0]
+        self.current_test_instance = instance
+        self.status('Checking instance devices for md5sums which match original volume/snapshots...')
+        self.find_volume_on_euinstance(self.build_image_volume, instance)
+        self.status('Checking instance for to make sure ephemeral is not present...')
         try:
             instance.get_ephemeral_dev()
         except:
             self.debug('Ephemeral was not found, passing...')
         else:
             raise Exception('Ephemeral device found, but none provided?')
+        self.status('Terminating instance, checking for delete on termination status for ebs block devs...')
         instance.terminate_and_verify()
 
 
-    def run_time_test1_dot_yes_image_add_ephemeral_and_snap_mapped_at_run_time_dot_is_true(self, ephemeral_size=2):
+    def register_n_run_test3_bfebs_image_w_ephemeral_map_snap_map_and_ebsvol_map_dot_is_true(self):
+        '''
+        Will test running a default bfebs image registered w/ the following mapped devices, delete on terminate for
+        all devices is true:
+        1)the snapshot containing the original bfebs image
+        2)the base test snapshot created by this testcase
+        3)an empty volume
+        Additional tests here:
+        -will verify a portion of the root device's md5sum against the original volume's/snapshot's
+        -will verify a portion of the test snapshot's md5sum against the guest's device
+        -will verify the presence and size of the ephemeral disk
+        -will attempt to verify the presence and size of empty volume's device (by process of elimination)
+        -will attempt to verify the empty volume's requested size against the size of the block dev on guest
+        -will verify delete on terminate set to True, and all volumes are deleted post instance termination
+        '''
+        bdm_emptyvol_dev = '/dev/vdd'
         bdm_snapshot_dev = '/dev/vdc'
         bdm_ephemeral_dev = '/dev/vdb'
-        image = self.dot_yes_image
-        bdm = self.add_block_device_types_to_mapping(device_name=bdm_ephemeral_dev, ephemeral_name='ephemeral0',size=ephemeral_size)
+        bdm_emptyvol_size = 2
+
+        self.status('Creating image with block device mapping...')
+        bdm = self.add_block_device_types_to_mapping(device_name=bdm_ephemeral_dev,
+                                                     ephemeral_name='ephemeral0',
+                                                     delete_on_terminate=True)
+        self.add_block_device_types_to_mapping(snapshot_id=self.base_test_snapshot.id,
+                                               device_name=bdm_snapshot_dev,
+                                               delete_on_terminate=True,
+                                               block_device_map=bdm)
+        self.add_block_device_types_to_mapping(size = bdm_emptyvol_size,
+                                               device_name = bdm_emptyvol_dev,
+                                               delete_on_terminate=True,
+                                               block_device_map=bdm)
+        self.tester.print_block_device_map(bdm)
+        image = self.create_bfebs_image(snapshot=self.build_image_snapshot,
+                                        block_device_map=bdm,
+                                        delete_on_terminate=True)
+        self.test_image3 = image
+        self.test_image3.add_tag(self.test_image3_tag_name)
+        self.status('Created image:'+str(image.id)+', now running instance from it...')
+        instance = self.tester.run_image(image=image,keypair=self.keypair, group=self.group)[0]
+        self.current_test_instance = instance
+        self.status('Checking instance devices for md5sums which match original volume/snapshots...')
+        guest_root_dev = instance.get_guest_dev_for_block_device_map_device(md5=self.build_image_volume.md5,
+                                                                            md5len=self.build_image_volume.md5len,
+                                                                            map_device=instance.root_device_name)
+        guest_snap_dev = instance.get_guest_dev_for_block_device_map_device(md5=self.base_test_volume.md5,
+                                                                            md5len=self.base_test_volume.md5len,
+                                                                            map_device=instance.root_device_name)
+        self.status('Checking instance for ephemeral disk and size...')
+        guest_ephemeral_dev = instance.check_ephemeral_against_vmtype()
+        self.status("Ephemeral verified, Attempting to find guest's device empty volume by process of elimination...")
+        remaining_devs=self.find_remaining_devices(instance,[guest_root_dev, guest_snap_dev, guest_ephemeral_dev])
+        if len(remaining_devs) != 1:
+            raise Exception('Could not find empty vol dev from remaining devs on guest:' + str(",").join(remaining_devs))
+        guest_emptyvol_device = '/dev/' + str(remaining_devs[0]).replace('/dev/','')
+        self.status('Found empty volume on guest device:'+ str(guest_emptyvol_device)+', checking for proper size...')
+        vol_size = instance.get_blockdev_size_in_bytes(guest_emptyvol_device) / self.gig
+        if vol_size != bdm_emptyvol_size:
+            raise Exception('Block device size on guest:' + str(vol_size) +
+                            ", does not match requested size:" + str(bdm_emptyvol_size))
+        self.status('Terminating instance, checking for delete on termination status for ebs block devs...')
+        instance.terminate_and_verify()
+
+    def register_n_run_test4_bfebs_image_w_ephemeral_map_snap_map_and_ebsvol_map_dot_is_false(self):
+        '''
+        Will test running a default bfebs image registered w/ the following mapped devices, delete on terminate for
+        all devices is False:
+        1)the snapshot containing the original bfebs image
+        2)the base test snapshot created by this testcase
+        3)an empty volume
+        Additional tests here:
+        -will verify a portion of the root device's md5sum against the original volume's/snapshot's
+        -will verify a portion of the test snapshot's md5sum against the guest's device
+        -will verify the presence and size of the ephemeral disk
+        -will attempt to verify the presence and size of empty volume's device (by process of elimination)
+        -will attempt to verify the empty volume's requested size against the size of the block dev on guest
+        -will verify delete on terminate set to False, and all volumes are not deleted post instance termination
+        '''
+        bdm_emptyvol_dev = '/dev/vdd'
+        bdm_snapshot_dev = '/dev/vdc'
+        bdm_ephemeral_dev = '/dev/vdb'
+        bdm_emptyvol_size = 2
+
+        self.status('Creating image with block device mapping...')
+        bdm = self.add_block_device_types_to_mapping(device_name=bdm_ephemeral_dev,
+                                                     ephemeral_name='ephemeral0',
+                                                     delete_on_terminate=False)
+        self.add_block_device_types_to_mapping(snapshot_id=self.base_test_snapshot.id,
+                                               device_name=bdm_snapshot_dev,
+                                               delete_on_terminate=False,
+                                               block_device_map=bdm)
+        self.add_block_device_types_to_mapping(device_name = bdm_emptyvol_dev,
+                                               size = bdm_emptyvol_size,
+                                               delete_on_terminate=False,
+                                               block_device_map=bdm)
+
+        self.tester.print_block_device_map(bdm)
+        image = self.create_bfebs_image(snapshot=self.build_image_snapshot,
+                                        block_device_map=bdm,
+                                        delete_on_terminate=False)
+        self.test_image4 = image
+        self.test_image4.add_tag(self.test_image4_tag_name)
+        self.status('Created image:'+str(image.id)+', now running instance from it...')
+        instance = self.tester.run_image(image=image, keypair=self.keypair, group=self.group)[0]
+        self.current_test_instance = instance
+        self.status('Checking instance devices for md5sums which match original volume/snapshots...')
+        guest_root_dev = instance.get_guest_dev_for_block_device_map_device(md5=self.build_image_volume.md5,
+                                                                            md5len=self.build_image_volume.md5len,
+                                                                            map_device=instance.root_device_name)
+        guest_snap_dev = instance.get_guest_dev_for_block_device_map_device(md5=self.base_test_volume.md5,
+                                                                            md5len=self.base_test_volume.md5len,
+                                                                            map_device=instance.root_device_name)
+        self.status('Checking instance for ephemeral disk and size...')
+        guest_ephemeral_dev = instance.check_ephemeral_against_vmtype()
+        self.status("Attempting to find guest's device empty volume by process of elimination...")
+        remaining_devs=self.find_remaining_devices(instance,[guest_root_dev, guest_snap_dev, guest_ephemeral_dev])
+        if len(remaining_devs) != 1:
+            raise Exception('Could not find empty vol dev from remaining devs on guest:' + str(",").join(remaining_devs))
+        guest_emptyvol_device = '/dev/' + str(remaining_devs[0]).replace('/dev/','')
+        self.status('Found empty volume on guest device:'+ str(guest_emptyvol_device)+', checking for proper size...')
+        vol_size = instance.get_blockdev_size_in_bytes(guest_emptyvol_device) / self.gig
+        if vol_size != bdm_emptyvol_size:
+            raise Exception('Block device size on guest:' + str(vol_size) +
+                            ", does not match requested size:" + str(bdm_emptyvol_size))
+        self.status('Terminating instance, checking for delete on termination status for ebs block devs...')
+        instance.terminate_and_verify()
+
+    def find_remaining_devices(self,instance,known_dev_list):
+        self.debug('Looking for remaining devices after known devs:' +str(',').join(known_dev_list))
+        dev_dir = instance.get_dev_dir()
+        remove_devs = []
+        for dev in dev_dir:
+            dev_string = '/dev/' + str(dev).replace('/dev/','')
+            for known_dev in known_dev_list:
+                #Remove all disk partitions
+                if dev_string.startswith(known_dev):
+                    print(str(dev)+': Eliminating known dev:' +str(dev_string)+ ' from possible remaining devices')
+                    if not dev in remove_devs:
+                        remove_devs.append(dev)
+                    continue
+        for dev in remove_devs:
+            print('Removing dev:'+str(dev))
+            dev_dir.remove(dev)
+        self.debug('Returning list of possible remaining/unknown devices:' + str(',').join(dev_dir))
+        return dev_dir
+
+
+
+    def run_time_test1_image1_add_ephemeral_and_snap_mapped_at_run_time_dot_true(self):
+        bdm_snapshot_dev = '/dev/vdc'
+        bdm_ephemeral_dev = '/dev/vdb'
+        image = self.test_image1
+        self.status('Using image:' +str(self.test_image1.id)+ ", ephemeral, and snapshot ebs devices added at run time..")
+        bdm = self.add_block_device_types_to_mapping(device_name=bdm_ephemeral_dev, ephemeral_name='ephemeral0')
         self.add_block_device_types_to_mapping(snapshot_id=self.base_test_snapshot.id, device_name=bdm_snapshot_dev)
-        instance = self.tester.run_image(image=image,block_device_map=bdm)[0]
-        eph_dev = instance.get_ephemeral_dev()
-        guest_eph_size = instance.get_blockdev_size_in_bytes(eph_dev)/self.gig
-        if guest_eph_size != ephemeral_size:
-            raise Exception('Ephemeral size:' + str(ephemeral_size) + " != ephemeral disk size on guest:" + str(guest_eph_size))
+        instance = self.tester.run_image(image=image,block_device_map=bdm, keypair=self.keypair, group=self.group)[0]
+        self.status('Checking instance for ephemeral disk and size...')
+        instance.check_ephemeral_against_vmtype()
         #Find block devices on guest by the MD5 sum of the volume(s) they were created from.
         self.find_volume_on_euinstance(self.build_image_volume, instance)
         snap_dev = instance.find_blockdev_by_md5(md5=self.base_test_snapshot.eutest_volume_md5,
@@ -290,14 +516,41 @@ class Block_Device_Mapping_Test(EutesterTestCase):
         snap_vol.md5len = self.base_test_snapshot.md5len
         snap_vol.guestdev = snap_dev
         instance.vol_write_random_data_get_md5(snap_vol, length=1024, overwrite=True)
-
-
-
         instance.terminate_and_verify()
 
 
+'''
    #     def test4_default_image_w_
 
 
+   # def test_meta_data
 
+   # def test_exceeding_ebs_max_prop
+
+    if __name__ == "__main__":
+        testcase = Block_Device_Mapping_Tests()
+
+        ### Use the list of tests passed from config/command line to determine what subset of tests to run
+        ### or use a predefined list
+        if testcase.args.run_suite:
+            unit_list = testcase.testsuite()
+        else:
+            list = testcase.args.tests or [ 'setup_instance_volume_and_script',
+                                            'run_remote_script_and_monitor',
+                                            'check_mpath_iterations']
+            ### Convert test suite methods to EutesterUnitTest objects
+            unit_list = [ ]
+            for test in list:
+                unit_list.append( testcase.create_testunit_by_name(test) )
+
+        ### Run the EutesterUnitTest objects
+        result = testcase.run_test_case_list(unit_list,eof=True,clean_on_exit=True)
+        exit(result)
+
+
+
+        testlist = []
+        #create first round of volumes
+        testlist.append(self.create_testunit_from_method(self.create_vols_per_zone, eof=True))
+'''
 
