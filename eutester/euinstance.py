@@ -360,7 +360,10 @@ class EuInstance(Instance, TaggedResource):
             dev = self.get_free_scsi_dev()
         if (self.tester.attach_volume(self, euvolume, dev, pause=10,timeout=timeout)): 
             #update our block device prefix, detect if virtio is now in use 
-            self.set_block_device_prefix()     
+            self.set_block_device_prefix()
+            if euvolume.attach_data.device != dev:
+                raise Exception('Attached device:' + str(euvolume.attach_data.device) +
+                                ", does not equal requested dev:" + str(dev))
             while (elapsed < timeout):
                 self.debug("Checking for volume attachment on guest, elapsed time("+str(elapsed)+")")
                 dev_list_after = self.get_dev_dir()
@@ -370,10 +373,10 @@ class EuInstance(Instance, TaggedResource):
                     devlist = str(diff[0]).split('/')
                     attached_dev = '/dev/'+devlist[len(devlist)-1]
                     euvolume.guestdev = attached_dev.strip()
-                    euvolume.clouddev = dev
+
                     self.debug("Volume:"+str(euvolume.id)+" guest device:"+str(euvolume.guestdev))
                     self.attached_vols.append(euvolume)
-                    self.debug(euvolume.id+" Requested dev:"+str(euvolume.clouddev)+", attached to guest device:"+str(euvolume.guestdev))
+                    self.debug(euvolume.id+" Requested dev:"+str(euvolume.attach_data.device)+", attached to guest device:"+str(euvolume.guestdev))
                     break
                 elapsed = int(time.time() - start)
                 time.sleep(2)
@@ -387,7 +390,7 @@ class EuInstance(Instance, TaggedResource):
         if (attached_dev is None):
             self.debug("List after\n"+" ".join(dev_list_after))
             raise Exception('Volume:'+str(euvolume.id)+' attached, but not found on guest'+str(self.id)+' after '+str(elapsed)+' seconds?')
-        self.debug('Success attaching volume:'+str(euvolume.id)+' to instance:'+self.id+', cloud dev:'+str(euvolume.clouddev)+', attached dev:'+str(attached_dev))
+        self.debug('Success attaching volume:'+str(euvolume.id)+' to instance:'+self.id+', cloud dev:'+str(euvolume.attach_data.device)+', attached dev:'+str(attached_dev))
         return attached_dev
     
     def detach_euvolume(self, euvolume, waitfordev=True, timeout=180):
@@ -487,13 +490,12 @@ class EuInstance(Instance, TaggedResource):
         :type timeout: integer
         :param timeout: timeout in seconds when waiting for an instance to go to terminated state. 
         '''
-        bad_vols = []
-        bad_vol_ids = []
         all_vols = []
         err_buff = ""
         elapsed = 0
         if verify_vols:
-            self.debug('Checking euinstance attached volumes states are in sync with clouds, mainly to alter to errors in test script...')
+            #Check that local obj's attached volume state matches cloud's, mainly to alert to errors in test script...
+            self.debug('Checking euinstance attached volumes states are in sync with clouds')
             for vol in self.attached_vols:
                 try:
                     self.verify_attached_vol_cloud_status(vol)
@@ -536,7 +538,7 @@ class EuInstance(Instance, TaggedResource):
                     if vol in self.attached_vols:
                         self.attached_vols.remove(vol)
                 if vol.status == fail_fast_status and elapsed >= 30:
-                    self.debug('illegal status for volume:' + str(vol.id) + ', status:' + str(vol.status))
+                    self.debug('Incorrect status for volume:' + str(vol.id) + ', status:' + str(vol.status))
                     all_vols.remove(vol)
                     err_buff += "\n" + str(self.id) + ":" +str(vol.id) + " Volume incorrect status:" + str(vol.status) + \
                                 ", expected status:" + str(vol.expected_status) + ", elapsed:" + str(elapsed)
@@ -581,7 +583,7 @@ class EuInstance(Instance, TaggedResource):
                 prefix= prefix+'e'
             dev = "/dev/"+prefix+str(d)
             for avol in self.attached_vols:
-                if avol.clouddev == dev:
+                if avol.attach_data.device == dev:
                     inuse = True
                     in_use_guest += str(avol.id)+", "
                     continue
@@ -1109,6 +1111,7 @@ class EuInstance(Instance, TaggedResource):
         md5 = md5 or euvolume.md5
         md5len = md5len or euvolume.md5len
         for vdev in  self.get_dev_dir():
+            vdev = '/dev/'+ str(vdev).replace('/dev/','')
             self.debug('Checking '+str(vdev)+" for a matching block device")
             block_md5 = self.get_dev_md5(vdev, md5len )
             self.debug('comparing local'+str(block_md5)+' vs '+str(md5))
@@ -1179,7 +1182,6 @@ class EuInstance(Instance, TaggedResource):
                         if not detach:
                             evol = EuVolume.make_euvol_from_vol(vol)
                             evol.guestdev = dev
-                            evol.clouddev = dev
                             self.attached_vols.append(evol)
                         else:
                             self.tester.detach_volume(vol,timeout=timeout)
@@ -1400,7 +1402,7 @@ class EuInstance(Instance, TaggedResource):
         devs = self.get_dev_dir()
         for prefix in dev_prefixs:
             if str(prefix+ephem_name) in devs:
-                return str(prefix+ephem_name)
+                return str('/dev/'+prefix+ephem_name)
         raise Exception('Could not find ephemeral device?')
 
     def get_blockdev_size_in_bytes(self,devpath):
@@ -1412,7 +1414,7 @@ class EuInstance(Instance, TaggedResource):
         gb = 1073741824
         size = self.vmtype_info.disk
         ephemeral_dev = self.get_ephemeral_dev()
-        block_size = self.get_blockdev_size_in_bytes('/dev/' + ephemeral_dev)
+        block_size = self.get_blockdev_size_in_bytes(ephemeral_dev)
         gbs = block_size / gb
         self.debug('Ephemeral check: ephem_dev:'
                    + str(ephemeral_dev)
@@ -1428,6 +1430,7 @@ class EuInstance(Instance, TaggedResource):
                             + ' != vmtype size:' +str(size) + "gb")
         else:
             self.debug('check_ephemeral_against_vmtype, passed')
+        return ephemeral_dev
 
 
     def get_memtotal_in_mb(self):
@@ -1445,6 +1448,34 @@ class EuInstance(Instance, TaggedResource):
                             + " vs memtotal:" + str(total_ram) + ". Diff is greater than allowed pad:" + str(pad) + "mb")
         else:
             self.debug('check_ram_against_vmtype, passed')
+
+    def get_guest_dev_for_block_device_map_device(self, md5, md5len, map_device):
+        '''
+        Finds a device in the block device mapping and attempts to locate which guest device is the volume is using
+        based upon the provided md5 sum, and length in bytes that were read in to create the checksum. If found the volume
+        is appended to the local list of attached volumes and the md5 checksum and len are set in the volume for later test
+        use.
+        returns the guest device if found.
+        '''
+        self.debug('Attempting to find block device for mapped device name:' + str(map_device) +
+                   ', md5:' + str(md5) +
+                   ', md5len:' + str(md5len))
+        mapped_device = self.block_device_mapping.get(map_device)
+        volume_id = mapped_device.volume_id
+        volume = self.tester.get_volume(volume_id=volume_id)
+        if volume.attach_data.device != map_device:
+            raise Exception('mapped device name:' + str(mapped_device) + ', does not match attached device name:' +
+                            str(volume.attach_data.device ))
+        local_dev = self.find_blockdev_by_md5(md5=md5, md5len=md5len)
+        if not local_dev:
+            raise Exception(str(map_device) +'/'+ str(volume_id) + ':Could not find a device matching md5:' +
+                            str(md5) + ", len:" + str(md5len))
+        volume.guestdev=local_dev
+        volume.md5 = md5
+        volume.md5len = md5len
+        self.attached_vols.append(volume)
+        return local_dev
+
 
 
     
