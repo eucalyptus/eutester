@@ -317,10 +317,11 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         -will look for 'no' ephemeral
         '''
         image = self.create_bfebs_image(snapshot=self.build_image_snapshot, delete_on_terminate=True)
-        if not image.block_device_mapping.get(image.root_device_name.delete_on_termination):
+        if not image.block_device_mapping.get(image.root_device_name).delete_on_termination:
             raise Exception('Expected DOT is True, instead image delete on termination set to:' +
                             str(image.block_device_mapping.get(image.root_device_name.delete_on_termination)))
         self.status('Created image:'+str(image.id)+', now running instance from it...')
+        self.tester.print_block_device_map(image.block_device_mapping)
         self.test_image1 = image
         self.test_image1.add_tag(self.test_image1_tag_name)
         instance = self.tester.run_image(image=image, keypair=self.keypair, group=self.group)[0]
@@ -352,10 +353,11 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         -will look for 'no' ephemeral
         '''
         image = self.create_bfebs_image(snapshot=self.build_image_snapshot, delete_on_terminate=False)
-        if image.block_device_mapping.get(image.root_device_name.delete_on_termination):
+        if image.block_device_mapping.get(image.root_device_name).delete_on_termination:
             raise Exception('Expected DOT is False, instead image delete on termination set to:' +
                             str(image.block_device_mapping.get(image.root_device_name.delete_on_termination)))
         self.status('Created image:'+str(image.id)+', now running instance from it...')
+        self.tester.print_block_device_map(image.block_device_mapping)
         self.test_image2 = image
         self.test_image2.add_tag(self.test_image2_tag_name)
         instance = self.tester.run_image(image=image, keypair=self.keypair, group=self.group)[0]
