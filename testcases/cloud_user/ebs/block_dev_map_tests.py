@@ -1,14 +1,27 @@
 __author__ = 'clarkmatthew'
 '''
+This test case class is intended to help test functions and features related to block device mapping for ebs backed
+instances. The test attempts to create a base ebs-backed image created from a remote url downloaded and written to a
+volume within this cloud. A snapshot of this volume, and md5sum are taken for use throughout the different test
+iterations. In addition a 2nd volume is filled with some amount of random/unique data before a 2nd snapshot and md5sum
+of it are created and used through the test as well.
+This test class attempts to test the different block device attributes and verify them through the different stages
+of the vm/guest.
+
+
+
+Some notes:
 ec2-register -n ImageName --root-device-name /dev/sda1 -s snap-e1eb279f
 -b "/dev/sdb=ephemeral0" -b "/dev/sdh=snap-d5eb27ab" -b "/dev/sdj=:100"
 
-This command maps /dev/sda to a EBS root volume based on a snapshot, /dev/sdb to ephemeral0, /dev/sdh to an EBS volume based on a snapshot, and /dev/sdj to an empty EBS volume that is 100 GiB in size. The output is the ID for your new AMI.
+This command maps /dev/sda to a EBS root volume based on a snapshot, /dev/sdb to ephemeral0,
+/dev/sdh to an EBS volume based on a snapshot,
+and /dev/sdj to an empty EBS volume that is 100 GiB in size. The output is the ID for your new AMI.
 
 
 
 
-1) Create a bfebs image and record snapshot md5 in process.
+
 
 '''
 
@@ -77,7 +90,7 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         self.base_test_volume = None
         self.base_test_volume_tag_name = 'block_dev_map_tests_base_test_volume'
         self.base_test_snapshot = None
-        self.base_test_snaphot_tag_name = 'block_dev_map_tests_base_test_snap'
+        self.base_test_snapshot_tag_name = 'block_dev_map_tests_base_test_snap'
         self.teste_image1 = None
         self.test_image1_tag_name = 'block_dev_map_tests_image1'
         self.test_image2 = None
@@ -207,7 +220,7 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
             self.instance.attach_volume(self.base_test_volume)
             self.instance.vol_write_random_data_get_md5(self.base_test_volume,length=1024, overwrite=True)
             self.base_test_snapshot = self.tester.create_snapshots(volume=self.base_test_volume)[0]
-            self.base_test_snapshot.add_tag(self.base_test_snaphot_tag_name)
+            self.base_test_snapshot.add_tag(self.base_test_snapshot_tag_name)
             self.base_test_volume.add_tag('md5', self.base_test_volume.md5)
             self.base_test_volume.add_tag('md5len', self.base_test_volume.md5len)
             self.base_test_snapshot.add_tag('md5', self.base_test_volume.md5)
@@ -272,7 +285,7 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
                 self.build_image_volume.md5 = self.build_image_volume.tags.get('md5')
                 self.build_image_volume.md5len = int(self.build_image_volume.tags.get('md5len'))
         if base_test:
-            self.base_test_snapshot = self.get_existing_test_snapshot_by_tag_key(tagkey=self.base_test_snaphot_tag_name)
+            self.base_test_snapshot = self.get_existing_test_snapshot_by_tag_key(tagkey=self.base_test_snapshot_tag_name)
             if self.base_test_snapshot:
                 self.base_test_snapshot.eutest_volume_md5 = self.base_test_snapshot.tags.get('md5')
                 self.base_test_snapshot.eutest_volume_md5len = int(self.base_test_snapshot.tags.get('md5len'))
@@ -304,6 +317,9 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         -will look for 'no' ephemeral
         '''
         image = self.create_bfebs_image(snapshot=self.build_image_snapshot, delete_on_terminate=True)
+        if not image.block_device_mapping.get(image.root_device_name.delete_on_termination):
+            raise Exception('Expected DOT is True, instead image delete on termination set to:' +
+                            str(image.block_device_mapping.get(image.root_device_name.delete_on_termination)))
         self.status('Created image:'+str(image.id)+', now running instance from it...')
         self.test_image1 = image
         self.test_image1.add_tag(self.test_image1_tag_name)
@@ -318,6 +334,12 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
             self.debug('Ephemeral was not found, passing...')
         else:
             raise Exception('Ephemeral device found, but none provided?')
+        self.status('Check block device mapping meta data...')
+        instance.check_instance_meta_data_for_block_device_mapping()
+        self.status('Stopping instance:' + str(instance.id))
+        instance.stop_instance_and_verify()
+        self.status('Restarting instance:' + str(instance.id))
+        instance.start_instance_and_verify(checkvolstatus=True)
         self.status('Terminating instance, checking for delete on termination status for ebs block devs...')
         instance.terminate_and_verify()
 
@@ -330,6 +352,9 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         -will look for 'no' ephemeral
         '''
         image = self.create_bfebs_image(snapshot=self.build_image_snapshot, delete_on_terminate=False)
+        if image.block_device_mapping.get(image.root_device_name.delete_on_termination):
+            raise Exception('Expected DOT is False, instead image delete on termination set to:' +
+                            str(image.block_device_mapping.get(image.root_device_name.delete_on_termination)))
         self.status('Created image:'+str(image.id)+', now running instance from it...')
         self.test_image2 = image
         self.test_image2.add_tag(self.test_image2_tag_name)
@@ -344,6 +369,12 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
             self.debug('Ephemeral was not found, passing...')
         else:
             raise Exception('Ephemeral device found, but none provided?')
+        self.status('Check block device mapping meta data...')
+        instance.check_instance_meta_data_for_block_device_mapping()
+        self.status('Stopping instance:' + str(instance.id))
+        instance.stop_instance_and_verify()
+        self.status('Restarting instance:' + str(instance.id))
+        instance.start_instance_and_verify(checkvolstatus=True)
         self.status('Terminating instance, checking for delete on termination status for ebs block devs...')
         instance.terminate_and_verify()
 
@@ -366,20 +397,22 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         bdm_emptyvol_dev = '/dev/vdd'
         bdm_snapshot_dev = '/dev/vdc'
         bdm_ephemeral_dev = '/dev/vdb'
+        bdm_ephemeral_name = 'ephemeral0'
         bdm_emptyvol_size = 2
 
         self.status('Creating image with block device mapping...')
-        bdm = self.add_block_device_types_to_mapping(device_name=bdm_ephemeral_dev,
-                                                     ephemeral_name='ephemeral0',
-                                                     delete_on_terminate=True)
-        self.add_block_device_types_to_mapping(snapshot_id=self.base_test_snapshot.id,
+        bdm = self.add_block_device_types_to_mapping(snapshot_id=self.base_test_snapshot.id,
                                                device_name=bdm_snapshot_dev,
-                                               delete_on_terminate=True,
-                                               block_device_map=bdm)
+                                               delete_on_terminate=True)
         self.add_block_device_types_to_mapping(size = bdm_emptyvol_size,
                                                device_name = bdm_emptyvol_dev,
                                                delete_on_terminate=True,
                                                block_device_map=bdm)
+        #add ephemeral dev separately to use later for bug work around...
+        eph_dev = BlockDeviceType()
+        eph_dev.device_name=bdm_ephemeral_dev
+        eph_dev.ephemeral_name=bdm_ephemeral_name
+        bdm[bdm_ephemeral_dev] = eph_dev
         self.tester.print_block_device_map(bdm)
         image = self.create_bfebs_image(snapshot=self.build_image_snapshot,
                                         block_device_map=bdm,
@@ -408,6 +441,17 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         if vol_size != bdm_emptyvol_size:
             raise Exception('Block device size on guest:' + str(vol_size) +
                             ", does not match requested size:" + str(bdm_emptyvol_size))
+        self.status('Check block device mapping meta data...')
+        #Temp work around for existing bug where ephemeral is not reported...
+        meta_bdm = instance.block_device_mapping
+        if not meta_bdm.has_key(bdm_ephemeral_dev):
+            self.resulterr('Ephemeral disk not reported in instance block dev mapping: see euca-6048')
+            meta_bdm[bdm_ephemeral_dev] = eph_dev
+        instance.check_instance_meta_data_for_block_device_mapping(root_dev=image.root_device_name, bdm=meta_bdm)
+        self.status('Stopping instance:' + str(instance.id))
+        instance.stop_instance_and_verify()
+        self.status('Restarting instance:' + str(instance.id))
+        instance.start_instance_and_verify(checkvolstatus=True)
         self.status('Terminating instance, checking for delete on termination status for ebs block devs...')
         instance.terminate_and_verify()
 
@@ -429,21 +473,22 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         bdm_emptyvol_dev = '/dev/vdd'
         bdm_snapshot_dev = '/dev/vdc'
         bdm_ephemeral_dev = '/dev/vdb'
+        bdm_ephemeral_name = 'ephemeral0'
         bdm_emptyvol_size = 2
 
         self.status('Creating image with block device mapping...')
-        bdm = self.add_block_device_types_to_mapping(device_name=bdm_ephemeral_dev,
-                                                     ephemeral_name='ephemeral0',
-                                                     delete_on_terminate=False)
-        self.add_block_device_types_to_mapping(snapshot_id=self.base_test_snapshot.id,
+        bdm = self.add_block_device_types_to_mapping(snapshot_id=self.base_test_snapshot.id,
                                                device_name=bdm_snapshot_dev,
-                                               delete_on_terminate=False,
-                                               block_device_map=bdm)
+                                               delete_on_terminate=False)
         self.add_block_device_types_to_mapping(device_name = bdm_emptyvol_dev,
                                                size = bdm_emptyvol_size,
                                                delete_on_terminate=False,
                                                block_device_map=bdm)
-
+        #add ephemeral dev separately to use later for bug work around...
+        eph_dev = BlockDeviceType()
+        eph_dev.device_name=bdm_ephemeral_dev
+        eph_dev.ephemeral_name=bdm_ephemeral_name
+        bdm[bdm_ephemeral_dev] = eph_dev
         self.tester.print_block_device_map(bdm)
         image = self.create_bfebs_image(snapshot=self.build_image_snapshot,
                                         block_device_map=bdm,
@@ -472,8 +517,271 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         if vol_size != bdm_emptyvol_size:
             raise Exception('Block device size on guest:' + str(vol_size) +
                             ", does not match requested size:" + str(bdm_emptyvol_size))
+        self.status('Check block device mapping meta data...')
+        #Temp work around for existing bug where ephemeral is not reported...
+        meta_bdm = instance.block_device_mapping
+        if not meta_bdm.has_key(bdm_ephemeral_dev):
+            self.resulterr('Ephemeral disk not reported in instance block dev mapping: see euca-6048')
+            meta_bdm[bdm_ephemeral_dev] = eph_dev
+        instance.check_instance_meta_data_for_block_device_mapping(root_dev=image.root_device_name, bdm=meta_bdm)
+        self.status('Check block device mapping meta data...')
+        #Temp work around for existing bug where ephemeral is not reported...
+        meta_bdm = instance.block_device_mapping
+        if not meta_bdm.has_key(bdm_ephemeral_dev):
+            self.resulterr('Ephemeral disk not reported in instance block dev mapping: see euca-6048')
+            meta_bdm[bdm_ephemeral_dev] = eph_dev
+        instance.check_instance_meta_data_for_block_device_mapping(root_dev=image.root_device_name, bdm=meta_bdm)
+        self.status('Stopping instance:' + str(instance.id))
+        instance.stop_instance_and_verify()
+        self.status('Restarting instance:' + str(instance.id))
+        instance.start_instance_and_verify(checkvolstatus=True)
         self.status('Terminating instance, checking for delete on termination status for ebs block devs...')
         instance.terminate_and_verify()
+
+
+    def run_time_test1_image1_overwrite_root_vol_size_and_set_dot_to_false(self):
+        '''
+        Will test running a default bfebs image registered w/ the following mapped devices, delete on terminate for
+        all devices is False:
+        1)the snapshot containing the original bfebs image
+
+        At run time the following block device map attributes will be over written by:
+        -root device size increased by 1g
+        -delete on terminate flag set from True to False
+
+        Additional tests here:
+        -will verify a portion of the root device's md5sum against the original volume's/snapshot's
+        -will verify that the guest's block dev representing the root dev is the new size provided
+        -will verify an ephemeral disk is not provided
+        -will verify delete on terminate set to False, and all volumes are not deleted post instance termination
+        '''
+
+        image = self.test_image1
+        #Add 1 to current root device size...
+        bdm_rootsnap_size = image.block_device_mapping.get(image.root_device_name).size + 1
+        #Get opposite of DOT value...
+        dot_value = (not image.block_device_mapping.get(image.root_device_name.delete_on_termination))
+        self.status('Using image:' +str(self.test_image1.id)+ ", root dev size set to:" +
+                     str(bdm_rootsnap_size) + " and dot to false at run time...")
+        bdm = self.add_block_device_types_to_mapping(device_name=image.root_device_name,
+                                                     size=bdm_rootsnap_size,
+                                                     delete_on_terminate=dot_value)
+        instance = self.tester.run_image(image=image,block_device_map=bdm, keypair=self.keypair, group=self.group)[0]
+        self.current_test_instance = instance
+        self.status('Checking instance devices for md5sums which match original volume/snapshots...')
+        root_guest_dev = self.find_volume_on_euinstance(self.build_image_volume, instance)
+        root_dev_size = instance.get_blockdev_size_in_bytes(root_guest_dev) / self.gig
+        if root_dev_size != bdm_rootsnap_size:
+            raise Exception('Root device size on guest:' + str(root_dev_size) +
+                            ' !=  requested size' + str(bdm_rootsnap_size) +
+                            ", original size in image:" + str(image.block_device_mapping.get(image.root_device_name).size))
+        self.status('Checking instance for to make sure ephemeral is not present...')
+        try:
+            instance.get_ephemeral_dev()
+        except:
+            self.debug('Ephemeral was not found, passing...')
+        else:
+            raise Exception('Ephemeral device found, but none provided?')
+        self.status('Check block device mapping meta data...')
+        instance.check_instance_meta_data_for_block_device_mapping(root_dev=image.root_device_name, bdm=bdm)
+        self.status('Stopping instance:' + str(instance.id))
+        instance.stop_instance_and_verify()
+        self.status('Restarting instance:' + str(instance.id))
+        instance.start_instance_and_verify(checkvolstatus=True)
+        self.status('Terminating instance, checking for delete on termination status for ebs block devs...')
+        instance.terminate_and_verify()
+
+
+    def run_time_test2_image1_add_ephemeral_map_snap_map_emptyvol_map_at_run_time_dot_true(self):
+        '''
+        Will test running a default bfebs image registered w/ the following mapped devices, delete on terminate for
+        all devices is False:
+        1)the snapshot containing the original bfebs image
+
+        At run time the following block devices will be applied per map:
+        1) Single ephemeral disk, size of vm type disk
+        2) Single volume created from the local base_test_snapshot - size altered by +1 gig
+        3) Single empty volume
+
+        Additional tests here:
+        -will verify a portion of the root device's md5sum against the original volume's/snapshot's
+        -will verify a portion of the test snapshot's md5sum against the guest's device and size of disk
+        -will verify the presence and size of the ephemeral disk
+        -will attempt to verify the presence and size of empty volume's device (by process of elimination)
+        -will attempt to verify the empty volume's requested size against the size of the block dev on guest
+        -will verify delete on terminate set to True, and all volumes are deleted post instance termination
+        '''
+
+        bdm_emptyvol_dev = '/dev/vdd'
+        bdm_snapshot_dev = '/dev/vdc'
+        bdm_ephemeral_dev = '/dev/vdb'
+        bdm_ephemeral_name = 'ephemeral0'
+        bdm_emptyvol_size = 1
+        bdm_snap_size = self.base_test_snapshot.volume_size + 1
+
+        image = self.test_image1
+        self.status('Using image:' +str(self.test_image1.id)+ ", ephemeral, and snapshot ebs devices added at run time..")
+
+        bdm = self.add_block_device_types_to_mapping(snapshot_id=self.base_test_snapshot.id,
+                                               device_name=bdm_snapshot_dev,
+                                               delete_on_terminate=False)
+        self.add_block_device_types_to_mapping(device_name = bdm_emptyvol_dev,
+                                               size = bdm_emptyvol_size,
+                                               delete_on_terminate=False,
+                                               block_device_map=bdm)
+        #add ephemeral dev separately to use later for bug work around...
+        eph_dev = BlockDeviceType()
+        eph_dev.device_name=bdm_ephemeral_dev
+        eph_dev.ephemeral_name=bdm_ephemeral_name
+        bdm[bdm_ephemeral_dev] = eph_dev
+        self.tester.print_block_device_map(bdm)
+        instance = self.tester.run_image(image=image,block_device_map=bdm, keypair=self.keypair, group=self.group)[0]
+        self.current_test_instance = instance
+        self.status('Checking instance for ephemeral disk and size...')
+        guest_ephemeral_dev = instance.check_ephemeral_against_vmtype()
+        self.status('Checking instance devices for md5sums which match original volume/snapshots...')
+        guest_root_dev = instance.get_guest_dev_for_block_device_map_device(md5=self.build_image_volume.md5,
+                                                                            md5len=self.build_image_volume.md5len,
+                                                                            map_device=instance.root_device_name)
+        guest_snap_dev = instance.get_guest_dev_for_block_device_map_device(md5=self.base_test_volume.md5,
+                                                                            md5len=self.base_test_volume.md5len,
+                                                                            map_device=instance.root_device_name)
+        guest_snapvol_size = instance.get_blockdev_size_in_bytes(guest_snap_dev) / self.gig
+        if guest_snapvol_size != bdm_snap_size:
+            raise Exception('Volume size on guest:'+ str(guest_snapvol_size)+' != ' + str(bdm_snap_size) +
+                            ', the size requested for bdm snap:' + str(self.base_test_snapshot.id))
+        self.status("Attempting to find guest's device empty volume by process of elimination...")
+        remaining_devs=self.find_remaining_devices(instance,[guest_root_dev, guest_snap_dev, guest_ephemeral_dev])
+        if len(remaining_devs) != 1:
+            raise Exception('Could not find empty vol dev from remaining devs on guest:' + str(",").join(remaining_devs))
+        guest_emptyvol_device = '/dev/' + str(remaining_devs[0]).replace('/dev/','')
+        self.status('Found empty volume on guest device:'+ str(guest_emptyvol_device)+', checking for proper size...')
+        vol_size = instance.get_blockdev_size_in_bytes(guest_emptyvol_device) / self.gig
+        if vol_size != bdm_emptyvol_size:
+            raise Exception('Block device size on guest:' + str(vol_size) +
+                            ", does not match requested size:" + str(bdm_emptyvol_size))
+        self.status('Check block device mapping meta data...')
+        #Temp work around for existing bug where ephemeral is not reported...
+        meta_bdm = instance.block_device_mapping
+        if not meta_bdm.has_key(bdm_ephemeral_dev):
+            self.resulterr('Ephemeral disk not reported in instance block dev mapping: see euca-6048')
+            meta_bdm[bdm_ephemeral_dev] = eph_dev
+        instance.check_instance_meta_data_for_block_device_mapping(root_dev=image.root_device_name, bdm=meta_bdm)
+        self.status('Stopping instance:' + str(instance.id))
+        instance.stop_instance_and_verify()
+        self.status('Restarting instance:' + str(instance.id))
+        instance.start_instance_and_verify(checkvolstatus=True)
+        self.status('Terminating instance, checking for delete on termination status for ebs block devs...')
+        instance.terminate_and_verify()
+
+    def run_time_test3_image3_overwrite_all_non_root_w_no_device(self):
+        image = self.test_image3
+        bdm_emptyvol_dev = '/dev/vdd'
+        bdm_snapshot_dev = '/dev/vdc'
+        bdm_ephemeral_dev = '/dev/vdb'
+        bdm = self.add_block_device_types_to_mapping(device_name=bdm_ephemeral_dev,
+                                                     no_device=True)
+        self.add_block_device_types_to_mapping(device_name=bdm_snapshot_dev,
+                                               no_device=True,
+                                               block_device_map=bdm)
+        self.add_block_device_types_to_mapping(device_name = bdm_emptyvol_dev,
+                                               no_device=True,
+                                               block_device_map=bdm)
+        self.tester.print_block_device_map(bdm)
+        instance = self.tester.run_image(image=image,block_device_map=bdm, keypair=self.keypair, group=self.group)[0]
+        self.status('Checking instance, confirming lack of ephemeral disk...')
+        try:
+            instance.get_ephemeral_dev()
+        except:
+            self.debug('Ephemeral was not found, passing...')
+        else:
+            raise Exception('Ephemeral device found, but was over written with no_device?')
+        root_dev = self.find_volume_on_euinstance(self.build_image_volume,instance)
+        self.status('Checking for any non-root block devices...')
+        remaining_devs = self.find_remaining_devices(instance=instance, known_dev_list=[root_dev])
+        if remaining_devs:
+            raise Exception('Found additional unknown block devices on guest, expected all to be removed:' +
+                            str(',').join(remaining_devs))
+        self.status('Check block device mapping meta data...')
+        instance.check_instance_meta_data_for_block_device_mapping()
+        self.status('Stopping instance:' + str(instance.id))
+        instance.stop_instance_and_verify()
+        self.status('Restarting instance:' + str(instance.id))
+        instance.start_instance_and_verify(checkvolstatus=True)
+        self.status('Terminating instance, checking for delete on termination status for ebs block devs...')
+        instance.terminate_and_verify()
+
+    def run_time_test4_image4_overwrite_misc_attributes_and_mixed_dot_at_run_time(self):
+        image = self.test_image4
+        bdm_emptyvol_dev = '/dev/vdd'
+        bdm_snapshot_dev = '/dev/vdc'
+        bdm_ephemeral_dev = '/dev/vdb'
+        bdm_emptyvol_size = image.block_device_mapping.get(bdm_emptyvol_dev).size + 1
+        bdm_emptyvol_dot =  (not image.block_device_mapping.get(bdm_emptyvol_dev).delete_on_termination)
+        bdm_snapshot_size = image.block_device_mapping.get(bdm_snapshot_dev).size + 1
+        bdm_root_size = image.block_device_mapping.get(image.root_device_name).size + 1
+        bdm_dot_value = (not image.block_device_mapping.get(image.root_device_name).delete_on_termination)
+        bdm = self.add_block_device_types_to_mapping(device_name=image.root_device_name,
+                                                           size=bdm_root_size,
+                                                           delete_on_terminate=bdm_dot_value)
+        self.add_block_device_types_to_mapping(snapshot_id=self.base_test_snapshot.id,
+                                               device_name=bdm_snapshot_dev,
+                                               delete_on_terminate=False,
+                                               size = bdm_snapshot_size,
+                                               block_device_map=bdm)
+        self.add_block_device_types_to_mapping(device_name = bdm_emptyvol_dev,
+                                               size = bdm_emptyvol_size,
+                                               delete_on_terminate=bdm_emptyvol_dot,
+                                               block_device_map=bdm)
+        self.tester.print_block_device_map(bdm)
+        instance = self.tester.run_image(image=image,block_device_map=bdm, keypair=self.keypair, group=self.group)[0]
+        self.current_test_instance = instance
+        self.status('Checking instance for ephemeral disk and size...')
+        guest_ephemeral_dev = instance.check_ephemeral_against_vmtype()
+
+        self.status('Checking instance devices for md5sums which match original volume/snapshots...')
+        guest_root_dev = instance.get_guest_dev_for_block_device_map_device(md5=self.build_image_volume.md5,
+                                                                            md5len=self.build_image_volume.md5len,
+                                                                            map_device=instance.root_device_name)
+        guest_root_size = instance.get_blockdev_size_in_bytes(guest_root_dev) / self.gig
+        if guest_root_size != bdm_root_size:
+            raise Exception('Root volume size on guest:'+ str(guest_root_size)+', != ' + str(bdm_root_size) +
+                            ' the size requested for root in bdm')
+
+        guest_snap_dev = instance.get_guest_dev_for_block_device_map_device(md5=self.base_test_volume.md5,
+                                                                            md5len=self.base_test_volume.md5len,
+                                                                            map_device=instance.root_device_name)
+        guest_snapvol_size = instance.get_blockdev_size_in_bytes(guest_snap_dev) / self.gig
+        if guest_snapvol_size != bdm_snapshot_size:
+            raise Exception('Volume size on guest:'+ str(guest_snapvol_size)+' != ' + str(bdm_snapshot_size) +
+                            ', the size requested for bdm snap:' + str(self.base_test_snapshot.id))
+
+        self.status("Attempting to find guest's device empty volume by process of elimination...")
+        remaining_devs=self.find_remaining_devices(instance,[guest_root_dev, guest_snap_dev, guest_ephemeral_dev])
+        if len(remaining_devs) != 1:
+            raise Exception('Could not find empty vol dev from remaining devs on guest:' + str(",").join(remaining_devs))
+        guest_emptyvol_device = '/dev/' + str(remaining_devs[0]).replace('/dev/','')
+        self.status('Found empty volume on guest device:'+ str(guest_emptyvol_device)+', checking for proper size...')
+        guest_emptyvol_size = instance.get_blockdev_size_in_bytes(guest_emptyvol_device) / self.gig
+        if guest_emptyvol_size != bdm_emptyvol_size:
+            raise Exception('Block device size on guest:' + str(guest_emptyvol_size) +
+                            ", does not match requested size:" + str(bdm_emptyvol_size))
+        self.status('Check block device mapping meta data...')
+        #Temp work around for existing bug where ephemeral is not reported...
+        meta_bdm = instance.block_device_mapping
+        if not meta_bdm.has_key(bdm_ephemeral_dev):
+            self.resulterr('Ephemeral disk not reported in instance block dev mapping: see euca-6048')
+            eph_dev = BlockDeviceType()
+            eph_dev.device_name=bdm_ephemeral_dev
+            eph_dev.ephemeral_name='ephemeral0'
+            meta_bdm[bdm_ephemeral_dev] = eph_dev
+        instance.check_instance_meta_data_for_block_device_mapping(root_dev=image.root_device_name, bdm=meta_bdm)
+
+        self.status('Terminating instance, checking for delete on termination status for ebs block devs...')
+        instance.terminate_and_verify()
+
+
+
 
     def find_remaining_devices(self,instance,known_dev_list):
         self.debug('Looking for remaining devices after known devs:' +str(',').join(known_dev_list))
@@ -484,39 +792,21 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
             for known_dev in known_dev_list:
                 #Remove all disk partitions
                 if dev_string.startswith(known_dev):
-                    print(str(dev)+': Eliminating known dev:' +str(dev_string)+ ' from possible remaining devices')
+                    self.debug(str(dev)+': Eliminating known dev:' +str(dev_string)+ ' from possible remaining devices')
                     if not dev in remove_devs:
                         remove_devs.append(dev)
                     continue
         for dev in remove_devs:
-            print('Removing dev:'+str(dev))
+            self.debug('Removing dev:'+str(dev))
             dev_dir.remove(dev)
         self.debug('Returning list of possible remaining/unknown devices:' + str(',').join(dev_dir))
         return dev_dir
 
 
 
-    def run_time_test1_image1_add_ephemeral_and_snap_mapped_at_run_time_dot_true(self):
-        bdm_snapshot_dev = '/dev/vdc'
-        bdm_ephemeral_dev = '/dev/vdb'
-        image = self.test_image1
-        self.status('Using image:' +str(self.test_image1.id)+ ", ephemeral, and snapshot ebs devices added at run time..")
-        bdm = self.add_block_device_types_to_mapping(device_name=bdm_ephemeral_dev, ephemeral_name='ephemeral0')
-        self.add_block_device_types_to_mapping(snapshot_id=self.base_test_snapshot.id, device_name=bdm_snapshot_dev)
-        instance = self.tester.run_image(image=image,block_device_map=bdm, keypair=self.keypair, group=self.group)[0]
-        self.status('Checking instance for ephemeral disk and size...')
-        instance.check_ephemeral_against_vmtype()
-        #Find block devices on guest by the MD5 sum of the volume(s) they were created from.
-        self.find_volume_on_euinstance(self.build_image_volume, instance)
-        snap_dev = instance.find_blockdev_by_md5(md5=self.base_test_snapshot.eutest_volume_md5,
-                                                 md5len=self.base_test_snapshot.eutest_volume_md5len)
-        #quick test to make sure we can write to the device...
-        snap_vol = self.tester.get_volume(status='in-use', attached_instance=instance.id,attached_dev=bdm_snapshot_dev)
-        snap_vol.md5 = self.base_test_snapshot.md5
-        snap_vol.md5len = self.base_test_snapshot.md5len
-        snap_vol.guestdev = snap_dev
-        instance.vol_write_random_data_get_md5(snap_vol, length=1024, overwrite=True)
-        instance.terminate_and_verify()
+
+
+
 
 
 '''
