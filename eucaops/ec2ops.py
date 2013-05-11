@@ -2665,7 +2665,7 @@ class EC2ops(Eutester):
                     if instance.root_device_type == 'ebs':
                         if not instance.bdm_vol:
                             try:
-                                instance.bdm_vol = self.get_volume(volume_id = instance.block_device_mapping.current_value.volume_id)
+                                instance.bdm_vol = self.get_volume(volume_id = instance.block_device_mapping.get(instance.root_device_name).volume_id)
                                 bdm_vol_id = instance.bdm_vol.id
                                 bdm_vol_status = instance.bdm_vol.status
                             except: pass
