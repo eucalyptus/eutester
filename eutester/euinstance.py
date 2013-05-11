@@ -1485,28 +1485,31 @@ class EuInstance(Instance, TaggedResource):
         meta_dev_names = self.get_metadata('block-device-mapping')
         meta_devices = {}
         root_dev = root_dev or self.root_device_name
-        bdm = bdm or self.block_device_mapping
+        orig_bdm = bdm or self.block_device_mapping
+        bdm = copy.copy(orig_bdm)
+        if root_dev in bdm:
+            bdm.pop(root_dev)
 
         meta_ami = self.get_metadata('block-device-mapping/ami')
-        if meta_ami != root_dev:
+        if not root_dev in meta_ami:
             raise Exception('Meta data "block-device-mapping/ami":' + str(meta_ami) + ' != ' + str(root_dev))
         meta_dev_names.remove('ami')
         meta_emi = self.get_metadata('block-device-mapping/emi')
-        if meta_emi != root_dev:
+        if not root_dev in meta_emi :
             raise Exception('Meta data "block-device-mapping/emi":' + str(meta_emi) + ' != ' + str(root_dev))
         meta_dev_names.remove('emi')
         meta_root = self.get_metadata('block-device-mapping/root')
-        if meta_root != root_dev:
+        if not root_dev in meta_root:
             raise Exception('Meta data "block-device-mapping/root":' + str(meta_root) + ' != ' + str(root_dev))
         meta_dev_names.remove('root')
         if self.root_device_type == 'ebs':
             meta_ebs1 = self.get_metadata('block-device-mapping/ebs1')
-            if meta_ebs1 != root_dev:
+            if not root_dev in meta_ebs1:
                 raise Exception('Meta data "block-device-mapping/ebs1":' + str(meta_ebs1) + ' != ' + str(root_dev))
             meta_dev_names.remove('ebs1')
 
         for device in meta_dev_names:
-            meta_devices[device] =  self.get_metadata('block-device-mapping/' + str(device))
+            meta_devices[device] =  self.get_metadata('block-device-mapping/' + str(device))[0]
 
         for device in bdm:
             found = False
@@ -1528,7 +1531,7 @@ class EuInstance(Instance, TaggedResource):
                 if not found:
                     raise Exception('No meta data found for block dev map device:' + str(device))
         if meta_devices:
-            err_buf = 'Unknown meta data found for block device mapping; '
+            err_buf = 'Unknown meta data found for the following not in:' + str(self.id) + "'s block_device_mapping:"
             for meta_dev in meta_devices:
                 err_buf += "'" + str(meta_dev) + ":" + str(meta_devices.get(meta_dev)) + "', "
             raise Exception(err_buf)
