@@ -1476,6 +1476,67 @@ class EuInstance(Instance, TaggedResource):
         self.attached_vols.append(volume)
         return local_dev
 
+    def check_instance_meta_data_for_block_device_mapping(self, root_dev=None, bdm=None):
+        '''
+        Checks current instances meta data against a provided block device map & root_dev, or
+        against the current values of the instance; self.block_device_mapping & self.root_device_name
+        '''
+
+        meta_dev_names = self.get_metadata('block-device-mapping')
+        meta_devices = {}
+        root_dev = root_dev or self.root_device_name
+        bdm = bdm or self.block_device_mapping
+
+        meta_ami = self.get_metadata('block-device-mapping/ami')
+        if meta_ami != root_dev:
+            raise Exception('Meta data "block-device-mapping/ami":' + str(meta_ami) + ' != ' + str(root_dev))
+        meta_dev_names.remove('ami')
+        meta_emi = self.get_metadata('block-device-mapping/emi')
+        if meta_emi != root_dev:
+            raise Exception('Meta data "block-device-mapping/emi":' + str(meta_emi) + ' != ' + str(root_dev))
+        meta_dev_names.remove('emi')
+        meta_root = self.get_metadata('block-device-mapping/root')
+        if meta_root != root_dev:
+            raise Exception('Meta data "block-device-mapping/root":' + str(meta_root) + ' != ' + str(root_dev))
+        meta_dev_names.remove('root')
+        if self.root_device_type == 'ebs':
+            meta_ebs1 = self.get_metadata('block-device-mapping/ebs1')
+            if meta_ebs1 != root_dev:
+                raise Exception('Meta data "block-device-mapping/ebs1":' + str(meta_ebs1) + ' != ' + str(root_dev))
+            meta_dev_names.remove('ebs1')
+
+        for device in meta_dev_names:
+            meta_devices[device] =  self.get_metadata('block-device-mapping/' + str(device))
+
+        for device in bdm:
+            found = False
+            device_map = bdm[device]
+            if device_map.no_device:
+                continue
+            else:
+                if device_map.ephemeral_name:
+                    dev_name_prefix = 'ephemeral'
+                else:
+                    dev_name_prefix = 'ebs'
+                for meta_dev in meta_devices:
+                    if str(meta_dev).startswith(dev_name_prefix):
+                        if meta_devices.get(meta_dev) == device:
+                            self.debug('Found meta data match for block device:' + str(device) + " at: " + str(meta_dev))
+                            meta_devices.pop(meta_dev)
+                            found = True
+                            break
+                if not found:
+                    raise Exception('No meta data found for block dev map device:' + str(device))
+        if meta_devices:
+            err_buf = 'Unknown meta data found for block device mapping; '
+            for meta_dev in meta_devices:
+                err_buf += "'" + str(meta_dev) + ":" + str(meta_devices.get(meta_dev)) + "', "
+            raise Exception(err_buf)
+
+
+
+
+
 
 
     
