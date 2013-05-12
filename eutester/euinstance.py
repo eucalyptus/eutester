@@ -1222,7 +1222,7 @@ class EuInstance(Instance, TaggedResource):
         self.debug(self.id+" stop_instance_and_verify Success")
         
     
-    def start_instance_and_verify(self, timeout=300, state = 'running', failstate='terminated', connect=True, checkvolstatus=False):
+    def start_instance_and_verify(self, timeout=300, state = 'running', failstates=['terminated'], failfasttime=30, connect=True, checkvolstatus=False):
         '''
         Attempts to start instance and verify state, and reconnects ssh session
         timeout -optional-time to wait on instance to go to state 'state' before failing
@@ -1235,17 +1235,23 @@ class EuInstance(Instance, TaggedResource):
         msg=""
         start = time.time()
         elapsed = 0
+        self.update()
+        #Add fail fast states...
+        if self.state == 'stopped':
+            failstates.extend(['stopped','stopping'])
         self.start()
+
         while (elapsed < timeout):
-            time.sleep(2)
+            elapsed = int(time.time()- start)
             self.update()
+            self.debug(str(self.id)+" wait for start, in state:"+str(self.state)+",time remaining:"+str(elapsed)+"/"+str(timeout) )
             if self.state == state:
                 break
-            if self.state == failstate:
-                raise Exception(str(self.id)+" instance went to state:"+str(self.state)+" while starting")
-            elapsed = int(time.time()- start)
-            if elapsed % 10 == 0 :
-                self.debug(str(self.id)+" wait for start, in state:"+str(self.state)+",time remaining:"+str(elapsed)+"/"+str(timeout) )
+            if elapsed >= failfasttime:
+                for failstate in failstates:
+                    if self.state == failstate:
+                        raise Exception(str(self.id)+" instance went to state:"+str(self.state)+" while starting")
+            time.sleep(10)
         if self.state != state:
             raise Exception(self.id+" not in "+str(state)+" state after elapsed:"+str(elapsed))
         else:
@@ -1253,7 +1259,7 @@ class EuInstance(Instance, TaggedResource):
             if connect:
                 self.connect_to_instance(timeout=timeout)
             if checkvolstatus:
-                badvols= self.get_unsynced_volumes()
+                badvols= self.get_unsynced_volumes(check_md5=True)
                 if badvols != []:
                     for vol in badvols:
                         msg = msg+"\nVolume:"+vol.id+" Local Dev:"+vol.guestdev
@@ -1470,10 +1476,12 @@ class EuInstance(Instance, TaggedResource):
         if not local_dev:
             raise Exception(str(map_device) +'/'+ str(volume_id) + ':Could not find a device matching md5:' +
                             str(md5) + ", len:" + str(md5len))
+        self.debug('Recording volume:' + str(volume.id) + ' md5 info in volume, and adding to attached list')
         volume.guestdev=local_dev
         volume.md5 = md5
         volume.md5len = md5len
-        self.attached_vols.append(volume)
+        if not volume in self.attached_vols:
+            self.attached_vols.append(volume)
         return local_dev
 
     def check_instance_meta_data_for_block_device_mapping(self, root_dev=None, bdm=None):
