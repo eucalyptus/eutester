@@ -405,15 +405,16 @@ class Euproperty_Manager():
                 return property
         raise Exception('Property not found by name:'+str(name))
         
-    def get_all_properties_for_partition(self, partition, list=None):
+    def get_all_properties_for_partition(self, partition, list=None, verbose=False):
         self.debug('Get all properties for partition:'+str(partition))
         props = []
         list = list or self.properties
         for property in list:
             if property.partition == partition:
-                self.debug('property:'+str(property.name)+", prop.partition:"+str(property.partition) +",partition:"+str(partition))
+                if verbose:
+                    self.debug('property:'+str(property.name)+", prop.partition:"+str(property.partition) +",partition:"+str(partition))
                 props.append(property)
-        self.debug('Returning list of len:'+str(len(props))+', props:'+str(props) )
+        self.debug('Returning list of len:'+str(len(props)))
         return props
 
     def get_all_properties_for_service(self,service, list=None):
