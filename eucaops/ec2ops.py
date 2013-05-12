@@ -2410,12 +2410,18 @@ class EC2ops(Eutester):
         waiting = copy.copy(instances)
         elapsed = 0
         good = []
+        failed = []
         start = time.time()
         self.debug('wait_for_instance_block_dev_mapping started...')
         while waiting and (elapsed < timeout):
             elapsed = time.time() - start
             for instance in waiting:
                 instance.update()
+                for failed_state in ['terminated', 'stopped','stopping']:
+                    if instance.state == failed_state:
+                        failed.append(instance)
+                        if instance in waiting:
+                            waiting.remove(instance)
                 if instance.root_device_type == 'ebs':
                     if instance.block_device_mapping and instance.block_device_mapping.current_value:
                         self.debug('Instance block device mapping is populated:'+str(instance.id))
@@ -2430,10 +2436,11 @@ class EC2ops(Eutester):
                     for instance in waiting:
                         self.debug('Waiting for instance block device mapping to be populated:'+str(instance.id))
                 time.sleep(poll_interval)
-        if waiting:
+        failed.extend(waiting)
+        if failed:
             err_buf = 'Instances failed to populate block dev mapping after '+str(elapsed)+'/'+str(timeout)+' seconds: '
-            for instance in waiting:
-                err_buf += str(instance.id)+','
+            for instance in failed:
+                err_buf += str(instance.id)+':'+str(instance.state)+', '
             raise Exception(err_buf)
         self.debug('wait_for_instance_block_dev_mapping started done. elapsed:'+str(elapsed))
     
