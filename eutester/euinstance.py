@@ -58,6 +58,7 @@ import sys
 import os
 import re
 import time
+import copy
 import types
 
 
@@ -158,7 +159,7 @@ class EuInstance(Instance, TaggedResource):
         #newins.set_block_device_prefix()
         if newins.root_device_type == 'ebs':
             try:
-                volume = newins.tester.get_volume(volume_id = newins.block_device_mapping.current_value.volume_id)
+                volume = newins.tester.get_volume(volume_id = newins.block_device_mapping.get(newins.root_device_name).volume_id)
                 newins.bdm_vol = EuVolume.make_euvol_from_vol(volume, tester=newins.tester,cmdstart=newins.cmdstart)
             except:pass
                 
@@ -359,7 +360,10 @@ class EuInstance(Instance, TaggedResource):
             dev = self.get_free_scsi_dev()
         if (self.tester.attach_volume(self, euvolume, dev, pause=10,timeout=timeout)): 
             #update our block device prefix, detect if virtio is now in use 
-            self.set_block_device_prefix()     
+            self.set_block_device_prefix()
+            if euvolume.attach_data.device != dev:
+                raise Exception('Attached device:' + str(euvolume.attach_data.device) +
+                                ", does not equal requested dev:" + str(dev))
             while (elapsed < timeout):
                 self.debug("Checking for volume attachment on guest, elapsed time("+str(elapsed)+")")
                 dev_list_after = self.get_dev_dir()
@@ -369,10 +373,10 @@ class EuInstance(Instance, TaggedResource):
                     devlist = str(diff[0]).split('/')
                     attached_dev = '/dev/'+devlist[len(devlist)-1]
                     euvolume.guestdev = attached_dev.strip()
-                    euvolume.clouddev = dev
+
                     self.debug("Volume:"+str(euvolume.id)+" guest device:"+str(euvolume.guestdev))
                     self.attached_vols.append(euvolume)
-                    self.debug(euvolume.id+" Requested dev:"+str(euvolume.clouddev)+", attached to guest device:"+str(euvolume.guestdev))
+                    self.debug(euvolume.id+" Requested dev:"+str(euvolume.attach_data.device)+", attached to guest device:"+str(euvolume.guestdev))
                     break
                 elapsed = int(time.time() - start)
                 time.sleep(2)
@@ -386,7 +390,7 @@ class EuInstance(Instance, TaggedResource):
         if (attached_dev is None):
             self.debug("List after\n"+" ".join(dev_list_after))
             raise Exception('Volume:'+str(euvolume.id)+' attached, but not found on guest'+str(self.id)+' after '+str(elapsed)+' seconds?')
-        self.debug('Success attaching volume:'+str(euvolume.id)+' to instance:'+self.id+', cloud dev:'+str(euvolume.clouddev)+', attached dev:'+str(attached_dev))
+        self.debug('Success attaching volume:'+str(euvolume.id)+' to instance:'+self.id+', cloud dev:'+str(euvolume.attach_data.device)+', attached dev:'+str(attached_dev))
         return attached_dev
     
     def detach_euvolume(self, euvolume, waitfordev=True, timeout=180):
@@ -471,7 +475,7 @@ class EuInstance(Instance, TaggedResource):
         
     
     
-    def terminate_and_verify(self,verify_vols=True, volto=30, timeout=300):
+    def terminate_and_verify(self,verify_vols=True, volto=180, timeout=300, poll_interval=10):
         '''
         Attempts to terminate the instance and verify delete on terminate state of an ebs root block dev if any. 
         If flagged will attempt to verify the correct
@@ -486,53 +490,66 @@ class EuInstance(Instance, TaggedResource):
         :type timeout: integer
         :param timeout: timeout in seconds when waiting for an instance to go to terminated state. 
         '''
-        bad_vols = []
-        bad_vol_ids = []
-        start = time.time()
+        all_vols = []
+        err_buff = ""
+        elapsed = 0
         if verify_vols:
-            self.debug('Checking euinstance attached volumes states are in sync with clouds...')
+            #Check that local obj's attached volume state matches cloud's, mainly to alert to errors in test script...
+            self.debug('Checking euinstance attached volumes states are in sync with clouds')
             for vol in self.attached_vols:
                 try:
                     self.verify_attached_vol_cloud_status(vol)
-                except Exception, e: 
-                    self.debug('Caught exception verifying attached status for:'+str(vol.id)+", adding to list for post terminate info. Error:"+str(e))
-                    bad_vols.append(vol)
-                    bad_vol_ids.append(vol.id)
-        self.tester.terminate_single_instance(self, timeout=timeout)
-        elapsed = int(time.time()-start)
-        if self.bdm_vol:
-            #check for bfebs backing volume state
-            if self.block_device_mapping.current_value.delete_on_termination:
-                vol_state='deleted'
-            else:
-                vol_state='available'
-            self.bdm_vol.update()
-            while self.bdm_vol.status != vol_state and elapsed < timeout:
-                elapsed = int(time.time()-start)
-                self.debug('Delete on terminate:'+str(self.block_device_mapping.current_value.delete_on_termination)+', expected state:'+str(vol_state)+', '+str(self.bdm_vol.id)+" in state:"+str(self.bdm_vol.status)+", elapsed:"+str(elapsed)+"/"+str(timeout))
-                self.bdm_vol.update()
-                time.sleep(5)
+                except Exception, e:
+                    err_buff += "ERROR: Unsynced volumes found prior to issuing terminate, check test code:"
+                    err_buff += '\n'+str(self.id)+':Caught exception verifying attached status for:'+str(vol.id)+", Error:"+str(e)
         if verify_vols:
-            self.debug('Waiting for attached volumes to go to available...')
-            while self.attached_vols and (elapsed < timeout): 
-                for vol in self.attached_vols:
-                    elapsed = int(time.time()-start)
-                    vol.update()
-                    self.debug(str(self.id)+' terminated, waiting for attached volume:'+str(vol.id)+ ', status:'+str(vol.status))
-                    if vol.status == 'available':
+            all_vols = self.tester.get_volumes(attached_instance=self.id)
+            for device in self.block_device_mapping:
+                dev_map = self.block_device_mapping[device]
+                self.debug(str(self.id) + ", has volume:" + str(dev_map.volume_id) +" mapped at device:" + str(device))
+                for volume in all_vols:
+                    if volume.id == dev_map.volume_id:
+                        volume.delete_on_termination = dev_map.delete_on_termination
+
+        self.tester.terminate_single_instance(self, timeout=timeout)
+        start = time.time()
+        while all_vols and elapsed < volto:
+            elapsed = int(time.time()-start)
+            loop_vols = copy.copy(all_vols)
+            for vol in loop_vols:
+                vol_status = 'available'
+                fail_fast_status = 'deleted'
+                if hasattr(vol, 'delete_on_termination'):
+                    if vol.delete_on_termination:
+                        vol_status='deleted'
+                        fail_fast_status = 'available'
+                    self.debug('volume:' + str(vol.id) + "/" + str(vol.status) +", from BDM, D.O.T.:" +
+                               str(vol.delete_on_termination) + ", waiting on status:" + str(vol_status) + ", elapsed:"
+                               + str(elapsed) + "/" + str(volto) )
+                else:
+                    self.debug('volume:' + str(vol.id) + "/" + str(vol.status) +", was attached, waiting on status:" +
+                               str(vol_status) + ", elapsed:" + str(elapsed) + "/" + str(volto) )
+                vol.expected_status = vol_status
+                vol.update()
+                if vol.status == vol_status:
+                    self.debug(str(self.id)+' terminated, ' + str(vol.id) + "/" + str(vol.status) +
+                               ": volume entered expected state:" + str(vol_status))
+                    all_vols.remove(vol)
+                    if vol in self.attached_vols:
                         self.attached_vols.remove(vol)
-                if self.attached_vols and (elapsed < timeout):
-                        time.sleep(5)
-            
-            if self.attached_vols or bad_vols:
-                attached_vol_error = ""
-                if bad_vols:
-                    bad_vol_error = 'ERROR: Unsynced volumes found prior to issuing terminate, check test code:'+",".join(bad_vol_ids)
-                if self.attached_vols:
-                    attached_vol_error += 'ERROR: Volumes did not become available after instance was terminated:'
-                    for vol in self.attached_vols:
-                        attached_vol_error += str(vol.id)+':'+str(vol.status)+", "                        
-                raise Exception(str(self.id)+", volume errors found during instance terminate:\n"+bad_vol_error+"\n"+attached_vol_error )
+                if vol.status == fail_fast_status and elapsed >= 30:
+                    self.debug('Incorrect status for volume:' + str(vol.id) + ', status:' + str(vol.status))
+                    all_vols.remove(vol)
+                    err_buff += "\n" + str(self.id) + ":" +str(vol.id) + " Volume incorrect status:" + str(vol.status) + \
+                                ", expected status:" + str(vol.expected_status) + ", elapsed:" + str(elapsed)
+            if all_vols:
+                time.sleep(poll_interval)
+        for vol in all_vols:
+            err_buff += "\n" + str(self.id) + ":" +str(vol.id) + " Volume timeout on current status:" + str(vol.status) + \
+                        ", expected status:" + str(vol.expected_status) + ", elapsed:" + str(elapsed)
+
+        if err_buff:
+            raise Exception(str(self.id)+", volume errors found during instance terminate_and_verify:\n"+  str(err_buff))
                 
                 
         
@@ -566,7 +583,7 @@ class EuInstance(Instance, TaggedResource):
                 prefix= prefix+'e'
             dev = "/dev/"+prefix+str(d)
             for avol in self.attached_vols:
-                if avol.clouddev == dev:
+                if avol.attach_data.device == dev:
                     inuse = True
                     in_use_guest += str(avol.id)+", "
                     continue
@@ -1087,7 +1104,31 @@ class EuInstance(Instance, TaggedResource):
                     bad_list.append(vol)
                     pass
         return bad_list
-        
+
+    def find_blockdev_by_md5(self, md5=None, md5len=None, euvolume=None):
+        guestdev = None
+
+        md5 = md5 or euvolume.md5
+        md5len = md5len or euvolume.md5len
+        for vdev in  self.get_dev_dir():
+            vdev = '/dev/'+ str(vdev).replace('/dev/','')
+            self.debug('Checking '+str(vdev)+" for a matching block device")
+            block_md5 = self.get_dev_md5(vdev, md5len )
+            self.debug('comparing local'+str(block_md5)+' vs '+str(md5))
+            if block_md5 == md5:
+                self.debug('Found match at dev:'+str(vdev))
+                if (euvolume):
+                    if (euvolume.guestdev != vdev ):
+                        self.debug("("+str(euvolume.id)+")Found dev match. Guest dev changed! Updating from previous:'"+str(euvolume.guestdev)+"' to:'"+str(vdev)+"'")
+                    else:
+                        self.debug("("+str(euvolume.id)+")Found dev match. Previous dev:'"+str(euvolume.guestdev)+"', Current dev:'"+str(vdev)+"'")
+                    euvolume.guestdev = vdev
+                guestdev = vdev
+                break
+        return guestdev
+
+
+
     def verify_attached_vol_cloud_status(self,euvolume ):
         '''
         Confirm that the cloud is showing the state for this euvolume as attached to this instance
@@ -1141,7 +1182,6 @@ class EuInstance(Instance, TaggedResource):
                         if not detach:
                             evol = EuVolume.make_euvol_from_vol(vol)
                             evol.guestdev = dev
-                            evol.clouddev = dev
                             self.attached_vols.append(evol)
                         else:
                             self.tester.detach_volume(vol,timeout=timeout)
@@ -1176,13 +1216,13 @@ class EuInstance(Instance, TaggedResource):
                 raise Exception(str(self.id)+" instance went to state:"+str(self.state)+" while stopping")
             elapsed = int(time.time()- start)
             if elapsed % 10 == 0 :
-                self.debug(str(self.id)+"wait for stop, in state:"+str(self.state)+",time remaining:"+str(elapsed)+"/"+str(timeout) )
+                self.debug(str(self.id)+" wait for stop, in state:"+str(self.state)+",time remaining:"+str(elapsed)+"/"+str(timeout) )
         if self.state != state:
             raise Exception(self.id+" state: "+str(self.state)+" expected:"+str(state)+", after elapsed:"+str(elapsed))
         self.debug(self.id+" stop_instance_and_verify Success")
         
     
-    def start_instance_and_verify(self, timeout=300, state = 'running', failstate='terminated', connect=True, checkvolstatus=False):
+    def start_instance_and_verify(self, timeout=300, state = 'running', failstates=['terminated'], failfasttime=30, connect=True, checkvolstatus=False):
         '''
         Attempts to start instance and verify state, and reconnects ssh session
         timeout -optional-time to wait on instance to go to state 'state' before failing
@@ -1195,17 +1235,23 @@ class EuInstance(Instance, TaggedResource):
         msg=""
         start = time.time()
         elapsed = 0
+        self.update()
+        #Add fail fast states...
+        if self.state == 'stopped':
+            failstates.extend(['stopped','stopping'])
         self.start()
+
         while (elapsed < timeout):
-            time.sleep(2)
+            elapsed = int(time.time()- start)
             self.update()
+            self.debug(str(self.id)+" wait for start, in state:"+str(self.state)+",time remaining:"+str(elapsed)+"/"+str(timeout) )
             if self.state == state:
                 break
-            if self.state == failstate:
-                raise Exception(str(self.id)+" instance went to state:"+str(self.state)+" while starting")
-            elapsed = int(time.time()- start)
-            if elapsed % 10 == 0 :
-                self.debug(str(self.id)+"wait for start, in state:"+str(self.state)+",time remaining:"+str(elapsed)+"/"+str(timeout) )
+            if elapsed >= failfasttime:
+                for failstate in failstates:
+                    if self.state == failstate:
+                        raise Exception(str(self.id)+" instance went to state:"+str(self.state)+" while starting")
+            time.sleep(10)
         if self.state != state:
             raise Exception(self.id+" not in "+str(state)+" state after elapsed:"+str(elapsed))
         else:
@@ -1213,7 +1259,7 @@ class EuInstance(Instance, TaggedResource):
             if connect:
                 self.connect_to_instance(timeout=timeout)
             if checkvolstatus:
-                badvols= self.get_unsynced_volumes()
+                badvols= self.get_unsynced_volumes(check_md5=True)
                 if badvols != []:
                     for vol in badvols:
                         msg = msg+"\nVolume:"+vol.id+" Local Dev:"+vol.guestdev
@@ -1362,7 +1408,7 @@ class EuInstance(Instance, TaggedResource):
         devs = self.get_dev_dir()
         for prefix in dev_prefixs:
             if str(prefix+ephem_name) in devs:
-                return str(prefix+ephem_name)
+                return str('/dev/'+prefix+ephem_name)
         raise Exception('Could not find ephemeral device?')
 
     def get_blockdev_size_in_bytes(self,devpath):
@@ -1374,7 +1420,7 @@ class EuInstance(Instance, TaggedResource):
         gb = 1073741824
         size = self.vmtype_info.disk
         ephemeral_dev = self.get_ephemeral_dev()
-        block_size = self.get_blockdev_size_in_bytes('/dev/' + ephemeral_dev)
+        block_size = self.get_blockdev_size_in_bytes(ephemeral_dev)
         gbs = block_size / gb
         self.debug('Ephemeral check: ephem_dev:'
                    + str(ephemeral_dev)
@@ -1390,6 +1436,7 @@ class EuInstance(Instance, TaggedResource):
                             + ' != vmtype size:' +str(size) + "gb")
         else:
             self.debug('check_ephemeral_against_vmtype, passed')
+        return ephemeral_dev
 
 
     def get_memtotal_in_mb(self):
@@ -1407,6 +1454,100 @@ class EuInstance(Instance, TaggedResource):
                             + " vs memtotal:" + str(total_ram) + ". Diff is greater than allowed pad:" + str(pad) + "mb")
         else:
             self.debug('check_ram_against_vmtype, passed')
+
+    def get_guest_dev_for_block_device_map_device(self, md5, md5len, map_device):
+        '''
+        Finds a device in the block device mapping and attempts to locate which guest device is the volume is using
+        based upon the provided md5 sum, and length in bytes that were read in to create the checksum. If found the volume
+        is appended to the local list of attached volumes and the md5 checksum and len are set in the volume for later test
+        use.
+        returns the guest device if found.
+        '''
+        self.debug('Attempting to find block device for mapped device name:' + str(map_device) +
+                   ', md5:' + str(md5) +
+                   ', md5len:' + str(md5len))
+        mapped_device = self.block_device_mapping.get(map_device)
+        volume_id = mapped_device.volume_id
+        volume = self.tester.get_volume(volume_id=volume_id)
+        if volume.attach_data.device != map_device:
+            raise Exception('mapped device name:' + str(mapped_device) + ', does not match attached device name:' +
+                            str(volume.attach_data.device ))
+        local_dev = self.find_blockdev_by_md5(md5=md5, md5len=md5len)
+        if not local_dev:
+            raise Exception(str(map_device) +'/'+ str(volume_id) + ':Could not find a device matching md5:' +
+                            str(md5) + ", len:" + str(md5len))
+        self.debug('Recording volume:' + str(volume.id) + ' md5 info in volume, and adding to attached list')
+        volume.guestdev=local_dev
+        volume.md5 = md5
+        volume.md5len = md5len
+        if not volume in self.attached_vols:
+            self.attached_vols.append(volume)
+        return local_dev
+
+    def check_instance_meta_data_for_block_device_mapping(self, root_dev=None, bdm=None):
+        '''
+        Checks current instances meta data against a provided block device map & root_dev, or
+        against the current values of the instance; self.block_device_mapping & self.root_device_name
+        '''
+
+        meta_dev_names = self.get_metadata('block-device-mapping')
+        meta_devices = {}
+        root_dev = root_dev or self.root_device_name
+        orig_bdm = bdm or self.block_device_mapping
+        bdm = copy.copy(orig_bdm)
+        if root_dev in bdm:
+            bdm.pop(root_dev)
+
+        meta_ami = self.get_metadata('block-device-mapping/ami')
+        if not root_dev in meta_ami:
+            raise Exception('Meta data "block-device-mapping/ami":' + str(meta_ami) + ' != ' + str(root_dev))
+        meta_dev_names.remove('ami')
+        meta_emi = self.get_metadata('block-device-mapping/emi')
+        if not root_dev in meta_emi :
+            raise Exception('Meta data "block-device-mapping/emi":' + str(meta_emi) + ' != ' + str(root_dev))
+        meta_dev_names.remove('emi')
+        meta_root = self.get_metadata('block-device-mapping/root')
+        if not root_dev in meta_root:
+            raise Exception('Meta data "block-device-mapping/root":' + str(meta_root) + ' != ' + str(root_dev))
+        meta_dev_names.remove('root')
+        if self.root_device_type == 'ebs':
+            meta_ebs1 = self.get_metadata('block-device-mapping/ebs1')
+            if not root_dev in meta_ebs1:
+                raise Exception('Meta data "block-device-mapping/ebs1":' + str(meta_ebs1) + ' != ' + str(root_dev))
+            meta_dev_names.remove('ebs1')
+
+        for device in meta_dev_names:
+            meta_devices[device] =  self.get_metadata('block-device-mapping/' + str(device))[0]
+
+        for device in bdm:
+            found = False
+            device_map = bdm[device]
+            if device_map.no_device:
+                continue
+            else:
+                if device_map.ephemeral_name:
+                    dev_name_prefix = 'ephemeral'
+                else:
+                    dev_name_prefix = 'ebs'
+                for meta_dev in meta_devices:
+                    if str(meta_dev).startswith(dev_name_prefix):
+                        if meta_devices.get(meta_dev) == device:
+                            self.debug('Found meta data match for block device:' + str(device) + " at: " + str(meta_dev))
+                            meta_devices.pop(meta_dev)
+                            found = True
+                            break
+                if not found:
+                    raise Exception('No meta data found for block dev map device:' + str(device))
+        if meta_devices:
+            err_buf = 'Unknown meta data found for the following not in:' + str(self.id) + "'s block_device_mapping:"
+            for meta_dev in meta_devices:
+                err_buf += "'" + str(meta_dev) + ":" + str(meta_devices.get(meta_dev)) + "', "
+            raise Exception(err_buf)
+
+
+
+
+
 
 
     
