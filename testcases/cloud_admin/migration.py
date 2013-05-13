@@ -88,7 +88,8 @@ class MigrationTest(EutesterTestCase):
         self.tester.wait_for_result(wait_for_new_nc, False, timeout=600, poll_wait=60)
         instance.sys("ls " + volume_device, code=0)
         destination_nc = self.tester.service_manager.get_all_node_controllers(instance_id=instance.id)[0]
-        destination_nc.machine.sys("virsh list | grep " + instance.id, code=0)
+        if destination_nc.machine.distro.name is not "vmware":
+            destination_nc.machine.sys("virsh list | grep " + instance.id, code=0)
 
     def MigrationBasicEBSBacked(self):
         self.image = self.tester.get_emi(root_device_type="ebs")
