@@ -69,6 +69,20 @@ class MigrationTest(EutesterTestCase):
     def clean_method(self):
         self.tester.cleanup_artifacts()
 
+    def migrate_instance(self, source_nc, instance, volume_device=None):
+        def wait_for_new_nc():
+            self.tester.service_manager.populate_nodes()
+            destination_nc = self.tester.service_manager.get_all_node_controllers(instance_id=instance.id)[0]
+            return source_nc.hostname == destination_nc.hostname
+
+        self.tester.wait_for_result(wait_for_new_nc, False, timeout=600, poll_wait=60)
+        if volume_device:
+            instance.sys("ls " + volume_device, code=0)
+
+        destination_nc = self.tester.service_manager.get_all_node_controllers(instance_id=instance.id)[0]
+        if destination_nc.machine.distro.name is not "vmware":
+            destination_nc.machine.sys("virsh list | grep " + instance.id, code=0)
+
     def MigrationBasicInstanceStore(self):
         enabled_clc = self.tester.service_manager.get_enabled_clc().machine
         reservation = self.tester.run_instance(self.image, username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, zone=self.zone)
@@ -81,15 +95,9 @@ class MigrationTest(EutesterTestCase):
         source_nc = self.tester.service_manager.get_all_node_controllers(instance_id=instance.id)[0]
         enabled_clc.sys( "source " + self.tester.credpath + "/eucarc &&" +
                          self.tester.eucapath + "/usr/sbin/euca-migrate-instances -i " + instance.id )
-        def wait_for_new_nc(**kwargs):
-            self.tester.service_manager.populate_nodes()
-            destination_nc = self.tester.service_manager.get_all_node_controllers(instance_id=instance.id)[0]
-            return source_nc.hostname == destination_nc.hostname
-        self.tester.wait_for_result(wait_for_new_nc, False, timeout=600, poll_wait=60)
-        instance.sys("ls " + volume_device, code=0)
-        destination_nc = self.tester.service_manager.get_all_node_controllers(instance_id=instance.id)[0]
-        if destination_nc.machine.distro.name is not "vmware":
-            destination_nc.machine.sys("virsh list | grep " + instance.id, code=0)
+        self.migrate_instance(source_nc, instance, volume_device)
+        ## Ensure we can migrate at least twice.
+        self.migrate_instance(source_nc, instance, volume_device)
 
     def MigrationBasicEBSBacked(self):
         self.image = self.tester.get_emi(root_device_type="ebs")
