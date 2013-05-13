@@ -81,7 +81,7 @@ class MigrationTest(EutesterTestCase):
         source_nc = self.tester.service_manager.get_all_node_controllers(instance_id=instance.id)[0]
         enabled_clc.sys( "source " + self.tester.credpath + "/eucarc &&" +
                          self.tester.eucapath + "/usr/sbin/euca-migrate-instances -i " + instance.id )
-        def wait_for_new_nc():
+        def wait_for_new_nc(**kwargs):
             self.tester.service_manager.populate_nodes()
             destination_nc = self.tester.service_manager.get_all_node_controllers(instance_id=instance.id)[0]
             return source_nc.hostname == destination_nc.hostname
