@@ -326,7 +326,7 @@ class Eutester(object):
             return func(*func_args, **func_kwargs)
         return methdecor
 
-    def wait_for_result(self, callback, result, timeout=60, **callback_kwargs):
+    def wait_for_result(self, callback, result, timeout=60, poll_wait=10, **callback_kwargs):
         """
         Wait for the instance to enter the state
 
@@ -345,7 +345,7 @@ class Eutester(object):
         while( elapsed <  timeout ) and (current_state != result):
             current_state = callback(**callback_kwargs)
             self.debug( "Result of " + str(callback.func_name) + ": " + str(current_state) )
-            self.sleep(10)
+            self.sleep(poll_wait)
             elapsed = int(time.time()- start)
         self.debug( "Result of " + str(callback.func_name) + ": " + str(current_state) )
         if current_state != result:
