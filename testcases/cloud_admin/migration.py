@@ -36,8 +36,11 @@
 import os
 import time
 from eucaops import Eucaops
+from eutester.euinstance import EuInstance
 from eutester.eutestcase import EutesterTestCase
 import random
+from eutester.euvolume import EuVolume
+
 
 class MigrationTest(EutesterTestCase):
     def __init__(self, extra_args= None):
@@ -70,6 +73,10 @@ class MigrationTest(EutesterTestCase):
         enabled_clc = self.tester.service_manager.get_enabled_clc().machine
         reservation = self.tester.run_instance(self.image, username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, zone=self.zone)
         instance = reservation.instances[0]
+        assert isinstance(instance, EuInstance)
+        volume = self.tester.create_volume(zone=self.zone)
+        assert isinstance(volume, EuVolume)
+        volume_device = instance.attach_euvolume(volume)
         self.tester.service_manager.populate_nodes()
         source_nc = self.tester.service_manager.get_all_node_controllers(instance_id=instance.id)[0]
         enabled_clc.sys( "source " + self.tester.credpath + "/eucarc &&" +
@@ -79,6 +86,9 @@ class MigrationTest(EutesterTestCase):
             destination_nc = self.tester.service_manager.get_all_node_controllers(instance_id=instance.id)[0]
             return source_nc.hostname == destination_nc.hostname
         self.tester.wait_for_result(wait_for_new_nc, False, timeout=600, poll_wait=60)
+        instance.sys("ls " + volume_device, code=0)
+        destination_nc = self.tester.service_manager.get_all_node_controllers(instance_id=instance.id)[0]
+        destination_nc.machine.sys("virsh list | grep " + instance.id, code=0)
 
     def MigrationBasicEBSBacked(self):
         self.image = self.tester.get_emi(root_device_type="ebs")
