@@ -173,8 +173,11 @@ class Eunode:
         service_state = None
         if self.machine:
             try:
-                self.sys("service eucalyptus-nc status", code=0)
-                service_state = 'running'
+                if self.machine.distro.name is not "vmware":
+                    self.sys("service eucalyptus-nc status", code=0)
+                    service_state = 'running'
+                else:
+                    service_state = 'running'
             except sshconnection.CommandExitCodeException:
                 service_state = 'not_running'
             except Exception, e:

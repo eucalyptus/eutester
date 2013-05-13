@@ -82,6 +82,8 @@ class MigrationTest(EutesterTestCase):
         destination_nc = self.tester.service_manager.get_all_node_controllers(instance_id=instance.id)[0]
         if destination_nc.machine.distro.name is not "vmware":
             destination_nc.machine.sys("virsh list | grep " + instance.id, code=0)
+        else:
+            destination_nc.machine.sys("esxcli vm process list | grep " + instance.id, code=0)
 
     def MigrationBasicInstanceStore(self):
         enabled_clc = self.tester.service_manager.get_enabled_clc().machine
