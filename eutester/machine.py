@@ -173,7 +173,7 @@ class Machine:
     
     def interrupt_network(self, time = 120, interface = "eth0"):
         try:
-            self.sys("ifdown " + interface + " && sleep " + str(time) + " && ifup eth0",  timeout=3)
+            self.sys("ifdown " + interface + " && sleep " + str(time) + " && ifup " + interface,  timeout=3)
         except Exception,e:
             pass
 

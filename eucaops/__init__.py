@@ -397,12 +397,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
                 machine_dict["arch"] = machine_details[3]
                 machine_dict["source"] = machine_details[4]
                 machine_dict["components"] = map(str.lower, machine_details[5].strip('[]').split())
-               
-                ### We dont want to login to ESX boxes
-                if re.search("vmware", machine_dict["distro"], re.IGNORECASE):
-                    connect=False
-                else:
-                    connect=True
+
                 ### ADD the machine to the array of machine
                 cloud_machine = Machine(   machine_dict["hostname"], 
                                         distro = machine_dict["distro"], 
@@ -410,7 +405,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
                                         arch = machine_dict["arch"], 
                                         source = machine_dict["source"], 
                                         components = machine_dict["components"],
-                                        connect = connect,
+                                        connect = True,
                                         password = self.password,
                                         keypath = self.keypath,
                                         username = username
