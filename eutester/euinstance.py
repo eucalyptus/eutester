@@ -400,7 +400,6 @@ class EuInstance(Instance, TaggedResource):
         waitfordev - boolean to indicate whether or no to poll guest instance for local device to be removed
         optional - timeout - integer seconds to wait before timing out waiting for the volume to detach 
         '''
-
         start = time.time()
         elapsed = 0 
         for vol in self.attached_vols:
@@ -648,15 +647,15 @@ class EuInstance(Instance, TaggedResource):
             ddcmd = 'echo '+str(euvolume.id)+' | dd of='+str(voldev)
             dd_res_for_id = self.dd_monitor(ddcmd=ddcmd, timeout=timeout)
             len_remaining = length - int(dd_res_for_id['dd_bytes'])
+            self.debug('length remaining to write after adding volumeid:' + str(len_remaining))
             if len_remaining <= 0:
                 return dd_res_for_id
             ddbs = 1024
             if len_remaining < ddbs:
                 ddbs = len_remaining
-            if length < mb:
-                return self.dd_monitor(ddif=str(srcdev), ddof=str(voldev), ddbs=ddbs, ddbytes=len_remaining, ddseek=int(dd_res_for_id['dd_bytes']), timeout=timeout)
-            else:
-                return self.dd_monitor(ddif=str(srcdev), ddof=str(voldev), ddbytes=ddbs, ddseek=int(dd_res_for_id['dd_bytes']), timeout=timeout)
+
+            return self.dd_monitor(ddif=str(srcdev), ddof=str(voldev), ddbs=ddbs, ddbytes=len_remaining, ddseek=int(dd_res_for_id['dd_bytes']), timeout=timeout)
+
                 
             
     
@@ -1090,7 +1089,7 @@ class EuInstance(Instance, TaggedResource):
                         except:pass 
                         if found:
                             break
-                        self.debug('Local device for volume not found. Sleeping and checking again...')
+                        self.debug('Local device for volume:' + str(vol.id) + ' not found. Sleeping and checking again...')
                         time.sleep(10)
                         elapsed = int(time.time() - start)
                     if not found:
@@ -1105,7 +1104,7 @@ class EuInstance(Instance, TaggedResource):
                     pass
         return bad_list
 
-    def find_blockdev_by_md5(self, md5=None, md5len=None, euvolume=None):
+    def find_blockdev_by_md5(self, md5=None, md5len=None, euvolume=None, add_to_attached_list=False):
         guestdev = None
 
         md5 = md5 or euvolume.md5
@@ -1114,20 +1113,23 @@ class EuInstance(Instance, TaggedResource):
             vdev = '/dev/'+ str(vdev).replace('/dev/','')
             self.debug('Checking '+str(vdev)+" for a matching block device")
             block_md5 = self.get_dev_md5(vdev, md5len )
-            self.debug('comparing local'+str(block_md5)+' vs '+str(md5))
+            self.debug('comparing dev' + str(vdev) +': '+str(block_md5)+' vs vol:'+str(md5))
             if block_md5 == md5:
                 self.debug('Found match at dev:'+str(vdev))
                 if (euvolume):
-                    if (euvolume.guestdev != vdev ):
+                    if ( euvolume.guestdev != vdev ):
                         self.debug("("+str(euvolume.id)+")Found dev match. Guest dev changed! Updating from previous:'"+str(euvolume.guestdev)+"' to:'"+str(vdev)+"'")
                     else:
                         self.debug("("+str(euvolume.id)+")Found dev match. Previous dev:'"+str(euvolume.guestdev)+"', Current dev:'"+str(vdev)+"'")
                     euvolume.guestdev = vdev
                 guestdev = vdev
                 break
+        if add_to_attached_list:
+            if not euvolume in self.attached_vols:
+                euvolume.md5 = md5
+                euvolume.md5len = md5len
+                self.attached_vols.append(euvolume)
         return guestdev
-
-
 
     def verify_attached_vol_cloud_status(self,euvolume ):
         '''
@@ -1222,7 +1224,7 @@ class EuInstance(Instance, TaggedResource):
         self.debug(self.id+" stop_instance_and_verify Success")
         
     
-    def start_instance_and_verify(self, timeout=300, state = 'running', failstates=['terminated'], failfasttime=30, connect=True, checkvolstatus=False):
+    def start_instance_and_verify(self, timeout=300, state = 'running', failstates=['terminated'], failfasttime=30, connect=True, checkvolstatus=True):
         '''
         Attempts to start instance and verify state, and reconnects ssh session
         timeout -optional-time to wait on instance to go to state 'state' before failing
@@ -1232,6 +1234,9 @@ class EuInstance(Instance, TaggedResource):
         checkvolstatus - optional -boolean to be used to check volume status post start up
         '''
         self.debug(self.id+" Attempting to start instance...")
+        dbg_buf = "\nInstance 'attached_vol' list:\n"
+        for vol in self.attached_vols:
+            dbg_buf += "Volume:" + str(vol.id) + ", md5:" + str(vol.md5) + ", md5len" + str(vol.md5len) + "\n"
         msg=""
         start = time.time()
         elapsed = 0
@@ -1360,9 +1365,6 @@ class EuInstance(Instance, TaggedResource):
         return mount_point
 
 
-
-
-
     def get_volume_mounted_dir(self, volume):
         """
         Attempts to fetch the dir/mount point for a given block-guestdev or a euvolume that contains attached guestdev
@@ -1384,10 +1386,10 @@ class EuInstance(Instance, TaggedResource):
         return mount_dir
 
 
-
     def update_vm_type_info(self):
         self.vmtype_info =  self.tester.get_vm_type_from_zone(self.placement,self.instance_type)
         return self.vmtype_info
+
 
     def get_ephemeral_dev(self):
         """
@@ -1466,6 +1468,10 @@ class EuInstance(Instance, TaggedResource):
         self.debug('Attempting to find block device for mapped device name:' + str(map_device) +
                    ', md5:' + str(md5) +
                    ', md5len:' + str(md5len))
+        dbg_buf = "\nInstance 'attached_vol' list:\n"
+        for vol in self.attached_vols:
+            dbg_buf += "Volume:" + str(vol.id) + ", md5:" + str(vol.md5) + ", md5len" + str(vol.md5len) + "\n"
+        self.debug(dbg_buf)
         mapped_device = self.block_device_mapping.get(map_device)
         volume_id = mapped_device.volume_id
         volume = self.tester.get_volume(volume_id=volume_id)
