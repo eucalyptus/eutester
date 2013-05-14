@@ -203,7 +203,7 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         self.status('Copy the remote bfebs image into a volume and create snapshot from it...')
         self.instance.attach_volume(self.build_image_volume)
         self.instance.sys("curl "+url+" > "+ self.build_image_volume.guestdev+" && sync")
-        self.instance.md5_attached_euvolume(self.build_image_volume,length=1024)
+        self.instance.md5_attached_euvolume(self.build_image_volume)
         self.build_image_snapshot = self.tester.create_snapshots(volume=self.build_image_volume)[0]
         #update test resources with tags...
         self.build_image_snapshot.add_tag(self.build_image_snapshot_tag_name)
@@ -217,7 +217,7 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         if create_test_vol:
             self.status('Attaching test volume, writing random data into it and gathering md5...')
             self.instance.attach_volume(self.base_test_volume)
-            self.instance.vol_write_random_data_get_md5(self.base_test_volume,length=1024, overwrite=True)
+            self.instance.vol_write_random_data_get_md5(self.base_test_volume, overwrite=True)
             self.base_test_snapshot = self.tester.create_snapshots(volume=self.base_test_volume)[0]
             self.base_test_snapshot.add_tag(self.base_test_snapshot_tag_name)
             self.base_test_volume.add_tag('md5', self.base_test_volume.md5)
@@ -300,14 +300,17 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         self.test_image4 = self.get_existing_test_image_by_tag_key(self.test_image4_tag_name)
 
 
-    def find_volume_on_euinstance(self, euvolume, euinstance):
+    def find_volume_on_euinstance(self, euinstance, map_device_name, md5=None, md5len=None, euvolume=None, ):
         '''
         Find block devices on guest by the MD5 sum of the volume(s) they were created from.
         Will attempt to find euvolumes on an instance 'if' the euvolume(s) have md5sums to use for
         comparison on the guest's dev dir.
         '''
+        md5 = md5 or euvolume.md5
+        md5len = md5len or euvolume.md5len
+        return euinstance.get_guest_dev_for_block_device_map_device(md5=md5,md5len=md5len,map_device=map_device_name)
 
-        return euinstance.find_blockdev_by_md5(md5=euvolume.md5, md5len=euvolume.md5len)
+        #return euinstance.find_blockdev_by_md5(md5=euvolume.md5, md5len=euvolume.md5len)
 
 
     def register_n_run_test1_bfebs_image_w_dot_is_true(self):
@@ -332,7 +335,7 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         self.status('Resulting in the instance block device map:')
         self.tester.print_block_device_map(instance.block_device_mapping)
         self.status('Checking instance devices for md5sums which match original volume/snapshots...')
-        self.find_volume_on_euinstance(self.build_image_volume, instance)
+        self.find_volume_on_euinstance(instance, instance.root_device_name, euvolume=self.build_image_volume)
         self.status('Checking instance for to make sure ephemeral is not present...')
         try:
             instance.get_ephemeral_dev()
@@ -370,7 +373,7 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         self.status('Resulting in the instance block device map:')
         self.tester.print_block_device_map(instance.block_device_mapping)
         self.status('Checking instance devices for md5sums which match original volume/snapshots...')
-        self.find_volume_on_euinstance(self.build_image_volume, instance)
+        self.find_volume_on_euinstance(instance, instance.root_device_name, euvolume=self.build_image_volume)
         self.status('Checking instance for to make sure ephemeral is not present...')
         try:
             instance.get_ephemeral_dev()
@@ -457,6 +460,12 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         if vol_size != bdm_emptyvol_size:
             raise Exception('Block device size on guest:' + str(vol_size) +
                             ", does not match requested size:" + str(bdm_emptyvol_size))
+        self.status('Found empty volume device on guest, writing random  data and storing md5 prior to stop/start tests...')
+        empty_vol = self.tester.get_volume(instance.block_device_mapping.get(bdm_emptyvol_dev).volume_id)
+        empty_vol.guestdev = guest_emptyvol_device
+        if not empty_vol in instance.attached_vols:
+            instance.attached_vols.append(empty_vol)
+        instance.vol_write_random_data_get_md5(empty_vol)
         self.status('Check block device mapping meta data...')
         #Temp work around for existing bug where ephemeral is not reported...
         meta_bdm = instance.block_device_mapping
@@ -540,6 +549,13 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         if vol_size != bdm_emptyvol_size:
             raise Exception('Block device size on guest:' + str(vol_size) +
                             ", does not match requested size:" + str(bdm_emptyvol_size))
+        self.status('Found empty volume device on guest, writing random  data and storing md5 prior to stop/start tests...')
+        empty_vol = self.tester.get_volume(instance.block_device_mapping.get(bdm_emptyvol_dev).volume_id)
+        empty_vol.guestdev = guest_emptyvol_device
+        if not empty_vol in instance.attached_vols:
+            instance.attached_vols.append(empty_vol)
+        instance.vol_write_random_data_get_md5(empty_vol)
+
         self.status('Check block device mapping meta data...')
         #Temp work around for existing bug where ephemeral is not reported...
         meta_bdm = instance.block_device_mapping
@@ -711,6 +727,12 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         if vol_size != bdm_emptyvol_size:
             raise Exception('Block device size on guest:' + str(vol_size) +
                             ", does not match requested size:" + str(bdm_emptyvol_size))
+        self.status('Found empty volume device on guest, writing random  data and storing md5 prior to stop/start tests...')
+        empty_vol = self.tester.get_volume(instance.block_device_mapping.get(bdm_emptyvol_dev).volume_id)
+        empty_vol.guestdev = guest_emptyvol_device
+        if not empty_vol in instance.attached_vols:
+            instance.attached_vols.append(empty_vol)
+        instance.vol_write_random_data_get_md5(empty_vol)
         self.status('Check block device mapping meta data...')
         #Temp work around for existing bug where ephemeral is not reported...
         meta_bdm = instance.block_device_mapping
@@ -830,6 +852,12 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         if guest_emptyvol_size != bdm_emptyvol_size:
             raise Exception('Block device size on guest:' + str(guest_emptyvol_size) +
                             ", does not match requested size:" + str(bdm_emptyvol_size))
+        self.status('Found empty volume device on guest, writing random  data and storing md5 prior to stop/start tests...')
+        empty_vol = self.tester.get_volume(instance.block_device_mapping.get(bdm_emptyvol_dev).volume_id)
+        empty_vol.guestdev = guest_emptyvol_device
+        if not empty_vol in instance.attached_vols:
+            instance.attached_vols.append(empty_vol)
+        instance.vol_write_random_data_get_md5(empty_vol)
         self.status('Check block device mapping meta data...')
         #Temp work around for existing bug where ephemeral is not reported...
         meta_bdm = instance.block_device_mapping
