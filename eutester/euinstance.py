@@ -70,8 +70,8 @@ class EuInstance(Instance, TaggedResource):
     keypath = None
     username = None
     password = None
-    rootfs_device = "sda"
-    block_device_prefix = "sd"
+    rootfs_device = "vda"
+    block_device_prefix = "vd"
     virtio_blk = False
     bdm_vol = None
     reservation = None
@@ -469,8 +469,11 @@ class EuInstance(Instance, TaggedResource):
         elif self.found("dmesg | grep xvda", "xvda"):
             self.rootfs_device = "xvda"
             self.virtio_blk = False
-        else:
+        elif self.found("dmesg | grep sda", "sda"):
             self.rootfs_device = "sda"
+            self.virtio_blk = False
+        else:
+            self.rootfs_device = "vda"
             self.virtio_blk = False
         
     
