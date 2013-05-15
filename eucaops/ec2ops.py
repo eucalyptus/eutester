@@ -1854,9 +1854,9 @@ class EC2ops(Eutester):
         """
         if emi is None:
             emi = "mi-"
-        self.debug("Looking for image prefix: " + str(emi) )
         ret_list = []
         images = self.ec2.get_all_images(filters=filters)
+        self.debug("Got " + str(len(images)) + " images matching prefix: " + str(emi) + ", now filtering..." )
         for image in images:
             
             if not re.search(emi, image.id):      
@@ -1877,9 +1877,11 @@ class EC2ops(Eutester):
                 continue
             self.debug("Returning image:"+str(image.id))
             ret_list.append(image)
-            if len(ret_list) >= max_count:
+            if max_count and len(ret_list) >= max_count:
                 return ret_list
-        raise Exception("Unable to find an EMI")
+        if not ret_list:
+            raise Exception("Unable to find an EMI")
+        return ret_list
 
 
     def get_emi(self,
@@ -2440,7 +2442,7 @@ class EC2ops(Eutester):
         if failed:
             err_buf = 'Instances failed to populate block dev mapping after '+str(elapsed)+'/'+str(timeout)+' seconds: '
             for instance in failed:
-                err_buf += str(instance.id)+':'+str(instance.state)+', '
+                err_buf += str(instance.id)+', current state:'+str(instance.state)+', '
             raise Exception(err_buf)
         self.debug('wait_for_instance_block_dev_mapping started done. elapsed:'+str(elapsed))
     
