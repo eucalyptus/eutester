@@ -154,10 +154,6 @@ class File_Util():
                 clean_string += c
         return clean_string
 
-    def update(self):
-        self.lines = self.get_file_lines()
-        self.md5sum = self.get_md5()
-
     def print_file(self, printmethod=None):
         for line in self.lines:
             if printmethod:
@@ -196,6 +192,7 @@ class File_Util():
             retries -= 1
             self.lines = self.get_file_lines()
             if self.lines:
+                self.md5sum = self.get_md5()
                 return
             time.sleep(2)
         print 'No lines gathered in update'

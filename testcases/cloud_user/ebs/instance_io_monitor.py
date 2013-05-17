@@ -121,7 +121,7 @@ class Instance_Io_Monitor(EutesterTestCase):
         self.volumes = None
         self.remote_script_path = None
         self.longest_wait_period = 0
-        self.mpath_monkey = None
+        self.path_controller = None
         self.cycle_paths =self.args.cycle_paths
 
 
@@ -132,10 +132,10 @@ class Instance_Io_Monitor(EutesterTestCase):
         Attempts to clean up resources created during this test...
         '''
         try:
-            if self.mpath_monkey:
+            if self.path_controller:
                 try:
-                    node = self.mpath_monkey.host
-                    self.mpath_monkey.clear_all_eutester_rules(timeout=120)
+                    node = self.path_controller.host
+                    self.path_controller.clear_all_eutester_rules(timeout=120)
                 except Exception, e:
                     self.debug('Error cleaning up iptables rules on NC:' + str(node) +', Err:'+str(e))
             self.tester.cleanup_artifacts()
@@ -191,13 +191,13 @@ class Instance_Io_Monitor(EutesterTestCase):
         return node
 
 
-    def create_mpath_monkey(self,instance=None):
+    def create_path_controller(self,instance=None):
         instance = instance or self.instance
         paths = self.get_nc_paths_for_instance(instance=instance)
         node = self.get_node_instance_is_running_on(instance=instance)
-        mm = Mpath_Monkey(node=node, sp_ip_list=paths)
-        self.mpath_monkey = mm
-        return mm
+        path_controller = Mpath_Monkey(node=node, sp_ip_list=paths)
+        self.path_controller = path_controller
+        return path_controller
 
 
 
@@ -243,7 +243,7 @@ class Instance_Io_Monitor(EutesterTestCase):
         self.attach_test_volume()
         self.mount_volume_and_create_test_file()
         if self.cycle_paths:
-            self.create_mpath_monkey()
+            self.create_path_controller()
         self.sftp_test_io_script_to_instance()
 
 
@@ -277,8 +277,9 @@ class Instance_Io_Monitor(EutesterTestCase):
             tb = self.tester.get_traceback()
             debug_string = str(tb) + '\nError caught by remote_ssh_io_monitor_cb:'+str(e)
             self.debug(debug_string)
-            self.stdscr.addstr(0, 0, debug_string)
-            self.stdscr.refresh()
+            if self.stdscr:
+                self.stdscr.addstr(0, 0, debug_string)
+                self.stdscr.refresh()
             err = str(e)
             raise Exception(str(tb)+ '\nError:' + str(err))
         finally:
@@ -286,14 +287,19 @@ class Instance_Io_Monitor(EutesterTestCase):
                 tb = self.tester.get_traceback()
                 err = "Remote io script ended with invalid status code:" + str(exit_value) + "\n" + str(exit_lines)
             self.stdscr.keypad(0)
-            curses.echo()
-            curses.nocbreak()
-            curses.endwin()
+            self.tear_down_curses()
             time.sleep(1)
             if tb:
                 raise Exception(str(tb)+ '\nError:' + str(err))
 
 
+    def tear_down_curses(self):
+        if self.stdscr:
+            self.stdscr.keypad(0)
+            curses.echo()
+            curses.nocbreak()
+            curses.endwin()
+            self.stdscr = None
 
     @eutester.Eutester.printinfo
     def remote_ssh_io_script_monitor_cb(self,
@@ -317,18 +323,19 @@ class Instance_Io_Monitor(EutesterTestCase):
         waited_str = "INTER_IO_SECONDS_WAITED: "+ str(waited)
         time_remaining = "TIME_REMAINING:"
 
-        if self.mpath_monkey:
-            remaining_iterations += str(self.mpath_monkey.remaining_iterations)
-            if not self.mpath_monkey.remaining_iterations:
-                self.stdscr.addstr(0, 0, 'MPATH MONKEY FINSIHED SUCCESSFULLY')
-                self.stdscr.refresh()
+        if self.path_controller:
+            remaining_iterations += str(self.path_controller.remaining_iterations)
+            if not self.path_controller.remaining_iterations:
+                if self.stdscr:
+                    self.stdscr.addstr(0, 0, 'MPATH MONKEY FINSIHED SUCCESSFULLY')
+                    self.stdscr.refresh()
                 ret.stop = True
-                self.mpath_monkey.timer.cancel()
-            if not self.mpath_monkey.blocked:
-                self.mpath_monkey.block_single_path_cycle()
+                self.path_controller.timer.cancel()
+            if not self.path_controller.blocked:
+                self.path_controller.block_single_path_cycle()
             else:
-                blocked_paths += self.mpath_monkey.get_blocked_string()
-                previous_blocked_path += str(self.mpath_monkey.lastblocked)
+                blocked_paths += self.path_controller.get_blocked_string()
+                previous_blocked_path += str(self.path_controller.lastblocked)
 
         if waited > self.longest_wait_period:
             self.longest_wait_period = waited
@@ -364,21 +371,28 @@ class Instance_Io_Monitor(EutesterTestCase):
                            + "\n-------------------------------------------------\n"
             #print "\r\x1b[K"+str(debug_string),
             #sys.stdout.flush()
-            self.stdscr.addstr(0, 0, debug_string)
-            self.stdscr.refresh()
+            if self.stdscr:
+                self.stdscr.clear()
+                self.stdscr.addstr(0, 0, debug_string)
+                self.stdscr.refresh()
+            if ret.stop:
+                self.tear_down_curses()
+                self.debug(debug_string)
             if return_buf:
                 time.sleep(10)
         except Exception, e:
             tb = self.tester.get_traceback()
             debug_string = str(tb) + '\nError caught by remote_ssh_io_monitor_cb:'+str(e)
             self.debug(debug_string)
-            self.stdscr.addstr(0, 0, debug_string)
-            self.stdscr.refresh()
+            if self.stdscr:
+                self.stdscr.addstr(0, 0, debug_string)
+                self.stdscr.refresh()
+                self.stdscr.endwin()
             ret.stop = True
             ret.nextargs = [ write_value, write_rate,read_rate, last_read, time.time()]
             ret.buf = return_buf
-            if self.mpath_monkey:
-                self.mpath_monkey.timer.cancel()
+            if self.path_controller:
+                self.path_controller.timer.cancel()
             time.sleep(10)
             pass
         finally:
@@ -392,8 +406,8 @@ class Instance_Io_Monitor(EutesterTestCase):
             self.stdscr = curses.initscr()
 
     def check_mpath_iterations(self):
-        if self.mpath_monkey and self.mpath_monkey.remaining_iterations:
-            remaining = self.mpath_monkey.remaining_iterations
+        if self.path_controller and self.path_controller.remaining_iterations:
+            remaining = self.path_controller.remaining_iterations
             raise Exception('Mpath monkey did not complete its iterations. Remaining:'+str(remaining))
 
     def test1_run_instance_monitor_io_and_cycle_all_paths_on_nc(self):
@@ -418,13 +432,13 @@ class Instance_Io_Monitor(EutesterTestCase):
                 self.debug('Test volume:' + str(self.volume.id) + ", not in available state. Creating a new one")
                 self.create_test_volume()
         if self.cycle_paths:
-            self.create_mpath_monkey()
-        self.mpath_monkey.clear_all_eutester_rules(timeout=120)
-        if len(self.mpath_monkey.sp_ip_list) > 1:
-            single_path = self.mpath_monkey.sp_ip_list[0]
+            self.create_path_controller()
+        self.path_controller.clear_all_eutester_rules(timeout=120)
+        if len(self.path_controller.sp_ip_list) > 1:
+            single_path = self.path_controller.sp_ip_list[0]
         else:
             raise Exception('Not enough paths to shut one down for test')
-        self.mpath_monkey.block_path(single_path)
+        self.path_controller.block_path(single_path)
         time.sleep(2)
         self.attach_test_volume()
         self.mount_volume_and_create_test_file()
@@ -440,15 +454,15 @@ class Instance_Io_Monitor(EutesterTestCase):
                 self.debug('Test volume:' + str(self.volume.id) + ", not in available state. Creating a new one")
                 self.create_test_volume()
         if self.cycle_paths:
-            self.create_mpath_monkey()
-        self.mpath_monkey.clear_all_eutester_rules(timeout=120)
+            self.create_path_controller()
+        self.path_controller.clear_all_eutester_rules(timeout=120)
         time.sleep(2)
         self.attach_test_volume()
-        if len(self.mpath_monkey.sp_ip_list) > 1:
-            single_path = self.mpath_monkey.sp_ip_list[0]
+        if len(self.path_controller.sp_ip_list) > 1:
+            single_path = self.path_controller.sp_ip_list[0]
         else:
             raise Exception('Not enough paths to shut one down for test')
-        self.mpath_monkey.block_path(single_path)
+        self.path_controller.block_path(single_path)
         self.mount_volume_and_create_test_file()
         self.run_remote_script_and_monitor(timed_run=10)
         self.instance.detach_euvolume(self.volume)

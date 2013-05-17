@@ -2427,6 +2427,7 @@ class EC2ops(Eutester):
                 if instance.root_device_type == 'ebs':
                     if instance.block_device_mapping and instance.block_device_mapping.current_value:
                         self.debug('Instance block device mapping is populated:'+str(instance.id))
+                        self.update_resources_with_volumes_from_instance_block_device_mapping(instance)
                         good.append(instance)
                 else:
                     good.append(instance)
@@ -2447,7 +2448,20 @@ class EC2ops(Eutester):
             raise Exception(err_buf)
         self.debug('wait_for_instance_block_dev_mapping done. elapsed:'+str(elapsed))
 
-    
+
+    def update_resources_with_volumes_from_instance_block_device_mapping(self, instance):
+        for device in instance.block_device_mapping:
+            if device.volume_id:
+                try:
+                    volume = self.get_volume(volume_id=device.volume_id)
+                except Exception, e:
+                    self.debug('Error trying to retrieve volume:' + str(volume.id) +
+                               ' from instance:' + str(instance.id) + " block dev map")
+                if not volume in self.test_resources['volumes']:
+                    self.test_resources['volumes'].append(volume)
+
+
+
     
     @Eutester.printinfo 
     def monitor_euinstances_to_running(self,instances, poll_interval=10, timeout=480):
