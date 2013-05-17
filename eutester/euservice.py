@@ -357,6 +357,7 @@ class EuserviceManager(object):
         self.eucaprefix = ". " + self.tester.credpath + "/eucarc && " + self.tester.eucapath
         if self.tester.clc is None:
             raise AttributeError("Tester object does not have CLC machine to use for SSH")
+        self.last_updated = None
         self.update()
 
     @eutester.Eutester.printinfo
@@ -934,6 +935,9 @@ class EuserviceManager(object):
 
     def update(self, name=None):
         ### Get all services
+        if self.last_updated:
+            if (time.time() - self.last_updated) < 1:
+                return
         self.reset()
         services = self.get(name)
         self.all_services = services
@@ -975,6 +979,7 @@ class EuserviceManager(object):
         if enabled_clc:
             enabled_clc = enabled_clc[0]
             self.update_node_list(enabled_clc=enabled_clc)
+        self.last_updated=time.time()
     
     def isReachable(self, address):
         return self.tester.ping(address)
