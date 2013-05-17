@@ -233,16 +233,19 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
             raise Exception("Setting property " + property + " failed")
     
    
-    def cleanup_artifacts(self):
+    def cleanup_artifacts(self,instances=True, snapshots=True, volumes=True):
         """
         Description: Attempts to remove artifacts created during and through this eutester's lifespan.
         """
 
         self.debug("Starting cleanup of artifacts")
-        for res in self.test_resources["reservations"]:
-            self.terminate_instances(res)
-        self.clean_up_test_volumes()
-        self.cleanup_test_snapshots()
+        if instances:
+            for res in self.test_resources["reservations"]:
+                self.terminate_instances(res)
+        if volumes:
+            self.clean_up_test_volumes()
+        if snapshots:
+            self.cleanup_test_snapshots()
 
         for key,array in self.test_resources.iteritems():
             for item in array:
