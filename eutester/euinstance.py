@@ -1483,7 +1483,7 @@ class EuInstance(Instance, TaggedResource):
                             str(volume.attach_data.device ))
         local_dev = self.find_blockdev_by_md5(md5=md5, md5len=md5len)
         if not local_dev:
-            raise Exception('dev:'str(map_device) +', vol:'+ str(volume_id) + ' - Could not find a device matching md5:' +
+            raise Exception('dev:'+ str(map_device) +', vol:'+ str(volume_id) + ' - Could not find a device matching md5:' +
                             str(md5) + ", len:" + str(md5len))
         self.debug('Recording volume:' + str(volume.id) + ' md5 info in volume, and adding to attached list')
         if not local_dev:
