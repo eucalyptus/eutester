@@ -2430,6 +2430,7 @@ class EC2ops(Eutester):
                         good.append(instance)
                 else:
                     good.append(instance)
+                    self.print_block_device_map(instance.block_device_mapping)
             for instance in good:
                 if instance in waiting:
                     waiting.remove(instance)
@@ -2444,7 +2445,8 @@ class EC2ops(Eutester):
             for instance in failed:
                 err_buf += str(instance.id)+', current state:'+str(instance.state)+', '
             raise Exception(err_buf)
-        self.debug('wait_for_instance_block_dev_mapping started done. elapsed:'+str(elapsed))
+        self.debug('wait_for_instance_block_dev_mapping done. elapsed:'+str(elapsed))
+
     
     
     @Eutester.printinfo 
