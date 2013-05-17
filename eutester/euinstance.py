@@ -880,7 +880,7 @@ class EuInstance(Instance, TaggedResource):
         '''
         Attempts to copy some amount of data into an attached volume, and return the md5sum of that volume
         A brief check of the first 32 bytes is performed to see if this volume has pre-existing non-zero filled data. 
-        If pre-existing data is found, and the overwrite flag is not set then the write is not performed. 
+        If pre-existing data is found, and the overwrite flag is not set then the write is not performed.
         Returns string with MD5 checksum calculated on 'length' bytes from the head of the device. 
         volume - mandatory - boto volume object of the attached volume 
         srcdev - optional - string, the file to copy into the volume
@@ -1480,9 +1480,11 @@ class EuInstance(Instance, TaggedResource):
                             str(volume.attach_data.device ))
         local_dev = self.find_blockdev_by_md5(md5=md5, md5len=md5len)
         if not local_dev:
-            raise Exception(str(map_device) +'/'+ str(volume_id) + ':Could not find a device matching md5:' +
+            raise Exception('dev:'str(map_device) +', vol:'+ str(volume_id) + ' - Could not find a device matching md5:' +
                             str(md5) + ", len:" + str(md5len))
         self.debug('Recording volume:' + str(volume.id) + ' md5 info in volume, and adding to attached list')
+        if not local_dev:
+            raise Exception('Could not find mapped device:' + str(map_device) + ', using md5:' + str(md5) + ', md5len' + str(md5len))
         volume.guestdev=local_dev
         volume.md5 = md5
         volume.md5len = md5len
