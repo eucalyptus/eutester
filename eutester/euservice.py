@@ -93,6 +93,7 @@ class Eunode:
                  partition,
                  name=None,
                  instance_ids=None,
+                 instances=None,
                  state = None,
                  machine = None,
                  debugmethod = None,
@@ -127,6 +128,7 @@ class Eunode:
                 self.debug("Failed to get machine for this node:" + str(hostname) + ", err:" + str(e))
         #if self.machine:
             #self.hypervisor =
+
 
     def debug(self, msg):
         """
@@ -171,8 +173,11 @@ class Eunode:
         service_state = None
         if self.machine:
             try:
-                self.sys("service eucalyptus-nc status", code=0)
-                service_state = 'running'
+                if self.machine.distro.name is not "vmware":
+                    self.sys("service eucalyptus-nc status", code=0)
+                    service_state = 'running'
+                else:
+                    service_state = 'running'
             except sshconnection.CommandExitCodeException:
                 service_state = 'not_running'
             except Exception, e:
@@ -352,6 +357,7 @@ class EuserviceManager(object):
         self.eucaprefix = ". " + self.tester.credpath + "/eucarc && " + self.tester.eucapath
         if self.tester.clc is None:
             raise AttributeError("Tester object does not have CLC machine to use for SSH")
+        self.last_updated = None
         self.update()
 
     @eutester.Eutester.printinfo
@@ -518,7 +524,10 @@ class EuserviceManager(object):
         clc = enabled_clc or self.get_enabled_clc()
         clc_version = clc.machine.get_eucalyptus_version()
         if self.compare_versions(clc_version,'3.3') >= 0:
-            return self.populate_nodes_3_3(enabled_clc)
+            try:
+                return self.populate_nodes_3_3(enabled_clc)
+            except:
+                return self.populate_nodes_pre_3_3(enabled_clc)
         else:
             return self.populate_nodes_pre_3_3(enabled_clc)
 
@@ -550,7 +559,7 @@ class EuserviceManager(object):
         #to avoid update() loop allow enabled_clc to be provided as arg
         clc = enabled_clc or self.get_enabled_clc()
         nodes_strings = clc.machine.sys(self.eucaprefix + \
-                                        "/usr/sbin/euca_conf --list-nodes 2>1 | grep -v warning")
+                                        "/usr/sbin/euca_conf --list-nodes 2>1 | grep 'NODE\|INSTANCE'")
         for node_string in nodes_strings:
             #handle/skip any blank lines first...
             node_string = node_string.strip()
@@ -560,11 +569,8 @@ class EuserviceManager(object):
             #sort out the node string...
             split_string = node_string.split()
             if split_string[type_loc] == 'INSTANCE':
-                instance_list.append(split_string[instance_id_loc])
-            else:
-                if instance_list and last_node:
-                    last_node.instance_ids = copy.copy(instance_list)
-                    instance_list = []
+                node.instance_ids.append(split_string[instance_id_loc])
+            elif(split_string[type_loc] == 'NODE'):
                 hostname = split_string[hostname_loc]
                 partition_name = split_string[partition_loc]
                 state = split_string[state_loc]
@@ -581,7 +587,6 @@ class EuserviceManager(object):
                               hostname,
                               partition,
                               state = state)
-                last_node = node
                 return_list.append(node)
                 if node in part.ncs:
                     part.ncs[part.ncs.index(node)]=node
@@ -612,10 +617,11 @@ class EuserviceManager(object):
         #to avoid update() loop allow enabled_clc to be provided as arg
         clc = enabled_clc or self.get_enabled_clc()
         nodes_strings = clc.machine.sys(self.eucaprefix + \
-                                        "/usr/sbin/euca_conf --list-nodes 2>1 | grep -v warning | grep '^NODE'")
+                                        "/usr/sbin/euca_conf --list-nodes 2>/dev/null | grep '^NODE'")
 
         for node_string in nodes_strings:
             #handle/skip any blank lines first...
+            self.debug('Handling Node string:' + str(node_string))
             node_string = node_string.strip()
             if not node_string:
                 continue
@@ -858,6 +864,7 @@ class EuserviceManager(object):
             return_list.append(node)
         return return_list
 
+
     def get_all_partitions(self):
         return_list = []
         for key in self.partitions:
@@ -928,6 +935,9 @@ class EuserviceManager(object):
 
     def update(self, name=None):
         ### Get all services
+        if self.last_updated:
+            if (time.time() - self.last_updated) < 1:
+                return
         self.reset()
         services = self.get(name)
         self.all_services = services
@@ -969,6 +979,7 @@ class EuserviceManager(object):
         if enabled_clc:
             enabled_clc = enabled_clc[0]
             self.update_node_list(enabled_clc=enabled_clc)
+        self.last_updated=time.time()
     
     def isReachable(self, address):
         return self.tester.ping(address)

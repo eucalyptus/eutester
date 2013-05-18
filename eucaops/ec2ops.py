@@ -44,6 +44,7 @@ import sys
 from datetime import datetime
 
 from boto.ec2.image import Image
+from boto.ec2.instance import Reservation, Instance
 from boto.ec2.keypair import KeyPair
 from boto.ec2.blockdevicemapping import BlockDeviceMapping, BlockDeviceType
 from boto.ec2.volume import Volume
@@ -53,6 +54,7 @@ from boto.ec2.regioninfo import RegionInfo
 import boto
 
 from eutester import Eutester
+import eutester
 from eutester.euinstance import EuInstance
 from eutester.euvolume import EuVolume
 from eutester.eusnapshot import EuSnapshot
@@ -425,7 +427,9 @@ class EC2ops(Eutester):
         :return:
 
         """
+        old_api_version = self.ec2.APIVersion
         try:
+            self.ec2.APIVersion = "2009-10-31"
             self.debug( "Attempting authorization of " + group_name + " on port " + str(port) + " " + protocol )
             self.ec2.authorize_security_group_deprecated(group_name,ip_protocol=protocol, from_port=port, to_port=port, cidr_ip=cidr_ip)
             return True
@@ -434,6 +438,8 @@ class EC2ops(Eutester):
                 self.debug( 'Security Group: %s already authorized' % group_name )
             else:
                 raise
+        finally:
+            self.ec2.APIVersion = old_api_version
 
 
     def authorize_group(self, group, port=22, protocol="tcp", cidr_ip="0.0.0.0/0"):
@@ -504,9 +510,12 @@ class EC2ops(Eutester):
         :param timeout: How long in seconds to wait for state
         :return: True on success
         """
-        self.debug( "Beginning poll loop for the " + str(len(reservation.instances))   + " found in " + str(reservation) )
         aggregate_result = True
-        for instance in reservation.instances:
+        instance_list = reservation
+        if isinstance(reservation, Reservation):
+            instance_list = reservation.instances
+        self.debug( "Beginning poll loop for the " + str(len(instance_list))   + " instance found in " + str(instance_list) )
+        for instance in instance_list:
             if not self.wait_for_instance(instance, state, timeout=timeout):
                 aggregate_result = False
         return aggregate_result
@@ -898,7 +907,7 @@ class EC2ops(Eutester):
         self.debug("\n"+str(buf)+"\n")
         
 
-    def delete_volume(self, volume, poll_interval=10, timeout=120):
+    def delete_volume(self, volume, poll_interval=10, timeout=180):
         """
         Delete the EBS volume then check that it no longer exists
 
@@ -934,7 +943,7 @@ class EC2ops(Eutester):
             return False
         return True
     
-    def delete_volumes(self, volume_list, poll_interval=10, timeout=120):
+    def delete_volumes(self, volume_list, poll_interval=10, timeout=180):
         """
         Deletes a list of EBS volumes then checks for proper state transition
 
@@ -1496,6 +1505,7 @@ class EC2ops(Eutester):
                       volume_id=None,
                       volume_size=None,
                       volume_md5=None,
+                      filters=None,
                       maxcount=None,
                       owner_id=None):
         """
@@ -1515,7 +1525,7 @@ class EC2ops(Eutester):
         snapshot_list = []
         if snapid:
             snapshot_list.append(snapid)
-        ec2_snaps =  self.ec2.get_all_snapshots(snapshot_ids=snapshot_list, owner=owner_id)
+        ec2_snaps =  self.ec2.get_all_snapshots(snapshot_ids=snapshot_list, filters=filters, owner=owner_id)
         for snap in ec2_snaps:
             if snap not in snapshots:
                 snapshots.append(snap)
@@ -1638,14 +1648,15 @@ class EC2ops(Eutester):
     @Eutester.printinfo
     def register_snapshot(self,
                           snapshot,
-                          root_device_name="/dev/sda1",
+                          root_device_name="/dev/sda",
                           description="bfebs",
                           windows=False,
                           bdmdev=None,
                           name=None,
                           ramdisk=None,
                           kernel=None,
-                          dot=True):
+                          dot=True,
+                          block_device_map=None):
         """Convience function for passing a snapshot instead of its id. See register_snapshot_by_id
         :param snapshot: Snapshot object to use as an image
         :param root_device_name: root device name to use when registering
@@ -1656,8 +1667,18 @@ class EC2ops(Eutester):
         :param ramdisk: Ramdisk ID to use
         :param kernel: Kernel ID to use
         :param dot: Delete on terminate flag
+        :param block_device_map: existing block device map to append snapshot block dev to
         """
-        return self.register_snapshot_by_id( snapshot.id, root_device_name, description, windows, bdmdev, name, ramdisk, kernel, dot)
+        return self.register_snapshot_by_id( snap_id=snapshot.id,
+                                             root_device_name=root_device_name,
+                                             description=description,
+                                             windows=windows,
+                                             bdmdev=bdmdev,
+                                             name=name,
+                                             ramdisk=ramdisk,
+                                             kernel=kernel,
+                                             dot=dot,
+                                             block_device_map=block_device_map)
     
     @Eutester.printinfo
     def register_snapshot_by_id( self,
@@ -1669,7 +1690,9 @@ class EC2ops(Eutester):
                                  name=None,
                                  ramdisk=None,
                                  kernel=None,
-                                 dot=True ):
+                                 size=None,
+                                 dot=True,
+                                 block_device_map=None):
         """
         Register an image snapshot
 
@@ -1682,6 +1705,7 @@ class EC2ops(Eutester):
         :param ramdisk: ramdisk id
         :param kernel: kernel id (note for windows this name should be "windows")
         :param dot: Delete On Terminate boolean
+        :param block_device_map: existing block device map to add the snapshot block dev type to
         :return: emi id of registered image
         """
         if bdmdev is None:
@@ -1691,10 +1715,11 @@ class EC2ops(Eutester):
         if ( windows is True ) and ( kernel is not None):
             kernel="windows"     
             
-        bdmap = BlockDeviceMapping()
+        bdmap = block_device_map or BlockDeviceMapping()
         block_dev_type = BlockDeviceType()
         block_dev_type.snapshot_id = snap_id
         block_dev_type.delete_on_termination = dot
+        block_dev_type.size = size
         bdmap[bdmdev] = block_dev_type
             
         self.debug("Register image with: snap_id:"+str(snap_id)+", root_device_name:"+str(root_device_name)+", desc:"+str(description)+
@@ -1809,6 +1834,7 @@ class EC2ops(Eutester):
                 state="available",
                 arch=None,
                 owner_id=None,
+                filters=None,
                 not_location=None,
                 max_count=None):
         """
@@ -1828,9 +1854,9 @@ class EC2ops(Eutester):
         """
         if emi is None:
             emi = "mi-"
-        self.debug("Looking for image prefix: " + str(emi) )
         ret_list = []
-        images = self.ec2.get_all_images()
+        images = self.ec2.get_all_images(filters=filters)
+        self.debug("Got " + str(len(images)) + " images matching prefix: " + str(emi) + ", now filtering..." )
         for image in images:
             
             if not re.search(emi, image.id):      
@@ -1851,9 +1877,11 @@ class EC2ops(Eutester):
                 continue
             self.debug("Returning image:"+str(image.id))
             ret_list.append(image)
-            if len(ret_list) >= max_count:
+            if max_count and len(ret_list) >= max_count:
                 return ret_list
-        raise Exception("Unable to find an EMI")
+        if not ret_list:
+            raise Exception("Unable to find an EMI")
+        return ret_list
 
 
     def get_emi(self,
@@ -1864,6 +1892,7 @@ class EC2ops(Eutester):
                    state="available",
                    arch=None,
                    owner_id=None,
+                   filters=None,
                    not_location=None,
                    ):
         """
@@ -1887,6 +1916,7 @@ class EC2ops(Eutester):
                                state=state,
                                arch=arch,
                                owner_id=owner_id,
+                               filters=filters,
                                not_location=not_location,
                                max_count=1)[0]
 
@@ -2064,7 +2094,8 @@ class EC2ops(Eutester):
                     attached_instance=None, 
                     attached_dev=None, 
                     snapid=None, 
-                    zone=None, 
+                    zone=None,
+                    filters=None,
                     minsize=1, 
                     maxsize=None,
                     md5=None, 
@@ -2087,7 +2118,7 @@ class EC2ops(Eutester):
         retlist = []
         if (attached_instance is not None) or (attached_dev is not None):
             status='in-use'
-        volumes = self.ec2.get_all_volumes()             
+        volumes = self.ec2.get_all_volumes(filters=filters)
         for volume in volumes:
             if not hasattr(volume,'md5'):
                 volume = EuVolume.make_euvol_from_vol(volume, tester=self)
@@ -2166,6 +2197,7 @@ class EC2ops(Eutester):
                      username="root",
                      password=None,
                      is_reachable=True,
+                     monitoring_enabled=False,
                      timeout=480):
         """
         Run instance/s and wait for them to go to the running state
@@ -2204,12 +2236,17 @@ class EC2ops(Eutester):
         if keypair:
             if isinstance(keypair, KeyPair):
                 keypair = keypair.name
-        
+
+        if monitoring_enabled :
+            enabled=True
+        else:
+            enabled=False
         start = time.time()
             
         self.debug( "Attempting to run "+ str(image.root_device_type)  +" image " + str(image) + " in group " + str(group))
         reservation = image.run(key_name=keypair,security_groups=[group],instance_type=type, placement=zone,
-                                min_count=min, max_count=max, user_data=user_data, addressing_type=addressing_type)
+                                min_count=min, max_count=max, user_data=user_data, addressing_type=addressing_type,
+                                monitoring_enabled=enabled)
         self.test_resources["reservations"].append(reservation)
         
         if (len(reservation.instances) < min) or (len(reservation.instances) > max):
@@ -2255,7 +2292,7 @@ class EC2ops(Eutester):
                 #                str(instance) + " did not receive a valid IP")
 
             if is_reachable:
-                self.ping(instance.public_dns_name, 20)
+                self.ping(instance.ip_address, 20)
                 
         #calculate remaining time to wait for establishing an ssh session/euinstance     
         timeout -= int(time.time() - start)
@@ -2275,7 +2312,8 @@ class EC2ops(Eutester):
                   type=None, 
                   zone=None, 
                   min=1, 
-                  max=1, 
+                  max=1,
+                  block_device_map=None,
                   user_data=None,
                   private_addressing=False, 
                   username="root", 
@@ -2328,7 +2366,8 @@ class EC2ops(Eutester):
             #self.debug( "Attempting to run "+ str(image.root_device_type)  +" image " + str(image) + " in group " + str(group))
             cmdstart=time.time()
             reservation = image.run(key_name=keypair,security_groups=[group],instance_type=type, placement=zone,
-                                    min_count=min, max_count=max, user_data=user_data, addressing_type=addressing_type)
+                                    min_count=min, max_count=max, user_data=user_data, addressing_type=addressing_type,
+                                    block_device_map=block_device_map)
             self.test_resources["reservations"].append(reservation)
             
             if (len(reservation.instances) < min) or (len(reservation.instances) > max):
@@ -2373,18 +2412,25 @@ class EC2ops(Eutester):
         waiting = copy.copy(instances)
         elapsed = 0
         good = []
+        failed = []
         start = time.time()
         self.debug('wait_for_instance_block_dev_mapping started...')
         while waiting and (elapsed < timeout):
             elapsed = time.time() - start
             for instance in waiting:
                 instance.update()
+                for failed_state in ['terminated', 'stopped','stopping']:
+                    if instance.state == failed_state:
+                        failed.append(instance)
+                        if instance in waiting:
+                            waiting.remove(instance)
                 if instance.root_device_type == 'ebs':
                     if instance.block_device_mapping and instance.block_device_mapping.current_value:
                         self.debug('Instance block device mapping is populated:'+str(instance.id))
                         good.append(instance)
                 else:
                     good.append(instance)
+                    self.print_block_device_map(instance.block_device_mapping)
             for instance in good:
                 if instance in waiting:
                     waiting.remove(instance)
@@ -2393,12 +2439,14 @@ class EC2ops(Eutester):
                     for instance in waiting:
                         self.debug('Waiting for instance block device mapping to be populated:'+str(instance.id))
                 time.sleep(poll_interval)
-        if waiting:
+        failed.extend(waiting)
+        if failed:
             err_buf = 'Instances failed to populate block dev mapping after '+str(elapsed)+'/'+str(timeout)+' seconds: '
-            for instance in waiting:
-                err_buf += str(instance.id)+','
+            for instance in failed:
+                err_buf += str(instance.id)+', current state:'+str(instance.state)+', '
             raise Exception(err_buf)
-        self.debug('wait_for_instance_block_dev_mapping started done. elapsed:'+str(elapsed))
+        self.debug('wait_for_instance_block_dev_mapping done. elapsed:'+str(elapsed))
+
     
     
     @Eutester.printinfo 
@@ -2628,7 +2676,7 @@ class EC2ops(Eutester):
                     if instance.root_device_type == 'ebs':
                         if not instance.bdm_vol:
                             try:
-                                instance.bdm_vol = self.get_volume(volume_id = instance.block_device_mapping.current_value.volume_id)
+                                instance.bdm_vol = self.get_volume(volume_id = instance.block_device_mapping.get(instance.root_device_name).volume_id)
                                 bdm_vol_id = instance.bdm_vol.id
                                 bdm_vol_status = instance.bdm_vol.status
                             except: pass
@@ -2842,7 +2890,26 @@ class EC2ops(Eutester):
                 euinstance_list.append(instance)
         reservation.instances = euinstance_list
         return reservation
-   
+
+    def convert_instance_to_euisntance(self, instance, keypair=None, username="root", password=None, timeout=120):
+        return EuInstance.make_euinstance_from_instance(instance, self, keypair=keypair, username = username, password=password, timeout=timeout )
+
+    def get_console_output(self, instance):
+        """
+        Retrieve console output from an instance
+
+        :param instance:  Instance ID or Instance object
+        :return: string
+        :raise: Exception on failure to get console output
+        """
+        self.debug("Attempting to get console output from: " + str(instance))
+        if isinstance(instance, Instance):
+            instance = instance.id
+        output = self.ec2.get_console_output(instance_id=instance)
+        self.debug(output)
+        return output
+
+
     def get_keypair(self, name):
         """
         Retrieve a boto.ec2.keypair object by its name
@@ -3006,9 +3073,12 @@ class EC2ops(Eutester):
                     aggregate_result = False
         ### Otherwise just kill this reservation
         else:
-            for instance in reservation.instances:
-                    self.debug( "Sending terminate for " + str(instance) )
-                    instance.terminate()
+            instance_list = reservation
+            if isinstance(reservation, Reservation):
+                instance_list = reservation.instances
+            for instance in instance_list:
+                self.debug( "Sending terminate for " + str(instance) )
+                instance.terminate()
             if self.wait_for_reservation(reservation, state="terminated", timeout=timeout) is False:
                 aggregate_result = False
         return aggregate_result
@@ -3020,21 +3090,27 @@ class EC2ops(Eutester):
         :param reservation: boto.ec2.reservation object
         :raise: Exception when instance does not reach stopped state
         """
-        for instance in reservation.instances:
+        instance_list = reservation
+        if isinstance(reservation, Reservation):
+            instance_list = reservation.instances
+        for instance in instance_list:
             self.debug( "Sending stop for " + str(instance) )
             instance.stop()
         if self.wait_for_reservation(reservation, state="stopped", timeout=timeout) is False:
             return False
         return True
     
-    def start_instances(self,reservation, timeout=480):
+    def start_instances(self, reservation, timeout=480):
         """
         Start all instances in a reservation
 
-        :param reservation: boto.ec2.reservation object
+        :param reservation: boto.ec2.reservation object or list of instances
         :raise: Exception when instance does not reach running state
         """
-        for instance in reservation.instances:
+        instance_list = reservation
+        if isinstance(reservation, Reservation):
+            instance_list = reservation.instances
+        for instance in instance_list:
             self.debug( "Sending start for " + str(instance) )
             instance.start()
         if self.wait_for_reservation(reservation, state="running", timeout=timeout) is False:
@@ -3248,6 +3324,29 @@ class EC2ops(Eutester):
         return image_obj
 
 
+    def create_web_servers(self, keypair, group, zone, port=80, count=2, image=None, filename="test-file"):
+        if not image:
+            image = self.get_emi()
+        reservation = self.run_instance(image, keypair=keypair, group=group, zone=zone, min=count, max=count)
+        self.authorize_group(group=group,port=port)
+
+        ### TODO edit this so that the proper port is open on the apache instance
+        for instance in reservation.instances:
+            assert isinstance(instance, EuInstance)
+            try:
+                instance.sys("which apt-get",code=0)
+                ## Debian based Linux
+                instance.sys("apt-get install -y apache2")
+                instance.sys("echo \"" + instance.id +"\" > /var/www/" + filename)
+            except eutester.sshconnection.CommandExitCodeException, e:
+                ### Enterprise Linux
+                instance.sys("yum install -y httpd")
+                instance.sys("service httpd start")
+                instance.sys("chkconfig httpd on")
+                instance.sys("echo \"" + instance.id +"\" > /var/www/html/" + filename)
+        return (reservation, filename)
+
+
     def generate_default_s3_upload_policy(self, bucket, prefix, expiration=24, acl='ec2-bundle-read'):
         """
         Generates s3 upload policy for bundle instance operation
@@ -3298,6 +3397,60 @@ class EC2ops(Eutester):
                 vm_type = type
                 break
         return vm_type
+
+    def print_block_device_map(self,block_device_map, printmethod=None ):
+        printmethod = printmethod or self.debug
+        buf = '\n'
+        device_w = 16
+        snap_w = 15
+        volume_w = 15
+        dot_w = 7
+        size_w = 6
+        status_w = 7
+        ephemeral_name_w = 12
+        attach_time_w = 12
+        no_device_w = 7
+        line = ''
+        titles = str('DEVICE').ljust(device_w) + "|" + \
+                 str('VOLUME_ID').center(volume_w) + "|" + \
+                 str('SNAP_ID').center(snap_w) + "|" + \
+                 str('D.O.T.').center(dot_w) + "|" + \
+                 str('SIZE').center(size_w) + "|" + \
+                 str('EPHEMERAL').center(ephemeral_name_w) + "|" + \
+                 str('NO DEV').center(no_device_w) + "|" + \
+                 str('ATTACH TM').center(attach_time_w) + "|" + \
+                 str('STATUS').center(status_w) + "\n"
+
+        for x in titles:
+            if x == '|':
+                line += '|'
+            else:
+                line += "-"
+        line = line+"\n"
+        header = str('BLOCK DEVICE MAP').center(len(line)) + "\n"
+        buf += line + header + line + titles + line
+        for device in block_device_map:
+            bdm = block_device_map[device]
+            buf += str(device).center(device_w) + "|" + \
+                   str(bdm.volume_id).center(volume_w) + "|" + \
+                   str(bdm.snapshot_id).center(snap_w) + "|" + \
+                   str(bdm.delete_on_termination).center(dot_w) + "|" + \
+                   str(bdm.size).center(size_w) + "|" + \
+                   str(bdm.ephemeral_name).center(ephemeral_name_w) + "|" + \
+                   str(bdm.no_device).center(no_device_w) + "|" + \
+                   str(bdm.attach_time).center(attach_time_w) + "|" + \
+                   str(bdm.status).center(status_w) + "\n"
+        buf += line
+        printmethod(buf)
+
+
+    def monitor_instances(self, instance_ids):
+        self.debug('Enabling monitoring for instance(s) ' + str(instance_ids))
+        self.ec2.monitor_instances(instance_ids)
+
+    def unmonitor_instances(self, instance_ids):
+        self.debug('Disabling monitoring for instance(s) ' + str(instance_ids))
+        self.ec2.unmonitor_instances(instance_ids)
 
 class VolumeStateException(Exception):
     def __init__(self, value):

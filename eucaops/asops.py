@@ -39,6 +39,7 @@ from boto.ec2.autoscale import Tag
 from boto.ec2.autoscale import LaunchConfiguration
 from boto.ec2.autoscale import AutoScalingGroup
 from boto.ec2.regioninfo import RegionInfo
+import time
 
 from eutester import Eutester
 
@@ -90,6 +91,7 @@ class ASops(Eutester):
         self.test_resources = {}
         self.setup_as_resource_trackers()
 
+    @Eutester.printinfo
     def setup_as_connection(self, endpoint=None, aws_access_key_id=None, aws_secret_access_key=None, is_secure=True,
                             host=None, region=None, path="/", port=443, boto_debug=0):
         """
@@ -243,6 +245,7 @@ class ASops(Eutester):
     def delete_as_group(self, names=None, force=None):
         self.debug("Deleting Auto Scaling Group: " + names)
         self.debug("Forcing: " + str(force))
+        # self.autoscale.set_desired_capacity(group_name=names, desired_capacity=0)
         self.autoscale.delete_auto_scaling_group(name=names, force_delete=force)
         if len(self.describe_as_group([names])) != 0:
             raise Exception('Auto Scaling Group not deleted')
@@ -315,7 +318,6 @@ class ASops(Eutester):
         as_url = self.parse_eucarc("AWS_AUTO_SCALING_URL")
         return as_url.split("/")[2].split(":")[0]
 
-    # TODO write wait/poll op for auto scaling groups
     def get_last_instance_id(self):
         reservations = self.ec2.get_all_instances()
         instances = [i for r in reservations for i in r.instances]

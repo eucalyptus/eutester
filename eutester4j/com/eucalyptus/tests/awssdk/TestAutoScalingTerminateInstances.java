@@ -95,9 +95,11 @@ public class TestAutoScalingTerminateInstances {
 
 			// Terminate instance with capacity decrement
 			final String instanceToTerminate = instanceIds.get(1);
-			as.terminateInstanceInAutoScalingGroup(new TerminateInstanceInAutoScalingGroupRequest()
-					.withInstanceId(instanceToTerminate)
-					.withShouldDecrementDesiredCapacity(true));
+//            final String instanceToTerminate = String.valueOf(getLastlaunchedInstance().get(0));
+            print("Terminating: " + instanceToTerminate);
+            as.terminateInstanceInAutoScalingGroup(new TerminateInstanceInAutoScalingGroupRequest()
+                    .withInstanceId(instanceToTerminate)
+                    .withShouldDecrementDesiredCapacity(true));
 			print("Waiting for instance to terminate");
 			List<String> remainingInstances = (List<String>) waitForInstances(timeout, 1, asGroupName, true);
 			assertThat(!remainingInstances.contains(instanceToTerminate),
@@ -106,9 +108,12 @@ public class TestAutoScalingTerminateInstances {
 					"Expected instance to remain: " + instanceIds.get(0));
 
 			// Terminate instance without capacity decrement, ensure replaced
+            print("Terminating without capacity decrement");
+
 			as.terminateInstanceInAutoScalingGroup(new TerminateInstanceInAutoScalingGroupRequest()
 					.withInstanceId(remainingInstances.get(0))
 					.withShouldDecrementDesiredCapacity(false));
+            print("Now terminating instance: " + remainingInstances.get(0));
 			print("Waiting for instance to be replaced");
 			Thread.sleep(10000); // We sleep to ensure the first instance has a
 									// chance to start terminating ...
@@ -121,8 +126,7 @@ public class TestAutoScalingTerminateInstances {
 			print("Deleting group without force, error expected");
 			try {
 				as.deleteAutoScalingGroup(new DeleteAutoScalingGroupRequest()
-						.withAutoScalingGroupName(asGroupName).withForceDelete(
-								false));
+						.withAutoScalingGroupName(asGroupName).withForceDelete(false));
 				assertThat(false, "Expected resource in use error");
 			} catch (final ResourceInUseException e) {
 				// expected

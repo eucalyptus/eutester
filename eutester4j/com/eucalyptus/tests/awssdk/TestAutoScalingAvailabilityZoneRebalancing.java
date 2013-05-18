@@ -38,14 +38,18 @@ import static com.eucalyptus.tests.awssdk.Eutester4j.*;
  */
 public class TestAutoScalingAvailabilityZoneRebalancing {
     @Test
-    public void test() throws Exception {
+    public void AutoScalingAvailabilityZoneRebalancingTest() throws Exception {
         testInfo(this.getClass().getSimpleName());
         getCloudInfo();
 
         // Find an AZ to use
         final DescribeAvailabilityZonesResult azResult = ec2.describeAvailabilityZones();
 
-        assertThat(azResult.getAvailabilityZones().size() > 1, "Multiple availability zones required");
+        // If only 1 AZ then do not run test but pass w/ a message
+        if (azResult.getAvailabilityZones().size() < 2) {
+            print("Test Skipped: Multiple Availability Zones Required");
+            return;
+        }
 
         final String availabilityZone1 = azResult.getAvailabilityZones().get(0).getZoneName();
         final String availabilityZone2 = azResult.getAvailabilityZones().get(1).getZoneName();

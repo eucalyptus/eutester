@@ -34,6 +34,7 @@ import threading
 import time
 import eulogger
 from eutester import Eutester
+from eutester.euconfig import EuConfig
 import sshconnection
 import re
 import os
@@ -129,6 +130,9 @@ class Machine:
                                                     debugmethod=self.debugmethod,
                                                     verbose=True)
             self.sftp = self.ssh.connection.open_sftp()
+        # If we were given a conf file, and have an ssh/sftp session, attempt to populate eucalyptus_conf into
+        # a euconfig object for this machine...
+        self.get_eucalyptus_conf()
             
     def convert_to_distro(self, distro_name, distro_release):
         distro_name = distro_name.lower()
@@ -169,7 +173,7 @@ class Machine:
     
     def interrupt_network(self, time = 120, interface = "eth0"):
         try:
-            self.sys("ifdown " + interface + " && sleep " + str(time) + " && ifup eth0",  timeout=3)
+            self.sys("ifdown " + interface + " && sleep " + str(time) + " && ifup " + interface,  timeout=3)
         except Exception,e:
             pass
 
@@ -375,8 +379,17 @@ class Machine:
             print Eutester.get_traceback()
         return int(elapsed)
 
-    def get_eucalyptus_version(self,versionpath='/etc/eucalyptus/eucalyptus-version'):
-        return self.sys('cat ' + versionpath, code=0)[0]
+    def get_eucalyptus_version(self,versionpath="/etc/eucalyptus/eucalyptus-version"):
+        """
+
+        :param versionpath: path to version file
+        :return: eucalyptus version string
+        """
+        try:
+            return self.sys('cat ' + versionpath, code=0)[0]
+        except Exception, e:
+            return self.sys('cat /opt/eucalyptus' + versionpath, code=0)[0]
+
 
 
     def is_file_present(self, filepath):
@@ -619,8 +632,39 @@ class Machine:
         """Save log buffers to a file"""
         for log_file in self.log_buffers.keys():
             self.save_log(log_file,path)
-    
-    
+
+    def get_eucalyptus_conf(self,eof=False,verbose=False):
+        out = None
+        config = None
+        use_path = None
+        paths = [ "/" , "/opt/eucalyptus" ]
+        for path in paths:
+            try:
+                self.sys('ls '+ str(path) + '/etc/eucalyptus/eucalyptus.conf', code=0, verbose=verbose)
+                use_path = path + '/etc/eucalyptus/eucalyptus.conf'
+                break
+            except:
+                pass
+        if not use_path:
+            out = 'eucalyptus.conf not found on this system'
+            if eof:
+                raise Exception(eof)
+            else:
+                self.debug(out)
+        else:
+            try:
+                config = EuConfig(filename=use_path, ssh=self.ssh, default_section_name='eucalyptus_conf')
+                self.config = config
+                if hasattr(config, 'eucalyptus_conf'):
+                    self.eucalyptus_conf = config.eucalyptus_conf
+            except Exception, e:
+                out = 'Error while trying to create euconfig from eucalyptus_conf:' + str(e)
+                if eof:
+                    raise Exception(out)
+                else:
+                    self.debug(out)
+        return config
+
             
         
     

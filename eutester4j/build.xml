@@ -14,6 +14,7 @@
     <property name="log4j-jar" value="${deps.dir}/log4j-${log4j.version}.jar"/>
     <property name="aws.dir" value="${deps.dir}/aws-java-sdk"/>
     <property name="eucarc" value="eucarc"/>
+    <property name="tests" value=""/>
 
     <!-- download and ready testng and AWS JAVA SDK -->
     <target name="download-deps">
@@ -64,6 +65,12 @@
     <!-- delete build and resutls directories -->
     <target name="clean">
         <delete dir="${build.dir}"/>
+        <delete dir="${deps.dir}"/>
+    </target>
+
+    <!-- delete build, results and dependencies directories -->
+    <target name="clean-all">
+        <delete dir="${build.dir}"/>
         <delete dir="${testng.output.dir}"/>
         <delete dir="${deps.dir}"/>
     </target>
@@ -85,7 +92,7 @@
         </taskdef>
 
         <mkdir dir="${testng.output.dir}"/>
-        <testng outputdir="${testng.output.dir}" classpathref="classpath">
+        <testng outputdir="${testng.output.dir}" classpathref="classpath" testnames="${tests}" haltonfailure="true">
             <xmlfileset dir="." includes="testng.xml"/>
             <jvmarg value="-Deucarc=${eucarc}" />
         </testng>
@@ -94,4 +101,6 @@
     <!-- clean, build and run tests -->
     <target name="clean-build" depends="clean, runTestNG"/>
 
+    <!-- clean all, build and run tests -->
+    <target name="clean-all-build" depends="clean-all, runTestNG"/>
 </project>

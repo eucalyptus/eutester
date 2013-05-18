@@ -108,7 +108,7 @@ class SshCbReturn():
         :param settimer: if cb settimer is > 0, timer timeout will be adjusted for this time
         :param statuscode: if cb statuscode is != -1 cmd status will return with this value
         :param nextargs: if cb nextargs is set, the next time cb is called these args will be passed instead
-        :param buf: if cb buf is not None, the cmd['output'] buffer will be appended with this buf
+        :param buf: if cb buf is not None, the cmd['output'] buffer will be appended with this buf instead of std-out/err
         """
         self.stop = stop
         self.statuscode = statuscode
@@ -175,6 +175,7 @@ class SshConnection():
         self.retry = retry
         self.debugmethod = debugmethod
         self.verbose = verbose
+        self.sftp = None
         self.key_files = key_files or []
         if not isinstance(self.key_files, types.ListType):
             self.key_files = str(self.key_files).split(',')
@@ -219,6 +220,7 @@ class SshConnection():
                                                       verbose=self.debug_connect)
         else:
             raise Exception("Need either a keypath or username+password to create ssh connection")
+
 
     def get_proxy_transport(self,
                             proxy_host=None,
@@ -398,6 +400,8 @@ class SshConnection():
                                 cbreturn = cb(new, *cbargs)
                                 #Let the callback control whether or not to continue
                                 if cbreturn.stop:
+                                    if cbreturn.buf:
+                                        output += cbreturn.buf
                                     cbfired = True
                                     #Let the callback dictate the return code, otherwise -1 for connection err may occur
                                     if cbreturn.statuscode != -1:
@@ -661,6 +665,16 @@ class SshConnection():
             show += password[len(password)-1]
         return show
 
+
+    def open_sftp(self, transport=None):
+        transport = transport or self.connection._transport
+        self.sftp = paramiko.SFTPClient.from_transport(transport)
+
+    def close_sftp(self):
+        self.sftp.close()
+
+
+
     def sftp_put(self,localfilepath,remotefilepath):
         """
         sftp transfer file from localfilepath to remote system at remotefilepath
@@ -670,9 +684,9 @@ class SshConnection():
         if not self.connection._transport:
             self.refresh_connection()
         transport = self.connection._transport
-        sftp = paramiko.SFTPClient.from_transport(transport)
-        sftp.put(remotepath=remotefilepath, localpath=localfilepath)
-        sftp.close()
+        self.open_sftp()
+        self.sftp.put(remotepath=remotefilepath, localpath=localfilepath)
+        self.close_sftp()
 
     def sftp_get(self, localfilepath, remotefilepath):
         """
@@ -683,9 +697,9 @@ class SshConnection():
         if not self.connection._transport:
             self.refresh_connection()
         transport = self.connection._transport
-        sftp = paramiko.SFTPClient.from_transport(transport)
-        sftp.get(remotepath=remotefilepath, localpath=localfilepath)
-        sftp.close()
+        self.open_sftp()
+        self.sftp.get(remotepath=remotefilepath, localpath=localfilepath)
+        self.close_sftp()
 
 
     def close(self):

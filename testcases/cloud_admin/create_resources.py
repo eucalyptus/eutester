@@ -49,15 +49,15 @@ class ResourceGeneration(EutesterTestCase):
                 self.parser.add_argument(arg)
         self.get_args()
         # Setup basic eutester object
-        self.tester = Eucaops( credpath=self.args.credpath)
+        self.tester = Eucaops( credpath=self.args.credpath, config_file=self.args.config, password=self.args.password)
+        self.testers = []
 
     def clean_method(self):
-        pass
+        self.tester.cleanup_artifacts()
 
     def CreateResources(self):
-        users = self.tester.get_all_users() 
-        testers = []
-        testers.append(self.tester)
+        users = self.tester.get_all_users()
+        self.testers.append(self.tester)
         for user in users:
             user_name = user['user_name']
             user_account = user['account_name']
@@ -68,12 +68,12 @@ class ResourceGeneration(EutesterTestCase):
                 secret_key = keys['secret_access_key']
                 self.tester.debug("Creating Eucaops object with access key " + access_key + " and secret key " +  secret_key)
                 new_tester = Eucaops(aws_access_key_id=access_key, aws_secret_access_key=secret_key, ec2_ip=self.tester.ec2.host, s3_ip=self.tester.s3.host,username=user_name, account=user_account)
-                testers.append(new_tester)
+                self.testers.append(new_tester)
 
-        self.tester.debug("Created a total of " + str(len(testers)) + " testers" )
+        self.tester.debug("Created a total of " + str(len(self.testers)) + " testers" )
 
 
-        for resource_tester in testers:
+        for resource_tester in self.testers:
             import random
             assert isinstance(resource_tester, Eucaops)
             zone = random.choice(resource_tester.get_zones())
@@ -83,13 +83,16 @@ class ResourceGeneration(EutesterTestCase):
             resource_tester.authorize_group_by_name(group_name=group.name, port=-1, protocol="icmp" )
             reservation = resource_tester.run_instance(keypair=keypair.name,group=group.name,zone=zone)
             instance = reservation.instances[0]
-            address = resource_tester.allocate_address()
-            resource_tester.associate_address(instance=instance, address=address)
-            resource_tester.disassociate_address_from_instance(instance)
-            resource_tester.release_address(address)
+            assert isinstance(instance, EuInstance)
+            if not instance.public_dns_name == instance.private_ip_address:
+                address = resource_tester.allocate_address()
+                resource_tester.associate_address(instance=instance, address=address)
+                resource_tester.disassociate_address_from_instance(instance)
+                resource_tester.release_address(address)
+            instance.update()
+            instance.reset_ssh_connection()
             volume = resource_tester.create_volume(size=1, zone=zone)
-            if isinstance(instance, EuInstance):
-                instance.attach_volume(volume)
+            instance.attach_volume(volume)
             snapshot = resource_tester.create_snapshot(volume_id=volume.id)
             volume_from_snap = resource_tester.create_volume(snapshot=snapshot, zone=zone)
             bucket = resource_tester.create_bucket(resource_tester.id_generator(12, string.ascii_lowercase  + string.digits))

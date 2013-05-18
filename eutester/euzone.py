@@ -97,8 +97,9 @@ class EuZone(Zone):
                     vm_types.append(it)
                     #Remove the setattr part after dev/debug?
                     self.__setattr__('vmtype_' + str(type_name.replace('.','_')), it)
-            if found and not re.search('vm types', zone.name) and  zone.name != self.name:
-                break
+                else:
+                    if not re.search('vm types', zone.name) and  zone.name != self.name:
+                        break
         return vm_types
 
     @eutester.Eutester.printinfo

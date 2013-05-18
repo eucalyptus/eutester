@@ -66,6 +66,8 @@ class Install(EutesterTestCase):
         for machine in self.tester.get_component_machines("sc"):
             machine.package_manager.add_repo(self.repo_url, "eucalyptus")
         for machine in self.tester.get_component_machines("nc"):
+            if machine.distro.name is "vmware":
+                continue
             machine.package_manager.add_repo(self.repo_url, "eucalyptus")
             machine.package_manager.add_repo(self.euca2ools_url, "euca2ools")
 

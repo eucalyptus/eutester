@@ -9,6 +9,8 @@ import com.amazonaws.services.autoscaling.model.*;
 import com.amazonaws.services.autoscaling.model.BlockDeviceMapping;
 import com.amazonaws.services.autoscaling.model.InstanceMonitoring;
 import com.amazonaws.services.autoscaling.model.Tag;
+import com.amazonaws.services.cloudwatch.AmazonCloudWatch;
+import com.amazonaws.services.cloudwatch.AmazonCloudWatchClient;
 import com.amazonaws.services.ec2.AmazonEC2;
 import com.amazonaws.services.ec2.AmazonEC2Client;
 import com.amazonaws.services.ec2.model.*;
@@ -20,6 +22,8 @@ import com.amazonaws.services.elasticloadbalancing.model.*;
 import com.amazonaws.services.identitymanagement.AmazonIdentityManagement;
 import com.amazonaws.services.identitymanagement.AmazonIdentityManagementClient;
 import com.amazonaws.services.identitymanagement.model.InstanceProfile;
+import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.AmazonS3Client;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
@@ -40,6 +44,9 @@ class Eutester4j {
 	static String AS_ENDPOINT = null;
 	static String ELB_ENDPOINT = null;
     static String IAM_ENDPOINT = null;
+    static String CW_ENDPOINT = null;
+    static String S3_ENDPOINT = null;
+    static String TOKENS_ENDPOINT = null;
 	static String SECRET_KEY = null;
 	static String ACCESS_KEY = null;
 	static String CREDPATH = null;
@@ -49,7 +56,8 @@ class Eutester4j {
     static AmazonEC2 ec2;
     static AmazonElasticLoadBalancing elb;
     static AmazonIdentityManagement iam;
-
+    static AmazonCloudWatch cw;
+    static AmazonS3 s3;
 
     static String IMAGE_ID = null;
     static String KERNEL_ID = null;
@@ -67,7 +75,10 @@ class Eutester4j {
 		EC2_ENDPOINT = parseEucarc(CREDPATH, "EC2_URL") + "/";
 		AS_ENDPOINT = parseEucarc(CREDPATH, "AWS_AUTO_SCALING_URL") + "/";
 		ELB_ENDPOINT = parseEucarc(CREDPATH, "AWS_ELB_URL") + "/";
+        CW_ENDPOINT = parseEucarc(CREDPATH, "AWS_CLOUDWATCH_URL") + "/";
         IAM_ENDPOINT = parseEucarc(CREDPATH, "EUARE_URL") + "/";
+        S3_ENDPOINT = parseEucarc(CREDPATH, "S3_URL") + "/";
+        TOKENS_ENDPOINT = parseEucarc(CREDPATH, "TOKEN_URL") + "/";
 		SECRET_KEY = parseEucarc(CREDPATH, "EC2_SECRET_KEY").replace("'", "");
 		ACCESS_KEY = parseEucarc(CREDPATH, "EC2_ACCESS_KEY").replace("'", "");
 
@@ -76,6 +87,8 @@ class Eutester4j {
         ec2 = getEc2Client(ACCESS_KEY, SECRET_KEY, EC2_ENDPOINT);
         elb = getElbClient(ACCESS_KEY, SECRET_KEY, ELB_ENDPOINT);
         iam = getIamClient(ACCESS_KEY,SECRET_KEY, IAM_ENDPOINT);
+        cw = getCwClient(ACCESS_KEY, SECRET_KEY, CW_ENDPOINT);
+        s3 = getS3Client(ACCESS_KEY, SECRET_KEY, S3_ENDPOINT);
         IMAGE_ID = findImage();
         KERNEL_ID = findKernel();
         RAMDISK_ID = finadRamdisk();
@@ -126,6 +139,23 @@ class Eutester4j {
         iam.setEndpoint(endpoint);
         return iam;
     }
+
+    public static AmazonCloudWatch getCwClient(String accessKey, String secretKey,
+                                               String endpoint) {
+        AWSCredentials creds = new BasicAWSCredentials(accessKey, secretKey);
+        final AmazonCloudWatch cw = new AmazonCloudWatchClient(creds);
+        cw.setEndpoint(endpoint);
+        return cw;
+    }
+
+    public static AmazonS3 getS3Client(String accessKey, String secretKey,
+                                               String endpoint) {
+        AWSCredentials creds = new BasicAWSCredentials(accessKey, secretKey);
+        final AmazonS3 s3 = new AmazonS3Client(creds);
+        s3.setEndpoint(endpoint);
+        return s3;
+    }
+
 	/**
 	 * 
 	 * @param credpath
@@ -681,7 +711,6 @@ class Eutester4j {
         assertThat(completed, "Instance not found for load balancer " + elbName + " within the expected timeout");
         print("Instance found in " + (System.currentTimeMillis() - startTime) + "ms for load balancer: " + elbName);
     }
-
 
     public static boolean isProfilePresent(final String profileName, final List<InstanceProfile> profiles) {
         boolean foundProfile = false;

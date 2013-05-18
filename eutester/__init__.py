@@ -325,7 +325,34 @@ class Eutester(object):
                 print 'printinfo method decorator error:'+str(e)
             return func(*func_args, **func_kwargs)
         return methdecor
-    
+
+    def wait_for_result(self, callback, result, timeout=60, poll_wait=10, **callback_kwargs):
+        """
+        Wait for the instance to enter the state
+
+        :param instance: Boto instance object to check the state on
+        :param state: state that we are looking for
+        :param poll_count: Number of 10 second poll intervals to wait before failure (for legacy test script support)
+        :param timeout: Time in seconds to wait before failure
+        :return: True on success
+        :raise: Exception when instance does not enter proper state
+        """
+        self.debug( "Beginning poll loop for result " + str(callback.func_name) + " to go to " + str(result) )
+        start = time.time()
+        elapsed = 0
+        current_state =  callback(**callback_kwargs)
+        ### If the instance changes state or goes to the desired state before my poll count is complete
+        while( elapsed <  timeout ) and (current_state != result):
+            current_state = callback(**callback_kwargs)
+            self.debug( "Result of " + str(callback.func_name) + ": " + str(current_state) )
+            self.sleep(poll_wait)
+            elapsed = int(time.time()- start)
+        self.debug( "Result of " + str(callback.func_name) + ": " + str(current_state) )
+        if current_state != result:
+            raise Exception( str(callback.func_name) + " did not return "+str(result)+" after elapsed:"+str(elapsed))
+        self.debug(  str(callback.func_name) + ' is now: ' + str(result)+" after "+ str(elapsed/60) + " minutes " + str(elapsed%60) + " seconds.")
+        return True
+
     @classmethod
     def get_traceback(cls):
         '''
