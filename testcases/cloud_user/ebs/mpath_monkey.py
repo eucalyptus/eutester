@@ -12,7 +12,7 @@ import types
 my_queue = Queue.Queue()
 
 
-class Mpath_Monkey(EutesterTestCase):
+class Path_Controller(EutesterTestCase):
     #a unique comment to add to iptables rules to signify the rule was added by this test
     ipt_msg = "eutester block data to san"
     
@@ -51,7 +51,7 @@ class Mpath_Monkey(EutesterTestCase):
             self.path_iterations =  self.args.path_iterations
         else:
             self.path_iterations =  path_iterations or 2
-        self.remaining_iterations = self.path_iterations or -1
+        self.total_path_iterations = 0
         self.node = node
         if self.node:
             self.host = node.hostname
@@ -123,7 +123,9 @@ class Mpath_Monkey(EutesterTestCase):
             out = self.sys('iptables -L -n --line-numbers | grep "'+str(self.ipt_msg)+'"')
             time.sleep(2)
             
-        
+
+    def iterate_sp(self):
+
         
     def set_timer(self, interval=30, cb=None, *args):
         self.debug("set_timer starting with interval "+str(interval)+"...")
@@ -191,41 +193,57 @@ class Mpath_Monkey(EutesterTestCase):
         except:pass
         return False
  
-    def block_single_path_cycle(self, lastblocked=None, wait_for_clear=True):
-        self.debug('block_single_path_cycle start...')
+    def block_next_path(self,
+                                lastblocked=None,
+                                wait_for_clear=True,
+                                timeout_on_clear=30,
+                                set_timer=0):
+        self.debug('block_next_path starting...')
         try:
             #iterate through sp ip list, block the next available ip in the list. 
             #if we've reached the end of the list restore all paths for an interval period
-            block = None
-            if not self.sp_ip_list:
+
+            #If we only have a single path, or no paths return...
+            if not self.sp_ip_list or len(self.sp_ip_list) == 1:
                 return
-            self.clear_all_eutester_rules()
-            if self.remaining_iterations == 0:
-                return
-            #self.restore_paths(self.sp_ip_list)
+
             blocked_paths = self.get_blocked_paths()
             if blocked_paths:
-                if not wait_for_clear:
-                    self.set_timer(self.restore_time, self.get_blocked_paths)
-                    return
-                else:
-                    self.wait(self.restore_time)
-            lastblocked = lastblocked or self.lastblocked
-            #time.sleep(self.restore_time)
-            if lastblocked:
-                index = self.sp_ip_list.index(lastblocked)
+                self.status('Clearing all blocked paths prior to cycling paths')
+                self.clear_all_eutester_rules()
+
+            #If there was a blocked path(s) then wait for restore period...
+            if wait_for_clear:
+                elapsed = 0
+                start = time.time()
+                while blocked_paths and elapsed < timeout_on_clear:
+                    self.clear_all_eutester_rules()
+                    blocked_paths = self.get_blocked_paths()
+                    if blocked_paths:
+                        time.sleep(1)
+                    elapsed = int(time.time() - start)
+                if blocked_paths:
+                    raise Exception('Could not clear blocked paths within ' + str(elapsed) + ' seconds; ' + ",".join(blocked_paths))
+            last_blocked = lastblocked or self.lastblocked
+
+
+            if last_blocked:
+                index = self.sp_ip_list.index(last_blocked)
+                #If were at the end of the list return to index 0
                 if index == (len(self.sp_ip_list)-1):
                     block = self.sp_ip_list[0]
+                    self.total_path_iterations += 1
                 else:
                     block = self.sp_ip_list[index+1]
             else:
                 block = self.sp_ip_list[0]
             self.debug("block_single_path_cycle, attempting to block path:"+str(block)+", set timer to:"+str(self.interval))
-            self.remaining_iterations -= 1
+
             self.block_path(block)
             args = [block,wait_for_clear]
-            self.set_timer(self.interval, self.block_single_path_cycle, args)
-            self.timer.start()
+            if set_timer:
+                self.set_timer(set_timer, self.block_single_path_cycle, args)
+                self.timer.start()
         except KeyboardInterrupt, k:
             if self.timer:
                 self.timer.cancel()
@@ -238,6 +256,12 @@ class Mpath_Monkey(EutesterTestCase):
         for addr in self.blocked:
             out += str(addr) + ","
         return str(out)
+
+    def reset(self):
+        if self.timer:
+            self.timer.cancel()
+        self.clear_all_eutester_rules()
+
 
     def wait(self,seconds):
         seconds = int(seconds)
