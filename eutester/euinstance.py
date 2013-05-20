@@ -73,7 +73,7 @@ class EuInstance(Instance, TaggedResource):
     rootfs_device = "vda"
     block_device_prefix = "vd"
     virtio_blk = False
-    bdm_vol = None
+    bdm_root_vol = None
     reservation = None
     attached_vols = []
     scsidevs = []
@@ -160,7 +160,7 @@ class EuInstance(Instance, TaggedResource):
         if newins.root_device_type == 'ebs':
             try:
                 volume = newins.tester.get_volume(volume_id = newins.block_device_mapping.get(newins.root_device_name).volume_id)
-                newins.bdm_vol = EuVolume.make_euvol_from_vol(volume, tester=newins.tester,cmdstart=newins.cmdstart)
+                newins.bdm_root_vol = EuVolume.make_euvol_from_vol(volume, tester=newins.tester,cmdstart=newins.cmdstart)
             except:pass
                 
         if newins.auto_connect:
@@ -186,15 +186,15 @@ class EuInstance(Instance, TaggedResource):
         
     
     def printself(self,title=True, footer=True, printmethod=None):
-        if self.bdm_vol:
-            bdmvol = self.bdm_vol.id
+        if self.bdm_root_vol:
+            bdmvol = self.bdm_root_vol.id
         else:
             bdmvol = None
             
         buf = "\n"
         if title:
             buf += str("-------------------------------------------------------------------------------------------------------------------------------------------------------------------\n")
-            buf += str('INST_ID').center(11)+'|'+str('EMI').center(13)+'|'+str('RES_ID').center(11)+'|'+str('LASTSTATE').center(10)+'|'+str('PRIV_ADDR').center(10)+'|'+str('AGE@STATUS').center(13)+'|'+str('VMTYPE').center(12)+'|'+str('BDM_VOL').center(13)+'|'+str('CLUSTER').center(25)+'|'+str('PUB_IP').center(16)+'|'+str('PRIV_IP')+'\n'
+            buf += str('INST_ID').center(11)+'|'+str('EMI').center(13)+'|'+str('RES_ID').center(11)+'|'+str('LASTSTATE').center(10)+'|'+str('PRIV_ADDR').center(10)+'|'+str('AGE@STATUS').center(13)+'|'+str('VMTYPE').center(12)+'|'+str('ROOT_VOL').center(13)+'|'+str('CLUSTER').center(25)+'|'+str('PUB_IP').center(16)+'|'+str('PRIV_IP')+'\n'
             buf += str("-------------------------------------------------------------------------------------------------------------------------------------------------------------------\n")
         buf += str(self.id).center(11)+'|'+str(self.image_id).center(13)+'|'+str(self.reservation.id).center(11)+'|'+str(self.laststate).center(10)+'|'+str(self.private_addressing).center(10)+'|'+str(self.age_at_state).center(13)+'|'+str(self.instance_type).center(12)+'|'+str(bdmvol).center(13)+'|'+str(self.placement).center(25)+'|'+str(self.public_dns_name).center(16)+'|'+str(self.private_ip_address).rstrip()
         if footer:
@@ -1174,7 +1174,7 @@ class EuInstance(Instance, TaggedResource):
         for vol in cloudlist:
             #check to see if the volume is attached to us, but is not involved with the bdm for this instance
             found = False
-            if (vol.attach_data.instance_id == self.id) and not ( self.root_device_type == 'ebs' and self.bdm_vol.id != vol.id):
+            if (vol.attach_data.instance_id == self.id) and not ( self.root_device_type == 'ebs' and self.bdm_root_vol.id != vol.id):
                 for avol in self.attached_vols:
                     if avol.id == vol.id:
                         self.debug("Volume"+vol.id+" found attached")
