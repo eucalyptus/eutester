@@ -35,6 +35,33 @@ import httplib
 import copy
 
 
+class FixedBlockDeviceMapping(BlockDeviceMapping):
+    #Temporary class until boto fixes this upstream.
+    # 'nodevice' param is formatted incorrectly, should not prefix with 'Ebs' before 'NoDevice'.
+
+    def build_list_params(self, params, prefix=''):
+        i = 1
+        for dev_name in self:
+            pre = '%sBlockDeviceMapping.%d' % (prefix, i)
+            params['%s.DeviceName' % pre] = dev_name
+            block_dev = self[dev_name]
+            if block_dev.ephemeral_name:
+                params['%s.VirtualName' % pre] = block_dev.ephemeral_name
+            else:
+                if block_dev.no_device:
+                    params['%s.NoDevice' % pre] = 'true'
+                if block_dev.snapshot_id:
+                    params['%s.Ebs.SnapshotId' % pre] = block_dev.snapshot_id
+                if block_dev.size:
+                    params['%s.Ebs.VolumeSize' % pre] = block_dev.size
+                if block_dev.delete_on_termination:
+                    params['%s.Ebs.DeleteOnTermination' % pre] = 'true'
+                else:
+                    params['%s.Ebs.DeleteOnTermination' % pre] = 'false'
+            i += 1
+
+
+
 
 class Block_Device_Mapping_Tests(EutesterTestCase):
     #Define the bytes per gig
@@ -245,7 +272,7 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
                                         no_device=False,
                                         delete_on_terminate=True,
                                         block_device_map=None):
-        block_device_map = block_device_map or BlockDeviceMapping()
+        block_device_map = block_device_map or FixedBlockDeviceMapping()
         block_dev_type = BlockDeviceType()
         block_dev_type.delete_on_termination = delete_on_terminate
         block_dev_type.no_device = no_device
