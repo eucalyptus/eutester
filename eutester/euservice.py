@@ -194,7 +194,7 @@ class Eunode:
         dict should have dict['id'], dict['name'], dict['state']
 
         """
-        return_list = {}
+        instance_list = []
         if self.machine:
             keys = []
             output = self.machine.sys('virsh list', code=0)
@@ -202,13 +202,12 @@ class Eunode:
                 keys = str(output[0]).strip().lower().split()
                 for line in output[2:]:
                     line = line.strip()
-                    #skip blank lines...
                     if line == "":
                         continue
                     domain_line = line.split()
                     for key in keys:
-                        return_list[key] = domain_line[keys.index(key)]
-        return return_list
+                        instance_list.append({keys[0]:domain_line[0], keys[1]:domain_line[1], keys[2]:domain_line[2]})
+        return instance_list
 
     #def get_iscsi_connections(self,):
     #def get_exported_volumes(self,)
