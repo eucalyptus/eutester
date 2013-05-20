@@ -205,8 +205,7 @@ class Eunode:
                     if line == "":
                         continue
                     domain_line = line.split()
-                    for key in keys:
-                        instance_list.append({keys[0]:domain_line[0], keys[1]:domain_line[1], keys[2]:domain_line[2]})
+                    instance_list.append({keys[0]:domain_line[0], keys[1]:domain_line[1], keys[2]:domain_line[2]})
         return instance_list
 
     #def get_iscsi_connections(self,):
