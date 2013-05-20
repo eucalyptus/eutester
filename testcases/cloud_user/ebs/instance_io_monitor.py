@@ -377,7 +377,7 @@ class Instance_Io_Monitor(EutesterTestCase):
             now = time.time()
             out = self.instance.ssh.cmd(cmd,
                                   verbose=False,
-                                  cb=self.remote_ssh_io_script_monitor_non_curses_cb,
+                                  cb=self.remote_ssh_io_script_monitor_cb,
                                   cbargs=[None,None,None,None,now, now, 'Starting' ])
             exit_value = out['status']
             exit_lines = out['output']
@@ -412,109 +412,9 @@ class Instance_Io_Monitor(EutesterTestCase):
             curses.endwin()
             self.stdscr = None
 
-    '''
+
     #@eutester.Eutester.printinfo
     def remote_ssh_io_script_monitor_cb(self,
-                                        buf,
-                                        write_value,
-                                        write_rate,
-                                        read_rate,
-                                        last_read,
-                                        last_time):
-        ret = SshCbReturn(stop=False, settimer=self.inter_io_timeout)
-        return_buf = ""
-        blocked_paths ="BLOCKED_PATHS:"
-        previous_blocked_path = "PREVIOUS_BLOCKED_PATH:"
-        path_index = "PATH_INDEX:"
-        write_rate = write_rate or 'WRITE_RATE:'
-        write_value = write_value or 'WRITE_VALUE'
-        read_rate = read_rate or 'READ_RATE'
-        last_read = last_read or 'LAST_READ'
-        last_time = last_time or time.time()
-        waited = int(time.time()- last_time)
-        waited_str = "INTER_IO_SECONDS_WAITED: "+ str(waited)
-        time_remaining = "TIME_REMAINING:"
-
-        path_controller = self.instance.path_controller
-        path_index += str(path_controller.sp_ip_list.index(path_controller.blocked))
-        if not path_controller.remaining_iterations:
-            if self.stdscr:
-                self.stdscr.addstr(0, 0, 'MPATH MONKEY FINSIHED SUCCESSFULLY')
-                self.stdscr.refresh()
-            ret.stop = True
-            path_controller.reset()
-        if not path_controller.blocked:
-            path_controller.block_single_path_cycle()
-        else:
-            blocked_paths += path_controller.get_blocked_string()
-            previous_blocked_path += str(path_controller.lastblocked)
-
-        if waited > self.longest_wait_period:
-            self.longest_wait_period = waited
-        longest_wait_period_str = "LONGEST_PERIOD_WAITED:" +str(self.longest_wait_period)
-        try:
-            for line in str(buf).splitlines():
-                if re.match('WRITE_VALUE',line):
-                    write_value = line
-                elif re.match('WRITE_RATE', line):
-                    write_rate = line
-                elif re.match('READ_RATE', line):
-                    read_rate = line
-                elif re.match('LAST_READ', line):
-                    last_read = line
-                elif re.match('TIME_REMAINING', line):
-                    time_remaining = line
-                elif re.search('err', line, re.IGNORECASE):
-                    return_buf += line
-
-            debug_string = "Instance: " + str(self.instance.id) + ", Volume:" + str(self.volume.id )+ "\n" \
-                           + "-------------------------------------------------\n" \
-                           + write_value.ljust(20) + "\n" \
-                           + write_rate.ljust(30) + "\n" \
-                           + read_rate.ljust(30) + "\n" \
-                           + last_read.ljust(20) + "\n" \
-                           + waited_str.ljust(20) + "\n" \
-                           + str(longest_wait_period_str).ljust(20) + "\n" \
-                           + str(blocked_paths) + "\n" \
-                           + str(previous_blocked_path) + "\n" \
-                           + str(remaining_iterations) + "\n" \
-                           + str(time_remaining) + "\n" \
-                           + "ret buf:" + str(return_buf) \
-                           + "\n-------------------------------------------------\n"
-            #print "\r\x1b[K"+str(debug_string),
-            #sys.stdout.flush()
-            if self.stdscr:
-                self.stdscr.clear()
-                self.stdscr.addstr(0, 0, debug_string)
-                self.stdscr.refresh()
-            if ret.stop:
-                self.tear_down_curses()
-                self.debug(debug_string)
-            if return_buf:
-                time.sleep(10)
-        except Exception, e:
-            tb = self.tester.get_traceback()
-            debug_string = str(tb) + '\nError caught by remote_ssh_io_monitor_cb:'+str(e)
-            self.debug(debug_string)
-            if self.stdscr:
-                self.stdscr.addstr(0, 0, debug_string)
-                self.stdscr.refresh()
-                self.stdscr.endwin()
-            ret.stop = True
-            ret.nextargs = [ write_value, write_rate,read_rate, last_read, time.time()]
-            ret.buf = return_buf
-            if self.path_controller:
-                self.path_controller.timer.cancel()
-            time.sleep(10)
-            pass
-        finally:
-            ret.nextargs = [ write_value, write_rate,read_rate, last_read, time.time()]
-            ret.buf = return_buf
-            return ret
-        '''
-
-    #@eutester.Eutester.printinfo
-    def remote_ssh_io_script_monitor_non_curses_cb(self,
                                         buf,
                                         write_value,
                                         write_rate,
@@ -548,7 +448,7 @@ class Instance_Io_Monitor(EutesterTestCase):
         status_str = 'STATUS:' + str(status)
 
         blocked_paths += path_controller.get_blocked_string()
-        
+
 
         if waited > self.longest_wait_period:
             self.longest_wait_period = waited
