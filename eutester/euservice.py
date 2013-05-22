@@ -33,9 +33,14 @@
 import re
 import time
 from eutester import sshconnection
+from eutester.sshconnection import SshCbReturn, CommandTimeoutException
+import types
+import stat
 import eutester
 import copy
+import os
 from eutester import machine
+from xml.dom.minidom import parse, parseString
 
 
 class log_marker:
@@ -209,6 +214,153 @@ class Eunode:
                     for key in keys:
                         return_list[key] = domain_line[keys.index(key)]
         return return_list
+
+    def tail_instance_console(self,
+                              instance,
+                              max_lines=None,
+                              timeout=30,
+                              idle_timeout=30,
+                              print_method=None):
+        '''
+
+
+        '''
+        if not isinstance(instance,types.StringTypes):
+            instance = instance.id
+        console_path = self.get_instance_console_path(instance)
+        start_time = time.time()
+        lines_read = 0
+        print_method = print_method or self.debug
+        prefix = str(instance) + " Console Output:"
+        try:
+            self.machine.cmd('tail -F ' + str(console_path),
+                             verbose=False,
+                             cb=self.remote_tail_monitor_cb,
+                             cbargs=[instance,
+                                     max_lines,
+                                     lines_read,
+                                     start_time,
+                                     timeout,
+                                     print_method,
+                                     prefix,
+                                     idle_timeout],
+                             timeout=idle_timeout)
+        except CommandTimeoutException, cte:
+            self.debug('Idle timeout fired while tailing console: ' + str(cte))
+
+
+    def remote_tail_monitor_cb(self,
+                               buf,
+                               instance_id,
+                               max_lines,
+                               lines_read,
+                               start_time,
+                               timeout,
+                               print_method,
+                               prefix,
+                               idle_timeout):
+        ret = SshCbReturn(stop=False, settimer=idle_timeout)
+        return_buf = ""
+        now = time.time()
+        if (timeout and (now - start_time) >= timeout) or (max_lines and lines_read >= max_lines):
+            ret.statuscode = 0
+            ret.stop = True
+        try:
+            for line in str(buf).splitlines():
+                lines_read += 1
+                print_method(str(prefix) + str(line))
+        except Exception, e:
+            return_buf = "Error in remote_tail_monitor:" + str(e)
+            ret.statuscode = 69
+            ret.stop = True
+        finally:
+            ret.buf = return_buf
+            ret.nextargs = [instance_id, max_lines, lines_read, start_time,timeout]
+            return ret
+
+
+    def get_multipath_dev_info_for_instance_ebs_volume(self, instance, volume):
+        if not isinstance(instance,types.StringTypes):
+            instance = instance.id
+        if not isinstance(volume,types.StringTypes):
+            volume = self.tester.get_volume(volume_id=volume)
+        if volume.attach_data and volume.attach_data.instance_id == instance:
+            dev = volume.attach_data.device
+        else:
+            raise Exception(str(volume.id) + 'Vol not attached to instance: ' + str(instance))
+        return self.get_multipath_dev_info_for_instance_ebs_block_dev(instance, dev)
+
+    def get_multipath_dev_info_for_instance_ebs_block_dev(self, instance, ebs_block_dev):
+        ebs_block_dev = os.path.basename(ebs_block_dev)
+        if not isinstance(instance,types.StringTypes):
+            instance = instance.id
+        dm_dev = self.get_node_dev_for_instance_block_dev(instance, ebs_block_dev)
+        mpath_dev = self.machine.sys('multipath -ll ' + str(dm_dev), verbose=False, code=0)
+        return mpath_dev
+
+    def get_node_dev_for_instance_block_dev(self, instance, block_dev):
+        block_dev = os.path.basename(block_dev)
+        if not isinstance(instance,types.StringTypes):
+            instance = instance.id
+        paths = self.get_instance_block_disk_source_paths(instance)
+        sym_link  = paths[block_dev]
+        real_dev = self.machine.sys('readlink -e ' + sym_link, verbose=False, code=0)[0]
+        fs_stat = self.machine.get_file_stat(real_dev)
+        if stat.S_ISBLK(fs_stat.st_mode):
+            return real_dev
+        else:
+            raise(str(instance) + ", dev:" + str(block_dev) + ',Error, device on node is not block type :' + str(real_dev))
+
+    def get_instance_block_disk_source_paths(self, instance, target_dev=None):
+        '''
+        Returns dict mapping target dev to source path dev/file on NC
+        Example return dict: {'vdb':'/NodeDiskPath/dev/sde'}
+        '''
+        ret_dict = {}
+        if target_dev:
+            target_dev = os.path.basename(target_dev)
+        if not isinstance(instance,types.StringTypes):
+            instance = instance.id
+        disk_doms = self.get_instance_block_disk_xml_dom_list(instance_id=instance)
+        for disk in disk_doms:
+            source_dev = disk.getElementsByTagName('source')[0].attributes.get('dev').nodeValue
+            target_bus = disk.getElementsByTagName('target')[0].attributes.get('dev').nodeValue
+            if not target_dev or target_dev == target_bus:
+                ret_dict[target_bus] = str(source_dev)
+        return ret_dict
+
+    def get_instance_console_path(self, instance_id):
+        if not isinstance(instance_id,types.StringTypes):
+            instance = instance_id.id
+        dev_dom = self.get_instance_device_xml_dom(instance_id=instance_id)
+        console_dom = dev_dom.getElementsByTagName('console')[0]
+        return console_dom.getElementsByTagName('source')[0].attributes.get('path').nodeValue
+
+
+    def get_instance_device_xml_dom(self, instance_id):
+        if not isinstance(instance_id,types.StringTypes):
+            instance = instance_id.id
+        dom = self.get_instance_xml_dom(instance_id)
+        return dom.getElementsByTagName('devices')[0]
+
+    def get_instance_block_disk_xml_dom_list(self, instance_id):
+        if not isinstance(instance_id,types.StringTypes):
+            instance = instance_id.id
+        dev_dom = self.get_instance_xml_dom(instance_id)
+        return dev_dom.getElementsByTagName('disk')
+
+    def get_instance_xml_dom(self, instance_id):
+        if not isinstance(instance_id,types.StringTypes):
+            instance = instance_id.id
+        output = self.get_instance_xml_text(instance_id)
+        dom_xml = parseString(output)
+        return dom_xml.getElementsByTagName('domain')[0]
+
+    def get_instance_xml_text(self, instance_id):
+        if not isinstance(instance_id,types.StringTypes):
+            instance = instance_id.id
+        return self.machine.sys('virsh dumpxml ' + str(instance_id),listformat=False, verbose=False, code=0)
+
 
     #def get_iscsi_connections(self,):
     #def get_exported_volumes(self,)
