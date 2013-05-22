@@ -110,6 +110,10 @@ class Path_Controller(EutesterTestCase):
         self.sp_ip_list = ret_list
         return ret_list
 
+    def get_eutester_current_block_rules(self):
+        output = self.sys('iptables -L -n --line-numbers | grep "'+str(self.ipt_msg)+'"')
+        return output
+
     def clear_all_eutester_rules(self, retry=True,timeout=60):
         #self.debug('Clear_all_eutester_rules...')
         self.last_clear_attempt_time = time.time()
@@ -219,7 +223,36 @@ class Path_Controller(EutesterTestCase):
         self.debug("block_single_path_cycle, attempting to block path:"+str(block)+", set timer to:"+str(self.interval))
         self.block_path(block)
         return block
- 
+
+        def get_blocked_string(self):
+            out = ""
+        for addr in self.blocked:
+            out += str(addr) + ","
+        return str(out)
+
+    def reset(self):
+        if self.timer:
+            self.timer.cancel()
+        self.clear_all_eutester_rules()
+
+
+    def wait(self,seconds):
+        seconds = int(seconds)
+        self.debug("Waiting for '"+str(seconds)+"' seconds...", traceback=2)
+        sys.stdout.write('Elapsed:')
+        for x in xrange(0,seconds):
+            if (x%seconds == 0):
+                sys.stdout.write(str(x))
+            else:
+                sys.stdout.write('-')
+            sys.stdout.flush()
+            time.sleep(1)
+        print(str(seconds))
+
+
+
+
+    '''
     def cycle_paths(self, lastblocked=None, wait_for_clear=True, timeout_on_clear=30, set_timer=0):
         self.debug('block_next_path starting...')
         try:
@@ -258,79 +291,12 @@ class Path_Controller(EutesterTestCase):
                 raise Exception('Caught keyboard interrupt...')
         nqstr = 'Blocking:' +str(self.blocked)
         self.queue.put(nqstr)
-
-    def get_blocked_string(self):
-        out = ""
-        for addr in self.blocked:
-            out += str(addr) + ","
-        return str(out)
-
-    def reset(self):
-        if self.timer:
-            self.timer.cancel()
-        self.clear_all_eutester_rules()
+        '''
 
 
-    def wait(self,seconds):
-        seconds = int(seconds)
-        self.debug("Waiting for '"+str(seconds)+"' seconds...", traceback=2)
-        sys.stdout.write('Elapsed:')
-        for x in xrange(0,seconds):
-            if (x%seconds == 0):
-                sys.stdout.write(str(x))
-            else:
-                sys.stdout.write('-')
-            sys.stdout.flush()
-            time.sleep(1)
-        print(str(seconds))
  
         
-        
-if __name__ == "__main__":
-    monkey = Path_Controller()
-    qinterval = int(monkey.args.interval) * (2+(len(monkey.sp_ip_list)))
-    if monkey.args.clear_rules:
-        monkey.clear_all_eutester_rules()
-        sys.exit()
-    else:
-        m_thread = threading.Thread(target=monkey.block_single_path_cycle)
-        m_thread.daemon=True
-        #monkey.block_single_path_cycle(None)
-        m_thread.start()
-        try:
-            #while(1):
-            #    time.sleep(2)
-            q_empty_cnt = 0 
-            while m_thread.isAlive: 
-                m_thread.join(5)
-                time.sleep(1)
-                try:
-                    qstr = my_queue.get_nowait()
-                except Queue.Empty, qe:
-                    q_empty_cnt += 1
-                    print "(q-check)",
-                    sys.stdout.flush()
-                else:
-                    q_empty_cnt = 0
-                    q_time = time.time()
-                    print "Got from thread queue: "+qstr
-                if q_empty_cnt > qinterval:
-                    q_elapsed = int(time.time() - q_time )
-                    raise Exception("q-check was empty for for "+str(q_elapsed)+" seconds")
-        except KeyboardInterrupt:
-            if monkey.timer:
-                monkey.timer.cancel()
-                print "Caught keyboard interrupt, killing timer and exiting..."
-                if monkey.clean_on_exit:
-                    monkey.clear_all_eutester_rules()
-                sys.exit()
-        except Exception, e:
-            if monkey.timer:
-                monkey.timer.cancel()
-                print str(e)
-                if monkey.args.clean_on_exit:
-                    monkey.clear_all_eutester_rules()
-                sys.exit()
+
        
             
             
