@@ -951,13 +951,25 @@ class EC2ops(Eutester):
         :param poll_interval: integer, seconds between polls on volumes' state
         :param timeout: integer time allowed before this method fails
         """
+        errmsg = ''
+        errlist = []
         if volume_list:
             vollist = copy.copy(volume_list)
         else:
             raise Exception("delete_volumes: volume_list was empty")
         for volume in vollist:
-            self.ec2.delete_volume(volume.id)
-            self.debug( "Sent delete for volume: " +  str(volume.id)  )
+            try:
+                self.debug( "Sending delete for volume: " +  str(volume.id)  )
+                self.ec2.delete_volume(volume.id)
+            except boto.exception.EC2ResponseError, be:
+                err = "ERROR: " + str(volume.id) + ", " + str(be.status)+ ", " + str(be.reason) + \
+                          ", " +str(be.error_message) + "\n"
+                errmsg += err
+                errlist.append(volume)
+                self.debug(err)
+        for volume in errlist:
+            if volume in vollist:
+                vollist.remove(volume)
         start = time.time()
         elapsed = 0
         while vollist and elapsed < timeout:
@@ -973,10 +985,9 @@ class EC2ops(Eutester):
             time.sleep(poll_interval)
             self.debug("---Waiting for:"+str(len(vollist))+" volumes to delete. Sleeping:"+
                        str(poll_interval)+", elapsed:"+str(elapsed)+"/"+str(timeout)+"---")
-        if vollist:
-            errmsg =""
+        if vollist or errmsg:
             for volume in vollist:
-                errmsg += "ERROR:"+str(volume) + " left in " +  volume.status + ',elapsed:'+str(elapsed)
+                errmsg += "ERROR:"+str(volume) + " left in " +  volume.status + ',elapsed:'+str(elapsed) + "\n"
             raise Exception(errmsg)
         
         
