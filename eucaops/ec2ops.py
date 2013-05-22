@@ -1683,7 +1683,7 @@ class EC2ops(Eutester):
     @Eutester.printinfo
     def register_snapshot_by_id( self,
                                  snap_id,
-                                 root_device_name="/dev/sda1",
+                                 root_device_name="/dev/sda",
                                  description="bfebs",
                                  windows=False,
                                  bdmdev=None,
