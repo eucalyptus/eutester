@@ -472,7 +472,7 @@ class EutesterTestCase(unittest.TestCase):
             parser.add_argument('--vmtype',
                                 help="Virtual Machine Type to use in this test", default='c1.medium')
         if userdata:
-            parser.add_argument('--userdata',
+            parser.add_argument('--user-data',
                                 help="User data string to provide instance run within this test", default=None)
         if instance_user:
             parser.add_argument('--instance-user',

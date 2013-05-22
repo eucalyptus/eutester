@@ -9,6 +9,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 import threading
 from eucaops import Eucaops
+from eutester.euinstance import EuInstance
 from eutester.eutestcase import EutesterTestCase
 from eucaops import EC2ops
 import os
@@ -23,14 +24,13 @@ class InstanceBasics(EutesterTestCase):
         if extra_args:
             for arg in extra_args:
                 self.parser.add_argument(arg)
-        self.parser.add_argument("--user-data")
         self.get_args()
         # Setup basic eutester object
         if self.args.region:
             self.tester = EC2ops( credpath=self.args.credpath, region=self.args.region)
         else:
             self.tester = Eucaops(config_file=self.args.config, password=self.args.password, credpath=self.args.credpath)
-        self.tester.poll_count = 120
+        self.instance_timeout = 240
 
         ### Add and authorize a group for the instance
         self.group = self.tester.add_group(group_name="group-" + str(time.time()))
@@ -72,7 +72,8 @@ class InstanceBasics(EutesterTestCase):
         """
         if zone is None:
             zone = self.zone
-        reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, zone=zone)
+        reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user,
+                                               keypair=self.keypair.name, group=self.group.name, zone=zone, timeout=self.instance_timeout)
         for instance in reservation.instances:
             self.assertTrue( self.tester.wait_for_reservation(reservation) ,'Instance did not go to running')
             self.assertTrue( self.tester.ping(instance.public_dns_name), 'Could not ping instance')
@@ -93,7 +94,8 @@ class InstanceBasics(EutesterTestCase):
         if zone is None:
             zone = self.zone
         if not self.reservation:
-            self.reservation = self.tester.run_instance(username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name,zone=zone)
+            self.reservation = self.tester.run_instance(username=self.args.instance_user, keypair=self.keypair.name,
+                                                        group=self.group.name,zone=zone, timeout=self.instance_timeout)
         else:
             reservation = self.reservation
 
@@ -114,7 +116,7 @@ class InstanceBasics(EutesterTestCase):
         self.set_reservation(reservation)
         return reservation
 
-    def MultipleInstances(self, available_small=None,zone = None):
+    def MultipleInstances(self, zone = None):
         """
         This case was developed to test the maximum number of m1.small vm types a configured
         cloud can run.  The test runs the maximum number of m1.small vm types allowed, then
@@ -125,12 +127,12 @@ class InstanceBasics(EutesterTestCase):
             self.tester.terminate_instances(self.reservation)
             self.set_reservation(None)
 
-        if available_small is None:
-            available_small = self.tester.get_available_vms()
-
         if zone is None:
             zone = self.zone
-        reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user,keypair=self.keypair.name, group=self.group.name,min=2, max=2, zone=zone)
+
+        reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user,
+                                               keypair=self.keypair.name, group=self.group.name,min=2, max=2, zone=zone,
+                                               timeout=self.instance_timeout)
         self.assertTrue( self.tester.wait_for_reservation(reservation) ,'Not all instances  went to running')
         self.set_reservation(reservation)
         return reservation
@@ -147,7 +149,9 @@ class InstanceBasics(EutesterTestCase):
         if self.reservation:
             self.tester.terminate_instances(self.reservation)
             self.set_reservation(None)
-        reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user,keypair=self.keypair.name, group=self.group.name,type="c1.xlarge",zone=zone)
+        reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user,
+                                               keypair=self.keypair.name, group=self.group.name,type="c1.xlarge",zone=zone,
+                                               timeout=self.instance_timeout)
         self.assertTrue( self.tester.wait_for_reservation(reservation) ,'Not all instances  went to running')
         self.set_reservation(reservation)
         return reservation
@@ -179,7 +183,9 @@ class InstanceBasics(EutesterTestCase):
         if zone is None:
             zone = self.zone
         if not self.reservation:
-            reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user,keypair=self.keypair.name, group=self.group.name, zone=zone)
+            reservation = self.tester.run_instance(self.image, user_data=self.args.user_data,
+                                                   username=self.args.instance_user,keypair=self.keypair.name,
+                                                   group=self.group.name, zone=zone, timeout=self.instance_timeout)
         else:
             reservation = self.reservation
         for instance in reservation.instances:
@@ -193,7 +199,7 @@ class InstanceBasics(EutesterTestCase):
             self.assertTrue(re.match(instance.get_metadata("public-ipv4")[0] , instance.ip_address), 'Incorrect public ip in metadata')
             self.assertTrue(re.match(instance.get_metadata("ami-id")[0], instance.image_id), 'Incorrect ami id in metadata')
             self.assertTrue(re.match(instance.get_metadata("ami-launch-index")[0], instance.ami_launch_index), 'Incorrect launch index in metadata')
-            self.assertTrue(re.match(instance.get_metadata("reservation-id")[0], self.reservation.id), 'Incorrect reservation in metadata')
+            self.assertTrue(re.match(instance.get_metadata("reservation-id")[0], reservation.id), 'Incorrect reservation in metadata')
             self.assertTrue(re.match(instance.get_metadata("placement/availability-zone")[0], instance.placement), 'Incorrect availability-zone in metadata')
             self.assertTrue(re.match(instance.get_metadata("kernel-id")[0], instance.kernel),  'Incorrect kernel id in metadata')
             self.assertTrue(re.match(instance.get_metadata("public-hostname")[0], instance.public_dns_name), 'Incorrect public host name in metadata')
@@ -223,62 +229,41 @@ class InstanceBasics(EutesterTestCase):
         if zone is None:
             zone = self.zone
         if not self.reservation:
-            reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user,keypair=self.keypair.name, group=self.group.name, zone=zone)
+            reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user,
+                                                   keypair=self.keypair.name, group=self.group.name, zone=zone,timeout=self.instance_timeout)
         else:
             reservation = self.reservation
-        for instance in reservation.instances:
 
-            # Test to see if Dynamic DNS has been configured # 
-            if re.match("internal", instance.private_dns_name.split('eucalyptus.')[-1]):
-                # Per AWS standard, resolution should have private hostname or private IP as a valid response
-                # Perform DNS resolution against private IP and private DNS name
-                # Check to see if nslookup was able to resolve
-                self.assertTrue(re.search('answer\:', instance.sys("nslookup " +  instance.get_metadata("hostname")[0])[3]), "DNS lookup failed for hostname.")
-                # Since nslookup was able to resolve, now check to see if nslookup on local-hostname returns local-ipv4 address
-                self.assertTrue(re.search(instance.get_metadata("local-ipv4")[0], instance.sys("nslookup " + instance.get_metadata("hostname")[0])[5]), "Incorrect DNS resolution for hostname.")
-                # Check to see if nslookup was able to resolve
-                self.assertTrue(re.search('answer\:', instance.sys("nslookup " +  instance.get_metadata("local-hostname")[0])[3]), "DNS lookup failed for private hostname.")
-                # Since nslookup was able to resolve, now check to see if nslookup on local-hostname returns local-ipv4 address
-                self.assertTrue(re.search(instance.get_metadata("local-ipv4")[0], instance.sys("nslookup " + instance.get_metadata("local-hostname")[0])[5]), "Incorrect DNS resolution for private hostname.")
-                # Check to see if nslookup was able to resolve
-                self.assertTrue(re.search('answer\:', instance.sys("nslookup " +  instance.get_metadata("local-ipv4")[0])[3]), "DNS lookup failed for private IP address.")
-                # Since nslookup was able to resolve, now check to see if nslookup on local-ipv4 address returns local-hostname
-                self.assertTrue(re.search(instance.get_metadata("local-hostname")[0], instance.sys("nslookup " +  instance.get_metadata("local-ipv4")[0])[4]), "Incorrect DNS resolution for private IP address")
-                # Perform DNS resolution against public IP and public DNS name
-                # Check to see if nslookup was able to resolve
-                self.assertTrue(re.search('answer\:', instance.sys("nslookup " +  instance.get_metadata("public-hostname")[0])[3]), "DNS lookup failed for public-hostname.")
-                # Since nslookup was able to resolve, now check to see if nslookup on public-hostname returns local-ipv4 address
-                self.assertTrue(re.search(instance.get_metadata("local-ipv4")[0], instance.sys("nslookup " + instance.get_metadata("public-hostname")[0])[5]), "Incorrect DNS resolution for public-hostname.")
-                # Check to see if nslookup was able to resolve
-                self.assertTrue(re.search('answer\:', instance.sys("nslookup " +  instance.get_metadata("public-ipv4")[0])[3]), "DNS lookup failed for public IP address.")
-                # Since nslookup was able to resolve, now check to see if nslookup on public-ipv4 address returns public-hostname
-                self.assertTrue(re.search(instance.get_metadata("public-hostname")[0], instance.sys("nslookup " +  instance.get_metadata("public-ipv4")[0])[4]), "Incorrect DNS resolution for public IP address")
-        self.set_reservation(reservation)
-        return reservation
-
-    def DNSCheck(self, zone=None):
-        """
-        This case was developed to test to make sure Eucalyptus Dynamic DNS reports correct
-        information for public/private IP address and DNS names passed to meta-data service.
-        The following tests are ran using the associated meta-data attributes:
-           - check to see if Eucalyptus Dynamic DNS is configured
-           - check to see if local-ipv4 and local-hostname are not the same
-           - check to see if public-ipv4 and public-hostname are not the same
-        If any of these tests fail, the test case will error out; logging the results.
-        """
-        if zone is None:
-            zone = self.zone
-        if not self.reservation:
-            reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user,keypair=self.keypair.name, group=self.group.name, zone=zone)
-        else:
-            reservation = self.reservation
         for instance in reservation.instances:
-            # Test to see if Dynamic DNS has been configured # 
-            if re.match("internal", instance.private_dns_name.split('eucalyptus.')[-1]):
-                # Make sure that private_ip_address is not the same as local-hostname
-                self.assertFalse(re.match(instance.private_ip_address, instance.private_dns_name), 'local-ipv4 and local-hostname are the same with DNS on')
-                # Make sure that ip_address is not the same as public-hostname
-                self.assertFalse(re.match(instance.ip_address, instance.public_dns_name), 'public-ipv4 and public-hostname are the same with DNS on')
+            if not re.search("internal", instance.private_dns_name):
+                self.tester.debug("Did not find instance DNS enabled, skipping test")
+                self.set_reservation(reservation)
+                return reservation
+            # Test to see if Dynamic DNS has been configured #
+            # Per AWS standard, resolution should have private hostname or private IP as a valid response
+            # Perform DNS resolution against private IP and private DNS name
+            # Check to see if nslookup was able to resolve
+            assert isinstance(instance, EuInstance)
+            self.assertTrue(instance.found("nslookup " +  instance.public_dns_name, instance.ip_address), "DNS lookup failed for hostname.")
+            # Since nslookup was able to resolve, now check to see if nslookup on local-hostname returns local-ipv4 address
+            self.assertTrue(instance.found("nslookup " + instance.public_dns_name, instance.private_ip_address), "Incorrect DNS resolution for hostname.")
+            # Check to see if nslookup was able to resolve
+            self.assertTrue(instance.found("nslookup " +  instance.private_dns_name, instance.private_ip_address), "DNS lookup failed for private hostname.")
+            # Since nslookup was able to resolve, now check to see if nslookup on local-hostname returns local-ipv4 address
+            self.assertTrue(instance.found("nslookup " + instance.private_dns_name, instance.private_ip_address), "Incorrect DNS resolution for private hostname.")
+            # Check to see if nslookup was able to resolve
+            self.assertTrue(instance.found("nslookup " +  instance.private_ip_address, instance.private_dns_name), "DNS lookup failed for private IP address.")
+            # Since nslookup was able to resolve, now check to see if nslookup on local-ipv4 address returns local-hostname
+            self.assertTrue(instance.found("nslookup " +  instance.private_ip_address, instance.private_dns_name), "Incorrect DNS resolution for private IP address")
+            # Perform DNS resolution against public IP and public DNS name
+            # Check to see if nslookup was able to resolve
+            self.assertTrue(instance.found("nslookup " +  instance.public_dns_name, instance.private_ip_address), "DNS lookup failed for public-hostname.")
+            # Since nslookup was able to resolve, now check to see if nslookup on public-hostname returns local-ipv4 address
+            self.assertTrue(instance.found("nslookup " + instance.public_dns_name, instance.private_ip_address), "Incorrect DNS resolution for public-hostname.")
+            # Check to see if nslookup was able to resolve
+            self.assertTrue(instance.found("nslookup " +  instance.public_dns_name, instance.ip_address), "DNS lookup failed for public IP address.")
+            # Since nslookup was able to resolve, now check to see if nslookup on public-ipv4 address returns public-hostname
+            self.assertTrue( instance.found("nslookup " +  instance.ip_address, instance.public_dns_name), "Incorrect DNS resolution for public IP address")
         self.set_reservation(reservation)
         return reservation
 
@@ -297,7 +282,9 @@ class InstanceBasics(EutesterTestCase):
         if zone is None:
             zone = self.zone
         if not self.reservation:
-            reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, zone=zone)
+            reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user,
+                                                   keypair=self.keypair.name, group=self.group.name, zone=zone,
+                                                   timeout=self.instance_timeout)
         else:
             reservation = self.reservation
         for instance in reservation.instances:
@@ -367,7 +354,9 @@ class InstanceBasics(EutesterTestCase):
                     return self.reservation
             self.tester.terminate_instances(self.reservation)
             self.set_reservation(None)
-        reservation = self.tester.run_instance(username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, private_addressing=True, zone=zone)
+        reservation = self.tester.run_instance(username=self.args.instance_user, keypair=self.keypair.name,
+                                               group=self.group.name, private_addressing=True, zone=zone,
+                                               timeout=self.instance_timeout)
         for instance in reservation.instances:
             address = self.tester.allocate_address()
             self.assertTrue(address,'Unable to allocate address')
@@ -400,7 +389,8 @@ class InstanceBasics(EutesterTestCase):
             self.tester.terminate_instances(self.reservation)
             self.set_reservation(None)
         for i in xrange(5):
-            reservation = self.tester.run_instance(username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, zone=zone)
+            reservation = self.tester.run_instance(username=self.args.instance_user, keypair=self.keypair.name,
+                                                   group=self.group.name, zone=zone,timeout=self.instance_timeout)
             for instance in reservation.instances:
                 if prev_address is not None:
                     self.assertTrue(re.search(str(prev_address) ,str(instance.public_dns_name)), str(prev_address) +" Address did not get reused but rather  " + str(instance.public_dns_name))
