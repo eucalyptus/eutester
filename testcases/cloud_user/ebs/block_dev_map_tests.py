@@ -35,6 +35,33 @@ import httplib
 import copy
 
 
+class FixedBlockDeviceMapping(BlockDeviceMapping):
+    #Temporary class until boto fixes this upstream.
+    # 'nodevice' param is formatted incorrectly, should not prefix with 'Ebs' before 'NoDevice'.
+
+    def build_list_params(self, params, prefix=''):
+        i = 1
+        for dev_name in self:
+            pre = '%sBlockDeviceMapping.%d' % (prefix, i)
+            params['%s.DeviceName' % pre] = dev_name
+            block_dev = self[dev_name]
+            if block_dev.ephemeral_name:
+                params['%s.VirtualName' % pre] = block_dev.ephemeral_name
+            else:
+                if block_dev.no_device:
+                    params['%s.NoDevice' % pre] = 'true'
+                if block_dev.snapshot_id:
+                    params['%s.Ebs.SnapshotId' % pre] = block_dev.snapshot_id
+                if block_dev.size:
+                    params['%s.Ebs.VolumeSize' % pre] = block_dev.size
+                if block_dev.delete_on_termination:
+                    params['%s.Ebs.DeleteOnTermination' % pre] = 'true'
+                else:
+                    params['%s.Ebs.DeleteOnTermination' % pre] = 'false'
+            i += 1
+
+
+
 
 class Block_Device_Mapping_Tests(EutesterTestCase):
     #Define the bytes per gig
@@ -133,11 +160,11 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
 
     def cleanup(self):
         #leave the base test, and snapshot behind for future use
-        if self.base_test_snapshot in self.test_resources['snapshots']:
-            self.test_resources['snapshots'].remove(self.base_test_snapshot)
+        if self.base_test_snapshot in self.tester.test_resources['snapshots']:
+            self.tester.test_resources['snapshots'].remove(self.base_test_snapshot)
 
-        if self.base_test_volume in self.test_resources['volumes']:
-            self.test_resources['volumes'].remove(self.base_test_volume)
+        if self.base_test_volume in self.tester.test_resources['volumes']:
+            self.tester.test_resources['volumes'].remove(self.base_test_volume)
 
         self.tester.cleanup_artifacts()
 
@@ -245,7 +272,7 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
                                         no_device=False,
                                         delete_on_terminate=True,
                                         block_device_map=None):
-        block_device_map = block_device_map or BlockDeviceMapping()
+        block_device_map = block_device_map or FixedBlockDeviceMapping()
         block_dev_type = BlockDeviceType()
         block_dev_type.delete_on_termination = delete_on_terminate
         block_dev_type.no_device = no_device
@@ -740,6 +767,7 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         self.status('Original Image block device map:')
         self.tester.print_block_device_map(image.block_device_mapping)
         bdm = self.add_block_device_types_to_mapping(snapshot_id=self.base_test_snapshot.id,
+                                               size = bdm_snap_size,
                                                device_name=bdm_snapshot_dev,
                                                delete_on_terminate=False)
         self.add_block_device_types_to_mapping(device_name = bdm_emptyvol_dev,
@@ -772,14 +800,17 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
                 raise Exception('Root device size on guest:' + str(root_dev_size) +
                                 ' !=  requested size' + str(bdm_rootsnap_size) +
                                 ", original size in image:" + str(image.block_device_mapping.get(image.root_device_name).size))
+
+            #Volume from snapshot checks...
             guest_snap_dev = instance.get_guest_dev_for_block_device_map_device(md5=self.base_test_volume.md5,
                                                                                 md5len=self.base_test_volume.md5len,
                                                                                 map_device=instance.root_device_name)
-
             guest_snapvol_size = instance.get_blockdev_size_in_bytes(guest_snap_dev) / self.gig
             if guest_snapvol_size != bdm_snap_size:
                 raise Exception('Volume size on guest:'+ str(guest_snapvol_size)+' != ' + str(bdm_snap_size) +
                                 ', the size requested for bdm snap:' + str(self.base_test_snapshot.id))
+
+            #Empty vol checks...
             self.status("Attempting to find guest's device empty volume by process of elimination...")
             remaining_devs=self.find_remaining_devices(instance,[guest_root_dev, guest_snap_dev, guest_ephemeral_dev])
             if len(remaining_devs) != 1:
@@ -796,6 +827,7 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
             if not empty_vol in instance.attached_vols:
                 instance.attached_vols.append(empty_vol)
             instance.vol_write_random_data_get_md5(empty_vol)
+
             self.status('Check block device mapping meta data...')
             #Temp work around for existing bug where ephemeral is not reported...
             meta_bdm = instance.block_device_mapping
@@ -1017,13 +1049,9 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
             self.current_test_instance = instance
             self.status('Resulting in the instance block device map:')
             self.tester.print_block_device_map(instance.block_device_mapping)
-            self.status('Checking instance for to make sure ephemeral is not present...')
-            try:
-                instance.get_ephemeral_dev()
-            except:
-                self.debug('Ephemeral was not found, passing...')
-            else:
-                raise Exception('Ephemeral device found, but none provided?')
+            self.status('Checking instance for to make sure ephemeral is present...')
+            instance.get_ephemeral_dev()
+
             self.status('Checking instance devices for md5sums which match original volume/snapshots.\nThis step will also \
                          record the volume id, md5 and guest device within the instance for later stop, start, and detach \
                          operations...')

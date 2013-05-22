@@ -689,7 +689,11 @@ class EutesterTestCase(unittest.TestCase):
     def endsuccess(self,msg=""):
         msg = "- UNIT ENDED - " + msg
         self.status(msg, traceback=2,a=1, testcolor=TestColor.get_canned_color('whiteongreen'))
-      
+
+    def errormsg(self,msg=""):
+        msg = "- ERROR - " + msg
+        self.status(msg, traceback=2,a=1,testcolor=TestColor.get_canned_color('failred'))
+
     def endfailure(self,msg="" ):
         msg = "- FAILED - " + msg
         self.status(msg, traceback=2,a=1,testcolor=TestColor.get_canned_color('failred'))

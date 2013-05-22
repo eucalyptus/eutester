@@ -2362,7 +2362,11 @@ class EC2ops(Eutester):
             if keypair:
                 if isinstance(keypair, KeyPair):
                     keypair = keypair.name
-                
+            self.debug('Euinstance list prior to running image...')
+            try:
+                self.print_euinstance_list()
+            except Exception, e:
+                self.debug('Failed to print euinstance list before running image, err:' +str(e))
             #self.debug( "Attempting to run "+ str(image.root_device_type)  +" image " + str(image) + " in group " + str(group))
             cmdstart=time.time()
             reservation = image.run(key_name=keypair,security_groups=[group],instance_type=type, placement=zone,
@@ -2427,6 +2431,7 @@ class EC2ops(Eutester):
                 if instance.root_device_type == 'ebs':
                     if instance.block_device_mapping and instance.block_device_mapping.current_value:
                         self.debug('Instance block device mapping is populated:'+str(instance.id))
+                        self.update_resources_with_volumes_from_instance_block_device_mapping(instance)
                         good.append(instance)
                 else:
                     good.append(instance)
@@ -2447,7 +2452,21 @@ class EC2ops(Eutester):
             raise Exception(err_buf)
         self.debug('wait_for_instance_block_dev_mapping done. elapsed:'+str(elapsed))
 
-    
+
+    def update_resources_with_volumes_from_instance_block_device_mapping(self, instance):
+        for device_name in instance.block_device_mapping:
+            device = instance.block_device_mapping.get(device_name)
+            if device.volume_id:
+                try:
+                    volume = self.get_volume(volume_id=device.volume_id)
+                except Exception, e:
+                    self.debug('Error trying to retrieve volume:' + str(volume.id) +
+                               ' from instance:' + str(instance.id) + " block dev map")
+                if not volume in self.test_resources['volumes']:
+                    self.test_resources['volumes'].append(volume)
+
+
+
     
     @Eutester.printinfo 
     def monitor_euinstances_to_running(self,instances, poll_interval=10, timeout=480):
@@ -2671,27 +2690,27 @@ class EC2ops(Eutester):
             for instance in monitor:
                 try:
                     instance.update()
-                    bdm_vol_status = None
-                    bdm_vol_id = None
+                    bdm_root_vol_status = None
+                    bdm_root_vol_id = None
                     if instance.root_device_type == 'ebs':
-                        if not instance.bdm_vol:
+                        if not instance.bdm_root_vol:
                             try:
-                                instance.bdm_vol = self.get_volume(volume_id = instance.block_device_mapping.get(instance.root_device_name).volume_id)
-                                bdm_vol_id = instance.bdm_vol.id
-                                bdm_vol_status = instance.bdm_vol.status
+                                instance.bdm_root_vol = self.get_volume(volume_id = instance.block_device_mapping.get(instance.root_device_name).volume_id)
+                                bdm_root_vol_id = instance.bdm_root_vol.id
+                                bdm_root_vol_status = instance.bdm_root_vol.status
                             except: pass
                         else:
-                            instance.bdm_vol.update()
-                            bdm_vol_id = instance.bdm_vol.id
-                            bdm_vol_status = instance.bdm_vol.status
+                            instance.bdm_root_vol.update()
+                            bdm_root_vol_id = instance.bdm_root_vol.id
+                            bdm_root_vol_status = instance.bdm_root_vol.status
                         if instance.laststate:
                             #fail fast on ebs backed instances that go into stopped stated unintentionally
                             if state != "stopped" and ( instance.laststate == 'pending' and instance.state == "stopped"):
                                 raise Exception("Instance:"+str(instance.id)+" illegal state transition from "
                                                 +str(instance.laststate)+" to "+str(instance.state))
                     dbgmsg = ("Intended state:" + str(state)+": "+str(instance.id)+' Current state:'+str(instance.state)+', type:'+
-                              str(instance.root_device_type) + ', backing volume:'+str(bdm_vol_id)+' status:'+
-                              str(bdm_vol_status)+", elapsed:"+ str(elapsed)+"/"+str(timeout))
+                              str(instance.root_device_type) + ', backing volume:'+str(bdm_root_vol_id)+' status:'+
+                              str(bdm_root_vol_status)+", elapsed:"+ str(elapsed)+"/"+str(timeout))
                     if instance.state == state:
                         self.debug("SUCCESS "+ dbgmsg)
                         #This instance is in the correct state, remove from monitor list
@@ -2737,15 +2756,46 @@ class EC2ops(Eutester):
             else:
                 self.debug(failmsg)
         
+
+
+
         
-    
-        
-    def print_euinstance_list(self, euinstance_list):
+    def print_euinstance_list(self,
+                              euinstance_list=None,
+                              state=None,
+                              instance_id=None,
+                              reservation=None,
+                              root_device_type=None,
+                              zone=None,
+                              key=None,
+                              public_ip=None,
+                              private_ip=None,
+                              ramdisk=None,
+                              kernel=None,
+                              image_id=None
+                              ):
         """
 
         :param euinstance_list: list of euinstance objs
         :raise:
         """
+        if not euinstance_list:
+            euinstance_list = []
+            instances = self.get_instances(state=state,
+                                           idstring=instance_id,
+                                           reservation=reservation,
+                                           rootdevtype=root_device_type,
+                                           zone=zone,
+                                           key=key,
+                                           pubip=public_ip,
+                                           privip=private_ip,
+                                           ramdisk=ramdisk,
+                                           kernel=kernel,
+                                           image_id=image_id)
+            for instance in instances:
+                euinstance_list.append(self.convert_instance_to_euisntance(instance, auto_connect=False))
+        if not euinstance_list:
+            return
         plist = copy.copy(euinstance_list)
         first = plist.pop(0)
         for instance in plist:
@@ -2891,8 +2941,9 @@ class EC2ops(Eutester):
         reservation.instances = euinstance_list
         return reservation
 
-    def convert_instance_to_euisntance(self, instance, keypair=None, username="root", password=None, timeout=120):
-        return EuInstance.make_euinstance_from_instance(instance, self, keypair=keypair, username = username, password=password, timeout=timeout )
+    def convert_instance_to_euisntance(self, instance, keypair=None, username="root", password=None, auto_connect=True,timeout=120):
+        return EuInstance.make_euinstance_from_instance(instance, self, keypair=keypair, username = username,
+                                                        password=password, auto_connect=auto_connect,timeout=timeout )
 
     def get_console_output(self, instance):
         """
@@ -2947,7 +2998,8 @@ class EC2ops(Eutester):
                       privip=None,
                       ramdisk=None,
                       kernel=None,
-                      image_id=None):
+                      image_id=None,
+                      filters=None):
         """
         Return a list of instances matching the filters provided.
 
@@ -2962,6 +3014,7 @@ class EC2ops(Eutester):
         :param ramdisk: Ramdisk ID string
         :param kernel: Kernel ID string
         :param image_id: Image ID string
+        :param filters: dict filters
         :return: list of instances
         """
         ilist = []
@@ -2972,7 +3025,7 @@ class EC2ops(Eutester):
         else:
             instance_ids = idstring
         
-        reservations = self.ec2.get_all_instances(instance_ids=instance_ids)
+        reservations = self.ec2.get_all_instances(instance_ids=instance_ids, filters=filters)
         for res in reservations:
             if ( reservation is None ) or (re.search(str(reservation), str(res.id))):
                 for i in res.instances:

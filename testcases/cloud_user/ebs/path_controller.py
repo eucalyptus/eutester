@@ -81,6 +81,9 @@ class Path_Controller(EutesterTestCase):
         self.blocked = []
         self.get_sp_ip_list(sp_ip_list=sp_ip_list)
         self.timer = None
+        self.last_clear_attempt_time = 0
+        self.last_cleared_time = 0
+        self.last_block_time = 0
         self.debug('Mpath_Monkey init:' \
                     + "\nhost:" + str(self.host) \
                     + "\nsp_ipt_list:" + str(self.sp_ip_list) \
@@ -107,24 +110,31 @@ class Path_Controller(EutesterTestCase):
         self.sp_ip_list = ret_list
         return ret_list
 
-    def clear_all_eutester_rules(self, timeout=60):
-        self.debug('Clear_all_eutester_rules...')
+    def clear_all_eutester_rules(self, retry=True,timeout=60):
+        #self.debug('Clear_all_eutester_rules...')
+        self.last_clear_attempt_time = time.time()
         #clears all rules which match the description string ipt_msg
         start = time.time()
         elapsed = 0
-        out = self.sys('iptables -L -n --line-numbers | grep "'+str(self.ipt_msg)+'"')
-        while out and elapsed < timeout:
+        output = self.sys('iptables -L -n --line-numbers | grep "'+str(self.ipt_msg)+'"')
+        while output and elapsed < timeout:
             elapsed = int(time.time()-start)
-            self.debug("Attempting to remove "+str(len(out))+" eutester rules from system. Elapsed: "+str(elapsed)+'/'+str(timeout))
-            for line in out:
+            self.debug("Attempting to remove "+str(len(output))+" eutester rules from system. Elapsed: "+str(elapsed)+'/'+str(timeout))
+            for line in output:
                 self.debug('Clearing rule: '+str(line))
                 rule_number = str(line).split()[0]
                 self.sys('iptables -D OUTPUT '+str(rule_number))
-            out = self.sys('iptables -L -n --line-numbers | grep "'+str(self.ipt_msg)+'"')
-            time.sleep(2)
-            
-
-    def iterate_sp(self):
+            output = self.sys('iptables -L -n --line-numbers | grep "'+str(self.ipt_msg)+'"')
+            if not output:
+                self.last_cleared_time = time.time()
+            else:
+                self.last_cleared_time = 0
+                if not retry:
+                    return len(output)
+                time.sleep(2)
+        if not output:
+            self.last_cleared_time = time.time()
+        return len(output)
 
         
     def set_timer(self, interval=30, cb=None, *args):
@@ -183,6 +193,7 @@ class Path_Controller(EutesterTestCase):
         self.sys('iptables -A OUTPUT -j DROP -d '+str(addr)+' -m comment --comment "'+str(self.ipt_msg)+'"', code=0)
         if not addr in self.blocked:
             self.blocked.append(addr)
+        self.last_block_time = time.time()
         self.lastblocked = addr
 
     def can_ping_path(self, addr, count=1, timeout=10):
@@ -192,12 +203,24 @@ class Path_Controller(EutesterTestCase):
             return True
         except:pass
         return False
+
+    def block_next_path(self, lastblocked=None):
+        last_blocked = lastblocked or self.lastblocked
+        if last_blocked:
+            index = self.sp_ip_list.index(last_blocked)
+            #If were at the end of the list return to index 0
+            if index == (len(self.sp_ip_list)-1):
+                block = self.sp_ip_list[0]
+                self.total_path_iterations += 1
+            else:
+                block = self.sp_ip_list[index+1]
+        else:
+            block = self.sp_ip_list[0]
+        self.debug("block_single_path_cycle, attempting to block path:"+str(block)+", set timer to:"+str(self.interval))
+        self.block_path(block)
+        return block
  
-    def block_next_path(self,
-                                lastblocked=None,
-                                wait_for_clear=True,
-                                timeout_on_clear=30,
-                                set_timer=0):
+    def cycle_paths(self, lastblocked=None, wait_for_clear=True, timeout_on_clear=30, set_timer=0):
         self.debug('block_next_path starting...')
         try:
             #iterate through sp ip list, block the next available ip in the list. 
@@ -224,22 +247,7 @@ class Path_Controller(EutesterTestCase):
                     elapsed = int(time.time() - start)
                 if blocked_paths:
                     raise Exception('Could not clear blocked paths within ' + str(elapsed) + ' seconds; ' + ",".join(blocked_paths))
-            last_blocked = lastblocked or self.lastblocked
-
-
-            if last_blocked:
-                index = self.sp_ip_list.index(last_blocked)
-                #If were at the end of the list return to index 0
-                if index == (len(self.sp_ip_list)-1):
-                    block = self.sp_ip_list[0]
-                    self.total_path_iterations += 1
-                else:
-                    block = self.sp_ip_list[index+1]
-            else:
-                block = self.sp_ip_list[0]
-            self.debug("block_single_path_cycle, attempting to block path:"+str(block)+", set timer to:"+str(self.interval))
-
-            self.block_path(block)
+            block = self.block_next_path(lastblocked=lastblocked)
             args = [block,wait_for_clear]
             if set_timer:
                 self.set_timer(set_timer, self.block_single_path_cycle, args)
@@ -279,7 +287,7 @@ class Path_Controller(EutesterTestCase):
         
         
 if __name__ == "__main__":
-    monkey = Mpath_Monkey()
+    monkey = Path_Controller()
     qinterval = int(monkey.args.interval) * (2+(len(monkey.sp_ip_list)))
     if monkey.args.clear_rules:
         monkey.clear_all_eutester_rules()

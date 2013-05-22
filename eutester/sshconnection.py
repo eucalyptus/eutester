@@ -439,7 +439,7 @@ class SshConnection():
                 if output is None:
                     output = []
                 #add command outcome in return dict.
-            if not status:
+            if status is None:
                 status = self.lastexitcode = chan.recv_exit_status()
             ret['cmd'] = cmd
             ret['output'] = output
