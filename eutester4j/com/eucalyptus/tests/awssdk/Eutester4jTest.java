@@ -126,7 +126,7 @@ public class Eutester4jTest {
 		try {
 			ec2Conn.describeAvailabilityZones();
 		} catch (Exception e) {
-			print("Got Expected Faiilure: " + e.getMessage());
+			print("Got Expected Failure: " + e.getMessage());
 			AssertJUnit.assertTrue(e.getMessage().length() > 0);
 		} 
 	}

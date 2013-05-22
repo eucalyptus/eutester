@@ -59,6 +59,11 @@
             <!-- <class name="com.eucalyptus.tests.awssdk.TestSTSAssumeRole"/> -->
         </classes>
     </test>
+    <test name="Walrus_Test">
+        <classes>
+            <class name="com.eucalyptus.tests.awssdk.WalrusTestNG"/>
+        </classes>
+    </test>
     <test name="Eutester4j_Sanity_Test">
         <classes>
             <class name="com.eucalyptus.tests.awssdk.Eutester4jTest"/>
