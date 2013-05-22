@@ -1335,6 +1335,7 @@ class EuInstance(Instance, TaggedResource):
     def mount_attached_volume(self,
                            volume,
                            mkfs_cmd="mkfs.ext3",
+                           force_mkfs=False,
                            mountdir="/mnt",
                            name=None):
         """
@@ -1355,10 +1356,13 @@ class EuInstance(Instance, TaggedResource):
         mounted_dir = self.get_volume_mounted_dir(volume)
         if mounted_dir:
             return mounted_dir
-        try:
-            self.sys('blkid -o value -s TYPE ' + str(dev) + '*', code=0)
-        except:
+        if force_mkfs:
             self.sys(mkfs_cmd + " " + dev, code=0)
+        else:
+            try:
+                self.sys('blkid -o value -s TYPE ' + str(dev) + '*', code=0)
+            except:
+                self.sys(mkfs_cmd + " " + dev, code=0)
         mount_point = mountdir+name
         try:
             self.assertFilePresent(mount_point)
