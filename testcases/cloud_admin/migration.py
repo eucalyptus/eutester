@@ -147,7 +147,7 @@ class MigrationTest(EutesterTestCase):
         self.source_nc = self.nodes.pop()
 
         for node in self.nodes:
-            node.sys("service eucalyptus-nc stop")
+            enabled_clc.sys("euca-modify-service -s STOPPED " + node.hostname)
 
         self.nodes = self.tester.service_manager.populate_nodes()
 
@@ -157,7 +157,7 @@ class MigrationTest(EutesterTestCase):
         # start all the NCs
         self.nodes = self.tester.service_manager.populate_nodes()
         for node in self.nodes:
-            node.sys("service eucalyptus-nc start")
+            enabled_clc.sys("euca-modify-service -s ENABLED " + node.hostname)
 
         self.nodes = self.tester.service_manager.populate_nodes()
         # evacuate source NC
