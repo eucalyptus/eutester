@@ -28,6 +28,7 @@ class Euca4229(unittest.TestCase):
         self.source  = "source " + self.tester.credpath + "/eucarc && "
 
     def tearDown(self):
+        self.tester.sys(self.source + self.sbin + "euca-modify-property -p walrus.storagemaxtotalsnapshotsizeingb=50")
         self.tester.cleanup_artifacts() 
         self.tester.delete_keypair(self.keypair)
         self.tester.local("rm " + self.keypair.name + ".pem") 
@@ -69,9 +70,6 @@ class Euca4229(unittest.TestCase):
             pass
         else:
             self.fail("FAIL new snapshot-metadata")
-        # Set back to default:
-        self.tester.sys(self.source + self.sbin + "euca-modify-property -p walrus.storagemaxtotalsnapshotsizeingb=50")
-        
 if __name__ == "__main__":
     unittest.main("Euca4229")
     
