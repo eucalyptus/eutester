@@ -69,6 +69,8 @@ class Euca4229(unittest.TestCase):
             pass
         else:
             self.fail("FAIL new snapshot-metadata")
+        # Set back to default:
+        self.tester.sys(self.source + self.sbin + "euca-modify-property -p walrus.storagemaxtotalsnapshotsizeingb=50")
         
 if __name__ == "__main__":
     unittest.main("Euca4229")
