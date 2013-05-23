@@ -15,7 +15,7 @@ import unittest
 import shutil
 import eutester.euproperties
 from eucaops import Eucaops
-from eutester.euproperties import Euproperty_manager
+from eutester.euproperties import Euproperty_Manager
 
 class Euca4229(unittest.TestCase):
 
@@ -24,6 +24,7 @@ class Euca4229(unittest.TestCase):
         self.cond = 0
         self.tester  = Eucaops( config_file=self.conf, password="foobar" )
         self.doAuth()
+        self.sbin = self.tester.eucapath + "/usr/sbin/"
         self.source  = "source " + self.tester.credpath + "/eucarc && "
 
     def tearDown(self):
@@ -52,7 +53,7 @@ class Euca4229(unittest.TestCase):
         # Get number of already existing snapshots:
         self.num_snaps_before = str(self.tester.sys(self.source + "euca-describe-snapshots")).count("SNAPSHOT")
         # Set storagemaxtotalsnapshotsizeingb 
-        self.tester.sys(self.source + "euca-modify-property -p walrus.storagemaxtotalsnapshotsizeingb=1")
+        self.tester.sys(self.source + self.sbin + "euca-modify-property -p walrus.storagemaxtotalsnapshotsizeingb=1")
         # create volume larger than storagemaxtotalsnapshotsizeingb = 1GB
         self.volume = self.tester.create_volume(self.zone, 2, timeout=100)
         # make sure the exception is thrown 
