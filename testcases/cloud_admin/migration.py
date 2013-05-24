@@ -62,7 +62,7 @@ class MigrationTest(EutesterTestCase):
         self.image = self.args.emi
         if not self.image:
             self.image = self.tester.get_emi(root_device_type="instance-store")
-
+        self.numberOfResources = 3
         zones = self.tester.ec2.get_all_zones()
         self.zone = random.choice(zones).name
 
@@ -140,24 +140,41 @@ class MigrationTest(EutesterTestCase):
         self.image = self.tester.get_emi(root_device_type="ebs")
         self.MigrationBasicInstanceStore()
 
-    def EvacuateNC(self):
-        # stop all the NCs except one
+    def EvacuateNC(self, volume_list = []):
         enabled_clc = self.tester.service_manager.get_enabled_clc().machine
         self.nodes = self.tester.service_manager.populate_nodes()
+        # pop out one NC to fill in
         self.source_nc = self.nodes.pop()
 
-        for node in self.nodes:
-            enabled_clc.sys("euca-modify-service -s STOPPED " + node.hostname)
+        def set_state(node, state):
+            # retrying, see EUCA-6389
+            while node.state != state:
+                self.tester.debug(node.hostname + ": SET STATE TO " + state)
+                enabled_clc.sys("euca-modify-service -s " + state + " " + node.hostname)
+                self.tester.sleep(10)
+                tmpnodes = self.tester.service_manager.populate_nodes()
+                for tmpnode in tmpnodes:
+                    if tmpnode.hostname == node.hostname:
+                        node = tmpnode
 
-        self.nodes = self.tester.service_manager.populate_nodes()
+        # stop all the NCs
+        for node in self.nodes:
+            set_state(node, "STOPPED")
 
         # run 3/4 instances
-        reservation = self.tester.run_instance(self.image, min=3, max=4, username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, zone=self.zone)
+        for i in xrange(self.numberOfResources):
+            reservation = self.tester.run_instance(self.image, username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, zone=self.zone)
+            instance = reservation.instances[0]
+            assert isinstance(instance, EuInstance)
+            volume_device = None
+            if volume_list:
+                volume_device = instance.attach_euvolume(volume_list[i])
 
-        # start all the NCs
         self.nodes = self.tester.service_manager.populate_nodes()
+        # start all the NCs
         for node in self.nodes:
-            enabled_clc.sys("euca-modify-service -s ENABLED " + node.hostname)
+            if node.hostname is not self.source_nc.hostname:
+                set_state(node, "ENABLED")
 
         self.nodes = self.tester.service_manager.populate_nodes()
         # evacuate source NC
@@ -175,6 +192,17 @@ class MigrationTest(EutesterTestCase):
 
         self.tester.wait_for_result(wait_for_evacuation, True, timeout=600, poll_wait=60)
 
+    def EvacuateNCWithVol(self):
+        volume_list = []
+        for i in xrange(self.numberOfResources):
+            volume = self.tester.create_volume(zone=self.zone)
+            assert isinstance(volume, EuVolume)
+            volume_list.append(volume)
+        self.EvacuateNC(volume_list)
+
+    def EvacuateNCAllEBS(self):
+        self.image = self.tester.get_emi(root_device_type="ebs")
+        self.EvacuateNC()
 
 if __name__ == "__main__":
     testcase = MigrationTest()
