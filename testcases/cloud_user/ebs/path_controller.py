@@ -26,7 +26,7 @@ class Path_Controller(EutesterTestCase):
         self.queue = queue or my_queue
         self.setuptestcase()
         if not (node or queue or sp_ip_list):
-            self.setup_parser(testname='Mpath_monkey', vmtype=False,zone=False, keypair=False,emi=False,credpath=False,
+            self.setup_parser(testname='Path_Controller', vmtype=False,zone=False, keypair=False,emi=False,credpath=False,
                               description='Run multipath failover script')
             self.parser.add_argument('--clear_rules', help='If set will clear all eutester applied rules matching ipt_msg string',action='store_true', default=False)
             self.parser.add_argument('--hostname', help='String representing host address or FQDN',default=None)
@@ -84,13 +84,15 @@ class Path_Controller(EutesterTestCase):
         self.last_clear_attempt_time = 0
         self.last_cleared_time = 0
         self.last_block_time = 0
-        self.debug('Mpath_Monkey init:' \
+        self.debug('Path_Controller init:' \
                     + "\nhost:" + str(self.host) \
                     + "\nsp_ipt_list:" + str(self.sp_ip_list) \
                     + "\ninterval:" + str(self.interval) \
                     + "\nrestore_time:" + str(self.restore_time))
 
 
+    def get_tag(self):
+        return str(self.ipt_msg) + ", time:" + str(time.time())
 
     def get_sp_ip_list(self,sp_ip_list=None, sp_ip_list_string=None):
         ret_list = []
@@ -224,11 +226,11 @@ class Path_Controller(EutesterTestCase):
         self.block_path(block)
         return block
 
-        def get_blocked_string(self):
-            out = ""
-        for addr in self.blocked:
+    def get_blocked_string(self):
+        out = ""
+        for addr in self.get_blocked_paths():
             out += str(addr) + ","
-        return str(out)
+        return out
 
     def reset(self):
         if self.timer:
