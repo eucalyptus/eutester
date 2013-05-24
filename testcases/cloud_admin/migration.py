@@ -69,13 +69,27 @@ class MigrationTest(EutesterTestCase):
     def clean_method(self):
         self.tester.cleanup_artifacts()
 
-    def migrate_instance(self, source_nc, instance, volume_device=None):
+    def MigrationBasicInstanceStore(self, volume=None):
+        enabled_clc = self.tester.service_manager.get_enabled_clc().machine
+        reservation = self.tester.run_instance(self.image, username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, zone=self.zone)
+        instance = reservation.instances[0]
+        assert isinstance(instance, EuInstance)
+        volume_device = None
+        if volume is not None:
+            volume_device = instance.attach_euvolume(volume)
+
+        self.tester.service_manager.populate_nodes()
+        source_nc = self.tester.service_manager.get_all_node_controllers(instance_id=instance.id)[0]
+        enabled_clc.sys( "source " + self.tester.credpath + "/eucarc &&" +
+                         self.tester.eucapath + "/usr/sbin/euca-migrate-instances -i " + instance.id )
+
         def wait_for_new_nc():
             self.tester.service_manager.populate_nodes()
             destination_nc = self.tester.service_manager.get_all_node_controllers(instance_id=instance.id)[0]
             return source_nc.hostname == destination_nc.hostname
 
         self.tester.wait_for_result(wait_for_new_nc, False, timeout=600, poll_wait=60)
+
         if volume_device:
             instance.sys("ls " + volume_device, code=0)
 
@@ -85,31 +99,85 @@ class MigrationTest(EutesterTestCase):
         else:
             destination_nc.machine.sys("esxcli vm process list | grep " + instance.id, code=0)
 
-    def MigrationBasicInstanceStore(self):
+    def MigrationInstanceStoreWithVol(self):
+        volume = self.tester.create_volume(zone=self.zone)
+        assert isinstance(volume, EuVolume)
+        self.MigrationBasicInstanceStore(volume)
+
+    def MigrationBasicEBSBacked(self, volume=None):
+        self.image = self.tester.get_emi(root_device_type="ebs")
+        self.MigrationBasicInstanceStore(volume)
+
+    def MigrationBasicEBSBackedWithVol(self):
+        volume = self.tester.create_volume(zone=self.zone)
+        assert isinstance(volume, EuVolume)
+        self.MigrationBasicEBSBacked(volume)
+
+    def MigrateToDest(self):
         enabled_clc = self.tester.service_manager.get_enabled_clc().machine
         reservation = self.tester.run_instance(self.image, username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, zone=self.zone)
         instance = reservation.instances[0]
-        assert isinstance(instance, EuInstance)
-        volume = self.tester.create_volume(zone=self.zone)
-        assert isinstance(volume, EuVolume)
-        volume_device = instance.attach_euvolume(volume)
         self.tester.service_manager.populate_nodes()
-        source_nc = self.tester.service_manager.get_all_node_controllers(instance_id=instance.id)[0]
-        enabled_clc.sys( "source " + self.tester.credpath + "/eucarc &&" +
-                         self.tester.eucapath + "/usr/sbin/euca-migrate-instances -i " + instance.id )
-        self.migrate_instance(source_nc, instance, volume_device)
-        ## Ensure we can migrate at least twice.
-        self.migrate_instance(source_nc, instance, volume_device)
+        self.source_nc = self.tester.service_manager.get_all_node_controllers(instance_id=instance.id)[0]
 
-    def MigrationBasicEBSBacked(self):
+        all_nc = self.tester.service_manager.get_all_node_controllers()
+        self.destination_nc = random.choice(all_nc)
+        while self.destination_nc == self.source_nc:
+                self.destination_nc = random.choice(all_nc)
+
+        enabled_clc.sys("source " + self.tester.credpath + "/eucarc && " +
+                            self.tester.eucapath + "/usr/sbin/euca-migrate-instances -i " +
+                            instance.id + " --dest " + self.destination_nc.machine.hostname)
+
+        def wait_for_new_nc():
+            self.tester.service_manager.populate_nodes()
+            self.instance_node = self.tester.service_manager.get_all_node_controllers(instance_id=instance.id)[0]
+            return self.instance_node.hostname == self.destination_nc.hostname
+
+        self.tester.wait_for_result(wait_for_new_nc, True, timeout=600, poll_wait=60)
+
+    def MigrationToDestEBSBacked(self):
         self.image = self.tester.get_emi(root_device_type="ebs")
         self.MigrationBasicInstanceStore()
+
+    def EvacuateNC(self):
+        # stop all the NCs except one
+        enabled_clc = self.tester.service_manager.get_enabled_clc().machine
+        self.nodes = self.tester.service_manager.populate_nodes()
+        self.source_nc = self.nodes.pop()
+
+        for node in self.nodes:
+            enabled_clc.sys("euca-modify-service -s STOPPED " + node.hostname)
+
+        self.nodes = self.tester.service_manager.populate_nodes()
+
+        # run 3/4 instances
+        reservation = self.tester.run_instance(self.image, min=3, max=4, username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, zone=self.zone)
+
+        # start all the NCs
+        self.nodes = self.tester.service_manager.populate_nodes()
+        for node in self.nodes:
+            enabled_clc.sys("euca-modify-service -s ENABLED " + node.hostname)
+
+        self.nodes = self.tester.service_manager.populate_nodes()
+        # evacuate source NC
+        enabled_clc.sys("source " + self.tester.credpath + "/eucarc && " +
+                            self.tester.eucapath + "/usr/sbin/euca-migrate-instances --source " +
+                        self.source_nc.machine.hostname)
+
+        def wait_for_evacuation():
+            self.tester.service_manager.populate_nodes()
+            emptyNC = self.source_nc.get_virsh_list()
+            return len(emptyNC) == 0
+
+        self.tester.wait_for_result(wait_for_evacuation, True, timeout=600, poll_wait=60)
+
 
 if __name__ == "__main__":
     testcase = MigrationTest()
     ### Use the list of tests passed from config/command line to determine what subset of tests to run
     ### or use a predefined list
-    list = testcase.args.tests or ["MigrationBasicInstanceStore"]
+    list = testcase.args.tests or ["EvacuateNC"]
 
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
