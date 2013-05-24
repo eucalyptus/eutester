@@ -446,37 +446,32 @@ class EuInstance(Instance, TaggedResource):
         
     def set_block_device_prefix(self):
         return self.set_rootfs_device()
-        '''
-        if self.found("dmesg | grep vda", "vda"):
+
+    def set_rootfs_device(self):
+        self.rootfs_device = "vda"
+        self.virtio_blk = True
+        try:
+            self.sys("dmesg | grep vda",code=0)
+            self.rootfs_device = "vda"
             self.block_device_prefix = "vd"
             self.virtio_blk = True
-            self.rootfs_device = "vda"
-        elif self.found("dmesg | grep xvda", "xvda"):
+        except:
+            pass
+        try:
+            self.sys("dmesg | grep xvda",code=0)
+            self.rootfs_device = "xvda"
             self.block_device_prefix = "xvd"
             self.virtio_blk = False
-            self.rootfs_device = "xvda"
-        else:
+        except:
+            pass
+        try:
+            self.sys("dmesg | grep sda",code=0)
+            self.rootfs_device = "sda"
             self.block_device_prefix = "sd"
             self.virtio_blk = False
-            self.rootfs_device = "sda"
-            
-        '''
-    def set_rootfs_device(self):
-        if self.found("dmesg | grep vda", "vda"):
-            self.rootfs_device = "vda"
-            self.virtio_blk = True
-        elif self.found("dmesg | grep xvda", "xvda"):
-            self.rootfs_device = "xvda"
-            self.virtio_blk = False
-        elif self.found("dmesg | grep sda", "sda"):
-            self.rootfs_device = "sda"
-            self.virtio_blk = False
-        else:
-            self.rootfs_device = "vda"
-            self.virtio_blk = False
-        
-    
-    
+        except:
+            pass
+
     def terminate_and_verify(self,verify_vols=True, volto=180, timeout=300, poll_interval=10):
         '''
         Attempts to terminate the instance and verify delete on terminate state of an ebs root block dev if any. 
