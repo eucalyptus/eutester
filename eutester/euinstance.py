@@ -60,6 +60,7 @@ import re
 import time
 import copy
 import types
+import operator
 
 
 
@@ -245,6 +246,7 @@ class EuInstance(Instance, TaggedResource):
             while (elapsed < timeout):
                 attempts += 1
                 try:
+                    self.update()
                     self.reset_ssh_connection()
                     self.debug('Try some sys...')
                     self.sys("")
@@ -439,9 +441,10 @@ class EuInstance(Instance, TaggedResource):
     def get_metadata(self, element_path, prefix='latest/meta-data/'): 
         """Return the lines of metadata from the element path provided"""
         ### If i can reach the metadata service ip use it to get metadata otherwise try the clc directly
-        if self.found("ping -c 1 169.254.169.254", "1 received"):
+        try:
+            self.sys("ping -c 1 169.254.169.254", code=0, verbose=False)
             return self.sys("curl http://169.254.169.254/"+str(prefix)+str(element_path), code=0)
-        else:
+        except:
             return self.sys("curl http://" + self.tester.get_ec2_ip()  + ":8773/"+str(prefix) + str(element_path), code=0)
         
     def set_block_device_prefix(self):
@@ -937,7 +940,13 @@ class EuInstance(Instance, TaggedResource):
             md5 = str(self.sys("head -c "+str(length)+" "+str(devpath)+" | md5sum")[0]).split(' ')[0].strip()
         return md5
         
-    def reboot_instance_and_verify(self,waitconnect=30, timeout=300, connect=True, checkvolstatus=False, pad=5):
+    def reboot_instance_and_verify(self,
+                                   waitconnect=30,
+                                   timeout=300,
+                                   connect=True,
+                                   checkvolstatus=False,
+                                   pad=5,
+                                   uptime_retries=3):
         '''
         Attempts to reboot an instance and verify it's state post reboot. 
         waitconnect-optional-integer representing seconds to wait before attempting to connect to instance after reboot
@@ -946,6 +955,7 @@ class EuInstance(Instance, TaggedResource):
         checkvolstatus - optional -boolean to be used to check volume status post start up
         '''
         msg=""
+        newuptime = None
         self.debug('Attempting to reboot instance:'+str(self.id)+', check attached volume state first')
         uptime = int(self.sys('cat /proc/uptime')[0].split()[1].split('.')[0])
         elapsed = 0
@@ -961,8 +971,16 @@ class EuInstance(Instance, TaggedResource):
         self.reboot()
         time.sleep(waitconnect)
         self.connect_to_instance(timeout=timeout)
+        def get_safe_uptime():
+            uptime = None
+            try:
+                uptime = self.get_uptime()
+            except: pass
+            return uptime
+        #Wait for the system to provide a valid response for uptime, early connections may not
+        newuptime = self.tester.wait_for_result( get_safe_uptime, None, oper=operator.ne)
+
         elapsed = int(time.time()-start)
-        newuptime = int(self.sys('cat /proc/uptime')[0].split()[1].split('.')[0])
         #Check to see if new uptime is at least 'pad' less than before, allowing for some pad 
         if (newuptime - (uptime+elapsed)) > pad:
             raise Exception("Instance uptime does not represent a reboot. Orig:"+str(uptime)+", New:"+str(newuptime)+", elapsed:"+str(elapsed))
@@ -974,7 +992,11 @@ class EuInstance(Instance, TaggedResource):
                 raise Exception("Missing volumes post reboot:"+str(msg)+"\n")
         self.debug(self.id+" reboot_instance_and_verify Success")
         
-        
+
+    def get_uptime(self):
+        return int(self.sys('cat /proc/uptime', code=0)[0].split()[1].split('.')[0])
+
+
     def attach_euvolume_list(self,list,intervoldelay=0, timepervol=90, md5len=32):
         '''
         Attempts to attach a list of euvolumes. Due to limitations with KVM and detecting the location/device
@@ -1357,7 +1379,7 @@ class EuInstance(Instance, TaggedResource):
         if mounted_dir:
             return mounted_dir
         if force_mkfs:
-            self.sys(mkfs_cmd + " " + dev, code=0)
+            self.sys(mkfs_cmd + " -F " + dev, code=0)
         else:
             try:
                 self.sys('blkid -o value -s TYPE ' + str(dev) + '*', code=0)
@@ -1504,35 +1526,28 @@ class EuInstance(Instance, TaggedResource):
         Checks current instances meta data against a provided block device map & root_dev, or
         against the current values of the instance; self.block_device_mapping & self.root_device_name
         '''
-
+        self.tester.print_block_device_map(self.block_device_mapping)
         meta_dev_names = self.get_metadata('block-device-mapping')
         meta_devices = {}
         root_dev = root_dev or self.root_device_name
+        root_dev = os.path.basename(root_dev)
         orig_bdm = bdm or self.block_device_mapping
         bdm = copy.copy(orig_bdm)
-        if root_dev in bdm:
+        if root_dev in bdm or 'dev/'+root_dev in bdm:
             bdm.pop(root_dev)
 
-        meta_ami = self.get_metadata('block-device-mapping/ami')
-        if not root_dev in meta_ami:
-            raise Exception('Meta data "block-device-mapping/ami":' + str(meta_ami) + ' != ' + str(root_dev))
-        meta_dev_names.remove('ami')
-        meta_emi = self.get_metadata('block-device-mapping/emi')
-        if not root_dev in meta_emi :
-            raise Exception('Meta data "block-device-mapping/emi":' + str(meta_emi) + ' != ' + str(root_dev))
-        meta_dev_names.remove('emi')
-        meta_root = self.get_metadata('block-device-mapping/root')
-        if not root_dev in meta_root:
-            raise Exception('Meta data "block-device-mapping/root":' + str(meta_root) + ' != ' + str(root_dev))
-        meta_dev_names.remove('root')
-        if self.root_device_type == 'ebs':
-            meta_ebs1 = self.get_metadata('block-device-mapping/ebs1')
-            if not root_dev in meta_ebs1:
-                raise Exception('Meta data "block-device-mapping/ebs1":' + str(meta_ebs1) + ' != ' + str(root_dev))
-            meta_dev_names.remove('ebs1')
-
         for device in meta_dev_names:
-            meta_devices[device] =  self.get_metadata('block-device-mapping/' + str(device))[0]
+            #Check root device meta data against the root device, else add to dict for comparison against block dev map
+            if device == 'ami' or device == 'emi' or device == 'root' or \
+            (device == 'ebs1' and self.root_device_type == 'ebs'):
+                meta_device = self.get_metadata('block-device-mapping/' + str(device))
+                if not meta_device:
+                    raise Exception('Device:' + str(device) + ' metadata response:' + str(meta_device))
+                if not root_dev in meta_device:
+                    raise Exception('Meta data "block-device-mapping/' + str(device) + '", root dev:'
+                                    + str(root_dev) + 'not in ' + str(meta_device))
+            else:
+                meta_devices[device] =  self.get_metadata('block-device-mapping/' + str(device))[0]
 
         for device in bdm:
             found = False
