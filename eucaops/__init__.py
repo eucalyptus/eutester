@@ -42,6 +42,7 @@ from stsops import STSops
 import time
 from eutester.euservice import EuserviceManager
 from boto.ec2.instance import Reservation
+from boto.exception import EC2ResponseError
 from eutester.euconfig import EuConfig
 from eutester.euproperties import Euproperty_Manager
 from eutester.machine import Machine
@@ -298,6 +299,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
         """
         euvolumes = []
         detaching = []
+        not_exist = []
         vol_str = volumes or "test_resources['volumes']"
         self.debug('clean_up_test_volumes starting, volumes:'+str(vol_str))
 
@@ -321,10 +323,23 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
             try:
                 if vol.status == 'in-use':
                     if vol.attach_data and vol.attach_data.status != 'detaching':
-                        vol.detach()
+                        try:
+                            vol.detach()
+                        except EC2ResponseError, be:
+                            if 'Volume does not exist' in be.error_message:
+                                not_exist.append(vol)
+                                self.debug(str(vol.id) + ', volume no longer exists')
+                            else:
+                                raise be
                     detaching.append(vol)
             except:
                 print self.get_traceback()
+        #If the volume was found to no longer exist on the sytem, remove it from further monitoring...
+        for vol in not_exist:
+            if vol in detaching:
+                detaching.remove(vol)
+            if vol in euvolumes:
+                euvolumes.remove(vol)
         if detaching:
             timeout = min_timeout + (len(detaching) * timeout_per_vol)
             self.monitor_euvolumes_to_status(detaching, status='available', attached_status=None,timeout=timeout)
