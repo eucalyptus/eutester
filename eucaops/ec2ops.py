@@ -961,7 +961,7 @@ class EC2ops(Eutester):
             try:
                 self.debug( "Sending delete for volume: " +  str(volume.id)  )
                 self.ec2.delete_volume(volume.id)
-            except boto.exception.EC2ResponseError, be:
+            except EC2ResponseError, be:
                 err = "ERROR: " + str(volume.id) + ", " + str(be.status)+ ", " + str(be.reason) + \
                           ", " +str(be.error_message) + "\n"
                 errmsg += err
@@ -2471,7 +2471,7 @@ class EC2ops(Eutester):
                 try:
                     volume = self.get_volume(volume_id=device.volume_id)
                 except Exception, e:
-                    self.debug('Error trying to retrieve volume:' + str(volume.id) +
+                    self.debug('Error trying to retrieve volume:' + str(device.volume_id) +
                                ' from instance:' + str(instance.id) + " block dev map")
                 if not volume in self.test_resources['volumes']:
                     self.test_resources['volumes'].append(volume)
