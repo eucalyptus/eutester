@@ -140,7 +140,7 @@ class Instance_Io_Monitor(EutesterTestCase):
 
         self.timed_test_period = self.args.timed_test_period
         self.instance = None
-        self.volumes = None
+        self.volumes = []
         self.remote_script_path = None
         self.longest_wait_period = 0
         self.path_controller = None
@@ -220,7 +220,8 @@ class Instance_Io_Monitor(EutesterTestCase):
         elif (now - last_block_time) > self.cycle_path_interval:
             path_controller.clear_all_eutester_rules(retry=False)
             status = 'Clearing blocked path'
-        return status
+        blocked_paths = "CURRENTLY BLOCKED:" + str(path_controller.get_blocked_string())
+        return blocked_paths + ", TEST STATUS:" + status
 
 
     def cycle_method_run_guest_io_for_time(self):
@@ -348,31 +349,37 @@ class Instance_Io_Monitor(EutesterTestCase):
         if not path_controller in self.path_controllers:
             self.path_controllers.append(path_controller)
         instance.path_controller = path_controller
+        instance.node = node
         return path_controller
 
 
-    def get_existing_test_volume(self, tagkey=None):
+    def get_existing_test_volumes(self, tagkey=None):
         if self.args.volume_id:
             volumes = self.tester.get_volumes(status='available',volume_id=str(self.args.volume_id))
             if not volumes:
-                raise Exception('Faild to fetch volume from id provided:' +str(self.args.volume_id))
+                raise Exception('Failed to fetch volume from id provided:' +str(self.args.volume_id))
         else:
             tagkey = tagkey or self.test_tag
             volumes = self.tester.get_volumes(status='available', filters={'tag-key':str(tagkey)})
         if volumes:
-            return volumes[0]
+            return volumes
         return None
 
-    def get_test_volume(self):
+    def get_test_volumes(self, count=1):
         if self.volume:
             self.volume.update()
             if self.volume.status == 'available':
                 return self.volume
-        volume = self.get_existing_test_volume()
-        if not volume:
-            volume = self.tester.create_volume(self.zone, size=self.size)
-        self.volume = volume
-        return volume
+        volumes = self.get_existing_test_volumes()
+        if not volumes:
+            volumes = self.tester.create_volumes(self.zone, size=self.size, count=count)
+            for volume in volumes:
+                volume.add_tag(str(self.test_tag))
+        self.volume = volumes[0]
+        for volume in volumes:
+            if volume not in self.volumes:
+                self.volumes.append(volume)
+        return volumes
 
     def attach_test_volume(self,volume=None):
         volume = volume or self.volume
@@ -383,7 +390,7 @@ class Instance_Io_Monitor(EutesterTestCase):
                         testcolor=TestColor.get_canned_color('failred'))
             time.sleep(10)
             self.debug('Monitoring volume post VolumeStateException...')
-            self.volume.eutest_attached_status = None
+            volume.eutest_attached_status = None
             self.tester.monitor_euvolumes_to_status([volume],status='in-use',attached_status='attached',timeout=90)
 
 
@@ -394,6 +401,20 @@ class Instance_Io_Monitor(EutesterTestCase):
         self.instance.sys('touch ' + test_file_path, code=0)
         self.test_file_path = test_file_path
 
+    def get_mpath_info_for_instance_vol(self, instance, vol):
+        if not hasattr(instance, 'node'):
+            instance.node = self.get_node_instance_is_running_on(instance)
+        info = instance.node.get_instance_multipath_dev_info_for_instance_ebs_volume(instance, vol)
+        return info
+
+    def print_mpath_info_for_instance_vol(self, instance, vol, mute=False):
+        info = "\n".join(self.get_mpath_info_for_instance_vol(instance, vol))
+        line = "\n-----------------------------------------------------------------------------------\n"
+        header = "\nMPATH INFO --> INSTANCE:" + str(instance.id) + ", VOLUME:" + str(vol.id) + "\n"
+        buf = line + header + info + line
+        if not mute:
+            self.debug(buf, linebyline=False)
+        return (buf)
 
     def sftp_test_io_script_to_instance(self):
         local_script_path =str(self.args.io_script_path)
@@ -404,7 +425,7 @@ class Instance_Io_Monitor(EutesterTestCase):
 
     def setup_instance_volume_and_script(self):
         self.get_test_instance()
-        self.get_test_volume()
+        self.get_test_volumes()
         self.attach_test_volume()
         self.mount_volume_and_create_test_file()
         self.sftp_test_io_script_to_instance()
@@ -425,7 +446,6 @@ class Instance_Io_Monitor(EutesterTestCase):
         path_controller.clear_all_eutester_rules()
         path_controller.total_path_iterations=0
 
-
         cmd = 'python ' + self.remote_script_path + " -f " + self.test_file_path + ' -t ' + str(timed_run)
         self.stdscr = curses.initscr()
         try:
@@ -435,7 +455,7 @@ class Instance_Io_Monitor(EutesterTestCase):
             out = self.instance.ssh.cmd(cmd,
                                   verbose=False,
                                   cb=self.remote_ssh_io_script_monitor_cb,
-                                  cbargs=[None,None,None,None,now, now, 'Starting' ])
+                                  cbargs=[None,None,None,None,now, now, 'Starting', None ])
             exit_value = out['status']
             exit_lines = out['output']
         except Exception, e:
@@ -480,13 +500,13 @@ class Instance_Io_Monitor(EutesterTestCase):
                                         last_read,
                                         last_time,
                                         cycle_check_time,
-                                        status):
+                                        status,
+                                        mpath_status):
         ret = SshCbReturn(stop=False, settimer=self.inter_io_timeout)
         return_buf = ""
         now = time.time()
         path_controller = self.instance.path_controller
         remaining_iterations = self.max_path_iterations- path_controller.total_path_iterations
-        blocked_paths ="BLOCKED_PATHS:"
         completed_iterations = "COMPLETED_ITERATIONS:" + str(path_controller.total_path_iterations)
         remaining_iterations_str = "REMAINING_ITERATIONS:" + str(remaining_iterations)
         write_rate = write_rate or 'WRITE_RATE:'
@@ -499,14 +519,16 @@ class Instance_Io_Monitor(EutesterTestCase):
         waited_str = "INTER_IO_SECONDS_WAITED: "+ str(waited)
         time_remaining = "GUEST_SIDE_SCRIPT_TIME_REMAINING:"
 
-        #Pace cycle checks by at least 1 second
+        #Pace cycle checks
         if now - cycle_check_time >= 5:
             status = self.current_cycle_method()
             cycle_check_time = now
+            try:
+                mpath_status = self.print_mpath_info_for_instance_vol(self.instance, self.volume)
+            except Exception, e:
+                mpath_status = str(e)
+
         status_str = 'STATUS:' + str(status)
-
-        blocked_paths += path_controller.get_blocked_string()
-
 
         if waited > self.longest_wait_period:
             self.longest_wait_period = waited
@@ -534,11 +556,11 @@ class Instance_Io_Monitor(EutesterTestCase):
                            + last_read.ljust(20) + "\n" \
                            + waited_str.ljust(20) + "\n" \
                            + str(longest_wait_period_str).ljust(20) + "\n" \
-                           + str(blocked_paths) + "\n" \
                            + str(completed_iterations) + "\n" \
                            + str(remaining_iterations_str) + "\n" \
                            + str(time_remaining) + "\n" \
                            + str(status_str) + "\n" \
+                           + str(mpath_status) + "\n" \
                            + "ret buf:" + str(return_buf) \
                            + "\n-------------------------------------------------\n"
 
@@ -565,7 +587,7 @@ class Instance_Io_Monitor(EutesterTestCase):
             ret.statuscode=69
             pass
         finally:
-            ret.nextargs = [ write_value, write_rate,read_rate, last_read, time.time(), cycle_check_time, status]
+            ret.nextargs = [ write_value, write_rate,read_rate, last_read, time.time(), cycle_check_time, status, mpath_status]
             ret.buf = return_buf
             return ret
 
@@ -597,6 +619,8 @@ class Instance_Io_Monitor(EutesterTestCase):
         finally:
             if clean_on_exit:
                 try:
+                    for pc in self.path_controllers:
+                        pc.clear_all_eutester_rules()
                     self.instance.terminate_and_verify()
                 except Exception, ie:
                     errmsg += '\n' + str(ie)
@@ -605,9 +629,11 @@ class Instance_Io_Monitor(EutesterTestCase):
 
 
 
-    def test2_attach_volume_while_a_single_path_is_down(self, wait_after_block=60, clean_on_exit=True):
+    def test2_attach_volume_while_a_single_path_is_down(self, wait_after_block=60, mb=1, clean_on_exit=True):
         single_path = None
+        length = mb * 1048576
         errmsg = ''
+        path_controller = None
         try:
             self.status('Get test instance to run test...')
             self.get_test_instance()
@@ -617,12 +643,12 @@ class Instance_Io_Monitor(EutesterTestCase):
             else:
                 raise Exception('Not enough paths to shut one down for test')
             self.status('Getting volume for use in test...')
-            self.get_test_volume()
+            self.get_test_volumes()
             self.status('Checking paths to make sure none are currently blocked...')
             if path_controller.get_blocked_paths():
                 self.debug('Clearing blocked paths and sleeping for recovery period:' +
                            str(self.path_recovery_interval) + ' seconds')
-                self.path_controller.clear_all_eutester_rules(timeout=120)
+                path_controller.clear_all_eutester_rules(timeout=120)
                 time.sleep(self.path_recovery_interval)
             self.status('Blocking single path: "' + str(single_path) + '" before attaching volume...')
             path_controller.block_path(single_path)
@@ -630,13 +656,16 @@ class Instance_Io_Monitor(EutesterTestCase):
             time.sleep(wait_after_block)
             self.status('Path is blocked, attaching volume...')
             self.attach_test_volume()
+            self.print_mpath_info_for_instance_vol(self.instance, self.volume)
+
             self.status('Mounting volume and creating guest side test env...')
-            self.mount_volume_and_create_test_file()
-            self.sftp_test_io_script_to_instance()
+
+            #self.mount_volume_and_create_test_file()
+            #self.sftp_test_io_script_to_instance()
             self.status('Attempting to run some basic io on guest volume...')
-            self.instance.vol_write_random_data_get_md5(self.volume, length=1048576, overwrite=True)
+            self.instance.vol_write_random_data_get_md5(self.volume, length=length, overwrite=True)
             self.status('Remote io monitor script done, success. Attempting to detach volume now...')
-            self.instance.detach_volume(self.volume)
+            self.instance.detach_euvolume(self.volume)
         except Exception, e:
             tb = self.tester.get_traceback()
             errmsg = "\n" + str(tb) + "\nERROR: " + str(e)
@@ -644,7 +673,11 @@ class Instance_Io_Monitor(EutesterTestCase):
             if clean_on_exit:
                 self.status('Tearing down instance after test...')
                 try:
-                    path_controller.clear_all_eutester_rules()
+                    if path_controller:
+                        path_controller.clear_all_eutester_rules()
+                    else:
+                        for pc in self.path_controllers:
+                            pc.clear_all_eutester_rules()
                     self.instance.terminate_and_verify()
                 except Exception, ie:
                     errmsg += '\n' + str(ie)
@@ -654,6 +687,7 @@ class Instance_Io_Monitor(EutesterTestCase):
     def test3_attach_volume_while_a_single_path_is_in_process_of_failing(self, clean_on_exit=True):
         single_path = None
         errmsg = ''
+        path_controller = None
         try:
             self.status('Get test instance to run test...')
             self.get_test_instance()
@@ -663,24 +697,25 @@ class Instance_Io_Monitor(EutesterTestCase):
             else:
                 raise Exception('Not enough paths to shut one down for test')
             self.status('Getting volume for use in test...')
-            self.get_test_volume()
+            self.get_test_volumes()
             self.status('Checking paths to make sure none are currently blocked...')
             if path_controller.get_blocked_paths():
                 self.debug('Clearing blocked paths and sleeping for recovery period:' +
                            str(self.path_recovery_interval) + ' seconds')
-                self.path_controller.clear_all_eutester_rules(timeout=120)
+                path_controller.clear_all_eutester_rules(timeout=120)
                 time.sleep(self.path_recovery_interval)
             self.status('Blocking single path: "' + str(single_path) + '" before attaching volume...')
             path_controller.block_path(single_path)
             self.status('Path is blocked, immediately attaching volume while path is in process of failing...')
             self.attach_test_volume()
+            self.print_mpath_info_for_instance_vol(self.instance, self.volume)
             self.status('Mounting volume and creating guest side test env...')
             self.mount_volume_and_create_test_file()
             self.sftp_test_io_script_to_instance()
             self.status('Attempting to run some basic io on guest volume...')
             self.instance.vol_write_random_data_get_md5(self.volume, length=1048576, overwrite=True)
             self.status('Remote io done, detaching...')
-            self.instance.detach_volume(self.volume)
+            self.instance.detach_euvolume(self.volume)
         except Exception, e:
             tb = self.tester.get_traceback()
             errmsg = "\n" + str(tb) + "\nERROR: " + str(e)
@@ -688,7 +723,11 @@ class Instance_Io_Monitor(EutesterTestCase):
             if clean_on_exit:
                 self.status('Tearing down instance after test...')
                 try:
-                    path_controller.clear_all_eutester_rules()
+                    if path_controller:
+                        path_controller.clear_all_eutester_rules()
+                    else:
+                        for pc in self.path_controllers:
+                            pc.clear_all_eutester_rules()
                     self.instance.terminate_and_verify()
                 except Exception, ie:
                     errmsg += '\n' + str(ie)
@@ -697,9 +736,10 @@ class Instance_Io_Monitor(EutesterTestCase):
 
 
 
-    def test3_detach_volume_with_single_path_down_after_attached(self, wait_after_block=60, clean_on_exit=True):
+    def test4_detach_volume_with_single_path_down_after_attached(self, wait_after_block=60, clean_on_exit=True):
         single_path = None
         errmsg = ''
+        path_controller = None
         try:
             self.status('Get test instance to run test...')
             self.get_test_instance()
@@ -709,16 +749,17 @@ class Instance_Io_Monitor(EutesterTestCase):
             else:
                 raise Exception('Not enough paths to shut one down for test')
             self.status('Getting volume for use in test...')
-            self.get_test_volume()
+            self.get_test_volumes()
             self.status('Checking paths to make sure none are currently blocked...')
             if path_controller.get_blocked_paths():
                 self.debug('Clearing blocked paths and sleeping for recovery period:' +
                            str(self.path_recovery_interval) + ' seconds')
-                self.path_controller.clear_all_eutester_rules(timeout=120)
+                path_controller.clear_all_eutester_rules(timeout=120)
                 time.sleep(self.path_recovery_interval)
 
             self.status('Attaching test volume while all paths are up...')
             self.attach_test_volume()
+            self.print_mpath_info_for_instance_vol(self.instance, self.volume)
             self.status('Mounting volume and creating guest side test env...')
             self.mount_volume_and_create_test_file()
             self.sftp_test_io_script_to_instance()
@@ -731,7 +772,7 @@ class Instance_Io_Monitor(EutesterTestCase):
             self.status('Waiting ' + str(wait_after_block) + ' seconds after blocking for path to go down...')
             time.sleep(wait_after_block)
             self.status('Detaching volume while path is down...')
-            self.instance.detach_volume(self.volume)
+            self.instance.detach_euvolume(self.volume)
 
         except Exception, e:
             tb = self.tester.get_traceback()
@@ -740,7 +781,67 @@ class Instance_Io_Monitor(EutesterTestCase):
             if clean_on_exit:
                 self.status('Tearing down instance after test...')
                 try:
-                    path_controller.clear_all_eutester_rules()
+                    if path_controller:
+                        path_controller.clear_all_eutester_rules()
+                    else:
+                        for pc in self.path_controllers:
+                            pc.clear_all_eutester_rules()
+                    self.instance.terminate_and_verify()
+                except Exception, ie:
+                    errmsg += '\n' + str(ie)
+            if errmsg:
+                raise Exception(errmsg)
+
+
+    def test5_attach_volume_while_a_single_path_is_down_run_io_monitor(self, wait_after_block=60, mb=1, clean_on_exit=True):
+        single_path = None
+        length = mb * 1048576
+        errmsg = ''
+        path_controller = None
+        try:
+            self.status('Get test instance to run test...')
+            self.get_test_instance()
+            path_controller =  self.instance.path_controller
+            if len(path_controller.sp_ip_list) > 1:
+                single_path = path_controller.sp_ip_list[1]
+            else:
+                raise Exception('Not enough paths to shut one down for test')
+            self.status('Getting volume for use in test...')
+            self.get_test_volumes()
+            self.status('Checking paths to make sure none are currently blocked...')
+            if path_controller.get_blocked_paths():
+                self.debug('Clearing blocked paths and sleeping for recovery period:' +
+                           str(self.path_recovery_interval) + ' seconds')
+                path_controller.clear_all_eutester_rules(timeout=120)
+                time.sleep(self.path_recovery_interval)
+            self.status('Blocking single path: "' + str(single_path) + '" before attaching volume...')
+            path_controller.block_path(single_path)
+            self.status('Path is blocked waiting ' + str(wait_after_block) + 'seconds before attach...')
+            time.sleep(wait_after_block)
+            self.status('Path is blocked, attaching volume...')
+            self.attach_test_volume()
+            self.print_mpath_info_for_instance_vol(self.instance, self.volume)
+            self.status('Mounting volume and creating guest side test env...')
+
+            self.mount_volume_and_create_test_file()
+            self.sftp_test_io_script_to_instance()
+            self.status('Attempting to run some basic io on guest volume...')
+            self.run_remote_script_and_monitor()
+            #self.instance.vol_write_random_data_get_md5(self.volume, length=length, overwrite=True)
+            self.status('Remote io monitor script done, success. Attempting to detach volume now...')
+            self.instance.detach_euvolume(self.volume)
+        except Exception, e:
+            tb = self.tester.get_traceback()
+            errmsg = "\n" + str(tb) + "\nERROR: " + str(e)
+        finally:
+            if clean_on_exit:
+                self.status('Tearing down instance after test...')
+                try:
+                    if path_controller:
+                        path_controller.clear_all_eutester_rules()
+                    else:
+                        for pc in self.path_controllers:
+                            pc.clear_all_eutester_rules()
                     self.instance.terminate_and_verify()
                 except Exception, ie:
                     errmsg += '\n' + str(ie)
@@ -749,6 +850,102 @@ class Instance_Io_Monitor(EutesterTestCase):
 
 
 
+    def test6_attach_vol_while_up_and_attach_vol_while_down_detach_both_cases(self,
+                                                                              wait_after_block=60,
+                                                                              vols_before_block=3,
+                                                                              vols_after_block=2,
+                                                                              clean_on_exit=True):
+        single_path = None
+        before_block = []
+        after_block = []
+        errmsg = ''
+        path_controller = None
+        try:
+            self.status('Get test instance to run test...')
+            self.get_test_instance()
+            path_controller =  self.instance.path_controller
+            if len(path_controller.sp_ip_list) > 1:
+                single_path = path_controller.sp_ip_list[1]
+            else:
+                raise Exception('Not enough paths to shut one down for test')
+            self.status('Getting volume for use in test...')
+            volumes = self.get_test_volumes(count=int(vols_after_block + vols_before_block))
+            self.status('Checking paths to make sure none are currently blocked...')
+            if path_controller.get_blocked_paths():
+                self.debug('Clearing blocked paths and sleeping for recovery period:' +
+                           str(self.path_recovery_interval) + ' seconds')
+                path_controller.clear_all_eutester_rules(timeout=120)
+                time.sleep(self.path_recovery_interval)
+
+            for x in xrange(0, vols_before_block):
+                volume = volumes[x]
+                before_block.append(volume)
+                self.status('Attaching test volume ' + str(x+1) + ' of ' +str(vols_before_block) + ' while all paths are up...')
+                self.attach_test_volume(volume)
+                self.print_mpath_info_for_instance_vol(self.instance, volume)
+                self.status('Attempting to run some basic io on guest volume...')
+                self.instance.vol_write_random_data_get_md5(volume, length=1048576, overwrite=True)
+                self.status('Remote write/read done for volume:' +str(volume.id))
+            self.status('Attached all ' + str(vols_before_block) + ' volumes before blocking a path')
+            if vols_after_block:
+                self.status('Blocking single path: "' + str(single_path) + '" before detaching volume:'
+                            + str(self.volume.id) + '...')
+                path_controller.block_path(single_path)
+                self.status('Waiting ' + str(wait_after_block) + ' seconds after blocking for path to go down...')
+                time.sleep(wait_after_block)
+                for x in xrange(0, vols_after_block):
+                    volume = volumes[x + vols_before_block]
+                    after_block.append(volume)
+                    self.status('Attaching test volume ' + str(x+1) + ' of ' +str(vols_before_block) +
+                                'while path:' + str(single_path) + " is down")
+                    self.attach_test_volume(volume)
+                    self.print_mpath_info_for_instance_vol(self.instance, volume)
+                    self.status('Attempting to run some basic io on guest volume...')
+                    self.instance.vol_write_random_data_get_md5(volume, length=1048576, overwrite=True)
+                    self.status('Remote write/read done for volume:' +str(volume.id))
+            self.status('Detaching a volume while path is down...')
+            detach_vols = []
+            if before_block:
+                detach_vols.append(before_block.pop())
+            if after_block:
+                detach_vols.append(after_block.pop())
+            for volume in detach_vols:
+                self.instance.detach_euvolume(volume)
+            if before_block or after_block:
+                detach_vols = []
+                if before_block:
+                    detach_vols.append(before_block.pop())
+                if after_block:
+                    detach_vols.append(after_block.pop())
+                self.status('Clearing blocked paths to detach remaining volumes')
+                self.status('Checking paths to make sure none are currently blocked...')
+                if path_controller.get_blocked_paths():
+                    self.debug('Clearing blocked paths and sleeping for recovery period:' +
+                               str(self.path_recovery_interval) + ' seconds')
+                    path_controller.clear_all_eutester_rules(timeout=120)
+                    time.sleep(self.path_recovery_interval)
+                    for volume in detach_vols:
+                        self.instance.detach_euvolume(volume)
+            before_block.extend(after_block)
+            self.status('terminating instance with' + str(len(before_block)) + ' volumes attached')
+
+        except Exception, e:
+            tb = self.tester.get_traceback()
+            errmsg = "\n" + str(tb) + "\nERROR: " + str(e)
+        finally:
+            if clean_on_exit:
+                self.status('Tearing down instance after test...')
+                try:
+                    if path_controller:
+                        path_controller.clear_all_eutester_rules()
+                    else:
+                        for pc in self.path_controllers:
+                            pc.clear_all_eutester_rules()
+                    self.instance.terminate_and_verify()
+                except Exception, ie:
+                    errmsg += '\n' + str(ie)
+            if errmsg:
+                raise Exception(errmsg)
 
     def testsuite(self):
         self.cycle_paths = True
