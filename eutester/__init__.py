@@ -45,6 +45,8 @@ import traceback
 import StringIO
 import eulogger
 import types
+import operator
+
 from functools import wraps
 
 
@@ -326,15 +328,16 @@ class Eutester(object):
             return func(*func_args, **func_kwargs)
         return methdecor
 
-    def wait_for_result(self, callback, result, timeout=60, poll_wait=10, **callback_kwargs):
+    def wait_for_result(self, callback, result, timeout=60, poll_wait=10, oper=operator.eq,  **callback_kwargs):
         """
         Wait for the instance to enter the state
 
         :param instance: Boto instance object to check the state on
-        :param state: state that we are looking for
+        :param result: result from the call back provided that we are looking for
         :param poll_count: Number of 10 second poll intervals to wait before failure (for legacy test script support)
         :param timeout: Time in seconds to wait before failure
-        :return: True on success
+        :param oper: operator obj used to evaluate 'result' against callback's result. ie operator.eq, operator.ne, etc..
+        :return: result upon success
         :raise: Exception when instance does not enter proper state
         """
         self.debug( "Beginning poll loop for result " + str(callback.func_name) + " to go to " + str(result) )
@@ -342,16 +345,19 @@ class Eutester(object):
         elapsed = 0
         current_state =  callback(**callback_kwargs)
         ### If the instance changes state or goes to the desired state before my poll count is complete
-        while( elapsed <  timeout ) and (current_state != result):
-            current_state = callback(**callback_kwargs)
-            self.debug( "Result of " + str(callback.func_name) + ": " + str(current_state) )
+        while( elapsed <  timeout and not oper(current_state,result) ):
+            self.debug(  str(callback.func_name) + ' returned: "' + str(current_state) + '" after '
+                       + str(elapsed/60) + " minutes " + str(elapsed%60) + " seconds.")
             self.sleep(poll_wait)
+            current_state = callback(**callback_kwargs)
             elapsed = int(time.time()- start)
-        self.debug( "Result of " + str(callback.func_name) + ": " + str(current_state) )
-        if current_state != result:
-            raise Exception( str(callback.func_name) + " did not return "+str(result)+" after elapsed:"+str(elapsed))
-        self.debug(  str(callback.func_name) + ' is now: ' + str(result)+" after "+ str(elapsed/60) + " minutes " + str(elapsed%60) + " seconds.")
-        return True
+        self.debug(  str(callback.func_name) + ' returned: "' + str(current_state) + '" after '
+                    + str(elapsed/60) + " minutes " + str(elapsed%60) + " seconds.")
+        if not oper(current_state,result):
+            raise Exception( str(callback.func_name) + " did not return " + str(operator.ne.__name__) +
+                             "(" + str(result) + ") true after elapsed:"+str(elapsed))
+        return current_state
+
 
     @classmethod
     def get_traceback(cls):
@@ -369,19 +375,7 @@ class Eutester(object):
     
     def __str__(self):
         return 'got self'
-        """
-        Prints informations about configuration of Eucateser as configuration file,
-        how many errors, the path of the Eucalyptus, and the path of the user credentials
-        """
-        s  = "+++++++++++++++++++++++++++++++++++++++++++++++++++++\n"
-        s += "+" + "Eucateser Configuration" + "\n"
-        s += "+" + "+++++++++++++++++++++++++++++++++++++++++++++++\n"
-        s += "+" + "Config File: " + str(self.config_file) +"\n"
-        s += "+" + "Fail Count: " +  str(self.fail_count) +"\n"
-        s += "+" + "Eucalyptus Path: " +  str(self.eucapath) +"\n"
-        s += "+" + "Credential Path: " +  str(self.credpath) +"\n"
-        s += "+++++++++++++++++++++++++++++++++++++++++++++++++++++\n"
-        return s
+
     
 
 
