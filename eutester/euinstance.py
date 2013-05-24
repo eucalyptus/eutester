@@ -71,8 +71,8 @@ class EuInstance(Instance, TaggedResource):
     keypath = None
     username = None
     password = None
-    rootfs_device = "vda"
-    block_device_prefix = "vd"
+    rootfs_device = "sda"
+    block_device_prefix = "sd"
     virtio_blk = False
     bdm_root_vol = None
     reservation = None
