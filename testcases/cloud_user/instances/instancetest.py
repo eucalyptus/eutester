@@ -30,7 +30,7 @@ class InstanceBasics(EutesterTestCase):
             self.tester = EC2ops( credpath=self.args.credpath, region=self.args.region)
         else:
             self.tester = Eucaops(config_file=self.args.config, password=self.args.password, credpath=self.args.credpath)
-        self.instance_timeout = 240
+        self.instance_timeout = 480
 
         ### Add and authorize a group for the instance
         self.group = self.tester.add_group(group_name="group-" + str(time.time()))
@@ -401,7 +401,7 @@ if __name__ == "__main__":
     testcase = InstanceBasics()
     ### Either use the list of tests passed from config/command line to determine what subset of tests to run
     list = testcase.args.tests or [ "BasicInstanceChecks",  "Reboot", "MetaData", "ElasticIps", "MultipleInstances" , "LargestInstance",
-                                   "PrivateIPAddressing", "Churn"]
+                                   "PrivateIPAddressing", "Churn", "DNSResolveCheck"]
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
     for test in list:
