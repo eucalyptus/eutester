@@ -448,8 +448,9 @@ class EuInstance(Instance, TaggedResource):
         return self.set_rootfs_device()
 
     def set_rootfs_device(self):
-        self.rootfs_device = "vda"
-        self.virtio_blk = True
+        self.rootfs_device = "sda"
+        self.block_device_prefix = "sd"
+        self.virtio_blk = False
         try:
             self.sys("dmesg | grep vda",code=0)
             self.rootfs_device = "vda"
