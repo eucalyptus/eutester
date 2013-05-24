@@ -58,9 +58,7 @@ class Upgrade(Install):
         self.stop_components()
         self.upgrade_packages()
         self.start_components()
-        if re.search("^3.1", self.old_version):
-            self.set_block_storage_manager()
-
+        self.tester.service_manager.all_services_operational()
 
 if __name__ == "__main__":
     testcase = Upgrade()
