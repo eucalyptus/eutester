@@ -142,22 +142,35 @@ class MigrationTest(EutesterTestCase):
 
     def EvacuateNC(self):
         # stop all the NCs except one
+        self.tnode = None
         enabled_clc = self.tester.service_manager.get_enabled_clc().machine
         self.nodes = self.tester.service_manager.populate_nodes()
         self.source_nc = self.nodes.pop()
 
+        def wait_for_nc_state_transition():
+            tnodes = self.tester.service_manager.populate_nodes()
+            for node in tnodes:
+                if node.hostname == self.tnode.hostname:
+                    return node.state
+
+        # stop all the NCs
         for node in self.nodes:
-            enabled_clc.sys("euca-modify-service -s STOPPED " + node.hostname)
+            self.tnode = node
+            enabled_clc.sys("euca-modify-service -s STOPPED " + self.tnode.hostname)
+            self.tester.wait_for_result(wait_for_nc_state_transition, "STOPPED", timeout=100, poll_wait=10)
 
         self.nodes = self.tester.service_manager.populate_nodes()
 
         # run 3/4 instances
         reservation = self.tester.run_instance(self.image, min=3, max=4, username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, zone=self.zone)
 
-        # start all the NCs
         self.nodes = self.tester.service_manager.populate_nodes()
+        # start all the NCs
         for node in self.nodes:
-            enabled_clc.sys("euca-modify-service -s ENABLED " + node.hostname)
+            if node.hostname is not self.source_nc.hostname:
+                self.tnode = node
+                enabled_clc.sys("euca-modify-service -s ENABLED " + self.tnode.hostname)
+                self.tester.wait_for_result(wait_for_nc_state_transition, "ENABLED", timeout=100, poll_wait=10)
 
         self.nodes = self.tester.service_manager.populate_nodes()
         # evacuate source NC
@@ -172,6 +185,9 @@ class MigrationTest(EutesterTestCase):
 
         self.tester.wait_for_result(wait_for_evacuation, True, timeout=600, poll_wait=60)
 
+    def EvacuateNCAllEBS(self):
+        self.image = self.tester.get_emi(root_device_type="ebs")
+        self.EvacuateNC()
 
 if __name__ == "__main__":
     testcase = MigrationTest()
