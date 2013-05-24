@@ -223,6 +223,8 @@ class Eunode:
 
 
         '''
+        if timeout < idle_timeout:
+            idle_timeout = timeout
         if not isinstance(instance,types.StringTypes):
             instance = instance.id
         console_path = self.get_instance_console_path(instance)
@@ -277,26 +279,48 @@ class Eunode:
             return ret
 
 
-    def get_multipath_dev_info_for_instance_ebs_volume(self, instance, volume):
+    def get_instance_multipath_dev_info_for_instance_ebs_volume(self, instance, volume):
         if not isinstance(instance,types.StringTypes):
             instance = instance.id
-        if not isinstance(volume,types.StringTypes):
+        if isinstance(volume,types.StringTypes):
             volume = self.tester.get_volume(volume_id=volume)
         if volume.attach_data and volume.attach_data.instance_id == instance:
             dev = volume.attach_data.device
         else:
             raise Exception(str(volume.id) + 'Vol not attached to instance: ' + str(instance))
-        return self.get_multipath_dev_info_for_instance_ebs_block_dev(instance, dev)
+        return self.get_instance_multipath_dev_info_for_instance_block_dev(instance, dev)
 
-    def get_multipath_dev_info_for_instance_ebs_block_dev(self, instance, ebs_block_dev):
+
+    def get_instance_multipath_dev_info_for_instance_block_dev(self, instance, ebs_block_dev, verbose=False):
+        if not isinstance(instance,types.StringTypes):
+            instance = instance.id
+        mpath_dev = self.get_instance_multipath_dev_for_instance_block_dev(instance, ebs_block_dev)
+        mpath_dev_info = self.machine.sys('multipath -ll ' + str(mpath_dev) + " | sed 's/[[:cntrl:]]//g' ",
+                                          verbose=verbose, code=0)
+        return mpath_dev_info
+
+    def get_instance_multipath_dev_for_instance_ebs_volume(self, instance, volume):
+        if not isinstance(instance,types.StringTypes):
+            instance = instance.id
+        if isinstance(volume,types.StringTypes):
+            volume = self.tester.get_volume(volume_id=volume)
+
+    def get_instance_multipath_dev_for_instance_block_dev(self, instance, ebs_block_dev, verbose=False):
+        mpath_dev = None
         ebs_block_dev = os.path.basename(ebs_block_dev)
         if not isinstance(instance,types.StringTypes):
             instance = instance.id
-        dm_dev = self.get_node_dev_for_instance_block_dev(instance, ebs_block_dev)
-        mpath_dev = self.machine.sys('multipath -ll ' + str(dm_dev), verbose=False, code=0)
+        dm_dev = self.get_instance_block_disk_dev_on_node(instance, ebs_block_dev)
+        sym_links = self.machine.sys('udevadm info --name ' + str(dm_dev) + ' --query symlink',
+                                     verbose=verbose, code=0)[0]
+        for path in str(sym_links).split():
+            if str(path).startswith('mapper/'):
+                mpath_dev = path.split('/')[1]
+                break
         return mpath_dev
 
-    def get_node_dev_for_instance_block_dev(self, instance, block_dev):
+
+    def get_instance_block_disk_dev_on_node(self, instance, block_dev):
         block_dev = os.path.basename(block_dev)
         if not isinstance(instance,types.StringTypes):
             instance = instance.id
