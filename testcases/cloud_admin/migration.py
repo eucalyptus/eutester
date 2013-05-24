@@ -167,7 +167,10 @@ class MigrationTest(EutesterTestCase):
 
         def wait_for_evacuation():
             self.tester.service_manager.populate_nodes()
-            emptyNC = self.source_nc.get_virsh_list()
+            if self.source_nc.machine.distro.name is "vmware":
+                emptyNC = self.source_nc.sys("esxcli vm process list | grep 'Display Name' | awk '{print $3}'")
+            else:
+                emptyNC = self.source_nc.get_virsh_list()
             return len(emptyNC) == 0
 
         self.tester.wait_for_result(wait_for_evacuation, True, timeout=600, poll_wait=60)
