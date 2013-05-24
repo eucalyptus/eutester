@@ -117,7 +117,7 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         self.base_test_volume_tag_name = 'block_dev_map_tests_base_test_volume'
         self.base_test_snapshot = None
         self.base_test_snapshot_tag_name = 'block_dev_map_tests_base_test_snap'
-        self.teste_image1 = None
+        self.test_image1 = None
         self.test_image1_tag_name = 'block_dev_map_tests_image1'
         self.test_image2 = None
         self.test_image2_tag_name = 'block_dev_map_tests_image2'
@@ -335,6 +335,19 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         self.test_image3 = self.get_existing_test_image_by_tag_key(self.test_image3_tag_name)
         self.test_image4 = self.get_existing_test_image_by_tag_key(self.test_image4_tag_name)
 
+
+    def try_existing_resources_else_create_them(self, url=None):
+
+        self.populate_self_from_existing_test_resources()
+        if not self.build_image_volume or \
+                not self.build_image_snapshot or \
+                not self.base_test_snapshot or \
+                not self.base_test_volume:
+            self.debug('Populate instances from existing missing all or some of the required resources, building resources now...')
+            url = url or self.url
+            if not url:
+                raise Exception('URL to bfebs image is needed to build snapshot test resource')
+            self.setup_bfebs_instance_volume_and_snapshots_from_url(url=url)
 
     def find_volume_on_euinstance(self, euinstance, map_device_name, md5=None, md5len=None, euvolume=None, ):
         '''
@@ -626,13 +639,6 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
                 instance.attached_vols.append(empty_vol)
             instance.vol_write_random_data_get_md5(empty_vol)
 
-            self.status('Check block device mapping meta data...')
-            #Temp work around for existing bug where ephemeral is not reported...
-            meta_bdm = instance.block_device_mapping
-            if not meta_bdm.has_key(bdm_ephemeral_dev):
-                self.resulterr('Ephemeral disk not reported in instance block dev mapping: see euca-6048')
-                meta_bdm[bdm_ephemeral_dev] = eph_dev
-            instance.check_instance_meta_data_for_block_device_mapping(root_dev=image.root_device_name, bdm=meta_bdm)
             self.status('Check block device mapping meta data...')
             #Temp work around for existing bug where ephemeral is not reported...
             meta_bdm = instance.block_device_mapping
@@ -1223,7 +1229,7 @@ if __name__ == "__main__":
         list = testcase.args.tests
     else:
         if testcase.args.use_previous:
-            list = ['populate_self_from_existing_test_resources']
+            list = ['try_existing_resources_else_create_them']
         else:
             if not testcase.args.url:
                 print 'URL needed if not using previously populated test resources and "use_previous" flag'
