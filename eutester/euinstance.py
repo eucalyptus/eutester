@@ -358,11 +358,11 @@ class EuInstance(Instance, TaggedResource):
         attached_dev = None
         start= time.time()
         elapsed = 0
+        #update our block device prefix, detect if virtio is now in use
+        self.set_block_device_prefix()
         if dev is None:
             dev = self.get_free_scsi_dev()
-        if (self.tester.attach_volume(self, euvolume, dev, pause=10,timeout=timeout)): 
-            #update our block device prefix, detect if virtio is now in use 
-            self.set_block_device_prefix()
+        if (self.tester.attach_volume(self, euvolume, dev, pause=10,timeout=timeout)):
             if euvolume.attach_data.device != dev:
                 raise Exception('Attached device:' + str(euvolume.attach_data.device) +
                                 ", does not equal requested dev:" + str(dev))
