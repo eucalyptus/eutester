@@ -26,12 +26,12 @@ import signal
 import re
 import curses
 
-class Instance_Io_Monitor(EutesterTestCase):
+class Mpath_Suite(EutesterTestCase):
     stopped_status = 'STOPPED'
     def __init__(self, tester=None, path_controllers=None, **kwargs):
         #### Pre-conditions
         self.setuptestcase()
-        self.setup_parser(testname='Multipath_instance_io_monitor')
+        self.setup_parser(testname='Multipath_suite')
 
         self.parser.add_argument('--local_path_to_nc_script',
                                  dest='io_script_path',
@@ -81,7 +81,7 @@ class Instance_Io_Monitor(EutesterTestCase):
                                  default=30)
 
         self.parser.add_argument('--run_suite',
-                                action='store_true', default=False,
+                                action='store_true', default=True,
                                 help='Boolean, will run all test methods in testsuite()')
 
         self.tester = tester
@@ -101,7 +101,7 @@ class Instance_Io_Monitor(EutesterTestCase):
                 raise Exception('Couldnt create Eucaops tester object, make sure credpath, '
                                 'or config_file and password was provided, err:' + str(e))
 
-        self.test_tag = 'instance_io_monitor'
+        self.test_tag = 'mpath_suite'
         #replace default eutester debugger with eutestcase's for more verbosity...
         self.tester.debug = lambda msg: self.debug(msg, traceback=2, linebyline=False)
         self.reservation = None
@@ -354,6 +354,7 @@ class Instance_Io_Monitor(EutesterTestCase):
 
 
     def get_existing_test_volumes(self, tagkey=None):
+        volumes = []
         if self.args.volume_id:
             volumes = self.tester.get_volumes(status='available',volume_id=str(self.args.volume_id))
             if not volumes:
@@ -361,24 +362,29 @@ class Instance_Io_Monitor(EutesterTestCase):
         else:
             tagkey = tagkey or self.test_tag
             volumes = self.tester.get_volumes(status='available', filters={'tag-key':str(tagkey)})
-        if volumes:
-            return volumes
-        return None
+        return volumes
 
     def get_test_volumes(self, count=1):
+        volumes = []
         if self.volume:
             self.volume.update()
             if self.volume.status == 'available':
-                return self.volume
-        volumes = self.get_existing_test_volumes()
-        if not volumes:
-            volumes = self.tester.create_volumes(self.zone, size=self.size, count=count)
-            for volume in volumes:
+                volumes.append(self.volume)
+                if count == 1:
+                    return volumes
+        volumes.extend(self.get_existing_test_volumes())
+        if len(volumes) >= count:
+            volumes = volumes[0:count]
+
+        elif len(volumes) < count:
+            new_volumes = self.tester.create_volumes(self.zone, size=self.size, count=(count-len(volumes)))
+            for volume in new_volumes:
                 volume.add_tag(str(self.test_tag))
-        self.volume = volumes[0]
+            volumes.extend(new_volumes)
         for volume in volumes:
             if volume not in self.volumes:
                 self.volumes.append(volume)
+        self.volume = volumes[0]
         return volumes
 
     def attach_test_volume(self,volume=None):
@@ -517,7 +523,7 @@ class Instance_Io_Monitor(EutesterTestCase):
         last_time = last_time or now
         waited = int(now - last_time)
         waited_str = "INTER_IO_SECONDS_WAITED: "+ str(waited)
-        time_remaining = "GUEST_SIDE_SCRIPT_TIME_REMAINING:"
+        time_remaining = "TIME_REMAINING:"
 
         #Pace cycle checks
         if now - cycle_check_time >= 5:
@@ -950,29 +956,30 @@ class Instance_Io_Monitor(EutesterTestCase):
     def testsuite(self):
         self.cycle_paths = True
         test_list = []
-        test_list.append(self.create_testunit_from_method(self.test1_run_instance_monitor_io_and_cycle_all_paths_on_nc))
-        test_list.append(self.create_testunit_from_method(self.test2_run_instance_attach_volume_while_a_single_path_is_down))
-        test_list.append(self.create_testunit_from_method(self.test3_run_instance_attach_vol_detach_vol_while_single_path_is_down))
+        test_list.append(self.create_testunit_from_method(self.test1_check_volume_io_on_guest_while_blocking_clearing_all_paths_once, eof=True))
+        test_list.append(self.create_testunit_from_method(self.test2_attach_volume_while_a_single_path_is_down))
+        test_list.append(self.create_testunit_from_method(self.test3_attach_volume_while_a_single_path_is_in_process_of_failing))
+        test_list.append(self.create_testunit_from_method(self.test4_detach_volume_with_single_path_down_after_attached))
+        test_list.append(self.create_testunit_from_method(self.test5_attach_volume_while_a_single_path_is_down_run_io_monitor))
+        test_list.append(self.create_testunit_from_method(self.test6_attach_vol_while_up_and_attach_vol_while_down_detach_both_cases))
         return test_list
 
 if __name__ == "__main__":
-    testcase = Instance_Io_Monitor()
+    testcase = Mpath_Suite()
 
     ### Use the list of tests passed from config/command line to determine what subset of tests to run
     ### or use a predefined list
     if testcase.args.run_suite:
         unit_list = testcase.testsuite()
     else:
-        list = testcase.args.tests or [ 'setup_instance_volume_and_script',
-                                        'run_remote_script_and_monitor',
-                                        'check_mpath_iterations']
+        test_names = testcase.args.tests or ['test1_check_volume_io_on_guest_while_blocking_clearing_all_paths_once']
         ### Convert test suite methods to EutesterUnitTest objects
         unit_list = [ ]
-        for test in list:
-            unit_list.append( testcase.create_testunit_by_name(test) )
+        for test in test_names:
+            unit_list.append(testcase.create_testunit_by_name(test))
 
     ### Run the EutesterUnitTest objects
-    result = testcase.run_test_case_list(unit_list,eof=True,clean_on_exit=True)
+    result = testcase.run_test_case_list(unit_list,eof=False,clean_on_exit=True)
     exit(result)
 
 
