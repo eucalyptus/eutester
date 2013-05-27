@@ -464,6 +464,7 @@ class EuConfig():
                  debugmethod=None,
                  verbose=True,
                  default_section_name='DEFAULTS',
+                 auto_detect_memo_section=True,
                  make_section_attrs=True,
                  legacy_qa_config=False,
                  preserve_option_case=True,
@@ -473,6 +474,7 @@ class EuConfig():
         self.legacy_qa_config = legacy_qa_config
         self.file_util = file_util
         self.ssh = ssh
+        self.auto_detect_memo_section=auto_detect_memo_section
         self.debugmethod = debugmethod
         self.make_section_attrs = make_section_attrs
         self.strip_values = strip_values
@@ -486,6 +488,8 @@ class EuConfig():
         #read the file into a list of lines
         self.lines = config_lines or self.file_util.lines
         self.config = None
+        if self.auto_detect_memo_section and self.has_legacy_memo_section_marker(lines=self.lines):
+            self.legacy_qa_config=True
         self.update()
 
 
@@ -497,6 +501,13 @@ class EuConfig():
         default_section_name = default_section_name or self.default_section_name
         default_section = '[' + str(default_section_name) + ']\n'
         self.lines.insert(0, default_section)
+
+    def has_legacy_memo_section_marker(self, lines=None):
+        lines = lines or self.lines
+        for line in lines:
+            if re.match("^MEMO\s*$", line):
+                return True
+        return False
 
     def has_a_section(self):
         for line in self.lines:
@@ -524,7 +535,7 @@ class EuConfig():
         #create our configParser object using the config buffer
         self.config = None
 
-        self.populate_config_parser_from_buf()
+        self.populate_config_parser_from_buf(buf=self.configbuf)
 
 
     @classmethod
@@ -577,15 +588,7 @@ class EuConfig():
         if make_section_attrs:
             self.make_sections(strip=strip_values)
 
-    '''
-    def read_config_file(self,filename):
-        cfile = open(filename,'r')
-        lines = cfile.readlines()
-        cfile.close()
-        return lines
-    '''
 
-    #def add_to_value_in_file(self,):
         
     def debug(self, msg):
         if self.verbose:
