@@ -952,8 +952,14 @@ class EuInstance(Instance, TaggedResource):
         '''
         msg=""
         newuptime = None
+        def get_safe_uptime():
+            uptime = None
+            try:
+                uptime = self.get_uptime()
+            except: pass
+            return uptime
         self.debug('Attempting to reboot instance:'+str(self.id)+', check attached volume state first')
-        uptime = int(self.sys('cat /proc/uptime')[0].split()[1].split('.')[0])
+        uptime = self.tester.wait_for_result( get_safe_uptime, None, oper=operator.ne)
         elapsed = 0
         start = time.time()
         if checkvolstatus:
@@ -967,12 +973,7 @@ class EuInstance(Instance, TaggedResource):
         self.reboot()
         time.sleep(waitconnect)
         self.connect_to_instance(timeout=timeout)
-        def get_safe_uptime():
-            uptime = None
-            try:
-                uptime = self.get_uptime()
-            except: pass
-            return uptime
+
         #Wait for the system to provide a valid response for uptime, early connections may not
         newuptime = self.tester.wait_for_result( get_safe_uptime, None, oper=operator.ne)
 
