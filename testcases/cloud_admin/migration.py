@@ -136,6 +136,7 @@ class MigrationTest(EutesterTestCase):
                     return self.instance_node.hostname == self.destination_nc.hostname
 
                 self.tester.wait_for_result(wait_for_new_nc, True, timeout=600, poll_wait=60)
+                self.assertTrue( self.tester.ping(instance.public_dns_name), 'Could not ping instance')
 
     def MigrationToDestEBSBacked(self):
         self.image = self.tester.get_emi(root_device_type="ebs")
