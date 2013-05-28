@@ -155,6 +155,33 @@ class Mpath_Suite(EutesterTestCase):
         self.path_controller = None
 
 
+    def memo_use_multipathing_check(self):
+        if self.has_arg('USE_MULTIPATHING') and re.search('YES', self.arg.USE_MULTIPATHING,  re.IGNORECASE):
+            self.debug('USE_MULTIPATHING flag set in memo field ')
+            return True
+        else:
+            self.debug('USE_MULTIPATHING flag not set in memo field')
+            return False
+
+
+    def zone_has_multiple_nc_paths(self, zone=None):
+        zone = zone or self.zone
+        ncpaths_property = self.tester.property_manager.get_property(service_type=Euproperty_Type.storage,partition=zone,name='ncpaths')
+        paths = str(ncpaths_property.value).split(',')
+        if len(paths) > 1:
+            self.debug('Multiple paths detected on this systems partition:' +str(zone))
+            return True
+        else:
+            self.debug('Multiple paths NOT detected on this systems partition:' +str(zone))
+            return False
+
+    def pre_test_check_should_run_multipath_tests_on_this_system(self):
+        if self.zone_has_multiple_nc_paths():
+            return True
+        if self.memo_use_multipathing_check():
+            raise Exception('Multipathing enabled in Memo field, but multiple paths not detected in "ncpaths" property')
+        self.debug('Multiple paths not detected, nor was "USE_MULTIPATHING" flag set in config, exiting "0" w/o running tests')
+        exit(0)
 
     def create_controller_for_each_node(self):
         node_list =  self.tester.service_manager.get_all_node_controllers()
@@ -245,7 +272,8 @@ class Mpath_Suite(EutesterTestCase):
 
     def cleanup(self, instances=True):
         '''
-        Attempts to clean up resources created during this test...
+        Attempts to remove all rules on nodes which were used in test and
+        clean up resources created during this test...
         '''
         try:
             for path_controller in self.path_controllers:
@@ -956,6 +984,7 @@ class Mpath_Suite(EutesterTestCase):
     def testsuite(self):
         self.cycle_paths = True
         test_list = []
+        test_list.append(self.create_testunit_from_method(self.pre_test_check_should_run_multipath_tests_on_this_system, eof=True))
         test_list.append(self.create_testunit_from_method(self.test1_check_volume_io_on_guest_while_blocking_clearing_all_paths_once, eof=True))
         test_list.append(self.create_testunit_from_method(self.test2_attach_volume_while_a_single_path_is_down))
         test_list.append(self.create_testunit_from_method(self.test3_attach_volume_while_a_single_path_is_in_process_of_failing))
@@ -972,7 +1001,8 @@ if __name__ == "__main__":
     if testcase.args.run_suite:
         unit_list = testcase.testsuite()
     else:
-        test_names = testcase.args.tests or ['test1_check_volume_io_on_guest_while_blocking_clearing_all_paths_once']
+        test_names = testcase.args.tests or ['pre_test_check_should_run_multipath_tests_on_this_system',
+                                             'test1_check_volume_io_on_guest_while_blocking_clearing_all_paths_once']
         ### Convert test suite methods to EutesterUnitTest objects
         unit_list = [ ]
         for test in test_names:
