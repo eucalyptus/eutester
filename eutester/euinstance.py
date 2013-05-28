@@ -1542,8 +1542,10 @@ class EuInstance(Instance, TaggedResource):
         root_dev = os.path.basename(root_dev)
         orig_bdm = bdm or self.block_device_mapping
         bdm = copy.copy(orig_bdm)
-        if root_dev in bdm or 'dev/'+root_dev in bdm:
+        if root_dev in bdm:
             bdm.pop(root_dev)
+        if 'dev/'+root_dev in bdm:
+            bdm.pop('dev/'+root_dev)
 
         for device in meta_dev_names:
             #Check root device meta data against the root device, else add to dict for comparison against block dev map
