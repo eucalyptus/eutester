@@ -1183,7 +1183,17 @@ class EutesterTestCase(unittest.TestCase):
                 for cfile in str(cliargs.config).split(','):
                     if not cfile in configfiles:
                         configfiles.append(cfile)
-            
+            #legacy support for config, configfile config_file arg names...
+            if ('config_file' in cliargs.__dict__) and  cliargs.config:
+                for cfile in str(cliargs.config).split(','):
+                    if not cfile in configfiles:
+                        configfiles.append(cfile)
+            #legacy support for config, configfile config_file arg names...
+            if ('configfile' in cliargs.__dict__) and  cliargs.config:
+                for cfile in str(cliargs.config).split(','):
+                    if not cfile in configfiles:
+                        configfiles.append(cfile)
+
         #store config block list for debug purposes
         cf.__setattr__('configsections',copy.copy(confblocks))
         
@@ -1229,6 +1239,7 @@ class EutesterTestCase(unittest.TestCase):
             if 'config' in args:
                 args.config_file = args.config
                 args.configfile = args.config
+
         except: pass
         try:
             args.cred_path = args.credpath

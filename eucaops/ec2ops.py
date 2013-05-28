@@ -943,7 +943,7 @@ class EC2ops(Eutester):
             return False
         return True
     
-    def delete_volumes(self, volume_list, poll_interval=10, timeout=180):
+    def delete_volumes(self, volume_list, poll_interval=10, force_send=False, timeout=180):
         """
         Deletes a list of EBS volumes then checks for proper state transition
 
@@ -960,13 +960,18 @@ class EC2ops(Eutester):
         for volume in vollist:
             try:
                 self.debug( "Sending delete for volume: " +  str(volume.id)  )
+                volume.update()
+                previous_status = volume.status
                 self.ec2.delete_volume(volume.id)
             except EC2ResponseError, be:
                 err = "ERROR: " + str(volume.id) + ", " + str(be.status)+ ", " + str(be.reason) + \
                           ", " +str(be.error_message) + "\n"
-                errmsg += err
-                errlist.append(volume)
-                self.debug(err)
+                if previous_status == 'deleting':
+                    self.debug(str(volume.id)+ ":" + str(previous_status) + ', err:' + str(err))
+                else:
+                    errmsg += err
+                    errlist.append(volume)
+                    self.debug(err)
         for volume in errlist:
             if volume in vollist:
                 vollist.remove(volume)
