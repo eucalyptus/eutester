@@ -121,20 +121,22 @@ class MigrationTest(EutesterTestCase):
         self.source_nc = self.tester.service_manager.get_all_node_controllers(instance_id=instance.id)[0]
 
         all_nc = self.tester.service_manager.get_all_node_controllers()
-        self.destination_nc = random.choice(all_nc)
-        while self.destination_nc == self.source_nc:
-                self.destination_nc = random.choice(all_nc)
+        self.destination_nc = None
+#        while self.destination_nc == self.source_nc:
+#                self.destination_nc = random.choice(all_nc)
+        for nc in all_nc:
+            if nc.machine.hostname != self.source_nc.machine.hostname:
+                self.destination_nc = nc
+                enabled_clc.sys("source " + self.tester.credpath + "/eucarc && " +
+                                    self.tester.eucapath + "/usr/sbin/euca-migrate-instances -i " +
+                                    instance.id + " --dest " + self.destination_nc.machine.hostname)
 
-        enabled_clc.sys("source " + self.tester.credpath + "/eucarc && " +
-                            self.tester.eucapath + "/usr/sbin/euca-migrate-instances -i " +
-                            instance.id + " --dest " + self.destination_nc.machine.hostname)
+                def wait_for_new_nc():
+                    self.tester.service_manager.populate_nodes()
+                    self.instance_node = self.tester.service_manager.get_all_node_controllers(instance_id=instance.id)[0]
+                    return self.instance_node.hostname == self.destination_nc.hostname
 
-        def wait_for_new_nc():
-            self.tester.service_manager.populate_nodes()
-            self.instance_node = self.tester.service_manager.get_all_node_controllers(instance_id=instance.id)[0]
-            return self.instance_node.hostname == self.destination_nc.hostname
-
-        self.tester.wait_for_result(wait_for_new_nc, True, timeout=600, poll_wait=60)
+                self.tester.wait_for_result(wait_for_new_nc, True, timeout=600, poll_wait=60)
 
     def MigrationToDestEBSBacked(self):
         self.image = self.tester.get_emi(root_device_type="ebs")
@@ -208,7 +210,7 @@ if __name__ == "__main__":
     testcase = MigrationTest()
     ### Use the list of tests passed from config/command line to determine what subset of tests to run
     ### or use a predefined list
-    list = testcase.args.tests or ["EvacuateNC"]
+    list = testcase.args.tests or ["MigrateToDest"]
 
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
