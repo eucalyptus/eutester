@@ -122,8 +122,7 @@ class MigrationTest(EutesterTestCase):
 
         all_nc = self.tester.service_manager.get_all_node_controllers()
         self.destination_nc = None
-#        while self.destination_nc == self.source_nc:
-#                self.destination_nc = random.choice(all_nc)
+
         for nc in all_nc:
             if nc.machine.hostname != self.source_nc.machine.hostname:
                 self.destination_nc = nc
