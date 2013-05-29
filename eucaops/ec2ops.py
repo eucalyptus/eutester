@@ -2475,11 +2475,13 @@ class EC2ops(Eutester):
             if device.volume_id:
                 try:
                     volume = self.get_volume(volume_id=device.volume_id)
+                    if not volume in self.test_resources['volumes']:
+                        self.test_resources['volumes'].append(volume)
                 except Exception, e:
-                    self.debug('Error trying to retrieve volume:' + str(device.volume_id) +
-                               ' from instance:' + str(instance.id) + " block dev map")
-                if not volume in self.test_resources['volumes']:
-                    self.test_resources['volumes'].append(volume)
+                    tb = self.get_traceback()
+                    self.debug("\n" + str(tb) + "\nError trying to retrieve volume:' + str(device.volume_id) +
+                               ' from instance:' + str(instance.id) + " block dev map, err:" + str(e))
+
 
 
 
