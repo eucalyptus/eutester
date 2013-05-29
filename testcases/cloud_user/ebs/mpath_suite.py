@@ -26,12 +26,12 @@ import signal
 import re
 import curses
 
-class Instance_Io_Monitor(EutesterTestCase):
+class Mpath_Suite(EutesterTestCase):
     stopped_status = 'STOPPED'
     def __init__(self, tester=None, path_controllers=None, **kwargs):
         #### Pre-conditions
         self.setuptestcase()
-        self.setup_parser(testname='Multipath_instance_io_monitor')
+        self.setup_parser(testname='Multipath_suite')
 
         self.parser.add_argument('--local_path_to_nc_script',
                                  dest='io_script_path',
@@ -81,7 +81,7 @@ class Instance_Io_Monitor(EutesterTestCase):
                                  default=30)
 
         self.parser.add_argument('--run_suite',
-                                action='store_true', default=False,
+                                action='store_true', default=True,
                                 help='Boolean, will run all test methods in testsuite()')
 
         self.tester = tester
@@ -101,7 +101,7 @@ class Instance_Io_Monitor(EutesterTestCase):
                 raise Exception('Couldnt create Eucaops tester object, make sure credpath, '
                                 'or config_file and password was provided, err:' + str(e))
 
-        self.test_tag = 'instance_io_monitor'
+        self.test_tag = 'mpath_suite'
         #replace default eutester debugger with eutestcase's for more verbosity...
         self.tester.debug = lambda msg: self.debug(msg, traceback=2, linebyline=False)
         self.reservation = None
@@ -153,8 +153,37 @@ class Instance_Io_Monitor(EutesterTestCase):
         self.max_path_iterations = self.args.max_path_iterations
         self.path_controllers = path_controllers or []
         self.path_controller = None
+        self.stdscr = None
+        self.curses_fd = None
 
 
+    def memo_use_multipathing_check(self):
+        if self.has_arg('USE_MULTIPATHING') and re.search('YES', self.args.USE_MULTIPATHING,  re.IGNORECASE):
+            self.debug('USE_MULTIPATHING flag set in memo field ')
+            return True
+        else:
+            self.debug('USE_MULTIPATHING flag not set in memo field')
+            return False
+
+
+    def zone_has_multiple_nc_paths(self, zone=None):
+        zone = zone or self.zone
+        ncpaths_property = self.tester.property_manager.get_property(service_type=Euproperty_Type.storage,partition=zone,name='ncpaths')
+        paths = str(ncpaths_property.value).split(',')
+        if len(paths) > 1:
+            self.debug('Multiple paths detected on this systems partition:' +str(zone))
+            return True
+        else:
+            self.debug('Multiple paths NOT detected on this systems partition:' +str(zone))
+            return False
+
+    def pre_test_check_should_run_multipath_tests_on_this_system(self):
+        if self.zone_has_multiple_nc_paths():
+            return True
+        if self.memo_use_multipathing_check():
+            raise Exception('Multipathing enabled in Memo field, but multiple paths not detected in "ncpaths" property')
+        self.debug('Multiple paths not detected, nor was "USE_MULTIPATHING" flag set in config, exiting "0" w/o running tests')
+        exit(0)
 
     def create_controller_for_each_node(self):
         node_list =  self.tester.service_manager.get_all_node_controllers()
@@ -245,7 +274,8 @@ class Instance_Io_Monitor(EutesterTestCase):
 
     def cleanup(self, instances=True):
         '''
-        Attempts to clean up resources created during this test...
+        Attempts to remove all rules on nodes which were used in test and
+        clean up resources created during this test...
         '''
         try:
             for path_controller in self.path_controllers:
@@ -354,6 +384,7 @@ class Instance_Io_Monitor(EutesterTestCase):
 
 
     def get_existing_test_volumes(self, tagkey=None):
+        volumes = []
         if self.args.volume_id:
             volumes = self.tester.get_volumes(status='available',volume_id=str(self.args.volume_id))
             if not volumes:
@@ -361,24 +392,29 @@ class Instance_Io_Monitor(EutesterTestCase):
         else:
             tagkey = tagkey or self.test_tag
             volumes = self.tester.get_volumes(status='available', filters={'tag-key':str(tagkey)})
-        if volumes:
-            return volumes
-        return None
+        return volumes
 
     def get_test_volumes(self, count=1):
+        volumes = []
         if self.volume:
             self.volume.update()
             if self.volume.status == 'available':
-                return self.volume
-        volumes = self.get_existing_test_volumes()
-        if not volumes:
-            volumes = self.tester.create_volumes(self.zone, size=self.size, count=count)
-            for volume in volumes:
+                volumes.append(self.volume)
+                if count == 1:
+                    return volumes
+        volumes.extend(self.get_existing_test_volumes())
+        if len(volumes) >= count:
+            volumes = volumes[0:count]
+
+        elif len(volumes) < count:
+            new_volumes = self.tester.create_volumes(self.zone, size=self.size, count=(count-len(volumes)))
+            for volume in new_volumes:
                 volume.add_tag(str(self.test_tag))
-        self.volume = volumes[0]
+            volumes.extend(new_volumes)
         for volume in volumes:
             if volume not in self.volumes:
                 self.volumes.append(volume)
+        self.volume = volumes[0]
         return volumes
 
     def attach_test_volume(self,volume=None):
@@ -447,7 +483,10 @@ class Instance_Io_Monitor(EutesterTestCase):
         path_controller.total_path_iterations=0
 
         cmd = 'python ' + self.remote_script_path + " -f " + self.test_file_path + ' -t ' + str(timed_run)
-        self.stdscr = curses.initscr()
+        try:
+            self.stdscr = curses.initscr()
+        except Exception, e:
+            self.debug('No term cababilties? Curses could not init:' +str(e))
         try:
             signal.signal(signal.SIGWINCH, self.sigwinch_handler)
             now = time.time()
@@ -517,13 +556,14 @@ class Instance_Io_Monitor(EutesterTestCase):
         last_time = last_time or now
         waited = int(now - last_time)
         waited_str = "INTER_IO_SECONDS_WAITED: "+ str(waited)
-        time_remaining = "GUEST_SIDE_SCRIPT_TIME_REMAINING:"
-
+        time_remaining = "TIME_REMAINING:"
+        printout = False
         #Pace cycle checks
         if now - cycle_check_time >= 5:
             status = self.current_cycle_method()
             cycle_check_time = now
             try:
+                printout = True
                 mpath_status = self.print_mpath_info_for_instance_vol(self.instance, self.volume)
             except Exception, e:
                 mpath_status = str(e)
@@ -578,6 +618,9 @@ class Instance_Io_Monitor(EutesterTestCase):
                     self.stdscr.clear()
                     self.stdscr.addstr(0, 0, debug_string)
                     self.stdscr.refresh()
+                elif printout:
+                    self.debug(debug_string +
+                               str('--------------------------------------------------------------------------------'))
         except Exception, e:
             tb = self.tester.get_traceback()
             debug_string = str(tb) + '\nError caught by remote_ssh_io_monitor_cb:'+str(e)
@@ -616,6 +659,7 @@ class Instance_Io_Monitor(EutesterTestCase):
         except Exception, e:
             tb = self.tester.get_traceback()
             errmsg = "ERROR:\n" + str(tb) + "\n" + str(e)
+            self.debug(errmsg)
         finally:
             if clean_on_exit:
                 try:
@@ -669,6 +713,7 @@ class Instance_Io_Monitor(EutesterTestCase):
         except Exception, e:
             tb = self.tester.get_traceback()
             errmsg = "\n" + str(tb) + "\nERROR: " + str(e)
+            self.errormsgg(errmsg)
         finally:
             if clean_on_exit:
                 self.status('Tearing down instance after test...')
@@ -719,6 +764,7 @@ class Instance_Io_Monitor(EutesterTestCase):
         except Exception, e:
             tb = self.tester.get_traceback()
             errmsg = "\n" + str(tb) + "\nERROR: " + str(e)
+            self.errormsg(errmsg)
         finally:
             if clean_on_exit:
                 self.status('Tearing down instance after test...')
@@ -777,6 +823,7 @@ class Instance_Io_Monitor(EutesterTestCase):
         except Exception, e:
             tb = self.tester.get_traceback()
             errmsg = "\n" + str(tb) + "\nERROR: " + str(e)
+            self.errormsg(errmsg)
         finally:
             if clean_on_exit:
                 self.status('Tearing down instance after test...')
@@ -833,6 +880,7 @@ class Instance_Io_Monitor(EutesterTestCase):
         except Exception, e:
             tb = self.tester.get_traceback()
             errmsg = "\n" + str(tb) + "\nERROR: " + str(e)
+            self.errormsg(errmsg)
         finally:
             if clean_on_exit:
                 self.status('Tearing down instance after test...')
@@ -870,6 +918,8 @@ class Instance_Io_Monitor(EutesterTestCase):
                 raise Exception('Not enough paths to shut one down for test')
             self.status('Getting volume for use in test...')
             volumes = self.get_test_volumes(count=int(vols_after_block + vols_before_block))
+            self.tester.print_euvolume_list(volumes)
+            after_block = copy.copy(volumes)
             self.status('Checking paths to make sure none are currently blocked...')
             if path_controller.get_blocked_paths():
                 self.debug('Clearing blocked paths and sleeping for recovery period:' +
@@ -878,7 +928,7 @@ class Instance_Io_Monitor(EutesterTestCase):
                 time.sleep(self.path_recovery_interval)
 
             for x in xrange(0, vols_before_block):
-                volume = volumes[x]
+                volume = after_block.pop()
                 before_block.append(volume)
                 self.status('Attaching test volume ' + str(x+1) + ' of ' +str(vols_before_block) + ' while all paths are up...')
                 self.attach_test_volume(volume)
@@ -887,28 +937,31 @@ class Instance_Io_Monitor(EutesterTestCase):
                 self.instance.vol_write_random_data_get_md5(volume, length=1048576, overwrite=True)
                 self.status('Remote write/read done for volume:' +str(volume.id))
             self.status('Attached all ' + str(vols_before_block) + ' volumes before blocking a path')
-            if vols_after_block:
+            self.tester.print_euvolume_list(volumes)
+            if after_block:
                 self.status('Blocking single path: "' + str(single_path) + '" before detaching volume:'
                             + str(self.volume.id) + '...')
                 path_controller.block_path(single_path)
                 self.status('Waiting ' + str(wait_after_block) + ' seconds after blocking for path to go down...')
                 time.sleep(wait_after_block)
-                for x in xrange(0, vols_after_block):
-                    volume = volumes[x + vols_before_block]
-                    after_block.append(volume)
-                    self.status('Attaching test volume ' + str(x+1) + ' of ' +str(vols_before_block) +
+                #Iterate through remaining volumes in list, rename
+                for volume in after_block:
+                    self.status('Attaching test volume ' + str(after_block.index(volume)) + ' of ' +str(len(after_block)) +
                                 'while path:' + str(single_path) + " is down")
                     self.attach_test_volume(volume)
                     self.print_mpath_info_for_instance_vol(self.instance, volume)
                     self.status('Attempting to run some basic io on guest volume...')
                     self.instance.vol_write_random_data_get_md5(volume, length=1048576, overwrite=True)
-                    self.status('Remote write/read done for volume:' +str(volume.id))
+                    self.status('Remote write/read done for volume:'  + str(volume.id) )
+            self.tester.print_euvolume_list(volumes)
             self.status('Detaching a volume while path is down...')
             detach_vols = []
+            #Grab a volume from each list to detach
             if before_block:
                 detach_vols.append(before_block.pop())
             if after_block:
                 detach_vols.append(after_block.pop())
+            self.status('Detaching volume(s) from before and after blocking a path(s)')
             for volume in detach_vols:
                 self.instance.detach_euvolume(volume)
             if before_block or after_block:
@@ -927,11 +980,13 @@ class Instance_Io_Monitor(EutesterTestCase):
                     for volume in detach_vols:
                         self.instance.detach_euvolume(volume)
             before_block.extend(after_block)
-            self.status('terminating instance with' + str(len(before_block)) + ' volumes attached')
+            self.tester.print_euvolume_list(volumes)
+            self.status('terminating instance with ' + str(len(before_block)) + ' volumes attached')
 
         except Exception, e:
             tb = self.tester.get_traceback()
             errmsg = "\n" + str(tb) + "\nERROR: " + str(e)
+            self.errormsg(errmsg)
         finally:
             if clean_on_exit:
                 self.status('Tearing down instance after test...')
@@ -950,29 +1005,32 @@ class Instance_Io_Monitor(EutesterTestCase):
     def testsuite(self):
         self.cycle_paths = True
         test_list = []
-        test_list.append(self.create_testunit_from_method(self.test1_run_instance_monitor_io_and_cycle_all_paths_on_nc))
-        test_list.append(self.create_testunit_from_method(self.test2_run_instance_attach_volume_while_a_single_path_is_down))
-        test_list.append(self.create_testunit_from_method(self.test3_run_instance_attach_vol_detach_vol_while_single_path_is_down))
+        test_list.append(self.create_testunit_from_method(self.pre_test_check_should_run_multipath_tests_on_this_system, eof=True))
+        test_list.append(self.create_testunit_from_method(self.test1_check_volume_io_on_guest_while_blocking_clearing_all_paths_once, eof=True))
+        test_list.append(self.create_testunit_from_method(self.test2_attach_volume_while_a_single_path_is_down))
+        test_list.append(self.create_testunit_from_method(self.test3_attach_volume_while_a_single_path_is_in_process_of_failing))
+        test_list.append(self.create_testunit_from_method(self.test4_detach_volume_with_single_path_down_after_attached))
+        test_list.append(self.create_testunit_from_method(self.test5_attach_volume_while_a_single_path_is_down_run_io_monitor))
+        test_list.append(self.create_testunit_from_method(self.test6_attach_vol_while_up_and_attach_vol_while_down_detach_both_cases))
         return test_list
 
 if __name__ == "__main__":
-    testcase = Instance_Io_Monitor()
+    testcase = Mpath_Suite()
 
     ### Use the list of tests passed from config/command line to determine what subset of tests to run
     ### or use a predefined list
     if testcase.args.run_suite:
         unit_list = testcase.testsuite()
     else:
-        list = testcase.args.tests or [ 'setup_instance_volume_and_script',
-                                        'run_remote_script_and_monitor',
-                                        'check_mpath_iterations']
+        test_names = testcase.args.tests or ['pre_test_check_should_run_multipath_tests_on_this_system',
+                                             'test1_check_volume_io_on_guest_while_blocking_clearing_all_paths_once']
         ### Convert test suite methods to EutesterUnitTest objects
         unit_list = [ ]
-        for test in list:
-            unit_list.append( testcase.create_testunit_by_name(test) )
+        for test in test_names:
+            unit_list.append(testcase.create_testunit_by_name(test))
 
     ### Run the EutesterUnitTest objects
-    result = testcase.run_test_case_list(unit_list,eof=True,clean_on_exit=True)
+    result = testcase.run_test_case_list(unit_list,eof=False,clean_on_exit=True)
     exit(result)
 
 

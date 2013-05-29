@@ -916,34 +916,47 @@ class EC2ops(Eutester):
         :param volume: Volume object to delete
         :return: bool, success of the operation
         """
-        self.ec2.delete_volume(volume.id)
-        self.debug( "Sent delete for volume: " +  str(volume.id)  )
+        try:
+            self.ec2.delete_volume(volume.id)
+        except Exception, e:
+            self.debug('Caught err while sending delete for volume:'+ str(volume.id) + " err:" + str(e))
+            self.debug('Monitoring to deleted state after catching error...')
+        self.debug( "Sent delete for volume: " +  str(volume.id) + ", monitor to deleted state or failure"  )
         start = time.time()
         elapsed = 0
+        volume_id = volume.id
         volume.update()
         while elapsed < timeout:
             try:
-                self.debug( str(volume) + " in " + volume.status + " sleeping:"+str(poll_interval)+", elapsed:"+str(elapsed))
-                time.sleep(poll_interval)
-                volume.update()
-                elapsed = int(time.time()-start)
-                if volume.status == "deleted":
-                    if volume in self.test_resources['volumes']:
-                        self.test_resources['volumes'].remove(volume)
+                chk_volume = self.get_volume(volume_id=volume_id)
+                if not chk_volume:
+                    self.debug(str(volume_id) + ', Volume no longer exists on system, deleted')
                     break
+                chk_volume.update()
+                self.debug( str(chk_volume) + " in " + chk_volume.status + " sleeping:"+str(poll_interval)+", elapsed:"+str(elapsed))
+                if chk_volume.status == "deleted":
+                    break
+                time.sleep(poll_interval)
+                elapsed = int(time.time()-start)
             except EC2ResponseError as e:
                 if e.status == 400:
-                    self.debug(str(volume) + "no longer exists in system")
+                    self.debug(str(volume_id) + "no longer exists in system")
+                    if volume in self.test_resources['volumes']:
+                        self.test_resources['volumes'].remove(volume)
                     return True
                 else:
                     raise e
+            if volume in self.test_resources['volumes']:
+                self.test_resources['volumes'].remove(volume)
+            return True
+
 
         if volume.status != 'deleted':
             self.fail(str(volume) + " left in " +  volume.status + ',elapsed:'+str(elapsed))
             return False
         return True
     
-    def delete_volumes(self, volume_list, poll_interval=10, timeout=180):
+    def delete_volumes(self, volume_list, poll_interval=10, force_send=False, timeout=180):
         """
         Deletes a list of EBS volumes then checks for proper state transition
 
@@ -960,13 +973,18 @@ class EC2ops(Eutester):
         for volume in vollist:
             try:
                 self.debug( "Sending delete for volume: " +  str(volume.id)  )
+                volume.update()
+                previous_status = volume.status
                 self.ec2.delete_volume(volume.id)
             except EC2ResponseError, be:
                 err = "ERROR: " + str(volume.id) + ", " + str(be.status)+ ", " + str(be.reason) + \
                           ", " +str(be.error_message) + "\n"
-                errmsg += err
-                errlist.append(volume)
-                self.debug(err)
+                if previous_status == 'deleting':
+                    self.debug(str(volume.id)+ ":" + str(previous_status) + ', err:' + str(err))
+                else:
+                    errmsg += err
+                    errlist.append(volume)
+                    self.debug(err)
         for volume in errlist:
             if volume in vollist:
                 vollist.remove(volume)
@@ -2470,15 +2488,14 @@ class EC2ops(Eutester):
             if device.volume_id:
                 try:
                     volume = self.get_volume(volume_id=device.volume_id)
+                    if not volume in self.test_resources['volumes']:
+                        self.test_resources['volumes'].append(volume)
                 except Exception, e:
-                    self.debug('Error trying to retrieve volume:' + str(device.volume_id) +
-                               ' from instance:' + str(instance.id) + " block dev map")
-                if not volume in self.test_resources['volumes']:
-                    self.test_resources['volumes'].append(volume)
+                    tb = self.get_traceback()
+                    self.debug("\n" + str(tb) + "\nError trying to retrieve volume:" + str(device.volume_id) +
+                               ' from instance:' + str(instance.id) + " block dev map, err:" + str(e))
 
 
-
-    
     @Eutester.printinfo 
     def monitor_euinstances_to_running(self,instances, poll_interval=10, timeout=480):
         self.debug("("+str(len(instances))+") Monitor_instances_to_running starting...")
