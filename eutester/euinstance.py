@@ -532,7 +532,9 @@ class EuInstance(Instance, TaggedResource):
                                str(vol_status) + ", elapsed:" + str(elapsed) + "/" + str(volto) )
                 vol.expected_status = vol_status
                 vol.update()
-                if vol.status == vol_status:
+                #if volume has reached it's intended status or
+                # the volume is no longer on the system and it's intended status is 'deleted'
+                if vol.status == vol_status or (not self.tester.get_volume(volume_id=vol.id, eof=False) and vol_status == 'deleted'):
                     self.debug(str(self.id)+' terminated, ' + str(vol.id) + "/" + str(vol.status) +
                                ": volume entered expected state:" + str(vol_status))
                     all_vols.remove(vol)
