@@ -158,7 +158,7 @@ class Mpath_Suite(EutesterTestCase):
 
 
     def memo_use_multipathing_check(self):
-        if self.has_arg('USE_MULTIPATHING') and re.search('YES', self.arg.USE_MULTIPATHING,  re.IGNORECASE):
+        if self.has_arg('USE_MULTIPATHING') and re.search('YES', self.args.USE_MULTIPATHING,  re.IGNORECASE):
             self.debug('USE_MULTIPATHING flag set in memo field ')
             return True
         else:
@@ -659,6 +659,7 @@ class Mpath_Suite(EutesterTestCase):
         except Exception, e:
             tb = self.tester.get_traceback()
             errmsg = "ERROR:\n" + str(tb) + "\n" + str(e)
+            self.debug(errmsg)
         finally:
             if clean_on_exit:
                 try:
@@ -712,6 +713,7 @@ class Mpath_Suite(EutesterTestCase):
         except Exception, e:
             tb = self.tester.get_traceback()
             errmsg = "\n" + str(tb) + "\nERROR: " + str(e)
+            self.errormsgg(errmsg)
         finally:
             if clean_on_exit:
                 self.status('Tearing down instance after test...')
@@ -762,6 +764,7 @@ class Mpath_Suite(EutesterTestCase):
         except Exception, e:
             tb = self.tester.get_traceback()
             errmsg = "\n" + str(tb) + "\nERROR: " + str(e)
+            self.errormsg(errmsg)
         finally:
             if clean_on_exit:
                 self.status('Tearing down instance after test...')
@@ -820,6 +823,7 @@ class Mpath_Suite(EutesterTestCase):
         except Exception, e:
             tb = self.tester.get_traceback()
             errmsg = "\n" + str(tb) + "\nERROR: " + str(e)
+            self.errormsg(errmsg)
         finally:
             if clean_on_exit:
                 self.status('Tearing down instance after test...')
@@ -876,6 +880,7 @@ class Mpath_Suite(EutesterTestCase):
         except Exception, e:
             tb = self.tester.get_traceback()
             errmsg = "\n" + str(tb) + "\nERROR: " + str(e)
+            self.errormsg(errmsg)
         finally:
             if clean_on_exit:
                 self.status('Tearing down instance after test...')
@@ -913,6 +918,8 @@ class Mpath_Suite(EutesterTestCase):
                 raise Exception('Not enough paths to shut one down for test')
             self.status('Getting volume for use in test...')
             volumes = self.get_test_volumes(count=int(vols_after_block + vols_before_block))
+            self.tester.print_euvolume_list(volumes)
+            after_block = copy.copy(volumes)
             self.status('Checking paths to make sure none are currently blocked...')
             if path_controller.get_blocked_paths():
                 self.debug('Clearing blocked paths and sleeping for recovery period:' +
@@ -921,7 +928,7 @@ class Mpath_Suite(EutesterTestCase):
                 time.sleep(self.path_recovery_interval)
 
             for x in xrange(0, vols_before_block):
-                volume = volumes[x]
+                volume = after_block.pop()
                 before_block.append(volume)
                 self.status('Attaching test volume ' + str(x+1) + ' of ' +str(vols_before_block) + ' while all paths are up...')
                 self.attach_test_volume(volume)
@@ -930,28 +937,31 @@ class Mpath_Suite(EutesterTestCase):
                 self.instance.vol_write_random_data_get_md5(volume, length=1048576, overwrite=True)
                 self.status('Remote write/read done for volume:' +str(volume.id))
             self.status('Attached all ' + str(vols_before_block) + ' volumes before blocking a path')
-            if vols_after_block:
+            self.tester.print_euvolume_list(volumes)
+            if after_block:
                 self.status('Blocking single path: "' + str(single_path) + '" before detaching volume:'
                             + str(self.volume.id) + '...')
                 path_controller.block_path(single_path)
                 self.status('Waiting ' + str(wait_after_block) + ' seconds after blocking for path to go down...')
                 time.sleep(wait_after_block)
-                for x in xrange(0, vols_after_block):
-                    volume = volumes[x + vols_before_block]
-                    after_block.append(volume)
-                    self.status('Attaching test volume ' + str(x+1) + ' of ' +str(vols_before_block) +
+                #Iterate through remaining volumes in list, rename
+                for volume in after_block:
+                    self.status('Attaching test volume ' + str(after_block.index(volume)) + ' of ' +str(len(after_block)) +
                                 'while path:' + str(single_path) + " is down")
                     self.attach_test_volume(volume)
                     self.print_mpath_info_for_instance_vol(self.instance, volume)
                     self.status('Attempting to run some basic io on guest volume...')
                     self.instance.vol_write_random_data_get_md5(volume, length=1048576, overwrite=True)
-                    self.status('Remote write/read done for volume:' +str(volume.id))
+                    self.status('Remote write/read done for volume:'  + str(volume.id) )
+            self.tester.print_euvolume_list(volumes)
             self.status('Detaching a volume while path is down...')
             detach_vols = []
+            #Grab a volume from each list to detach
             if before_block:
                 detach_vols.append(before_block.pop())
             if after_block:
                 detach_vols.append(after_block.pop())
+            self.status('Detaching volume(s) from before and after blocking a path(s)')
             for volume in detach_vols:
                 self.instance.detach_euvolume(volume)
             if before_block or after_block:
@@ -970,11 +980,13 @@ class Mpath_Suite(EutesterTestCase):
                     for volume in detach_vols:
                         self.instance.detach_euvolume(volume)
             before_block.extend(after_block)
-            self.status('terminating instance with' + str(len(before_block)) + ' volumes attached')
+            self.tester.print_euvolume_list(volumes)
+            self.status('terminating instance with ' + str(len(before_block)) + ' volumes attached')
 
         except Exception, e:
             tb = self.tester.get_traceback()
             errmsg = "\n" + str(tb) + "\nERROR: " + str(e)
+            self.errormsg(errmsg)
         finally:
             if clean_on_exit:
                 self.status('Tearing down instance after test...')
