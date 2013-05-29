@@ -153,6 +153,8 @@ class Mpath_Suite(EutesterTestCase):
         self.max_path_iterations = self.args.max_path_iterations
         self.path_controllers = path_controllers or []
         self.path_controller = None
+        self.stdscr = None
+        self.curses_fd = None
 
 
     def memo_use_multipathing_check(self):
@@ -481,7 +483,10 @@ class Mpath_Suite(EutesterTestCase):
         path_controller.total_path_iterations=0
 
         cmd = 'python ' + self.remote_script_path + " -f " + self.test_file_path + ' -t ' + str(timed_run)
-        self.stdscr = curses.initscr()
+        try:
+            self.stdscr = curses.initscr()
+        except Exception, e:
+            self.debug('No term cababilties? Curses could not init:' +str(e))
         try:
             signal.signal(signal.SIGWINCH, self.sigwinch_handler)
             now = time.time()
@@ -552,12 +557,13 @@ class Mpath_Suite(EutesterTestCase):
         waited = int(now - last_time)
         waited_str = "INTER_IO_SECONDS_WAITED: "+ str(waited)
         time_remaining = "TIME_REMAINING:"
-
+        printout = False
         #Pace cycle checks
         if now - cycle_check_time >= 5:
             status = self.current_cycle_method()
             cycle_check_time = now
             try:
+                printout = True
                 mpath_status = self.print_mpath_info_for_instance_vol(self.instance, self.volume)
             except Exception, e:
                 mpath_status = str(e)
@@ -612,6 +618,9 @@ class Mpath_Suite(EutesterTestCase):
                     self.stdscr.clear()
                     self.stdscr.addstr(0, 0, debug_string)
                     self.stdscr.refresh()
+                elif printout:
+                    self.debug(debug_string +
+                               str('--------------------------------------------------------------------------------'))
         except Exception, e:
             tb = self.tester.get_traceback()
             debug_string = str(tb) + '\nError caught by remote_ssh_io_monitor_cb:'+str(e)
