@@ -2479,13 +2479,10 @@ class EC2ops(Eutester):
                         self.test_resources['volumes'].append(volume)
                 except Exception, e:
                     tb = self.get_traceback()
-                    self.debug("\n" + str(tb) + "\nError trying to retrieve volume:' + str(device.volume_id) +
+                    self.debug("\n" + str(tb) + "\nError trying to retrieve volume:" + str(device.volume_id) +
                                ' from instance:' + str(instance.id) + " block dev map, err:" + str(e))
 
 
-
-
-    
     @Eutester.printinfo 
     def monitor_euinstances_to_running(self,instances, poll_interval=10, timeout=480):
         self.debug("("+str(len(instances))+") Monitor_instances_to_running starting...")
