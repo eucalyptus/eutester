@@ -1189,7 +1189,7 @@ class EC2ops(Eutester):
     
     
     @Eutester.printinfo
-    def create_snapshot_from_volume(self, volume, wait_on_progress=20, poll_interval=10, timeout=0, description=""):
+    def create_snapshot_from_volume(self, volume, wait_on_progress=40, poll_interval=10, timeout=0, description=""):
         """
         Create a new EBS snapshot from an existing volume then wait for it to go to the created state.
         By default will poll for poll_count.  If wait_on_progress is specified than will wait on "wait_on_progress"
@@ -1209,7 +1209,7 @@ class EC2ops(Eutester):
         
         
     @Eutester.printinfo
-    def create_snapshot(self, volume_id, wait_on_progress=20, poll_interval=10, timeout=0, description=""):
+    def create_snapshot(self, volume_id, wait_on_progress=40, poll_interval=10, timeout=0, description=""):
         """
         Create a new single EBS snapshot from an existing volume id then wait for it to go to the created state.
         By default will poll for poll_count.  If wait_on_progress is specified than will wait on "wait_on_progress"
@@ -1240,7 +1240,7 @@ class EC2ops(Eutester):
                                      mincount=None,
                                      eof=True,
                                      delay=0,
-                                     wait_on_progress=20,
+                                     wait_on_progress=40,
                                      poll_interval=10,
                                      timeout=0,
                                      description=""):
@@ -1279,7 +1279,7 @@ class EC2ops(Eutester):
                          mincount=None, 
                          eof=True, 
                          delay=0, 
-                         wait_on_progress=20, 
+                         wait_on_progress=40,
                          poll_interval=10, 
                          timeout=0, 
                          monitor_to_completed=True,
@@ -1402,7 +1402,7 @@ class EC2ops(Eutester):
                                      snaps,
                                      mincount=None, 
                                      eof=True, 
-                                     wait_on_progress=20, 
+                                     wait_on_progress=40,
                                      poll_interval=10, 
                                      timeout=0,
                                      delete_failed=True ):
