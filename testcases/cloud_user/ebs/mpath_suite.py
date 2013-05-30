@@ -939,8 +939,7 @@ class Mpath_Suite(EutesterTestCase):
             self.status('Attached all ' + str(vols_before_block) + ' volumes before blocking a path')
             self.tester.print_euvolume_list(volumes)
             if after_block:
-                self.status('Blocking single path: "' + str(single_path) + '" before detaching volume:'
-                            + str(self.volume.id) + '...')
+                self.status('Blocking single path: "' + str(single_path) + "...")
                 path_controller.block_path(single_path)
                 self.status('Waiting ' + str(wait_after_block) + ' seconds after blocking for path to go down...')
                 time.sleep(wait_after_block)

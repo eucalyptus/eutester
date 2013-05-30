@@ -162,7 +162,11 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         #leave the base test, and snapshot behind for future use
         if self.base_test_snapshot in self.tester.test_resources['snapshots']:
             self.tester.test_resources['snapshots'].remove(self.base_test_snapshot)
+        if self.build_image_snapshot in self.tester.test_resources['snapshots']:
+            self.tester.test_resources['snapshots'].remove(self.build_image_snapshot)
 
+        if self.build_image_volume in self.tester.test_resources['volumes']:
+            self.tester.test_resources['volumes'].remove(self.build_image_volume)
         if self.base_test_volume in self.tester.test_resources['volumes']:
             self.tester.test_resources['volumes'].remove(self.base_test_volume)
 
@@ -339,15 +343,30 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
     def try_existing_resources_else_create_them(self, url=None):
 
         self.populate_self_from_existing_test_resources()
-        if not self.build_image_volume or \
-                not self.build_image_snapshot or \
-                not self.base_test_snapshot or \
-                not self.base_test_volume:
-            self.debug('Populate instances from existing missing all or some of the required resources, building resources now...')
+        if not self.build_image_snapshot or not self.base_test_snapshot:
+            self.debug('\nPopulate instances from existing missing all or some of the required resources:' +
+                       '\nbuild_image_volume:' + str(self.build_image_volume) +
+                       '\nbuild_image_snapshot(required):' + str(self.build_image_snapshot) +
+                       '\nbase_test_snapshot(required):' + str(self.base_test_snapshot) +
+                       '\nbase_test_volume:' + str(self.base_test_volume) + "\n")
+            self.debug('Building missing resources now...')
             url = url or self.url
             if not url:
                 raise Exception('URL to bfebs image is needed to build snapshot test resource')
             self.setup_bfebs_instance_volume_and_snapshots_from_url(url=url)
+        if not self.build_image_volume:
+            self.build_test_volume = self.tester.create_euvolume(zone=self.zone, snapshot=self.build_image_snapshot)
+            self.build_image_volume.md5 = self.build_image_snapshot.md5=self.build_image_snapshot.eutest_volume_md5
+            self.build_image_volume.md5len = self.build_image_snapshot.eutest_volume_md5len
+            self.build_image_volume.add_tag('md5', self.build_image_volume.md5)
+            self.build_image_volume.add_tag('md5len', self.build_image_volume.md5len)
+        if not self.base_test_volume:
+            self.status('Creating base_test_volume from base_test_snapshot: ')
+            self.base_test_volume = self.tester.create_euvolume(zone=self.zone, snapshot=self.base_test_snapshot)
+            self.base_test_volume.md5 = self.base_test_snapshot.md5=self.build_image_snapshot.eutest_volume_md5
+            self.base_test_volume.md5len = self.base_test_snapshot.eutest_volume_md5len
+            self.base_test_volume.add_tag('md5', self.base_test_volume.md5)
+            self.base_test_volume.add_tag('md5len', self.base_test_volume.md5len)
 
     def find_volume_on_euinstance(self, euinstance, map_device_name, md5=None, md5len=None, euvolume=None, ):
         '''
@@ -386,7 +405,10 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
             self.status('Resulting in the instance block device map:')
             self.tester.print_block_device_map(instance.block_device_mapping)
             self.status('Checking instance devices for md5sums which match original volume/snapshots...')
-            self.find_volume_on_euinstance(instance, instance.root_device_name, euvolume=self.build_image_volume)
+            self.find_volume_on_euinstance(instance,
+                                           instance.root_device_name,
+                                           md5=self.build_image_snapshot.eutest_volume_md5,
+                                           md5len=self.build_image_snapshot.eutest_volume_md5len)
             self.status('Checking instance for to make sure ephemeral is not present...')
             try:
                 instance.get_ephemeral_dev()
@@ -434,7 +456,10 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
             self.status('Resulting in the instance block device map:')
             self.tester.print_block_device_map(instance.block_device_mapping)
             self.status('Checking instance devices for md5sums which match original volume/snapshots...')
-            self.find_volume_on_euinstance(instance, instance.root_device_name, euvolume=self.build_image_volume)
+            self.find_volume_on_euinstance(instance,
+                                           instance.root_device_name,
+                                           md5=self.build_image_snapshot.eutest_volume_md5,
+                                           md5len=self.build_image_snapshot.eutest_volume_md5len)
             self.status('Checking instance for to make sure ephemeral is not present...')
             try:
                 instance.get_ephemeral_dev()
@@ -514,12 +539,12 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
                          'record the volume id, md5 and guest device within the instance for later stop, start, and detach' +
                          'operations...')
             self.status('Getting guest device for root device...')
-            guest_root_dev = instance.get_guest_dev_for_block_device_map_device(md5=self.build_image_volume.md5,
-                                                                                md5len=self.build_image_volume.md5len,
+            guest_root_dev = instance.get_guest_dev_for_block_device_map_device(md5=self.build_image_snapshot.eutest_volume_md5,
+                                                                                md5len=self.build_image_snapshot.eutest_volume_md5len,
                                                                                 map_device=instance.root_device_name)
             self.status('Getting guest device for snapshot device...')
-            guest_snap_dev = instance.get_guest_dev_for_block_device_map_device(md5=self.base_test_volume.md5,
-                                                                                md5len=self.base_test_volume.md5len,
+            guest_snap_dev = instance.get_guest_dev_for_block_device_map_device(md5=self.base_test_snapshot.eutest_volume_md5,
+                                                                                md5len=self.base_test_snapshot.eutest_volume_md5len,
                                                                                 map_device=bdm_snapshot_dev)
             self.status('Checking instance for ephemeral disk and size...')
             guest_ephemeral_dev = instance.check_ephemeral_against_vmtype()
@@ -614,11 +639,11 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
             self.status('Checking instance devices for md5sums which match original volume/snapshots.\nThis step will also \
                          record the volume id, md5 and guest device within the instance for later stop, start, and detach \
                          operations...')
-            guest_root_dev = instance.get_guest_dev_for_block_device_map_device(md5=self.build_image_volume.md5,
-                                                                                md5len=self.build_image_volume.md5len,
+            guest_root_dev = instance.get_guest_dev_for_block_device_map_device(md5=self.build_image_snapshot.eutest_volume_md5,
+                                                                                md5len=self.build_image_snapshot.eutest_volume_md5len,
                                                                                 map_device=instance.root_device_name)
-            guest_snap_dev = instance.get_guest_dev_for_block_device_map_device(md5=self.base_test_volume.md5,
-                                                                                md5len=self.base_test_volume.md5len,
+            guest_snap_dev = instance.get_guest_dev_for_block_device_map_device(md5=self.base_test_snapshot.eutest_volume_md5,
+                                                                                md5len=self.base_test_snapshot.eutest_volume_md5len,
                                                                                 map_device=bdm_snapshot_dev)
             self.status('Checking instance for ephemeral disk and size...')
             guest_ephemeral_dev = instance.check_ephemeral_against_vmtype()
@@ -704,8 +729,8 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
                          record the volume id, md5 and guest device within the instance for later stop, start, and detach \
                          operations...')
             self.status('Checking device(s) size(s) on guest vs requested in bdm...')
-            guest_root_dev = instance.get_guest_dev_for_block_device_map_device(md5=self.build_image_volume.md5,
-                                                                                md5len=self.build_image_volume.md5len,
+            guest_root_dev = instance.get_guest_dev_for_block_device_map_device(md5=self.build_image_snapshot.eutest_volume_md5,
+                                                                                md5len=self.build_image_snapshot.eutest_volume_md5len,
                                                                                 map_device=instance.root_device_name)
             self.status('Checking device(s) size(s) on guest vs requested in bdm...')
             root_dev_size = instance.get_blockdev_size_in_bytes(guest_root_dev) / self.gig
@@ -798,8 +823,8 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
                          record the volume id, md5 and guest device within the instance for later stop, start, and detach \
                          operations...')
             self.status('Checking device(s) size(s) on guest vs requested in bdm...')
-            guest_root_dev = instance.get_guest_dev_for_block_device_map_device(md5=self.build_image_volume.md5,
-                                                                                md5len=self.build_image_volume.md5len,
+            guest_root_dev = instance.get_guest_dev_for_block_device_map_device(md5=self.build_image_snapshot.eutest_volume_md5,
+                                                                                md5len=self.build_image_snapshot.eutest_volume_md5len,
                                                                                 map_device=instance.root_device_name)
             root_dev_size = instance.get_blockdev_size_in_bytes(guest_root_dev) / self.gig
             if root_dev_size != bdm_rootsnap_size:
@@ -808,8 +833,8 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
                                 ", original size in image:" + str(image.block_device_mapping.get(image.root_device_name).size))
 
             #Volume from snapshot checks...
-            guest_snap_dev = instance.get_guest_dev_for_block_device_map_device(md5=self.base_test_volume.md5,
-                                                                                md5len=self.base_test_volume.md5len,
+            guest_snap_dev = instance.get_guest_dev_for_block_device_map_device(md5=self.base_test_snapshot.eutest_volume_md5,
+                                                                                md5len=self.base_test_snapshot.eutest_volume_md5len,
                                                                                 map_device=bdm_snapshot_dev)
             guest_snapvol_size = instance.get_blockdev_size_in_bytes(guest_snap_dev) / self.gig
             if guest_snapvol_size != bdm_snap_size:
@@ -884,8 +909,8 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
             self.debug('Ephemeral was not found, passing...')
         else:
             raise Exception('Ephemeral device found, but was over written with no_device?')
-        guest_root_dev = instance.get_guest_dev_for_block_device_map_device(md5=self.build_image_volume.md5,
-                                                                            md5len=self.build_image_volume.md5len,
+        guest_root_dev = instance.get_guest_dev_for_block_device_map_device(md5=self.build_image_snapshot.eutest_volume_md5,
+                                                                            md5len=self.build_image_snapshot.eutest_volume_md5len,
                                                                             map_device=instance.root_device_name)
         self.status('Checking for any non-root block devices...')
         remaining_devs = self.find_remaining_devices(instance=instance, known_dev_list=[guest_root_dev])
@@ -949,16 +974,16 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
                          record the volume id, md5 and guest device within the instance for later stop, start, and detach \
                          operations...')
             self.status('Checking device(s) size(s) on guest vs requested in bdm...')
-            guest_root_dev = instance.get_guest_dev_for_block_device_map_device(md5=self.build_image_volume.md5,
-                                                                                md5len=self.build_image_volume.md5len,
+            guest_root_dev = instance.get_guest_dev_for_block_device_map_device(md5=self.build_image_snapshot.eutest_volume_md5,
+                                                                                md5len=self.build_image_snapshot.eutest_volume_md5len,
                                                                                 map_device=instance.root_device_name)
             guest_root_size = instance.get_blockdev_size_in_bytes(guest_root_dev) / self.gig
             if guest_root_size != bdm_root_size:
                 raise Exception('Root volume size on guest:'+ str(guest_root_size)+', != ' + str(bdm_root_size) +
                                 ' the size requested for root in bdm')
 
-            guest_snap_dev = instance.get_guest_dev_for_block_device_map_device(md5=self.base_test_volume.md5,
-                                                                                md5len=self.base_test_volume.md5len,
+            guest_snap_dev = instance.get_guest_dev_for_block_device_map_device(md5=self.base_test_snapshot.eutest_volume_md5,
+                                                                                md5len=self.base_test_snapshot.eutest_volume_md5len,
                                                                                 map_device=bdm_snapshot_dev)
             guest_snapvol_size = instance.get_blockdev_size_in_bytes(guest_snap_dev) / self.gig
             if guest_snapvol_size != bdm_snapshot_size:
@@ -1041,6 +1066,7 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         self.tester.print_block_device_map(image.block_device_mapping)
         bdm = self.add_block_device_types_to_mapping(snapshot_id=self.base_test_snapshot.id,
                                                      device_name=bdm_snapshot_dev,
+                                                     size=bdm_snap_size,
                                                      delete_on_terminate=True)
 
         #add ephemeral dev separately to use later for bug work around...
@@ -1061,20 +1087,30 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
             self.status('Checking instance devices for md5sums which match original volume/snapshots.\nThis step will also \
                          record the volume id, md5 and guest device within the instance for later stop, start, and detach \
                          operations...')
-            guest_root_dev = instance.get_guest_dev_for_block_device_map_device(md5=self.build_image_volume.md5,
-                                                                                md5len=self.build_image_volume.md5len,
+            self.status('Getting guest dev for bdm root device...')
+            guest_root_dev = instance.get_guest_dev_for_block_device_map_device(md5=self.build_image_snapshot.eutest_volume_md5,
+                                                                                md5len=self.build_image_snapshot.eutest_volume_md5len,
                                                                                 map_device=instance.root_device_name)
+            self.status('Checking guest root device size against bdm')
             guest_root_size = instance.get_blockdev_size_in_bytes(guest_root_dev) / self.gig
             if guest_root_size != bdm_root_size:
                 raise Exception('Root volume size on guest:'+ str(guest_root_size)+', != ' + str(bdm_root_size) +
                                 ' the size requested for root in bdm')
-            guest_snap_dev = instance.get_guest_dev_for_block_device_map_device(md5=self.base_test_volume.md5,
-                                                                                md5len=self.base_test_volume.md5len,
+            self.status('Getting guest device for bdm base test snapshot...')
+            guest_snap_dev = instance.get_guest_dev_for_block_device_map_device(md5=self.base_test_snapshot.eutest_volume_md5,
+                                                                                md5len=self.base_test_snapshot.eutest_volume_md5len,
                                                                                 map_device=bdm_snapshot_dev)
+            self.status('Checking size on guest for base test snapshot...')
             guest_snapvol_size = instance.get_blockdev_size_in_bytes(guest_snap_dev) / self.gig
             if guest_snapvol_size != bdm_snap_size:
                 raise Exception('Volume size on guest:'+ str(guest_snapvol_size)+' != ' + str(bdm_snap_size) +
                                 ', the size requested for bdm snap:' + str(self.base_test_snapshot.id))
+            #Grab the current block device map before attaching any volumes, use this for meta data testing later.
+            #Temp work around for existing bug where ephemeral is not reported...
+            meta_bdm = instance.block_device_mapping
+            if not meta_bdm.has_key(bdm_ephemeral_dev):
+                self.resulterr('Ephemeral disk not reported in instance block dev mapping: see euca-6048')
+                meta_bdm[bdm_ephemeral_dev] = eph_dev
             self.status('Attaching the base test volume to this running instance...')
             instance.attach_euvolume(self.base_test_volume, timeout=120, overwrite=False)
             self.status('Block dev map after attaching volume to running instance:')
@@ -1091,11 +1127,6 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
             instance.update()
             self.tester.print_block_device_map(instance.block_device_mapping)
             self.status('Check block device mapping meta data...')
-            #Temp work around for existing bug where ephemeral is not reported...
-            meta_bdm = instance.block_device_mapping
-            if not meta_bdm.has_key(bdm_ephemeral_dev):
-                self.resulterr('Ephemeral disk not reported in instance block dev mapping: see euca-6048')
-                meta_bdm[bdm_ephemeral_dev] = eph_dev
             instance.check_instance_meta_data_for_block_device_mapping(root_dev=image.root_device_name, bdm=meta_bdm)
             self.status('Stopping instance:' + str(instance.id))
             instance.stop_instance_and_verify()
@@ -1198,6 +1229,23 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
                 raise Exception(errmsg)
 
     def misc_test3_run_image1_check_attached_volume_states_during_stop_start(self, can_detach_block_dev_map=False):
+        '''
+        Attempts to run test bfebs image#1 and test the following:
+        -Add an additional ebs block device in the map built from the base test snapshot
+        -Verify the root device is present and in bdm and by checksum on the guest
+        -Verify the root device's size specified in the bdm is also the size which appears on the running guest
+        -Verify the additional ebs device is present and in bdm and by checksum on the guest
+        -Verify the additional ebs device's size specified in the bdm is also the size which appears on the running guest
+        -Verify instance meta data for block device mapping
+        -Attach a volume while instance is in running state, verify device on guest
+        -Stop the instance and verify the instance goes to stopped state correctly
+        -While in the stopped state monitor all volumes attached to instance for 60 seconds to confirm correct state
+        -Monitor instance for 60 seconds to verify it remains in correct stopped state
+        -Attempt to detach volume while instance is in stopped state
+        -Start instance and verify all volumes are attached, check guest for devices by checksum
+
+
+        '''
         errmsg = ""
         image = self.test_image1
         bdm_snapshot_dev = '/dev/vdc'
@@ -1212,37 +1260,42 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
                                                          delete_on_terminate=True)
             self.status('Applying the following block device map:')
             self.tester.print_block_device_map(bdm)
+            self.status('Running instance with previously displayed block device mapping...')
             instance = self.tester.run_image(image=image,block_device_map=bdm, keypair=self.keypair, group=self.group)[0]
 
             self.current_test_instance = instance
-            self.status('Resulting in the instance block device map:')
+            self.status('Instance now running. Resulting in the instance block device map:')
             self.tester.print_block_device_map(instance.block_device_mapping)
             self.status('Checking instance devices for md5sums which match original volume/snapshots.\nThis step will also \
                          record the volume id, md5 and guest device within the instance for later stop, start, and detach \
                          operations...')
-            self.status('Checking device(s) size(s) on guest vs requested in bdm...')
-            guest_root_dev = instance.get_guest_dev_for_block_device_map_device(md5=self.build_image_volume.md5,
-                                                                                md5len=self.build_image_volume.md5len,
+            self.status('Getting guest device for block dev map root device...')
+            guest_root_dev = instance.get_guest_dev_for_block_device_map_device(md5=self.build_image_snapshot.eutest_volume_md5,
+                                                                                md5len=self.build_image_snapshot.eutest_volume_md5len,
                                                                                 map_device=instance.root_device_name)
-            self.status('Checking device(s) size(s) on guest vs requested in bdm...')
+            self.status('Checking device(s) size(s) on guest vs requested in bdm for root device ...')
             root_dev_size = instance.get_blockdev_size_in_bytes(guest_root_dev) / self.gig
             if root_dev_size != bdm_root_size:
                 raise Exception('Root device size on guest:' + str(root_dev_size) +
                                 ' !=  requested size' + str(bdm_root_size) +
                                 ", original size in image:" + str(bdm_root_size))
-            guest_snap_dev = instance.get_guest_dev_for_block_device_map_device(md5=self.base_test_volume.md5,
-                                                                                md5len=self.base_test_volume.md5len,
+            self.status('Getting guest device for block dev map, device using base test snapshot...')
+            guest_snap_dev = instance.get_guest_dev_for_block_device_map_device(md5=self.base_test_snapshot.eutest_volume_md5,
+                                                                                md5len=self.base_test_snapshot.eutest_volume_md5len,
                                                                                 map_device=bdm_snapshot_dev)
+            self.status('Checking device(s) size(s) on guest vs requested in bdm for base test snapshot ...')
             guest_snapvol_size = instance.get_blockdev_size_in_bytes(guest_snap_dev) / self.gig
             if guest_snapvol_size != bdm_snap_size:
                 raise Exception('Volume size on guest:'+ str(guest_snapvol_size)+' != ' + str(bdm_snap_size) +
                                 ', the size requested for bdm snap:' + str(self.base_test_snapshot.id))
+            #Get block device map before attaching volumes to use for meta data test later...
+            meta_bdm = instance.block_device_mapping
             self.status('Attaching the base test volume to this running instance...')
             instance.attach_euvolume(self.base_test_volume, timeout=120, overwrite=False)
             self.status('Block dev map after attaching volume to running instance:')
             instance.update()
             self.status('Check block device mapping meta data...')
-            instance.check_instance_meta_data_for_block_device_mapping(root_dev=image.root_device_name, bdm=bdm)
+            instance.check_instance_meta_data_for_block_device_mapping(root_dev=image.root_device_name, bdm=meta_bdm)
             self.status('Stopping instance:' + str(instance.id))
             instance.stop_instance_and_verify()
             self.status('Monitor attached volumes for 1 minute make sure status remains in-use...')
