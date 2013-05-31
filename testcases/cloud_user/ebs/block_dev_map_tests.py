@@ -33,6 +33,7 @@ import time
 import types
 import httplib
 import copy
+import math
 
 
 class FixedBlockDeviceMapping(BlockDeviceMapping):
@@ -222,7 +223,7 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         url = url or self.url
         volumes = []
         self.image_bytes = self.get_remote_file_size_via_http(url=url)
-        self.image_gigs = ( ((self.image_bytes/self.gig)+1) or 1)
+        self.image_gigs = (math.ceil(float(self.image_bytes)/self.gig) or 1)
 
         self.status('Attempting to launch instance store instance...')
         instance = self.tester.run_image(self.image,
