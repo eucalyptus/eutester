@@ -1481,12 +1481,14 @@ class EC2ops(Eutester):
                         retlist.append(snapshot)
                         snapshots.remove(snapshot)
                 except Exception, e:
+                    tb = self.get_traceback()
+                    errbuf = '\n' + str(tb) + '\n' + str(e)
+                    self.debug("Exception caught in snapshot creation, snapshot:"+str(snapshot.id)+".Err:"+str(errbuf))
                     if eof:
                         #If exit on fail, delete all snaps and raise exception
                         self.delete_snapshots(snapshots)
                         raise e
                     else:
-                        self.debug("Exception caught in snapshot creation, snapshot:"+str(snapshot.id)+".Err:"+str(e))
                         snapshot.eutest_failmsg = str(e)
                         snapshot.eutest_timeintest = elapsed
                         failed.append(snapshot)
