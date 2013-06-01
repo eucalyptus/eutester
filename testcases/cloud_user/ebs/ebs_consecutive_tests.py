@@ -48,7 +48,7 @@ if __name__ == "__main__":
     #add/remove arguements to the default cli and config file argument list, see testcase class for all default cli args
     testcase.setup_parser(description="Attempts to test and provide info on focused areas related to Eucalyptus EBS related functionality.", 
                           testlist=False)
-    testcase.parser.add_argument('--snap_count', type=int, help='Number of snapshots to create per zone',default=4)
+    testcase.parser.add_argument('--snap_count', type=int, help='Number of snapshots to create per zone',default=5)
     testcase.parser.add_argument('--snap_delay', type=int, help='Delay in seconds between each snapshot created',default=0)
     testcase.parser.add_argument('--snap_progress', type=int, help='Number of 10 second polls to allow without increase in snapshot progress',default=60)
     testcase.parser.add_argument('--timepergig', type=int, help='Time allowed per gig size of volume during volume creation',default=500)
