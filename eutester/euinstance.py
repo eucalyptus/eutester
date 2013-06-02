@@ -324,7 +324,7 @@ class EuInstance(Instance, TaggedResource):
         self.debug('File '+filepath+' is present on '+self.id)
         
     
-    def attach_volume(self, volume,  dev=None, timeout=60, overwrite=False):
+    def attach_volume(self, volume,  dev=None, timeout=180, overwrite=False):
         '''
         Method used to attach a volume to an instance and track it's use by that instance
         required - euvolume - the euvolume object being attached
@@ -338,7 +338,7 @@ class EuInstance(Instance, TaggedResource):
         return self.attach_euvolume(volume,  dev=dev, timeout=timeout, overwrite=overwrite)
     
         
-    def attach_euvolume(self, euvolume, dev=None, timeout=60, overwrite=False):
+    def attach_euvolume(self, euvolume, dev=None, timeout=180, overwrite=False):
         '''
         Method used to attach a volume to an instance and track it's use by that instance
         required - euvolume - the euvolume object being attached
