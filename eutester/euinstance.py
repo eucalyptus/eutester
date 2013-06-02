@@ -1222,7 +1222,7 @@ class EuInstance(Instance, TaggedResource):
                 
         
         
-    def stop_instance_and_verify(self, timeout=120, state='stopped', failstate='terminated', check_vols=True):
+    def stop_instance_and_verify(self, timeout=200, state='stopped', failstate='terminated', check_vols=True):
         '''
         Attempts to stop instance and verify the state has gone to stopped state
         timeout -optional-time to wait on instance to go to state 'state' before failing
