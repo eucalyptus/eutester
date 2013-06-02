@@ -1004,7 +1004,7 @@ class Mpath_Suite(EutesterTestCase):
     def testsuite(self):
         self.cycle_paths = True
         test_list = []
-        test_list.append(self.create_testunit_from_method(self.pre_test_check_should_run_multipath_tests_on_this_system, eof=True))
+        #test_list.append(self.create_testunit_from_method(self.pre_test_check_should_run_multipath_tests_on_this_system, eof=True))
         test_list.append(self.create_testunit_from_method(self.test1_check_volume_io_on_guest_while_blocking_clearing_all_paths_once, eof=True))
         test_list.append(self.create_testunit_from_method(self.test2_attach_volume_while_a_single_path_is_down))
         test_list.append(self.create_testunit_from_method(self.test3_attach_volume_while_a_single_path_is_in_process_of_failing))
@@ -1019,10 +1019,11 @@ if __name__ == "__main__":
     ### Use the list of tests passed from config/command line to determine what subset of tests to run
     ### or use a predefined list
     if testcase.args.run_suite:
+        testcase.pre_test_check_should_run_multipath_tests_on_this_system()
         unit_list = testcase.testsuite()
     else:
-        test_names = testcase.args.tests or ['pre_test_check_should_run_multipath_tests_on_this_system',
-                                             'test1_check_volume_io_on_guest_while_blocking_clearing_all_paths_once']
+        testcase.pre_test_check_should_run_multipath_tests_on_this_system()
+        test_names = testcase.args.tests or ['test1_check_volume_io_on_guest_while_blocking_clearing_all_paths_once']
         ### Convert test suite methods to EutesterUnitTest objects
         unit_list = [ ]
         for test in test_names:
