@@ -324,7 +324,7 @@ class EuInstance(Instance, TaggedResource):
         self.debug('File '+filepath+' is present on '+self.id)
         
     
-    def attach_volume(self, volume,  dev=None, timeout=60, overwrite=False):
+    def attach_volume(self, volume,  dev=None, timeout=180, overwrite=False):
         '''
         Method used to attach a volume to an instance and track it's use by that instance
         required - euvolume - the euvolume object being attached
@@ -338,7 +338,7 @@ class EuInstance(Instance, TaggedResource):
         return self.attach_euvolume(volume,  dev=dev, timeout=timeout, overwrite=overwrite)
     
         
-    def attach_euvolume(self, euvolume, dev=None, timeout=60, overwrite=False):
+    def attach_euvolume(self, euvolume, dev=None, timeout=180, overwrite=False):
         '''
         Method used to attach a volume to an instance and track it's use by that instance
         required - euvolume - the euvolume object being attached
@@ -532,7 +532,9 @@ class EuInstance(Instance, TaggedResource):
                                str(vol_status) + ", elapsed:" + str(elapsed) + "/" + str(volto) )
                 vol.expected_status = vol_status
                 vol.update()
-                if vol.status == vol_status:
+                #if volume has reached it's intended status or
+                # the volume is no longer on the system and it's intended status is 'deleted'
+                if vol.status == vol_status or (not self.tester.get_volume(volume_id=vol.id, eof=False) and vol_status == 'deleted'):
                     self.debug(str(self.id)+' terminated, ' + str(vol.id) + "/" + str(vol.status) +
                                ": volume entered expected state:" + str(vol_status))
                     all_vols.remove(vol)
@@ -1220,7 +1222,7 @@ class EuInstance(Instance, TaggedResource):
                 
         
         
-    def stop_instance_and_verify(self, timeout=120, state='stopped', failstate='terminated'):
+    def stop_instance_and_verify(self, timeout=120, state='stopped', failstate='terminated', check_vols=True):
         '''
         Attempts to stop instance and verify the state has gone to stopped state
         timeout -optional-time to wait on instance to go to state 'state' before failing
@@ -1243,6 +1245,12 @@ class EuInstance(Instance, TaggedResource):
                 self.debug(str(self.id)+" wait for stop, in state:"+str(self.state)+",time remaining:"+str(elapsed)+"/"+str(timeout) )
         if self.state != state:
             raise Exception(self.id+" state: "+str(self.state)+" expected:"+str(state)+", after elapsed:"+str(elapsed))
+        if check_vols:
+            for volume in self.attached_vols:
+                volume.update
+                if volume.status != 'in-use':
+                    raise Exception(str(self.id) + ', Volume ' + str(volume.id) + ':' + str(volume.status)
+                                    + ' state did not remain in-use during stop'  )
         self.debug(self.id+" stop_instance_and_verify Success")
         
     
@@ -1256,9 +1264,15 @@ class EuInstance(Instance, TaggedResource):
         checkvolstatus - optional -boolean to be used to check volume status post start up
         '''
         self.debug(self.id+" Attempting to start instance...")
-        dbg_buf = "\nInstance 'attached_vol' list:\n"
-        for vol in self.attached_vols:
-            dbg_buf += "Volume:" + str(vol.id) + ", md5:" + str(vol.md5) + ", md5len" + str(vol.md5len) + "\n"
+        if checkvolstatus:
+            for volume in self.attached_vols:
+                volume.update
+                if checkvolstatus:
+                    if volume.status != 'in-use':
+                        raise Exception(str(self.id) + ', Volume ' + str(volume.id) + ':' + str(volume.status)
+                                        + ' state did not remain in-use during stop'  )
+        self.debug("\n"+ str(self.id) + ": Printing Instance 'attached_vol' list:\n")
+        self.tester.print_euvolume_list(self.attached_vols)
         msg=""
         start = time.time()
         elapsed = 0
@@ -1530,8 +1544,10 @@ class EuInstance(Instance, TaggedResource):
         root_dev = os.path.basename(root_dev)
         orig_bdm = bdm or self.block_device_mapping
         bdm = copy.copy(orig_bdm)
-        if root_dev in bdm or 'dev/'+root_dev in bdm:
+        if root_dev in bdm:
             bdm.pop(root_dev)
+        if '/dev/'+root_dev in bdm:
+            bdm.pop('/dev/'+root_dev)
 
         for device in meta_dev_names:
             #Check root device meta data against the root device, else add to dict for comparison against block dev map
@@ -1540,9 +1556,9 @@ class EuInstance(Instance, TaggedResource):
                 meta_device = self.get_metadata('block-device-mapping/' + str(device))
                 if not meta_device:
                     raise Exception('Device:' + str(device) + ' metadata response:' + str(meta_device))
-                if not root_dev in meta_device:
+                if not root_dev in meta_device and not '/dev/'+str(root_dev) in meta_device:
                     raise Exception('Meta data "block-device-mapping/' + str(device) + '", root dev:'
-                                    + str(root_dev) + 'not in ' + str(meta_device))
+                                    + str(root_dev) + ' not in ' + str(meta_device))
             else:
                 meta_devices[device] =  self.get_metadata('block-device-mapping/' + str(device))[0]
 
