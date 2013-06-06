@@ -395,6 +395,13 @@ class Mpath_Suite(EutesterTestCase):
         return volumes
 
     def get_test_volumes(self, count=1):
+        '''
+        Attempt to retrieve a list of volumes created by this test, or a previous run of this test and in available state.
+        If the test can not recycle enough test volumes, it will create new ones so 'count' number of test volumes
+        can be returned.
+
+        :param count: int representing the number of test volumes desired.
+        '''
         volumes = []
         if self.volume:
             self.volume.update()
@@ -402,7 +409,7 @@ class Mpath_Suite(EutesterTestCase):
                 volumes.append(self.volume)
                 if count == 1:
                     return volumes
-        volumes.extend(self.get_existing_test_volumes())
+        volumes =  volumes + list(set(self.get_existing_test_volumes()) - set(volumes))
         if len(volumes) >= count:
             volumes = volumes[0:count]
 
