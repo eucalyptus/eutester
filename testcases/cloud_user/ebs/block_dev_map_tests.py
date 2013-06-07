@@ -166,11 +166,14 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         '''
         #leave the base test, and snapshot behind for future use. To remove these,
         # the images they are associated with will need to be deleted as well.
-        if self.base_test_snapshot in self.tester.test_resources['snapshots']:
-            self.tester.test_resources['snapshots'].remove(self.base_test_snapshot)
-        if self.build_image_snapshot in self.tester.test_resources['snapshots']:
-            self.tester.test_resources['snapshots'].remove(self.build_image_snapshot)
-
+        id_list = []
+        if self.base_test_snapshot:
+            id_list.append(str(self.base_test_snapshot.id).strip())
+        if self.build_image_snapshot:
+            id_list.append(self.build_image_snapshot.id)
+        for snap in self.tester.test_resources['snapshots']:
+            if str(snap.id).strip() in id_list:
+                self.tester.test_resources['snapshots'].remove(snap)
         self.tester.cleanup_artifacts()
 
 
