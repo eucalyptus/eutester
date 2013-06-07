@@ -403,16 +403,13 @@ class Mpath_Suite(EutesterTestCase):
         :param count: int representing the number of test volumes desired.
         '''
         volumes = []
-        if self.volume:
+        if count == 1 and self.volume:
             self.volume.update()
             if self.volume.status == 'available':
-                volumes.append(self.volume)
-                if count == 1:
-                    return volumes
-        volumes =  volumes + list(set(self.get_existing_test_volumes()) - set(volumes))
+                return [self.volume]
+        volumes = self.get_existing_test_volumes()
         if len(volumes) >= count:
             volumes = volumes[0:count]
-
         elif len(volumes) < count:
             new_volumes = self.tester.create_volumes(self.zone, size=self.size, count=(count-len(volumes)))
             for volume in new_volumes:
