@@ -288,10 +288,11 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
                     for dev in image.block_device_mapping:
                         if image.block_device_mapping[dev].snapshot_id == snap.id:
                             self.delete_image(image)
-        return self.delete_snapshots(snaps,
-                                     base_timeout=base_timeout,
-                                     add_time_per_snap=add_time_per_snap,
-                                     wait_for_valid_state=wait_for_valid_state)
+        if snaps:
+            return self.delete_snapshots(snaps,
+                                        base_timeout=base_timeout,
+                                        add_time_per_snap=add_time_per_snap,
+                                        wait_for_valid_state=wait_for_valid_state)
 
 
 

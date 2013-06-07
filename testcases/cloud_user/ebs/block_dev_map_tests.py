@@ -34,6 +34,7 @@ import types
 import httplib
 import copy
 import math
+import re
 
 
 class FixedBlockDeviceMapping(BlockDeviceMapping):
@@ -167,13 +168,15 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         #leave the base test, and snapshot behind for future use. To remove these,
         # the images they are associated with will need to be deleted as well.
         id_list = []
-        if self.base_test_snapshot:
-            id_list.append(str(self.base_test_snapshot.id).strip())
-        if self.build_image_snapshot:
-            id_list.append(self.build_image_snapshot.id)
+        delete_list = []
         for snap in self.tester.test_resources['snapshots']:
-            if str(snap.id).strip() in id_list:
-                self.tester.test_resources['snapshots'].remove(snap)
+            if self.base_test_snapshot and re.search( snap.id, self.base_test_snapshot.id):
+                self.debug('Removing base_test_snapshot from test_resources list so not deleted')
+            elif self.build_image_snapshot and re.search(snap.id, self.build_image_snapshot.id):
+                self.debug('Removing build_image_snapshot from test_resources list so not deleted')
+            else:
+                delete_list.append(snap)
+        self.tester.test_resources['snapshots'] = delete_list
         self.tester.cleanup_artifacts()
 
 
