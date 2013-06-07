@@ -280,6 +280,8 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
         snaps = snaps or self.test_resources['snapshots']
         if not snaps:
             return
+        self.debug('Attempting to clean the following snapshots:')
+        self.print_eusnapshot_list(snaps)
         if clean_images:
             for snap in snaps:
                 for image in self.test_resources['images']:
