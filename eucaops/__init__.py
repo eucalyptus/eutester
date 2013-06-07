@@ -309,12 +309,21 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
 
         for vol in volumes:
             try:
-                vol.update()
-                if not isinstance(vol, EuVolume):
-                    vol = EuVolume.make_euvol_from_vol(vol, self)
-                euvolumes.append(vol)
+                vol = self.get_volume(volume_id=vol.id)
             except:
-                print self.get_traceback()
+                tb = self.get_traceback()
+                self.debug("Caught Exception:\n" + str(tb) + "\n"+ str(vol.id) +
+                           ', Could not retrieve volume, may no longer exist?')
+                vol = None
+            if vol:
+                try:
+                    vol.update()
+                    if not isinstance(vol, EuVolume):
+                        vol = EuVolume.make_euvol_from_vol(vol, self)
+                    euvolumes.append(vol)
+                except:
+                    tb = self.get_traceback()
+                    self.debug('Caught Exception: \n' + str(tb))
         try:
             self.print_euvolume_list(euvolumes)
         except: pass
