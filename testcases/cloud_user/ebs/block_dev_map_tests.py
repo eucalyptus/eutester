@@ -160,16 +160,16 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
 
 
     def cleanup(self):
-        #leave the base test, and snapshot behind for future use
+        '''
+        Definition:
+        Clean up test artifacts leaving behind the images and snapshots created during this test
+        '''
+        #leave the base test, and snapshot behind for future use. To remove these,
+        # the images they are associated with will need to be deleted as well.
         if self.base_test_snapshot in self.tester.test_resources['snapshots']:
             self.tester.test_resources['snapshots'].remove(self.base_test_snapshot)
         if self.build_image_snapshot in self.tester.test_resources['snapshots']:
             self.tester.test_resources['snapshots'].remove(self.build_image_snapshot)
-
-        if self.build_image_volume in self.tester.test_resources['volumes']:
-            self.tester.test_resources['volumes'].remove(self.build_image_volume)
-        if self.base_test_volume in self.tester.test_resources['volumes']:
-            self.tester.test_resources['volumes'].remove(self.base_test_volume)
 
         self.tester.cleanup_artifacts()
 
