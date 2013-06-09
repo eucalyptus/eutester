@@ -90,6 +90,8 @@ class BFEBSBasics(InstanceBasics):
                     self.assertTrue(self.tester.ping(instance.ip_address))
         finally:
             self.tester.terminate_instances(instances)
+            if self.volume:
+                self.tester.delete_volume(self.volume)
 
 
 
