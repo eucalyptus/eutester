@@ -508,16 +508,19 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
             return None
         else:
             return machines[0]
-         
-    def get_component_machines(self, component):
+
+    def get_component_machines(self, component = None):
         #loop through machines looking for this component type
         """ Parse the machine list and a list of bm_machine objects that match the component passed in"""
-        component.lower()
-        machines_with_role = [machine for machine in self.config['machines'] if re.search(component, " ".join(machine.components))]
-        if len(machines_with_role) == 0:
-            raise Exception("Could not find component "  + component + " in list of machines")
+        if component is None:
+            return self.config['machines']
         else:
-            return machines_with_role
+            component.lower()
+            machines_with_role = [machine for machine in self.config['machines'] if re.search(component, " ".join(machine.components))]
+            if len(machines_with_role) == 0:
+                raise Exception("Could not find component "  + component + " in list of machines")
+            else:
+                return machines_with_role
 
     def swap_component_hostname(self, hostname):
         if hostname != None:

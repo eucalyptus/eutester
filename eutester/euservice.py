@@ -1201,7 +1201,7 @@ class EuserviceManager(object):
     def disable(self,euservice):
         self.modify_service(euservice, "DISABLED")
         
-    def wait_for_service(self, euservice, state = "ENABLED", attempt_both = True, timeout=600):
+    def wait_for_service(self, euservice, state = "ENABLED", states=None,attempt_both = True, timeout=600):
         interval = 20
         poll_count = timeout / interval
         while (poll_count > 0):
@@ -1209,8 +1209,13 @@ class EuserviceManager(object):
             try:
                 matching_services = self.get(euservice.type, euservice.partition, attempt_both)
                 for service in matching_services:
-                    if re.search(state, service.state):
-                        return service 
+                    if states:
+                        for state in states:
+                            if re.search(state, service.state):
+                                return service
+                    else:
+                        if re.search(state, service.state):
+                            return service
             except Exception, e:
                 self.tester.debug("Caught " + str(e) + " when trying to get services. Retrying in " + str(interval) + "s")
             poll_count -= 1
