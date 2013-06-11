@@ -14,7 +14,7 @@ from eucaops import ec2ops
 #from eutester.euvolume import EuVolume
 #from eutester.eusnapshot import EuSnapshot
 from eutester.sshconnection import SshCbReturn
-from eutester.euproperties import Euproperty_Type
+from eutester.euproperties import Euproperty_Type, EupropertyNotFoundException
 from testcases.cloud_user.ebs.path_controller import Path_Controller
 from eucaops import Eucaops
 import eutester
@@ -168,8 +168,11 @@ class Mpath_Suite(EutesterTestCase):
 
     def zone_has_multiple_nc_paths(self, zone=None):
         zone = zone or self.zone
-        ncpaths_property = self.tester.property_manager.get_property(service_type=Euproperty_Type.storage,partition=zone,name='ncpaths')
-        paths = str(ncpaths_property.value).split(',')
+        try:
+            ncpaths_property = self.tester.property_manager.get_property(service_type=Euproperty_Type.storage,partition=zone,name='ncpaths')
+            paths = str(ncpaths_property.value).split(',')
+        except EupropertyNotFoundException:
+            return False
         if len(paths) > 1:
             self.debug('Multiple paths detected on this systems partition:' +str(zone))
             return True
@@ -183,7 +186,7 @@ class Mpath_Suite(EutesterTestCase):
         if self.memo_use_multipathing_check():
             raise Exception('Multipathing enabled in Memo field, but multiple paths not detected in "ncpaths" property')
         self.debug('Multiple paths not detected, nor was "USE_MULTIPATHING" flag set in config, exiting "0" w/o running tests')
-        exit(0)
+        sys.exit(0)
 
     def create_controller_for_each_node(self):
         node_list =  self.tester.service_manager.get_all_node_controllers()
@@ -1035,7 +1038,7 @@ if __name__ == "__main__":
 
     ### Run the EutesterUnitTest objects
     result = testcase.run_test_case_list(unit_list,eof=False,clean_on_exit=True)
-    exit(result)
+    sys.exit(result)
 
 
 
