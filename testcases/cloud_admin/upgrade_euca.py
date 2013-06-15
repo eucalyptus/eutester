@@ -44,6 +44,16 @@ class Upgrade(Install):
                                     machine.install("eucalyptus-enterprise-storage-san-netapp")
                                 if re.search("EmcVnxProvider", self.args.san_provider):
                                     machine.install("eucalyptus-enterprise-storage-san-emc")
+            if re.search("^3.2", self.old_version):
+                if hasattr(self.args, 'ebs_storage_manager'):
+                    if re.search("SANManager" ,self.args.ebs_storage_manager):
+                        if re.search("clc", " ".join(machine.components)):
+                            if hasattr(self.args, 'san_provider'):
+                                if re.search("NetappProvider", self.args.san_provider):
+                                    for zone in self.tester.get_zones():
+                                        machine.sys("source " + self.tester.credpath + "/eucarc && " +
+                                                    self.tester.eucapath + "/usr/sbin/euca-modify-property -p " +
+                                                    zone + ".storage.chapuser=" + self.tester.id_generator())
             new_version = machine.sys("cat /etc/eucalyptus/eucalyptus-version")[0]
             if not self.args.nightly and re.match( self.old_version, new_version):
                 raise Exception("Version before (" + self.old_version +") and version after (" + new_version + ") are the same")

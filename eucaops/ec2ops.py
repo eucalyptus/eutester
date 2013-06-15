@@ -870,36 +870,48 @@ class EC2ops(Eutester):
 
 
                 
-    def print_euvolume_list(self,euvolumelist):
+    def print_euvolume_list(self,euvolumelist=None):
         """
 
         :param euvolumelist: list of euvolume
         """
         buf=""
-        euvolumes = copy.copy(euvolumelist)
-        if not euvolumes:
-            raise Exception('print_euvolume_list: Euvolume list to print is empty')
-        for volume in euvolumes:
+        euvolumes = []
+        if not euvolumelist:
+            euvolumelist = self.get_volumes()
+        if not euvolumelist:
+            self.debug('No volumes to print')
+            return
+        for volume in euvolumelist:
             if not isinstance(volume, EuVolume):
-                raise Exception("object not of type EuVolume. Found type:"+str(type(volume)))
+                self.debug("object not of type EuVolume. Found type:"+str(type(volume)))
+                volume = EuVolume.make_euvol_from_vol(volume=volume, tester=self)
+            euvolumes.append(volume)
+        if not euvolumes:
+            return
         volume = euvolumes.pop()
         buf = volume.printself()
         for volume in euvolumes:
             buf += volume.printself(title=False)
         self.debug("\n"+str(buf)+"\n")
         
-    def print_eusnapshot_list(self,eusnapshots):
+    def print_eusnapshot_list(self,eusnapshots=None):
         """
 
         :param eusnapshots: list of eusnapshots
         """
         buf=""
+        print_list = []
         if not eusnapshots:
-            raise Exception('print_eusnapshot_list: EuSnapshot list to print is empty')
-        print_list = copy.copy(eusnapshots)
-        for snapshot in print_list:
+            eusnapshots = self.get_snapshots()
+        if not eusnapshots:
+            self.debug('No snapshots to print')
+            return
+        for snapshot in eusnapshots:
             if not isinstance(snapshot, EuSnapshot):
-                raise Exception("object not of type EuSnapshot. Found type:"+str(type(snapshot)))
+                self.debug("object not of type EuSnapshot. Found type:"+str(type(snapshot)))
+                snapshot = EuSnapshot.make_eusnap_from_snap(snapshot=snapshot, tester=self)
+            print_list.append(snapshot)
         snapshot = print_list.pop()
         buf = snapshot.printself()
         for snapshot in print_list:
@@ -916,34 +928,47 @@ class EC2ops(Eutester):
         :param volume: Volume object to delete
         :return: bool, success of the operation
         """
-        self.ec2.delete_volume(volume.id)
-        self.debug( "Sent delete for volume: " +  str(volume.id)  )
+        try:
+            self.ec2.delete_volume(volume.id)
+        except Exception, e:
+            self.debug('Caught err while sending delete for volume:'+ str(volume.id) + " err:" + str(e))
+            self.debug('Monitoring to deleted state after catching error...')
+        self.debug( "Sent delete for volume: " +  str(volume.id) + ", monitor to deleted state or failure"  )
         start = time.time()
         elapsed = 0
+        volume_id = volume.id
         volume.update()
         while elapsed < timeout:
             try:
-                self.debug( str(volume) + " in " + volume.status + " sleeping:"+str(poll_interval)+", elapsed:"+str(elapsed))
-                time.sleep(poll_interval)
-                volume.update()
-                elapsed = int(time.time()-start)
-                if volume.status == "deleted":
-                    if volume in self.test_resources['volumes']:
-                        self.test_resources['volumes'].remove(volume)
+                chk_volume = self.get_volume(volume_id=volume_id)
+                if not chk_volume:
+                    self.debug(str(volume_id) + ', Volume no longer exists on system, deleted')
                     break
+                chk_volume.update()
+                self.debug( str(chk_volume) + " in " + chk_volume.status + " sleeping:"+str(poll_interval)+", elapsed:"+str(elapsed))
+                if chk_volume.status == "deleted":
+                    break
+                time.sleep(poll_interval)
+                elapsed = int(time.time()-start)
             except EC2ResponseError as e:
                 if e.status == 400:
-                    self.debug(str(volume) + "no longer exists in system")
+                    self.debug(str(volume_id) + "no longer exists in system")
+                    if volume in self.test_resources['volumes']:
+                        self.test_resources['volumes'].remove(volume)
                     return True
                 else:
                     raise e
+            if volume in self.test_resources['volumes']:
+                self.test_resources['volumes'].remove(volume)
+            return True
+
 
         if volume.status != 'deleted':
             self.fail(str(volume) + " left in " +  volume.status + ',elapsed:'+str(elapsed))
             return False
         return True
     
-    def delete_volumes(self, volume_list, poll_interval=10, timeout=180):
+    def delete_volumes(self, volume_list, poll_interval=10, force_send=False, timeout=180):
         """
         Deletes a list of EBS volumes then checks for proper state transition
 
@@ -960,13 +985,18 @@ class EC2ops(Eutester):
         for volume in vollist:
             try:
                 self.debug( "Sending delete for volume: " +  str(volume.id)  )
+                volume.update()
+                previous_status = volume.status
                 self.ec2.delete_volume(volume.id)
             except EC2ResponseError, be:
                 err = "ERROR: " + str(volume.id) + ", " + str(be.status)+ ", " + str(be.reason) + \
                           ", " +str(be.error_message) + "\n"
-                errmsg += err
-                errlist.append(volume)
-                self.debug(err)
+                if previous_status == 'deleting':
+                    self.debug(str(volume.id)+ ":" + str(previous_status) + ', err:' + str(err))
+                else:
+                    errmsg += err
+                    errlist.append(volume)
+                    self.debug(err)
         for volume in errlist:
             if volume in vollist:
                 vollist.remove(volume)
@@ -1171,7 +1201,7 @@ class EC2ops(Eutester):
     
     
     @Eutester.printinfo
-    def create_snapshot_from_volume(self, volume, wait_on_progress=20, poll_interval=10, timeout=0, description=""):
+    def create_snapshot_from_volume(self, volume, wait_on_progress=40, poll_interval=10, timeout=0, description=""):
         """
         Create a new EBS snapshot from an existing volume then wait for it to go to the created state.
         By default will poll for poll_count.  If wait_on_progress is specified than will wait on "wait_on_progress"
@@ -1191,7 +1221,7 @@ class EC2ops(Eutester):
         
         
     @Eutester.printinfo
-    def create_snapshot(self, volume_id, wait_on_progress=20, poll_interval=10, timeout=0, description=""):
+    def create_snapshot(self, volume_id, wait_on_progress=40, poll_interval=10, timeout=0, description=""):
         """
         Create a new single EBS snapshot from an existing volume id then wait for it to go to the created state.
         By default will poll for poll_count.  If wait_on_progress is specified than will wait on "wait_on_progress"
@@ -1222,7 +1252,7 @@ class EC2ops(Eutester):
                                      mincount=None,
                                      eof=True,
                                      delay=0,
-                                     wait_on_progress=20,
+                                     wait_on_progress=40,
                                      poll_interval=10,
                                      timeout=0,
                                      description=""):
@@ -1261,7 +1291,7 @@ class EC2ops(Eutester):
                          mincount=None, 
                          eof=True, 
                          delay=0, 
-                         wait_on_progress=20, 
+                         wait_on_progress=40,
                          poll_interval=10, 
                          timeout=0, 
                          monitor_to_completed=True,
@@ -1384,7 +1414,7 @@ class EC2ops(Eutester):
                                      snaps,
                                      mincount=None, 
                                      eof=True, 
-                                     wait_on_progress=20, 
+                                     wait_on_progress=40,
                                      poll_interval=10, 
                                      timeout=0,
                                      delete_failed=True ):
@@ -1463,12 +1493,14 @@ class EC2ops(Eutester):
                         retlist.append(snapshot)
                         snapshots.remove(snapshot)
                 except Exception, e:
+                    tb = self.get_traceback()
+                    errbuf = '\n' + str(tb) + '\n' + str(e)
+                    self.debug("Exception caught in snapshot creation, snapshot:"+str(snapshot.id)+".Err:"+str(errbuf))
                     if eof:
                         #If exit on fail, delete all snaps and raise exception
                         self.delete_snapshots(snapshots)
                         raise e
                     else:
-                        self.debug("Exception caught in snapshot creation, snapshot:"+str(snapshot.id)+".Err:"+str(e))
                         snapshot.eutest_failmsg = str(e)
                         snapshot.eutest_timeintest = elapsed
                         failed.append(snapshot)
@@ -2470,15 +2502,14 @@ class EC2ops(Eutester):
             if device.volume_id:
                 try:
                     volume = self.get_volume(volume_id=device.volume_id)
+                    if not volume in self.test_resources['volumes']:
+                        self.test_resources['volumes'].append(volume)
                 except Exception, e:
-                    self.debug('Error trying to retrieve volume:' + str(device.volume_id) +
-                               ' from instance:' + str(instance.id) + " block dev map")
-                if not volume in self.test_resources['volumes']:
-                    self.test_resources['volumes'].append(volume)
+                    tb = self.get_traceback()
+                    self.debug("\n" + str(tb) + "\nError trying to retrieve volume:" + str(device.volume_id) +
+                               ' from instance:' + str(instance.id) + " block dev map, err:" + str(e))
 
 
-
-    
     @Eutester.printinfo 
     def monitor_euinstances_to_running(self,instances, poll_interval=10, timeout=480):
         self.debug("("+str(len(instances))+") Monitor_instances_to_running starting...")
@@ -2790,6 +2821,7 @@ class EC2ops(Eutester):
         :param euinstance_list: list of euinstance objs
         :raise:
         """
+        plist = []
         if not euinstance_list:
             euinstance_list = []
             instances = self.get_instances(state=state,
@@ -2806,12 +2838,14 @@ class EC2ops(Eutester):
             for instance in instances:
                 euinstance_list.append(self.convert_instance_to_euisntance(instance, auto_connect=False))
         if not euinstance_list:
+            self.debug('No instances to print')
             return
-        plist = copy.copy(euinstance_list)
-        first = plist.pop(0)
-        for instance in plist:
+        for instance in euinstance_list:
             if not isinstance(instance,EuInstance):
-                raise Exception("print_euinstance list passed non-EuInstnace type")
+                self.debug("print_euinstance list passed non-EuInstnace type")
+                instance = self.convert_instance_to_euisntance(instance, auto_connect=False)
+            plist.append(instance)
+        first = plist.pop(0)
         buf = first.printself(title=True, footer=False)
         for instance in plist:
             buf += instance.printself(title=False, footer=False)
@@ -3128,6 +3162,8 @@ class EC2ops(Eutester):
             reservations = self.ec2.get_all_instances()
             #first send terminate for all instances
             for res in reservations:
+                self.debug('Attempting to terminate instances:')
+                self.print_euinstance_list(euinstance_list=res.instances)
                 for instance in res.instances:
                     self.debug( "Sending terminate for " + str(instance) )
                     instance.terminate()

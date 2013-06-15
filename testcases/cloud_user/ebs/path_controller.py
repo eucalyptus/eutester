@@ -154,7 +154,7 @@ class Path_Controller(EutesterTestCase):
         self.debug('Checking iptables for path state: '+str(addr)+' ...')
         out = self.sys('iptables -L',code=0)
         for line in out:
-            if re.match(self.ipt_msg, line) and re.match("^DROP", line):
+            if re.search(self.ipt_msg, line) and re.match("^DROP", line):
                 #make sure we don't get a partial match...
                 lines = line.rstrip().split()
                 for word in lines:

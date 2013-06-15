@@ -55,7 +55,7 @@ class Ebs_Persistance_Tests(EutesterTestCase):
         self.parser.add_argument('--timepergig',
                                  type=int,
                                  help='Time allowed per gig size of volume during volume creation, default:120',
-                                 default=120)
+                                 default=300)
         self.parser.add_argument('--deletetimeout',
                                  type=int,
                                  help='Time allowed for volume to transition from deleting to deleted, default:120',
@@ -150,7 +150,7 @@ class Ebs_Persistance_Tests(EutesterTestCase):
     def pretest2_pre_service_restart_create_volume_resources(self,
                                                      volsperinstance=2,
                                                      size=1,
-                                                     timepergig=120):
+                                                     timepergig=300):
         """
         Definition: Create volumes to be used in this test based upon volsperinstance and size args provided.
          This tests should be completed per zone prior to restarting services.
@@ -201,7 +201,7 @@ class Ebs_Persistance_Tests(EutesterTestCase):
                         testcolor=TestColor.get_canned_color('whiteonblue'))
 
 
-    def pretest4_pre_service_restart_create_snap_per_zone(self,timepergig=120):
+    def pretest4_pre_service_restart_create_snap_per_zone(self,timepergig=300):
         """
         Definition: Create a single snapshot. This tests should be completed per zone prior to restarting services.
         :param timepergig: integer time allowed per GB in seconds during creation

@@ -22,7 +22,7 @@ class BFEBSBasics(InstanceBasics):
         if not self.reservation:
             self.reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, zone=zone)
         for instance in self.reservation.instances:
-            self.volume = self.tester.create_volume(zone=self.zone, size=2)
+            self.volume = self.tester.create_volume(zone=self.zone, size=3)
             self.volume_device = instance.attach_volume(self.volume)
             instance.sys("curl " +  self.args.imgurl + " > " + self.volume_device, timeout=800, code=0)
             snapshot = self.tester.create_snapshot(self.volume.id)
@@ -90,6 +90,8 @@ class BFEBSBasics(InstanceBasics):
                     self.assertTrue(self.tester.ping(instance.ip_address))
         finally:
             self.tester.terminate_instances(instances)
+            if self.volume:
+                self.tester.delete_volume(self.volume)
 
 
 

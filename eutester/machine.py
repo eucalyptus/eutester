@@ -352,7 +352,10 @@ class Machine:
         seconds_min = 60
         seconds_hour = 3600
         seconds_day = 86400
+        elapsed = 0
         try:
+            if not pid:
+                raise Exception('Empty pid passed to get_elapsed_seconds_since_pid_started')
             cmd = "ps -eo pid,etime | grep " + str(pid) + " | awk '{print $2}'"
             self.debug('starting get pid uptime"' + str(cmd) + '"...')
             #expected format: days-HH:MM:SS

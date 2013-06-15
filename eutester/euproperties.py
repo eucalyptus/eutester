@@ -403,7 +403,7 @@ class Euproperty_Manager():
         for property in list:
             if property.name == name:
                 return property
-        raise Exception('Property not found by name:'+str(name))
+        raise EupropertyNotFoundException('Property not found by name:'+str(name))
         
     def get_all_properties_for_partition(self, partition, list=None, verbose=False):
         self.debug('Get all properties for partition:'+str(partition))
@@ -762,6 +762,12 @@ class EupropertiesException(Exception):
         self.value = value
     def __str__ (self):
         return repr(self.value)
+
+class EupropertyNotFoundException(Exception):
+    def __init__(self, value):
+        self.value = value
+def __str__ (self):
+    return repr(self.value)
 
     
     
