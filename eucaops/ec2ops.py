@@ -870,36 +870,48 @@ class EC2ops(Eutester):
 
 
                 
-    def print_euvolume_list(self,euvolumelist):
+    def print_euvolume_list(self,euvolumelist=None):
         """
 
         :param euvolumelist: list of euvolume
         """
         buf=""
-        euvolumes = copy.copy(euvolumelist)
-        if not euvolumes:
-            raise Exception('print_euvolume_list: Euvolume list to print is empty')
-        for volume in euvolumes:
+        euvolumes = []
+        if not euvolumelist:
+            euvolumelist = self.get_volumes()
+        if not euvolumelist:
+            self.debug('No volumes to print')
+            return
+        for volume in euvolumelist:
             if not isinstance(volume, EuVolume):
-                raise Exception("object not of type EuVolume. Found type:"+str(type(volume)))
+                self.debug("object not of type EuVolume. Found type:"+str(type(volume)))
+                volume = EuVolume.make_euvol_from_vol(volume=volume, tester=self)
+            euvolumes.append(volume)
+        if not euvolumes:
+            return
         volume = euvolumes.pop()
         buf = volume.printself()
         for volume in euvolumes:
             buf += volume.printself(title=False)
         self.debug("\n"+str(buf)+"\n")
         
-    def print_eusnapshot_list(self,eusnapshots):
+    def print_eusnapshot_list(self,eusnapshots=None):
         """
 
         :param eusnapshots: list of eusnapshots
         """
         buf=""
+        print_list = []
         if not eusnapshots:
-            raise Exception('print_eusnapshot_list: EuSnapshot list to print is empty')
-        print_list = copy.copy(eusnapshots)
-        for snapshot in print_list:
+            eusnapshots = self.get_snapshots()
+        if not eusnapshots:
+            self.debug('No snapshots to print')
+            return
+        for snapshot in eusnapshots:
             if not isinstance(snapshot, EuSnapshot):
-                raise Exception("object not of type EuSnapshot. Found type:"+str(type(snapshot)))
+                self.debug("object not of type EuSnapshot. Found type:"+str(type(snapshot)))
+                snapshot = EuSnapshot.make_eusnap_from_snap(snapshot=snapshot, tester=self)
+            print_list.append(snapshot)
         snapshot = print_list.pop()
         buf = snapshot.printself()
         for snapshot in print_list:
@@ -1481,12 +1493,14 @@ class EC2ops(Eutester):
                         retlist.append(snapshot)
                         snapshots.remove(snapshot)
                 except Exception, e:
+                    tb = self.get_traceback()
+                    errbuf = '\n' + str(tb) + '\n' + str(e)
+                    self.debug("Exception caught in snapshot creation, snapshot:"+str(snapshot.id)+".Err:"+str(errbuf))
                     if eof:
                         #If exit on fail, delete all snaps and raise exception
                         self.delete_snapshots(snapshots)
                         raise e
                     else:
-                        self.debug("Exception caught in snapshot creation, snapshot:"+str(snapshot.id)+".Err:"+str(e))
                         snapshot.eutest_failmsg = str(e)
                         snapshot.eutest_timeintest = elapsed
                         failed.append(snapshot)
@@ -2807,6 +2821,7 @@ class EC2ops(Eutester):
         :param euinstance_list: list of euinstance objs
         :raise:
         """
+        plist = []
         if not euinstance_list:
             euinstance_list = []
             instances = self.get_instances(state=state,
@@ -2823,12 +2838,14 @@ class EC2ops(Eutester):
             for instance in instances:
                 euinstance_list.append(self.convert_instance_to_euisntance(instance, auto_connect=False))
         if not euinstance_list:
+            self.debug('No instances to print')
             return
-        plist = copy.copy(euinstance_list)
-        first = plist.pop(0)
-        for instance in plist:
+        for instance in euinstance_list:
             if not isinstance(instance,EuInstance):
-                raise Exception("print_euinstance list passed non-EuInstnace type")
+                self.debug("print_euinstance list passed non-EuInstnace type")
+                instance = self.convert_instance_to_euisntance(instance, auto_connect=False)
+            plist.append(instance)
+        first = plist.pop(0)
         buf = first.printself(title=True, footer=False)
         for instance in plist:
             buf += instance.printself(title=False, footer=False)
@@ -3145,6 +3162,8 @@ class EC2ops(Eutester):
             reservations = self.ec2.get_all_instances()
             #first send terminate for all instances
             for res in reservations:
+                self.debug('Attempting to terminate instances:')
+                self.print_euinstance_list(euinstance_list=res.instances)
                 for instance in res.instances:
                     self.debug( "Sending terminate for " + str(instance) )
                     instance.terminate()

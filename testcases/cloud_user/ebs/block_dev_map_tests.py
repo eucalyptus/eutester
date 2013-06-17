@@ -33,6 +33,8 @@ import time
 import types
 import httplib
 import copy
+import math
+import re
 
 
 class FixedBlockDeviceMapping(BlockDeviceMapping):
@@ -159,17 +161,22 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
 
 
     def cleanup(self):
-        #leave the base test, and snapshot behind for future use
-        if self.base_test_snapshot in self.tester.test_resources['snapshots']:
-            self.tester.test_resources['snapshots'].remove(self.base_test_snapshot)
-        if self.build_image_snapshot in self.tester.test_resources['snapshots']:
-            self.tester.test_resources['snapshots'].remove(self.build_image_snapshot)
-
-        if self.build_image_volume in self.tester.test_resources['volumes']:
-            self.tester.test_resources['volumes'].remove(self.build_image_volume)
-        if self.base_test_volume in self.tester.test_resources['volumes']:
-            self.tester.test_resources['volumes'].remove(self.base_test_volume)
-
+        '''
+        Definition:
+        Clean up test artifacts leaving behind the images and snapshots created during this test
+        '''
+        #leave the base test, and snapshot behind for future use. To remove these,
+        # the images they are associated with will need to be deleted as well.
+        id_list = []
+        delete_list = []
+        for snap in self.tester.test_resources['snapshots']:
+            if self.base_test_snapshot and re.search( snap.id, self.base_test_snapshot.id):
+                self.debug('Removing base_test_snapshot from test_resources list so not deleted')
+            elif self.build_image_snapshot and re.search(snap.id, self.build_image_snapshot.id):
+                self.debug('Removing build_image_snapshot from test_resources list so not deleted')
+            else:
+                delete_list.append(snap)
+        self.tester.test_resources['snapshots'] = delete_list
         self.tester.cleanup_artifacts()
 
 
@@ -222,7 +229,7 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         url = url or self.url
         volumes = []
         self.image_bytes = self.get_remote_file_size_via_http(url=url)
-        self.image_gigs = ( ((self.image_bytes/self.gig)+1) or 1)
+        self.image_gigs = int(math.ceil(float(self.image_bytes)/self.gig) or 1)
 
         self.status('Attempting to launch instance store instance...')
         instance = self.tester.run_image(self.image,

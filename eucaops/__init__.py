@@ -280,13 +280,19 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
         snaps = snaps or self.test_resources['snapshots']
         if not snaps:
             return
+        self.debug('Attempting to clean the following snapshots:')
+        self.print_eusnapshot_list(snaps)
         if clean_images:
             for snap in snaps:
                 for image in self.test_resources['images']:
                     for dev in image.block_device_mapping:
                         if image.block_device_mapping[dev].snapshot_id == snap.id:
                             self.delete_image(image)
-        return self.delete_snapshots(snaps,base_timeout=base_timeout, add_time_per_snap=add_time_per_snap, wait_for_valid_state=wait_for_valid_state)
+        if snaps:
+            return self.delete_snapshots(snaps,
+                                        base_timeout=base_timeout,
+                                        add_time_per_snap=add_time_per_snap,
+                                        wait_for_valid_state=wait_for_valid_state)
 
 
 
@@ -300,6 +306,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
         euvolumes = []
         detaching = []
         not_exist = []
+        line = '\n----------------------------------------------------------------------------------------------------\n'
         vol_str = volumes or "test_resources['volumes']"
         self.debug('clean_up_test_volumes starting, volumes:'+str(vol_str))
 
@@ -309,21 +316,34 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
 
         for vol in volumes:
             try:
-                vol.update()
-                if not isinstance(vol, EuVolume):
-                    vol = EuVolume.make_euvol_from_vol(vol, self)
-                euvolumes.append(vol)
+                vol = self.get_volume(volume_id=vol.id)
             except:
-                print self.get_traceback()
+                tb = self.get_traceback()
+                self.debug("\n" + line + " Ignoring caught Exception:\n" + str(tb) + "\n"+ str(vol.id) +
+                           ', Could not retrieve volume, may no longer exist?' + line)
+                vol = None
+            if vol:
+                try:
+                    vol.update()
+                    if not isinstance(vol, EuVolume):
+                        vol = EuVolume.make_euvol_from_vol(vol, self)
+                    euvolumes.append(vol)
+                except:
+                    tb = self.get_traceback()
+                    self.debug('Ignoring caught Exception: \n' + str(tb))
         try:
+            self.debug('Attempting to clean up the following volumes:')
             self.print_euvolume_list(euvolumes)
         except: pass
         self.debug('Clean_up_volumes: Detaching any attached volumes to be deleted...')
-        for vol in volumes:
+        for vol in euvolumes:
             try:
+                vol.update()
                 if vol.status == 'in-use':
-                    if vol.attach_data and vol.attach_data.status != 'detaching':
+                    if vol.attach_data and (vol.attach_data.status != 'detaching' or vol.attach_data.status != 'detached'):
                         try:
+                            self.debug(str(vol.id) + ', Sending detach. Status:' +str(vol.status) +
+                                       ', attach_data.status:' + str(vol.attach_data.status))
                             vol.detach()
                         except EC2ResponseError, be:
                             if 'Volume does not exist' in be.error_message:
@@ -334,16 +354,19 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
                     detaching.append(vol)
             except:
                 print self.get_traceback()
-        #If the volume was found to no longer exist on the sytem, remove it from further monitoring...
+        #If the volume was found to no longer exist on the system, remove it from further monitoring...
         for vol in not_exist:
             if vol in detaching:
                 detaching.remove(vol)
             if vol in euvolumes:
                 euvolumes.remove(vol)
+        self.test_resources['volumes'] = euvolumes
+        #If detaching wait for detaching to transition to detached...
         if detaching:
             timeout = min_timeout + (len(detaching) * timeout_per_vol)
             self.monitor_euvolumes_to_status(detaching, status='available', attached_status=None,timeout=timeout)
         self.debug('clean_up_volumes: Deleteing volumes now...')
+        self.print_euvolume_list(euvolumes)
         self.delete_volumes(euvolumes)
 
                     

@@ -14,7 +14,7 @@ from eucaops import ec2ops
 #from eutester.euvolume import EuVolume
 #from eutester.eusnapshot import EuSnapshot
 from eutester.sshconnection import SshCbReturn
-from eutester.euproperties import Euproperty_Type
+from eutester.euproperties import Euproperty_Type, EupropertyNotFoundException
 from testcases.cloud_user.ebs.path_controller import Path_Controller
 from eucaops import Eucaops
 import eutester
@@ -168,8 +168,11 @@ class Mpath_Suite(EutesterTestCase):
 
     def zone_has_multiple_nc_paths(self, zone=None):
         zone = zone or self.zone
-        ncpaths_property = self.tester.property_manager.get_property(service_type=Euproperty_Type.storage,partition=zone,name='ncpaths')
-        paths = str(ncpaths_property.value).split(',')
+        try:
+            ncpaths_property = self.tester.property_manager.get_property(service_type=Euproperty_Type.storage,partition=zone,name='ncpaths')
+            paths = str(ncpaths_property.value).split(',')
+        except EupropertyNotFoundException:
+            return False
         if len(paths) > 1:
             self.debug('Multiple paths detected on this systems partition:' +str(zone))
             return True
@@ -183,7 +186,7 @@ class Mpath_Suite(EutesterTestCase):
         if self.memo_use_multipathing_check():
             raise Exception('Multipathing enabled in Memo field, but multiple paths not detected in "ncpaths" property')
         self.debug('Multiple paths not detected, nor was "USE_MULTIPATHING" flag set in config, exiting "0" w/o running tests')
-        exit(0)
+        sys.exit(0)
 
     def create_controller_for_each_node(self):
         node_list =  self.tester.service_manager.get_all_node_controllers()
@@ -395,17 +398,21 @@ class Mpath_Suite(EutesterTestCase):
         return volumes
 
     def get_test_volumes(self, count=1):
+        '''
+        Attempt to retrieve a list of volumes created by this test, or a previous run of this test and in available state.
+        If the test can not recycle enough test volumes, it will create new ones so 'count' number of test volumes
+        can be returned.
+
+        :param count: int representing the number of test volumes desired.
+        '''
         volumes = []
-        if self.volume:
+        if count == 1 and self.volume:
             self.volume.update()
             if self.volume.status == 'available':
-                volumes.append(self.volume)
-                if count == 1:
-                    return volumes
-        volumes.extend(self.get_existing_test_volumes())
+                return [self.volume]
+        volumes = self.get_existing_test_volumes()
         if len(volumes) >= count:
             volumes = volumes[0:count]
-
         elif len(volumes) < count:
             new_volumes = self.tester.create_volumes(self.zone, size=self.size, count=(count-len(volumes)))
             for volume in new_volumes:
@@ -1004,7 +1011,7 @@ class Mpath_Suite(EutesterTestCase):
     def testsuite(self):
         self.cycle_paths = True
         test_list = []
-        test_list.append(self.create_testunit_from_method(self.pre_test_check_should_run_multipath_tests_on_this_system, eof=True))
+        #test_list.append(self.create_testunit_from_method(self.pre_test_check_should_run_multipath_tests_on_this_system, eof=True))
         test_list.append(self.create_testunit_from_method(self.test1_check_volume_io_on_guest_while_blocking_clearing_all_paths_once, eof=True))
         test_list.append(self.create_testunit_from_method(self.test2_attach_volume_while_a_single_path_is_down))
         test_list.append(self.create_testunit_from_method(self.test3_attach_volume_while_a_single_path_is_in_process_of_failing))
@@ -1019,10 +1026,11 @@ if __name__ == "__main__":
     ### Use the list of tests passed from config/command line to determine what subset of tests to run
     ### or use a predefined list
     if testcase.args.run_suite:
+        testcase.pre_test_check_should_run_multipath_tests_on_this_system()
         unit_list = testcase.testsuite()
     else:
-        test_names = testcase.args.tests or ['pre_test_check_should_run_multipath_tests_on_this_system',
-                                             'test1_check_volume_io_on_guest_while_blocking_clearing_all_paths_once']
+        testcase.pre_test_check_should_run_multipath_tests_on_this_system()
+        test_names = testcase.args.tests or ['test1_check_volume_io_on_guest_while_blocking_clearing_all_paths_once']
         ### Convert test suite methods to EutesterUnitTest objects
         unit_list = [ ]
         for test in test_names:
@@ -1030,7 +1038,7 @@ if __name__ == "__main__":
 
     ### Run the EutesterUnitTest objects
     result = testcase.run_test_case_list(unit_list,eof=False,clean_on_exit=True)
-    exit(result)
+    sys.exit(result)
 
 
 
