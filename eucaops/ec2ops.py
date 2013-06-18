@@ -1208,12 +1208,12 @@ class EC2ops(Eutester):
         overrides # of poll_interval periods, using wait_on_progress # of periods of poll_interval length in seconds
         w/o progress before failing. If volume.id is passed, euvolume data will not be transfered to snapshot created. 
 
-        :param volume: (mandatory Volume) Volume id of the volume to create snapshot from
-        :param wait_on_progress: (optional string) string used to describe the snapshot
-        :param poll_interval: (optional integer) # of poll intervals to wait while 0 progress is made before exiting,
+        :param volume_id: (mandatory string) Volume id of the volume to create snapshot from
+        :param wait_on_progress:(optional integer) # of poll intervals to wait while 0 progress is made before exiting,
          overrides "poll_count" when used
-        :param timeout: (optional integer) time to sleep between polling snapshot status
-        :param description: (optional integer) over all time to wait before exiting as failure
+        :param poll_interval: (optional integer) time to sleep between polling snapshot status
+        :param timeout: (optional integer) over all time to wait before exiting as failure
+        :param description:  (optional string) string used to describe the snapshot
         :return: EuSnapshot
         """
         return self.create_snapshots(volume, count=1, mincount=1, eof=True, wait_on_progress=wait_on_progress,
@@ -1229,11 +1229,11 @@ class EC2ops(Eutester):
         w/o progress before failing. If volume.id is passed, euvolume data will not be transfered to snapshot created. 
 
         :param volume_id: (mandatory string) Volume id of the volume to create snapshot from
-        :param wait_on_progress: (optional string) string used to describe the snapshot
-        :param poll_interval: (optional integer) # of poll intervals to wait while 0 progress is made before exiting,
+        :param wait_on_progress:(optional integer) # of poll intervals to wait while 0 progress is made before exiting,
          overrides "poll_count" when used
-        :param timeout: (optional integer) time to sleep between polling snapshot status
-        :param description: (optional integer) over all time to wait before exiting as failure
+        :param poll_interval: (optional integer) time to sleep between polling snapshot status
+        :param timeout: (optional integer) over all time to wait before exiting as failure
+        :param description:  (optional string) string used to describe the snapshot
         :return: EuSnapshot
         """
         snapshots = self.create_snapshots_from_vol_id(volume_id, count=1, mincount=1, eof=True,
@@ -1267,11 +1267,11 @@ class EC2ops(Eutester):
         :param mincount: (optional Integer) Specify the min success count, defaults to 'count'
         :param eof: (optional boolean) End on failure.If true will end on first failure, otherwise will continue to try
          and fufill mincount
-        :param wait_on_progress: (optional string) string used to describe the snapshot
-        :param poll_interval: (optional integer) # of poll intervals to wait while 0 progress is made before exiting,
+        :param wait_on_progress:(optional integer) # of poll intervals to wait while 0 progress is made before exiting,
          overrides "poll_count" when used
-        :param timeout: (optional integer) time to sleep between polling snapshot status
-        :param description: (optional integer) over all time to wait before exiting as failure
+        :param poll_interval: (optional integer) time to sleep between polling snapshot status
+        :param timeout: (optional integer) over all time to wait before exiting as failure
+        :param description:  (optional string) string used to describe the snapshot
         :return: EuSnapshot list
         """
         if isinstance(volume_id, Volume):
@@ -1413,10 +1413,11 @@ class EC2ops(Eutester):
     def monitor_eusnaps_to_completed(self,
                                      snaps,
                                      mincount=None, 
-                                     eof=True, 
+                                     eof=True,
                                      wait_on_progress=40,
                                      poll_interval=10, 
                                      timeout=0,
+                                     monitor_to_progress = None,
                                      delete_failed=True ):
         """
         Monitor an EBS snapshot list for snapshots to enter the to the completed state.
@@ -1432,6 +1433,8 @@ class EC2ops(Eutester):
                                  overrides "poll_count" when used
         :param poll_interval: (optional integer) time to sleep between polling snapshot status
         :param timeout: (optional integer) over all time to wait before exiting as failure
+        :param monitor_to_progress (optional integer): will consider the monitor successful and exit when the snapshot's
+                                                        progress is >= this value
         :param delete_failed: (optional boolean) automatically delete failed volumes
         :return: EuSnapshot list
         """
@@ -1490,6 +1493,13 @@ class EC2ops(Eutester):
                         self.test_resources["snapshots"].append(snapshot)
                         snapshot.eutest_timeintest = elapsed
                         snapshot.eutest_failmsg ='SUCCESS'
+                        retlist.append(snapshot)
+                        snapshots.remove(snapshot)
+                    if monitor_to_progress and (curr_progress >=  monitor_to_progress):
+                        self.debug(str(snapshot.id)+" reached designated monitor state after " + str(elapsed) + " seconds. Status:"+
+                                   snapshot.status+", Progress:"+snapshot.progress)
+                        self.test_resources["snapshots"].append(snapshot)
+                        snapshot.eutest_timeintest = elapsed
                         retlist.append(snapshot)
                         snapshots.remove(snapshot)
                 except Exception, e:
@@ -2381,6 +2391,7 @@ class EC2ops(Eutester):
         :param auto_connect: boolean flag whether or not ssh connections should be automatically attempted
         :param clean_on_fail: boolean flag whether or not to attempt to delete/remove failed instances-(not implemented)
         :param monitor_to_running: boolean flag whether or not to monitor instances to a running state
+        :pararm block_device_map: block device map obj
         :param timeout: time allowed before failing this operation
         :return: list of euinstances
         """
