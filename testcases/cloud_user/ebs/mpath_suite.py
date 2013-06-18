@@ -1260,7 +1260,7 @@ class Mpath_Suite(EutesterTestCase):
         test_list.append(self.create_testunit_from_method(self.test9_test_storage_controller_path_fail_while_create_snapshot_in_progress))
         return test_list
 
-    def nc_test_suite(self):
+    def test_suite(self):
         '''
         Full test suite includes both NC and SC tests
         '''
