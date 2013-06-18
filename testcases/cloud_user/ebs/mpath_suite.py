@@ -7,7 +7,7 @@ operations via ssh connection to instance.
 __author__ = 'clarkmatthew'
 
 
-from eutester.eutestcase import EutesterTestCase
+from eutester.eutestcase import EutesterTestCase, SkipTestException
 from eutester.eutestcase import TestColor
 from eucaops import ec2ops
 #from eutester.euinstance import EuInstance
@@ -155,6 +155,18 @@ class Mpath_Suite(EutesterTestCase):
         self.path_controller = None
         self.stdscr = None
         self.curses_fd = None
+        self.testvol_w_checksum = None
+
+
+    def get_enabled_storage_controller_for_zone(self, zone=None):
+        zone = zone or self.zone
+        sc_list = self.tester.service_manager.get_all_storage_controllers(partition=zone, state='ENABLED',use_cached_list=False)
+        if sc_list:
+            sc = sc_list[0]
+        else:
+            tb = self.tester.get_traceback()
+            raise Exception('\n' + str(tb) + 'No enabled storage controllers found in partition:' + str(zone))
+        return sc
 
 
     def memo_use_multipathing_check(self):
@@ -180,13 +192,60 @@ class Mpath_Suite(EutesterTestCase):
             self.debug('Multiple paths NOT detected on this systems partition:' +str(zone))
             return False
 
-    def pre_test_check_should_run_multipath_tests_on_this_system(self):
-        if self.zone_has_multiple_nc_paths():
+    def zone_has_multiple_sc_paths(self, zone=None):
+        zone = zone or self.zone
+        try:
+            scpaths_property = self.tester.property_manager.get_property(service_type=Euproperty_Type.storage,partition=zone,name='scpaths')
+            paths = str(scpaths_property.value).split(',')
+        except EupropertyNotFoundException:
+            return False
+        if len(paths) > 1:
+            self.debug('Multiple SC paths detected on this systems partition:' +str(zone))
+            return True
+        else:
+            self.debug('Multiple SC paths NOT detected on this systems partition:' +str(zone))
+            return False
+
+    def zone_has_multiple_sc_hosts(self, zone=None):
+        zone = zone or self.zone
+        try:
+            schost_property = self.tester.property_manager.get_property(service_type=Euproperty_Type.storage,partition=zone,name='sanhost')
+            hosts = str(schost_property.value).split(',')
+        except EupropertyNotFoundException:
+            return False
+        if len(hosts) > 1:
+            self.debug('Multiple san hosts detected on this systems partition:' +str(zone))
+            return True
+        else:
+            self.debug('Multiple san hosts not detected on this systems partition:' +str(zone))
+            return False
+
+    def pre_test_check_should_run_nc_multipath_tests_on_this_system(self,zone=None):
+        zone = zone or self.zone
+        if self.zone_has_multiple_nc_paths(zone=zone):
             return True
         if self.memo_use_multipathing_check():
             raise Exception('Multipathing enabled in Memo field, but multiple paths not detected in "ncpaths" property')
-        self.debug('Multiple paths not detected, nor was "USE_MULTIPATHING" flag set in config, exiting "0" w/o running tests')
-        sys.exit(0)
+        raise SkipTestException('Multiple paths not detected, nor was "USE_MULTIPATHING" flag set in config, exiting w/o running tests')
+
+
+    def pre_test_check_should_run_sc_multipath_tests_on_this_system(self,zone=None):
+        zone = zone or self.zone
+        if self.zone_has_multiple_sc_paths(zone=zone):
+            return True
+        if self.memo_use_multipathing_check():
+            raise Exception('Multipathing enabled in Memo field, but multiple paths not detected in "scpaths" property')
+        raise SkipTestException('Multiple paths not detected, nor was "USE_MULTIPATHING" flag set in config, exiting w/o running tests')
+
+    def pre_test_check_should_run_sc_multihosts_tests_on_this_system(self,zone=None):
+        zone = zone or self.zone
+        if self.zone_has_multiple_sc_hosts(zone=zone):
+            return True
+        raise SkipTestException('Multiple san hosts not detected, exiting w/o running tests')
+
+
+
+
 
     def create_controller_for_each_node(self):
         node_list =  self.tester.service_manager.get_all_node_controllers()
@@ -344,6 +403,27 @@ class Mpath_Suite(EutesterTestCase):
         partition = node.partition.name
         ncpaths_property = self.tester.property_manager.get_property(service_type=Euproperty_Type.storage,partition=partition,name='ncpaths')
         for path in str(ncpaths_property.value).split(','):
+            for part in path.split(':'):
+                if re.search('iface', part):
+                    if iface:
+                        paths.append(part)
+                elif not iface:
+                    paths.append(part)
+        return paths
+
+    def get_sc_sanhosts_by_sc(self, sc):
+        partition = sc.partition
+        sanhost_property = self.tester.property_manager.get_storage_sanhost_value(partition=partition)
+        if not sanhost_property:
+            tb = self.tester.get_traceback()
+            raise Exception('\n' + str(tb) + 'San host property not found for sc:' + str(sc.hostname))
+        return sanhost_property.split(',')
+
+    def get_sc_paths_by_sc(self, sc, iface=False):
+        paths = []
+        partition = sc.partition
+        scpaths_property = self.tester.property_manager.get_property(service_type=Euproperty_Type.storage,partition=partition,name='scpaths')
+        for path in str(scpaths_property.value).split(','):
             for part in path.split(':'):
                 if re.search('iface', part):
                     if iface:
@@ -656,6 +736,7 @@ class Mpath_Suite(EutesterTestCase):
     def test1_check_volume_io_on_guest_while_blocking_clearing_all_paths_once(self,clean_on_exit=True):
         test_list = []
         errmsg = ''
+        self.pre_test_check_should_run_nc_multipath_tests_on_this_system()
         try:
             #Setup and connect to instance, create + attach vol, format vol, scp io script, create test dir/file.
             self.setup_instance_volume_and_script()
@@ -685,6 +766,7 @@ class Mpath_Suite(EutesterTestCase):
         length = mb * 1048576
         errmsg = ''
         path_controller = None
+        self.pre_test_check_should_run_nc_multipath_tests_on_this_system()
         try:
             self.status('Get test instance to run test...')
             self.get_test_instance()
@@ -740,6 +822,7 @@ class Mpath_Suite(EutesterTestCase):
         single_path = None
         errmsg = ''
         path_controller = None
+        self.pre_test_check_should_run_nc_multipath_tests_on_this_system()
         try:
             self.status('Get test instance to run test...')
             self.get_test_instance()
@@ -793,6 +876,7 @@ class Mpath_Suite(EutesterTestCase):
         single_path = None
         errmsg = ''
         path_controller = None
+        self.pre_test_check_should_run_nc_multipath_tests_on_this_system()
         try:
             self.status('Get test instance to run test...')
             self.get_test_instance()
@@ -852,6 +936,7 @@ class Mpath_Suite(EutesterTestCase):
         length = mb * 1048576
         errmsg = ''
         path_controller = None
+        self.pre_test_check_should_run_nc_multipath_tests_on_this_system()
         try:
             self.status('Get test instance to run test...')
             self.get_test_instance()
@@ -915,6 +1000,7 @@ class Mpath_Suite(EutesterTestCase):
         after_block = []
         errmsg = ''
         path_controller = None
+        self.pre_test_check_should_run_nc_multipath_tests_on_this_system()
         try:
             self.status('Get test instance to run test...')
             self.get_test_instance()
@@ -1008,7 +1094,186 @@ class Mpath_Suite(EutesterTestCase):
             if errmsg:
                 raise Exception(errmsg)
 
-    def testsuite(self):
+    def test7_test_storage_controller_sanhost_fallback(self,zone=None, wait_for_host=120):
+        zone = zone or self.zone
+        errmsg=""
+        self.status('Attempting to get enabled sc and sanhosts from zone:' +str(zone))
+        sc = self.get_enabled_storage_controller_for_zone(zone=zone)
+        sanhosts = self.get_sc_sanhosts_by_sc(sc)
+        if not len(sanhosts) > 1:
+            raise SkipTestException('Skipping test - Did not find > 1 host in sanhost property:' + str(sanhosts))
+        pc = Path_Controller(node=sc,sp_ip_list=sanhosts)
+        if pc.get_blocked_paths():
+            pc.clear_all_eutester_rules()
+            time.sleep(60)
+        self.status('Attempting to iterate through list of sanhosts, block host, create vol, then clear host...')
+        hostcount=0
+        try:
+            for host in sanhosts:
+                hostcount += 1
+                self.status('Attempting to block host: ' + str(host) + ' count(' + str(hostcount) + '/' + str(len(sanhosts)) + ')')
+                pc.block_path(host)
+                volume = self.tester.create_volume(zone=zone, size=1)
+                self.tester.delete_volume(volume=volume, timeout=300)
+                self.status('Done with host:' + str(host) + ', clearing rules and sleeping for ' + str(wait_for_host) +' seconds')
+                pc.clear_all_eutester_rules()
+                time.sleep(wait_for_host)
+            self.status('Success - Created a volume while blocking network i/o to each sanhost')
+            self.debug('Make sure all paths are unblocked on SC...')
+        except Exception, e:
+            tb = self.tester.get_traceback()
+            errmsg += '\n' + str(tb) + '\n Caught error:' + str(e)
+            self.debug(errmsg, linebyline=False)
+        finally:
+            try:
+                pc.clear_all_eutester_rules()
+            except Exception, ce:
+                errmsg += '\n' + str(ce)
+            if errmsg:
+                raise Exception(errmsg)
+
+
+    def create_local_test_volume_checksum(self, instance):
+        gb =1073741824
+        mb = 1048576
+        self.status('Getting a unique md5 sum for volume...')
+        vol = self.get_test_volumes()[0]
+        instance.attach_volume(volume=vol)
+        dd_dict = instance.random_fill_volume(vol,length=mb)
+        wrote1 = int(dd_dict['dd_bytes'])
+        dd_dict2 = instance.dd_monitor(ddif='/dev/zero', ddof=vol.guestdev, ddbytes= (gb - wrote1), ddseek=dd_dict['dd_bytes'] )
+        wrote2 = int(dd_dict2['dd_bytes'])
+        instance.get_dev_md5(vol.guestdev, length=(wrote1+wrote2), timeout=90)
+        self.testvol_w_checksum = vol
+        return vol
+
+    def test8_test_storage_controller_path_fail_then_create_snapshot(self,):
+        errmsg = ""
+        self.pre_test_check_should_run_sc_multipath_tests_on_this_system()
+        self.status('Get test instance to run test...')
+        instance = self.get_test_instance()
+        zone = str(instance.placement)
+        self.status('Attempting to get enabled sc and scpaths from zone:' +str(zone))
+        sc = self.get_enabled_storage_controller_for_zone(zone=zone)
+        paths = self.get_sc_paths_by_sc(sc)
+        pc = Path_Controller(node=sc,sp_ip_list=paths)
+        self.status('Clearing all eutester rules on: ' + str(pc.host))
+        if pc.get_blocked_paths():
+            pc.clear_all_eutester_rules()
+            time.sleep(60)
+        vol = self.testvol_w_checksum or self.create_local_test_volume_checksum(instance=instance)
+        paths_to_block = copy.copy(pc.sp_ip_list)
+        dont_block = paths_to_block.pop()
+        paths_to_block_string =",".join(paths_to_block)
+        self.status('Unblocked:' + str(dont_block) + ', Blocking paths:' + str(paths_to_block_string) + ', on SC:' + str(pc.host))
+        try:
+            for path in paths_to_block:
+                pc.block_path(path)
+            self.status('Creating Snapshot with path ' + str(paths_to_block_string) + ', blocked...')
+            test_snap = self.tester.create_snapshots(volume=vol, wait_on_progress=40, monitor_to_completed=True)[0]
+            self.status('Created snapshot, now verifying snapshot integrity from volume md5 check...')
+            self.status('Creating volume from test snapshot...')
+            vol_from_snap = self.tester.create_volume(zone=self.zone, snapshot=test_snap)
+            self.status('Attaching volume created from test snapshot to verify md5sum against original...')
+            instance.attach_volume(volume=vol_from_snap)
+            instance.md5_attached_euvolume(vol_from_snap, length=vol.md5len)
+            if vol.md5 != vol_from_snap.md5:
+                raise Exception('Vol created from snapshot md5(' + str(vol_from_snap.md5)+'/' + str(vol_from_snap.md5len) +
+                                ') != original volume(' + str(vol.md5) + '/' + str(vol.md5len) + ')')
+            else:
+                self.debug('SUCCESS: Vol created from snapshot md5(' + str(vol_from_snap.md5)+'/' + str(vol_from_snap.md5len) +
+                           ') == original volume(' + str(vol.md5) + '/' + str(vol.md5len) + ')')
+        except Exception, e:
+            tb = self.tester.get_traceback()
+            errmsg += '\n' + str(tb) + '\n Caught error:' + str(e)
+            self.debug(errmsg,linebyline=False)
+        finally:
+            try:
+                pc.clear_all_eutester_rules()
+            except Exception, ce:
+                errmsg += '\n' + str(ce)
+            if errmsg:
+                raise Exception(errmsg)
+
+
+    def test9_test_storage_controller_path_fail_while_create_snapshot_in_progress(self):
+        errmsg=""
+        self.status('Get test instance to run test...')
+        instance = self.get_test_instance()
+        zone = str(instance.placement)
+        self.pre_test_check_should_run_sc_multipath_tests_on_this_system()
+        self.status('Attempting to get enabled sc and scpaths from zone:' +str(zone))
+        sc = self.get_enabled_storage_controller_for_zone(zone=zone)
+        paths = self.get_sc_paths_by_sc(sc)
+        if not len(paths) > 1:
+            raise SkipTestException('Skipping test - Did not find > 1 path in scpaths property:' + str(paths))
+        pc = Path_Controller(node=sc,sp_ip_list=paths)
+        self.status('Clearing all eutester rules on: ' + str(pc.host))
+        if pc.get_blocked_paths():
+            pc.clear_all_eutester_rules()
+            time.sleep(60)
+        self.status('Getting volume with unique checksum...')
+        vol = self.testvol_w_checksum or self.create_local_test_volume_checksum(instance=instance)
+        path_to_block = pc.sp_ip_list[0]
+        self.status('Creating snapshot, then monitoring to at least 1% progress before blocking path...')
+        snap = self.tester.create_snapshots(volume=vol, wait_on_progress=40, monitor_to_completed=False)[0]
+        self.tester.monitor_eusnaps_to_completed(snaps=[snap],monitor_to_progress=1)
+        snap.update()
+        self.status('Snap progress'+ str(snap.progress) +', Blocking path:' + str(path_to_block) + ', on SC:' + str(pc.host))
+        try:
+            pc.block_path(path_to_block)
+            self.status('Monitoring snapshot to completed state...')
+            self.tester.monitor_eusnaps_to_completed(snaps=[snap])
+            self.status('Created snapshot, now verifying snapshot integrity from volume md5 check...')
+            self.status('Creating volume from test snapshot...')
+            vol_from_snap = self.tester.create_volume(zone=self.zone, snapshot=snap)
+            self.status('Attaching volume created from test snapshot to verify md5sum against original...')
+            instance.attach_volume(volume=vol_from_snap)
+            instance.md5_attached_euvolume(vol_from_snap, length=vol.md5len)
+            if vol.md5 != vol_from_snap.md5:
+                raise Exception('Vol created from snapshot md5(' + str(vol_from_snap.md5)+'/' + str(vol_from_snap.md5len) +
+                                ') != original volume (' + str(vol.md5) + '/' + str(vol.md5len) + ')')
+            else:
+                self.debug('SUCCESS: Vol created from snapshot md5(' + str(vol_from_snap.md5)+'/' + str(vol_from_snap.md5len) +
+                           ') == original volume(' + str(vol.md5) + '/' + str(vol.md5len) + ')')
+        except Exception, e:
+            tb = self.tester.get_traceback()
+            errmsg += '\n' + str(tb) + '\n Caught error:' + str(e)
+            self.debug(errmsg, linebyline=False)
+        finally:
+            try:
+                pc.clear_all_eutester_rules()
+            except Exception, ce:
+                errmsg += '\n' + str(ce)
+            if errmsg:
+                raise Exception(errmsg)
+
+
+    def sc_test_suite(self):
+        '''
+        SC test suite includes testing dev mapper multipath during snapshot creation, as well as sanhost fallback tests
+        '''
+        self.cycle_paths = True
+        test_list = []
+        test_list.append(self.create_testunit_from_method(self.test7_test_storage_controller_sanhost_fallback))
+        test_list.append(self.create_testunit_from_method(self.test8_test_storage_controller_path_fail_then_create_snapshot))
+        test_list.append(self.create_testunit_from_method(self.test9_test_storage_controller_path_fail_while_create_snapshot_in_progress))
+        return test_list
+
+    def nc_test_suite(self):
+        '''
+        Full test suite includes both NC and SC tests
+        '''
+        test_list = []
+        test_list.extend(self.nc_test_suite())
+        test_list.extend(self.sc_test_suite())
+        return test_list
+
+    def nc_test_suite(self):
+        '''
+        NC test suite includes testing volume attach, detach, and i/o operations during different stages of path fail over
+        and recovery.
+        '''
         self.cycle_paths = True
         test_list = []
         #test_list.append(self.create_testunit_from_method(self.pre_test_check_should_run_multipath_tests_on_this_system, eof=True))

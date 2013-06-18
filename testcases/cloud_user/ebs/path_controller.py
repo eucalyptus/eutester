@@ -130,6 +130,7 @@ class Path_Controller(EutesterTestCase):
                 self.debug('Clearing rule: '+str(line))
                 rule_number = str(line).split()[0]
                 self.sys('iptables -D OUTPUT '+str(rule_number))
+                self.sys('iptables -D INPUT '+str(rule_number))
             output = self.sys('iptables -L -n --line-numbers | grep "'+str(self.ipt_msg)+'"')
             if not output:
                 self.last_cleared_time = time.time()
@@ -152,7 +153,10 @@ class Path_Controller(EutesterTestCase):
     
     def is_path_blocked(self, addr):
         self.debug('Checking iptables for path state: '+str(addr)+' ...')
-        out = self.sys('iptables -L',code=0)
+        if re.match('\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}', addr):
+            out = self.sys('iptables -L -n ',code=0)
+        else:
+            out = self.sys('iptables -L ',code=0)
         for line in out:
             if re.search(self.ipt_msg, line) and re.match("^DROP", line):
                 #make sure we don't get a partial match...
@@ -195,8 +199,12 @@ class Path_Controller(EutesterTestCase):
         try:
             self.sys('iptables -D OUTPUT -j DROP -d '+str(addr))
         except: pass
+        try:
+            self.sys('iptables -D INPUT -j DROP -d '+str(addr))
+        except: pass
         #Add rule to block...
         self.sys('iptables -A OUTPUT -j DROP -d '+str(addr)+' -m comment --comment "'+str(self.ipt_msg)+'"', code=0)
+        self.sys('iptables -A INPUT -j DROP -d '+str(addr)+' -m comment --comment "'+str(self.ipt_msg)+'"', code=0)
         if not addr in self.blocked:
             self.blocked.append(addr)
         self.last_block_time = time.time()
@@ -222,7 +230,7 @@ class Path_Controller(EutesterTestCase):
                 block = self.sp_ip_list[index+1]
         else:
             block = self.sp_ip_list[0]
-        self.debug("block_single_path_cycle, attempting to block path:"+str(block)+", set timer to:"+str(self.interval))
+        self.debug("block_next_path, attempting to block path:"+str(block)+", set timer to:"+str(self.interval))
         self.block_path(block)
         return block
 
