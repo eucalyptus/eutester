@@ -644,21 +644,31 @@ class EuInstance(Instance, TaggedResource):
                 fsize = randint(1048576,10485760)
         if not length:
             timeout = int(euvolume.size) * timepergig
-            return self.dd_monitor(ddif=str(srcdev), ddof=str(voldev), ddbs=fsize,timeout=timeout)
         else:
-            timeout = timepergig * ((length/gb) or 1) 
-            #write the volume id into the volume for starters
-            ddcmd = 'echo '+str(euvolume.id)+' | dd of='+str(voldev)
-            dd_res_for_id = self.dd_monitor(ddcmd=ddcmd, timeout=timeout)
-            len_remaining = length - int(dd_res_for_id['dd_bytes'])
-            self.debug('length remaining to write after adding volumeid:' + str(len_remaining))
-            if len_remaining <= 0:
-                return dd_res_for_id
-            ddbs = 1024
-            if len_remaining < ddbs:
-                ddbs = len_remaining
-
-            return self.dd_monitor(ddif=str(srcdev), ddof=str(voldev), ddbs=ddbs, ddbytes=len_remaining, ddseek=int(dd_res_for_id['dd_bytes']), timeout=timeout)
+            timeout = timepergig * ((length/gb) or 1)
+        #write the volume id into the volume for starters
+        ddcmd = 'echo '+str(euvolume.id)+' | dd of='+str(voldev)
+        dd_res_for_id = self.dd_monitor(ddcmd=ddcmd, timeout=timeout)
+        len_remaining = length - int(dd_res_for_id['dd_bytes'])
+        self.debug('length remaining to write after adding volumeid:' + str(len_remaining))
+        if len_remaining <= 0:
+            return dd_res_for_id
+        ddbs = 1024
+        if len_remaining < ddbs:
+            ddbs = len_remaining
+        if not length:
+            return self.dd_monitor(ddif=str(srcdev),
+                                   ddof=str(voldev),
+                                   ddbs=fsize,
+                                   ddseek=int(dd_res_for_id['dd_bytes']),
+                                   timeout=timeout)
+        else:
+            return self.dd_monitor(ddif=str(srcdev),
+                                   ddof=str(voldev),
+                                   ddbs=ddbs,
+                                   ddbytes=len_remaining,
+                                   ddseek=int(dd_res_for_id['dd_bytes']),
+                                   timeout=timeout)
 
                 
             
@@ -896,13 +906,15 @@ class EuInstance(Instance, TaggedResource):
         #check to see if there's existing data that we should avoid overwriting 
         if overwrite or ( int(self.sys('head -c '+str(length)+ ' '+str(voldev)+' | xargs -0 printf %s | wc -c')[0]) == 0):
             
-            self.random_fill_volume(euvolume, srcdev=srcdev, length=length)
+            dd_dict = self.random_fill_volume(euvolume, srcdev=srcdev, length=length)
+            length = dd_dict['dd_bytes']
         else:
             self.debug("Volume has existing data, skipping random data fill")
         #calculate checksum of euvolume attached device for given length
         md5 = self.md5_attached_euvolume(euvolume, timepergig=timepergig,length=length)
         self.debug("Filled Volume:"+euvolume.id+" dev:"+voldev+" md5:"+md5)
         euvolume.md5 = md5
+        euvolume.md5len = length
         return md5
     
     def md5_attached_euvolume(self, euvolume, timepergig=90,length=None,updatevol=True):
