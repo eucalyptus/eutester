@@ -1,7 +1,54 @@
+# Software License Agreement (BSD License)
+#
+# Copyright (c) 2009-2011, Eucalyptus Systems, Inc.
+# All rights reserved.
+#
+# Redistribution and use of this software in source and binary forms, with or
+# without modification, are permitted provided that the following conditions
+# are met:
+#
+#   Redistributions of source code must retain the above
+#   copyright notice, this list of conditions and the
+#   following disclaimer.
+#
+#   Redistributions in binary form must reproduce the above
+#   copyright notice, this list of conditions and the
+#   following disclaimer in the documentation and/or other
+#   materials provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+#
+# Author: matt.clark@eucalyptus.com
+
 """
-Script to Quickly run an instance, attach a volume, mount the volume, create a test file on that volume,
-upload script to create and monitor read/write IO on the mounted volume. Provided real time display of read/write
-operations via ssh connection to instance.
+Description:
+Set of methods to aid in multipath testing. Main test points are ebs usage during blocking and unblocking network i/o to
+ device mapper multipath paths via iptables.
+ Node Controller Test points:
+    -confirm multiple paths are set on the NC and/or SC in order to run test, else will throw 'SkipTestException' for
+     testcase class to handle
+    -constant i/o on guest mounted volume with read, write, and checks during mpath failovers
+    -attach and detach during different phases of path(s) failing over.
+    -attach a volume to a guest while a single path is down, verify read/write direct to device on guest
+    -attach a volume while a path is in the process of failing
+    -attach a volume with all paths in good state, then detach while single path is down.
+    -attach a volume to a guest while a single path is down, verify mounted formated volume i/o, verify detach
+    -Multiple volume attach/detach checks with different path up/down states.
+Storage Controller Test points:
+    -If multiple sanhosts are provided in the SC's storage property, will attempt to test sanhost fail over using iptables
+    to block network i/o to a given host and iterate through the hosts. Will attempt to create volumes to verify functionality.
+    -If multiple scpaths are provided in the storage property, will attempt to block dev mapper paths with iptables, while
+    creating snapshots. Will test blocking paths before and during snapshot creation. 
 """
 
 __author__ = 'clarkmatthew'
@@ -995,6 +1042,14 @@ class Mpath_Suite(EutesterTestCase):
                                                                               vols_before_block=3,
                                                                               vols_after_block=2,
                                                                               clean_on_exit=True):
+        '''
+        Attaches 'vols_before_block' number of volumes while paths are not blocked. Then blocks a single path
+        and attaches 'vols_after_block' number of volumes while a single path has been blocked.
+        Detaches a volume attached before blocking as well as a volume attached after blocking from the instance.
+        Clears all paths and detaches all remaining volumes from the instance.
+        terminates instance.
+        '''
+
         single_path = None
         before_block = []
         after_block = []
