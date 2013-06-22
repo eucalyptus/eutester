@@ -129,8 +129,9 @@ class Eutester(object):
 
     def local(self, cmd):
         """ Run a command locally on the tester"""
-        std_out_return = os.popen(cmd).readlines()
-        return std_out_return
+        import subprocess
+        std_out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
+        return std_out
     
     def found(self, command, regex):
         """ Returns a Boolean of whether the result of the command contains the regex
