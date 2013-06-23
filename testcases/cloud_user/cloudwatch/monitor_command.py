@@ -48,8 +48,11 @@ class CloudWatchCustom(EutesterTestCase):
                     output = "".join(machine.sys(self.args.command, code=0))
                     self.tester.debug(output)
                     value = int(output)
+                    ### Push to Hostname dimension
                     self.tester.put_metric_data(self.args.namespace, self.args.metric_name, unit=self.args.unit,
                                                 dimensions={"Hostname": machine.hostname}, value=value)
+                    ### Push to aggregate metric as well
+                    self.tester.put_metric_data(self.args.namespace, self.args.metric_name, unit=self.args.unit, value=value)
                 except CommandExitCodeException:
                     self.tester.critical("Command exited Non-zero not putting data")
                 except ValueError:
