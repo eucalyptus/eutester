@@ -57,7 +57,6 @@ class CloudWatchCustom(EutesterTestCase):
                     self.tester.critical("Command exited Non-zero not putting data")
                 except ValueError:
                     self.tester.critical("Command returned non-integer")
-                self.tester.sleep(self.args.interval)
             self.tester.sleep(self.args.interval)
 
 if __name__ == "__main__":
