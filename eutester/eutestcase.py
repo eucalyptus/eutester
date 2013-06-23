@@ -277,6 +277,11 @@ class EutesterTestUnit():
                 ret = self.method(*self.args, **self.kwargs)
             self.result=EutesterTestResult.passed
             return ret
+        except SkipTestException, se:
+            print TestColor.get_canned_color('failred') + \
+                  "TESTUNIT SKIPPED:" + str(self.name) + "\n" + str(se) + TestColor.reset
+            self.error = str(se)
+            self.result = EutesterTestResult.not_run
         except Exception, e:
             buf = '\nTESTUNIT FAILED: ' + self.name
             if self.kwargs.get('html_anchors',False):
@@ -966,6 +971,12 @@ class EutesterTestCase(unittest.TestCase):
                                       + str(err_sum) \
                                       + '\n'
                     buf += "\n"+str(self.resulterr(test_error_line, printout=False))
+            if testunit.result == EutesterTestResult.not_run:
+                err_sum = "\n".join(str(testunit.error).splitlines()[0:3])
+                test_error_line = 'NOT_RUN:('+str(testunit.name)+'): ' \
+                                  + str(err_sum) \
+                                  + '\n'
+                buf += "\n"+str(self.resulterr(test_error_line, printout=False))
         buf += self.resultdefault("\n"+ self.getline(80)+"\n", printout=False)
         buf += str(self.print_test_list_short_stats(list))
         buf += "\n"
@@ -1442,9 +1453,14 @@ class EutesterTestCase(unittest.TestCase):
         fcode = cls.get_method_fcode(meth)
         varnames = fcode.co_varnames[0:fcode.co_argcount]
         return varnames
-       
 
 
-        
+
+class SkipTestException(Exception):
+    def __init__(self, value):
+        self.value = value
+
+    def __str__(self):
+        return repr(self.value)
             
     
