@@ -5,7 +5,6 @@ from eucaops import EC2ops
 from eutester.eutestcase import EutesterTestCase
 from eutester.sshconnection import CommandExitCodeException
 
-
 class CloudWatchCustom(EutesterTestCase):
     def __init__(self, extra_args= None):
         self.setuptestcase()
@@ -56,8 +55,12 @@ class CloudWatchCustom(EutesterTestCase):
                 except CommandExitCodeException:
                     self.tester.critical("Command exited Non-zero not putting data")
                 except ValueError:
-                    self.tester.critical("Command returned non-integer")
+                    self.tester.critical("Command returned non-integer"
+                except Exception, e:
+                    self.tester.critical("Unknown failure: " + str(e))
             self.tester.sleep(self.args.interval)
+
+
 
 if __name__ == "__main__":
     testcase = CloudWatchCustom()
