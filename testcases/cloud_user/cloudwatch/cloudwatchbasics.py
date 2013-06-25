@@ -24,19 +24,11 @@ class CloudWatchBasics(EutesterTestCase):
         else:
             self.tester = Eucaops(config_file=self.args.config, password=self.args.password, credpath=self.args.credpath)
         self.start_time =  str(int(time.time()))
+        self.zone = self.tester.get_zones().pop()
         self.namespace = 'Namespace-' + self.start_time
         self.keypair = self.tester.add_keypair()
         self.group = self.tester.add_group()
-        ### Set up autoscaling config, group and policys, this will start one instance
-        self.setUpAutoscaling()
-        ## Create Dimensions used in tests
-        self.instanceDimension = newDimension('InstanceId', self.instanceid)
-        self.volumeDimension = newDimension('VolumeId', self.volume.id)
-        self.autoScalingDimension = newDimension('AutoScalingGroupName', self.auto_scaling_group_name)
-        ### setup Alarms
-        self.setUpAlarms()
-        ### Wait for metrics to populate, timeout 30 minutes
-        self.tester.wait_for_result(self.IsMetricsListPopulated, result=True, timeout=1800)
+
 
     def clean_method(self):
         self.tester.cleanup_artifacts()
@@ -218,7 +210,7 @@ class CloudWatchBasics(EutesterTestCase):
                                          user_data=diskWrite + ' ' + diskRead)
         ### create auto scale group
         self.tester.create_as_group(group_name=self.auto_scaling_group_name,
-                                    availability_zones=self.tester.get_zones(),
+                                    availability_zones=self.zone,
                                     launch_config=self.launch_config_name,
                                     min_size=0,
                                     max_size=5,
@@ -253,7 +245,6 @@ class CloudWatchBasics(EutesterTestCase):
             state = self.instance.state
         self.debug(self.instanceid + ' is now running.')
         ### Create and attach a volume
-        self.zone = self.tester.get_zones().pop()
         self.volume = self.tester.create_volume(self.zone)
         self.tester.attach_volume(self.instance, self.volume, '/dev/sdf' )
         ### Get the newly created policies.
@@ -364,7 +355,7 @@ class CloudWatchBasics(EutesterTestCase):
         return False
 
     def MonitorInstancesTest(self):
-        self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group, is_reachable=False)
+        self.reservation = self.tester.run_instance(keypair=self.keypair.name, zone=self.zone, group=self.group, is_reachable=False)
         instanceid = self.tester.get_last_instance_id()
         ### Enable Monitoring
         self.tester.monitor_instances([instanceid])
@@ -403,7 +394,7 @@ if __name__ == '__main__':
     testcase = CloudWatchBasics()
     ### Use the list of tests passed from config/command line to determine what subset of tests to run
     ### or use a predefined list  'PutDataGetStats', 'ListMetricsTest', 'GetMetricStatisticsTest', 'MetricAlarmsTest', 'MonitorInstancesTest'
-    test_list = testcase.args.tests or ['PutDataGetStats']
+    test_list = testcase.args.tests or ['PutDataGetStats', 'ListMetricsTest', 'GetMetricStatisticsTest', 'MetricAlarmsTest', 'MonitorInstancesTest']
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
     for test in test_list:
