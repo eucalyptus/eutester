@@ -94,12 +94,15 @@ import select
 import socket
 import time
 import types
+import sys
+import termios
+import tty
 
 
 
 
 class SshCbReturn():
-    def __init__(self, stop=False, statuscode=-1, settimer=0, buf=None, nextargs=None):
+    def __init__(self, stop=False, statuscode=-1, settimer=0, buf=None, nextargs=None, nextcb=None, removecb=False):
         """
         Used to return data from an ssh cmd callback method that can be used to handle output as it's rx'd instead of...
         waiting for the cmd to finish and returned buffer. See SshConnection.cmd() for more info.
@@ -109,11 +112,17 @@ class SshCbReturn():
         :param statuscode: if cb statuscode is != -1 cmd status will return with this value
         :param nextargs: if cb nextargs is set, the next time cb is called these args will be passed instead
         :param buf: if cb buf is not None, the cmd['output'] buffer will be appended with this buf instead of std-out/err
+        :param sendstring: ssh.cmd() will send this string to the channel if not None
+        :param nextcb: optional callback can be return to ssh.cmd() to handle future output rx'd on the channel
+        :param removecb: boolean used to remove any callback from future output for ssh.cmd()
         """
         self.stop = stop
         self.statuscode = statuscode
         self.settimer = settimer
+        self.sendstring = None
         self.nextargs = nextargs or []
+        self.nextcb = nextcb
+        self.removecb = removecb
         self.buf = buf
 
 
@@ -379,6 +388,7 @@ class SshConnection():
             cmdstart = start = time.time()
             newdebug = "\n"
             while True and chan.closed == 0:
+                time.sleep(0.05)
                 try:
                     rl, wl, xl = select.select([fd], [], [], timeout)
                 except select.error:
@@ -387,7 +397,6 @@ class SshConnection():
                 if elapsed >= timeout:
                     raise CommandTimeoutException(
                         "SSH Command timer fired after " + str(int(elapsed)) + " seconds. Cmd:'" + str(cmd) + "'")
-                time.sleep(0.05)
                 if len(rl) > 0:
                     while chan.recv_ready():
                         new = chan.recv(1024)
@@ -417,8 +426,19 @@ class SshConnection():
                                     if cbreturn.settimer > 0:
                                         start = time.time()
                                         timeout = cbreturn.settimer
+                                    #Let the callback update the output buffer to be returned
                                     if cbreturn.buf:
                                         output += cbreturn.buf
+                                    #Change the callback to handle future output from this cmd
+                                    if cbreturn.nextcb:
+                                        cb = cbreturn.nextcb
+                                    #Remove all callbacks
+                                    if cbreturn.removecb:
+                                        cb = None
+                                    #Send a string to the channel provided in callback (similar to expect)
+                                    if cbreturn.sendstring is not None:
+                                        self.debug('Sending string:' + str(cbreturn.sendstring))
+                                        chan.send(s=str(cbreturn.sendstring))
                             else:
                                 #if no call back then append output to return dict and handle debug
                                 output += new
@@ -664,6 +684,109 @@ class SshConnection():
             show = password[0]+show
             show += password[len(password)-1]
         return show
+
+    def expect_password_cb(self, buf, password, nextcb=None, cbargs=None, prompt="^Password:$"):
+        '''
+        Sample callback to handle password prompts to be provided to ssh.cmd()
+        :param buf: output from cmd()
+        :param password: string password to be supplied to a detected 'password' prompt
+        :param nextcb: function/method callback to be returned, this cmd() will use to handle it's future output.
+        :param prompt: regex string used to match prompt. case insensitive match used
+        :
+        '''
+
+        ret = SshCbReturn(stop=False, buf=buf, removecb=False)
+        if nextcb is not None:
+            ret.nextcb=self.remove_cb_blank_line
+            ret.nextargs=[nextcb, cbargs]
+        else:
+            ret.nextcb=self.remove_cb_blank_line
+            ret.nextargs=[None, None]
+
+
+        try:
+            #See if line in buffer is prompting for password...
+            lines = buf.splitlines()
+            for line in lines:
+                if re.match(prompt,line.strip(), re.IGNORECASE):
+                    self.debug(buf)
+                    self.debug('Got password prompt, sending password...')
+                    ret.sendstring = str(password).rstrip() + "\n"
+                    ret.buf = None
+                    break
+        except Exception, e:
+            raise Exception('Error during ssh expect_password_cb, err:' + str(e))
+        return ret
+
+    def remove_cb_blank_line(self, buf, nextcb, cbargs):
+        ret = SshCbReturn(stop=False, buf=buf)
+        if nextcb:
+            ret.removecb=False
+            ret.nextargs=cbargs
+        else:
+            ret.removecb=True
+        lines = buf.splitlines()
+        if lines and lines[0] == "":
+            if len(lines) > 1:
+                ret.buf = "\n".join(lines[1:])
+            else:
+                ret.buf = None
+        return ret
+
+    def start_interactive(self, timeout=180):
+        '''
+        Example method to invoke an interactive shell
+        :pararm timeout: inactive session timeout, a value of 0 will wait for input/output forever
+        '''
+        tran = self.connection.get_transport()
+        if tran is None:
+            self.debug("SSH transport was None, attempting to re-establish ssh to: "+str(self.host))
+            self.refresh_connection()
+            tran = self.connection.get_transport()
+        chan = tran.open_session()
+        chan.get_pty()
+        chan.setblocking(0)
+        print('Opened channel, starting interactive mode...')
+        oldtty = termios.tcgetattr(sys.stdin)
+        try:
+            tty.setraw(sys.stdin.fileno())
+            tty.setcbreak(sys.stdin.fileno())
+            chan.settimeout(0)
+            chan.invoke_shell()
+            fd = chan.fileno()
+            while True:
+                time.sleep(0.05)
+                try:
+                    read_ready, wlist, xlist = select.select([fd, sys.stdin], [], [],timeout)
+                except select.error, se:
+                    print 'select error:' + str(se)
+                    break
+                if fd in read_ready:
+                    try:
+                        recv = chan.recv(1024)
+                        if recv is None or len(recv) == 0:
+                            self.debug('Session closing (chan)...   ')
+                            break
+                        sys.stdout.write(recv)
+                        sys.stdout.flush()
+                    except socket.timeout:
+                        pass
+                elif sys.stdin in read_ready:
+                    user_input = sys.stdin.read(1)
+                    if user_input is None or len(user_input) == 0:
+                        self.debug('Session closing (stdin)...')
+                        break
+                    chan.send(user_input)
+                else:
+                    self.debug('Got nothing, closing...')
+                    break
+        finally:
+            try:
+                termios.tcsetattr(sys.stdin, termios.TCSADRAIN, oldtty)
+            except:pass
+            if chan:
+                chan.close()
+
 
 
     def open_sftp(self, transport=None):

@@ -48,7 +48,7 @@ Storage Controller Test points:
     -If multiple sanhosts are provided in the SC's storage property, will attempt to test sanhost fail over using iptables
     to block network i/o to a given host and iterate through the hosts. Will attempt to create volumes to verify functionality.
     -If multiple scpaths are provided in the storage property, will attempt to block dev mapper paths with iptables, while
-    creating snapshots. Will test blocking paths before and during snapshot creation. 
+    creating snapshots. Will test blocking paths before and during snapshot creation.
 """
 
 __author__ = 'clarkmatthew'
