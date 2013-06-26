@@ -97,6 +97,7 @@ import types
 import sys
 import termios
 import tty
+import eucaops
 
 
 
@@ -313,7 +314,7 @@ class SshConnection():
             "SSH Command timer fired after " + str(int(elapsed)) + " seconds. Cmd:'" + str(cmd) + "'")
 
 
-    def sys(self, cmd, verbose=False, timeout=120, listformat=True, code=None):
+    def sys(self, cmd, verbose=False, timeout=120, listformat=True, enable_debug=False, code=None):
         """
         Issue a command cmd and return output in list format
 
@@ -323,7 +324,7 @@ class SshConnection():
         :param listformat:  - optional - format output into single buffer or list of lines
         :param code: - optional - expected exitcode, will except if cmd's  exitcode does not match this value
         """
-        out = self.cmd(cmd, verbose=verbose, timeout=timeout, listformat=listformat)
+        out = self.cmd(cmd, verbose=verbose, timeout=timeout, listformat=listformat, enable_debug=enable_debug)
         output = out['output']
         if code is not None:
             if out['status'] != code:
@@ -333,7 +334,7 @@ class SshConnection():
         return output
 
 
-    def cmd(self, cmd, verbose=None, timeout=120, listformat=False, cb=None, cbargs=[], get_pty=True):
+    def cmd(self, cmd, verbose=None, timeout=120, listformat=False, enable_debug=False, cb=None, cbargs=[], get_pty=True):
         """ 
         Runs a command 'cmd' within an ssh connection. 
         Upon success returns dict representing outcome of the command.
@@ -369,6 +370,9 @@ class SshConnection():
         self.lastexitcode = SshConnection.cmd_not_executed_code
         start = time.time()
         status = None
+        def cmddebug(msg):
+            if enable_debug:
+                self.debug(msg)
         if verbose:
             self.debug("[" + self.username + "@" + str(self.host) + "]# " + cmd)
         try:
@@ -382,12 +386,12 @@ class SshConnection():
             if get_pty:
                 chan.get_pty()
             chan.exec_command(cmd)
-            output = ""
+            output = None
             fd = chan.fileno()
             chan.setblocking(0)
             cmdstart = start = time.time()
             newdebug = "\n"
-            while True and chan.closed == 0:
+            while not chan.closed:
                 time.sleep(0.05)
                 try:
                     rl, wl, xl = select.select([fd], [], [], timeout)
@@ -398,19 +402,32 @@ class SshConnection():
                     raise CommandTimeoutException(
                         "SSH Command timer fired after " + str(int(elapsed)) + " seconds. Cmd:'" + str(cmd) + "'")
                 if len(rl) > 0:
+                    cmddebug('ssh cmd: got input on recv channel')
                     while chan.recv_ready():
                         new = chan.recv(1024)
+                        if verbose:
+                            cmddebug('ssh cmd: got new data on channel:"' + str(new) + '"')
                         if new is not None:
                             #We have data to handle...
                             #Run call back if there is one, let call back handle data read in
                             if cb is not None:
+                                if enable_debug:
+                                    cbname = 'unknown'
+                                    try:
+                                        cbname = str(cb.im_func.func_code.co_name)
+                                    except: pass
+                                    self.debug('ssh cmd: sending new data to callback: ' + str(cbname))
                                 #If cb returns false break, end rx loop, return cmd outcome/output dict. 
                                 #cbreturn = SshCbReturn()
                                 cbreturn = cb(new, *cbargs)
                                 #Let the callback control whether or not to continue
                                 if cbreturn.stop:
+                                    cmddebug('ssh cmd: callback sent stop')
                                     if cbreturn.buf:
-                                        output += cbreturn.buf
+                                        if output is None:
+                                            output = cbreturn.buf
+                                        else:
+                                            output += cbreturn.buf
                                     cbfired = True
                                     #Let the callback dictate the return code, otherwise -1 for connection err may occur
                                     if cbreturn.statuscode != -1:
@@ -420,28 +437,41 @@ class SshConnection():
                                     chan.close()
                                     break
                                 else:
+
                                     #Let the callback update its calling args if needed
-                                    cbargs = cbreturn.nextargs or cbargs
+                                    if cbreturn.nextargs is not None:
+                                        cbargs = cbreturn.nextargs
                                     #Let the callback update/reset the timeout if needed
                                     if cbreturn.settimer > 0:
                                         start = time.time()
                                         timeout = cbreturn.settimer
                                     #Let the callback update the output buffer to be returned
                                     if cbreturn.buf:
-                                        output += cbreturn.buf
+                                        cmddebug('ssh cmd: cb returned buf:"' + str(cbreturn.buf) + '"')
+                                        if output is None:
+                                            output = cbreturn.buf
+                                        else:
+                                            output += cbreturn.buf
                                     #Change the callback to handle future output from this cmd
                                     if cbreturn.nextcb:
+                                        cmddebug('ssh cmd: updating to new callback provided in cb return nextcb')
                                         cb = cbreturn.nextcb
                                     #Remove all callbacks
                                     if cbreturn.removecb:
+                                        cmddebug('ssh cmd: removing all callbacks per cb return removecb value')
                                         cb = None
                                     #Send a string to the channel provided in callback (similar to expect)
                                     if cbreturn.sendstring is not None:
-                                        self.debug('Sending string:' + str(cbreturn.sendstring))
+                                        if verbose:
+                                            cmddebug('Sending string:' + str(cbreturn.sendstring))
                                         chan.send(s=str(cbreturn.sendstring))
+                                        cmddebug('channel status after sending string. Is closed = ' + str(chan.closed))
                             else:
                                 #if no call back then append output to return dict and handle debug
-                                output += new
+                                if output == None:
+                                    output = new
+                                else:
+                                    output += new
                                 if verbose:
                                     #Dont print line by line output if cb is used, let cb handle that 
                                     newdebug += new
@@ -452,20 +482,25 @@ class SshConnection():
                     if newdebug and verbose:
                         self.debug(str(newdebug))
                         newdebug = ''
-
+                elif enable_debug:
+                    self.debug('ssh cmd: len of rl was < 0')
+            cmddebug('ssh cmd: channel closed')
+            if output is None:
+                output = ""
             if listformat:
                 #return output as list of lines
                 output = output.splitlines()
                 if output is None:
                     output = []
-                #add command outcome in return dict.
+
+            #add command outcome in return dict.
             if status is None:
                 status = self.lastexitcode = chan.recv_exit_status()
             ret['cmd'] = cmd
             ret['output'] = output
             ret['status'] = status
             ret['cbfired'] = cbfired
-            ret['elapsed'] = elapsed = int(time.time() - cmdstart)
+            ret['elapsed'] = int(time.time() - cmdstart)
             if verbose:
                 self.debug("done with exec")
         except CommandTimeoutException, cte:
@@ -685,7 +720,15 @@ class SshConnection():
             show += password[len(password)-1]
         return show
 
-    def expect_password_cb(self, buf, password, nextcb=None, cbargs=None, prompt="^Password:$"):
+    def expect_password_cb(self,
+                           buf,
+                           password,
+                           prompt="^Password",
+                           nextcb=None,
+                           cbargs=[],
+                           retry=0,
+                           password_attempts=0,
+                           verbose=False):
         '''
         Sample callback to handle password prompts to be provided to ssh.cmd()
         :param buf: output from cmd()
@@ -694,44 +737,84 @@ class SshConnection():
         :param prompt: regex string used to match prompt. case insensitive match used
         :
         '''
+        ret = SshCbReturn(stop=False)
+        #newbuf = None
+        def debug(msg, ssh=self):
+            if verbose:
+                ssh.debug(msg)
 
-        ret = SshCbReturn(stop=False, buf=buf, removecb=False)
-        if nextcb is not None:
-            ret.nextcb=self.remove_cb_blank_line
-            ret.nextargs=[nextcb, cbargs]
-        else:
-            ret.nextcb=self.remove_cb_blank_line
-            ret.nextargs=[None, None]
+        def add_to_buffer(lines_to_add, newbuf):
+            for line in lines_to_add:
+                debug('Adding line to buf:"' + str(line) +'"')
+                if newbuf is None:
+                    newbuf = line+ '\n'
+                else:
+                    newbuf += line + '\n'
+            return newbuf
+        bufadd = lambda line: add_to_buffer(line, ret.buf)
+        debug('STARTING expect_password_cb: password:' + str(password)+", prompt:"+str(prompt))
+        debug('Starting buf:"' + str(buf) + '"')
+        #Create a callback return obj for the cmd() loop to consume...
 
-
-        try:
-            #See if line in buffer is prompting for password...
-            lines = buf.splitlines()
-            for line in lines:
-                if re.match(prompt,line.strip(), re.IGNORECASE):
-                    self.debug(buf)
-                    self.debug('Got password prompt, sending password...')
-                    ret.sendstring = str(password).rstrip() + "\n"
-                    ret.buf = None
-                    break
-        except Exception, e:
-            raise Exception('Error during ssh expect_password_cb, err:' + str(e))
-        return ret
-
-    def remove_cb_blank_line(self, buf, nextcb, cbargs):
-        ret = SshCbReturn(stop=False, buf=buf)
-        if nextcb:
-            ret.removecb=False
-            ret.nextargs=cbargs
-        else:
-            ret.removecb=True
         lines = buf.splitlines()
-        if lines and lines[0] == "":
-            if len(lines) > 1:
-                ret.buf = "\n".join(lines[1:])
-            else:
+
+        #See if we've already gone through password dialog, if so there may be a left over newline. Remove it.
+        if password_attempts and lines[0] == "":
+            debug('Removing first blank line(s) after sending password')
+            lines.pop(0)
+            if not lines:
+                #self.debug('Skipping blanklines...')
                 ret.buf = None
+                ret.nextargs=[password, prompt, nextcb, cbargs, retry, password_attempts, verbose]
+                return ret
+
+        #See if we have a prompt for password, assume we only have one match and were blocking waiting on password input
+        prompt_indices = [i for i, s in enumerate(lines) if re.match(prompt, s, re.IGNORECASE)]
+        if prompt_indices:
+            debug('Got password prompt, sending password...')
+            #Check to see if we've already tried a password, and if we should retry or fail
+            if password_attempts > retry:
+                raise CommandExpectPasswordException("Password dialog attempts:" + str(password_attempts) +
+                                                     " exceeded retry limit:" + str(retry))
+            prompt_index = prompt_indices[0]
+            if prompt_index:
+                #We have a prompt, add lines found in the buffer before the prompt back to the return buffer.
+                ret.buf = bufadd(lines[:prompt_index-1])
+            #Remove line with password prompt
+            lines.pop()
+            #Add any lines other than password prompt back to return buffer
+            ret.buf = bufadd(lines)
+            #Add password to CbReturn sendstring value to be sent to channel in cmd() loop...
+            ret.sendstring = str(password).rstrip() + "\n"
+            #Increment our password attempts value, and args to return obj for next time we get called. Expecting to
+            # get called at least 1 more time to handle the blank line after password dialog, may also get called for a
+            # login, and prompted for a password again...
+            password_attempts += 1
+            ret.removecb = False
+            ret.nextcb = None
+            ret.nextargs=[password, prompt, nextcb, cbargs, retry, password_attempts, verbose]
+            debug('Ending buf:"' + str(ret.buf) + '"')
+            return ret
+        else:
+            debug('\nPassword prompt not found, continuing. password_attempts:'+ str(password_attempts) +
+                       ', prompt:' + str(prompt) + ', len lines: ' + str(len(lines)))
+            #Assume the password dialog is complete, pass buffer to next handler,
+            # attempt to make password portion look transparent
+            ret.buf = bufadd(lines)
+            if nextcb is not None:
+                debug('Got nextcb, calling it on our buffer now...')
+                ret = nextcb(ret.buf, *cbargs)
+                if ret.nextcb and not ret.removecb:
+                    nextcb=ret.nextcb
+                else:
+                    nextcb=None
+            #tweak the return values, store the real ones in our nextargs and handle things in this method instead
+            ret.nextcb = None
+        ret.removecb = False
+        ret.nextargs = [password, prompt, nextcb, cbargs, retry, password_attempts, verbose]
+        debug('Ending buf:"' + str(ret.buf) + '"')
         return ret
+
 
     def start_interactive(self, timeout=180):
         '''
@@ -837,6 +920,13 @@ class CommandExitCodeException(Exception):
         return repr(self.value)
 
 class CommandTimeoutException(Exception):
+    def __init__(self, value):
+        self.value = value
+
+    def __str__(self):
+        return repr(self.value)
+
+class CommandExpectPasswordException(Exception):
     def __init__(self, value):
         self.value = value
 
