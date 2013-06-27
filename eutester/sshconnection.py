@@ -359,6 +359,7 @@ class SshConnection():
                         if cb statuscode is != -1 cmd status will return with this value
                         if cb nextargs is set, the next time cb is called these args will be passed instead of cbargs
         :param cbargs: - optional - list of arguments to be appended to output buffer and passed to cb
+        :param enable_debug: - optional - boolean, if set will use self.debug() to print additional messages during cmd()
 
         """
         if verbose is None:
@@ -777,12 +778,9 @@ class SshConnection():
                 raise CommandExpectPasswordException("Password dialog attempts:" + str(password_attempts) +
                                                      " exceeded retry limit:" + str(retry))
             prompt_index = prompt_indices[0]
-            if prompt_index:
-                #We have a prompt, add lines found in the buffer before the prompt back to the return buffer.
-                ret.buf = bufadd(lines[:prompt_index-1])
-            #Remove line with password prompt
-            lines.pop()
             #Add any lines other than password prompt back to return buffer
+            #Remove line with password prompt first
+            lines.pop(prompt_index)
             ret.buf = bufadd(lines)
             #Add password to CbReturn sendstring value to be sent to channel in cmd() loop...
             ret.sendstring = str(password).rstrip() + "\n"
