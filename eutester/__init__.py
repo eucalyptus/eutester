@@ -131,14 +131,14 @@ class Eutester(object):
         """ Run a command locally on the tester"""
         import shlex,subprocess
         args = shlex.split(str(cmd))
-        p = subprocess.Popen(args, stderr=subprocess.PIPE, stdout=subprocess.PIPE, bufsize=4096)
-        std_out = list([p.communicate()])
-        """ Return stdout or stderr based upon results of command
-        """
-        if std_out[0] != '':
-            return std_out[0]
-        else:
-            return std_out[1]    
+        process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=4096)
+        output, unused_err = process.communicate()
+        retcode = process.poll()
+        if retcode:
+            error = subprocess.CalledProcessError(retcode, cmd)
+            error.output = output
+            raise error
+        return output.split("\n")
 
     def found(self, command, regex):
         """ Returns a Boolean of whether the result of the command contains the regex
