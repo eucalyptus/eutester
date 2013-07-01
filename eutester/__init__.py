@@ -128,9 +128,13 @@ class Eutester(object):
         raise TimeoutFunctionException()
 
     def local(self, cmd):
-        """ Run a command locally on the tester"""
-        import shlex,subprocess
-        args = shlex.split(str(cmd))
+        """
+        Run a command on the localhost
+        :param cmd: str representing the command to be run
+        :return: :raise: CalledProcessError on non-zero return code
+        """
+        import subprocess
+        args = cmd.split()
         process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=4096)
         output, unused_err = process.communicate()
         retcode = process.poll()
