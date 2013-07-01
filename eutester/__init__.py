@@ -31,7 +31,6 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 # Author: vic.iglesias@eucalyptus.com
-import subprocess
 
 __version__ = '0.0.7'
 
@@ -128,31 +127,10 @@ class Eutester(object):
     def handle_timeout(self, signum, frame): 
         raise TimeoutFunctionException()
 
-    def check_output(*popenargs, **kwargs):
-        """Run command with arguments and return its output as a byte string.
-
-        Backported from Python 2.7 as it's implemented as pure python on stdlib.
-
-        >>> check_output(['/usr/bin/python', '--version'])
-        Python 2.6.2
-
-        from https://gist.github.com/edufelipe/1027906
-        """
-        process = subprocess.Popen(stdout=subprocess.PIPE, *popenargs, **kwargs)
-        output, unused_err = process.communicate()
-        retcode = process.poll()
-        if retcode:
-            cmd = kwargs.get("args")
-            if cmd is None:
-                cmd = popenargs[0]
-            error = subprocess.CalledProcessError(retcode, cmd)
-            error.output = output
-            raise error
-        return output
-
     def local(self, cmd):
         """ Run a command locally on the tester"""
-        std_out = self.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
+        import subprocess
+        std_out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
         return std_out
     
     def found(self, command, regex):
