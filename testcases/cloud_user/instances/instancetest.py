@@ -97,25 +97,25 @@ class InstanceBasics(EutesterTestCase):
         if zone is None:
             zone = self.zone
         if not self.reservation:
-            self.reservation = self.tester.run_instance(username=self.args.instance_user, keypair=self.keypair.name,
+            reservation = self.tester.run_instance(self.image, username=self.args.instance_user, keypair=self.keypair.name,
                                                         group=self.group.name,zone=zone, timeout=self.instance_timeout)
         else:
             reservation = self.reservation
 
         for instance in reservation.instances:
-            if instance.public_dns_name == instance.private_ip_address:
+            if instance.ip_address == instance.private_ip_address:
                 self.tester.debug("WARNING: System or Static mode detected, skipping ElasticIps")
                 return reservation
             self.address = self.tester.allocate_address()
             self.assertTrue(self.address,'Unable to allocate address')
             self.tester.associate_address(instance, self.address)
             instance.update()
-            self.assertTrue( self.tester.ping(instance.public_dns_name), "Could not ping instance with new IP")
+            self.assertTrue( self.tester.ping(instance.ip_address), "Could not ping instance with new IP")
             self.tester.disassociate_address_from_instance(instance)
             self.tester.release_address(self.address)
             self.address = None
             instance.update()
-            self.assertTrue( self.tester.ping(instance.public_dns_name), "Could not ping after dissassociate")
+            self.assertTrue( self.tester.ping(instance.ip_address), "Could not ping after dissassociate")
         self.set_reservation(reservation)
         return reservation
 
@@ -352,12 +352,12 @@ class InstanceBasics(EutesterTestCase):
             zone = self.zone
         if self.reservation:
             for instance in self.reservation.instances:
-                if instance.public_dns_name == instance.private_ip_address:
+                if instance.ip_address == instance.private_ip_address:
                     self.tester.debug("WARNING: System or Static mode detected, skipping PrivateIPAddressing")
                     return self.reservation
             self.tester.terminate_instances(self.reservation)
             self.set_reservation(None)
-        reservation = self.tester.run_instance(username=self.args.instance_user, keypair=self.keypair.name,
+        reservation = self.tester.run_instance(self.image, username=self.args.instance_user, keypair=self.keypair.name,
                                                group=self.group.name, private_addressing=True, zone=zone,
                                                timeout=self.instance_timeout)
         for instance in reservation.instances:
@@ -366,14 +366,14 @@ class InstanceBasics(EutesterTestCase):
             self.tester.associate_address(instance, address)
             self.tester.sleep(30)
             instance.update()
-            self.assertTrue( self.tester.ping(instance.public_dns_name), "Could not ping instance with new IP")
+            self.assertTrue( self.tester.ping(instance.ip_address), "Could not ping instance with new IP")
             address.disassociate()
             self.tester.sleep(30)
             instance.update()
-            self.assertFalse( self.tester.ping(instance.public_dns_name), "Was able to ping instance that should have only had a private IP")
+            self.assertFalse(self.tester.ping(instance.ip_address), "Was able to ping instance that should have only had a private IP")
             address.release()
-            if instance.public_dns_name != instance.private_dns_name:
-                self.fail("Instance received a new public IP: " + instance.public_dns_name)
+            if instance.ip_address != "0.0.0.0":
+                self.fail("Instance received a new public IP: " + instance.ip_address)
         self.set_reservation(None)
         return reservation
 
@@ -392,18 +392,18 @@ class InstanceBasics(EutesterTestCase):
             self.tester.terminate_instances(self.reservation)
             self.set_reservation(None)
         for i in xrange(5):
-            reservation = self.tester.run_instance(username=self.args.instance_user, keypair=self.keypair.name,
+            reservation = self.tester.run_instance(self.image, username=self.args.instance_user, keypair=self.keypair.name,
                                                    group=self.group.name, zone=zone,timeout=self.instance_timeout)
             for instance in reservation.instances:
                 if prev_address is not None:
-                    self.assertTrue(re.search(str(prev_address) ,str(instance.public_dns_name)), str(prev_address) +" Address did not get reused but rather  " + str(instance.public_dns_name))
-                prev_address = instance.public_dns_name
+                    self.assertTrue(re.search(str(prev_address) ,str(instance.ip_address)), str(prev_address) +" Address did not get reused but rather  " + str(instance.public_dns_name))
+                prev_address = instance.ip_address
             self.tester.terminate_instances(reservation)
 
 if __name__ == "__main__":
     testcase = InstanceBasics()
     ### Either use the list of tests passed from config/command line to determine what subset of tests to run
-    list = testcase.args.tests or [ "BasicInstanceChecks",  "Reboot", "MetaData", "ElasticIps", "MultipleInstances" , "LargestInstance",
+    list = testcase.args.tests or [ "BasicInstanceChecks",  "Reboot", "MetaData", "ElasticIps   ", "MultipleInstances" , "LargestInstance",
                                    "PrivateIPAddressing", "Churn", "DNSResolveCheck"]
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
