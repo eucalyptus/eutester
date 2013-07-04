@@ -2069,10 +2069,6 @@ class EC2ops(Eutester):
                 instance.reset_ssh_connection()
             else:
                 self.debug('WARNING: associate_address called with refresh_ssh set to true, but instance is not EuInstance type:'+str(instance.id))
-        
-            
-            
-        
 
     def disassociate_address_from_instance(self, instance, timeout=75):
         """
