@@ -165,15 +165,18 @@ class Eutester(object):
             return False
         self.debug("Attempting to ping " + address)
         while poll_count > 0:
-            poll_count -= 1 
-            if self.found("ping -c 1 " + address, "1.*1.*received"):
+            poll_count -= 1
+            try:
+                self.local("ping -c 1 " + address)
                 self.debug("Was able to ping address")
                 return True
-            if poll_count == 0:
-                self.critical("Was unable to ping address")
-                return False
+            except:
+                pass
             self.debug("Ping unsuccessful retrying in 2 seconds " + str(poll_count) + " more times")
-            self.sleep(2)    
+            self.sleep(2)
+        self.critical("Was unable to ping address")
+        return False
+
     
     def scan_port_range(self, ip, start, stop, timeout=1, tcp=True):
         '''
