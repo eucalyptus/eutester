@@ -52,6 +52,9 @@ class InstanceBasics(EutesterTestCase):
             self.zone = self.args.zone
         self.reservation = None
         self.reservation_lock = threading.Lock()
+        self.run_instance_params = {'image': self.image, 'user_data': self.args.user_data, 'username': self.args.instance_user,
+                                'keypair': self.keypair.name, 'group': self.group.name,'zone': self.zone,
+                                'timeout': self.instance_timeout}
 
     def set_reservation(self, reservation):
         self.reservation_lock.acquire()
@@ -61,7 +64,7 @@ class InstanceBasics(EutesterTestCase):
     def clean_method(self):
         self.tester.cleanup_artifacts()
 
-    def BasicInstanceChecks(self, zone = None):
+    def BasicInstanceChecks(self):
         """
         This case was developed to run through a series of basic instance tests.
              The tests are as follows:
@@ -73,10 +76,7 @@ class InstanceBasics(EutesterTestCase):
                        (ssh into instance and run basic ls command)
              If any of these tests fail, the test case will error out, logging the results.
         """
-        if zone is None:
-            zone = self.zone
-        reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user,
-                                               keypair=self.keypair.name, group=self.group.name, zone=zone, timeout=self.instance_timeout)
+        reservation = self.tester.run_instance(**self.run_instance_params)
         for instance in reservation.instances:
             self.assertTrue( self.tester.wait_for_reservation(reservation) ,'Instance did not go to running')
             self.assertTrue( self.tester.ping(instance.ip_address), 'Could not ping instance')
@@ -84,7 +84,7 @@ class InstanceBasics(EutesterTestCase):
         self.set_reservation(reservation)
         return reservation
 
-    def ElasticIps(self, zone = None):
+    def ElasticIps(self):
         """
        This case was developed to test elastic IPs in Eucalyptus. This test case does
        not test instances that are launched using private-addressing option.
@@ -94,11 +94,8 @@ class InstanceBasics(EutesterTestCase):
            - releases the allocated IP address
        If any of the tests fail, the test case will error out, logging the results.
         """
-        if zone is None:
-            zone = self.zone
         if not self.reservation:
-            reservation = self.tester.run_instance(self.image, username=self.args.instance_user, keypair=self.keypair.name,
-                                                        group=self.group.name,zone=zone, timeout=self.instance_timeout)
+            reservation = self.tester.run_instance(**self.run_instance_params)
         else:
             reservation = self.reservation
 
@@ -119,7 +116,7 @@ class InstanceBasics(EutesterTestCase):
         self.set_reservation(reservation)
         return reservation
 
-    def MultipleInstances(self, zone = None):
+    def MultipleInstances(self):
         """
         This case was developed to test the maximum number of m1.small vm types a configured
         cloud can run.  The test runs the maximum number of m1.small vm types allowed, then
@@ -130,36 +127,27 @@ class InstanceBasics(EutesterTestCase):
             self.tester.terminate_instances(self.reservation)
             self.set_reservation(None)
 
-        if zone is None:
-            zone = self.zone
-
-        reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user,
-                                               keypair=self.keypair.name, group=self.group.name,min=2, max=2, zone=zone,
-                                               timeout=self.instance_timeout)
+        reservation = self.tester.run_instance(min=2, max=2, **self.run_instance_params)
         self.assertTrue( self.tester.wait_for_reservation(reservation) ,'Not all instances  went to running')
         self.set_reservation(reservation)
         return reservation
 
-    def LargestInstance(self, zone = None):
+    def LargestInstance(self):
         """
         This case was developed to test the maximum number of c1.xlarge vm types a configured
         cloud can run.  The test runs the maximum number of c1.xlarge vm types allowed, then
         tests to see if all the instances reached a running state.  If there is a failure,
         the test case errors out; logging the results.
         """
-        if zone is None:
-            zone = self.zone
         if self.reservation:
             self.tester.terminate_instances(self.reservation)
             self.set_reservation(None)
-        reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user,
-                                               keypair=self.keypair.name, group=self.group.name,type="c1.xlarge",zone=zone,
-                                               timeout=self.instance_timeout)
+        reservation = self.tester.run_instance(type="c1.xlarge", **self.run_instance_params)
         self.assertTrue( self.tester.wait_for_reservation(reservation) ,'Not all instances  went to running')
         self.set_reservation(reservation)
         return reservation
 
-    def MetaData(self, zone=None):
+    def MetaData(self):
         """
         This case was developed to test the metadata service of an instance for consistency.
         The following meta-data attributes are tested:
@@ -183,12 +171,8 @@ class InstanceBasics(EutesterTestCase):
          ['block-device-mapping/',  'ami-manifest-path']
         If any of these tests fail, the test case will error out; logging the results.
         """
-        if zone is None:
-            zone = self.zone
         if not self.reservation:
-            reservation = self.tester.run_instance(self.image, user_data=self.args.user_data,
-                                                   username=self.args.instance_user,keypair=self.keypair.name,
-                                                   group=self.group.name, zone=zone, timeout=self.instance_timeout)
+            reservation = self.tester.run_instance(**self.run_instance_params)
         else:
             reservation = self.reservation
         for instance in reservation.instances:
@@ -232,8 +216,7 @@ class InstanceBasics(EutesterTestCase):
         if zone is None:
             zone = self.zone
         if not self.reservation:
-            reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user,
-                                                   keypair=self.keypair.name, group=self.group.name, zone=zone,timeout=self.instance_timeout)
+            reservation = self.tester.run_instance(**self.run_instance_params)
         else:
             reservation = self.reservation
 
@@ -274,9 +257,7 @@ class InstanceBasics(EutesterTestCase):
         if zone is None:
             zone = self.zone
         if not self.reservation:
-            reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user,
-                                                   keypair=self.keypair.name, group=self.group.name, zone=zone,
-                                                   timeout=self.instance_timeout)
+            reservation = self.tester.run_instance(**self.run_instance_params)
         else:
             reservation = self.reservation
         for instance in reservation.instances:
@@ -328,7 +309,7 @@ class InstanceBasics(EutesterTestCase):
             return self.tester.get_available_vms(zone=self.zone) >= available_instances_before
         self.tester.wait_for_result(available_after_greater, result=True, timeout=360)
 
-    def PrivateIPAddressing(self, zone = None):
+    def PrivateIPAddressing(self):
         """
         This case was developed to test instances that are launched with private-addressing
         set to True.  The tests executed are as follows:
@@ -337,8 +318,6 @@ class InstanceBasics(EutesterTestCase):
             - check to see if the instance went back to private addressing
         If any of these tests fail, the test case will error out; logging the results.
         """
-        if zone is None:
-            zone = self.zone
         if self.reservation:
             for instance in self.reservation.instances:
                 if instance.ip_address == instance.private_ip_address:
@@ -346,9 +325,7 @@ class InstanceBasics(EutesterTestCase):
                     return self.reservation
             self.tester.terminate_instances(self.reservation)
             self.set_reservation(None)
-        reservation = self.tester.run_instance(self.image, username=self.args.instance_user, keypair=self.keypair.name,
-                                               group=self.group.name, private_addressing=True, zone=zone,
-                                               timeout=self.instance_timeout)
+        reservation = self.tester.run_instance(private_addressing=True, **self.run_instance_params)
         for instance in reservation.instances:
             address = self.tester.allocate_address()
             self.assertTrue(address,'Unable to allocate address')
@@ -366,7 +343,7 @@ class InstanceBasics(EutesterTestCase):
         self.set_reservation(None)
         return reservation
 
-    def ReuseAddresses(self, zone = None):
+    def ReuseAddresses(self):
         """
         This case was developed to test when you run instances in a series, and make sure
         they get the same address.  The test launches an instance, checks the IP information,
@@ -374,15 +351,11 @@ class InstanceBasics(EutesterTestCase):
         is an error, the test case will error out; logging the results.
         """
         prev_address = None
-        if zone is None:
-            zone = self.zone
-            ### Run the test 5 times in a row
         if self.reservation:
             self.tester.terminate_instances(self.reservation)
             self.set_reservation(None)
         for i in xrange(5):
-            reservation = self.tester.run_instance(self.image, username=self.args.instance_user, keypair=self.keypair.name,
-                                                   group=self.group.name, zone=zone,timeout=self.instance_timeout)
+            reservation = self.tester.run_instance(**self.run_instance_params)
             for instance in reservation.instances:
                 if prev_address is not None:
                     self.assertTrue(re.search(str(prev_address) ,str(instance.ip_address)), str(prev_address) +" Address did not get reused but rather  " + str(instance.public_dns_name))
@@ -392,8 +365,8 @@ class InstanceBasics(EutesterTestCase):
 if __name__ == "__main__":
     testcase = InstanceBasics()
     ### Either use the list of tests passed from config/command line to determine what subset of tests to run
-    list = testcase.args.tests or [ "BasicInstanceChecks",  "Reboot", "MetaData", "ElasticIps   ", "MultipleInstances" , "LargestInstance",
-                                   "PrivateIPAddressing", "Churn", "DNSResolveCheck"]
+    list = testcase.args.tests or [ "BasicInstanceChecks",  "Reboot", "MetaData", "ElasticIps", "MultipleInstances",
+                                    "LargestInstance", "PrivateIPAddressing", "Churn", "DNSResolveCheck"]
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
     for test in list:
