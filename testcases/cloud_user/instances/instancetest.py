@@ -45,8 +45,11 @@ class InstanceBasics(EutesterTestCase):
         self.address = None
         self.volume = None
         self.private_addressing = False
-        zones = self.tester.ec2.get_all_zones()
-        self.zone = random.choice(zones).name
+        if not self.args.zone:
+            zones = self.tester.ec2.get_all_zones()
+            self.zone = random.choice(zones).name
+        else:
+            self.zone = self.args.zone
         self.reservation = None
         self.reservation_lock = threading.Lock()
 
@@ -76,7 +79,7 @@ class InstanceBasics(EutesterTestCase):
                                                keypair=self.keypair.name, group=self.group.name, zone=zone, timeout=self.instance_timeout)
         for instance in reservation.instances:
             self.assertTrue( self.tester.wait_for_reservation(reservation) ,'Instance did not go to running')
-            self.assertTrue( self.tester.ping(instance.public_dns_name), 'Could not ping instance')
+            self.assertTrue( self.tester.ping(instance.ip_address), 'Could not ping instance')
             self.assertFalse( instance.found("ls -1 /dev/" + instance.rootfs_device + "2",  "No such file or directory"),  'Did not find ephemeral storage at ' + instance.rootfs_device + "2")
         self.set_reservation(reservation)
         return reservation
