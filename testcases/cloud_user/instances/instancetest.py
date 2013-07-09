@@ -338,7 +338,7 @@ class InstanceBasics(EutesterTestCase):
             instance.update()
             self.assertFalse(self.tester.ping(instance.ip_address), "Was able to ping instance that should have only had a private IP")
             address.release()
-            if instance.ip_address != "0.0.0.0" or instance.ip_address != instance.private_ip_address:
+            if instance.ip_address != "0.0.0.0" and instance.ip_address != instance.private_ip_address:
                 self.fail("Instance received a new public IP: " + instance.ip_address)
         self.set_reservation(None)
         return reservation
