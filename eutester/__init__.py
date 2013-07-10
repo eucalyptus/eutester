@@ -128,11 +128,22 @@ class Eutester(object):
         raise TimeoutFunctionException()
 
     def local(self, cmd):
-        """ Run a command locally on the tester"""
+        """
+        Run a command on the localhost
+        :param cmd: str representing the command to be run
+        :return: :raise: CalledProcessError on non-zero return code
+        """
         import subprocess
-        std_out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
-        return std_out
-    
+        args = cmd.split()
+        process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=4096)
+        output, unused_err = process.communicate()
+        retcode = process.poll()
+        if retcode:
+            error = subprocess.CalledProcessError(retcode, cmd)
+            error.output = output
+            raise error
+        return output.split("\n")
+
     def found(self, command, regex):
         """ Returns a Boolean of whether the result of the command contains the regex
         """
@@ -154,15 +165,18 @@ class Eutester(object):
             return False
         self.debug("Attempting to ping " + address)
         while poll_count > 0:
-            poll_count -= 1 
-            if self.found("ping -c 1 " + address, "1.*1.*received"):
+            poll_count -= 1
+            try:
+                self.local("ping -c 1 " + address)
                 self.debug("Was able to ping address")
                 return True
-            if poll_count == 0:
-                self.critical("Was unable to ping address")
-                return False
+            except:
+                pass
             self.debug("Ping unsuccessful retrying in 2 seconds " + str(poll_count) + " more times")
-            self.sleep(2)    
+            self.sleep(2)
+        self.critical("Was unable to ping address")
+        return False
+
     
     def scan_port_range(self, ip, start, stop, timeout=1, tcp=True):
         '''

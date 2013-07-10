@@ -2033,7 +2033,7 @@ class EC2ops(Eutester):
         :raise: Exception in case of association failure
         """
         ip =  str(address.public_ip)
-        old_ip = str(instance.public_dns_name)
+        old_ip = str(instance.ip_address)
         self.debug("Attemtping to associate " + str(ip) + " with " + str(instance.id))
         try:
             address.associate(instance.id)
@@ -2058,21 +2058,17 @@ class EC2ops(Eutester):
         while instance.ip_address not in address.public_ip:
             if elapsed > timeout:
                 raise Exception('Address ' + str(address) + ' did not associate with instance after:'+str(elapsed)+" seconds")
-            self.debug('Instance {0} has IP {1} attached instead of {2}'.format(instance.id, instance.public_dns_name, address.public_ip) )
+            self.debug('Instance {0} has IP {1} attached instead of {2}'.format(instance.id, instance.ip_address, address.public_ip) )
             self.sleep(5)
             instance.update()
             elapsed = int(time.time()-start)
-            self.debug("Associated IP successfully old_ip:"+str(old_ip)+' new_ip:'+str(instance.public_dns_name))
+            self.debug("Associated IP successfully old_ip:"+str(old_ip)+' new_ip:'+str(instance.ip_address))
         if refresh_ssh:
             if isinstance(instance, EuInstance):
-                self.debug('Refreshing EuInstance:'+str(instance.id)+' ssh connection to associated addr:'+str(instance.public_dns_name))
+                self.debug('Refreshing EuInstance:'+str(instance.id)+' ssh connection to associated addr:'+str(instance.ip_address))
                 instance.reset_ssh_connection()
             else:
                 self.debug('WARNING: associate_address called with refresh_ssh set to true, but instance is not EuInstance type:'+str(instance.id))
-        
-            
-            
-        
 
     def disassociate_address_from_instance(self, instance, timeout=75):
         """
@@ -2082,10 +2078,10 @@ class EC2ops(Eutester):
         :param timeout: Time in seconds to wait for address to disassociate
         :raise:
         """
-        self.debug("disassociate_address_from_instance: instance.public_dns_name:" +
-                   str(instance.public_dns_name) + " instance:" + str(instance))
+        self.debug("disassociate_address_from_instance: instance.ip_address:" +
+                   str(instance.ip_address) + " instance:" + str(instance))
         ip=str(instance.public_dns_name)
-        address = self.ec2.get_all_addresses(addresses=[instance.public_dns_name])[0]
+        address = self.ec2.get_all_addresses(addresses=[instance.ip_address])[0]
         
         
         start = time.time()
@@ -2108,7 +2104,7 @@ class EC2ops(Eutester):
         start = time.time()
         ### Ensure instance gets correct address
         while re.search( instance.ip_address,address.public_ip):
-            self.debug('Instance {0} has IP "{1}" still using address "{2}" after {3} seconds'.format(instance.id, instance.public_dns_name, address.public_ip, str(elapsed)) )
+            self.debug('Instance {0} has IP "{1}" still using address "{2}" after {3} seconds'.format(instance.id, instance.ip_address, address.public_ip, str(elapsed)) )
             if elapsed > timeout:
                 raise Exception('Address ' + str(address) + ' never disassociated with instance after '+str(elapsed)+' seconds')
             instance.update()
@@ -2335,14 +2331,15 @@ class EC2ops(Eutester):
                            str(instance.private_ip_address) + " Public DNS Name: " + str(instance.public_dns_name) +
                            " Private DNS Name: " + str(instance.private_dns_name))
 
-            try:
-                self.wait_for_valid_ip(instance, private_addressing=private_addressing)
-            except Exception, e:
-                ip_err = "WARNING in wait_for_valid_ip: "+str(e)
-                self.debug(ip_err)
-                #self.terminate_instances(reservation)
-                #raise Exception("Reservation " +  str(reservation) + " has been terminated because instance " +
-                #                str(instance) + " did not receive a valid IP")
+            if not private_addressing:
+                try:
+                    self.wait_for_valid_ip(instance, private_addressing=private_addressing)
+                except Exception, e:
+                    ip_err = "WARNING in wait_for_valid_ip: "+str(e)
+                    self.debug(ip_err)
+                    self.terminate_instances(reservation)
+                    raise Exception("Reservation " +  str(reservation) + " has been terminated because instance " +
+                                    str(instance) + " did not receive a valid IP")
 
             if is_reachable:
                 self.ping(instance.ip_address, 20)
