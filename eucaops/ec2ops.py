@@ -2891,13 +2891,7 @@ class EC2ops(Eutester):
                 else:
                     self.debug(str(instance.id)+": FOUND public ip. Current:"+str(instance.public_dns_name)+
                                ", elapsed:"+str(elapsed)+"/"+str(timeout))
-                    if ((instance.ip_address == instance.private_ip_address) or \
-                            (instance.public_dns_name == instance.private_dns_name)) and not private_addressing:
-                        self.debug("ERROR:"+str(instance.id) + " got Public IP: " + str(instance.ip_address)  +
-                                   " Private IP: " + str(instance.private_ip_address) + " Public DNS Name: " +
-                                   str(instance.public_dns_name) + " Private DNS Name: " + str(instance.private_dns_name))
-                    else:
-                        good.append(instance)
+                    good.append(instance)
             #clean up list outside of loop
             for instance in good:
                 if instance in monitoring:
