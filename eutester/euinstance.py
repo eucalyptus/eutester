@@ -786,7 +786,6 @@ class EuInstance(Instance, TaggedResource):
 
     @Eutester.printinfo
     def random_fill_volume(self,euvolume,srcdev=None, length=None, timepergig=90):
-    def random_fill_volume(self,euvolume,srcdev=None, length=None, timepergig=90):
         '''
         Attempts to fill the entie given euvolume with unique non-zero data.
         The srcdev is read from in a set size, and then used to write to the euvolume to populate it. The file 
