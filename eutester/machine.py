@@ -281,6 +281,9 @@ class Machine:
         """
         return self.get_eucalyptus_service_pid('eucalyptus-cc.pid')
 
+    def get_uptime(self):
+        return int(self.sys('cat /proc/uptime', code=0)[0].split()[1].split('.')[0])
+
     def get_eucalyptus_cloud_process_uptime(self):
         """
         Attempts to look up the elapsed running time of the PID associated with the eucalyptus-cloud process/service.
