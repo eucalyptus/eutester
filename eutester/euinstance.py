@@ -63,9 +63,6 @@ import types
 import operator
 
 
-
-
-
 class EuInstance(Instance, TaggedResource):
     keypair = None
     keypath = None
@@ -249,7 +246,7 @@ class EuInstance(Instance, TaggedResource):
         Attempts to connect to an instance via ssh.
         timeout - optional - time in seconds to wait for connection before failure
         '''
-        self.debug("Attempting to reconnect_to_instance:"+self.id)
+        self.debug("Attempting to reconnect_to_instance:" + self.id)
         attempts = 0
         if ((self.keypath is not None) or ((self.username is not None)and(self.password is not None))):
             start = time.time()
@@ -272,10 +269,10 @@ class EuInstance(Instance, TaggedResource):
                     pass
                 else:
                     break
+            elapsed = int(time.time()-start)
             if self.ssh is None:
                 raise Exception(str(self.id)+":Failed establishing ssh connection to instance, elapsed:"+str(elapsed)+
                                 "/"+str(timeout))
-
         else:
             self.debug("keypath or username/password need to be populated for ssh connection")
 
@@ -383,7 +380,7 @@ class EuInstance(Instance, TaggedResource):
                       timeout=120,
                       retry=0):
         password = password or self.exec_password
-        cmd = 'sudo ' + str(cmd)
+        cmd = "sudo '" + str(cmd) +"'"
         return self.cmd_expect_password(cmd,
                                        password=password,
                                        prompt=prompt,
@@ -789,6 +786,7 @@ class EuInstance(Instance, TaggedResource):
 
     @Eutester.printinfo
     def random_fill_volume(self,euvolume,srcdev=None, length=None, timepergig=90):
+    def random_fill_volume(self,euvolume,srcdev=None, length=None, timepergig=90):
         '''
         Attempts to fill the entie given euvolume with unique non-zero data.
         The srcdev is read from in a set size, and then used to write to the euvolume to populate it. The file 
@@ -1090,8 +1088,8 @@ class EuInstance(Instance, TaggedResource):
         #check to see if there's existing data that we should avoid overwriting 
         if overwrite or ( int(self.sys('head -c '+str(length)+ ' '+str(voldev)+' | xargs -0 printf %s | wc -c')[0]) == 0):
             
-            dd_dict = self.random_fill_volume(euvolume, srcdev=srcdev, length=length)
-            length = dd_dict['dd_bytes']
+            self.random_fill_volume(euvolume, srcdev=srcdev, length=length)
+            #length = dd_dict['dd_bytes']
         else:
             self.debug("Volume has existing data, skipping random data fill")
         #calculate checksum of euvolume attached device for given length
@@ -1358,7 +1356,7 @@ class EuInstance(Instance, TaggedResource):
         Confirm that the cloud is showing the state for this euvolume as attached to this instance
         '''
         try:
-            euvolume = cloudlist=self.tester.get_volume(volume_id=euvolume.id)
+            euvolume = self.tester.get_volume(volume_id=euvolume.id)
         except Exception, e:
             self.debug("Error in verify_attached_vol_status, try running init_volume_list first")
             raise Exception("Failed to get volume in get_attached_vol_cloud_status, err:"+str(e))
