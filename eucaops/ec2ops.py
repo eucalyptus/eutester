@@ -3545,6 +3545,20 @@ class EC2ops(Eutester):
         buf += line
         printmethod(buf)
 
+    def print_all_vm_types(self,zone=None, debugmethod=None):
+        debugmethod = debugmethod or self.debug
+        buf = "\n"
+        if zone:
+            zones = [zone]
+        else:
+            zones = self.ec2.get_all_zones()
+        for zone in zones:
+            buf += "------------------------( " + str(zone) + " )--------------------------------------------\n"
+            for vm in self.get_vm_type_list_from_zone(zone):
+                vminfo = self.get_all_attributes(vm, verbose=False)
+                buf +=  "---------------------------------"
+                buf += self.get_all_attributes(vm, verbose=False)
+        debugmethod(buf)
 
     def monitor_instances(self, instance_ids):
         self.debug('Enabling monitoring for instance(s) ' + str(instance_ids))
