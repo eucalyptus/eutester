@@ -819,15 +819,36 @@ class EbsTestSuite(EutesterTestCase):
             self.run_test_case_list(testlist)
         else:
             return testlist
-                   
-    
-    
-                
-        
+
+
+    def expand_volume_size(self, zonelist=None, volsperzone=1, size=1):
+        """
+        Description:
+                    Intention of this test is to verify creation of volume(s) from a snapshot and expanding
+                    the size of the volume
+        """
+        zonelist = zonelist or self.zonelist
+        if not zonelist:
+            raise Exception("Zone list was empty")
+        for testzone in zonelist:
+            vols = self.tester.create_volumes(testzone, size=size, count=volsperzone)
+            testzone.volumes.extend(vols)
+            snapshots = []
+            for volume in vols:
+                snapshots.append(self.tester.create_snapshot_from_volume(volume))
+            larger_volumes = []
+            for snaphot in snapshots:
+                larger_volumes.append(self.tester.create_volume(testzone, snapshot=snaphot, size=size+1))
+            for volume in larger_volumes:
+                assert volume.size > size
+
+
     def ebs_basic_test_suite(self, run=True):  
         testlist = [] 
         #create first round of volumes
         testlist.append(self.create_testunit_from_method(self.create_vols_per_zone, eof=True))
+        #create volumes that have their sizes expanded from their original snapshots
+        testlist.append(self.create_testunit_from_method(self.expand_volume_size, eof=True))
         #launch instances to interact with ebs volumes
         testlist.append(self.create_testunit_from_method(self.create_test_instances_for_zones, eof=True))
         #attach first round of volumes
