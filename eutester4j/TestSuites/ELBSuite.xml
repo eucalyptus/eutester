@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="ELB Test Suite">
+    <test name="ELB_Tests">
+        <classes>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingELBAddRemoveInstances"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingELBInstanceHealthMonitoring"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingELBReferenceValidation"/>
+        </classes>>
+    </test>
+</suite>

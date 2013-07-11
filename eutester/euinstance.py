@@ -380,7 +380,12 @@ class EuInstance(Instance, TaggedResource):
                       timeout=120,
                       retry=0):
         password = password or self.exec_password
-        cmd = "sudo '" + str(cmd) +"'"
+        if re.search("'", cmd):
+            delim = '"'
+        else:
+            delim = "'"
+
+        cmd = "sudo sh -c " + delim + str(cmd) + delim
         return self.cmd_expect_password(cmd,
                                        password=password,
                                        prompt=prompt,
