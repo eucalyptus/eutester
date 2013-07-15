@@ -621,6 +621,50 @@ class EuInstance(Instance, TaggedResource):
         except:
             return self.sys("curl http://" + self.tester.get_ec2_ip()  + ":8773/"+str(prefix) + str(element_path), code=0)
         
+    def get_userdata(self, prefix='latest/user-data/'): 
+        import base64
+        import zlib
+        import string
+        """Return the string of userdata from the element path provided"""
+        ### If i can reach the userdata service ip use it to get userdata otherwise try the clc directly
+        try:
+            self.sys("ping -c 1 169.254.169.254", code=0, verbose=False)
+            results = self.sys("curl http://169.254.169.254/"+str(prefix), code=0)
+            """
+            Make sure to account for instances that have resolution errors with sudo
+            due to local IP not being in /etc/hosts
+            """
+            for content in results:
+                if content.startswith("sudo"):
+                    results.remove(content)
+                    break
+
+            curl_data = ''.join(results)
+            user_data = base64.b64decode(curl_data)
+            if all(c in string.printable for c in user_data):
+                return re.escape(user_data)
+            else:
+                file_data = zlib.decompress(user_data, 16+zlib.MAX_WBITS)
+                return re.escape(file_data)
+        except:
+            results = self.sys("curl http://" + self.tester.get_ec2_ip()  + ":8773/"+str(prefix), code=0)
+            """
+            Make sure to account for instances that have resolution errors with sudo
+            due to local IP not being in /etc/hosts
+            """
+            for content in results:
+                if content.startswith("sudo"):
+                    results.remove(content)
+                    break
+
+            curl_data = ''.join(results)
+            user_data = base64.b64decode(curl_data)
+            if all(c in string.printable for c in user_data):
+                return re.escape(user_data)
+            else:
+                file_data = zlib.decompress(user_data, 16+zlib.MAX_WBITS)
+                return re.escape(file_data)
+        
     def set_block_device_prefix(self):
         return self.set_rootfs_device()
 
