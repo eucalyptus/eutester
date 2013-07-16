@@ -3173,7 +3173,7 @@ class EC2ops(Eutester):
             for res in reservations:
                 if self.wait_for_reservation(res, state="terminated", timeout=timeout) is False:
                     aggregate_result = False
-            self.test_resources['reservations'] = [reservation for reservation in self.test_resources['reservations'] if reservation is not reservation ]
+            self.test_resources['reservations'] = [other_reservation for other_reservation in self.test_resources['reservations'] if other_reservation is not reservation]
         ### Otherwise just kill this reservation
         else:
             instance_list = reservation
@@ -3184,7 +3184,7 @@ class EC2ops(Eutester):
                 instance.terminate()
             if self.wait_for_reservation(reservation, state="terminated", timeout=timeout) is False:
                 aggregate_result = False
-            self.test_resources['reservations'] = {}
+            self.test_resources['reservations'] = []
         return aggregate_result
     
     def stop_instances(self,reservation, timeout=480):
