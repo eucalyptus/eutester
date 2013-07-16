@@ -62,6 +62,8 @@ class LVMSnapshotUtility(EutesterTestCase):
         '''
         machines = self.tester.get_component_machines()
         for machine in machines:
+            if machine.distro.name is "vmware":
+                continue
             machine.sys("lvcreate -l 100%origin -s -n " + self.args.name + " `blkid -L rootfs`", code=0)
 
     def RestoreLVMSnapshot(self):
@@ -72,6 +74,8 @@ class LVMSnapshotUtility(EutesterTestCase):
         machines = self.tester.get_component_machines()
         check_file = "/root/merge-executed"
         for machine in machines:
+            if machine.distro.name is "vmware":
+                continue
             logical_volume = "/dev/vg01/" + self.args.name
             machine.sys("e2label " + logical_volume + " rootfs")
             machine.sys("touch " + check_file)
