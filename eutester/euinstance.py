@@ -309,7 +309,12 @@ class EuInstance(Instance, TaggedResource):
             try_non_root_exec = self.try_non_root_exec
         if self.username != 'root' and try_non_root_exec:
             if self.use_sudo:
-                return self.sys_with_sudo(cmd, verbose=verbose, code=code, enable_debug=enable_debug, timeout=timeout)
+                results = self.sys_with_sudo(cmd, verbose=verbose, code=code, enable_debug=enable_debug, timeout=timeout)
+                for content in results:
+                    if content.startswith("sudo"):
+                        results.remove(content)
+                        break
+                return results
             else:
                 return self.sys_with_su(cmd, verbose=verbose, code=code, enable_debug=enable_debug, timeout=timeout)
 
@@ -629,17 +634,7 @@ class EuInstance(Instance, TaggedResource):
         ### If i can reach the userdata service ip use it to get userdata otherwise try the clc directly
         try:
             self.sys("ping -c 1 169.254.169.254", code=0, verbose=False)
-            results = self.sys("curl http://169.254.169.254/"+str(prefix), code=0)
-            """
-            Make sure to account for instances that have resolution errors with sudo
-            due to local IP not being in /etc/hosts
-            """
-            for content in results:
-                if content.startswith("sudo"):
-                    results.remove(content)
-                    break
-
-            curl_data = ''.join(results)
+            curl_data = ''.join(self.sys("curl http://169.254.169.254/"+str(prefix), code=0))
             user_data = base64.b64decode(curl_data)
             if all(c in string.printable for c in user_data):
                 return re.escape(user_data)
@@ -647,17 +642,7 @@ class EuInstance(Instance, TaggedResource):
                 file_data = zlib.decompress(user_data, 16+zlib.MAX_WBITS)
                 return re.escape(file_data)
         except:
-            results = self.sys("curl http://" + self.tester.get_ec2_ip()  + ":8773/"+str(prefix), code=0)
-            """
-            Make sure to account for instances that have resolution errors with sudo
-            due to local IP not being in /etc/hosts
-            """
-            for content in results:
-                if content.startswith("sudo"):
-                    results.remove(content)
-                    break
-
-            curl_data = ''.join(results)
+            curl_data = ''.join(self.sys("curl http://" + self.tester.get_ec2_ip()  + ":8773/"+str(prefix), code=0))
             user_data = base64.b64decode(curl_data)
             if all(c in string.printable for c in user_data):
                 return re.escape(user_data)
