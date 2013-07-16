@@ -375,7 +375,7 @@ if __name__ == "__main__":
     testcase= EutesterTestCase(name='instancetest')
     testcase.setup_parser(description="Test the Eucalyptus EC2 instance store image functionality.")
     testcase.get_args()
-    testsuite= testcase.do_with_args(InstanceBasics)
+    instancetestsuite= testcase.do_with_args(InstanceBasics)
 
     ### Either use the list of tests passed from config/command line to determine what subset of tests to run
     list = testcase.args.tests or [ "BasicInstanceChecks",  "Reboot", "MetaData", "ElasticIps", "MultipleInstances",
@@ -383,8 +383,9 @@ if __name__ == "__main__":
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = []
     for test in list:
-        test = getattr(testsuite,test)
+        test = getattr(instancetestsuite,test)
         unit_list.append(testcase.create_testunit_from_method(test))
+    testcase.clean_method = instancetestsuite.clean_method
     result = testcase.run_test_case_list(unit_list)
     exit(result)
 
