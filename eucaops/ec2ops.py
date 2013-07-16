@@ -2292,20 +2292,9 @@ class EC2ops(Eutester):
             enabled=False
         start = time.time()
         
-        if user_data:
-            if os.path.isfile(user_data):
-                with open(user_data) as user_data_file:
-                    encoded_user_data = base64.b64encode(
-                        user_data_file.read())
-            else:
-                encoded_user_data = base64.b64encode(
-                    user_data)
-        else:
-            encoded_user_data=None
-        
         self.debug( "Attempting to run "+ str(image.root_device_type)  +" image " + str(image) + " in group " + str(group))
         reservation = image.run(key_name=keypair,security_groups=[group],instance_type=type, placement=zone,
-                                min_count=min, max_count=max, user_data=encoded_user_data, addressing_type=addressing_type,
+                                min_count=min, max_count=max, user_data=user_data, addressing_type=addressing_type,
                                 monitoring_enabled=enabled)
         self.test_resources["reservations"].append(reservation)
         
