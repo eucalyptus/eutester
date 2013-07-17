@@ -92,7 +92,7 @@ class BFEBSBasics(InstanceBasics):
         finally:
             self.tester.terminate_instances(instances)
             if self.volume:
-                self.tester.wait_for_volume(self.volume, state="available")
+                self.tester.wait_for_volume(self.volume, status="available")
                 self.tester.delete_volume(self.volume)
                 self.volume = None
 
