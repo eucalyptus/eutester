@@ -9,6 +9,12 @@ class BFEBSBasics(InstanceBasics):
         super(BFEBSBasics, self).__init__(name=name, credpath=credpath, region=region, config_file=config_file, password=password,
                                           emi=emi, zone=zone, user_data=user_data, instance_user=instance_user)
 
+    def clean_method(self):
+        if self.reservation:
+            self.tester.terminate_instances(self.reservation)
+        if self.volume:
+            self.tester.delete_volume(self.volume)
+
     def RegisterImage(self):
         '''Register a BFEBS snapshot'''
         if not self.imgurl:
@@ -87,6 +93,7 @@ class BFEBSBasics(InstanceBasics):
             self.tester.terminate_instances(instances)
             if self.volume:
                 self.tester.delete_volume(self.volume)
+                self.volume = None
 
 if __name__ == "__main__":
     testcase= EutesterTestCase(name='bfebstest')
