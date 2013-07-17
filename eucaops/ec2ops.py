@@ -918,11 +918,11 @@ class EC2ops(Eutester):
             buf += snapshot.printself(title=False)
         self.debug("\n"+str(buf)+"\n")
 
-    def wait_for_volume(self, volume, state="available"):
+    def wait_for_volume(self, volume, status="available"):
         def get_volume_state():
             volume.update()
-            return volume.state
-        self.wait_for_result(get_volume_state, state)
+            return volume.status
+        self.wait_for_result(get_volume_state, status)
 
     def delete_volume(self, volume, poll_interval=10, timeout=180):
         """
