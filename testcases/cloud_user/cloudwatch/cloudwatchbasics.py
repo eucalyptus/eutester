@@ -28,6 +28,15 @@ class CloudWatchBasics(EutesterTestCase):
         self.namespace = 'Namespace-' + self.start_time
         self.keypair = self.tester.add_keypair()
         self.group = self.tester.add_group()
+        ## Create Dimensions used in tests
+        self.instanceDimension = newDimension('InstanceId', self.instanceid)
+        self.volumeDimension = newDimension('VolumeId', self.volume.id)
+        self.autoScalingDimension = newDimension('AutoScalingGroupName', self.auto_scaling_group_name)
+        ### setup Alarms
+        self.setUpAutoscaling()
+        self.setUpAlarms()
+        ### Wait for metrics to populate, timeout 30 minutes
+        self.tester.wait_for_result(self.IsMetricsListPopulated, result=True, timeout=1800)
 
         ### setup AutoScaling & Alarms
         self.setUpAutoscaling()
