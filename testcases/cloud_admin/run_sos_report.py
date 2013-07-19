@@ -14,7 +14,7 @@ class SampleTest(EutesterTestCase):
         self.start_time = self.ticket_number = int(time.time())
         self.parser.add_argument("--remote-dir", default="/root/euca-sosreport-" + str(self.start_time) + "/")
         self.parser.add_argument("--local-dir", default=os.getcwd())
-        self.parser.add_argument("--package-url", default="http://mongo.beldurnik.com/RPMS/eucalyptus-sos-plugins-0.1-0.el6.noarch.rpm")
+        self.parser.add_argument("--package-url", default="http://mongo.beldurnik.com/RPMS/eucalyptus-sos-plugins-0.1.1-0.el6.noarch.rpm")
         self.get_args()
         # Setup basic eutester object
         self.tester = Eucaops( config_file=self.args.config,password=self.args.password)
