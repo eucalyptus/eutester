@@ -7,7 +7,7 @@ from eutester.eutestcase import EutesterTestCase
 from eutester.machine import Machine
 
 
-class SampleTest(EutesterTestCase):
+class SOSreport(EutesterTestCase):
     def __init__(self):
         self.setuptestcase()
         self.setup_parser()
@@ -54,7 +54,7 @@ class SampleTest(EutesterTestCase):
         self.Download()
 
 if __name__ == "__main__":
-    testcase = SampleTest()
+    testcase = SOSreport()
     ### Use the list of tests passed from config/command line to determine what subset of tests to run
     ### or use a predefined list
     list = testcase.args.tests or ["RunAll"]
