@@ -934,7 +934,12 @@ class EC2ops(Eutester):
         for snapshot in print_list:
             buf += snapshot.printself(title=False)
         self.debug("\n"+str(buf)+"\n")
-        
+
+    def wait_for_volume(self, volume, status="available"):
+        def get_volume_state():
+            volume.update()
+            return volume.status
+        self.wait_for_result(get_volume_state, status)
 
     def delete_volume(self, volume, poll_interval=10, timeout=180):
         """
@@ -3190,6 +3195,7 @@ class EC2ops(Eutester):
             for res in reservations:
                 if self.wait_for_reservation(res, state="terminated", timeout=timeout) is False:
                     aggregate_result = False
+            self.test_resources['reservations'] = [other_reservation for other_reservation in self.test_resources['reservations'] if other_reservation is not reservation]
         ### Otherwise just kill this reservation
         else:
             instance_list = reservation
@@ -3200,6 +3206,7 @@ class EC2ops(Eutester):
                 instance.terminate()
             if self.wait_for_reservation(reservation, state="terminated", timeout=timeout) is False:
                 aggregate_result = False
+            self.test_resources['reservations'] = []
         return aggregate_result
     
     def stop_instances(self,reservation, timeout=480):

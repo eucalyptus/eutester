@@ -18,41 +18,50 @@ import random
 
 
 class InstanceBasics(EutesterTestCase):
-    def __init__(self, extra_args= None):
-        self.setuptestcase()
-        self.setup_parser()
-        if extra_args:
-            for arg in extra_args:
-                self.parser.add_argument(arg)
-        self.get_args()
-        # Setup basic eutester object
-        if self.args.region:
-            self.tester = EC2ops( credpath=self.args.credpath, region=self.args.region)
+    def __init__( self, name="InstanceBasics", credpath=None, region=None, config_file=None, password=None, emi=None, zone=None,
+                  user_data=None, instance_user=None, **kwargs):
+        """
+        EC2 API tests focused on instance store instances
+
+        :param credpath: Path to directory containing eucarc file
+        :param region: EC2 Region to run testcase in
+        :param config_file: Configuration file path
+        :param password: SSH password for bare metal machines if config is passed and keys arent synced
+        :param emi: Image id to use for test
+        :param zone: Availability Zone to run test in
+        :param user_data: User Data to pass to instance
+        :param instance_user: User to login to instance as
+        :param kwargs: Additional arguments
+        """
+        super(InstanceBasics, self).__init__(name=name)
+        if region:
+            self.tester = EC2ops(credpath=credpath, region=region)
         else:
-            self.tester = Eucaops(config_file=self.args.config, password=self.args.password, credpath=self.args.credpath)
+            self.tester = Eucaops(config_file=config_file, password=password, credpath=credpath)
         self.instance_timeout = 480
 
         ### Add and authorize a group for the instance
         self.group = self.tester.add_group(group_name="group-" + str(time.time()))
-        self.tester.authorize_group_by_name(group_name=self.group.name )
+        self.tester.authorize_group_by_name(group_name=self.group.name)
         self.tester.authorize_group_by_name(group_name=self.group.name, port=-1, protocol="icmp" )
         ### Generate a keypair for the instance
         self.keypair = self.tester.add_keypair( "keypair-" + str(time.time()))
         self.keypath = '%s/%s.pem' % (os.curdir, self.keypair.name)
-        self.image = self.args.emi
-        if not self.image:
+        if emi:
+            self.image = emi
+        else:
             self.image = self.tester.get_emi(root_device_type="instance-store")
         self.address = None
         self.volume = None
         self.private_addressing = False
-        if not self.args.zone:
+        if not zone:
             zones = self.tester.ec2.get_all_zones()
             self.zone = random.choice(zones).name
         else:
-            self.zone = self.args.zone
+            self.zone = zone
         self.reservation = None
         self.reservation_lock = threading.Lock()
-        self.run_instance_params = {'image': self.image, 'user_data': self.args.user_data, 'username': self.args.instance_user,
+        self.run_instance_params = {'image': self.image, 'user_data': user_data, 'username': instance_user,
                                 'keypair': self.keypair.name, 'group': self.group.name,'zone': self.zone,
                                 'timeout': self.instance_timeout}
 
@@ -128,7 +137,7 @@ class InstanceBasics(EutesterTestCase):
             self.set_reservation(None)
 
         reservation = self.tester.run_instance(min=2, max=2, **self.run_instance_params)
-        self.assertTrue( self.tester.wait_for_reservation(reservation) ,'Not all instances  went to running')
+        self.assertTrue(self.tester.wait_for_reservation(reservation) ,'Not all instances  went to running')
         self.set_reservation(reservation)
         return reservation
 
@@ -363,16 +372,20 @@ class InstanceBasics(EutesterTestCase):
             self.tester.terminate_instances(reservation)
 
 if __name__ == "__main__":
-    testcase = InstanceBasics()
+    testcase= EutesterTestCase(name='instancetest')
+    testcase.setup_parser(description="Test the Eucalyptus EC2 instance store image functionality.")
+    testcase.get_args()
+    instancetestsuite= testcase.do_with_args(InstanceBasics)
+
     ### Either use the list of tests passed from config/command line to determine what subset of tests to run
     list = testcase.args.tests or [ "BasicInstanceChecks",  "Reboot", "MetaData", "ElasticIps", "MultipleInstances",
                                     "LargestInstance", "PrivateIPAddressing", "Churn", "DNSResolveCheck"]
     ### Convert test suite methods to EutesterUnitTest objects
-    unit_list = [ ]
+    unit_list = []
     for test in list:
-        unit_list.append( testcase.create_testunit_by_name(test) )
-    ### Run the EutesterUnitTest objects
-
-    result = testcase.run_test_case_list(unit_list,clean_on_exit=True)
+        test = getattr(instancetestsuite,test)
+        unit_list.append(testcase.create_testunit_from_method(test))
+    testcase.clean_method = instancetestsuite.clean_method
+    result = testcase.run_test_case_list(unit_list)
     exit(result)
 

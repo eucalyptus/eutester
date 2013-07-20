@@ -37,6 +37,8 @@ import re
 import string
 from eutester.euinstance import EuInstance
 from eutester.eutestcase import EutesterTestCase
+from eutester.sshconnection import CommandTimeoutException
+
 
 class LVMSnapshotUtility(EutesterTestCase):
     
@@ -60,6 +62,8 @@ class LVMSnapshotUtility(EutesterTestCase):
         '''
         machines = self.tester.get_component_machines()
         for machine in machines:
+            if machine.distro.name is "vmware":
+                continue
             machine.sys("lvcreate -l 100%origin -s -n " + self.args.name + " `blkid -L rootfs`", code=0)
 
     def RestoreLVMSnapshot(self):
@@ -68,19 +72,41 @@ class LVMSnapshotUtility(EutesterTestCase):
         '''
 
         machines = self.tester.get_component_machines()
-        first_uptime = {}
+        check_file = "/root/merge-executed"
         for machine in machines:
-            machine.sys("lvconvert --merge /dev/vg01/" + self.args.name, code=0)
-            first_uptime[machine.hostname] = self.get_safe_uptime(machine)
-            machine.sys("reboot now", timeout=2)
+            if machine.distro.name is "vmware":
+                continue
+            logical_volume = "/dev/vg01/" + self.args.name
+            machine.sys("e2label " + logical_volume + " rootfs")
+            machine.sys("touch " + check_file)
+            machine.sys("lvconvert --merge " + logical_volume, code=0)
+            try:
+                machine.sys("reboot -f", timeout=2)
+            except CommandTimeoutException:
+                pass
 
         self.tester.sleep(30)
+
         for machine in machines:
             self.tester.ping(machine.hostname, poll_count=120)
-            if self.get_safe_uptime(machine) > first_uptime[machine.hostname]:
-                raise Exception("Machine uptime did not reset after reboot attempt")
-            machine.refresh_ssh()
-            machine.sys("lvcreate -l 100%origin -s -n " + self.args.name + " `blkid -L rootfs`", code=0)
+
+        for machine in machines:
+            def ssh_refresh():
+                try:
+                    machine.refresh_ssh()
+                    return True
+                except:
+                    return False
+            self.tester.wait_for_result(ssh_refresh, True, timeout=120)
+            machine.sys('ls ' + check_file, code=2)
+            def lv_gone():
+                try:
+                    machine.sys("lvdisplay " + logical_volume, code=5)
+                    return True
+                except:
+                    return False
+            self.tester.wait_for_result(lv_gone, True, timeout=240)
+            machine.sys("lvcreate -l 100%origin -s -n " + logical_volume + " `blkid -L rootfs`", code=0)
 
     def get_safe_uptime(self, machine):
             uptime = None

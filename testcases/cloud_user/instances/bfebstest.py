@@ -1,33 +1,34 @@
 #!/usr/bin/python
+from eutester.eutestcase import EutesterTestCase
 from instancetest import InstanceBasics
 
 class BFEBSBasics(InstanceBasics):
-    def __init__(self, extra_args = None):
-        args = ['--imgurl']
-        if extra_args:
-            args.append(extra_args)
-        super(BFEBSBasics, self).__init__(args)
+    def __init__(self, name="BFEBSBasics", credpath=None, region=None, config_file=None, password=None, emi=None, zone=None,
+                  user_data=None, instance_user=None, imgurl=None ):
+        self.imgurl = imgurl
+        super(BFEBSBasics, self).__init__(name=name, credpath=credpath, region=region, config_file=config_file, password=password,
+                                          emi=emi, zone=zone, user_data=user_data, instance_user=instance_user)
 
     def clean_method(self):
         if self.reservation:
             self.tester.terminate_instances(self.reservation)
-            self.reservation = None
+        if self.volume:
+            self.tester.delete_volume(self.volume)
 
-    def RegisterImage(self, zone= None):
+    def RegisterImage(self):
         '''Register a BFEBS snapshot'''
-        if zone is None:
-            zone = self.zone
-        if not self.args.imgurl:
+        if not self.imgurl:
             raise Exception("No imgurl passed to run BFEBS tests")
         if not self.reservation:
-            self.reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, zone=zone)
+            self.run_instance_params['image'] = self.tester.get_emi(root_device_type="instance-store")
+            self.reservation = self.tester.run_instance(**self.run_instance_params)
         for instance in self.reservation.instances:
             self.volume = self.tester.create_volume(zone=self.zone, size=3)
             self.volume_device = instance.attach_volume(self.volume)
-            instance.sys("curl " +  self.args.imgurl + " > " + self.volume_device, timeout=800, code=0)
+            instance.sys("curl " +  self.imgurl + " > " + self.volume_device, timeout=800, code=0)
             snapshot = self.tester.create_snapshot(self.volume.id)
             image_id = self.tester.register_snapshot(snapshot)
-        self.image = self.tester.get_emi(image_id)
+        self.run_instance_params['image'] = self.tester.get_emi(image_id)
         self.tester.terminate_instances(self.reservation)
         self.reservation = None
 
@@ -44,29 +45,29 @@ class BFEBSBasics(InstanceBasics):
         if self.reservation:
             self.tester.terminate_instances(self.reservation)
         self.image = self.tester.get_emi(root_device_type="ebs")
-        self.MaxSmallInstances(self.tester.get_available_vms() / 2) 
+        self.MultipleInstances()
 
     def ChurnBFEBS(self):
         """Start instances and stop them before they are running, increase time to terminate on each iteration"""
         if self.reservation:
             self.tester.terminate_instances(self.reservation)
         self.image = self.tester.get_emi(root_device_type="ebs")
-        self.Churn(self.image.id)
+        self.Churn()
 
     def RunStop(self, zone=None):
         """Run instance then stop them without starting them again"""
         if zone is None:
             zone = self.zone
         try:
-            self.image = self.tester.get_emi(root_device_type="ebs")
+            self.run_instance_params['image'] = self.tester.get_emi(root_device_type="ebs")
         except Exception,e:
             self.RegisterImage()
-            self.image = self.tester.get_emi(root_device_type="ebs")
+            self.run_instance_params['image'] = self.tester.get_emi(root_device_type="ebs")
         if not self.volume:
             self.volume = self.tester.create_volume(zone=self.zone, size=2)
         if self.reservation:
             self.tester.terminate_instances(self.reservation)
-        self.reservation = self.tester.run_instance(self.image, user_data=self.args.user_data, username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, zone=zone)
+        self.reservation = self.tester.run_instance(**self.run_instance_params)
         ## Ensure that we can attach and use a volume
         for instance in self.reservation.instances:
             vol_dev = instance.attach_volume(self.volume)
@@ -91,19 +92,25 @@ class BFEBSBasics(InstanceBasics):
         finally:
             self.tester.terminate_instances(instances)
             if self.volume:
+                self.tester.wait_for_volume(self.volume, status="available")
                 self.tester.delete_volume(self.volume)
-
-
+                self.volume = None
 
 if __name__ == "__main__":
-    testcase = BFEBSBasics()
-    ### Either use the list of tests passed from config/command line to determine what subset of tests to run
-    list = testcase.args.tests or [ "RegisterImage",  "StopStart", "MultipleBFEBSInstances", "ChurnBFEBS" ]
-    ### Convert test suite methods to EutesterUnitTest objects
-    unit_list = [ ]
-    for test in list:
-        unit_list.append( testcase.create_testunit_by_name(test) )
-        ### Run the EutesterUnitTest objects
+    testcase= EutesterTestCase(name='bfebstest')
+    testcase.setup_parser(description="Test the Eucalyptus EC2 BFEBS image functionality.")
+    testcase.parser.add_argument('--imgurl',
+                        help="BFEBS Image to splat down", default=None)
+    testcase.get_args()
+    bfebstestsuite = testcase.do_with_args(BFEBSBasics)
 
-    result = testcase.run_test_case_list(unit_list,clean_on_exit=True)
+    ### Either use the list of tests passed from config/command line to determine what subset of tests to run
+    list = testcase.args.tests or [ "RegisterImage",  "StopStart", "MultipleBFEBSInstances"]
+    ### Convert test suite methods to EutesterUnitTest objects
+    unit_list = []
+    for test in list:
+        test = getattr(bfebstestsuite,test)
+        unit_list.append(testcase.create_testunit_from_method(test))
+    testcase.clean_method = bfebstestsuite.clean_method
+    result = testcase.run_test_case_list(unit_list)
     exit(result)
