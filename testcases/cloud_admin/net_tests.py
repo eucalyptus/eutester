@@ -74,7 +74,10 @@ test4:
 
 '''
 
-
+#todo: Make use of CC optional so test can be run with only creds and non-admin user.
+# CC only provides additional point of debug so can be removed from test for non-euca testing
+#todo: Allow test to run with an admin and non-admin account, so debug can be provided through admin and test can
+# be run under non-admin if desired.
 
 
 from eucaops import Eucaops
@@ -90,8 +93,8 @@ class Net_Tests(EutesterTestCase):
     def __init__(self,  tester=None, **kwargs):
         self.setuptestcase()
         self.setup_parser()
-        self.parser.add_argument("--use_cidr",
-                                 action='store_true',
+        self.parser.add_argument("--no_cidr",
+                                 action='store_false',
                                  help="Boolean to authorize sec group with cidr notation or by group ",
                                  default=True)
         '''
@@ -109,8 +112,8 @@ class Net_Tests(EutesterTestCase):
             print 'Setting kwarg:'+str(kw)+" to "+str(kwargs[kw])
             self.set_arg(kw ,kwargs[kw])
         self.show_args()
+        ### Create the Eucaops object, by default this will be Eucalyptus/Admin and have ssh access to components
         if not tester and not self.args.config:
-            #todo: Make use of CC optional so test can be run with only creds. CC only provides additional point of debug.
             print "Need eutester config file to execute this test. As well as system ssh credentials (key, password, etc)"
             self.parser.print_help()
             sys.exit(1)
@@ -125,7 +128,9 @@ class Net_Tests(EutesterTestCase):
                 #replace default eutester debugger with eutestcase's for more verbosity...
             self.tester.debug = lambda msg: self.debug(msg, traceback=2, linebyline=False)
         self.assertIsInstance(self.tester, Eucaops)
-        ### Add and authorize a group for the instance
+        self.cc_last_checked = time.time()
+
+        ### Create local zone list to run tests in
         if self.args.zone:
             self.zones = [str(self.args.zone)]
         else:
@@ -134,11 +139,19 @@ class Net_Tests(EutesterTestCase):
             raise Exception('No zones found to run this test?')
         self.debug('Running test against zones:' + ",".join(self.zones))
 
+        ### Add and authorize securtiy groups
+        self.debug("Creating group1..")
         self.group1 = self.tester.add_group(str(self.name) + "_group1_" + str(time.time()))
-        self.group2 = self.tester.add_group(str(self.name) + "_group2_" + str(time.time()))
-        #Authorize ssh for group1 not for group2, do group2 per instance later...
+        self.debug("Authorize ssh for group1 from '0.0.0.0/0'")
         self.tester.authorize_group(self.group1, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
         #self.tester.authorize_group(self.group1, protocol='icmp',port='-1')
+
+        self.debug("Creating group2, will authorize later from rules within test methods..")
+        self.group2 = self.tester.add_group(str(self.name) + "_group2_" + str(time.time()))
+        self.group1_instances = []
+        self.group2_instances = []
+
+
 
         ### Generate a keypair for the instances
         try:
@@ -158,12 +171,57 @@ class Net_Tests(EutesterTestCase):
         if not self.image:
             raise Exception('couldnt find instance store image')
 
-        self.group1_instances = []
-        self.group2_instances = []
-        self.cc_last_checked = time.time()
+
+
+
+    ######################################################
+    #   Test Utility Methods
+    ######################################################
+
+    def authorize_group_for_instance_list(self, group, instances):
+        for instance in instances:
+            self.assertIsInstance(instance, EuInstance)
+            self.tester.authorize_group(group, cidr_ip=instance.private_ip_address + "/32")
 
     def clean_method(self):
         self.tester.cleanup_artifacts()
+
+    def create_ssh_connection_to_instance_through_cc(self, instance, retry=3):
+        cc = self.get_active_cc_for_instance(instance)
+        ssh = None
+        attempts = 0
+        elapsed = 0
+        start = time.time()
+        proxy_keypath=cc.machine.ssh.keypath or None
+        while not ssh and attempts < retry:
+            attempts += 1
+            elapsed = int(time.time()-start)
+            self.debug('Attempting to ssh to instances private ip:' + str(instance.private_ip_address) +
+                       'through the cc ip:' + str(cc.hostname) + ', attempts:' +str(attempts) + "/" + str(retry) +
+                       ", elapsed:" + str(elapsed))
+            ssh = SshConnection(host=instance.private_ip_address,
+                                keypath=instance.keypath,
+                                proxy=cc.hostname,
+                                proxy_username=cc.machine.ssh.username,
+                                proxy_password=cc.machine.ssh.password,
+                                proxy_keypath=proxy_keypath)
+        if not ssh:
+            raise Exception('Could not ssh to instances private ip:' + str(instance.private_ip_address) +
+                            'through the cc ip:' + str(cc.hostname) + ', attempts:' +str(attempts) + "/" + str(retry) +
+                            ", elapsed:" + str(elapsed))
+        return ssh
+
+    def get_active_cc_for_instance(self,instance,refresh_active_cc=30):
+        elapsed = time.time()-self.cc_last_checked
+        self.cc_last_checked = time.time()
+        if elapsed > refresh_active_cc:
+            use_cached_list = False
+        else:
+            use_cached_list = True
+        cc = self.tester.service_manager.get_all_cluster_controllers(partition=instance.placement,
+                                                                     use_cached_list= use_cached_list,
+                                                                     state='ENABLED')[0]
+        return cc
 
     def ping_instance_private_ip_from_active_cc(self, instance, refresh_active_cc=30):
         self.assertIsInstance(instance, EuInstance)
@@ -174,6 +232,12 @@ class Net_Tests(EutesterTestCase):
         except:pass
         return False
 
+
+
+
+    ################################################################
+    #   Test Methods
+    ################################################################
 
 
     def test1_create_instance_in_zones_for_security_group1(self):
@@ -212,45 +276,6 @@ class Net_Tests(EutesterTestCase):
             instance.sys('chmod 0600 ' + os.path.basename(instance.keypath), code=0 )
             self.group1_instances.append(instance)
 
-    def get_active_cc_for_instance(self,instance,refresh_active_cc=30):
-        elapsed = time.time()-self.cc_last_checked
-        self.cc_last_checked = time.time()
-        if elapsed > refresh_active_cc:
-            use_cached_list = False
-        else:
-            use_cached_list = True
-        cc = self.tester.service_manager.get_all_cluster_controllers(partition=instance.placement,
-                                                                     use_cached_list= use_cached_list,
-                                                                     state='ENABLED'
-        )[0]
-        return cc
-
-
-    def create_ssh_connection_to_instance_through_cc(self, instance, retry=3):
-        cc = self.get_active_cc_for_instance(instance)
-        ssh = None
-        attempts = 0
-        elapsed = 0
-        start = time.time()
-        proxy_keypath=cc.machine.ssh.keypath or None
-        while not ssh and attempts < retry:
-            attempts += 1
-            elapsed = int(time.time()-start)
-            self.debug('Attempting to ssh to instances private ip:' + str(instance.private_ip_address) +
-                       'through the cc ip:' + str(cc.hostname) + ', attempts:' +str(attempts) + "/" + str(retry) +
-                       ", elapsed:" + str(elapsed))
-            ssh = SshConnection(host=instance.private_ip_address,
-                                keypath=instance.keypath,
-                                proxy=cc.hostname,
-                                proxy_username=cc.machine.ssh.username,
-                                proxy_password=cc.machine.ssh.password,
-                                proxy_keypath=proxy_keypath)
-        if not ssh:
-            raise Exception('Could not ssh to instances private ip:' + str(instance.private_ip_address) +
-                            'through the cc ip:' + str(cc.hostname) + ', attempts:' +str(attempts) + "/" + str(retry) +
-                            ", elapsed:" + str(elapsed))
-        return ssh
-
 
     def test2_create_instance_in_zones_for_security_group2(self):
         '''
@@ -283,17 +308,12 @@ class Net_Tests(EutesterTestCase):
             instance.cc_ssh.sys('chmod 0600 ' + os.path.basename(instance.keypath), code=0 )
             self.group2_instances.append(instance)
 
-    def authorize_group_for_instance_list(self, group, instances):
-        for instance in instances:
-            self.assertIsInstance(instance, EuInstance)
-            self.tester.authorize_group(group, cidr_ip=instance.private_ip_address + "/32")
 
-
-    def test3_test_ssh_between_instances_in_diff_sec_groups_same_zone(self, use_cidr=None):
+    def test3_test_ssh_between_instances_in_diff_sec_groups_same_zone(self, no_cidr=None):
         '''
         Definition:
         This test attempts to set up security group rules between group1 and group2 to authorize group2 access
-        from group1. If use_cidr is True security groups will be setup using cidr notication ip/mask for each instance in
+        from group1. If no_cidr is True security groups will be setup using cidr notication ip/mask for each instance in
         group1, otherwise the entire source group 1 will authorized.
         the group will be
         Test attempts to:
@@ -302,13 +322,13 @@ class Net_Tests(EutesterTestCase):
                 private ips.
         '''
 
-        if use_cidr is None:
-            use_cidr = self.args.use_cidr
-        if use_cidr:
+        if no_cidr is None:
+            no_cidr = self.args.no_cidr
+        if no_cidr:
             self.authorize_group_for_instance_list(self.group2, self.group1_instances)
         else:
             #todo: Add user id to request in eucaops...
-            self.tester.authorize_group(self.group2, src_security_group_name=self.group1.name )
+            self.tester.authorize_group(self.group2, cidr_ip=None, port=None, src_security_group_name=self.group1.name )
 
         for zone in self.zones:
             instance1 = None
