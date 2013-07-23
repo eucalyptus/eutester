@@ -364,7 +364,7 @@ class Net_Tests(EutesterTestCase):
                       + " ' uname -a'", code=0)
         self.debug('Ssh between instances passed')
 
-    def test4_attempt_unauthorized_ssh_from_testmachine_to_group2(self):
+    def test4_attempt_unauthorized_ssh_from_test_machine_to_group2(self):
         '''
         Description:
         Test attempts to verify that the local machine cannot ssh to the instances within group2 which is not authorized
@@ -396,7 +396,7 @@ if __name__ == "__main__":
         list =['test1_create_instance_in_zones_for_security_group1',
                'test2_create_instance_in_zones_for_security_group2',
                'test3_test_ssh_between_instances_in_diff_sec_groups_same_zone',
-               'test4_attempt_unauthorized_ssh_from_testmachine_to_group2']
+               'test4_attempt_unauthorized_ssh_from_test_machine_to_group2']
         ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
     for test in list:
