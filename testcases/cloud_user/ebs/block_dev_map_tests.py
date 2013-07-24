@@ -1,4 +1,35 @@
-__author__ = 'clarkmatthew'
+# Software License Agreement (BSD License)
+#
+# Copyright (c) 2009-2011, Eucalyptus Systems, Inc.
+# All rights reserved.
+#
+# Redistribution and use of this software in source and binary forms, with or
+# without modification, are permitted provided that the following conditions
+# are met:
+#
+#   Redistributions of source code must retain the above
+#   copyright notice, this list of conditions and the
+#   following disclaimer.
+#
+#   Redistributions in binary form must reproduce the above
+#   copyright notice, this list of conditions and the
+#   following disclaimer in the documentation and/or other
+#   materials provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+#
+# Author: matt.clark@eucalyptus.com
+
 '''
 This test case class is intended to help test functions and features related to block device mapping for ebs backed
 instances. The test attempts to create a base ebs-backed image created from a remote url downloaded and written to a
@@ -10,18 +41,13 @@ of the vm/guest.
 
 
 
-Some notes:
+Some notes/examples on euca2ools registration using block dev mapping:
 ec2-register -n ImageName --root-device-name /dev/sda1 -s snap-e1eb279f
 -b "/dev/sdb=ephemeral0" -b "/dev/sdh=snap-d5eb27ab" -b "/dev/sdj=:100"
 
 This command maps /dev/sda to a EBS root volume based on a snapshot, /dev/sdb to ephemeral0,
 /dev/sdh to an EBS volume based on a snapshot,
 and /dev/sdj to an empty EBS volume that is 100 GiB in size. The output is the ID for your new AMI.
-
-
-
-
-
 
 '''
 

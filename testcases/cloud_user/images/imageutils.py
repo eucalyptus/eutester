@@ -144,6 +144,7 @@ class ImageUtils(EutesterTestCase):
                      ramdisk=None,
                      block_device_mapping=None,
                      destination='/disk1/storage',
+                     arch='x86_64',
                      debug=False,
                      interbundle_timeout=120, 
                      time_per_gig=None):
@@ -174,6 +175,8 @@ class ImageUtils(EutesterTestCase):
             cmdargs = cmdargs + " --block-device-mapping " + str(block_device_mapping)
         if destination:
             cmdargs = cmdargs + " --destination " + str(destination)
+        if arch:
+            cmdargs = cmdargs + " --arch " + str(arch)
         if debug:
             cmdargs = cmdargs + " --debug "
         

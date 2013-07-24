@@ -384,16 +384,16 @@ class EC2ops(Eutester):
 
     def delete_group(self, group):
         """
-        Delete the group object passed in and check that it no longer shows up
+        Delete the security group object passed in and check that it no longer shows up
 
         :param group: Group object to delete and check
         :return: bool whether operation succeeded
         """
         name = group.name
-        self.debug( "Sending delete for group: " + name )
+        self.debug( "Sending delete for security group: " + name )
         group.delete()
         if self.check_group(name):
-            self.fail("Group found after attempt to delete it")
+            self.fail("Group still found after attempt to delete it")
             return False
         return True
 
@@ -416,7 +416,15 @@ class EC2ops(Eutester):
             return True
 
     @Eutester.printinfo
-    def authorize_group_by_name(self,group_name="default", port=22, protocol="tcp", cidr_ip="0.0.0.0/0"):
+    def authorize_group_by_name(self,
+                                group_name="default",
+                                port=22,
+                                protocol="tcp",
+                                cidr_ip="0.0.0.0/0",
+                                src_security_group=None,
+                                src_security_group_name=None,
+                                src_security_group_owner_id=None,
+                                force_args=False):
         """
         Authorize the group with group_name
 
@@ -424,14 +432,39 @@ class EC2ops(Eutester):
         :param port: Port to open, default=22
         :param protocol: Protocol to authorize, default=tcp
         :param cidr_ip: CIDR subnet to authorize, default="0.0.0.0/0" everything
+        :param src_security_group_name: Grant access to 'group' from src_security_group_name, default=None
         :return:
 
         """
+        if not force_args:
+            if src_security_group or src_security_group_name:
+                cidr_ip=None
+                port=None
+                protocol=None
+            if src_security_group:
+                src_security_group_owner_id= src_security_group_owner_id or src_security_group.owner_id
+                src_security_group_name = src_security_group_name or src_security_group.name
+
+            if src_security_group_name and not src_security_group_owner_id:
+                    group = self.get_security_group(name=src_security_group_name)
+                    src_security_group_owner_id = group.owner_id
+
         old_api_version = self.ec2.APIVersion
         try:
-            self.ec2.APIVersion = "2009-10-31"
-            self.debug( "Attempting authorization of " + group_name + " on port " + str(port) + " " + protocol )
-            self.ec2.authorize_security_group_deprecated(group_name,ip_protocol=protocol, from_port=port, to_port=port, cidr_ip=cidr_ip)
+            #self.ec2.APIVersion = "2009-10-31"
+            if src_security_group_name:
+                self.debug( "Attempting authorization of " + group_name + " from " + str(src_security_group_name) +
+                            " on port " + str(port) + " " + str(protocol) )
+            else:
+                self.debug( "Attempting authorization of " + group_name + " on port " + str(port) + " " + str(protocol) )
+            self.ec2.authorize_security_group_deprecated(group_name,
+                                                         ip_protocol=protocol,
+                                                         from_port=port,
+                                                         to_port=port,
+                                                         cidr_ip=cidr_ip,
+                                                         src_security_group_name=src_security_group_name,
+                                                         src_security_group_owner_id=src_security_group_owner_id,
+                                                         )
             return True
         except self.ec2.ResponseError, e:
             if e.code == 'InvalidPermission.Duplicate':
@@ -442,7 +475,15 @@ class EC2ops(Eutester):
             self.ec2.APIVersion = old_api_version
 
 
-    def authorize_group(self, group, port=22, protocol="tcp", cidr_ip="0.0.0.0/0"):
+    def authorize_group(self,
+                        group,
+                        port=22,
+                        protocol="tcp",
+                        cidr_ip="0.0.0.0/0",
+                        src_security_group=None,
+                        src_security_group_name=None,
+                        src_security_group_owner_id=None,
+                        force_args=False):
         """
         Authorize the boto.group object
 
@@ -450,10 +491,19 @@ class EC2ops(Eutester):
         :param port: Port to open, default=22
         :param protocol: Protocol to authorize, default=tcp
         :param cidr_ip: CIDR subnet to authorize, default="0.0.0.0/0" everything
+        :param src_security_group_name: Grant access to 'group' from src_security_group_name, default=None
+        :param force_args: boolean to send arguments w/o the test method sanitizing them
         :return: True on success
         :raise: Exception if operation fails
         """
-        return self.authorize_group_by_name(group.name, port, protocol, cidr_ip)
+        return self.authorize_group_by_name(group.name,
+                                            port=port,
+                                            protocol=protocol,
+                                            cidr_ip=cidr_ip,
+                                            src_security_group=src_security_group,
+                                            src_security_group_name=src_security_group_name,
+                                            src_security_group_owner_id=src_security_group_owner_id,
+                                            force_args=force_args)
     
     def terminate_single_instance(self, instance, timeout=300 ):
         """
