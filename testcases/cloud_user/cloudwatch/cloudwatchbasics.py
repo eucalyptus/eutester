@@ -24,18 +24,19 @@ class CloudWatchBasics(EutesterTestCase):
         else:
             self.tester = Eucaops(config_file=self.args.config, password=self.args.password, credpath=self.args.credpath)
         self.start_time =  str(int(time.time()))
-        self.zone = self.tester.get_zones().pop()
+        self.zone = self.tester.get_zones()
         self.namespace = 'Namespace-' + self.start_time
         self.keypair = self.tester.add_keypair()
         self.group = self.tester.add_group()
-        ### setup AutoScaling & Alarms
+        ### Setup AutoScaling
         self.setUpAutoscaling()
-        self.setUpAlarms()
-        ### Wait for metrics to populate, timeout 30 minutes
-        ## Create Dimensions used in tests
+        ### Create Dimensions used in tests
         self.instanceDimension = newDimension('InstanceId', self.instanceid)
         self.volumeDimension = newDimension('VolumeId', self.volume.id)
         self.autoScalingDimension = newDimension('AutoScalingGroupName', self.auto_scaling_group_name)
+        ### Setup Alarms
+        self.setUpAlarms()
+        ### Wait for metrics to populate, timeout 30 minute
         self.tester.wait_for_result(self.IsMetricsListPopulated, result=True, timeout=1800)
 
 
@@ -254,7 +255,7 @@ class CloudWatchBasics(EutesterTestCase):
             state = self.instance.state
         self.debug(self.instanceid + ' is now running.')
         ### Create and attach a volume
-        self.volume = self.tester.create_volume(self.zone)
+        self.volume = self.tester.create_volume(self.zone.pop())
         self.tester.attach_volume(self.instance, self.volume, '/dev/sdf' )
         ### Get the newly created policies.
         self.policy_exact = self.tester.autoscale.get_all_policies(policy_names=[self.exact])
