@@ -297,11 +297,11 @@ class S3ops(Eutester):
         elif canned_acl == "bucket-owner-read":
             if bucket_owner_id is None:
                 raise Exception("No bucket_owner_id passed when trying to create bucket-owner-read canned acl ")
-            built_acl.add_grant(Grant(permission="READ",user_id=bucket_owner_id))
+            built_acl.add_grant(Grant(permission="READ",id=bucket_owner_id))
         elif canned_acl == "bucket-owner-full-control":
             if bucket_owner_id is None:
                 raise Exception("No bucket_owner_id passed when trying to create bucket-owner-full-control canned acl ")
-            built_acl.add_grant(Grant(permission="FULL_CONTROL",user_id=bucket_owner_id))        
+            built_acl.add_grant(Grant(permission="FULL_CONTROL",id=bucket_owner_id))
         return built_acl
     
     def check_acl_equivalence(self, acl1=None, acl2=None):

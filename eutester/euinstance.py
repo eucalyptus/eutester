@@ -309,7 +309,12 @@ class EuInstance(Instance, TaggedResource):
             try_non_root_exec = self.try_non_root_exec
         if self.username != 'root' and try_non_root_exec:
             if self.use_sudo:
-                return self.sys_with_sudo(cmd, verbose=verbose, code=code, enable_debug=enable_debug, timeout=timeout)
+                results = self.sys_with_sudo(cmd, verbose=verbose, code=code, enable_debug=enable_debug, timeout=timeout)
+                for content in results:
+                    if content.startswith("sudo"):
+                        results.remove(content)
+                        break
+                return results
             else:
                 return self.sys_with_su(cmd, verbose=verbose, code=code, enable_debug=enable_debug, timeout=timeout)
 
@@ -620,7 +625,7 @@ class EuInstance(Instance, TaggedResource):
             return self.sys("curl http://169.254.169.254/"+str(prefix)+str(element_path), code=0)
         except:
             return self.sys("curl http://" + self.tester.get_ec2_ip()  + ":8773/"+str(prefix) + str(element_path), code=0)
-        
+          
     def set_block_device_prefix(self):
         return self.set_rootfs_device()
 

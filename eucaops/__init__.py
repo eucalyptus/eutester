@@ -518,7 +518,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
             component.lower()
             machines_with_role = [machine for machine in self.config['machines'] if re.search(component, " ".join(machine.components))]
             if len(machines_with_role) == 0:
-                raise Exception("Could not find component "  + component + " in list of machines")
+                raise IndexError("Could not find component "  + component + " in list of machines")
             else:
                 return machines_with_role
 

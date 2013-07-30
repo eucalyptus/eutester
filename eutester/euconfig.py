@@ -621,7 +621,16 @@ class EuConfig():
                     #self.debug("Adding line to legacy buf:"+str(line))
                     buf=buf+line
         return buf
-    
+
+    def uncomment_line(self, config_item):
+        new_conf = []
+        for line in self.lines:
+            if re.match("^\s+#",line) and re.search(config_item,line):
+                #self.debug("Ignoring legacy line:"+str(line))
+                new_conf.append(line.strip('#'))
+            else:
+                new_conf.append(line)
+        self.lines = new_conf
     
     def get_config_buf(self,lines=None, default_section_name=None):
         '''

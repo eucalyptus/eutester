@@ -2346,7 +2346,7 @@ class EC2ops(Eutester):
         else:
             enabled=False
         start = time.time()
-            
+        
         self.debug( "Attempting to run "+ str(image.root_device_type)  +" image " + str(image) + " in group " + str(group))
         reservation = image.run(key_name=keypair,security_groups=[group],instance_type=type, placement=zone,
                                 min_count=min, max_count=max, user_data=user_data, addressing_type=addressing_type,
