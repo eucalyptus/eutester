@@ -124,7 +124,7 @@ class File_Util():
         if self.ssh:
             self.ssh.sys('mv ' + str(from_path) + " " + str(to_path))
         else:
-            os.remove(self.filepath)
+            os.remove(to_path)
             os.rename(from_path, to_path)
 
     def get_md5(self, blocksize=65536):
