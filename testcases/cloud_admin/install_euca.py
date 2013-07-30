@@ -2,6 +2,7 @@ __author__ = 'viglesias'
 import re
 from eucaops import Eucaops
 from eutester.eutestcase import EutesterTestCase
+#from eutester.machine import Machine
 
 class Install(EutesterTestCase):
 
@@ -14,15 +15,21 @@ class Install(EutesterTestCase):
         self.parser.add_argument("--nogpg",action='store_true')
         self.parser.add_argument("--nightly",action='store_true')
         self.parser.add_argument("--lvm-extents")
-        self.parser.add_argument("--root-lv")
+        self.parser.add_argument("--vnet-mode", default="MANAGED-NOVLAN")
+        self.parser.add_argument("--vnet-subnet", default="172.17.0.0")
+        self.parser.add_argument("--vnet-netmask", default="255.255.0.0")
+        self.parser.add_argument("--vnet-publicips")
+        self.parser.add_argument("--vnet-dns", default="8.8.8.8")
+        self.parser.add_argument("--root-lv", default="/dev/vg01/")
+        self.parser.add_argument("--block-device-manager", default="das")
         if extra_args:
             for arg in extra_args:
                 self.parser.add_argument(arg)
         self.get_args()
         # Setup basic eutester object
         self.tester = Eucaops( config_file=self.args.config_file, password=self.args.password, download_creds=download_creds)
-        if not self.args.branch and not self.args.euca_url and not self.args.enterprise_url:
-            self.args.branch = self.args.upgrade_to_branch
+        #if not self.args.branch and not self.args.euca_url and not self.args.enterprise_url:
+        #    self.args.branch = self.args.upgrade_to_branch
 
     def clean_method(self):
         pass
@@ -148,6 +155,31 @@ class Install(EutesterTestCase):
             timeout -= 20
             self.tester.sleep(20)
 
+    def sync_keys(self):
+        ### Sync CLC SSH key to all machines
+        clc = self.tester.get_component_machines("clc")[0]
+        clc_pub_key = clc.sys("cat ~/.ssh/id_rsa.pub")[0]
+        for machine in self.tester.get_component_machines():
+            machine.sys("echo " + clc_pub_key + " >> ~/.ssh/authorized_keys")
+
+        ### Sync CC keys to the proper NCs
+        try:
+            for cluster in ["00", "01", "02","03"]:
+                for machine in self.tester.get_component_machines("cc" + cluster):
+                    cc_pub_key = machine.sys("cat ~/.ssh/id_rsa.pub")[0]
+                    for nc in self.tester.get_component_machines("nc" + cluster):
+                        nc.sys("echo " + clc_pub_key + " >> ~/.ssh/authorized_keys")
+        except IndexError:
+            pass
+
+    def remove_host_check(self):
+        for machine in self.tester.get_component_machines():
+            ssh_config_file = 'Host *\nStrictHostKeyChecking no\nUserKnownHostsFile=/dev/null\n'
+            #assert isinstance(machine, Machine)
+            file = machine.sftp.open("/root/.ssh/config", "w")
+            file.write(ssh_config_file)
+            file.close()
+
     def register_components(self):
         clcs = self.tester.get_component_machines("clc")
         if len(clcs) > 1:
@@ -183,23 +215,18 @@ class Install(EutesterTestCase):
                 clcs[0].sys("euca_conf --register-sc -C storage" + str(cluster_number-1) +
                             "B -P cluster" + str(cluster_number-1) + " -H " + sc.hostname)
 
-        nodes = self.tester.get_component_machines("nc")
-        registered_nodes = {1:None, 2:None,3:None,4:None,5:None,6:None,7:None,8:None}
-        cluster_number = 1
-        for node in nodes:
-            if not registered_nodes[cluster_number]:
-                registered_nodes[cluster_number] = [node]
-                for cluster in registered_clusters[cluster_number]:
-                    cluster.sys("euca_conf --register-nodes " + node.hostname)
-                cluster_number += 1
-            else:
-                registered_nodes[cluster_number-1].append(node)
-                for cluster in registered_clusters[cluster_number-1]:
-                    cluster.sys("euca_conf --register-nodes " + node.hostname)
-        self.clc_service = self.tester.service_manager.get_enabled_clc()
+        try:
+            for cluster in ["00", "01", "02","03"]:
+                for nc in self.tester.get_component_machines("nc" + cluster):
+                    for cc in self.tester.get_component_machines("cc" + cluster):
+                        cc.sys("euca_conf --register-nodes " + nc.hostname)
+        except IndexError:
+            pass
 
     def set_block_storage_manager(self):
-        enabled_clc = self.tester.service_manager.wait_for_service(self.clc_service)
+        if not hasattr(self.tester, 'service_manager'):
+            self.tester = Eucaops(config_file=self.args.config_file, password=self.args.password)
+        enabled_clc = self.tester.service_manager.get_enabled_clc()
         self.zones = self.tester.get_zones()
         for zone in self.zones:
             ebs_manager = "overlay"
@@ -214,21 +241,36 @@ class Install(EutesterTestCase):
                             ebs_manager = "netapp"
                         if re.search("EmcVnxProvider", self.args.san_provider):
                             ebs_manager = "emc-fastsnap"
+            else:
+                ebs_manager = self.args.block_device_manager
             enabled_clc.machine.sys("source " + self.tester.credpath + "/eucarc && euca-modify-property -p " + zone + ".storage.blockstoragemanager=" + ebs_manager,code=0)
+            enabled_clc.machine.sys("source " + self.tester.credpath + "/eucarc && euca-modify-property -p " + zone + ".storage.dasdevice=" + self.args.root_lv,code=0)
 
+    def configure_network(self):
+        for machine in self.tester.get_component_machines("cc"):
+            machine.eucalyptus_conf.VNET_MODE.config_file_set_this_line(self.args.vnet_mode)
+            machine.config.uncomment_line("VNET_SUBNET")
+            machine.config.uncomment_line("VNET_NETMASK")
+            machine.config.uncomment_line("VNET_PUBLICIPS")
+            machine.config.uncomment_line("VNET_DNS")
+            machine.eucalyptus_conf.update()
+            machine.eucalyptus_conf.VNET_SUBNET.config_file_set_this_line(self.args.vnet_subnet)
+            machine.eucalyptus_conf.VNET_NETMASK.config_file_set_this_line(self.args.vnet_netmask)
+            machine.eucalyptus_conf.VNET_PUBLICIPS.config_file_set_this_line(self.args.vnet_publicips)
+            machine.eucalyptus_conf.VNET_DNS.config_file_set_this_line(self.args.vnet_dns)
+
+        for machine in self.tester.get_component_machines("nc"):
+            machine.eucalyptus_conf.VNET_MODE.config_file_set_this_line(self.args.vnet_mode)
 
     def clean_method(self):
         pass
 
 
     def InstallEuca(self):
-        self.add_euca_repo()
-        if self.args.enterprise_url:
-            self.add_enterprise_repo()
-        self.extend_logical_volume()
-        self.install_packages()
         self.initialize_db()
-        self.setup_bridges()
+        self.sync_keys()
+        self.remove_host_check()
+        self.configure_network()
         self.start_components()
         self.wait_for_creds()
         self.register_components()

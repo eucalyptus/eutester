@@ -625,40 +625,7 @@ class EuInstance(Instance, TaggedResource):
             return self.sys("curl http://169.254.169.254/"+str(prefix)+str(element_path), code=0)
         except:
             return self.sys("curl http://" + self.tester.get_ec2_ip()  + ":8773/"+str(prefix) + str(element_path), code=0)
-        
-    def get_userdata(self, prefix='latest/user-data/'): 
-        import magic
-        import gzip
-        """Return the string of userdata from the element path provided"""
-        ### If i can reach the userdata service ip use it to get userdata otherwise try the clc directly
-        try:
-            self.sys("ping -c 1 169.254.169.254", code=0, verbose=False)
-            user_data = ''.join(self.sys("curl http://169.254.169.254/"+str(prefix), code=0))
-            if os.path.isfile(user_data):
-                file_type = magic.from_file(user_data, mime=True)
-                if re.search("text", file_type):
-                    with open(user_data) as user_data_file:
-                        file_data = user_data_file.read()
-                elif re.search("gzip", file_type):
-                    gzip_file = gzip.GzipFile(fileobj=open(user_data))
-                    file_data = gzip_file.read()
-                return re.escape(file_data)
-            else:
-                return re.escape(user_data)
-        except:
-            user_data = ''.join(self.sys("curl http://" + self.tester.get_ec2_ip()  + ":8773/"+str(prefix), code=0))
-            if os.path.isfile(user_data):
-                file_type = magic.from_file(user_data, mime=True)
-                if re.search("text", file_type):
-                    with open(user_data) as user_data_file:
-                        file_data = user_data_file.read()
-                elif re.search("gzip", file_type):
-                    gzip_file = gzip.GzipFile(fileobj=open(user_data))
-                    file_data = gzip_file.read()
-                return re.escape(file_data)
-            else:
-                return re.escape(user_data)
-        
+          
     def set_block_device_prefix(self):
         return self.set_rootfs_device()
 
