@@ -15,7 +15,8 @@ from eucaops import EC2ops
 import os
 import re
 import random
-
+import magic
+import gzip
 
 class InstanceBasics(EutesterTestCase):
     def __init__( self, name="InstanceBasics", credpath=None, region=None, config_file=None, password=None, emi=None, zone=None,
@@ -209,6 +210,38 @@ class InstanceBasics(EutesterTestCase):
         self.set_reservation(reservation)
         return reservation
 
+    def UserData(self):
+        """
+        This case was developed to test the user-data service of an instance for consistency.
+        This case does a comparison of the user data passed in by the user-data argument to 
+        the data supplied by the user-data service within the instance. Supported 
+        user data formats can be found here: https://cloudinit.readthedocs.org/en/latest/topics/format.html
+        If this test fails, the test case will error out; logging the results.
+        """
+        if not self.reservation:
+            reservation = self.tester.run_instance(**self.run_instance_params)
+        else:
+            reservation = self.reservation
+        for instance in reservation.instances:
+            """
+            Test to see if user data value is a file; if its a file, convert to string then compare,
+            if not, do a string compare
+            """     
+            if os.path.isfile(self.args.user_data):
+                file_type = magic.from_file(self.args.user_data, mime=True)
+                if re.search("text", file_type):
+                    with open(self.args.user_data) as user_data_file:
+                        user_data = user_data_file.read()
+                elif re.search("gzip", file_type):
+                    gzip_file = gzip.GzipFile(fileobj=open(self.args.user_data))
+                    user_data = gzip_file.read() 
+                self.assertTrue(re.search(instance.get_userdata(), user_data), 'Incorrect User Data File')
+            else:
+                self.assertTrue(re.search(instance.get_userdata(), self.args.user_data), 'Incorrect User Data String')
+            
+        self.set_reservation(reservation)
+        return reservation
+    
     def DNSResolveCheck(self, zone=None):
         """
         This case was developed to test DNS resolution information for public/private DNS
