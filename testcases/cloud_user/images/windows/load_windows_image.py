@@ -14,7 +14,7 @@ testcase.setup_parser(testname='load_windows_image.py',
                       testlist=False)
 
 testcase.parser.add_argument('--url',help='URL containing remote windows image to create EMI from', default=None)
-testcase.parser.add_argument('--file',dest='image_file', help='File path to create windows EMI from', default=None)
+testcase.parser.add_argument('--file',dest='image_file_path', help='File path to create windows EMI from', default=None)
 testcase.parser.add_argument('--workip',help='The IP of the machine that the operation will be performed on', default=None)
 testcase.parser.add_argument('--destpath',help='The path on the workip, that this operation will be performed on', default='/disk1/storage')
 testcase.parser.add_argument('--urlpass', dest='wget_password',help='Password needed to retrieve remote url', default=None)
@@ -25,14 +25,17 @@ testcase.parser.add_argument('--bucket',dest='bucketname', help='bucketname', de
 
 args = testcase.get_args()
 
-if (not args.url and not args.image_file) or (args.url and args.image_file):
+if (not args.url and not args.image_file_path) or (args.url and args.image_file_path):
     raise Exception('Must specify either a URL or FILE path to create Windows EMI from')
 if args.workip:
     machine = Machine(hostname=args.workip,password=args.password)
 
 WinTests = testcase.do_with_args(WindowsTests,work_component=machine)
 
-test = testcase.create_testunit_from_method(WinTests.create_windows_emi_from_url)
+if args.image_file_path:
+    test = testcase.create_testunit_from_method(WinTests.create_windows_emi_from_file)
+else:
+    test = testcase.create_testunit_from_method(WinTests.create_windows_emi_from_url)
 
 testcase.run_test_case_list([test], eof=True, clean_on_exit=False, printresults=True)
 
