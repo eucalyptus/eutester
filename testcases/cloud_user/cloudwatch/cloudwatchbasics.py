@@ -14,9 +14,13 @@ class CloudWatchBasics(EutesterTestCase):
     def __init__(self, extra_args= None):
         self.setuptestcase()
         self.setup_parser()
+        self.parser.add_argument('--clean_on_exit',
+                                 action='store_true', default=True,
+                                 help='Boolean, used to flag whether to run clean up method after running test list)')
         if extra_args:
             for arg in extra_args:
                 self.parser.add_argument(arg)
+
         self.get_args()
         ### Setup basic eutester object
         if self.args.region:
@@ -411,5 +415,5 @@ if __name__ == '__main__':
         unit_list.append( testcase.create_testunit_by_name(test) )
 
     ### Run the EutesterUnitTest objects
-    result = testcase.run_test_case_list(unit_list,clean_on_exit=False)
+    result = testcase.run_test_case_list(unit_list,clean_on_exit=testcase.args.clean_on_exit)
     exit(result)

@@ -195,7 +195,7 @@ class ImageUtils(EutesterTestCase):
         manifest = None
         for line in out['output']:
             line = str(line)
-            if re.search('Generating manifest',line):
+            if re.search("(Generating|Wrote) manifest",line):
                 manifest = line.split()[2]
                 break
         if manifest is None:
@@ -260,8 +260,8 @@ class ImageUtils(EutesterTestCase):
             raise Exception('upload_bundle "'+str(manifest)+'" failed. Errcode:'+str(out['status']))
         for line in out['output']:
             line = str(line)
-            if re.search('Uploaded image',line):
-                upmanifest = line.split()[3]
+            if re.search('Uploaded', line) and re.search('manifest', line):
+                upmanifest = line.split().pop()
                 break
         if upmanifest is None:
             raise Exception('Failed to find upload manifest from upload_bundle command')

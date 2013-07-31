@@ -368,7 +368,7 @@ class WindowsTests(EutesterTestCase):
                                            time_per_gig = (time_per_gig or self.time_per_gig) )
         
     def create_windows_emi_from_file(self,
-                                     fpath,
+                                     image_file_path,
                                      component = None, 
                                      component_credpath = None,
                                      bucketname = None, 
@@ -382,7 +382,8 @@ class WindowsTests(EutesterTestCase):
         Work is done on a given machine and requires euca2ools present on that machine. 
         Returns the emi of the registered image
         '''
-        return self.iu.create_emi_from_url( 
+        return self.iu.create_emi_from_url(
+                                           url = None,
                                            component = (component or self.component), 
                                            bucketname = (bucketname or self.bucketname), 
                                            component_credpath = (component_credpath or self.component_credpath), 
@@ -390,7 +391,7 @@ class WindowsTests(EutesterTestCase):
                                            interbundle_timeout = (inter_bundle_timeout or self.inter_bundle_timeout), 
                                            upload_timeout = (upload_timeout or self.upload_timeout),
                                            destpath = (destpath or self.destpath),
-                                           filepath = fpath,
+                                           filepath = image_file_path,
                                            time_per_gig = (time_per_gig or self.time_per_gig) )
         
     def test_run_windows_emi(self,

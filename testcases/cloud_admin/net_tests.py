@@ -327,7 +327,6 @@ class Net_Tests(EutesterTestCase):
         if no_cidr:
             self.authorize_group_for_instance_list(self.group2, self.group1_instances)
         else:
-            #todo: Add user id to request in eucaops...
             self.tester.authorize_group(self.group2, cidr_ip=None, port=None, src_security_group_name=self.group1.name )
 
         for zone in self.zones:

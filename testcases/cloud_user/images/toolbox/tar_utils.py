@@ -153,7 +153,7 @@ class Local_Tarutils(Tarutils):
     
     def __init__(self, uri, headersize=512, printmethod=None, verbose=True):
         self.tarfile = None
-        tarutil.__init__(self, uri, headersize=512, printmethod=None, verbose=True)
+        Tarutils.__init__(self, uri, headersize=512, printmethod=None, verbose=True)
         
         
     def update(self):
@@ -161,7 +161,7 @@ class Local_Tarutils(Tarutils):
         #reset file in case it has changed since last update
         self.close()
         self.tarfile = tarfile.open(name=self.uri, mode = self.fileformat)
-        tarutil.update(self)
+        Tarutils.update(self)
     
     
     def get_members(self, uri=None, headersize=None):
@@ -287,7 +287,7 @@ class Http_Tarutils(Tarutils):
         filesize = filesize or self.filesize
         freespace = self.get_freespace(destpath)
         if member.size > freespace:
-            raise Exception(str(memberpath)+":"+str(member.size)+" exceeds destpath freespace:"+(destpath)+":"+str(freespace) )
+            raise Exception(str(member.name)+":"+str(member.size)+" exceeds destpath freespace:"+(destpath)+":"+str(freespace) )
         start = member.offset_data
         offset = member.size
         destfile=str(destpath).rstrip('/')+'/'+str(member.name)

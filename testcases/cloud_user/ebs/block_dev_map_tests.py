@@ -250,13 +250,13 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
 
 
 
-    def setup_bfebs_instance_volume_and_snapshots_from_url(self, url=None, create_test_vol=True):
+    def setup_bfebs_instance_volume_and_snapshots_from_url(self, url=None, create_test_vol=True, time_per_gig=100):
 
         url = url or self.url
         volumes = []
         self.image_bytes = self.get_remote_file_size_via_http(url=url)
         self.image_gigs = int(math.ceil(float(self.image_bytes)/self.gig) or 1)
-
+        curl_timeout= self.image_gigs * time_per_gig
         self.status('Attempting to launch instance store instance...')
         instance = self.tester.run_image(self.image,
                                               keypair=self.keypair.name,
@@ -276,13 +276,15 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         self.tester.monitor_created_euvolumes_to_state(volumes=volumes)
         self.status('Copy the remote bfebs image into a volume and create snapshot from it...')
         instance.attach_volume(self.build_image_volume)
-        instance.sys("curl "+url+" > "+ self.build_image_volume.guestdev+" && sync")
+        instance.sys("curl "+url+" > "+ self.build_image_volume.guestdev+" && sync", timeout=curl_timeout)
         instance.md5_attached_euvolume(self.build_image_volume)
         self.build_image_snapshot = self.tester.create_snapshots(volume=self.build_image_volume)[0]
         #update test resources with tags...
         self.build_image_snapshot.add_tag(self.build_image_snapshot_tag_name)
         self.build_image_snapshot.add_tag('md5',self.build_image_volume.md5)
         self.build_image_snapshot.add_tag('md5len',self.build_image_volume.md5len)
+        self.build_image_snapshot.add_tag('src_url', str(url))
+        self.build_image_volume.add_tag('src_url', str(url))
         self.build_image_volume.add_tag('md5', self.build_image_volume.md5)
         self.build_image_volume.add_tag('md5len', self.build_image_volume.md5len)
 
