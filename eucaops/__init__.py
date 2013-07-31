@@ -361,13 +361,13 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
             if vol in euvolumes:
                 euvolumes.remove(vol)
         self.test_resources['volumes'] = euvolumes
+        timeout = min_timeout + (len(volumes) * timeout_per_vol)
         #If detaching wait for detaching to transition to detached...
         if detaching:
-            timeout = min_timeout + (len(detaching) * timeout_per_vol)
             self.monitor_euvolumes_to_status(detaching, status='available', attached_status=None,timeout=timeout)
         self.debug('clean_up_volumes: Deleteing volumes now...')
         self.print_euvolume_list(euvolumes)
-        self.delete_volumes(euvolumes)
+        self.delete_volumes(euvolumes, timeout=timeout)
 
                     
     def get_current_resources(self,verbose=False):
