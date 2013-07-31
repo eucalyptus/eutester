@@ -241,13 +241,13 @@ class InstanceBasics(EutesterTestCase):
             # Check to see if nslookup was able to resolve
             assert isinstance(instance, EuInstance)
             # Check nslookup to resolve public DNS Name to local-ipv4 address
-            self.assertTrue(instance.found("nslookup " + instance.public_dns_name, instance.private_ip_address), "Incorrect DNS resolution for hostname.")
+            self.assertTrue(instance.found("nslookup " + instance.public_dns_name + " " + self.tester.ec2.host, instance.private_ip_address), "Incorrect DNS resolution for hostname.")
             # Check nslookup to resolve public-ipv4 address to public DNS name
-            self.assertTrue( instance.found("nslookup " +  instance.ip_address, instance.public_dns_name), "Incorrect DNS resolution for public IP address")
+            self.assertTrue( instance.found("nslookup " +  instance.ip_address + " " + self.tester.ec2.host, instance.public_dns_name), "Incorrect DNS resolution for public IP address")
             # Check nslookup to resolve private DNS Name to local-ipv4 address
-            self.assertTrue(instance.found("nslookup " + instance.private_dns_name, instance.private_ip_address), "Incorrect DNS resolution for private hostname.")
+            self.assertTrue(instance.found("nslookup " + instance.private_dns_name + " " + self.tester.ec2.host, instance.private_ip_address), "Incorrect DNS resolution for private hostname.")
             # Check nslookup to resolve local-ipv4 address to private DNS name
-            self.assertTrue(instance.found("nslookup " +  instance.private_ip_address, instance.private_dns_name), "Incorrect DNS resolution for private IP address")
+            self.assertTrue(instance.found("nslookup " +  instance.private_ip_address + " " + self.tester.ec2.host, instance.private_dns_name), "Incorrect DNS resolution for private IP address")
         self.set_reservation(reservation)
         return reservation
 
@@ -378,8 +378,8 @@ if __name__ == "__main__":
     instancetestsuite= testcase.do_with_args(InstanceBasics)
 
     ### Either use the list of tests passed from config/command line to determine what subset of tests to run
-    list = testcase.args.tests or [ "BasicInstanceChecks",  "Reboot", "MetaData", "ElasticIps", "MultipleInstances",
-                                    "LargestInstance", "PrivateIPAddressing", "Churn", "DNSResolveCheck"]
+    list = testcase.args.tests or [ "BasicInstanceChecks", "DNSResolveCheck", "Reboot", "MetaData", "ElasticIps", "MultipleInstances",
+                                    "LargestInstance", "PrivateIPAddressing", "Churn"]
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = []
     for test in list:
