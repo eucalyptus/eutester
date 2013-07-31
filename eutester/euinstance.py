@@ -627,7 +627,7 @@ class EuInstance(Instance, TaggedResource):
             return self.sys("curl http://" + self.tester.get_ec2_ip()  + ":8773/"+str(prefix) + str(element_path), code=0)
         
     def get_userdata(self, prefix='latest/user-data/'): 
-        import magic
+        import subprocess
         import gzip
         """Return the string of userdata from the element path provided"""
         ### If i can reach the userdata service ip use it to get userdata otherwise try the clc directly
@@ -635,7 +635,7 @@ class EuInstance(Instance, TaggedResource):
             self.sys("ping -c 1 169.254.169.254", code=0, verbose=False)
             user_data = ''.join(self.sys("curl http://169.254.169.254/"+str(prefix), code=0))
             if os.path.isfile(user_data):
-                file_type = magic.from_file(user_data, mime=True)
+                file_type = subprocess.Popen("file -b " + user_data, shell=True, stdout=subprocess.PIPE).communicate()[0]
                 if re.search("text", file_type):
                     with open(user_data) as user_data_file:
                         file_data = user_data_file.read()

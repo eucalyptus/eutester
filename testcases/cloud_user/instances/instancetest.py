@@ -15,7 +15,7 @@ from eucaops import EC2ops
 import os
 import re
 import random
-import magic
+import subprocess
 import gzip
 
 class InstanceBasics(EutesterTestCase):
@@ -219,7 +219,7 @@ class InstanceBasics(EutesterTestCase):
             if not, do a string compare
             """     
             if os.path.isfile(self.args.user_data):
-                file_type = magic.from_file(self.args.user_data, mime=True)
+                file_type = subprocess.Popen("file -b " + self.args.user_data, shell=True, stdout=subprocess.PIPE).communicate()[0]
                 if re.search("text", file_type):
                     with open(self.args.user_data) as user_data_file:
                         user_data = user_data_file.read()
