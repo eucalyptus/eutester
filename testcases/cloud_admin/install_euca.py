@@ -21,6 +21,7 @@ class Install(EutesterTestCase):
         self.parser.add_argument("--vnet-publicips")
         self.parser.add_argument("--vnet-dns", default="8.8.8.8")
         self.parser.add_argument("--root-lv", default="/dev/vg01/")
+        self.parser.add_argument("--dnsdomain")
         self.parser.add_argument("--block-device-manager", default="das")
         if extra_args:
             for arg in extra_args:
@@ -155,7 +156,7 @@ class Install(EutesterTestCase):
             timeout -= 20
             self.tester.sleep(20)
 
-    def sync_keys(self):
+    def sync_ssh_keys(self):
         ### Sync CLC SSH key to all machines
         clc = self.tester.get_component_machines("clc")[0]
         clc_pub_key = clc.sys("cat ~/.ssh/id_rsa.pub")[0]
@@ -164,7 +165,7 @@ class Install(EutesterTestCase):
 
         ### Sync CC keys to the proper NCs
         try:
-            for cluster in ["00", "01", "02","03"]:
+            for cluster in ["00", "01", "02", "03"]:
                 for machine in self.tester.get_component_machines("cc" + cluster):
                     cc_pub_key = machine.sys("cat ~/.ssh/id_rsa.pub")[0]
                     for nc in self.tester.get_component_machines("nc" + cluster):
@@ -243,8 +244,8 @@ class Install(EutesterTestCase):
                             ebs_manager = "emc-fastsnap"
             else:
                 ebs_manager = self.args.block_device_manager
-            enabled_clc.machine.sys("source " + self.tester.credpath + "/eucarc && euca-modify-property -p " + zone + ".storage.blockstoragemanager=" + ebs_manager,code=0)
-            enabled_clc.machine.sys("source " + self.tester.credpath + "/eucarc && euca-modify-property -p " + zone + ".storage.dasdevice=" + self.args.root_lv,code=0)
+            self.tester.modify_property("storage.blockstoragemanager", ebs_manager)
+            self.tester.modify_property("storage.dasdevice", self.args.root_lv)
 
     def configure_network(self):
         for machine in self.tester.get_component_machines("cc"):
@@ -262,13 +263,24 @@ class Install(EutesterTestCase):
         for machine in self.tester.get_component_machines("nc"):
             machine.eucalyptus_conf.VNET_MODE.config_file_set_this_line(self.args.vnet_mode)
 
+    def setup_dns(self):
+        if not hasattr(self.tester, 'service_manager'):
+            self.tester = Eucaops(config_file=self.args.config_file, password=self.args.password)
+        self.tester.modify_property("bootstrap.webservices.use_dns_delegation", "true")
+        self.tester.modify_property("bootstrap.webservices.use_instance_dns", "true")
+        if self.args.dnsdomain:
+            self.tester.modify_property("system.dns.dnsdomain", self.args.dnsdomain)
+        else:
+            hostname = self.tester.service_manager.get_enabled_clc().machine.sys('hostname')[0].split(".")[0]
+            domain = hostname + ".autoqa.qa1.eucalyptus-systems.com"
+            self.tester.modify_property("system.dns.dnsdomain", domain)
+
     def clean_method(self):
         pass
 
-
     def InstallEuca(self):
         self.initialize_db()
-        self.sync_keys()
+        self.sync_ssh_keys()
         self.remove_host_check()
         self.configure_network()
         self.start_components()
