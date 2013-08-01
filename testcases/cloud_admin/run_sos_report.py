@@ -12,7 +12,7 @@ class SOSreport(EutesterTestCase):
         self.setuptestcase()
         self.setup_parser()
         self.start_time = int(time.time())
-        self.parser.add_argument("--ticket-number", default=self.start_time)
+        self.parser.add_argument("--ticket-number", default=str(self.start_time))
         self.parser.add_argument("--remote-dir", default="/root/")
         self.parser.add_argument("--local-dir", default=os.getcwd())
         self.parser.add_argument("--package-url", default="http://mongo.beldurnik.com/RPMS/eucalyptus-sos-plugins-0.1.1-0.el6.noarch.rpm")
