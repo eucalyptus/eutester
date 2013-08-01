@@ -1380,7 +1380,23 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
             if errmsg:
                 raise Exception(errmsg)
 
+    def misc_test4_run_image1_terminate_during_stopped_verify_dot_true(self):
+        self.status('Running test image1 w/ dot flag set to true...')
+        if
+        instance = self.tester.run_image(self.test_image1, keypair=self.keypair, group=self.group)[0]
+        self.status('Stopping instance...')
+        instance.stop_instance_and_verify()
+        self.status('Terminating instance and verifying correct volume state for DOT=True')
+        instance.terminate_and_verify()
 
+
+    def misc_test5_run_image2_terminate_during_stopped_verify_dot_false(self):
+        self.status('Running test image2 w/ dot flag set to false...')
+        instance = self.tester.run_image(self.test_image1, keypair=self.keypair, group=self.group)[0]
+        self.status('Stopping instance...')
+        instance.stop_instance_and_verify()
+        self.status('Terminating instance and verifying correct volume state for DOT=False')
+        instance.terminate_and_verify()
 
     def find_remaining_devices(self,instance,known_dev_list):
         self.debug('Looking for remaining devices after known devs:' +str(',').join(known_dev_list))
@@ -1431,7 +1447,9 @@ if __name__ == "__main__":
                      'run_time_test5_image1_add_snap_map_attach_a_vol_to_running_instance',
                      'misc_test1_exceed_max_vol_size_storage_property_per_block_dev_map',
                      'misc_test2_exceed_max_total_storage_property_per_block_dev_map',
-                     'misc_test3_run_image1_check_attached_volume_states_during_stop_start'])
+                     'misc_test3_run_image1_check_attached_volume_states_during_stop_start',
+                     'misc_test4_run_image1_terminate_during_stopped_verify_dot_true',
+                     'misc_test5_run_image1_terminate_during_stopped_verify_dot_false'])
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
     for test in list:
