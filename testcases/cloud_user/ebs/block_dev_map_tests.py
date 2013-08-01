@@ -1382,7 +1382,6 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
 
     def misc_test4_run_image1_terminate_during_stopped_verify_dot_true(self):
         self.status('Running test image1 w/ dot flag set to true...')
-        if
         instance = self.tester.run_image(self.test_image1, keypair=self.keypair, group=self.group)[0]
         self.status('Stopping instance...')
         instance.stop_instance_and_verify()
