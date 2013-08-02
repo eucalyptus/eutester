@@ -17,6 +17,7 @@ import random
 from boto.s3.key import Key
 from boto.s3.prefix import Prefix
 from boto.exception import S3ResponseError
+import dateutil.parser
 
 from eucaops import Eucaops
 from eutester.eutestcase import EutesterTestCase
@@ -126,8 +127,7 @@ class ObjectTestSuite(EutesterTestCase):
             else:
                 self.tester.info("Not a key, skipping: " + str(obj))
         return should_fail
-        
-        
+
     def compare_versions(self, key1, key2):
         """
         Returns -1 if key1 < key2, 0 if equal, and 1 if key1 > key2. 
@@ -135,17 +135,22 @@ class ObjectTestSuite(EutesterTestCase):
         If version_id and name are equal then key1 = key2
         If an error occurs or something is wrong, returns None
         """
-        if key1.name > key2.name:
+        if key1.name < key2.name:
+            #self.debug("Key1: " + key1.name + " is less than " + key2.name)
             return 1
-        elif key1.name < key2.name:
+        elif key1.name > key2.name:
+            #self.debug("Key1: " + key1.name + " is greater than " + key2.name)
             return -1
         else:
             if key1.version_id == key2.version_id:
+                #self.debug("Key1: " + key1.name + " is the same version as " + key2.name)
                 return 0
             else:
-                if key1.last_modified > key2.last_modified:
+                if dateutil.parser.parse(key1.last_modified) > dateutil.parser.parse(key2.last_modified):
+                    #self.debug("Key1: " + key1.last_modified + " last modified is greater than " + key2.last_modified)
                     return 1
-                elif key1.last_modified < key2.last_modified:
+                elif dateutil.parser.parse(key1.last_modified) < dateutil.parser.parse(key2.last_modified):
+                    #self.debug("Key1: " + key1.last_modified + " last modified is less than " + key2.last_modified)
                     return -1
         return None
     
@@ -213,12 +218,13 @@ class ObjectTestSuite(EutesterTestCase):
         ret_key = self.test_bucket.get_key(testkey)
         if ret_key:
             self.tester.info("Erroneously got: " + ret_key.name)
-            raise S3ResponseError("Should have thrown exception for getting a non-existent object")
+            raise S3ResponseError(404, "Should have thrown exception for getting a non-existent object")
         self.tester.info("Finishing basic ops test")
                
     def test_object_byte_offset_read(self):
         """Tests fetching specific byte offsets of the object"""
         self.tester.info("Byte-range Offset GET Test")
+        self.test_bucket = self.clear_and_rebuild_bucket(self.test_bucket_name)
         testkey = "rangetestkey-" + str(int(time.time()))
         source_bytes = bytearray(self.test_object_data)
         
@@ -280,7 +286,7 @@ class ObjectTestSuite(EutesterTestCase):
     def test_object_large_objects(self):
         """Test operations on large objects (>1MB), but not so large that we must use the multi-part upload interface"""
         self.tester.info("Testing large-ish objects over 1MB in size on bucket" + self.test_bucket_name)
-        
+        self.test_bucket = self.clear_and_rebuild_bucket(self.test_bucket_name)
         test_data = ""
         large_obj_size_bytes = 5 * 1024 * 1024 #5MB
         self.tester.info("Generating " + str(large_obj_size_bytes) + " bytes of data")
@@ -314,7 +320,7 @@ class ObjectTestSuite(EutesterTestCase):
     def test_object_versioning_enabled(self):
         """Tests object versioning for get/put/delete on a versioned bucket"""
         self.tester.info("Testing bucket Versioning-Enabled")
-        
+        self.test_bucket = self.clear_and_rebuild_bucket(self.test_bucket_name)
         if not self.enable_versioning(self.test_bucket):
             self.fail("Could not properly enable versioning")
              
@@ -354,12 +360,11 @@ class ObjectTestSuite(EutesterTestCase):
         
         #Delete current latest version (v3)
         self.test_bucket.delete_key(keyname)
-        ##try:
-        ### REMOVE CHECKS DUE TO EUCA-7133
+
         del_obj = self.test_bucket.get_key(keyname)
-        ##    self.fail("Should have gotten 404 not-found error, but got: " + del_obj.key + " instead")
-        ##except S3ResponseError as e:
-        ##    self.tester.info("Correctly got " + str(e.status) + " in response to GET of a deleted key")
+        if del_obj:
+            self.tester.info("Erroneously got: " + del_obj.name)
+            raise S3ResponseError(404, "Should have thrown this exception for getting a non-existent object")
         
         #Restore v1 using copy
         try:
@@ -388,15 +393,19 @@ class ObjectTestSuite(EutesterTestCase):
         self.tester.check_md5(eTag=top_obj.etag,data=v3data)
         
         self.tester.info("Finished the versioning enabled test. Success!!")
-    
+
+    def clear_and_rebuild_bucket(self, bucket_name):
+        self.tester.clear_bucket(bucket_name)
+        return self.tester.create_bucket(bucket_name)
+
     def test_object_versionlisting(self):
         """
         Tests object version listing from a bucket
         """
         version_max = 3
-        keyrange = 100
+        keyrange = 20
         self.tester.info("Testing listing versions in a bucket and pagination using " + str(keyrange) + " keys with " + str(version_max) + " versions per key")
-        
+        self.test_bucket = self.clear_and_rebuild_bucket(self.test_bucket_name)
         if not self.enable_versioning(self.test_bucket):
             self.fail("Could not enable versioning properly. Failing")
         
@@ -417,34 +426,29 @@ class ObjectTestSuite(EutesterTestCase):
         if keyrange * version_max >= 1000:
             if not len(listing) == 999:
                 self.test_bucket.configure_versioning(False)
+                self.tester.debug(str(listing))
                 raise Exception("Bucket version listing did not limit the response to 999. Instead: " + str(len(listing)))
         else:
             if not len(listing) == keyrange * version_max:
                 self.test_bucket.configure_versioning(False)
+                self.tester.debug(str(listing))
                 raise Exception("Bucket version listing did not equal the number uploaded. Instead: " + str(len(listing)))
         
         prev_obj = None
-        should_fail = None
         for obj in listing:
             if isinstance(obj,Key):
                 self.tester.info("Key: " + obj.name + " -- " + obj.version_id + "--" + obj.last_modified)                
                 if prev_obj != None:
-                    if self.compare_versions(prev_obj, obj) > 0:
-                        should_fail = obj
+                    if self.compare_versions(prev_obj, obj) <= 0:
+                        raise Exception("Version listing not sorted correctly, offending key: " + obj.name + " version: " + obj.version_id + " date: " + obj.last_modified)
                 prev_obj = obj
             else:
                 self.tester.info("Not a key, skipping: " + str(obj))
-            
-        if should_fail:
-            self.fail("Version listing not sorted correctly, offending key: " + should_fail.name + " version: " + should_fail.version_id + " date: " + should_fail.last_modified)
-        
-        #Now try with a known-smaller max-keys to ensure that the pagination works.j
-        page_listing = self.test_bucket.get_all_versions(max_keys=(keyrange/2))
     
     def test_object_versioning_suspended(self):
         """Tests object versioning on a suspended bucket, a more complicated test than the Enabled test"""
         self.tester.info("Testing bucket Versioning-Suspended")
-    
+        self.test_bucket = self.clear_and_rebuild_bucket(self.test_bucket_name)
         #Create some keys
         keyname1 = "versionkey1-" + str(int(time.time()))
         keyname2 = "versionkey2-" + str(int(time.time()))
