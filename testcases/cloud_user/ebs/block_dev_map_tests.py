@@ -1380,6 +1380,39 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
             if errmsg:
                 raise Exception(errmsg)
 
+    def misc_test4_run_image1_terminate_during_stopped_verify_volume_dot(self):
+        '''
+        Attempts to run an instance with it's:
+        - root device DOT (delete on termination) flag set to True
+        - add another volume in the BDM with the DOT flag set to False
+        - verifies that the 2nd non-root volume is present on the guest
+        - stops the guest
+        - terminates the guest in the stop state
+        - verifies the volume states match the DOT states. The root volume should be deleted, the 2nd should be available
+        '''
+        self.status('Running test image1 w/ dot flag set to true and BDM volume with DOT set to false...')
+        image = self.test_image1
+        bdm_snapshot_dev = '/dev/vdc'
+        self.status('Original Image block device map:')
+        self.tester.print_block_device_map(image.block_device_mapping)
+        bdm = self.add_block_device_types_to_mapping(snapshot_id=self.base_test_snapshot.id,
+                                                     device_name=bdm_snapshot_dev,
+                                                     delete_on_terminate=False)
+        self.status('Applying the following block device map:')
+        self.tester.print_block_device_map(bdm)
+        self.status('Running instance with previously displayed block device mapping...')
+        instance = self.tester.run_image(image=image,block_device_map=bdm, keypair=self.keypair, group=self.group)[0]
+        self.current_test_instance = instance
+        self.status('Checking instance for attached BDM volume created from base test snapshot')
+        guest_snap_dev = instance.get_guest_dev_for_block_device_map_device(md5=self.base_test_snapshot.eutest_volume_md5,
+                                                                            md5len=self.base_test_snapshot.eutest_volume_md5len,
+                                                                            map_device=bdm_snapshot_dev)
+        self.status('Stopping instance...')
+        instance.stop_instance_and_verify()
+        self.status('Terminating instance and verifying correct volume states for both BDM volumes root + ' +
+                    str(bdm_snapshot_dev))
+        instance.terminate_and_verify()
+
 
 
     def find_remaining_devices(self,instance,known_dev_list):
@@ -1431,7 +1464,8 @@ if __name__ == "__main__":
                      'run_time_test5_image1_add_snap_map_attach_a_vol_to_running_instance',
                      'misc_test1_exceed_max_vol_size_storage_property_per_block_dev_map',
                      'misc_test2_exceed_max_total_storage_property_per_block_dev_map',
-                     'misc_test3_run_image1_check_attached_volume_states_during_stop_start'])
+                     'misc_test3_run_image1_check_attached_volume_states_during_stop_start',
+                     'misc_test4_run_image1_terminate_during_stopped_verify_dot_true'])
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
     for test in list:
