@@ -39,6 +39,7 @@ import sshconnection
 import re
 import os
 import sys
+import tempfile
 from repoutils import RepoUtils
 
 class DistroName:
@@ -144,7 +145,15 @@ class Machine:
                 return distro
         raise Exception("Unable to find distro " + str(distro_name) + " and version "
                         + str(distro_release) + " for hostname " + str(self.hostname))
-    
+
+    def put_templated_file(self, local_src, remote_dest, **kwargs):
+        tmp = tempfile.mktemp()
+        try:
+            Eutester.render_file_template(local_src, tmp, **kwargs)
+            self.ssh.sftp_put(tmp, remote_dest)
+        finally:
+            os.remove(tmp)
+
     def refresh_ssh(self):
         self.ssh.refresh_connection()
         
