@@ -50,7 +50,6 @@ import operator
 from functools import wraps
 
 
-
 class TimeoutFunctionException(Exception): 
     """Exception to raise on a timeout""" 
     pass 
@@ -267,6 +266,14 @@ class Eutester(object):
         """Convinience function for time.sleep()"""
         self.debug("Sleeping for " + str(seconds) + " seconds")
         time.sleep(seconds)
+
+    @staticmethod
+    def render_file_template(src, dest, **kwargs):
+        import jinja2
+        with open(src) as sfile:
+            templ = jinja2.Template(sfile.read())
+            with open(dest, 'w') as dfile:
+                dfile.write(templ.render(kwargs))
     
     def id_generator(self, size=6, chars=string.ascii_uppercase + string.ascii_lowercase  + string.digits ):
         """Returns a string of size with random charachters from the chars array.
