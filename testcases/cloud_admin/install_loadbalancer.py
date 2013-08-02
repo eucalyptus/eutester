@@ -28,9 +28,6 @@ class ConfigureLoadBalancer(EutesterTestCase):
         assert isinstance(first_clc,Machine)
         first_clc.add_repo(url=self.args.img_repo, name="EucaLoadBalancer")
         first_clc.install("eucalyptus-load-balancer-image-devel")
-
-        load_balancer_bucket = "loadbalancer_vm"
-        tarball_location = first_clc.sys("ls /usr/share/eucalyptus-load-balancer-image*/*.tgz")[0]
         first_clc.sys("source " + self.tester.credpath  + "/eucarc && euca-install-load-balancer --install-default" , code=0)
 
 if __name__ == "__main__":
