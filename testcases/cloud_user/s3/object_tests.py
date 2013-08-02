@@ -210,16 +210,10 @@ class ObjectTestSuite(EutesterTestCase):
         #Test DELETE
         self.test_bucket.delete_key(testkey)
         ret_key = None
-        # Remove this key due to: EUCA-7133
-        #try:
-        #    ret_key = self.test_bucket.get_key(testkey)
-        #    self.tester.info("Erroneously got: " + ret_key.name)
-        #    self.fail("Should have thrown exception for getting a non-existent object")
-        #except S3ResponseError as e:
-        #    if e.status == 404:
-        #        self.tester.info("Correctly could not get the deleted object")
-        #    else:
-        #        self.fail("Couldn't get deleted object, but got error other than 404: " + str(e.status))
+        ret_key = self.test_bucket.get_key(testkey)
+        if ret_key:
+            self.tester.info("Erroneously got: " + ret_key.name)
+            raise S3ResponseError("Should have thrown exception for getting a non-existent object")
         self.tester.info("Finishing basic ops test")
                
     def test_object_byte_offset_read(self):
@@ -384,13 +378,10 @@ class ObjectTestSuite(EutesterTestCase):
 
         #Delete v2 explicitly
         self.test_bucket.delete_key(key_name=obj_v2.key,version_id=obj_v2.version_id)
-        ### REMOVE CHECKS DUE TO EUCA-7133
-        ##try
         del_obj = self.test_bucket.get_key(keyname,version_id=obj_v2.version_id)
-        ###    self.fail("Should have gotten 404 not-found error, but got: " + del_obj.key + " instead")
-        ##except S3ResponseError as e:
-        ###    self.tester.info("Correctly got " + str(e.status) + " in response to GET of a deleted key")
-        
+        if del_obj:
+            raise S3ResponseError("Should have gotten 404 not-found error, but got: " + del_obj.key + " instead",404)
+
         #Show what's on top
         top_obj = self.test_bucket.get_key(keyname)
         self.print_key_info([top_obj])
