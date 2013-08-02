@@ -108,6 +108,8 @@ class Install(EutesterTestCase):
             machine.sys("service eucalyptus-cloud start", timeout=480)
         for machine in self.tester.get_component_machines("clc"):
             machine.sys("service eucalyptus-cloud start", timeout=480)
+        ### Wait for components to come up (mainly CLC)
+        self.tester.sleep(180)
 
     def stop_components(self):
         for machine in self.tester.get_component_machines("clc"):
@@ -282,7 +284,7 @@ class Install(EutesterTestCase):
         self.initialize_db()
         self.sync_ssh_keys()
         self.remove_host_check()
-        self.configure_network()
+        #self.configure_network()
         self.start_components()
         self.wait_for_creds()
         self.register_components()

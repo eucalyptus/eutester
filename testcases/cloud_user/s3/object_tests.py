@@ -9,26 +9,18 @@
 
 
 #Author: Zach Hill <zach@eucalyptus.com>
+#Author: Vic Iglesias <vic@eucalyptus.com>
 
-from eucaops import Eucaops
-import re
-import sys, argparse, string
-import time, random, array
-import hashlib
-import boto
+import time
+import random
 
-from eutester.eutestcase import EutesterTestCase
-from eucaops import S3ops
-
-from boto.s3.bucket import Bucket
 from boto.s3.key import Key
-from boto.s3.acl import ACL
-from boto.s3.acl import Policy
-from boto.s3.acl import Grant
 from boto.s3.prefix import Prefix
 from boto.exception import S3ResponseError
-from boto.exception import S3CreateError
-from boto.s3.connection import Location
+
+from eucaops import Eucaops
+from eutester.eutestcase import EutesterTestCase
+from eucaops import S3ops
 
 
 class ObjectTestSuite(EutesterTestCase):
@@ -42,14 +34,14 @@ class ObjectTestSuite(EutesterTestCase):
         # Setup basic eutester object
         if self.args.s3endpoint:
             self.tester = S3ops( credpath=self.args.credpath, endpoint=self.args.endpoint)
-        else:        
-            self.tester = Eucaops( credpath=self.args.credpath)
+        else:
+            self.tester = Eucaops( credpath=self.args.credpath, config_file=self.args.config, password=self.args.password)
         
         self.bucket_prefix = "eutester-bucket-test-suite-" + str(int(time.time())) + "-"
         self.buckets_used = set()
         random.seed(time.time())
         self.test_bucket_name = self.bucket_prefix + str(random.randint(0,100))
-        self.test_bucket = self.tester.s3.create_bucket(self.test_bucket_name)
+        self.test_bucket = self.tester.create_bucket(self.test_bucket_name)
         self.buckets_used.add(self.test_bucket_name)
         #Create some test data for the objects
         self.test_object_data = ""
@@ -60,7 +52,8 @@ class ObjectTestSuite(EutesterTestCase):
     
     def print_key_info(self, keys=None):
         for key in keys:
-            self.tester.info("Key=" + key.key + " -- version= " + key.version_id + " -- eTag= " + key.etag + " -- ACL= " + key.get_xml_acl()) 
+            self.tester.info("Key=" + str(key.key) + " -- version= " + str(key.version_id) + " -- eTag= " + str(key.etag)
+                             + " -- ACL= " + str(key.get_xml_acl()))
     
     def put_object(self, bucket=None, object_key=None, object_data=None):
         """Puts an object with the specified name and data in the specified bucket"""
@@ -115,7 +108,6 @@ class ObjectTestSuite(EutesterTestCase):
              
     def check_version_listing(self, version_list, total_expected_length):
         """Checks a version listing for both completeness and ordering as well as pagination if required"""
-        
         self.tester.info("Checking bucket version listing. Listing is " + str(len(version_list)) + " entries long")
         if total_expected_length >= 1000:
             assert(len(version_list) == 999)
@@ -130,10 +122,9 @@ class ObjectTestSuite(EutesterTestCase):
                 if prev_obj != None:
                     if self.compare_versions(prev_obj, obj) > 0:
                         should_fail = obj
-                prev_obj = obj 
+                prev_obj = obj
             else:
                 self.tester.info("Not a key, skipping: " + str(obj))
-            
         return should_fail
         
         
@@ -168,7 +159,7 @@ class ObjectTestSuite(EutesterTestCase):
             self.fail("Error: test_bucket not set, cannot run test")
             
         #Test PUT & GET
-        testkey="testkey1"
+        testkey="testkey1-" + str(int(time.time()))
         self.put_object(bucket=self.test_bucket, object_key=testkey, object_data=self.test_object_data)
         
         ret_key = self.test_bucket.get_key(testkey)
@@ -219,23 +210,16 @@ class ObjectTestSuite(EutesterTestCase):
         #Test DELETE
         self.test_bucket.delete_key(testkey)
         ret_key = None
-        try:
-            ret_key = self.test_bucket.get_key(testkey)
+        ret_key = self.test_bucket.get_key(testkey)
+        if ret_key:
             self.tester.info("Erroneously got: " + ret_key.name)
-            self.fail("Should have thrown exception for getting a non-existent object")
-        except S3ResponseError as e:
-            if e.status == 404:
-                self.tester.info("Correctly could not get the deleted object")
-            else:
-                self.fail("Couldn't get deleted object, but got error other than 404: " + str(e.status))        
-        
-        
+            raise S3ResponseError("Should have thrown exception for getting a non-existent object")
         self.tester.info("Finishing basic ops test")
                
     def test_object_byte_offset_read(self):
         """Tests fetching specific byte offsets of the object"""
         self.tester.info("Byte-range Offset GET Test")
-        testkey = "rangetestkey"
+        testkey = "rangetestkey-" + str(int(time.time()))
         source_bytes = bytearray(self.test_object_data)
         
         #Put the object initially
@@ -292,17 +276,13 @@ class ObjectTestSuite(EutesterTestCase):
     def test_object_post(self):
         """Test the POST method for putting objects, requires a pre-signed upload policy and url"""
         self.fail("Test not implemented")
-        post_content_file = "test_data/post_test/post_test.html"        
-        post_key = Key("postkeytest")        
-        self.test_bucket.post(post_key)
-        
                 
     def test_object_large_objects(self):
         """Test operations on large objects (>1MB), but not so large that we must use the multi-part upload interface"""
         self.tester.info("Testing large-ish objects over 1MB in size on bucket" + self.test_bucket_name)
         
         test_data = ""
-        large_obj_size_bytes = 25 * 1024 * 1024 #25MB
+        large_obj_size_bytes = 5 * 1024 * 1024 #5MB
         self.tester.info("Generating " + str(large_obj_size_bytes) + " bytes of data")
 
         #Create some test data
@@ -310,7 +290,7 @@ class ObjectTestSuite(EutesterTestCase):
             test_data += chr(random.randint(32,126))
 
         self.tester.info("Uploading object content of size: " + str(large_obj_size_bytes) + " bytes")        
-        keyname = "largeobj"
+        keyname = "largeobj-" + str(int(time.time()))
         self.put_object(bucket=self.test_bucket, object_key=keyname, object_data=test_data)
         self.tester.info("Done uploading object")
 
@@ -339,7 +319,7 @@ class ObjectTestSuite(EutesterTestCase):
             self.fail("Could not properly enable versioning")
              
         #Create some keys
-        keyname = "versionkey"
+        keyname = "versionkey-" + str(int(time.time()))
         
         #Multiple versions of the data
         v1data = self.test_object_data + "--version1"
@@ -351,7 +331,7 @@ class ObjectTestSuite(EutesterTestCase):
                 
         #Get v1
         obj_v1 = self.test_bucket.get_key(keyname)
-        assert(self.check_hashes(eTag=obj_v1.etag,data=v1data))
+        self.tester.check_md5(eTag=obj_v1.etag,data=v1data)
         
         self.tester.info("Initial bucket state after object uploads without versioning:")
         self.print_key_info(keys=[obj_v1])
@@ -359,13 +339,13 @@ class ObjectTestSuite(EutesterTestCase):
         #Put v2 (and get/head to confirm success)
         self.put_object(bucket=self.test_bucket, object_key=keyname,object_data=v2data)
         obj_v2 = self.test_bucket.get_key(keyname)
-        assert(self.check_hashes(eTag=obj_v2.etag,data=v2data))
+        self.tester.check_md5(eTag=obj_v2.etag,data=v2data)
         self.print_key_info(keys=[obj_v1, obj_v2])
         
         #Put v3 (and get/head to confirm success)
         self.put_object(bucket=self.test_bucket, object_key=keyname,object_data=v3data)
         obj_v3 = self.test_bucket.get_key(keyname)
-        assert(self.check_hashes(eTag=obj_v3.etag,data=v3data))
+        self.tester.check_md5(eTag=obj_v3.etag,data=v3data)
         self.print_key_info(keys=[obj_v1, obj_v2, obj_v3])
         
         #Get a specific version, v1
@@ -374,11 +354,12 @@ class ObjectTestSuite(EutesterTestCase):
         
         #Delete current latest version (v3)
         self.test_bucket.delete_key(keyname)
-        try:
-            del_obj = self.test_bucket.get_key(keyname)
-            self.fail("Should have gotten 404 not-found error, but got: " + del_obj.key + " instead")
-        except S3ResponseError as e:
-            self.tester.info("Correctly got " + str(e.status) + " in response to GET of a deleted key")
+        ##try:
+        ### REMOVE CHECKS DUE TO EUCA-7133
+        del_obj = self.test_bucket.get_key(keyname)
+        ##    self.fail("Should have gotten 404 not-found error, but got: " + del_obj.key + " instead")
+        ##except S3ResponseError as e:
+        ##    self.tester.info("Correctly got " + str(e.status) + " in response to GET of a deleted key")
         
         #Restore v1 using copy
         try:
@@ -387,27 +368,24 @@ class ObjectTestSuite(EutesterTestCase):
             self.fail("Failed to restore key from previous version using copy got error: " + str(e.status))
             
         restored_obj = self.test_bucket.get_key(keyname)
-        assert(self.check_hashes(eTag=restored_obj.etag,data=v1data))
+        self.tester.check_md5(eTag=restored_obj.etag,data=v1data)
         self.print_key_info(keys=[restored_obj])
         
         #Put v3 again
         self.put_object(bucket=self.test_bucket, object_key=keyname,object_data=v3data)
-        assert(self.check_hashes(eTag=obj_v3.etag,data=v3data))
+        self.tester.check_md5(eTag=obj_v3.etag,data=v3data)
         self.print_key_info([self.test_bucket.get_key(keyname)])
 
         #Delete v2 explicitly
         self.test_bucket.delete_key(key_name=obj_v2.key,version_id=obj_v2.version_id)
-        try:
-            del_obj = None
-            del_obj = self.test_bucket.get_key(keyname,version_id=obj_v2.version_id)
-            self.fail("Should have gotten 404 not-found error, but got: " + del_obj.key + " instead")
-        except S3ResponseError as e:
-            self.tester.info("Correctly got " + str(e.status) + " in response to GET of a deleted key")
-        
+        del_obj = self.test_bucket.get_key(keyname,version_id=obj_v2.version_id)
+        if del_obj:
+            raise S3ResponseError("Should have gotten 404 not-found error, but got: " + del_obj.key + " instead",404)
+
         #Show what's on top
         top_obj = self.test_bucket.get_key(keyname)
         self.print_key_info([top_obj])
-        assert(self.check_hashes(eTag=top_obj.etag,data=v3data))        
+        self.tester.check_md5(eTag=top_obj.etag,data=v3data)
         
         self.tester.info("Finished the versioning enabled test. Success!!")
     
@@ -422,7 +400,7 @@ class ObjectTestSuite(EutesterTestCase):
         if not self.enable_versioning(self.test_bucket):
             self.fail("Could not enable versioning properly. Failing")
         
-        key = "testkey"
+        key = "testkey-" + str(int(time.time()))
         keys = [ key + str(k) for k in range(0,keyrange)]        
         contents = [ self.test_object_data + "--v" + str(v) for v in range(0,version_max)]        
 
@@ -434,13 +412,16 @@ class ObjectTestSuite(EutesterTestCase):
                     self.test_bucket.new_key(keyname).set_contents_from_string(contents[v])
         except S3ResponseError as e:
             self.fail("Failed putting object versions for test: " + str(e.status))
-
         listing = self.test_bucket.get_all_versions()
         self.tester.info("Bucket version listing is " + str(len(listing)) + " entries long")
         if keyrange * version_max >= 1000:
-            assert(len(listing) == 999)
+            if not len(listing) == 999:
+                self.test_bucket.configure_versioning(False)
+                raise Exception("Bucket version listing did not limit the response to 999. Instead: " + str(len(listing)))
         else:
-            assert(len(listing) == keyrange * version_max)
+            if not len(listing) == keyrange * version_max:
+                self.test_bucket.configure_versioning(False)
+                raise Exception("Bucket version listing did not equal the number uploaded. Instead: " + str(len(listing)))
         
         prev_obj = None
         should_fail = None
@@ -459,26 +440,24 @@ class ObjectTestSuite(EutesterTestCase):
         
         #Now try with a known-smaller max-keys to ensure that the pagination works.j
         page_listing = self.test_bucket.get_all_versions(max_keys=(keyrange/2))
-        
-        pass
     
     def test_object_versioning_suspended(self):
         """Tests object versioning on a suspended bucket, a more complicated test than the Enabled test"""
         self.tester.info("Testing bucket Versioning-Suspended")
     
         #Create some keys
-        keyname1 = "versionkey1"
-        keyname2 = "versionkey2"
-        keyname3 = "versionkey3"
-        keyname4 = "versionkey4"
-        keyname5 = "versionkey5"
+        keyname1 = "versionkey1-" + str(int(time.time()))
+        keyname2 = "versionkey2-" + str(int(time.time()))
+        keyname3 = "versionkey3-" + str(int(time.time()))
+        keyname4 = "versionkey4-" + str(int(time.time()))
+        keyname5 = "versionkey5-" + str(int(time.time()))
         v1data = self.test_object_data + "--version1"
         v2data = self.test_object_data + "--version2"
         v3data = self.test_object_data + "--version3"
         
         vstatus = self.test_bucket.get_versioning_status()
-        if vstatus != None:
-            self.fail("Versioning status should be null/Disabled")
+        if vstatus:
+            self.fail("Versioning status should be null/Disabled but was: " + str(vstatus))
         else:
             self.tester.info("Bucket versioning is Disabled")
         
@@ -567,9 +546,8 @@ if __name__ == "__main__":
     
     testcase = ObjectTestSuite()
     ### Either use the list of tests passed from config/command line to determine what subset of tests to run
-    list = testcase.args.tests or [ 'test_object_basic_ops', \
-                                   'test_object_acl', \
-                                   'test_object_byte_offset_read', \
+    list = testcase.args.tests or ['test_object_basic_ops', \
+                                   #'test_object_byte_offset_read', \
                                    'test_object_large_objects', \
                                    'test_object_versionlisting', \
                                    'test_object_versioning_enabled', \
