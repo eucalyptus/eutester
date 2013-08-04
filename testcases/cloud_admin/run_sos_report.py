@@ -19,7 +19,7 @@ class SOSreport(EutesterTestCase):
         self.get_args()
         self.remote_dir = self.args.remote_dir + "/euca-sosreport-" + self.args.ticket_number + "/"
         # Setup basic eutester object
-        self.tester = Eucaops( config_file=self.args.config,password=self.args.password)
+        self.tester = Eucaops( config_file=self.args.config,password=self.args.password, download_creds=False)
 
     def clean_method(self):
         pass
