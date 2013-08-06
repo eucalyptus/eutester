@@ -2642,7 +2642,7 @@ class EC2ops(Eutester):
                 if not self.ec2_source_ip:
                     #Try to get the outgoing addr used to connect to this instance
                     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM,socket.IPPROTO_UDP)
-                    s.connect((instance.public_dns_name,1))
+                    s.connect((instance.ip_address,1))
                     #set the tester's global source_ip, assuming it can re-used (at least until another method sets it to None again)
                     self.ec2_source_ip = s.getsockname()[0]
                 if self.ec2_source_ip == "0.0.0.0":
