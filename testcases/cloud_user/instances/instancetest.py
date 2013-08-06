@@ -201,6 +201,7 @@ class InstanceBasics(EutesterTestCase):
             self.assertTrue(re.match(instance.get_metadata("public-hostname")[0], instance.public_dns_name), 'Incorrect public host name in metadata')
             self.assertTrue(re.match(instance.get_metadata("local-hostname")[0], instance.private_dns_name), 'Incorrect private host name in metadata')
             self.assertTrue(re.match(instance.get_metadata("hostname")[0], instance.private_dns_name), 'Incorrect host name in metadata')
+            self.assertTrue(re.match(instance.get_metadata("local-hostname")[0], instance.get_metadata("hostname")[0]), 'local-hostname and hostname do not match')
             self.assertTrue(re.match(instance.get_metadata("ramdisk-id")[0], instance.ramdisk ), 'Incorrect ramdisk in metadata') #instance-type
             self.assertTrue(re.match(instance.get_metadata("instance-type")[0], instance.instance_type ), 'Incorrect instance type in metadata')
             BAD_META_DATA_KEYS = ['foobar']
