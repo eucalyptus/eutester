@@ -15,7 +15,6 @@ from eucaops import EC2ops
 import os
 import re
 import random
-import subprocess
 import gzip
 
 class InstanceBasics(EutesterTestCase):
