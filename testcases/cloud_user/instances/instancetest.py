@@ -298,7 +298,7 @@ class InstanceBasics(EutesterTestCase):
         available_instances_before = self.tester.get_available_vms(zone=self.zone)
 
         ## Run through count iterations of test
-        count = available_instances_before
+        count = 4
         future_instances =[]
 
         with ThreadPoolExecutor(max_workers=count) as executor:
