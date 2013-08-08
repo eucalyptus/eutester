@@ -1878,59 +1878,35 @@ class EC2ops(Eutester):
         :param image: boto image object to deregister
         :param delete: boolean, if True will attempt to deregister until removed/deleted, default:False
         """
-        return self.deregister_image(image, delete=True, timeout=timeout)
+        return self.deregister_image( image )
 
-    def deregister_image(self, image, delete=False, poll_interval=5, timeout=60):
+    def deregister_image(self, image):
         """
         Deregister an image.
 
-        :param poll_interval: int seconds to wait between polling for image state
-        :param timeout: int seconds to wait before failing operation
         :param image: boto image object to deregister
-        :param delete: boolean, if True will attempt to deregister until removed/deleted, default:False
         """
-        gotimage = None
-        elapsed = 0
-        start = time.time()
         gotimage = image
 
-        while gotimage and (elapsed < timeout):
-            elapsed = int(time.time()-start)
-            try:
-                gotimage = self.ec2.get_all_images(image_ids=[image.id])[0]
-            except IndexError, ie:
-                if delete:
-                    self.debug("deregister_image:"+str(image.id)+", No image found in get_all_images. Delete is True, ok")
-                    return
-                else:
-                    raise Exception("deregister_image:"+str(image.id)+", No image found in get_all_images.Error: "
-                                                                      "Image unexpectedly deleted!")
-            except Exception, e:
-                #should return [] if not found, exception indicates an error with the command maybe?
-                tb = self.get_traceback()
-                raise Exception('deregister_image: Error attempting to get image:'+str(image.id)+", err:"+str(tb)+'\n'+str(e))
-            self.ec2.deregister_image(image.id)
-            # If the state is not deregistered deregister image for the first time, should leave image behind in a
-            # Deregistered state. Verify the image enters that state...
-            if gotimage.state != 'deregistered':
-                gotimage.update()
-                if gotimage.state != 'deregistered':
-                    raise Exception("Image did not show as deregistered after first deregistration")
-                else:
-                    self.debug('deregister_image: Success, '+str(image.id)+' is now in deregistered state')
-            else:
-                # If the image is already deregistered, a 2nd deregister request should remove the image from the system
-                # If the 'remove' flag is not set, we can return now as the method is complete.
-                # Otherwise continue till removed/deleted
-                if not delete:
-                    return
-                else:
-                    self.debug("deregister_image:"+str(image.id)+" waiting for image to be deleted after deregistration. "
-                                "Elapsed:"+str(elapsed)+"/"+str(timeout))
-                    time.sleep(poll_interval)
-
-
-
+        try:
+            gotimage = self.ec2.get_all_images(image_ids=[image.id])[0]
+        except IndexError, ie:
+            raise Exception("deregister_image:" + str(image.id) + ", No image found in get_all_images.Error: ")
+        except Exception, e:
+            #should return [] if not found, exception indicates an error with the command maybe?
+            tb = self.get_traceback()
+            raise Exception(
+                'deregister_image: Error attempting to get image:' + str(image.id) + ", err:" + str(tb) + '\n' + str(e))
+        self.ec2.deregister_image(image.id)
+        try:
+            # make sure the image was removed (should throw an exception),if not make sure it is in the deregistered state
+            # if it is still associated with a running instance'
+            gotimage = self.ec2.get_all_images(image_ids=[image.id])[0]
+            # this will not be executed if image was removed
+            if( gotimage.state != 'deregistered') :
+                raise Exception('deregister_image: Error attempting to deregister image:' + str(image.id)  + '\n')
+        except IndexError, ie:
+            pass
 
 
     @Eutester.printinfo
