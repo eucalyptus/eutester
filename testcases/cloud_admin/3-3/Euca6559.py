@@ -32,14 +32,6 @@ class Euca6559(unittest.TestCase):
         self.source = "source " + self.tester.credpath + "/eucarc && "
         self.out = self.tester.sys(self.source + cmd)
 
-    def runInstances(self, numMax):
-        #Start instance
-        self.reservation = self.tester.run_instance(image=self.new_emi, keypair=self.keypair.name, group=self.group, min=1, max=numMax, is_reachable=False)
-        # Make sure the instance is running
-        for instance in self.reservation.instances:
-            if instance.state == "running":
-                self.ip = instance.public_dns_name
-                self.instanceid = instance.id
     def doAuth(self):
         self.keypair = self.tester.add_keypair()
         self.group = self.tester.add_group()
@@ -48,7 +40,6 @@ class Euca6559(unittest.TestCase):
     def testName(self):
         self.emi = self.tester.get_emi()
         self.new_emi = self.tester.register_manifest(self.emi.location)
-        self.runInstances(1)
         self.tester.deregister_image(self.new_emi);
         self.runSysCmd('euca-describe-images ' + self.new_emi.id);
         ### make sure that the images in the deregistered state are not output to user.
