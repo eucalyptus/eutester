@@ -76,7 +76,7 @@ class InstanceRestore(EutesterTestCase):
             instance_under_test = instance
             instance.terminate()
 
-        self.tester.deregister_image(self.image, delete=True)
+        self.tester.deregister_image(self.image)
 
         for nc in self.ncs:
             nc.sys("service eucalyptus-nc start")

@@ -298,7 +298,7 @@ class InstanceBasics(EutesterTestCase):
         available_instances_before = self.tester.get_available_vms(zone=self.zone)
 
         ## Run through count iterations of test
-        count = available_instances_before
+        count = 4
         future_instances =[]
 
         with ThreadPoolExecutor(max_workers=count) as executor:
@@ -349,6 +349,7 @@ class InstanceBasics(EutesterTestCase):
             address.release()
             if instance.ip_address != "0.0.0.0" and instance.ip_address != instance.private_ip_address:
                 self.fail("Instance received a new public IP: " + instance.ip_address)
+        self.tester.terminate_instances(self.reservation)
         self.set_reservation(None)
         return reservation
 
