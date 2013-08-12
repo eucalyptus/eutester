@@ -414,8 +414,72 @@ class Net_Tests(EutesterTestCase):
             except:
                 self.debug('Success: Was not able to ssh from the local machine to instance in unauthorized sec group')
 
+    def test5_test_ssh_between_instances_in_same_sec_groups_different_zone(self):
+        '''
+        Definition:
+        This test attempts to check connectivity for instances in the same security group, but in different zones.
+        Note: This test requires the CC have tunnelling enabled, or the CCs in each zone be on same
+        layer 2 network segment.
 
-    def test5_test_ssh_between_instances_in_diff_sec_groups_different_zone(self, no_cidr=None):
+        Test attempts to:
+            -Iterate through each zone and attempt to ssh from an instance in group1 to an instance in a separate zone
+             but same security group1 over their private ips.
+        '''
+        zones = []
+        if len(self.zones) < 2:
+            raise SkipTestException('Skipping test5, only a single zone found or provided')
+
+        class TestZone():
+            def __init__(self, zone):
+                self.zone = zone
+                self.test_instance_group1 = None
+                self.test_instance_group2 = None
+
+        for zone in self.zones:
+            zones.append(TestZone(zone))
+            #Grab a single instance from each zone within security group1
+        for zone in zones:
+            instance = None
+            for instance in self.group1_instances:
+                if instance.placement == zone.zone:
+                    self.assertIsInstance(instance, EuInstance)
+                    zone.test_instance_group1 = instance
+                    break
+                instance = None
+            if not zone.test_instance_group1:
+                raise Exception('Could not find an instance in group1 for zone:' + str(zone.zone))
+
+        self.debug('Iterating through zones, attempting ssh between zones within same security group...')
+        for zone in zones:
+            instance1 = zone.test_instance_group1
+            for zone2 in zones:
+                if zone.zone != zone2.zone:
+                    instance2 = zone2.test_instance_group1
+                    if not instance1 or not instance2:
+                        raise Exception('Security group: ' + str(self.group1.name) + ", missing instances in a Zone:"
+                                        + str(zone.zone) + " = instance:" + str(instance1) +
+                                        ", Zone:" + str(zone2.zone) + " = instance:" + str(instance2))
+                    self.debug('Attempting to run ssh command "uname -a" between instances across zones and security groups:\n'
+                               + str(instance1.id) + '/sec grps(' + str(instance1.security_groups)+") --> "
+                               + str(instance2.id) + '/sec grps(' + str(instance2.security_groups)+")\n"
+                               + "Current test run in zones: " + str(instance1.placement) + "-->" + str(instance2.placement),
+                               linebyline=False )
+                    self.debug('Check some debug information re this data connection in this security group first...')
+                    self.tester.does_instance_sec_group_allow(instance=instance2,
+                                                              src_addr=instance1.private_ip_address,
+                                                              protocol='tcp',
+                                                              port=22)
+                    self.debug('Now Running the ssh command...')
+                    instance1.sys("ssh -o StrictHostKeyChecking=no -i "
+                                  + str(os.path.basename(instance1.keypath))
+                                  + " root@" + str(instance2.private_ip_address)
+                                  + " ' uname -a'", code=0)
+                    self.debug('Ssh between instances passed')
+
+
+
+
+    def test6_test_ssh_between_instances_in_diff_sec_groups_different_zone(self):
         '''
         Definition:
         This test attempts to set up security group rules between group1 and group2 to authorize group2 access
@@ -425,7 +489,7 @@ class Net_Tests(EutesterTestCase):
         the group will be
         Note: This test requires the CC have tunnelling enabled, or the CCs in each zone be on same
         layer 2 network segment.
-        
+
         Test attempts to:
             -Authorize security groups for inter group private ip access.
             -Iterate through each zone and attempt to ssh from an instance in group1 to an instance in group2 over their
@@ -434,12 +498,8 @@ class Net_Tests(EutesterTestCase):
         zones = []
         if len(self.zones) < 2:
             raise SkipTestException('Skipping test5, only a single zone found or provided')
-        if no_cidr is None:
-            no_cidr = self.args.no_cidr
-        if no_cidr:
-            self.authorize_group_for_instance_list(self.group2, self.group1_instances)
-        else:
-            self.tester.authorize_group(self.group2, cidr_ip=None, port=None, src_security_group_name=self.group1.name)
+        self.status('Authorizing group2:' + str(self.group2.name) + ' for access from group1:' + str(self.group1.name))
+        self.tester.authorize_group(self.group2, cidr_ip=None, port=None, src_security_group_name=self.group1.name)
 
         class TestZone():
             def __init__(self, zone):
@@ -502,68 +562,6 @@ class Net_Tests(EutesterTestCase):
                     self.debug('Ssh between instances passed')
 
 
-    def test6_test_ssh_between_instances_in_same_sec_groups_different_zone(self):
-        '''
-        Definition:
-        This test attempts to check connectivity for instances in the same security group, but in different zones.
-        Note: This test requires the CC have tunnelling enabled, or the CCs in each zone be on same
-        layer 2 network segment.
-
-        Test attempts to:
-            -Iterate through each zone and attempt to ssh from an instance in group1 to an instance in a separate zone
-             but same security group1 over their private ips.
-        '''
-        zones = []
-        if len(self.zones) < 2:
-            raise SkipTestException('Skipping test5, only a single zone found or provided')
-
-        class TestZone():
-            def __init__(self, zone):
-                self.zone = zone
-                self.test_instance_group1 = None
-                self.test_instance_group2 = None
-
-        for zone in self.zones:
-            zones.append(TestZone(zone))
-        #Grab a single instance from each zone within security group1
-        for zone in zones:
-            instance = None
-            for instance in self.group1_instances:
-                if instance.placement == zone.zone:
-                    self.assertIsInstance(instance, EuInstance)
-                    zone.test_instance_group1 = instance
-                    break
-                instance = None
-            if not zone.test_instance_group1:
-                raise Exception('Could not find an instance in group1 for zone:' + str(zone.zone))
-
-        self.debug('Iterating through zones, attempting ssh between zones within same security group...')
-        for zone in zones:
-            instance1 = zone.test_instance_group1
-            for zone2 in zones:
-                if zone.zone != zone2.zone:
-                    instance2 = zone2.test_instance_group1
-                    if not instance1 or not instance2:
-                        raise Exception('Security group: ' + str(self.group1.name) + ", missing instances in a Zone:"
-                                        + str(zone.zone) + " = instance:" + str(instance1) +
-                                        ", Zone:" + str(zone2.zone) + " = instance:" + str(instance2))
-                    self.debug('Attempting to run ssh command "uname -a" between instances across zones and security groups:\n'
-                               + str(instance1.id) + '/sec grps(' + str(instance1.security_groups)+") --> "
-                               + str(instance2.id) + '/sec grps(' + str(instance2.security_groups)+")\n"
-                               + "Current test run in zones: " + str(instance1.placement) + "-->" + str(instance2.placement),
-                               linebyline=False )
-                    self.debug('Check some debug information re this data connection in this security group first...')
-                    self.tester.does_instance_sec_group_allow(instance=instance2,
-                                                              src_addr=instance1.private_ip_address,
-                                                              protocol='tcp',
-                                                              port=22)
-                    self.debug('Now Running the ssh command...')
-                    instance1.sys("ssh -o StrictHostKeyChecking=no -i "
-                                  + str(os.path.basename(instance1.keypath))
-                                  + " root@" + str(instance2.private_ip_address)
-                                  + " ' uname -a'", code=0)
-                    self.debug('Ssh between instances passed')
-
 
 
 
@@ -581,8 +579,8 @@ if __name__ == "__main__":
                'test2_create_instance_in_zones_for_security_group2',
                'test3_test_ssh_between_instances_in_diff_sec_groups_same_zone',
                'test4_attempt_unauthorized_ssh_from_test_machine_to_group2',
-               'test5_test_ssh_between_instances_in_diff_sec_groups_different_zone',
-               'test6_test_ssh_between_instances_in_same_sec_groups_different_zone']
+               'test5_test_ssh_between_instances_in_same_sec_groups_different_zone',
+               'test6_test_ssh_between_instances_in_diff_sec_groups_different_zone']
         ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
     for test in list:
