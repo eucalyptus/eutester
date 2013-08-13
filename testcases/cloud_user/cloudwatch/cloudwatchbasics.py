@@ -270,11 +270,11 @@ class CloudWatchBasics(EutesterTestCase):
     def cleanUpAutoscaling(self):
         self.tester.delete_all_alarms()
         self.tester.delete_all_policies()
-        self.tester.delete_as_group(names=self.auto_scaling_group_name,force=True)
+        self.tester.delete_as_group(name=self.auto_scaling_group_name,force=True)
         self.tester.delete_launch_config(self.launch_config_name)
 
     def isInService(self):
-        group = self.tester.describe_as_group(names=[self.auto_scaling_group_name]).pop()
+        group = self.tester.describe_as_group(name=[self.auto_scaling_group_name]).pop()
         allInService = True
         for instance in group.instances:
             if not str(instance.lifecycle_state).endswith('InService'):
@@ -326,13 +326,13 @@ class CloudWatchBasics(EutesterTestCase):
 
     def testAlarms(self):
         ### The number of running instances should equal the desired_capacity for the auto_scaling_group = (1)
-        group = self.tester.describe_as_group(names=[self.auto_scaling_group_name]).pop()
+        group = self.tester.describe_as_group(name=[self.auto_scaling_group_name]).pop()
         assert len(group.instances) == 1
         ### The number of running instances should still be 1 with 'exact' disabled
         self.tester.disable_alarm_actions('exact')
         self.tester.set_alarm_state('exact')
         self.tester.sleep(15)
-        group = self.tester.describe_as_group(names=[self.auto_scaling_group_name]).pop()
+        group = self.tester.describe_as_group(name=[self.auto_scaling_group_name]).pop()
         assert len(group.instances) == 1
         self.tester.enable_alarm_actions('exact')
         self.debug('The number of running ' + self.auto_scaling_group_name + ' instances = 1')
@@ -340,20 +340,20 @@ class CloudWatchBasics(EutesterTestCase):
         self.tester.set_alarm_state('change')
         self.tester.sleep(15)
         self.tester.wait_for_result(self.isInService,result=True, timeout=240)
-        group = self.tester.describe_as_group(names=[self.auto_scaling_group_name]).pop()
+        group = self.tester.describe_as_group(name=[self.auto_scaling_group_name]).pop()
         self.debug(len(group.instances))
         assert len(group.instances) == 2
         self.debug('Success the number of running ' + self.auto_scaling_group_name + ' instances changed to 2')
         ### The number of running instances should equal the total from the previous scaling_adjustment (2) - 50% = (1)
         self.tester.set_alarm_state('percent')
         self.tester.sleep(15)
-        group = self.tester.describe_as_group(names=[self.auto_scaling_group_name]).pop()
+        group = self.tester.describe_as_group(name=[self.auto_scaling_group_name]).pop()
         assert len(group.instances) == 1
         self.debug('Success the number of running ' + self.auto_scaling_group_name + ' instances decreased by 50%')
         ### This should terminate all instances in the auto_scaling_group. 
         self.tester.set_alarm_state('exact')
         self.tester.sleep(15)
-        group = self.tester.describe_as_group(names=[self.auto_scaling_group_name]).pop()
+        group = self.tester.describe_as_group(name=[self.auto_scaling_group_name]).pop()
         assert group.instances == None
         self.debug('Success the number of running ' + self.auto_scaling_group_name + ' instances is exactly 0')
         pass
