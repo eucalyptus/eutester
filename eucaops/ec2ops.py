@@ -2577,12 +2577,13 @@ class EC2ops(Eutester):
                         #First try ping
                         self.debug('Security group rules allow ping from this test machine:'+
                                    str(self.does_instance_sec_group_allow(instance, protocol='icmp', port=0)))
-                        self.ping(instance.private_ip_address, 2)
+                        self.ping(instance.ip_address, 2)
                         #now try to connect ssh
                         allow = "None"
                         try:
                             allow=str(self.does_instance_sec_group_allow(instance, protocol='tcp', port=22))
-                        except:pass
+                        except:
+                            pass
                         self.debug('Does security group rules allow ssh from this test machine:'+str(allow))
                         instance.connect_to_instance(timeout=15)
                         self.debug("Connected to instance:"+str(instance.id))
