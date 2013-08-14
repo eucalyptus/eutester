@@ -1465,7 +1465,7 @@ if __name__ == "__main__":
                      'misc_test1_exceed_max_vol_size_storage_property_per_block_dev_map',
                      'misc_test2_exceed_max_total_storage_property_per_block_dev_map',
                      'misc_test3_run_image1_check_attached_volume_states_during_stop_start',
-                     'misc_test4_run_image1_terminate_during_stopped_verify_dot_true'])
+                     'misc_test4_run_image1_terminate_during_stopped_verify_volume_dot'])
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
     for test in list:

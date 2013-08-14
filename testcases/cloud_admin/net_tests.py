@@ -82,11 +82,14 @@ test4:
 
 from eucaops import Eucaops
 from eutester.eutestcase import EutesterTestCase
+from eutester.eutestcase import SkipTestException
 from eutester.euinstance import EuInstance
 from eutester.sshconnection import SshConnection
 import time
 import os
 import sys
+import copy
+
 
 class Net_Tests(EutesterTestCase):
 
@@ -186,11 +189,12 @@ class Net_Tests(EutesterTestCase):
     def clean_method(self):
         self.tester.cleanup_artifacts()
 
-    def create_ssh_connection_to_instance_through_cc(self, instance, retry=3):
+    def create_ssh_connection_to_instance_through_cc(self, instance, retry=10):
         cc = self.get_active_cc_for_instance(instance)
         ssh = None
         attempts = 0
         elapsed = 0
+        next_retry_time = 10
         start = time.time()
         proxy_keypath=cc.machine.ssh.keypath or None
         while not ssh and attempts < retry:
@@ -199,16 +203,26 @@ class Net_Tests(EutesterTestCase):
             self.debug('Attempting to ssh to instances private ip:' + str(instance.private_ip_address) +
                        'through the cc ip:' + str(cc.hostname) + ', attempts:' +str(attempts) + "/" + str(retry) +
                        ", elapsed:" + str(elapsed))
-            ssh = SshConnection(host=instance.private_ip_address,
+            try:
+                ssh = SshConnection(host=instance.private_ip_address,
                                 keypath=instance.keypath,
                                 proxy=cc.hostname,
                                 proxy_username=cc.machine.ssh.username,
                                 proxy_password=cc.machine.ssh.password,
                                 proxy_keypath=proxy_keypath)
+            except Exception, ce:
+                tb = self.tester.get_traceback()
+                if attempts >= retry:
+                    self.debug("\n" + tb,linebyline=False)
+                self.debug('Failed to connect error:' + str(ce))
+            if attempts < retry:
+                    time.sleep(next_retry_time)
+
         if not ssh:
             raise Exception('Could not ssh to instances private ip:' + str(instance.private_ip_address) +
-                            'through the cc ip:' + str(cc.hostname) + ', attempts:' +str(attempts) + "/" + str(retry) +
+                            ' through the cc ip:' + str(cc.hostname) + ', attempts:' +str(attempts) + "/" + str(retry) +
                             ", elapsed:" + str(elapsed))
+
         return ssh
 
     def get_active_cc_for_instance(self,instance,refresh_active_cc=30):
@@ -253,11 +267,19 @@ class Net_Tests(EutesterTestCase):
             -Add instance to global 'group1_instances'
         '''
         for zone in self.zones:
+            #Create an instance, monitor it's state but disable the auto network/connect checks till afterward
             instance = self.tester.run_image(image=self.image,
                                              keypair=self.keypair,
                                              group=self.group1,
                                              zone=zone,
-                                             auto_connect=False)[0]
+                                             auto_connect=False,
+                                             monitor_to_running=False)[0]
+            self.group1_instances.append(instance)
+        self.tester.monitor_euinstances_to_running(self.group1_instances)
+        #Now run the network portion.
+        for instance in self.group1_instances:
+            self.status('Checking connectivity to:' + str(instance.id) + ":" + str(instance.private_ip_address)+
+                        ", zone:" + str(instance.placement) )
             self.assertIsInstance(instance, EuInstance)
             self.debug('Attempting to ping instances private ip from cc...')
             self.tester.wait_for_result( self.ping_instance_private_ip_from_active_cc,
@@ -271,10 +293,13 @@ class Net_Tests(EutesterTestCase):
                                                       protocol='tcp',
                                                       port=22)
             instance.connect_to_instance(timeout=90)
+            self.status('SSH connection to instance:' + str(instance.id) +
+                        ' successful to public ip:' + str(instance.ip_address) +
+                        ', zone:' + str(instance.placement))
             instance.sys('uname -a', code=0)
             instance.ssh.sftp_put(instance.keypath, os.path.basename(instance.keypath))
             instance.sys('chmod 0600 ' + os.path.basename(instance.keypath), code=0 )
-            self.group1_instances.append(instance)
+
 
 
     def test2_create_instance_in_zones_for_security_group2(self):
@@ -294,19 +319,28 @@ class Net_Tests(EutesterTestCase):
                                              keypair=self.keypair,
                                              group=self.group2,
                                              zone=zone,
-                                             auto_connect=False)[0]
+                                             auto_connect=False,
+                                             monitor_to_running=False)[0]
+            self.group2_instances.append(instance)
+        self.tester.monitor_euinstances_to_running(self.group2_instances)
+        for instance in self.group2_instances:
+            self.status('Checking connectivity to:' + str(instance.id) + ":" + str(instance.private_ip_address)+
+                        ", zone:" + str(instance.placement) )
             self.assertIsInstance(instance, EuInstance)
             self.tester.wait_for_result( self.ping_instance_private_ip_from_active_cc,
                                          result=True,
                                          timeout=90,
                                          instance=instance)
-            self.debug('Make sure ssh is working through CC path before trying between instances...')
+            self.status('Make sure ssh is working through CC path before trying between instances...')
             instance.cc_ssh = self.create_ssh_connection_to_instance_through_cc(instance)
+            self.status('SSH connection to instance:' + str(instance.id) +
+                        ' successful to private ip:' + str(instance.private_ip_address) +
+                        ', zone:' + str(instance.placement))
             instance.cc_ssh.sys('uname -a', code=0)
-            self.debug('Uploading keypair to instance in group2...')
+            self.status('Uploading keypair to instance in group2...')
             instance.cc_ssh.sftp_put(instance.keypath, os.path.basename(instance.keypath))
             instance.cc_ssh.sys('chmod 0600 ' + os.path.basename(instance.keypath), code=0 )
-            self.group2_instances.append(instance)
+            self.status('Done with create instance security group2:' + str(instance.id))
 
 
     def test3_test_ssh_between_instances_in_diff_sec_groups_same_zone(self, no_cidr=None):
@@ -380,6 +414,155 @@ class Net_Tests(EutesterTestCase):
             except:
                 self.debug('Success: Was not able to ssh from the local machine to instance in unauthorized sec group')
 
+    def test5_test_ssh_between_instances_in_same_sec_groups_different_zone(self):
+        '''
+        Definition:
+        This test attempts to check connectivity for instances in the same security group, but in different zones.
+        Note: This test requires the CC have tunnelling enabled, or the CCs in each zone be on same
+        layer 2 network segment.
+
+        Test attempts to:
+            -Iterate through each zone and attempt to ssh from an instance in group1 to an instance in a separate zone
+             but same security group1 over their private ips.
+        '''
+        zones = []
+        if len(self.zones) < 2:
+            raise SkipTestException('Skipping test5, only a single zone found or provided')
+
+        class TestZone():
+            def __init__(self, zone):
+                self.zone = zone
+                self.test_instance_group1 = None
+                self.test_instance_group2 = None
+
+        for zone in self.zones:
+            zones.append(TestZone(zone))
+            #Grab a single instance from each zone within security group1
+        for zone in zones:
+            instance = None
+            for instance in self.group1_instances:
+                if instance.placement == zone.zone:
+                    self.assertIsInstance(instance, EuInstance)
+                    zone.test_instance_group1 = instance
+                    break
+                instance = None
+            if not zone.test_instance_group1:
+                raise Exception('Could not find an instance in group1 for zone:' + str(zone.zone))
+
+        self.debug('Iterating through zones, attempting ssh between zones within same security group...')
+        for zone in zones:
+            instance1 = zone.test_instance_group1
+            for zone2 in zones:
+                if zone.zone != zone2.zone:
+                    instance2 = zone2.test_instance_group1
+                    if not instance1 or not instance2:
+                        raise Exception('Security group: ' + str(self.group1.name) + ", missing instances in a Zone:"
+                                        + str(zone.zone) + " = instance:" + str(instance1) +
+                                        ", Zone:" + str(zone2.zone) + " = instance:" + str(instance2))
+                    self.debug('Attempting to run ssh command "uname -a" between instances across zones and security groups:\n'
+                               + str(instance1.id) + '/sec grps(' + str(instance1.security_groups)+") --> "
+                               + str(instance2.id) + '/sec grps(' + str(instance2.security_groups)+")\n"
+                               + "Current test run in zones: " + str(instance1.placement) + "-->" + str(instance2.placement),
+                               linebyline=False )
+                    self.debug('Check some debug information re this data connection in this security group first...')
+                    self.tester.does_instance_sec_group_allow(instance=instance2,
+                                                              src_addr=instance1.private_ip_address,
+                                                              protocol='tcp',
+                                                              port=22)
+                    self.debug('Now Running the ssh command...')
+                    instance1.sys("ssh -o StrictHostKeyChecking=no -i "
+                                  + str(os.path.basename(instance1.keypath))
+                                  + " root@" + str(instance2.private_ip_address)
+                                  + " ' uname -a'", code=0)
+                    self.debug('Ssh between instances passed')
+
+
+
+
+    def test6_test_ssh_between_instances_in_diff_sec_groups_different_zone(self):
+        '''
+        Definition:
+        This test attempts to set up security group rules between group1 and group2 to authorize group2 access
+        from group1 across different zones.
+        If no_cidr is True security groups will be setup using cidr notication ip/mask for each instance in
+        group1, otherwise the entire source group 1 will authorized.
+        the group will be
+        Note: This test requires the CC have tunnelling enabled, or the CCs in each zone be on same
+        layer 2 network segment.
+
+        Test attempts to:
+            -Authorize security groups for inter group private ip access.
+            -Iterate through each zone and attempt to ssh from an instance in group1 to an instance in group2 over their
+                private ips.
+        '''
+        zones = []
+        if len(self.zones) < 2:
+            raise SkipTestException('Skipping test5, only a single zone found or provided')
+        self.status('Authorizing group2:' + str(self.group2.name) + ' for access from group1:' + str(self.group1.name))
+        self.tester.authorize_group(self.group2, cidr_ip=None, port=None, src_security_group_name=self.group1.name)
+
+        class TestZone():
+            def __init__(self, zone):
+                self.zone = zone
+                self.test_instance_group1 = None
+                self.test_instance_group2 = None
+
+        for zone in self.zones:
+            zones.append(TestZone(zone))
+
+
+        self.debug('Grabbing  a single instance from each zone and from each test security group to use in this test...')
+        for zone in zones:
+            instance = None
+            for instance in self.group1_instances:
+                if instance.placement == zone.zone:
+                    self.assertIsInstance(instance, EuInstance)
+                    zone.test_instance_group1 = instance
+                    break
+                instance = None
+            if not zone.test_instance_group1:
+                raise Exception('Could not find an instance in group1 for zone:' + str(zone.zone))
+            instance = None
+            for instance in self.group2_instances:
+                if instance.placement == zone.zone:
+                    self.assertIsInstance(instance, EuInstance)
+                    zone.test_instance_group2 = instance
+                    break
+            if not zone.test_instance_group2:
+                raise Exception('Could not find instance in group2 for zone:' + str(zone.zone))
+            instance = None
+
+        self.status('Checking connectivity for instances in each zone, in separate but authorized security groups...')
+        for zone in zones:
+            instance1 = zone.test_instance_group1
+            if not instance1:
+                raise Exception('Missing instance in Security group: ' + str(self.group1.name) + ', Zone:' +
+                                str(zone) + " = instance:" + str(instance1) )
+            for zone2 in zones:
+                if zone.zone != zone2.zone:
+                    instance2 = zone2.test_instance_group2
+                    if not instance2:
+                        raise Exception('Missing instance in Security group: ' + str(self.group2.name) + ', Zone:' +
+                                        str(zone2.zone) + " = instance:" + str(instance2) )
+                    self.debug('Attempting to run ssh command "uname -a" between instances across zones and security groups:\n'
+                               + str(instance1.id) + '/sec grps(' + str(instance1.security_groups)+") --> "
+                               + str(instance2.id) + '/sec grps(' + str(instance2.security_groups)+")\n"
+                               + "Current test run in zones: " + str(instance1.placement) + "-->" + str(instance2.placement),
+                               linebyline=False )
+                    self.debug('Check some debug information re this data connection in this security group first...')
+                    self.tester.does_instance_sec_group_allow(instance=instance2,
+                                                              src_addr=instance1.private_ip_address,
+                                                              protocol='tcp',
+                                                              port=22)
+                    self.debug('Now Running the ssh command...')
+                    instance1.sys("ssh -o StrictHostKeyChecking=no -i "
+                                  + str(os.path.basename(instance1.keypath))
+                                  + " root@" + str(instance2.private_ip_address)
+                                  + " ' uname -a'", code=0)
+                    self.debug('Ssh between instances passed')
+
+
+
 
 
 
@@ -395,7 +578,9 @@ if __name__ == "__main__":
         list =['test1_create_instance_in_zones_for_security_group1',
                'test2_create_instance_in_zones_for_security_group2',
                'test3_test_ssh_between_instances_in_diff_sec_groups_same_zone',
-               'test4_attempt_unauthorized_ssh_from_test_machine_to_group2']
+               'test4_attempt_unauthorized_ssh_from_test_machine_to_group2',
+               'test5_test_ssh_between_instances_in_same_sec_groups_different_zone',
+               'test6_test_ssh_between_instances_in_diff_sec_groups_different_zone']
         ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
     for test in list:
