@@ -2,8 +2,6 @@
 import json
 import os
 import time
-from boto.file import Key
-from boto.resultset import ResultSet
 from eucaops import Eucaops, S3ops
 from eutester.eutestcase import EutesterTestCase
 
