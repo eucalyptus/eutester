@@ -1887,7 +1887,7 @@ class EC2ops(Eutester):
         :param image: boto image object to deregister
         """
         gotimage = image
-
+        self.debug("Deregistering image: " + str(image))
         try:
             gotimage = self.ec2.get_all_images(image_ids=[image.id])[0]
         except IndexError, ie:
