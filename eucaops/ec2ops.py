@@ -2299,10 +2299,7 @@ class EC2ops(Eutester):
         :raise:
         """
         if image is None:
-            images = self.ec2.get_all_images()
-            for emi in images:
-                if re.match("emi",emi.id):
-                    image = emi      
+            image = self.get_emi()
         if not isinstance(image, Image):
             image = self.get_emi(emi=str(image))
         if image is None:
