@@ -85,7 +85,7 @@ class AutoScalingBasics(EutesterTestCase):
 
         ### create auto scale group
         self.auto_scaling_group_name = 'ASG-' + str(time.time())
-        self.tester.create_as_group(group_name=self.auto_scaling_group_name,
+        self.asg = self.tester.create_as_group(group_name=self.auto_scaling_group_name,
                                     availability_zones=self.tester.get_zones(),
                                     launch_config=self.launch_config_name,
                                     min_size=0,
@@ -169,7 +169,8 @@ class AutoScalingBasics(EutesterTestCase):
         self.tester.delete_all_policies()
 
         ### Test Delete Auto Scaling Group
-        self.tester.delete_as_group(name=self.auto_scaling_group_name, force=True)
+        self.tester.wait_for_result(self.gracefully_delete, True)
+        self.asg = None
 
         self.tester.sleep(10)
 
@@ -220,7 +221,7 @@ class AutoScalingBasics(EutesterTestCase):
                                          cooldown=120)
         if len(self.tester.autoscale.get_all_policies()) > 25:
             raise Exception("More than 25 policies exist for 1 auto scaling group")
-        self.tester.delete_as_group(name=asg_name)
+        self.tester.wait_for_result(self.gracefully_delete, True)
         self.asg = None
 
     def too_many_as_groups(self):
