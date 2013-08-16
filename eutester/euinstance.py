@@ -935,6 +935,7 @@ class EuInstance(Instance, TaggedResource):
         elapsed = 0
         done = False
         infobuf = None
+        outbuf = None
         start = time.time()
         if ddcmd:
             ddcmd = ddcmd

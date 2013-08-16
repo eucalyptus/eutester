@@ -41,7 +41,7 @@ class SOSreport(EutesterTestCase):
             if machine.distro.name is "vmware":
                 continue
             machine.sys("mkdir -p " + self.args.remote_dir)
-            machine.sys("sosreport --batch --tmp-dir " + self.args.remote_dir + " --ticket-number " + str(self.args.ticket_number),code=0)
+            machine.sys("sosreport --batch --skip-plugins=emc --tmp-dir " + self.args.remote_dir + " --ticket-number " + str(self.args.ticket_number),code=0)
 
     def Download(self):
         for machine in self.tester.get_component_machines():

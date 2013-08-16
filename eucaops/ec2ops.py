@@ -1887,7 +1887,7 @@ class EC2ops(Eutester):
         :param image: boto image object to deregister
         """
         gotimage = image
-
+        self.debug("Deregistering image: " + str(image))
         try:
             gotimage = self.ec2.get_all_images(image_ids=[image.id])[0]
         except IndexError, ie:
@@ -2299,10 +2299,7 @@ class EC2ops(Eutester):
         :raise:
         """
         if image is None:
-            images = self.ec2.get_all_images()
-            for emi in images:
-                if re.match("emi",emi.id):
-                    image = emi      
+            image = self.get_emi()
         if not isinstance(image, Image):
             image = self.get_emi(emi=str(image))
         if image is None:
@@ -2577,12 +2574,13 @@ class EC2ops(Eutester):
                         #First try ping
                         self.debug('Security group rules allow ping from this test machine:'+
                                    str(self.does_instance_sec_group_allow(instance, protocol='icmp', port=0)))
-                        self.ping(instance.private_ip_address, 2)
+                        self.ping(instance.ip_address, 2)
                         #now try to connect ssh
                         allow = "None"
                         try:
                             allow=str(self.does_instance_sec_group_allow(instance, protocol='tcp', port=22))
-                        except:pass
+                        except:
+                            pass
                         self.debug('Does security group rules allow ssh from this test machine:'+str(allow))
                         instance.connect_to_instance(timeout=15)
                         self.debug("Connected to instance:"+str(instance.id))
