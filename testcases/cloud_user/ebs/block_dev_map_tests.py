@@ -1352,7 +1352,8 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
                         self.debug(err)
                         errmsg += err
                     self.tester.print_euvolume_list(instance.attached_vols)
-                self.sleep(10)
+                raise Exception('This exception needs to be removed!')
+                time.sleep(10)
             self.status('Attempt to detach volume which was attached after running instance while in stopped state...')
             instance.detach_euvolume(self.base_test_volume,timeout=180)
             try:
@@ -1443,7 +1444,7 @@ if __name__ == "__main__":
     ### or use a predefined list
 
     if testcase.args.tests:
-        list = testcase.args.tests
+        list = testcase.args.tests.splitlines(',')
     else:
         if testcase.args.use_previous:
             list = ['try_existing_resources_else_create_them']
