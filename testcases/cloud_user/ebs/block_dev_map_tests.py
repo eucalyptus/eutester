@@ -95,7 +95,7 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
     #Define the bytes per gig
     gig = 1073741824
 
-    def __init__(self, url=None, tester=None, **kwargs):
+    def __init__(self, url=None, tester=None, instance_password=None, **kwargs):
         #### Pre-conditions
         self.setuptestcase()
         self.setup_parser()
@@ -155,7 +155,7 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         self.test_image4_tag_name = 'block_dev_map_tests_image4'
         self.snapshots = []
         self.images = []
-
+        self.instance_password =instance_password
 
         ### Add and authorize a group for the instance
         if self.args.zone:
@@ -167,14 +167,17 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         self.tester.authorize_group(self.group)
         self.tester.authorize_group(self.group, protocol='icmp',port='-1')
         ### Generate a keypair for the instance
-        try:
-            keys = self.tester.get_all_current_local_keys()
-            if keys:
-                self.keypair = keys[0]
-            else:
-                self.keypair = self.tester.add_keypair('mpathtestinstancekey'+str(time.time()))
-        except Exception, ke:
-            raise Exception("Failed to find/create a keypair, error:" + str(ke))
+        if self.instance_password:
+            self.keypair = None
+        else:
+            try:
+                keys = self.tester.get_all_current_local_keys()
+                if keys:
+                    self.keypair = keys[0]
+                else:
+                    self.keypair = self.tester.add_keypair('mpathtestinstancekey'+str(time.time()))
+            except Exception, ke:
+                raise Exception("Failed to find/create a keypair, error:" + str(ke))
 
         ### Get an image to work with
         if self.args.emi:
@@ -1296,7 +1299,11 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
             self.status('Applying the following block device map:')
             self.tester.print_block_device_map(bdm)
             self.status('Running instance with previously displayed block device mapping...')
-            instance = self.tester.run_image(image=image,block_device_map=bdm, keypair=self.keypair, group=self.group)[0]
+            instance = self.tester.run_image(image=image,
+                                             block_device_map=bdm,
+                                             keypair=self.keypair,
+                                             password=self.instance_password,
+                                             group=self.group)[0]
 
             self.current_test_instance = instance
             self.status('Instance now running. Resulting in the instance block device map:')
