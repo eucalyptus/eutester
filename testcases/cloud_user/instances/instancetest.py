@@ -259,6 +259,7 @@ class InstanceBasics(EutesterTestCase):
                 self.assertTrue(instance.found("nslookup " + instance.private_dns_name + " " + self.tester.ec2.host, instance.private_ip_address), "Incorrect DNS resolution for private hostname.")
             # Check nslookup to resolve local-ipv4 address to private DNS name
             self.assertTrue(instance.found("nslookup " +  instance.private_ip_address + " " + self.tester.ec2.host, instance.private_dns_name), "Incorrect DNS resolution for private IP address")
+        self.assertTrue(self.tester.ping(instance.public_dns_name))
         self.set_reservation(reservation)
         return reservation
 
