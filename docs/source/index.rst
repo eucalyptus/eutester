@@ -48,8 +48,10 @@ Required arguments: credential path::
 
 Config file example
 ----------------
-    clc.mydomain.com CENTOS 5.7 64 REPO [CC00 CLC SC00 WS]    
-    nc1.mydomain.com VMWARE ESX-4.0 64 REPO [NC00] 
+::
+
+    clc.mydomain.com CENTOS 5.7 64 REPO [CC00 CLC SC00 WS]
+    nc1.mydomain.com VMWARE ESX-4.0 64 REPO [NC00]
 
 .. toctree::
    :maxdepth: 2
