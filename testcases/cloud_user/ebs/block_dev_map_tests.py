@@ -1359,7 +1359,6 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
                         self.debug(err)
                         errmsg += err
                     self.tester.print_euvolume_list(instance.attached_vols)
-                raise Exception('This exception needs to be removed!')
                 time.sleep(10)
             self.status('Attempt to detach volume which was attached after running instance while in stopped state...')
             instance.detach_euvolume(self.base_test_volume,timeout=180)
@@ -1421,6 +1420,96 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
                     str(bdm_snapshot_dev))
         instance.terminate_and_verify()
 
+    def misc_test5_run_image1_with_multiple_bdm_terminate_in_stopped_state(self, can_detach_block_dev_map=False):
+        '''
+        Attempts to run test bfebs image#1 and test the following:
+        -Add an additional ebs block device in the map built from the base test snapshot
+        -Verify the root device is present and in bdm and by checksum on the guest
+        -Verify the root device's size specified in the bdm is also the size which appears on the running guest
+        -Verify the additional ebs device is present and in bdm and by checksum on the guest
+        -Verify the additional ebs device's size specified in the bdm is also the size which appears on the running guest
+        -Verify instance meta data for block device mapping
+        -Attach a volume while instance is in running state, verify device on guest
+        -Stop the instance and verify the instance goes to stopped state correctly
+        -While in the stopped terminate the instance
+        -Verify all volumes enter their correct Delete On Terminate states
+
+        '''
+        errmsg = ""
+        image = self.test_image1
+        bdm_snapshot_dev = '/dev/vdc'
+        bdm_snap_size = self.base_test_snapshot.volume_size
+        bdm_root_size = image.block_device_mapping.get(image.root_device_name).size
+        try:
+            self.status('Original Image block device map:')
+            self.tester.print_block_device_map(image.block_device_mapping)
+            bdm = self.add_block_device_types_to_mapping(snapshot_id=self.base_test_snapshot.id,
+                                                         device_name=bdm_snapshot_dev,
+                                                         size=bdm_snap_size,
+                                                         delete_on_terminate=True)
+            self.status('Applying the following block device map:')
+            self.tester.print_block_device_map(bdm)
+            self.status('Running instance with previously displayed block device mapping...')
+            instance = self.tester.run_image(image=image,
+                                             block_device_map=bdm,
+                                             keypair=self.keypair,
+                                             password=self.instance_password,
+                                             group=self.group)[0]
+
+            self.current_test_instance = instance
+            self.status('Instance now running. Resulting in the instance block device map:')
+            self.tester.print_block_device_map(instance.block_device_mapping)
+            self.status('Checking instance devices for md5sums which match original volume/snapshots.\nThis step will also \
+                         record the volume id, md5 and guest device within the instance for later stop, start, and detach \
+                         operations...')
+            self.status('Getting guest device for block dev map root device...')
+            guest_root_dev = instance.get_guest_dev_for_block_device_map_device(md5=self.build_image_snapshot.eutest_volume_md5,
+                                                                                md5len=self.build_image_snapshot.eutest_volume_md5len,
+                                                                                map_device=instance.root_device_name)
+            self.status('Checking device(s) size(s) on guest vs requested in bdm for root device ...')
+            root_dev_size = instance.get_blockdev_size_in_bytes(guest_root_dev) / self.gig
+            if root_dev_size != bdm_root_size:
+                raise Exception('Root device size on guest:' + str(root_dev_size) +
+                                ' !=  requested size' + str(bdm_root_size) +
+                                ", original size in image:" + str(bdm_root_size))
+            self.status('Getting guest device for block dev map, device using base test snapshot...')
+            guest_snap_dev = instance.get_guest_dev_for_block_device_map_device(md5=self.base_test_snapshot.eutest_volume_md5,
+                                                                                md5len=self.base_test_snapshot.eutest_volume_md5len,
+                                                                                map_device=bdm_snapshot_dev)
+            self.status('Checking device(s) size(s) on guest vs requested in bdm for base test snapshot ...')
+            guest_snapvol_size = instance.get_blockdev_size_in_bytes(guest_snap_dev) / self.gig
+            if guest_snapvol_size != bdm_snap_size:
+                raise Exception('Volume size on guest:'+ str(guest_snapvol_size)+' != ' + str(bdm_snap_size) +
+                                ', the size requested for bdm snap:' + str(self.base_test_snapshot.id))
+                #Get block device map before attaching volumes to use for meta data test later...
+            meta_bdm = instance.block_device_mapping
+            self.status('Attaching the base test volume to this running instance...')
+            instance.attach_euvolume(self.base_test_volume, timeout=120, overwrite=False)
+            self.status('Block dev map after attaching volume to running instance:')
+            instance.update()
+            self.status('Check block device mapping meta data...')
+            instance.check_instance_meta_data_for_block_device_mapping(root_dev=image.root_device_name, bdm=meta_bdm)
+            self.status('Stopping instance:' + str(instance.id))
+            instance.stop_instance_and_verify()
+            self.status('Monitor attached volumes for 1 minute make sure status remains in-use...')
+            start = time.time()
+            elapsed = 0
+            errmsg = ''
+        except Exception, e:
+            tb = self.tester.get_traceback()
+            errmsg = str(tb) + '\nTest Failed, err:' + str(e)
+            self.endfailure(errmsg)
+
+        finally:
+            try:
+                self.status('Terminating instance, checking for delete on termination status for ebs block devs...')
+                instance.terminate_and_verify()
+            except Exception, tv:
+                tb = self.tester.get_traceback()
+                errmsg = errmsg + "\n" + str(tb) + "\nError during terminate and verify:" + str(tv)
+            if errmsg:
+                raise Exception(errmsg)
+
 
 
     def find_remaining_devices(self,instance,known_dev_list):
@@ -1473,7 +1562,9 @@ if __name__ == "__main__":
                      'misc_test1_exceed_max_vol_size_storage_property_per_block_dev_map',
                      'misc_test2_exceed_max_total_storage_property_per_block_dev_map',
                      'misc_test3_run_image1_check_attached_volume_states_during_stop_start',
-                     'misc_test4_run_image1_terminate_during_stopped_verify_volume_dot'])
+                     'misc_test4_run_image1_terminate_during_stopped_verify_volume_dot',
+                     'misc_test5_run_image1_with_multiple_bdm_terminate_in_stopped_state'])
+        
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
     for test in list:
