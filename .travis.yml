@@ -7,9 +7,10 @@ env:
   - BOTO_VERSION=2.5.2
   - BOTO_VERSION=2.9.2
   - BOTO_VERSION=2.9.9
-
+before_install:
+  - sudo apt-get install swig
 install:
-  - pip install -q boto==BOTO_VERSION
+  - pip install -q boto==$BOTO_VERSION
   - python setup.py -q install
 # command to run tests
 script: nosetests
