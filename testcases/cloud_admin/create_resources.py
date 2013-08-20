@@ -84,7 +84,7 @@ class ResourceGeneration(EutesterTestCase):
             reservation = resource_tester.run_instance(keypair=keypair.name,group=group.name,zone=zone)
             instance = reservation.instances[0]
             assert isinstance(instance, EuInstance)
-            if not instance.public_dns_name == instance.private_ip_address:
+            if not instance.ip_address == instance.private_ip_address:
                 address = resource_tester.allocate_address()
                 resource_tester.associate_address(instance=instance, address=address)
                 resource_tester.disassociate_address_from_instance(instance)

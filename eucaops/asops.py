@@ -227,7 +227,7 @@ class ASops(Eutester):
                                     termination_policies=termination_policies)
         self.autoscale.create_auto_scaling_group(as_group)
 
-        as_group = self.describe_as_group([group_name])
+        as_group = self.describe_as_group(group_name)
 
         self.debug("SUCCESS: Created Auto Scaling Group: " + as_group.name)
         return as_group
