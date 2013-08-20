@@ -2094,9 +2094,10 @@ class EC2ops(Eutester):
             instance.update()
             elapsed = int(time.time()-start)
             self.debug("Associated IP successfully old_ip:"+str(old_ip)+' new_ip:'+str(instance.ip_address))
-        instance.update()
         if refresh_ssh:
             if isinstance(instance, EuInstance):
+                self.sleep(5)
+                instance.update()
                 self.debug('Refreshing EuInstance:'+str(instance.id)+' ssh connection to associated addr:'+str(instance.ip_address))
                 instance.reset_ssh_connection()
             else:
@@ -2135,7 +2136,7 @@ class EC2ops(Eutester):
         
         start = time.time()
         ### Ensure instance gets correct address
-        while re.search( instance.ip_address,address.public_ip):
+        while instance.ip_address != address.public_ip:
             self.debug('Instance {0} has IP "{1}" still using address "{2}" after {3} seconds'.format(instance.id, instance.ip_address, address.public_ip, str(elapsed)) )
             if elapsed > timeout:
                 raise Exception('Address ' + str(address) + ' never disassociated with instance after '+str(elapsed)+' seconds')
