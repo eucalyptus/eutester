@@ -79,7 +79,7 @@ class ResourceGeneration(EutesterTestCase):
             zone = random.choice(resource_tester.get_zones())
             keypair = resource_tester.add_keypair(resource_tester.id_generator())
             group = resource_tester.add_group(resource_tester.id_generator())
-            resource_tester.authorize_group_by_name(group_name=group.name )
+            resource_tester.authorize_group_by_name(group_name=group.name)
             resource_tester.authorize_group_by_name(group_name=group.name, port=-1, protocol="icmp" )
             reservation = resource_tester.run_instance(keypair=keypair.name,group=group.name,zone=zone)
             instance = reservation.instances[0]
@@ -89,6 +89,7 @@ class ResourceGeneration(EutesterTestCase):
                 resource_tester.associate_address(instance=instance, address=address)
                 resource_tester.disassociate_address_from_instance(instance)
                 resource_tester.release_address(address)
+            self.tester.sleep(5)
             instance.update()
             instance.reset_ssh_connection()
             volume = resource_tester.create_volume(size=1, zone=zone)
