@@ -2094,6 +2094,7 @@ class EC2ops(Eutester):
             instance.update()
             elapsed = int(time.time()-start)
             self.debug("Associated IP successfully old_ip:"+str(old_ip)+' new_ip:'+str(instance.ip_address))
+        instance.update()
         if refresh_ssh:
             if isinstance(instance, EuInstance):
                 self.debug('Refreshing EuInstance:'+str(instance.id)+' ssh connection to associated addr:'+str(instance.ip_address))
