@@ -1244,6 +1244,34 @@ class EuserviceManager(object):
             else:
                 self.wait_for_service(service,"ENABLED")
 
+    def wait_for_all_services_operational(self, timeout=600):
+        '''
+        Attempts to wait for a core set of eutester monitored services on the cloud and/or specified in the
+        config file to transition to ENABLED. In the HA case will look for both an ENABLED and DISABLED service.
+        '''
+        start = time.time()
+        elapsed = 0
+        while elapsed < timeout:
+            self.debug("wait_for_all_services_operational, elapsed: " + str(elapsed) + "/" + str(timeout))
+            elapsed = int(time.time() - start)
+            try:
+                self.print_services_list()
+                self.all_services_operational()
+                self.debug('All services were detected as operational')
+                return
+            except Exception, e:
+                tb = self.tester.get_traceback()
+                elapsed = int(time.time() - start )
+                error = tb + "\n Error waiting for all services operational, elapsed: " + \
+                        str(elapsed) + "/" + str(timeout) + ", error:" + str(e)
+                if elapsed < timeout:
+                    self.debug(error)
+                else:
+                    raise(error)
+            time.sleep(15)
+
+
+
     def get_enabled_clc(self):
         clc = self.get_enabled(self.clcs)
         if clc is None:
