@@ -13,4 +13,4 @@ install:
   - pip install -q boto==$BOTO_VERSION
   - python setup.py -q install
 # command to run tests
-script: nosetests
+script: nosetests -w tests
