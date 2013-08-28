@@ -39,7 +39,7 @@ class EucaopsTest(unittest.TestCase):
         self.tester = Eucaops(download_creds=False)
 
     def test_logger(self):
-        self.assertIsNotNone(self.tester.logger)
+        self.assertNotEqual(self.tester.logger, None)
 
 if __name__ == "__main__":
     unittest.main()
