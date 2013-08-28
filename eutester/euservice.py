@@ -1267,7 +1267,7 @@ class EuserviceManager(object):
                 if elapsed < timeout:
                     self.debug(error)
                 else:
-                    raise(error)
+                    raise Exception(error)
             time.sleep(15)
 
 
