@@ -1887,7 +1887,7 @@ class EC2ops(Eutester):
         :param image: boto image object to deregister
         """
         gotimage = image
-
+        self.debug("Deregistering image: " + str(image))
         try:
             gotimage = self.ec2.get_all_images(image_ids=[image.id])[0]
         except IndexError, ie:
@@ -2096,6 +2096,8 @@ class EC2ops(Eutester):
             self.debug("Associated IP successfully old_ip:"+str(old_ip)+' new_ip:'+str(instance.ip_address))
         if refresh_ssh:
             if isinstance(instance, EuInstance):
+                self.sleep(5)
+                instance.update()
                 self.debug('Refreshing EuInstance:'+str(instance.id)+' ssh connection to associated addr:'+str(instance.ip_address))
                 instance.reset_ssh_connection()
             else:
@@ -2134,7 +2136,10 @@ class EC2ops(Eutester):
         
         start = time.time()
         ### Ensure instance gets correct address
-        while re.search( instance.ip_address,address.public_ip):
+        ### When private addressing is enabled the pub address should be equal to the priv address
+        ### Otherwise we want to the pub address to be anything but its current and not the priv address
+        while (not instance.private_addressing and instance.ip_address != address.public_ip and instance.ip_address != address.private_ip_address) or \
+                (instance.private_addressing and instance.ip_address == instance.private_ip_address):
             self.debug('Instance {0} has IP "{1}" still using address "{2}" after {3} seconds'.format(instance.id, instance.ip_address, address.public_ip, str(elapsed)) )
             if elapsed > timeout:
                 raise Exception('Address ' + str(address) + ' never disassociated with instance after '+str(elapsed)+' seconds')
@@ -2142,7 +2147,7 @@ class EC2ops(Eutester):
             self.sleep(5)
             elapsed = int(time.time()-start)
             address = self.ec2.get_all_addresses(addresses=[address.public_ip])[0]
-        self.debug("Disassociated IP successfully")    
+        self.debug("Disassociated IP successfully")
 
     def release_address(self, address):
         """
@@ -2299,10 +2304,7 @@ class EC2ops(Eutester):
         :raise:
         """
         if image is None:
-            images = self.ec2.get_all_images()
-            for emi in images:
-                if re.match("emi",emi.id):
-                    image = emi      
+            image = self.get_emi()
         if not isinstance(image, Image):
             image = self.get_emi(emi=str(image))
         if image is None:
@@ -2364,7 +2366,7 @@ class EC2ops(Eutester):
 
             if not private_addressing:
                 try:
-                    self.wait_for_valid_ip(instance, private_addressing=private_addressing)
+                    self.wait_for_valid_ip(instance)
                 except Exception, e:
                     ip_err = "WARNING in wait_for_valid_ip: "+str(e)
                     self.debug(ip_err)
@@ -2380,7 +2382,7 @@ class EC2ops(Eutester):
         #if we can establish an SSH session convert the instances to the test class euinstance for access to instance specific test methods
         if is_reachable:
             self.debug("Converting " + str(reservation) + " into euinstances")
-            return self.convert_reservation_to_euinstance(reservation, username=username, password=password,
+            return self.convert_reservation_to_euinstance(reservation, username=username, password=password, private_addressing=private_addressing,
                                                           keyname=keypair, timeout=timeout)
         else:
             return reservation
@@ -2837,11 +2839,7 @@ class EC2ops(Eutester):
                 raise Exception(failmsg)
             else:
                 self.debug(failmsg)
-        
 
-
-
-        
     def print_euinstance_list(self,
                               euinstance_list=None,
                               state=None,
@@ -2890,11 +2888,11 @@ class EC2ops(Eutester):
         for instance in plist:
             buf += instance.printself(title=False, footer=False)
         self.debug("\n"+str(buf)+"\n")
-    
+
     @Eutester.printinfo
-    def wait_for_valid_ip(self, instances, private_addressing=False, poll_interval=10, timeout = 60):
+    def wait_for_valid_ip(self, instances, regex="0.0.0.0", poll_interval=10, timeout = 60):
         """
-        Wait for instance public DNS name to clear from 0.0.0.0
+        Wait for instance public DNS name to clear from regex
 
         :param instances:
         :param private_addressing: boolean for whether instance has private addressing enabled
@@ -2912,7 +2910,7 @@ class EC2ops(Eutester):
         elapsed = 0
         good = []
         start = time.time()
-        zeros = re.compile("0.0.0.0")
+        zeros = re.compile(regex)
         while monitoring and (elapsed <= timeout):
             elapsed = int(time.time()- start)
             for instance in monitoring:
@@ -2987,7 +2985,7 @@ class EC2ops(Eutester):
         self.debug("Done with check_system_for_dup_ip")
         
 
-    def convert_reservation_to_euinstance(self, reservation, username="root", password=None, keyname=None, timeout=60):
+    def convert_reservation_to_euinstance(self, reservation, username="root", password=None, keyname=None, private_addressing=False, timeout=60):
         """
         Convert all instances in an entire reservation into eutester.euinstance.Euinstance objects.
 
@@ -3010,7 +3008,8 @@ class EC2ops(Eutester):
                                                                                      keypair=keypair, 
                                                                                      username = username, 
                                                                                      password=password, 
-                                                                                     timeout=timeout ))
+                                                                                     timeout=timeout,
+                                                                                     private_addressing=private_addressing))
                 except Exception, e:
                     self.debug(self.get_traceback())
                     euinstance_list.append(instance)
@@ -3608,3 +3607,4 @@ class VolumeStateException(Exception):
 
     def __str__(self):
         return repr(self.value)
+

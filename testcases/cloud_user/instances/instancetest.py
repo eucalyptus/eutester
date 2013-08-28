@@ -64,6 +64,15 @@ class InstanceBasics(EutesterTestCase):
         self.run_instance_params = {'image': self.image, 'user_data': user_data, 'username': instance_user,
                                 'keypair': self.keypair.name, 'group': self.group.name,'zone': self.zone,
                                 'timeout': self.instance_timeout}
+        self.managed_network = True
+
+        ### If I have access to the underlying infrastructure I can look
+        ### at the network mode and only run certain tests where it makes sense
+        if hasattr(self.tester,"service_manager"):
+            cc = self.tester.get_component_machines("cc")[0]
+            network_mode = cc.sys("cat " + self.tester.eucapath + "/etc/eucalyptus/eucalyptus.conf | grep MODE")[0]
+            if re.search("(SYSTEM|STATIC)", network_mode):
+                self.managed_network = False
 
     def set_reservation(self, reservation):
         self.reservation_lock.acquire()
@@ -120,6 +129,8 @@ class InstanceBasics(EutesterTestCase):
             self.tester.disassociate_address_from_instance(instance)
             self.tester.release_address(self.address)
             self.address = None
+            assert isinstance(instance, EuInstance)
+            self.tester.sleep(5)
             instance.update()
             self.assertTrue( self.tester.ping(instance.ip_address), "Could not ping after dissassociate")
         self.set_reservation(reservation)
@@ -243,11 +254,14 @@ class InstanceBasics(EutesterTestCase):
             # Check nslookup to resolve public DNS Name to local-ipv4 address
             self.assertTrue(instance.found("nslookup " + instance.public_dns_name + " " + self.tester.ec2.host, instance.private_ip_address), "Incorrect DNS resolution for hostname.")
             # Check nslookup to resolve public-ipv4 address to public DNS name
-            self.assertTrue( instance.found("nslookup " +  instance.ip_address + " " + self.tester.ec2.host, instance.public_dns_name), "Incorrect DNS resolution for public IP address")
+            if self.managed_network:
+                self.assertTrue( instance.found("nslookup " +  instance.ip_address + " " + self.tester.ec2.host, instance.public_dns_name), "Incorrect DNS resolution for public IP address")
             # Check nslookup to resolve private DNS Name to local-ipv4 address
-            self.assertTrue(instance.found("nslookup " + instance.private_dns_name + " " + self.tester.ec2.host, instance.private_ip_address), "Incorrect DNS resolution for private hostname.")
+            if self.managed_network:
+                self.assertTrue(instance.found("nslookup " + instance.private_dns_name + " " + self.tester.ec2.host, instance.private_ip_address), "Incorrect DNS resolution for private hostname.")
             # Check nslookup to resolve local-ipv4 address to private DNS name
             self.assertTrue(instance.found("nslookup " +  instance.private_ip_address + " " + self.tester.ec2.host, instance.private_dns_name), "Incorrect DNS resolution for private IP address")
+        self.assertTrue(self.tester.ping(instance.public_dns_name))
         self.set_reservation(reservation)
         return reservation
 

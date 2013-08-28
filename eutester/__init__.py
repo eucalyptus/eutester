@@ -32,7 +32,7 @@
 #
 # Author: vic.iglesias@eucalyptus.com
 
-__version__ = '0.0.7'
+__version__ = '0.0.8'
 
 import re
 import os
@@ -84,8 +84,6 @@ class Eutester(object):
             self.aws_secret_access_key = self.get_secret_key()
             self.account_id = self.get_account_id()
             self.user_id = self.get_user_id()
-        else:
-            raise Exception("Please provide credpath argument")
 
     def get_access_key(self):
         if not self.aws_access_key_id:     

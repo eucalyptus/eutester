@@ -211,7 +211,7 @@ class EuInstance(Instance, TaggedResource):
             buf += str("-------------------------------------------------------------------------------------------------------------------------------------------------------------------\n")
             buf += str('INST_ID').center(11)+'|'+str('EMI').center(13)+'|'+str('RES_ID').center(11)+'|'+str('LASTSTATE').center(10)+'|'+str('PRIV_ADDR').center(10)+'|'+str('AGE@STATUS').center(13)+'|'+str('VMTYPE').center(12)+'|'+str('ROOT_VOL').center(13)+'|'+str('CLUSTER').center(25)+'|'+str('PUB_IP').center(16)+'|'+str('PRIV_IP')+'\n'
             buf += str("-------------------------------------------------------------------------------------------------------------------------------------------------------------------\n")
-        buf += str(self.id).center(11)+'|'+str(self.image_id).center(13)+'|'+str(self.reservation.id).center(11)+'|'+str(self.laststate).center(10)+'|'+str(self.private_addressing).center(10)+'|'+str(self.age_at_state).center(13)+'|'+str(self.instance_type).center(12)+'|'+str(bdmvol).center(13)+'|'+str(self.placement).center(25)+'|'+str(self.public_dns_name).center(16)+'|'+str(self.private_ip_address).rstrip()
+        buf += str(self.id).center(11)+'|'+str(self.image_id).center(13)+'|'+str(self.reservation.id).center(11)+'|'+str(self.laststate).center(10)+'|'+str(self.private_addressing).center(10)+'|'+str(self.age_at_state).center(13)+'|'+str(self.instance_type).center(12)+'|'+str(bdmvol).center(13)+'|'+str(self.placement).center(25)+'|'+str(self.ip_address).center(16)+'|'+str(self.private_ip_address).rstrip()
         if footer:
             buf += str("\n-------------------------------------------------------------------------------------------------------------------------------------------------------------------")
         if printmethod:
@@ -797,7 +797,7 @@ class EuInstance(Instance, TaggedResource):
     @Eutester.printinfo
     def random_fill_volume(self,euvolume,srcdev=None, length=None, timepergig=90):
         '''
-        Attempts to fill the entie given euvolume with unique non-zero data.
+        Attempts to fill the entire given euvolume with unique non-zero data.
         The srcdev is read from in a set size, and then used to write to the euvolume to populate it. The file 
         helps with both speed up the copy in the urandom case, and adds both some level of randomness another src device as well as 
         allows smaller src devs to be used to fill larger euvolumes by repeatedly reading into the copy. 
@@ -827,10 +827,11 @@ class EuInstance(Instance, TaggedResource):
             timeout = timepergig * ((length/gb) or 1)
         #write the volume id into the volume for starters
         ddcmd = 'echo '+str(euvolume.id)+' | dd of='+str(voldev)
-        dd_res_for_id = self.dd_monitor(ddcmd=ddcmd, timeout=timeout)
+        dd_res_for_id = self.dd_monitor(ddcmd=ddcmd, timeout=timeout, sync=False)
         len_remaining = length - int(dd_res_for_id['dd_bytes'])
         self.debug('length remaining to write after adding volumeid:' + str(len_remaining))
         if len_remaining <= 0:
+            self.sys('sync')
             return dd_res_for_id
         ddbs = 1024
         if len_remaining < ddbs:
@@ -870,7 +871,8 @@ class EuInstance(Instance, TaggedResource):
                    ddseek=None,
                    timeout=300,
                    poll_interval=1,
-                   tmpfile=None):
+                   tmpfile=None,
+                   sync=True):
         '''
         Executes dd command on instance, monitors and displays ongoing status, and returns stats dict for dd outcome
         :type ddif: str
@@ -1067,8 +1069,9 @@ class EuInstance(Instance, TaggedResource):
             raise Exception('dd_monitor timed out before dd cmd completed, elapsed:'+str(elapsed)+'/'+str(timeout))
         else:
             #sync to ensure writes to dev
-            self.sys('sync', code=0)
-            elapsed = int(time.time()-start)
+            if sync:
+                self.sys('sync', code=0)
+                elapsed = int(time.time()-start)
         #if we have any info from exceptions caught during parsing, print that here...
         if infobuf:
             print infobuf
