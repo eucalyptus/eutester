@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 import time
 from concurrent.futures import ThreadPoolExecutor
 from eucaops import Eucaops
@@ -28,14 +28,18 @@ class WalrusConcurrent(EutesterTestCase):
     def Concurrent(self):
         key_payload = self.tester.id_generator(self.args.size)
         thread_count = self.args.number
+        thread_pool = []
         with ThreadPoolExecutor(max_workers=thread_count) as executor:
-                thread_pool = []
                 for i in xrange(thread_count):
                         thread_pool.append(executor.submit(self.tester.upload_object, bucket_name=self.bucket_name, key_name="test" + str(i), contents=key_payload))
         end = time.time()
         total = end - self.start
         self.tester.debug("\nExecution time: {0}\n# of Objects: {1}\nObject Size: {2}B\nConcurrency Level of {3}".format(
                             total, self.args.number, self.args.size, self.args.concurrent))
+        with ThreadPoolExecutor(max_workers=thread_count) as executor:
+                for object in thread_pool:
+                        thread_pool.append(executor.submit(self.tester.delete_object, object))
+
 
 if __name__ == "__main__":
     testcase = WalrusConcurrent()

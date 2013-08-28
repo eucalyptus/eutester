@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 # Software License Agreement (BSD License)
 #
@@ -323,7 +323,7 @@ if __name__ == "__main__":
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
     for test in list:
-        unit_list.append( testcase.create_testunit_by_name(test) )
+        unit_list.append( testcase.create_testunit_by_name(test))
 
     ### Run the EutesterUnitTest objects
     result = testcase.run_test_case_list(unit_list)
