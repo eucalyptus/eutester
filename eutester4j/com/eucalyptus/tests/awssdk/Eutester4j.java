@@ -91,7 +91,7 @@ class Eutester4j {
         s3 = getS3Client(ACCESS_KEY, SECRET_KEY, S3_ENDPOINT);
         IMAGE_ID = findImage();
         KERNEL_ID = findKernel();
-        RAMDISK_ID = finadRamdisk();
+        RAMDISK_ID = findRamdisk();
         AVAILABILITY_ZONE = findAvalablityZone();
         NAME_PREFIX = eucaUUID() + "-";
         print("Using resource prefix for test: " + NAME_PREFIX);
@@ -327,7 +327,7 @@ class Eutester4j {
         return imagesResult.getImages().get(0).getKernelId();
     }
 
-    public static String finadRamdisk(){
+    public static String findRamdisk(){
         // Find an appropriate image to launch
         final DescribeImagesResult imagesResult = ec2
                 .describeImages(new DescribeImagesRequest()
