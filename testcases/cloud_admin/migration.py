@@ -69,7 +69,7 @@ class MigrationTest(EutesterTestCase):
     def clean_method(self):
         self.tester.cleanup_artifacts()
 
-    def MigrationBasicInstanceStore(self, volume=None):
+    def MigrationBasic(self, volume=None):
         enabled_clc = self.tester.service_manager.get_enabled_clc().machine
         reservation = self.tester.run_instance(self.image, username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, zone=self.zone)
         instance = reservation.instances[0]
@@ -89,6 +89,7 @@ class MigrationTest(EutesterTestCase):
             return source_nc.hostname == destination_nc.hostname
 
         self.tester.wait_for_result(wait_for_new_nc, False, timeout=600, poll_wait=60)
+        self.assertTrue(self.tester.ping(instance.public_dns_name), 'Could not ping instance')
 
         if volume_device:
             instance.sys("ls " + volume_device, code=0)
@@ -102,11 +103,11 @@ class MigrationTest(EutesterTestCase):
     def MigrationInstanceStoreWithVol(self):
         volume = self.tester.create_volume(zone=self.zone)
         assert isinstance(volume, EuVolume)
-        self.MigrationBasicInstanceStore(volume)
+        self.MigrationBasic(volume)
 
     def MigrationBasicEBSBacked(self, volume=None):
         self.image = self.tester.get_emi(root_device_type="ebs")
-        self.MigrationBasicInstanceStore(volume)
+        self.MigrationBasic(volume)
 
     def MigrationBasicEBSBackedWithVol(self):
         volume = self.tester.create_volume(zone=self.zone)
@@ -138,11 +139,21 @@ class MigrationTest(EutesterTestCase):
                 self.tester.wait_for_result(wait_for_new_nc, True, timeout=600, poll_wait=60)
                 self.assertTrue( self.tester.ping(instance.public_dns_name), 'Could not ping instance')
 
+        # migrate the instance to it's original source node
+        self.destination_nc = self.source_nc
+        enabled_clc.sys("source " + self.tester.credpath + "/eucarc && " +
+                            self.tester.eucapath + "/usr/sbin/euca-migrate-instances -i " +
+                            instance.id + " --dest " + self.destination_nc.machine.hostname)
+
+        self.tester.wait_for_result(wait_for_new_nc, True, timeout=600, poll_wait=60)
+        self.assertTrue(self.tester.ping(instance.public_dns_name), 'Could not ping instance')
+
     def MigrationToDestEBSBacked(self):
         self.image = self.tester.get_emi(root_device_type="ebs")
-        self.MigrationBasicInstanceStore()
+        self.MigrateToDest()
 
     def EvacuateNC(self, volume_list = []):
+        instance_list = []
         enabled_clc = self.tester.service_manager.get_enabled_clc().machine
         self.nodes = self.tester.service_manager.populate_nodes()
         # pop out one NC to fill in
@@ -163,10 +174,11 @@ class MigrationTest(EutesterTestCase):
         for node in self.nodes:
             set_state(node, "STOPPED")
 
-        # run 3/4 instances
-        for i in xrange(self.numberOfResources):
-            reservation = self.tester.run_instance(self.image, username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, zone=self.zone)
-            instance = reservation.instances[0]
+        reservation = self.tester.run_instance(self.image, min=3, max=3, username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, zone=self.zone)
+
+        for i in xrange(3):
+            instance = reservation.instances[i]
+            instance_list.append(instance)
             assert isinstance(instance, EuInstance)
             volume_device = None
             if volume_list:
@@ -194,6 +206,9 @@ class MigrationTest(EutesterTestCase):
 
         self.tester.wait_for_result(wait_for_evacuation, True, timeout=600, poll_wait=60)
 
+        for inst in instance_list:
+            self.assertTrue(self.tester.ping(inst.public_dns_name), 'Could not ping instance')
+
     def EvacuateNCWithVol(self):
         volume_list = []
         for i in xrange(self.numberOfResources):
@@ -210,12 +225,12 @@ if __name__ == "__main__":
     testcase = MigrationTest()
     ### Use the list of tests passed from config/command line to determine what subset of tests to run
     ### or use a predefined list
-    list = testcase.args.tests or ["MigrateToDest"]
+    list = testcase.args.tests or ["MigrationBasic"]
 
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
     for test in list:
-        unit_list.append( testcase.create_testunit_by_name(test) )
+        unit_list.append(testcase.create_testunit_by_name(test))
 
     ### Run the EutesterUnitTest objects
     result = testcase.run_test_case_list(unit_list,clean_on_exit=True)
