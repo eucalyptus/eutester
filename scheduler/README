@@ -1,0 +1,13 @@
+Tests for scheduling.  
+
+* download testdept from
+
+http://code.google.com/p/test-dept/
+
+* place eucalyptus build tree in directory next to eutester
+
+* update scheduler function in scheduler.c if need be
+
+* run 
+	make
+
