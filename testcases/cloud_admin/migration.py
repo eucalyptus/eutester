@@ -51,6 +51,9 @@ class MigrationTest(EutesterTestCase):
                 self.parser.add_argument(arg)
         self.get_args()
         self.tester = Eucaops( config_file=self.args.config, password=self.args.password)
+        self.numberOfNodes = self.tester.service_manager.get_all_node_controllers()
+        if len(self.numberOfNodes) < 2:
+            exit("Not enough NCs to test instance migration.")
 
         self.group = self.tester.add_group(group_name="group-" + str(time.time()))
         self.tester.authorize_group_by_name(group_name=self.group.name )
@@ -71,8 +74,8 @@ class MigrationTest(EutesterTestCase):
 
     def MigrationBasic(self, volume=None):
         enabled_clc = self.tester.service_manager.get_enabled_clc().machine
-        reservation = self.tester.run_instance(self.image, username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, zone=self.zone)
-        instance = reservation.instances[0]
+        self.reservation = self.tester.run_instance(self.image, username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, zone=self.zone)
+        instance = self.reservation.instances[0]
         assert isinstance(instance, EuInstance)
         volume_device = None
         if volume is not None:
@@ -100,6 +103,10 @@ class MigrationTest(EutesterTestCase):
         else:
             destination_nc.machine.sys("esxcli vm process list | grep " + instance.id, code=0)
 
+        self.tester.terminate_instances(reservation=self.reservation)
+        if volume is not None:
+            self.tester.delete_volume(volume)
+
     def MigrationInstanceStoreWithVol(self):
         volume = self.tester.create_volume(zone=self.zone)
         assert isinstance(volume, EuVolume)
@@ -116,8 +123,8 @@ class MigrationTest(EutesterTestCase):
 
     def MigrateToDest(self):
         enabled_clc = self.tester.service_manager.get_enabled_clc().machine
-        reservation = self.tester.run_instance(self.image, username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, zone=self.zone)
-        instance = reservation.instances[0]
+        self.reservation = self.tester.run_instance(self.image, username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, zone=self.zone)
+        instance = self.reservation.instances[0]
         self.tester.service_manager.populate_nodes()
         self.source_nc = self.tester.service_manager.get_all_node_controllers(instance_id=instance.id)[0]
 
@@ -148,6 +155,8 @@ class MigrationTest(EutesterTestCase):
         self.tester.wait_for_result(wait_for_new_nc, True, timeout=600, poll_wait=60)
         self.assertTrue(self.tester.ping(instance.public_dns_name), 'Could not ping instance')
 
+        self.tester.terminate_instances(reservation=self.reservation)
+
     def MigrationToDestEBSBacked(self):
         self.image = self.tester.get_emi(root_device_type="ebs")
         self.MigrateToDest()
@@ -174,10 +183,11 @@ class MigrationTest(EutesterTestCase):
         for node in self.nodes:
             set_state(node, "STOPPED")
 
-        reservation = self.tester.run_instance(self.image, min=3, max=3, username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, zone=self.zone)
+        self.image = self.tester.get_emi(root_device_type="instance-store")
+        self.reservation = self.tester.run_instance(self.image, min=3, max=3, username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, zone=self.zone)
 
         for i in xrange(3):
-            instance = reservation.instances[i]
+            instance = self.reservation.instances[i]
             instance_list.append(instance)
             assert isinstance(instance, EuInstance)
             volume_device = None
@@ -209,6 +219,10 @@ class MigrationTest(EutesterTestCase):
         for inst in instance_list:
             self.assertTrue(self.tester.ping(inst.public_dns_name), 'Could not ping instance')
 
+        self.tester.terminate_instances(reservation=self.reservation)
+        if volume_list:
+            self.tester.delete_volumes(volume_list)
+
     def EvacuateNCWithVol(self):
         volume_list = []
         for i in xrange(self.numberOfResources):
@@ -225,7 +239,7 @@ if __name__ == "__main__":
     testcase = MigrationTest()
     ### Use the list of tests passed from config/command line to determine what subset of tests to run
     ### or use a predefined list
-    list = testcase.args.tests or ["MigrationBasic"]
+    list = testcase.args.tests or ["MigrationBasic", "MigrationInstanceStoreWithVol", "MigrationBasicEBSBacked", "MigrationBasicEBSBackedWithVol", "MigrateToDest", "MigrationToDestEBSBacked", "EvacuateNC", "EvacuateNCWithVol", "EvacuateNCAllEBS"]
 
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
