@@ -137,7 +137,7 @@ class ASops(Eutester):
             as_connection_args = copy.copy(connection_args)
             as_connection_args['path'] = path
             as_connection_args['region'] = as_region
-            self.debug("Attempting to create auto scale connection to " + as_region.endpoint + ":" + str(port) + path)
+            self.debug("Attempting to create auto scale connection to " + as_region.endpoint + ':' + str(port) + path)
             self.autoscale = boto.ec2.autoscale.AutoScaleConnection(**as_connection_args)
         except Exception, e:
             self.critical("Was unable to create auto scale connection because of exception: " + str(e))

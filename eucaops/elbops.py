@@ -134,7 +134,7 @@ class ELBops(Eutester):
             elb_connection_args = copy.copy(connection_args)
             elb_connection_args['path'] = path
             elb_connection_args['region'] = elb_region
-            self.debug("Attempting to create cloud watch connection to " + elb_region.endpoint + str(port) + path)
+            self.debug("Attempting to create load balancer connection to " + elb_region.endpoint + ':' + str(port) + path)
             self.elb = boto.connect_elb(**elb_connection_args)
         except Exception, e:
             self.critical("Was unable to create elb connection because of exception: " + str(e))
