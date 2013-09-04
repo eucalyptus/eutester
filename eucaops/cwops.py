@@ -168,7 +168,7 @@ class CWops(Eutester):
             cw_connection_args = copy.copy(connection_args)
             cw_connection_args['path'] = path
             cw_connection_args['region'] = cw_region
-            self.debug('Attempting to create cloud watch connection to ' + cw_region.endpoint + str(port) + path)
+            self.debug('Attempting to create cloud watch connection to ' + cw_region.endpoint + ':' + str(port) + path)
             self.cw = boto.connect_cloudwatch(**cw_connection_args)
         except Exception, e:
             self.critical('Was unable to create Cloud Watch connection because of exception: ' + str(e))
