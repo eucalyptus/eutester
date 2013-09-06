@@ -85,16 +85,7 @@ class LoadBalancing(EutesterTestCase):
                                                               load_balancer_port=self.load_balancer_port)
         assert isinstance(self.load_balancer, LoadBalancer)
 
-        ### Populate resources we will use and cleanup
-        self.address = None
-        self.volume = None
-        self.snapshot = None
-        self.reservation = None
-        self.load_balancer = None
-
-
     def clean_method(self):
-        ### Terminate the reservation if it is still up
         self.tester.cleanup_artifacts()
 
     def GenerateRequests(self):
