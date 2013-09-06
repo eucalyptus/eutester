@@ -828,15 +828,19 @@ class EutesterTestCase(unittest.TestCase):
             except: 
                 pass
             self.testlist = copy.copy(list)
-            total = 0
             passed = 0
+            failed = 0
+            not_run = 0
             for test in list:
-                total += 1
                 if test.result == EutesterTestResult.passed:
                     passed += 1
-            print "passed:"+str(passed)+" out of total:"+str(total)
-            self.debug('</pre>')
-            if total != passed:
+                if test.result == EutesterTestResult.failed:
+                    failed += 1
+                if test.result == EutesterTestResult.not_run:
+                    not_run += 1
+            total = passed + failed + not_run
+            print "passed:"+str(passed)+" failed:" + str(failed) + " not_run:" + str(not_run) + " total:"+str(total)
+            if failed:
                 return(1)
             else:
                 return(0)
