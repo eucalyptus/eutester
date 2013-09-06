@@ -1255,10 +1255,10 @@ class Mpath_Suite(EutesterTestCase):
 
     def test9_test_storage_controller_path_fail_while_create_snapshot_in_progress(self):
         errmsg=""
+        self.pre_test_check_should_run_sc_multipath_tests_on_this_system()
         self.status('Get test instance to run test...')
         instance = self.get_test_instance()
         zone = str(instance.placement)
-        self.pre_test_check_should_run_sc_multipath_tests_on_this_system()
         self.status('Attempting to get enabled sc and scpaths from zone:' +str(zone))
         sc = self.get_enabled_storage_controller_for_zone(zone=zone)
         paths = self.get_sc_paths_by_sc(sc)
