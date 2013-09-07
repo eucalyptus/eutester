@@ -3469,13 +3469,13 @@ class EC2ops(Eutester):
         for instance in reservation.instances:
             assert isinstance(instance, EuInstance)
             try:
-                instance.sys("which apt-get",code=0)
+                instance.sys("which apt-get", code=0)
                 ## Debian based Linux
-                instance.sys("apt-get install -y apache2")
+                instance.sys("apt-get install -y apache2", code=0)
                 instance.sys("echo \"" + instance.id +"\" > /var/www/" + filename)
             except eutester.sshconnection.CommandExitCodeException, e:
                 ### Enterprise Linux
-                instance.sys("yum install -y httpd")
+                instance.sys("yum install -y httpd", code=0)
                 instance.sys("service httpd start")
                 instance.sys("chkconfig httpd on")
                 instance.sys("echo \"" + instance.id +"\" > /var/www/html/" + filename)
