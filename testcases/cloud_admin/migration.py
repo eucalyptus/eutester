@@ -63,8 +63,9 @@ class MigrationTest(EutesterTestCase):
         self.keypath = '%s/%s.pem' % (os.curdir, self.keypair.name)
 
         self.image = self.args.emi
-        if not self.image:
-            self.image = self.tester.get_emi(root_device_type="instance-store")
+        self.ephemeral_image = self.tester.get_emi(root_device_type="instance-store")
+        self.ebs_image = self.tester.get_emi(root_device_type="ebs")
+
         self.numberOfResources = 3
         zones = self.tester.ec2.get_all_zones()
         self.zone = random.choice(zones).name
@@ -72,11 +73,18 @@ class MigrationTest(EutesterTestCase):
     def clean_method(self):
         self.tester.cleanup_artifacts()
 
-    def MigrationBasic(self, volume=None):
+    def MigrationBasic(self, volume=None, machine_image=None):
         enabled_clc = self.tester.service_manager.get_enabled_clc().machine
+
+        if machine_image is None:
+            self.image = self.ephemeral_image
+        else:
+            self.image = self.ebs_image
+
         self.reservation = self.tester.run_instance(self.image, username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, zone=self.zone)
         instance = self.reservation.instances[0]
         assert isinstance(instance, EuInstance)
+
         volume_device = None
         if volume is not None:
             volume_device = instance.attach_euvolume(volume)
@@ -110,19 +118,25 @@ class MigrationTest(EutesterTestCase):
     def MigrationInstanceStoreWithVol(self):
         volume = self.tester.create_volume(zone=self.zone)
         assert isinstance(volume, EuVolume)
-        self.MigrationBasic(volume)
+        self.MigrationBasic(volume, None)
 
     def MigrationBasicEBSBacked(self, volume=None):
-        self.image = self.tester.get_emi(root_device_type="ebs")
-        self.MigrationBasic(volume)
+        machine_image = "ebs"
+        self.MigrationBasic(volume, machine_image)
 
     def MigrationBasicEBSBackedWithVol(self):
         volume = self.tester.create_volume(zone=self.zone)
         assert isinstance(volume, EuVolume)
         self.MigrationBasicEBSBacked(volume)
 
-    def MigrateToDest(self):
+    def MigrateToDest(self, machine_image=None):
         enabled_clc = self.tester.service_manager.get_enabled_clc().machine
+
+        if machine_image is None:
+            self.image = self.ephemeral_image
+        else:
+            self.image = self.ebs_image
+
         self.reservation = self.tester.run_instance(self.image, username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, zone=self.zone)
         instance = self.reservation.instances[0]
         self.tester.service_manager.populate_nodes()
@@ -158,10 +172,10 @@ class MigrationTest(EutesterTestCase):
         self.tester.terminate_instances(reservation=self.reservation)
 
     def MigrationToDestEBSBacked(self):
-        self.image = self.tester.get_emi(root_device_type="ebs")
-        self.MigrateToDest()
+        machine_image = "ebs"
+        self.MigrateToDest(machine_image)
 
-    def EvacuateNC(self, volume_list = []):
+    def EvacuateNC(self, volume_list = [], machine_image=None):
         instance_list = []
         enabled_clc = self.tester.service_manager.get_enabled_clc().machine
         self.nodes = self.tester.service_manager.populate_nodes()
@@ -183,10 +197,14 @@ class MigrationTest(EutesterTestCase):
         for node in self.nodes:
             set_state(node, "STOPPED")
 
-        self.image = self.tester.get_emi(root_device_type="instance-store")
-        self.reservation = self.tester.run_instance(self.image, min=3, max=3, username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, zone=self.zone)
+        if machine_image is None:
+            self.image = self.ephemeral_image
+        else:
+            self.image = self.ebs_image
 
-        for i in xrange(3):
+        self.reservation = self.tester.run_instance(self.image, min=self.numberOfResources, max=self.numberOfResources, username=self.args.instance_user, keypair=self.keypair.name, group=self.group.name, zone=self.zone)
+
+        for i in xrange(self.numberOfResources):
             instance = self.reservation.instances[i]
             instance_list.append(instance)
             assert isinstance(instance, EuInstance)
@@ -229,11 +247,12 @@ class MigrationTest(EutesterTestCase):
             volume = self.tester.create_volume(zone=self.zone)
             assert isinstance(volume, EuVolume)
             volume_list.append(volume)
-        self.EvacuateNC(volume_list)
+        self.EvacuateNC(volume_list, None)
 
     def EvacuateNCAllEBS(self):
-        self.image = self.tester.get_emi(root_device_type="ebs")
-        self.EvacuateNC()
+        volume_list = []
+        machine_image = "ebs"
+        self.EvacuateNC(volume_list, machine_image)
 
 if __name__ == "__main__":
     testcase = MigrationTest()
