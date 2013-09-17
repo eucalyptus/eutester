@@ -297,7 +297,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
 
 
 
-    def clean_up_test_volumes(self, volumes=None, min_timeout=180, timeout_per_vol=20):
+    def clean_up_test_volumes(self, volumes=None, min_timeout=180, timeout_per_vol=30):
         """
         Definition: cleaup helper method intended to clean up volumes created within a test, after the test has ran.
 
