@@ -78,22 +78,29 @@ class LoadBalancing(EutesterTestCase):
         (self.web_servers, self.filename) = self.tester.create_web_servers(keypair=self.keypair,
                                                                           group=self.group,
                                                                           zone=self.zone,
-                                                                          port=self.load_balancer_port)
+                                                                          port=self.load_balancer_port,
+                                                                          filename='instance-name',
+                                                                          image=self.image)
 
-        self.load_balancer = self.tester.create_load_balancer(zones= [self.zone],
+        self.load_balancer = self.tester.create_load_balancer(zones=[self.zone],
                                                               name="test-" + str(time.time()),
                                                               load_balancer_port=self.load_balancer_port)
         assert isinstance(self.load_balancer, LoadBalancer)
+        self.tester.register_lb_instances(self.load_balancer.name,
+                                          self.web_servers.instances)
 
     def clean_method(self):
         self.tester.cleanup_artifacts()
 
     def GenerateRequests(self):
         """
-        This will test the most basic use case for a load balancer. Uses to backend instances with httpd servers
+        This will test the most basic use case for a load balancer.
+        Uses to backend instances with httpd servers.
         """
-        lb_url = self.load_balancer.dns_name + ":" + self.load_balancer_port
-        self.tester.generate_http_requests(url=lb_url, count=100)
+        dns = self.tester.service_manager.get_enabled_dns()
+        lb_ip = dns.resolve(self.load_balancer.dns_name)
+        lb_url = "http://{0}:{1}/instance-name".format(lb_ip, self.load_balancer_port)
+        self.tester.generate_http_requests(url=lb_url, count=1000)
 
 if __name__ == "__main__":
     testcase = LoadBalancing()
