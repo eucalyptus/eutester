@@ -274,8 +274,13 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
         """
         :param lbs: optional list of load balancers, otherwise it will attempt to delete from test_resources[]
         """
-        lbs = lbs or self.test_resources['load_balancers']
-        self.delete_load_balancers(lbs)
+        if lbs:
+            self.delete_load_balancers(lbs)
+        else:
+            try:
+                self.delete_load_balancers(self.test_resources['load_balancers'])
+            except KeyError:
+                self.debug("No loadbalancers to delete")
 
     def cleanup_test_snapshots(self,snaps=None, clean_images=False, add_time_per_snap=10, wait_for_valid_state=120, base_timeout=180):
         """
