@@ -127,7 +127,7 @@ class AutoScalingBasics(EutesterTestCase):
         self.debug("**** Created Auto Scaling Policies: " + self.up_policy_name + " " + self.down_policy_name + " " +
                    self.exact_policy_name)
 
-        self.tester.wait_for_result(self.scaling_activities_complete, True, timeout=120)
+        self.tester.wait_for_result(self.scaling_activities_complete, True, timeout=180)
         ### Test Execute ChangeInCapacity Auto Scaling Policy
         self.tester.execute_as_policy(policy_name=self.up_policy_name,
                                       as_group=self.auto_scaling_group_name,
@@ -137,7 +137,7 @@ class AutoScalingBasics(EutesterTestCase):
         self.debug("Executed  ChangeInCapacity policy, increased desired capacity to: " +
                    str(self.tester.describe_as_group(self.auto_scaling_group_name).desired_capacity))
 
-        self.tester.wait_for_result(self.scaling_activities_complete, True, timeout=120)
+        self.tester.wait_for_result(self.scaling_activities_complete, True, timeout=180)
 
         ### Test Execute PercentChangeInCapacity Auto Scaling Policy
         self.tester.execute_as_policy(policy_name=self.down_policy_name,
@@ -148,7 +148,7 @@ class AutoScalingBasics(EutesterTestCase):
         self.debug("Executed PercentChangeInCapacity policy, decreased desired capacity to: " +
                    str(self.tester.describe_as_group(self.auto_scaling_group_name).desired_capacity))
 
-        self.tester.wait_for_result(self.scaling_activities_complete, True, timeout=120)
+        self.tester.wait_for_result(self.scaling_activities_complete, True, timeout=180)
 
         ### Test Execute ExactCapacity Auto Scaling Policy
         self.tester.execute_as_policy(policy_name=self.exact_policy_name,
@@ -159,7 +159,7 @@ class AutoScalingBasics(EutesterTestCase):
         self.debug("Executed ExactCapacity policy, exact capacity is: " +
                    str(self.tester.describe_as_group(self.auto_scaling_group_name).desired_capacity))
 
-        self.tester.wait_for_result(self.scaling_activities_complete, True, timeout=120)
+        self.tester.wait_for_result(self.scaling_activities_complete, True, timeout=180)
 
         ### Test Delete all Auto Scaling Policies
         self.tester.delete_all_policies()

@@ -11,7 +11,7 @@ class SampleTest(EutesterTestCase):
         self.parser.add_argument("--account-prefix",default="test-account-")
         self.parser.add_argument("--group-prefix",default="test-group-")
         self.parser.add_argument("--user-prefix",default="test-user-")
-        self.parser.add_argument("--user-number",default=2)
+        self.parser.add_argument("--user-number",default=1)
         self.get_args()
         # Setup basic eutester object
         self.tester = Eucaops(config_file=self.args.config, password=self.args.password, credpath=self.args.credpath)

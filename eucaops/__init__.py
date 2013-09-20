@@ -234,7 +234,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
             raise Exception("Setting property " + property + " failed")
     
    
-    def cleanup_artifacts(self,instances=True, snapshots=True, volumes=True):
+    def cleanup_artifacts(self,instances=True, snapshots=True, volumes=True, load_balancers=True):
         """
         Description: Attempts to remove artifacts created during and through this eutester's lifespan.
         """
@@ -247,6 +247,8 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
             self.clean_up_test_volumes()
         if snapshots:
             self.cleanup_test_snapshots()
+        if load_balancers:
+            self.cleanup_load_balancers()
 
         for key,array in self.test_resources.iteritems():
             for item in array:
@@ -267,6 +269,18 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
                         item.delete()
                 except Exception, e:
                     self.fail("Unable to delete item: " + str(item) + "\n" + str(e))
+
+    def cleanup_load_balancers(self, lbs=None):
+        """
+        :param lbs: optional list of load balancers, otherwise it will attempt to delete from test_resources[]
+        """
+        if lbs:
+            self.delete_load_balancers(lbs)
+        else:
+            try:
+                self.delete_load_balancers(self.test_resources['load_balancers'])
+            except KeyError:
+                self.debug("No loadbalancers to delete")
 
     def cleanup_test_snapshots(self,snaps=None, clean_images=False, add_time_per_snap=10, wait_for_valid_state=120, base_timeout=180):
         """
@@ -297,7 +311,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
 
 
 
-    def clean_up_test_volumes(self, volumes=None, min_timeout=180, timeout_per_vol=20):
+    def clean_up_test_volumes(self, volumes=None, min_timeout=180, timeout_per_vol=30):
         """
         Definition: cleaup helper method intended to clean up volumes created within a test, after the test has ran.
 
