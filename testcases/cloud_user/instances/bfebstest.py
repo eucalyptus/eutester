@@ -20,7 +20,7 @@ class BFEBSBasics(InstanceBasics):
         if not self.imgurl:
             raise Exception("No imgurl passed to run BFEBS tests")
         if not self.reservation:
-            self.run_instance_params['image'] = self.tester.get_emi(root_device_type="instance-store")
+            self.run_instance_params['image'] = self.tester.get_emi(root_device_type="instance-store",not_location="loadbalancer")
             self.reservation = self.tester.run_instance(**self.run_instance_params)
         for instance in self.reservation.instances:
             self.volume = self.tester.create_volume(zone=self.zone, size=3)
