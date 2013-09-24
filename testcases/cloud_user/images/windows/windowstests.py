@@ -346,6 +346,7 @@ class WindowsTests(EutesterTestCase):
                                       destpath = None, 
                                       inter_bundle_timeout = None, 
                                       upload_timeout = None,
+                                      virtualization_type = None,
                                       wget_user = None,
                                       wget_password = None,
                                       time_per_gig = None,
@@ -363,6 +364,7 @@ class WindowsTests(EutesterTestCase):
                                            interbundle_timeout = (inter_bundle_timeout or self.inter_bundle_timeout), 
                                            upload_timeout = (upload_timeout or self.upload_timeout),
                                            destpath = (destpath or self.destpath),
+                                           virtualization_type=virtualization_type,
                                            wget_user = (wget_user), 
                                            wget_password = (wget_password),   
                                            time_per_gig = (time_per_gig or self.time_per_gig) )
