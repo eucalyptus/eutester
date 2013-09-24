@@ -97,6 +97,27 @@ class Eutester4j {
         print("Using resource prefix for test: " + NAME_PREFIX);
         print("Cloud Discovery Complete");
 	}
+	
+	// Quick way to initialize just the S3 client without initializing other clients in getCloudInfo(). 
+	// For ease of use against AWS (mainly) as well as Eucalyptus
+	public static void initS3Client() throws Exception {
+		if (eucarc != null){
+            CREDPATH = eucarc;
+        } else {
+            CREDPATH = "eucarc";
+        }
+        print("Getting cloud information from " + CREDPATH);
+        
+        S3_ENDPOINT = parseEucarc(CREDPATH, "S3_URL") + "/";
+        
+        SECRET_KEY = parseEucarc(CREDPATH, "EC2_SECRET_KEY").replace("'", "");
+		ACCESS_KEY = parseEucarc(CREDPATH, "EC2_ACCESS_KEY").replace("'", "");
+		
+		print("Initializing S3 connections");
+		s3 = getS3Client(ACCESS_KEY, SECRET_KEY, S3_ENDPOINT);
+		
+		print("S3 Discovery Complete");
+    }
 
     public static void testInfo(String testName){
         print("*****TEST NAME: " + testName);
