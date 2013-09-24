@@ -5,6 +5,7 @@ import static com.eucalyptus.tests.awssdk.Eutester4j.eucaUUID;
 import static com.eucalyptus.tests.awssdk.Eutester4j.getCloudInfo;
 import static com.eucalyptus.tests.awssdk.Eutester4j.print;
 import static com.eucalyptus.tests.awssdk.Eutester4j.s3;
+import static com.eucalyptus.tests.awssdk.Eutester4j.testInfo;
 import static org.testng.AssertJUnit.assertTrue;
 
 import java.util.ArrayList;
@@ -12,6 +13,7 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
+import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 
 import com.amazonaws.AmazonServiceException;
@@ -29,13 +31,18 @@ import com.amazonaws.services.s3.model.Permission;
  * contains tests for creating buckets with canned ACLs. After a bucket is successfully created, the bucket ACL is fetched and verified against the canned ACL
  * definition.</p>
  * 
- * </p>As of 9/19/2013 all tests passed against S3 . {@link BucketCannedACLTests#createBucket_CannedACL_BucketOwnerRead()} fails against Walrus</p>
+ * </p>As of 9/19/2013 all tests passed against S3 . {@link S3BucketCannedACLTests#createBucket_CannedACL_BucketOwnerRead()} fails against Walrus</p>
  * 
  * @see <a href="http://docs.aws.amazon.com/AmazonS3/latest/dev/ACLOverview.html">S3 Access Control Lists</a>
  * @author Swathi Gangisetty
  * 
  */
-public class BucketCannedACLTests {
+public class S3BucketCannedACLTests {
+
+	@BeforeClass
+	public void init() throws Exception {
+		getCloudInfo();
+	}
 
 	/**
 	 * </p>Test for <code>authenticated-read</code> canned ACL</p>
@@ -46,8 +53,8 @@ public class BucketCannedACLTests {
 	 */
 	@Test
 	public void createBucket_CannedACL_AuthenticatedRead() throws Exception {
-		getCloudInfo();
-
+		testInfo(this.getClass().getSimpleName() + " - createBucket_CannedACL_AuthenticatedRead");
+		
 		final List<Runnable> cleanupTasks = new ArrayList<Runnable>();
 		try {
 			/* Create bucket with Canned ACL AuthenticatedRead */
@@ -115,7 +122,7 @@ public class BucketCannedACLTests {
 	 */
 	@Test
 	public void createBucket_CannedACL_BucketOwnerFullControl() throws Exception {
-		getCloudInfo();
+		testInfo(this.getClass().getSimpleName() + " - createBucket_CannedACL_BucketOwnerFullControl");
 
 		final List<Runnable> cleanupTasks = new ArrayList<Runnable>();
 		try {
@@ -180,7 +187,7 @@ public class BucketCannedACLTests {
 	 */
 	@Test
 	public void createBucket_CannedACL_BucketOwnerRead() throws Exception {
-		getCloudInfo();
+		testInfo(this.getClass().getSimpleName() + " - createBucket_CannedACL_BucketOwnerRead");
 
 		final List<Runnable> cleanupTasks = new ArrayList<Runnable>();
 		try {
@@ -243,7 +250,7 @@ public class BucketCannedACLTests {
 	 */
 	@Test
 	public void createBucket_CannedACL_LogDeliveryWrite() throws Exception {
-		getCloudInfo();
+		testInfo(this.getClass().getSimpleName() + " - createBucket_CannedACL_LogDeliveryWrite");
 
 		final List<Runnable> cleanupTasks = new ArrayList<Runnable>();
 		try {
@@ -312,7 +319,7 @@ public class BucketCannedACLTests {
 	 */
 	@Test
 	public void createBucket_CannedACL_Private() throws Exception {
-		getCloudInfo();
+		testInfo(this.getClass().getSimpleName() + " - createBucket_CannedACL_Private");
 
 		final List<Runnable> cleanupTasks = new ArrayList<Runnable>();
 		try {
@@ -375,7 +382,7 @@ public class BucketCannedACLTests {
 	 */
 	@Test
 	public void createBucket_CannedACL_PublicRead() throws Exception {
-		getCloudInfo();
+		testInfo(this.getClass().getSimpleName() + " - createBucket_CannedACL_PublicRead");
 
 		final List<Runnable> cleanupTasks = new ArrayList<Runnable>();
 		try {
@@ -443,7 +450,7 @@ public class BucketCannedACLTests {
 	 */
 	@Test
 	public void createBucket_CannedACL_PublicReadWrite() throws Exception {
-		getCloudInfo();
+		testInfo(this.getClass().getSimpleName() + " - createBucket_CannedACL_PublicReadWrite");
 
 		final List<Runnable> cleanupTasks = new ArrayList<Runnable>();
 		try {

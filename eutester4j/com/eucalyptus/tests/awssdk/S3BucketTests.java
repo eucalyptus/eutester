@@ -5,6 +5,7 @@ import static com.eucalyptus.tests.awssdk.Eutester4j.eucaUUID;
 import static com.eucalyptus.tests.awssdk.Eutester4j.getCloudInfo;
 import static com.eucalyptus.tests.awssdk.Eutester4j.print;
 import static com.eucalyptus.tests.awssdk.Eutester4j.s3;
+import static com.eucalyptus.tests.awssdk.Eutester4j.testInfo;
 import static org.testng.AssertJUnit.assertTrue;
 
 import java.util.ArrayList;
@@ -12,6 +13,7 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
+import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 
 import com.amazonaws.AmazonServiceException;
@@ -19,7 +21,6 @@ import com.amazonaws.services.s3.model.AccessControlList;
 import com.amazonaws.services.s3.model.AmazonS3Exception;
 import com.amazonaws.services.s3.model.Bucket;
 import com.amazonaws.services.s3.model.BucketLoggingConfiguration;
-import com.amazonaws.services.s3.model.BucketPolicy;
 import com.amazonaws.services.s3.model.BucketVersioningConfiguration;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.CanonicalGrantee;
@@ -30,18 +31,22 @@ import com.amazonaws.services.s3.model.SetBucketLoggingConfigurationRequest;
 import com.amazonaws.services.s3.model.SetBucketVersioningConfigurationRequest;
 
 /**
+ * This class contains tests for basic operations on S3 buckets.
+ * 
  * @author Swathi Gangisetty
  * 
  */
-public class BucketTests {
+public class S3BucketTests {
 
-	/**
-	 * 
-	 */
+	@BeforeClass
+	public void init() throws Exception {
+		getCloudInfo();
+	}
+
 	@Test
 	public void bucketBasics() throws Exception {
-		getCloudInfo();
-
+		testInfo(this.getClass().getSimpleName() + " - bucketBasics");
+		
 		final List<Runnable> cleanupTasks = new ArrayList<Runnable>();
 		try {
 			try {
@@ -59,6 +64,18 @@ public class BucketTests {
 				assertTrue("Invalid reference to bucket", bucket != null);
 				assertTrue("Mismatch in bucket names. Expected bucket name to be " + bucketName + ", but got " + bucket.getName(),
 						bucketName.equals(bucket.getName()));
+
+				print("Listing all buckets");
+				List<Bucket> bucketList = s3.listBuckets();
+				assertTrue("Invalid or empty bucket list", bucketList != null && !bucketList.isEmpty());
+				boolean found = false;
+				for (Bucket buck : bucketList) {
+					if (buck.getName().equals(bucketName)) {
+						found = true;
+						break;
+					}
+				}
+				assertTrue("Expected newly created bucket to be listed in the buckets but did not", found);
 
 				print("Checking if the bucket " + bucketName + " exists");
 				assertTrue("Expected to find " + bucketName + ", but the bucket was not found", s3.doesBucketExist(bucketName));
@@ -108,8 +125,8 @@ public class BucketTests {
 
 	@Test
 	public void loggingConfiguration() throws Exception {
-		getCloudInfo();
-
+		testInfo(this.getClass().getSimpleName() + " - loggingConfiguration");
+		
 		final List<Runnable> cleanupTasks = new ArrayList<Runnable>();
 		try {
 			try {
@@ -207,8 +224,8 @@ public class BucketTests {
 	// The versioning configuration remains unchanged but no error is received
 	@Test
 	public void versioningConfiguration() throws Exception {
-		getCloudInfo();
-
+		testInfo(this.getClass().getSimpleName() + " - versioningConfiguration");
+		
 		final List<Runnable> cleanupTasks = new ArrayList<Runnable>();
 		try {
 			try {
@@ -263,7 +280,7 @@ public class BucketTests {
 				} finally {
 					assertTrue("Expected AmazonS3Exception for setting bucking versioning configuration to OFF", error);
 				}
-
+				
 			} catch (AmazonServiceException ase) {
 				ase.printStackTrace();
 				print("Caught Exception: " + ase.getMessage());
