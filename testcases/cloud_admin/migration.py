@@ -40,6 +40,7 @@ from eutester.euinstance import EuInstance
 from eutester.eutestcase import EutesterTestCase
 import random
 from eutester.euvolume import EuVolume
+from testcases.cloud_user.instances.bfebstest import BFEBSBasics
 
 
 class MigrationTest(EutesterTestCase):
@@ -49,6 +50,8 @@ class MigrationTest(EutesterTestCase):
         if extra_args:
             for arg in extra_args:
                 self.parser.add_argument(arg)
+        self.parser.add_argument('--imgurl',
+                        help="BFEBS Image to splat down", default=None)
         self.get_args()
         self.tester = Eucaops( config_file=self.args.config, password=self.args.password)
         self.numberOfNodes = self.tester.service_manager.get_all_node_controllers()
@@ -68,6 +71,12 @@ class MigrationTest(EutesterTestCase):
         self.numberOfResources = 3
         zones = self.tester.ec2.get_all_zones()
         self.zone = random.choice(zones).name
+
+        try:
+            self.tester.get_emi(root_device_type="ebs")
+        except:
+            bfebs = self.do_with_args(BFEBSBasics)
+            bfebs.RegisterImage()
 
     def clean_method(self):
         self.tester.cleanup_artifacts()
