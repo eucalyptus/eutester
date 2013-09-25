@@ -1953,7 +1953,8 @@ class EC2ops(Eutester):
         :param state: example: 'available'
         :param arch: example: 'x86_64'
         :param owner_id: owners numeric id
-        :param not_location: skip if location string matches this string. Example: not_location='windows'
+        :param not_location: skip if location string matches this comma separated string or list of strings. Examples:
+                            not_location='windows,centos', not_location=['loadbalancer', 'lucid']
         :param max_count: return after finding 'max_count' number of matching images
         :return: image id
         :raise: Exception if image is not found
@@ -1962,9 +1963,8 @@ class EC2ops(Eutester):
             emi = "mi-"
         ret_list = []
         images = self.ec2.get_all_images(filters=filters)
-        self.debug("Got " + str(len(images)) + " images matching prefix: " + str(emi) + ", now filtering..." )
+        self.debug("Got " + str(len(images)) + " total images " + str(emi) + ", now filtering..." )
         for image in images:
-            
             if not re.search(emi, image.id):      
                 continue  
             if (root_device_type is not None) and (image.root_device_type != root_device_type):
@@ -1979,8 +1979,16 @@ class EC2ops(Eutester):
                 continue                
             if (owner_id is not None) and (image.owner_id != owner_id):
                 continue
-            if (not_location is not None) and (re.search( not_location, image.location)):
-                continue
+            if (not_location is not None):
+                if not isinstance(not_location,types.ListType):
+                    not_location = not_location.split(',')
+                skip = False
+                for loc in not_location:
+                    if (re.search( str(loc), image.location)):
+                        skip = True
+                        break
+                if skip:
+                    continue
             self.debug("Returning image:"+str(image.id))
             ret_list.append(image)
             if max_count and len(ret_list) >= max_count:
