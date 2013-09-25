@@ -66,7 +66,8 @@ class EbsTestSuite(EutesterTestCase):
                  tester=None, 
                  zone=None, 
                  config_file='../input/2b_tested.lst', 
-                 password="foobar", 
+                 password="foobar",
+                 user_data=None,
                  inst_pass=None,
                  credpath=None, 
                  volumes=None, 
@@ -93,11 +94,10 @@ class EbsTestSuite(EutesterTestCase):
             self.image = self.tester.get_emi(emi=emi)
         else:
             self.image = self.tester.get_emi(root_device_type=root_device_type, not_location='windows')
-        
         self.vmtype = vmtype
         self.zone = None    
         self.zonelist = []
-            
+        self.user_data = user_data
         #create some zone objects and append them to the zonelist
         if self.zone:
             self.zone = TestZone(zone)
@@ -221,6 +221,7 @@ class EbsTestSuite(EutesterTestCase):
                                                 group=group,
                                                 username=username,
                                                 password=inst_pass,
+                                                user_data=self.user_data,
                                                 type=vmtype,
                                                 zone=zone,
                                                 min=count,
@@ -253,12 +254,7 @@ class EbsTestSuite(EutesterTestCase):
             for instance in zone.instances:
                 instance.terminate_and_verify(verify_vols=True,timeout=timeout)
                 zone.instances.remove(instance)
-                
-               
-                
-                
-        
-    
+
     def negative_attach_in_use_volume_in_zones(self,zonelist=None,timeout=360):
         """
         Description:
