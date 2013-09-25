@@ -492,17 +492,18 @@ class DnsService(Euservice):
 
         
 class Partition:
-    name = ""
-    ccs = []
-    scs = []
-    vbs = []
-    ncs = []
-    volumes = []
-    instances = []
+
     
     def __init__(self, name, service_manager ):
         self.name = name
         self.service_manager = service_manager
+        name = ""
+        self.ccs = []
+        self.scs = []
+        self.vbs = []
+        self.ncs = []
+        self.volumes = []
+        self.instances = []
         
     def get_enabled(self, list):
         self.service_manager.update()
