@@ -69,6 +69,9 @@ EC2RegionData = {
 
 class EC2ops(Eutester):
 
+    enable_root_user_data = """#cloud-config
+disable_root: false"""
+
     @Eutester.printinfo
     def __init__(self,
                  host=None,
@@ -2308,7 +2311,9 @@ class EC2ops(Eutester):
         if not isinstance(image, Image):
             image = self.get_emi(emi=str(image))
         if image is None:
-            raise Exception("emi is None. run_instance could not auto find an emi?")   
+            raise Exception("emi is None. run_instance could not auto find an emi?")
+        if not user_data:
+            user_data = self.enable_root_user_data
         if private_addressing is True:
             addressing_type = "private"
             is_reachable= False
@@ -2400,7 +2405,7 @@ class EC2ops(Eutester):
                   user_data=None,
                   private_addressing=False, 
                   username="root", 
-                  password=None, 
+                  password=None,
                   auto_connect=True,
                   clean_on_fail=True,
                   monitor_to_running = True,
@@ -2436,7 +2441,9 @@ class EC2ops(Eutester):
             if not isinstance(image, Image):
                 image = self.get_emi(emi=str(image))
             if image is None:
-                raise Exception("emi is None. run_instance could not auto find an emi?")   
+                raise Exception("emi is None. run_instance could not auto find an emi?")
+            if not user_data:
+                user_data = self.enable_root_user_data
             if private_addressing is True:
                 addressing_type = "private"
                 connect = False
