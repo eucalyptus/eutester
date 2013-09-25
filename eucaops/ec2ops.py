@@ -1847,6 +1847,8 @@ disable_root: false"""
                         image_location,
                         root_device_name=None,
                         description=None,
+                        architecture=None,
+                        virtualization_type=None,
                         bdmdev=None,
                         name=None,
                         ramdisk=None,
@@ -1863,13 +1865,33 @@ disable_root: false"""
         :param kernel: kernel id (note for windows this name should be "windows")
         :return: image id string
         """
+        ri_kwargs = { 'name':name,
+                   'description':description,
+                   'kernel_id':kernel,
+                   'image_location':image_location,
+                   'ramdisk_id':ramdisk,
+                   'architecture':architecture,
+                   'block_device_map':bdmdev,
+                   'root_device_name':root_device_name}
+        #Check to see if boto is recent enough to have this param...
+        if virtualization_type:
+            if 'virtualization_type' in self.ec2.register_image.im_func.func_code.co_varnames:
+                ri_kwargs['virtualization_type'] = virtualization_type
+            else:
+                raise Exception('virtualization_type arg populated but not found in this version of ec2.register_image?')
+        image_id = self.ec2.register_image(**ri_kwargs)
+
+        '''
         image_id = self.ec2.register_image(name=name,
                                            description=description,
                                            kernel_id=kernel,
                                            image_location=image_location,
                                            ramdisk_id=ramdisk,
+                                           architecture=architecture,
+                                           virtualization_type=virtualization_type,
                                            block_device_map=bdmdev,
                                            root_device_name=root_device_name)
+        '''
         self.test_resources["images"].append(image_id)
         return image_id
 
