@@ -1823,7 +1823,7 @@ disable_root: false"""
             bdmdev=root_device_name
         if name is None:
             name="bfebs_"+ snap_id
-        if ( windows is True ) and ( kernel is not None):
+        if ( windows ) and (not kernel):
             kernel="windows"     
             
         bdmap = block_device_map or BlockDeviceMapping()
