@@ -277,6 +277,11 @@ class EutesterTestUnit():
                 ret = self.method(*self.args, **self.kwargs)
             self.result=EutesterTestResult.passed
             return ret
+        except SkipTestException, se:
+            print TestColor.get_canned_color('failred') + \
+                  "TESTUNIT SKIPPED:" + str(self.name) + "\n" + str(se) + TestColor.reset
+            self.error = str(se)
+            self.result = EutesterTestResult.not_run
         except Exception, e:
             buf = '\nTESTUNIT FAILED: ' + self.name
             if self.kwargs.get('html_anchors',False):
@@ -472,7 +477,7 @@ class EutesterTestCase(unittest.TestCase):
             parser.add_argument('--vmtype',
                                 help="Virtual Machine Type to use in this test", default='c1.medium')
         if userdata:
-            parser.add_argument('--userdata',
+            parser.add_argument('--user-data',
                                 help="User data string to provide instance run within this test", default=None)
         if instance_user:
             parser.add_argument('--instance-user',
@@ -689,7 +694,11 @@ class EutesterTestCase(unittest.TestCase):
     def endsuccess(self,msg=""):
         msg = "- UNIT ENDED - " + msg
         self.status(msg, traceback=2,a=1, testcolor=TestColor.get_canned_color('whiteongreen'))
-      
+
+    def errormsg(self,msg=""):
+        msg = "- ERROR - " + msg
+        self.status(msg, traceback=2,a=1,testcolor=TestColor.get_canned_color('failred'))
+
     def endfailure(self,msg="" ):
         msg = "- FAILED - " + msg
         self.status(msg, traceback=2,a=1,testcolor=TestColor.get_canned_color('failred'))
@@ -819,15 +828,19 @@ class EutesterTestCase(unittest.TestCase):
             except: 
                 pass
             self.testlist = copy.copy(list)
-            total = 0
             passed = 0
+            failed = 0
+            not_run = 0
             for test in list:
-                total += 1
                 if test.result == EutesterTestResult.passed:
                     passed += 1
-            print "passed:"+str(passed)+" out of total:"+str(total)
-            self.debug('</pre>')
-            if total != passed:
+                if test.result == EutesterTestResult.failed:
+                    failed += 1
+                if test.result == EutesterTestResult.not_run:
+                    not_run += 1
+            total = passed + failed + not_run
+            print "passed:"+str(passed)+" failed:" + str(failed) + " not_run:" + str(not_run) + " total:"+str(total)
+            if failed:
                 return(1)
             else:
                 return(0)
@@ -962,6 +975,12 @@ class EutesterTestCase(unittest.TestCase):
                                       + str(err_sum) \
                                       + '\n'
                     buf += "\n"+str(self.resulterr(test_error_line, printout=False))
+            if testunit.result == EutesterTestResult.not_run:
+                err_sum = "\n".join(str(testunit.error).splitlines()[0:3])
+                test_error_line = 'NOT_RUN:('+str(testunit.name)+'): ' \
+                                  + str(err_sum) \
+                                  + '\n'
+                buf += "\n"+str(self.resulterr(test_error_line, printout=False))
         buf += self.resultdefault("\n"+ self.getline(80)+"\n", printout=False)
         buf += str(self.print_test_list_short_stats(list))
         buf += "\n"
@@ -1179,7 +1198,17 @@ class EutesterTestCase(unittest.TestCase):
                 for cfile in str(cliargs.config).split(','):
                     if not cfile in configfiles:
                         configfiles.append(cfile)
-            
+            #legacy support for config, configfile config_file arg names...
+            if ('config_file' in cliargs.__dict__) and  cliargs.config:
+                for cfile in str(cliargs.config).split(','):
+                    if not cfile in configfiles:
+                        configfiles.append(cfile)
+            #legacy support for config, configfile config_file arg names...
+            if ('configfile' in cliargs.__dict__) and  cliargs.config:
+                for cfile in str(cliargs.config).split(','):
+                    if not cfile in configfiles:
+                        configfiles.append(cfile)
+
         #store config block list for debug purposes
         cf.__setattr__('configsections',copy.copy(confblocks))
         
@@ -1225,6 +1254,7 @@ class EutesterTestCase(unittest.TestCase):
             if 'config' in args:
                 args.config_file = args.config
                 args.configfile = args.config
+
         except: pass
         try:
             args.cred_path = args.credpath
@@ -1427,9 +1457,14 @@ class EutesterTestCase(unittest.TestCase):
         fcode = cls.get_method_fcode(meth)
         varnames = fcode.co_varnames[0:fcode.co_argcount]
         return varnames
-       
 
 
-        
+
+class SkipTestException(Exception):
+    def __init__(self, value):
+        self.value = value
+
+    def __str__(self):
+        return repr(self.value)
             
     

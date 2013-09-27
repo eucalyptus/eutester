@@ -14,9 +14,13 @@ class CloudWatchBasics(EutesterTestCase):
     def __init__(self, extra_args= None):
         self.setuptestcase()
         self.setup_parser()
+        self.parser.add_argument('--clean_on_exit',
+                                 action='store_true', default=True,
+                                 help='Boolean, used to flag whether to run clean up method after running test list)')
         if extra_args:
             for arg in extra_args:
                 self.parser.add_argument(arg)
+
         self.get_args()
         ### Setup basic eutester object
         if self.args.region:
@@ -24,19 +28,21 @@ class CloudWatchBasics(EutesterTestCase):
         else:
             self.tester = Eucaops(config_file=self.args.config, password=self.args.password, credpath=self.args.credpath)
         self.start_time =  str(int(time.time()))
+        self.zone = self.tester.get_zones()
         self.namespace = 'Namespace-' + self.start_time
         self.keypair = self.tester.add_keypair()
         self.group = self.tester.add_group()
-        ### Set up autoscaling config, group and policys, this will start one instance
+        ### Setup AutoScaling
         self.setUpAutoscaling()
-        ## Create Dimensions used in tests
+        ### Create Dimensions used in tests
         self.instanceDimension = newDimension('InstanceId', self.instanceid)
         self.volumeDimension = newDimension('VolumeId', self.volume.id)
         self.autoScalingDimension = newDimension('AutoScalingGroupName', self.auto_scaling_group_name)
-        ### setup Alarms
+        ### Setup Alarms
         self.setUpAlarms()
-        ### Wait for metrics to populate, timeout 30 minutes
+        ### Wait for metrics to populate, timeout 30 minute
         self.tester.wait_for_result(self.IsMetricsListPopulated, result=True, timeout=1800)
+
 
     def clean_method(self):
         self.tester.cleanup_artifacts()
@@ -218,7 +224,7 @@ class CloudWatchBasics(EutesterTestCase):
                                          user_data=diskWrite + ' ' + diskRead)
         ### create auto scale group
         self.tester.create_as_group(group_name=self.auto_scaling_group_name,
-                                    availability_zones=self.tester.get_zones(),
+                                    availability_zones=self.zone,
                                     launch_config=self.launch_config_name,
                                     min_size=0,
                                     max_size=5,
@@ -253,8 +259,7 @@ class CloudWatchBasics(EutesterTestCase):
             state = self.instance.state
         self.debug(self.instanceid + ' is now running.')
         ### Create and attach a volume
-        self.zone = self.tester.get_zones().pop()
-        self.volume = self.tester.create_volume(self.zone)
+        self.volume = self.tester.create_volume(self.zone.pop())
         self.tester.attach_volume(self.instance, self.volume, '/dev/sdf' )
         ### Get the newly created policies.
         self.policy_exact = self.tester.autoscale.get_all_policies(policy_names=[self.exact])
@@ -265,11 +270,11 @@ class CloudWatchBasics(EutesterTestCase):
     def cleanUpAutoscaling(self):
         self.tester.delete_all_alarms()
         self.tester.delete_all_policies()
-        self.tester.delete_as_group(names=self.auto_scaling_group_name,force=True)
+        self.tester.delete_as_group(name=self.auto_scaling_group_name,force=True)
         self.tester.delete_launch_config(self.launch_config_name)
 
     def isInService(self):
-        group = self.tester.describe_as_group(names=[self.auto_scaling_group_name]).pop()
+        group = self.tester.describe_as_group(name=self.auto_scaling_group_name)
         allInService = True
         for instance in group.instances:
             if not str(instance.lifecycle_state).endswith('InService'):
@@ -321,13 +326,13 @@ class CloudWatchBasics(EutesterTestCase):
 
     def testAlarms(self):
         ### The number of running instances should equal the desired_capacity for the auto_scaling_group = (1)
-        group = self.tester.describe_as_group(names=[self.auto_scaling_group_name]).pop()
+        group = self.tester.describe_as_group(name=self.auto_scaling_group_name)
         assert len(group.instances) == 1
         ### The number of running instances should still be 1 with 'exact' disabled
         self.tester.disable_alarm_actions('exact')
         self.tester.set_alarm_state('exact')
         self.tester.sleep(15)
-        group = self.tester.describe_as_group(names=[self.auto_scaling_group_name]).pop()
+        group = self.tester.describe_as_group(name=self.auto_scaling_group_name)
         assert len(group.instances) == 1
         self.tester.enable_alarm_actions('exact')
         self.debug('The number of running ' + self.auto_scaling_group_name + ' instances = 1')
@@ -335,20 +340,20 @@ class CloudWatchBasics(EutesterTestCase):
         self.tester.set_alarm_state('change')
         self.tester.sleep(15)
         self.tester.wait_for_result(self.isInService,result=True, timeout=240)
-        group = self.tester.describe_as_group(names=[self.auto_scaling_group_name]).pop()
+        group = self.tester.describe_as_group(name=self.auto_scaling_group_name)
         self.debug(len(group.instances))
         assert len(group.instances) == 2
         self.debug('Success the number of running ' + self.auto_scaling_group_name + ' instances changed to 2')
         ### The number of running instances should equal the total from the previous scaling_adjustment (2) - 50% = (1)
         self.tester.set_alarm_state('percent')
         self.tester.sleep(15)
-        group = self.tester.describe_as_group(names=[self.auto_scaling_group_name]).pop()
+        group = self.tester.describe_as_group(name=self.auto_scaling_group_name)
         assert len(group.instances) == 1
         self.debug('Success the number of running ' + self.auto_scaling_group_name + ' instances decreased by 50%')
         ### This should terminate all instances in the auto_scaling_group. 
         self.tester.set_alarm_state('exact')
         self.tester.sleep(15)
-        group = self.tester.describe_as_group(names=[self.auto_scaling_group_name]).pop()
+        group = self.tester.describe_as_group(name=self.auto_scaling_group_name)
         assert group.instances == None
         self.debug('Success the number of running ' + self.auto_scaling_group_name + ' instances is exactly 0')
         pass
@@ -364,7 +369,7 @@ class CloudWatchBasics(EutesterTestCase):
         return False
 
     def MonitorInstancesTest(self):
-        self.reservation = self.tester.run_instance(keypair=self.keypair.name, group=self.group, is_reachable=False)
+        self.reservation = self.tester.run_instance(keypair=self.keypair.name, zone=self.zone, group=self.group, is_reachable=False)
         instanceid = self.tester.get_last_instance_id()
         ### Enable Monitoring
         self.tester.monitor_instances([instanceid])
@@ -403,12 +408,12 @@ if __name__ == '__main__':
     testcase = CloudWatchBasics()
     ### Use the list of tests passed from config/command line to determine what subset of tests to run
     ### or use a predefined list  'PutDataGetStats', 'ListMetricsTest', 'GetMetricStatisticsTest', 'MetricAlarmsTest', 'MonitorInstancesTest'
-    test_list = testcase.args.tests or ['PutDataGetStats']
+    test_list = testcase.args.tests or ['PutDataGetStats', 'ListMetricsTest', 'GetMetricStatisticsTest', 'MetricAlarmsTest', 'MonitorInstancesTest']
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
     for test in test_list:
         unit_list.append( testcase.create_testunit_by_name(test) )
 
     ### Run the EutesterUnitTest objects
-    result = testcase.run_test_case_list(unit_list,clean_on_exit=False)
+    result = testcase.run_test_case_list(unit_list,clean_on_exit=testcase.args.clean_on_exit)
     exit(result)

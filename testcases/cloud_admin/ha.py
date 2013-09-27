@@ -57,6 +57,8 @@ class HAtests(InstanceBasics, BucketTestSuite):
             self.standing_key_name = "failover-key-" + self.start_time
             self.standing_key = self.tester.upload_object(self.standing_bucket_name, self.standing_key_name)
             self.standing_key = self.tester.get_objects_by_prefix(self.standing_bucket_name, self.standing_key_name)
+            self.run_instance_params = {'image': self.image, 'keypair': self.keypair.name, 'group': self.group.name,
+                                        'zone': self.zone, 'timeout': self.instance_timeout}
         except Exception, e:
             self.clean_method()
             raise Exception("Init for testcase failed. Reason: " + str(e))

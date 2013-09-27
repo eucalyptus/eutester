@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 # Software License Agreement (BSD License)
 #
@@ -34,6 +34,8 @@
 
 import time
 import os
+from boto.ec2.autoscale import AutoScalingGroup, Instance, Activity
+from boto.exception import BotoServerError
 from eucaops import Eucaops
 from eutester.eutestcase import EutesterTestCase
 
@@ -55,16 +57,21 @@ class AutoScalingBasics(EutesterTestCase):
         self.group = self.tester.add_group(group_name="group-" + str(time.time()))
         self.tester.authorize_group_by_name(group_name=self.group.name )
         self.tester.authorize_group_by_name(group_name=self.group.name, port=-1, protocol="icmp" )
+
         ### Generate a keypair for the instance
         self.keypair = self.tester.add_keypair( "keypair-" + str(time.time()))
         self.keypath = '%s/%s.pem' % (os.curdir, self.keypair.name)
 
         self.image = self.args.emi
         if not self.image:
-            self.image = self.tester.get_emi(root_device_type="instance-store")
+            self.image = self.tester.get_emi(root_device_type="instance-store", not_location="loadbalancer")
         self.address = None
+        self.asg = None
 
     def clean_method(self):
+        if self.asg:
+            self.tester.wait_for_result(self.gracefully_delete, True)
+            self.tester.delete_as_group(self.asg.name, force=True)
         self.tester.cleanup_artifacts()
 
     def AutoScalingBasics(self):
@@ -78,7 +85,7 @@ class AutoScalingBasics(EutesterTestCase):
 
         ### create auto scale group
         self.auto_scaling_group_name = 'ASG-' + str(time.time())
-        self.tester.create_as_group(group_name=self.auto_scaling_group_name,
+        self.asg = self.tester.create_as_group(group_name=self.auto_scaling_group_name,
                                     availability_zones=self.tester.get_zones(),
                                     launch_config=self.launch_config_name,
                                     min_size=0,
@@ -120,54 +127,57 @@ class AutoScalingBasics(EutesterTestCase):
         self.debug("**** Created Auto Scaling Policies: " + self.up_policy_name + " " + self.down_policy_name + " " +
                    self.exact_policy_name)
 
-        ### check progress of most recent scaling activity
-        def scaling_activity():
-            activities = self.tester.autoscale.get_all_activities(autoscale_group=self.auto_scaling_group_name)
-            if len(activities) == 0:
-                return 0
-            else:
-                return activities[-1].progress
-
+        self.tester.wait_for_result(self.scaling_activities_complete, True, timeout=180)
         ### Test Execute ChangeInCapacity Auto Scaling Policy
         self.tester.execute_as_policy(policy_name=self.up_policy_name,
                                       as_group=self.auto_scaling_group_name,
                                       honor_cooldown=False)
-        if self.tester.describe_as_group([self.auto_scaling_group_name])[0].desired_capacity != self.up_size:
+        if self.tester.describe_as_group(self.auto_scaling_group_name).desired_capacity != self.up_size:
             raise Exception("Auto Scale Up not executed")
         self.debug("Executed  ChangeInCapacity policy, increased desired capacity to: " +
-                   str(self.tester.describe_as_group([self.auto_scaling_group_name])[0].desired_capacity))
-        self.tester.wait_for_result(scaling_activity, result="100", timeout=60)
+                   str(self.tester.describe_as_group(self.auto_scaling_group_name).desired_capacity))
+
+        self.tester.wait_for_result(self.scaling_activities_complete, True, timeout=180)
 
         ### Test Execute PercentChangeInCapacity Auto Scaling Policy
         self.tester.execute_as_policy(policy_name=self.down_policy_name,
                                       as_group=self.auto_scaling_group_name,
                                       honor_cooldown=False)
-        if self.tester.describe_as_group([self.auto_scaling_group_name])[0].desired_capacity != 0.5 * self.up_size:
+        if self.tester.describe_as_group(self.auto_scaling_group_name).desired_capacity != 0.5 * self.up_size:
             raise Exception("Auto Scale down percentage not executed")
         self.debug("Executed PercentChangeInCapacity policy, decreased desired capacity to: " +
-                   str(self.tester.describe_as_group([self.auto_scaling_group_name])[0].desired_capacity))
-        self.tester.wait_for_result(scaling_activity, result="100", timeout=60)
+                   str(self.tester.describe_as_group(self.auto_scaling_group_name).desired_capacity))
+
+        self.tester.wait_for_result(self.scaling_activities_complete, True, timeout=180)
 
         ### Test Execute ExactCapacity Auto Scaling Policy
         self.tester.execute_as_policy(policy_name=self.exact_policy_name,
                                       as_group=self.auto_scaling_group_name,
                                       honor_cooldown=False)
-        if self.tester.describe_as_group([self.auto_scaling_group_name])[0].desired_capacity != self.exact_size:
+        if self.tester.describe_as_group(self.auto_scaling_group_name).desired_capacity != self.exact_size:
             raise Exception("Auto Scale down percentage not executed")
         self.debug("Executed ExactCapacity policy, exact capacity is: " +
-                   str(self.tester.describe_as_group([self.auto_scaling_group_name])[0].desired_capacity))
-        self.tester.wait_for_result(scaling_activity, result="100", timeout=60)
+                   str(self.tester.describe_as_group(self.auto_scaling_group_name).desired_capacity))
+
+        self.tester.wait_for_result(self.scaling_activities_complete, True, timeout=180)
 
         ### Test Delete all Auto Scaling Policies
         self.tester.delete_all_policies()
 
         ### Test Delete Auto Scaling Group
-        self.tester.delete_as_group(names=self.auto_scaling_group_name, force=True)
-
-        self.tester.sleep(10)
+        self.tester.wait_for_result(self.gracefully_delete, True)
+        self.asg = None
 
         ### Test delete launch config
         self.tester.delete_launch_config(self.launch_config_name)
+
+    def scaling_activities_complete(self):
+        activities = self.asg.get_activities()
+        for activity in activities:
+            assert isinstance(activity,Activity)
+            if activity.progress != 100:
+                return False
+        return True
 
     def AutoScalingInstanceBasics(self):
         """
@@ -198,8 +208,8 @@ class AutoScalingBasics(EutesterTestCase):
                                          instance_type="m1.small",
                                          key_name=self.keypair.name,
                                          security_groups=[self.group.name])
-        asg = 'ASG-' + str(time.time())
-        self.tester.create_as_group(group_name=asg,
+        asg_name = 'ASG-' + str(time.time())
+        self.asg = self.tester.create_as_group(group_name=asg_name,
                                     launch_config=launch_config_name,
                                     availability_zones=self.tester.get_zones(),
                                     min_size=0,
@@ -208,12 +218,13 @@ class AutoScalingBasics(EutesterTestCase):
             policy_name = "Policy-" + str(i + 1)
             self.tester.create_as_policy(name=policy_name,
                                          adjustment_type="ExactCapacity",
-                                         as_name=asg,
+                                         as_name=asg_name,
                                          scaling_adjustment=0,
                                          cooldown=120)
         if len(self.tester.autoscale.get_all_policies()) > 25:
             raise Exception("More than 25 policies exist for 1 auto scaling group")
-        self.tester.delete_as_group(names=asg)
+        self.tester.wait_for_result(self.gracefully_delete, True)
+        self.asg = None
 
     def too_many_as_groups(self):
         """
@@ -230,7 +241,7 @@ class AutoScalingBasics(EutesterTestCase):
         self.tester.delete_all_autoscaling_groups()
         self.tester.delete_all_launch_configs()
 
-    def change_launch_config(self):
+    def change_config(self):
         ### create initial launch configuration
         first_launch_config = 'First-Launch-Config-' + str(time.time())
         self.tester.create_launch_config(name=first_launch_config, image_id=self.image.id, instance_type="m1.small")
@@ -241,32 +252,65 @@ class AutoScalingBasics(EutesterTestCase):
 
         ### create auto scale group
         auto_scaling_group_name = 'ASG-' + str(time.time())
-        self.tester.create_as_group(group_name=auto_scaling_group_name,
+        self.asg = self.tester.create_as_group(group_name=auto_scaling_group_name,
                                     launch_config=first_launch_config,
                                     availability_zones=self.tester.get_zones(),
                                     min_size=1,
                                     max_size=4,
                                     desired_capacity=1)
-        #wait briefly before changing capacity
-        # TODO get new instance ID and get it's type verify correct type
-        self.tester.sleep(10)
-        self.tester.update_as_group(group_name=auto_scaling_group_name,
+
+        assert isinstance(self.asg, AutoScalingGroup)
+        self.tester.update_as_group(group_name=self.asg.name,
                                     launch_config=second_launch_config,
                                     availability_zones=self.tester.get_zones(),
                                     min_size=1,
-                                    max_size=4,
-                                    desired_capacity=2)
-        # wait for new instance
-        self.tester.sleep(10)
-        # TODO  get new instance ID and get it's type verify correct type
-        last_instance_id = self.tester.get_last_instance_id()
-        self.debug("LAST ID: " + str(last_instance_id))
-        ### Delete Auto Scaling Group
-        self.tester.delete_as_group(names=auto_scaling_group_name, force=True)
+                                    max_size=4)
+        def wait_for_instances(number=1):
+            self.asg = self.tester.describe_as_group(self.asg.name)
+            instances = self.asg.instances
+            if not instances:
+                self.tester.debug("No instances in ASG")
+                return False
+            if len(self.asg.instances) != number:
+                self.tester.debug("Instances not yet allocated")
+                return False
+            for instance in instances:
+                assert isinstance(instance, Instance)
+                instance = self.tester.get_instances(idstring=instance.instance_id)[0]
+                if instance.state != "running":
+                    self.tester.debug("Instance: " + str(instance) + " still in " + instance.state + " state")
+                    return False
+                else:
+                    self.tester.debug("Instance: " + str(instance) + " now running")
+            return True
 
+        self.tester.wait_for_result(wait_for_instances, True ,timeout=360)
+        ### Set desired capacity
+        new_desired = 2
+        self.asg.set_capacity(new_desired)
+        self.tester.wait_for_result(wait_for_instances, True, number=new_desired, timeout=360)
+        #wait briefly before changing capacity
+        # TODO  get new instance ID and get it's type verify correct type
+        ### Delete Auto Scaling Group
+        last_instance = self.tester.get_instances(idstring=self.tester.get_last_instance_id())[0]
+        assert last_instance.instance_type == "m1.large"
+
+        self.tester.wait_for_result(self.gracefully_delete, True)
+        self.asg = None
         ### delete launch configs
         self.tester.delete_launch_config(first_launch_config)
         self.tester.delete_launch_config(second_launch_config)
+
+    def gracefully_delete(self, asg = None):
+            if not asg:
+                asg = self.asg
+            assert isinstance(asg, AutoScalingGroup)
+            try:
+                self.tester.delete_as_group(name=asg.name, force=True)
+            except BotoServerError, e:
+                if e.status == 400 and e.reason == "ScalingActivityInProgress":
+                    return False
+            return True
 
 if __name__ == "__main__":
     testcase = AutoScalingBasics()
@@ -274,13 +318,13 @@ if __name__ == "__main__":
     ### or use a predefined list "AutoScalingGroupBasics", "LaunchConfigBasics", "AutoScalingInstanceBasics"
     # list = testcase.args.tests or ["AutoScalingBasics"] ["clean_groups_and_configs"] too_many_launch_configs_test
     # too_many_policies_test, change_launch_config, clear_all
-    list = testcase.args.tests or ["AutoScalingBasics", "change_launch_config"]
+    list = testcase.args.tests or ["AutoScalingBasics", "change_config"]
 
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
     for test in list:
-        unit_list.append( testcase.create_testunit_by_name(test) )
+        unit_list.append( testcase.create_testunit_by_name(test))
 
     ### Run the EutesterUnitTest objects
-    result = testcase.run_test_case_list(unit_list, clean_on_exit=False)
+    result = testcase.run_test_case_list(unit_list)
     exit(result)

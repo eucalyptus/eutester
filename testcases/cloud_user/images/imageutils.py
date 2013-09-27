@@ -144,6 +144,7 @@ class ImageUtils(EutesterTestCase):
                      ramdisk=None,
                      block_device_mapping=None,
                      destination='/disk1/storage',
+                     arch='x86_64',
                      debug=False,
                      interbundle_timeout=120, 
                      time_per_gig=None):
@@ -174,6 +175,8 @@ class ImageUtils(EutesterTestCase):
             cmdargs = cmdargs + " --block-device-mapping " + str(block_device_mapping)
         if destination:
             cmdargs = cmdargs + " --destination " + str(destination)
+        if arch:
+            cmdargs = cmdargs + " --arch " + str(arch)
         if debug:
             cmdargs = cmdargs + " --debug "
         
@@ -192,7 +195,7 @@ class ImageUtils(EutesterTestCase):
         manifest = None
         for line in out['output']:
             line = str(line)
-            if re.search('Generating manifest',line):
+            if re.search("(Generating|Wrote) manifest",line):
                 manifest = line.split()[2]
                 break
         if manifest is None:
@@ -257,8 +260,8 @@ class ImageUtils(EutesterTestCase):
             raise Exception('upload_bundle "'+str(manifest)+'" failed. Errcode:'+str(out['status']))
         for line in out['output']:
             line = str(line)
-            if re.search('Uploaded image',line):
-                upmanifest = line.split()[3]
+            if re.search('Uploaded', line) and re.search('manifest', line):
+                upmanifest = line.split().pop()
                 break
         if upmanifest is None:
             raise Exception('Failed to find upload manifest from upload_bundle command')
@@ -306,6 +309,7 @@ class ImageUtils(EutesterTestCase):
                        ramdisk=None,
                        name=None,
                        architecture=None,
+                       virtualization_type=None,
                        root_device_name=None,
                        description="None",
                        block_device_mapping=None,
@@ -327,6 +331,7 @@ class ImageUtils(EutesterTestCase):
         return self.tester.register_image( manifest,
                                            root_device_name=root_device_name,
                                            description=description,
+                                           virtualization_type=virtualization_type,
                                            bdmdev=block_device_mapping,
                                            name=name,
                                            ramdisk=ramdisk,
@@ -345,10 +350,12 @@ class ImageUtils(EutesterTestCase):
                             prefix=None,
                             kernel=None,
                             ramdisk=None,
+                            architecture=None,
                             block_device_mapping=None,
                             destination='/disk1/storage',
                             root_device_name=None,
                             description=None,
+                            virtualization_type=None,
                             name=None,
                             interbundle_timeout=120, 
                             upload_timeout=0, 
@@ -369,27 +376,51 @@ class ImageUtils(EutesterTestCase):
             filename = str(url).split('/')[-1]
             dir = destpath or self.destpath
             filepath = dir + '/' + str(filename)
-            filesize = self.wget_image(url, destpath=destpath, component=component, user=wget_user, 
-                                       password=wget_password, retryconn=wget_retryconn, time_per_gig=time_per_gig)
+            self.debug('Downloading image to ' + str(component) + ', url:' + str(url))
+            filesize = self.wget_image(url,
+                                       destpath=destpath,
+                                       component=component,
+                                       user=wget_user,
+                                       password=wget_password,
+                                       retryconn=wget_retryconn,
+                                       time_per_gig=time_per_gig)
             
-        self.debug('create_emi_from_url: Image downloaded to machine, now bundling image...')
+        self.status('create_emi_from_url: Image downloaded to machine, now bundling image...')
         if bundle_manifest is None and upload_manifest is None:
-            bundle_manifest = self.bundle_image(filepath, component=component, component_credpath=component_credpath, 
-                                                prefix=prefix, kernel=kernel, ramdisk=ramdisk, block_device_mapping=block_device_mapping, 
-                                                destination=destination, debug=debug, interbundle_timeout=interbundle_timeout, 
+            bundle_manifest = self.bundle_image(filepath,
+                                                component=component,
+                                                component_credpath=component_credpath,
+                                                prefix=prefix,
+                                                kernel=kernel,
+                                                ramdisk=ramdisk,
+                                                block_device_mapping=block_device_mapping,
+                                                destination=destination,
+                                                debug=debug,
+                                                interbundle_timeout=interbundle_timeout,
                                                 time_per_gig=time_per_gig)
         
-        self.debug('create_emi_from_url: Image bundled, now uploading...')
+        self.status('create_emi_from_url: Image bundled, now uploading...')
         if upload_manifest is None:
-            upload_manifest = self.upload_bundle(bundle_manifest, component=component, bucketname=bucketname, 
-                                                 component_credpath=component_credpath, debug=debug, interbundle_timeout=interbundle_timeout, 
-                                                 timeout=upload_timeout, uniquebucket=uniquebucket)
+            upload_manifest = self.upload_bundle(bundle_manifest,
+                                                 component=component,
+                                                 bucketname=bucketname,
+                                                 component_credpath=component_credpath,
+                                                 debug=debug,
+                                                 interbundle_timeout=interbundle_timeout,
+                                                 timeout=upload_timeout,
+                                                 uniquebucket=uniquebucket)
         
-        self.debug('create_emi_from_url: Now registering...')
-        emi = self.tester.register_image(image_location=upload_manifest, root_device_name=root_device_name,
-                                         description=description, bdmdev=block_device_mapping, 
-                                         name=name, ramdisk=ramdisk, kernel=kernel)
+        self.status('create_emi_from_url: Now registering...')
+        emi = self.tester.register_image(image_location=upload_manifest,
+                                         root_device_name=root_device_name,
+                                         description=description,
+                                         virtualization_type=virtualization_type,
+                                         bdmdev=block_device_mapping,
+                                         name=name,
+                                         architecture=architecture,
+                                         ramdisk=ramdisk,
+                                         kernel=kernel)
         elapsed= int(time.time()-start)
-        self.debug('create_emi_from_url: Done, image registered as:'+str(emi)+", after "+str(elapsed)+" seconds")
+        self.status('create_emi_from_url: Done, image registered as:'+str(emi)+", after "+str(elapsed)+" seconds")
         return emi
     

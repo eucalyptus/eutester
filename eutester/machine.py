@@ -39,6 +39,7 @@ import sshconnection
 import re
 import os
 import sys
+import tempfile
 from repoutils import RepoUtils
 
 class DistroName:
@@ -144,7 +145,15 @@ class Machine:
                 return distro
         raise Exception("Unable to find distro " + str(distro_name) + " and version "
                         + str(distro_release) + " for hostname " + str(self.hostname))
-    
+
+    def put_templated_file(self, local_src, remote_dest, **kwargs):
+        tmp = tempfile.mktemp()
+        try:
+            Eutester.render_file_template(local_src, tmp, **kwargs)
+            self.ssh.sftp_put(tmp, remote_dest)
+        finally:
+            os.remove(tmp)
+
     def refresh_ssh(self):
         self.ssh.refresh_connection()
         
@@ -281,6 +290,9 @@ class Machine:
         """
         return self.get_eucalyptus_service_pid('eucalyptus-cc.pid')
 
+    def get_uptime(self):
+        return int(self.sys('cat /proc/uptime', code=0)[0].split()[1].split('.')[0])
+
     def get_eucalyptus_cloud_process_uptime(self):
         """
         Attempts to look up the elapsed running time of the PID associated with the eucalyptus-cloud process/service.
@@ -352,7 +364,10 @@ class Machine:
         seconds_min = 60
         seconds_hour = 3600
         seconds_day = 86400
+        elapsed = 0
         try:
+            if not pid:
+                raise Exception('Empty pid passed to get_elapsed_seconds_since_pid_started')
             cmd = "ps -eo pid,etime | grep " + str(pid) + " | awk '{print $2}'"
             self.debug('starting get pid uptime"' + str(cmd) + '"...')
             #expected format: days-HH:MM:SS

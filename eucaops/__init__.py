@@ -42,6 +42,7 @@ from stsops import STSops
 import time
 from eutester.euservice import EuserviceManager
 from boto.ec2.instance import Reservation
+from boto.exception import EC2ResponseError
 from eutester.euconfig import EuConfig
 from eutester.euproperties import Euproperty_Manager
 from eutester.machine import Machine
@@ -233,7 +234,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
             raise Exception("Setting property " + property + " failed")
     
    
-    def cleanup_artifacts(self,instances=True, snapshots=True, volumes=True):
+    def cleanup_artifacts(self,instances=True, snapshots=True, volumes=True, load_balancers=True):
         """
         Description: Attempts to remove artifacts created during and through this eutester's lifespan.
         """
@@ -246,6 +247,8 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
             self.clean_up_test_volumes()
         if snapshots:
             self.cleanup_test_snapshots()
+        if load_balancers:
+            self.cleanup_load_balancers()
 
         for key,array in self.test_resources.iteritems():
             for item in array:
@@ -267,6 +270,18 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
                 except Exception, e:
                     self.fail("Unable to delete item: " + str(item) + "\n" + str(e))
 
+    def cleanup_load_balancers(self, lbs=None):
+        """
+        :param lbs: optional list of load balancers, otherwise it will attempt to delete from test_resources[]
+        """
+        if lbs:
+            self.delete_load_balancers(lbs)
+        else:
+            try:
+                self.delete_load_balancers(self.test_resources['load_balancers'])
+            except KeyError:
+                self.debug("No loadbalancers to delete")
+
     def cleanup_test_snapshots(self,snaps=None, clean_images=False, add_time_per_snap=10, wait_for_valid_state=120, base_timeout=180):
         """
         :param snaps: optional list of snapshots, else will attempt to delete from test_resources[]
@@ -279,18 +294,24 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
         snaps = snaps or self.test_resources['snapshots']
         if not snaps:
             return
+        self.debug('Attempting to clean the following snapshots:')
+        self.print_eusnapshot_list(snaps)
         if clean_images:
             for snap in snaps:
                 for image in self.test_resources['images']:
                     for dev in image.block_device_mapping:
                         if image.block_device_mapping[dev].snapshot_id == snap.id:
                             self.delete_image(image)
-        return self.delete_snapshots(snaps,base_timeout=base_timeout, add_time_per_snap=add_time_per_snap, wait_for_valid_state=wait_for_valid_state)
+        if snaps:
+            return self.delete_snapshots(snaps,
+                                        base_timeout=base_timeout,
+                                        add_time_per_snap=add_time_per_snap,
+                                        wait_for_valid_state=wait_for_valid_state)
 
 
 
 
-    def clean_up_test_volumes(self, volumes=None, min_timeout=180, timeout_per_vol=20):
+    def clean_up_test_volumes(self, volumes=None, min_timeout=180, timeout_per_vol=30):
         """
         Definition: cleaup helper method intended to clean up volumes created within a test, after the test has ran.
 
@@ -298,6 +319,8 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
         """
         euvolumes = []
         detaching = []
+        not_exist = []
+        line = '\n----------------------------------------------------------------------------------------------------\n'
         vol_str = volumes or "test_resources['volumes']"
         self.debug('clean_up_test_volumes starting, volumes:'+str(vol_str))
 
@@ -307,29 +330,58 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
 
         for vol in volumes:
             try:
-                vol.update()
-                if not isinstance(vol, EuVolume):
-                    vol = EuVolume.make_euvol_from_vol(vol, self)
-                euvolumes.append(vol)
+                vol = self.get_volume(volume_id=vol.id)
             except:
-                print self.get_traceback()
+                tb = self.get_traceback()
+                self.debug("\n" + line + " Ignoring caught Exception:\n" + str(tb) + "\n"+ str(vol.id) +
+                           ', Could not retrieve volume, may no longer exist?' + line)
+                vol = None
+            if vol:
+                try:
+                    vol.update()
+                    if not isinstance(vol, EuVolume):
+                        vol = EuVolume.make_euvol_from_vol(vol, self)
+                    euvolumes.append(vol)
+                except:
+                    tb = self.get_traceback()
+                    self.debug('Ignoring caught Exception: \n' + str(tb))
         try:
+            self.debug('Attempting to clean up the following volumes:')
             self.print_euvolume_list(euvolumes)
         except: pass
         self.debug('Clean_up_volumes: Detaching any attached volumes to be deleted...')
-        for vol in volumes:
+        for vol in euvolumes:
             try:
+                vol.update()
                 if vol.status == 'in-use':
-                    if vol.attach_data and vol.attach_data.status != 'detaching':
-                        vol.detach()
+                    if vol.attach_data and (vol.attach_data.status != 'detaching' or vol.attach_data.status != 'detached'):
+                        try:
+                            self.debug(str(vol.id) + ', Sending detach. Status:' +str(vol.status) +
+                                       ', attach_data.status:' + str(vol.attach_data.status))
+                            vol.detach()
+                        except EC2ResponseError, be:
+                            if 'Volume does not exist' in be.error_message:
+                                not_exist.append(vol)
+                                self.debug(str(vol.id) + ', volume no longer exists')
+                            else:
+                                raise be
                     detaching.append(vol)
             except:
                 print self.get_traceback()
+        #If the volume was found to no longer exist on the system, remove it from further monitoring...
+        for vol in not_exist:
+            if vol in detaching:
+                detaching.remove(vol)
+            if vol in euvolumes:
+                euvolumes.remove(vol)
+        self.test_resources['volumes'] = euvolumes
+        timeout = min_timeout + (len(volumes) * timeout_per_vol)
+        #If detaching wait for detaching to transition to detached...
         if detaching:
-            timeout = min_timeout + (len(detaching) * timeout_per_vol)
             self.monitor_euvolumes_to_status(detaching, status='available', attached_status=None,timeout=timeout)
         self.debug('clean_up_volumes: Deleteing volumes now...')
-        self.delete_volumes(euvolumes)
+        self.print_euvolume_list(euvolumes)
+        self.delete_volumes(euvolumes, timeout=timeout)
 
                     
     def get_current_resources(self,verbose=False):
@@ -470,16 +522,19 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
             return None
         else:
             return machines[0]
-         
-    def get_component_machines(self, component):
+
+    def get_component_machines(self, component = None):
         #loop through machines looking for this component type
         """ Parse the machine list and a list of bm_machine objects that match the component passed in"""
-        component.lower()
-        machines_with_role = [machine for machine in self.config['machines'] if re.search(component, " ".join(machine.components))]
-        if len(machines_with_role) == 0:
-            raise Exception("Could not find component "  + component + " in list of machines")
+        if component is None:
+            return self.config['machines']
         else:
-            return machines_with_role
+            component.lower()
+            machines_with_role = [machine for machine in self.config['machines'] if re.search(component, " ".join(machine.components))]
+            if len(machines_with_role) == 0:
+                raise IndexError("Could not find component "  + component + " in list of machines")
+            else:
+                return machines_with_role
 
     def swap_component_hostname(self, hostname):
         if hostname != None:

@@ -33,9 +33,15 @@
 import re
 import time
 from eutester import sshconnection
+from eutester.sshconnection import SshCbReturn, CommandTimeoutException
+import types
+import stat
 import eutester
 import copy
+import os
 from eutester import machine
+from xml.dom.minidom import parse, parseString
+import dns.resolver
 
 
 class log_marker:
@@ -194,7 +200,7 @@ class Eunode:
         dict should have dict['id'], dict['name'], dict['state']
 
         """
-        return_list = {}
+        instance_list = []
         if self.machine:
             keys = []
             output = self.machine.sys('virsh list', code=0)
@@ -202,13 +208,182 @@ class Eunode:
                 keys = str(output[0]).strip().lower().split()
                 for line in output[2:]:
                     line = line.strip()
-                    #skip blank lines...
                     if line == "":
                         continue
                     domain_line = line.split()
-                    for key in keys:
-                        return_list[key] = domain_line[keys.index(key)]
-        return return_list
+                    instance_list.append({keys[0]:domain_line[0], keys[1]:domain_line[1], keys[2]:domain_line[2]})
+        return instance_list
+
+    def tail_instance_console(self,
+                              instance,
+                              max_lines=None,
+                              timeout=30,
+                              idle_timeout=30,
+                              print_method=None):
+        '''
+
+
+        '''
+        if timeout < idle_timeout:
+            idle_timeout = timeout
+        if not isinstance(instance,types.StringTypes):
+            instance = instance.id
+        console_path = self.get_instance_console_path(instance)
+        start_time = time.time()
+        lines_read = 0
+        print_method = print_method or self.debug
+        prefix = str(instance) + " Console Output:"
+        try:
+            self.machine.cmd('tail -F ' + str(console_path),
+                             verbose=False,
+                             cb=self.remote_tail_monitor_cb,
+                             cbargs=[instance,
+                                     max_lines,
+                                     lines_read,
+                                     start_time,
+                                     timeout,
+                                     print_method,
+                                     prefix,
+                                     idle_timeout],
+                             timeout=idle_timeout)
+        except CommandTimeoutException, cte:
+            self.debug('Idle timeout fired while tailing console: ' + str(cte))
+
+
+    def remote_tail_monitor_cb(self,
+                               buf,
+                               instance_id,
+                               max_lines,
+                               lines_read,
+                               start_time,
+                               timeout,
+                               print_method,
+                               prefix,
+                               idle_timeout):
+        ret = SshCbReturn(stop=False, settimer=idle_timeout)
+        return_buf = ""
+        now = time.time()
+        if (timeout and (now - start_time) >= timeout) or (max_lines and lines_read >= max_lines):
+            ret.statuscode = 0
+            ret.stop = True
+        try:
+            for line in str(buf).splitlines():
+                lines_read += 1
+                print_method(str(prefix) + str(line))
+        except Exception, e:
+            return_buf = "Error in remote_tail_monitor:" + str(e)
+            ret.statuscode = 69
+            ret.stop = True
+        finally:
+            ret.buf = return_buf
+            ret.nextargs = [instance_id, max_lines, lines_read, start_time,timeout]
+            return ret
+
+
+    def get_instance_multipath_dev_info_for_instance_ebs_volume(self, instance, volume):
+        if not isinstance(instance,types.StringTypes):
+            instance = instance.id
+        if isinstance(volume,types.StringTypes):
+            volume = self.tester.get_volume(volume_id=volume)
+        if volume.attach_data and volume.attach_data.instance_id == instance:
+            dev = volume.attach_data.device
+        else:
+            raise Exception(str(volume.id) + 'Vol not attached to instance: ' + str(instance))
+        return self.get_instance_multipath_dev_info_for_instance_block_dev(instance, dev)
+
+
+    def get_instance_multipath_dev_info_for_instance_block_dev(self, instance, ebs_block_dev, verbose=False):
+        if not isinstance(instance,types.StringTypes):
+            instance = instance.id
+        mpath_dev = self.get_instance_multipath_dev_for_instance_block_dev(instance, ebs_block_dev)
+        mpath_dev_info = self.machine.sys('multipath -ll ' + str(mpath_dev) + " | sed 's/[[:cntrl:]]//g' ",
+                                          verbose=verbose, code=0)
+        return mpath_dev_info
+
+    def get_instance_multipath_dev_for_instance_ebs_volume(self, instance, volume):
+        if not isinstance(instance,types.StringTypes):
+            instance = instance.id
+        if isinstance(volume,types.StringTypes):
+            volume = self.tester.get_volume(volume_id=volume)
+
+    def get_instance_multipath_dev_for_instance_block_dev(self, instance, ebs_block_dev, verbose=False):
+        mpath_dev = None
+        ebs_block_dev = os.path.basename(ebs_block_dev)
+        if not isinstance(instance,types.StringTypes):
+            instance = instance.id
+        dm_dev = self.get_instance_block_disk_dev_on_node(instance, ebs_block_dev)
+        sym_links = self.machine.sys('udevadm info --name ' + str(dm_dev) + ' --query symlink',
+                                     verbose=verbose, code=0)[0]
+        for path in str(sym_links).split():
+            if str(path).startswith('mapper/'):
+                mpath_dev = path.split('/')[1]
+                break
+        return mpath_dev
+
+
+    def get_instance_block_disk_dev_on_node(self, instance, block_dev):
+        block_dev = os.path.basename(block_dev)
+        if not isinstance(instance,types.StringTypes):
+            instance = instance.id
+        paths = self.get_instance_block_disk_source_paths(instance)
+        sym_link  = paths[block_dev]
+        real_dev = self.machine.sys('readlink -e ' + sym_link, verbose=False, code=0)[0]
+        fs_stat = self.machine.get_file_stat(real_dev)
+        if stat.S_ISBLK(fs_stat.st_mode):
+            return real_dev
+        else:
+            raise(str(instance) + ", dev:" + str(block_dev) + ',Error, device on node is not block type :' + str(real_dev))
+
+    def get_instance_block_disk_source_paths(self, instance, target_dev=None):
+        '''
+        Returns dict mapping target dev to source path dev/file on NC
+        Example return dict: {'vdb':'/NodeDiskPath/dev/sde'}
+        '''
+        ret_dict = {}
+        if target_dev:
+            target_dev = os.path.basename(target_dev)
+        if not isinstance(instance,types.StringTypes):
+            instance = instance.id
+        disk_doms = self.get_instance_block_disk_xml_dom_list(instance_id=instance)
+        for disk in disk_doms:
+            source_dev = disk.getElementsByTagName('source')[0].attributes.get('dev').nodeValue
+            target_bus = disk.getElementsByTagName('target')[0].attributes.get('dev').nodeValue
+            if not target_dev or target_dev == target_bus:
+                ret_dict[target_bus] = str(source_dev)
+        return ret_dict
+
+    def get_instance_console_path(self, instance_id):
+        if not isinstance(instance_id,types.StringTypes):
+            instance = instance_id.id
+        dev_dom = self.get_instance_device_xml_dom(instance_id=instance_id)
+        console_dom = dev_dom.getElementsByTagName('console')[0]
+        return console_dom.getElementsByTagName('source')[0].attributes.get('path').nodeValue
+
+
+    def get_instance_device_xml_dom(self, instance_id):
+        if not isinstance(instance_id,types.StringTypes):
+            instance = instance_id.id
+        dom = self.get_instance_xml_dom(instance_id)
+        return dom.getElementsByTagName('devices')[0]
+
+    def get_instance_block_disk_xml_dom_list(self, instance_id):
+        if not isinstance(instance_id,types.StringTypes):
+            instance = instance_id.id
+        dev_dom = self.get_instance_xml_dom(instance_id)
+        return dev_dom.getElementsByTagName('disk')
+
+    def get_instance_xml_dom(self, instance_id):
+        if not isinstance(instance_id,types.StringTypes):
+            instance = instance_id.id
+        output = self.get_instance_xml_text(instance_id)
+        dom_xml = parseString(output)
+        return dom_xml.getElementsByTagName('domain')[0]
+
+    def get_instance_xml_text(self, instance_id):
+        if not isinstance(instance_id,types.StringTypes):
+            instance = instance_id.id
+        return self.machine.sys('virsh dumpxml ' + str(instance_id),listformat=False, verbose=False, code=0)
+
 
     #def get_iscsi_connections(self,):
     #def get_exported_volumes(self,)
@@ -216,9 +391,7 @@ class Eunode:
 
 
 
-
-
-class Euservice:
+class Euservice(object):
 
     def __init__(self, service_string, tester = None):
         values = service_string.split()
@@ -283,20 +456,54 @@ class Euservice:
         if printmethod:
             printmethod(buf)
         return buf
-    
+
+    @staticmethod
+    def create_service(service_string, tester=None):
+        if service_string.split()[1] == 'dns':
+            return DnsService(service_string)
+        else:
+            return Euservice(service_string, tester)
+
+
+
+class DnsService(Euservice):
+    def __init__(self, service_string):
+        super(DnsService, self).__init__(service_string)
+        self.resolver = dns.resolver.Resolver(configure=False)
+        self.resolver.nameservers = [self.hostname]
+
+    def resolve(self, name, timeout=360, poll_count=20):
+        """Resolve hostnames against the Eucalyptus DNS service"""
+        poll_sleep = timeout/poll_count
+        for _ in range(poll_count):
+            try:
+                print("DNSQUERY: Resolving `{0}' against nameserver(s) {1}".format(name, self.resolver.nameservers))
+                ans = self.resolver.query(name)
+                return str(ans[0])
+            except dns.resolver.NXDOMAIN:
+                raise Exception("Unable to resolve hostname `{0}'".format(name))
+            except dns.resolver.NoNameservers:
+                # Note that this usually means our DNS server returned a malformed message
+                pass
+            finally:
+                time.sleep(poll_sleep)
+        raise Exception("Unable to resolve hostname `{0}'".format(name))
+
+
         
 class Partition:
-    name = ""
-    ccs = []
-    scs = []
-    vbs = []
-    ncs = []
-    volumes = []
-    instances = []
+
     
     def __init__(self, name, service_manager ):
         self.name = name
         self.service_manager = service_manager
+        name = ""
+        self.ccs = []
+        self.scs = []
+        self.vbs = []
+        self.ncs = []
+        self.volumes = []
+        self.instances = []
         
     def get_enabled(self, list):
         self.service_manager.update()
@@ -454,9 +661,8 @@ class EuserviceManager(object):
                 time.sleep(poll_interval)
         #Create euservice objects from command output and return list of euservices.
         for service_line in describe_services:
-            services.append(Euservice(service_line, self.tester))
+            services.append(Euservice.create_service(service_line, self.tester))
         return services
-
 
     def print_services_list(self, services=None):
         services = services or self.all_services
@@ -1027,7 +1233,7 @@ class EuserviceManager(object):
     def disable(self,euservice):
         self.modify_service(euservice, "DISABLED")
         
-    def wait_for_service(self, euservice, state = "ENABLED", attempt_both = True, timeout=600):
+    def wait_for_service(self, euservice, state = "ENABLED", states=None,attempt_both = True, timeout=600):
         interval = 20
         poll_count = timeout / interval
         while (poll_count > 0):
@@ -1035,8 +1241,13 @@ class EuserviceManager(object):
             try:
                 matching_services = self.get(euservice.type, euservice.partition, attempt_both)
                 for service in matching_services:
-                    if re.search(state, service.state):
-                        return service 
+                    if states:
+                        for state in states:
+                            if re.search(state, service.state):
+                                return service
+                    else:
+                        if re.search(state, service.state):
+                            return service
             except Exception, e:
                 self.tester.debug("Caught " + str(e) + " when trying to get services. Retrying in " + str(interval) + "s")
             poll_count -= 1
@@ -1065,6 +1276,34 @@ class EuserviceManager(object):
             else:
                 self.wait_for_service(service,"ENABLED")
 
+    def wait_for_all_services_operational(self, timeout=600):
+        '''
+        Attempts to wait for a core set of eutester monitored services on the cloud and/or specified in the
+        config file to transition to ENABLED. In the HA case will look for both an ENABLED and DISABLED service.
+        '''
+        start = time.time()
+        elapsed = 0
+        while elapsed < timeout:
+            self.debug("wait_for_all_services_operational, elapsed: " + str(elapsed) + "/" + str(timeout))
+            elapsed = int(time.time() - start)
+            try:
+                self.print_services_list()
+                self.all_services_operational()
+                self.debug('All services were detected as operational')
+                return
+            except Exception, e:
+                tb = self.tester.get_traceback()
+                elapsed = int(time.time() - start )
+                error = tb + "\n Error waiting for all services operational, elapsed: " + \
+                        str(elapsed) + "/" + str(timeout) + ", error:" + str(e)
+                if elapsed < timeout:
+                    self.debug(error)
+                else:
+                    raise Exception(error)
+            time.sleep(15)
+
+
+
     def get_enabled_clc(self):
         clc = self.get_enabled(self.clcs)
         if clc is None:
@@ -1092,6 +1331,13 @@ class EuserviceManager(object):
             raise Exception("Neither Walrus is disabled")
         else:
             return walrus
+
+    def get_enabled_dns(self):
+        dns = self.get_enabled([self.dns])
+        if dns is None:
+            raise Exception("DNS service is not available")
+        else:
+            return dns
     
     def get_enabled(self, list_of_services):
         self.update()

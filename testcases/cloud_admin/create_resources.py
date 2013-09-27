@@ -41,19 +41,19 @@ from eutester.eutestcase import EutesterTestCase
 
 class ResourceGeneration(EutesterTestCase):
     
-    def __init__(self,extra_args = None):
+    def __init__(self):
         self.setuptestcase()
         self.setup_parser()
-        if extra_args:
-            for arg in extra_args:
-                self.parser.add_argument(arg)
+        self.parser.add_argument("--no-cleanup", action='store_true')
         self.get_args()
         # Setup basic eutester object
         self.tester = Eucaops( credpath=self.args.credpath, config_file=self.args.config, password=self.args.password)
         self.testers = []
 
     def clean_method(self):
-        self.tester.cleanup_artifacts()
+        if not self.args.no_cleanup:
+            for tester in self.testers:
+                self.tester.cleanup_artifacts()
 
     def CreateResources(self):
         users = self.tester.get_all_users()
@@ -79,16 +79,18 @@ class ResourceGeneration(EutesterTestCase):
             zone = random.choice(resource_tester.get_zones())
             keypair = resource_tester.add_keypair(resource_tester.id_generator())
             group = resource_tester.add_group(resource_tester.id_generator())
-            resource_tester.authorize_group_by_name(group_name=group.name )
+            resource_tester.authorize_group_by_name(group_name=group.name)
             resource_tester.authorize_group_by_name(group_name=group.name, port=-1, protocol="icmp" )
             reservation = resource_tester.run_instance(keypair=keypair.name,group=group.name,zone=zone)
             instance = reservation.instances[0]
             assert isinstance(instance, EuInstance)
-            if not instance.public_dns_name == instance.private_ip_address:
+            if not instance.ip_address == instance.private_ip_address:
                 address = resource_tester.allocate_address()
                 resource_tester.associate_address(instance=instance, address=address)
                 resource_tester.disassociate_address_from_instance(instance)
-                resource_tester.release_address(address)
+                if not self.args.no_cleanup:
+                    resource_tester.release_address(address)
+            self.tester.sleep(5)
             instance.update()
             instance.reset_ssh_connection()
             volume = resource_tester.create_volume(size=1, zone=zone)
@@ -97,7 +99,8 @@ class ResourceGeneration(EutesterTestCase):
             volume_from_snap = resource_tester.create_volume(snapshot=snapshot, zone=zone)
             bucket = resource_tester.create_bucket(resource_tester.id_generator(12, string.ascii_lowercase  + string.digits))
             key = resource_tester.upload_object(bucket_name= bucket.name, key_name= resource_tester.id_generator(12, string.ascii_lowercase  + string.digits), contents= resource_tester.id_generator(200))
-            resource_tester.terminate_instances(reservation)
+            if not self.args.no_cleanup:
+                resource_tester.terminate_instances(reservation)
 
 if __name__ == "__main__":
     testcase = ResourceGeneration()

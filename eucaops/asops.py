@@ -137,7 +137,7 @@ class ASops(Eutester):
             as_connection_args = copy.copy(connection_args)
             as_connection_args['path'] = path
             as_connection_args['region'] = as_region
-            self.debug("Attempting to create auto scale connection to " + as_region.endpoint + ":" + str(port) + path)
+            self.debug("Attempting to create auto scale connection to " + as_region.endpoint + ':' + str(port) + path)
             self.autoscale = boto.ec2.autoscale.AutoScaleConnection(**as_connection_args)
         except Exception, e:
             self.critical("Was unable to create auto scale connection because of exception: " + str(e))
@@ -211,6 +211,7 @@ class ASops(Eutester):
         :param min_size:  Minimum size of group (required).
         :param max_size: Maximum size of group (required).
         """
+        self.debug("Creating Auto Scaling group: " + group_name)
         as_group = AutoScalingGroup(connection=self.autoscale,
                                     group_name=group_name,
                                     load_balancers=load_balancers,
@@ -224,32 +225,39 @@ class ASops(Eutester):
                                     health_check_period=health_check_period,
                                     tags=tags,
                                     termination_policies=termination_policies)
-        self.debug("Creating Auto Scaling group: " + group_name)
         self.autoscale.create_auto_scaling_group(as_group)
-        if len(self.describe_as_group([group_name])) != 1:
-            raise Exception('Auto Scaling Group not created')
-        self.debug("SUCCESS: Created Auto Scaling Group: " +
-                   self.describe_as_group([group_name])[0].name)
 
-    def describe_as_group(self, names=None):
+        as_group = self.describe_as_group(group_name)
+
+        self.debug("SUCCESS: Created Auto Scaling Group: " + as_group.name)
+        return as_group
+
+    def describe_as_group(self, name=None):
         """
         Returns a full description of each Auto Scaling group in the given
         list. This includes all Amazon EC2 instances that are members of the
         group. If a list of names is not provided, the service returns the full
         details of all Auto Scaling groups.
-        :param names:
+        :param name:
         :return:
         """
-        return self.autoscale.get_all_groups(names=names)
+        groups = self.autoscale.get_all_groups(names=[name])
+        if len(groups) > 1:
+            raise Exception("More than one group with name: " + name)
+        if len(groups) == 0:
+            raise Exception("No group found with name: " + name)
+        return groups[0]
 
-    def delete_as_group(self, names=None, force=None):
-        self.debug("Deleting Auto Scaling Group: " + names)
+    def delete_as_group(self, name=None, force=None):
+        self.debug("Deleting Auto Scaling Group: " + name)
         self.debug("Forcing: " + str(force))
         # self.autoscale.set_desired_capacity(group_name=names, desired_capacity=0)
-        self.autoscale.delete_auto_scaling_group(name=names, force_delete=force)
-        if len(self.describe_as_group([names])) != 0:
+        self.autoscale.delete_auto_scaling_group(name=name, force_delete=force)
+        try:
+            self.describe_as_group([name])
             raise Exception('Auto Scaling Group not deleted')
-        self.debug('SUCCESS: Deleted Auto Scaling Group: ' + names)
+        except:
+            self.debug('SUCCESS: Deleted Auto Scaling Group: ' + name)
 
     def create_as_policy(self, name, adjustment_type, scaling_adjustment, as_name, cooldown=None):
         """
@@ -294,7 +302,7 @@ class ASops(Eutester):
         ### clear all ASGs
         for asg in self.describe_as_group():
             self.debug("Found Auto Scaling Group: " + asg.name)
-            self.delete_as_group(names=asg.name, force=True)
+            self.delete_as_group(name=asg.name, force=True)
         if len(self.describe_as_group()) != 0:
             self.debug("Some AS groups remain")
             for asg in self.describe_as_group():
@@ -368,7 +376,8 @@ class ASops(Eutester):
         :param health_check_type:
         :param health_check_period:
         """
-        AutoScalingGroup(connection=self.autoscale,
+        self.debug("Updating ASG: " + group_name)
+        return AutoScalingGroup(connection=self.autoscale,
                          name=group_name,
                          launch_config=launch_config,
                          min_size=min_size,
