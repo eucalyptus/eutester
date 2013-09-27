@@ -48,6 +48,7 @@ Sample usage:
 from boto.ec2.volume import Volume
 from boto.ec2.instance import Instance
 #from eutester import euvolume
+from eutester import Eutester
 from eutester.euvolume import EuVolume
 from eutester import eulogger
 from eutester.taggedresource import TaggedResource
@@ -57,10 +58,9 @@ import sys
 import os
 import re
 import time
+import copy
 import types
-
-
-
+import operator
 
 
 class EuInstance(Instance, TaggedResource):
@@ -71,7 +71,7 @@ class EuInstance(Instance, TaggedResource):
     rootfs_device = "sda"
     block_device_prefix = "sd"
     virtio_blk = False
-    bdm_vol = None
+    bdm_root_vol = None
     reservation = None
     attached_vols = []
     scsidevs = []
@@ -91,7 +91,9 @@ class EuInstance(Instance, TaggedResource):
     cmdstart = 0
     auto_connect = True
     security_groups = []
-
+    vmtype_info = None
+    try_non_root_exec = None
+    use_sudo = None
    
     @classmethod
     def make_euinstance_from_instance(cls, 
@@ -100,14 +102,16 @@ class EuInstance(Instance, TaggedResource):
                                       debugmethod = None, 
                                       keypair=None, 
                                       keypath=None, 
-                                      password=None, 
+                                      password=None,
                                       username="root",  
                                       auto_connect = True,
                                       verbose=True, 
                                       timeout=120,
                                       private_addressing = False,
                                       reservation = None, 
-                                      cmdstart=None, 
+                                      cmdstart=None,
+                                      try_non_root_exec=True,
+                                      exec_password=None,
                                       retry=2
                                       ):
         '''
@@ -115,8 +119,11 @@ class EuInstance(Instance, TaggedResource):
         Arguments:
         instance - mandatory- a Boto instance object used to build this euinstance object
         keypair - optional- a boto keypair object used for creating ssh connection to the instance
-        password - optional- string used to create ssh connection to this instance as an alternative to keypair 
         username - optional- string used to create ssh connection as an alternative to keypair
+        password - optional- string used to create ssh connection to this instance as an alternative to keypair
+        exec_password -optional -string used for su or sudo where prompted for password, will default to 'password'
+        auto_connect -optional -boolean, if True will attempt to automatically create an ssh session for this instance
+        try_non_root_exec -optional -boolean, if True will attempt to use sudo if available else su -c to execute privileged commands
         timeout - optional- integer used for ssh connection timeout
         debugmethod - optional - method, used for debug output 
         verbose - optional - boolean to determine if debug is to be printed using debug()
@@ -137,11 +144,12 @@ class EuInstance(Instance, TaggedResource):
                 keypair = tester.get_keypair(keyname)
             else:
                 keyname = keypair.name
-            keypath = os.getcwd() + "/" + keyname + ".pem" 
+            keypath = os.getcwd() + "/" + keyname + ".pem"
         newins.keypair = keypair
         newins.keypath = keypath
         newins.password = password
         newins.username = username
+        newins.exec_password = exec_password or password
         newins.verbose = verbose
         newins.attached_vols=[] 
         newins.timeout = timeout
@@ -153,17 +161,27 @@ class EuInstance(Instance, TaggedResource):
         newins.cmdstart = cmdstart
         newins.auto_connect = auto_connect
         newins.set_last_status()
+        newins.update_vm_type_info()
         #newins.set_block_device_prefix()
         if newins.root_device_type == 'ebs':
             try:
-                volume = newins.tester.get_volume(volume_id = newins.block_device_mapping.current_value.volume_id)
-                newins.bdm_vol = EuVolume.make_euvol_from_vol(volume, tester=newins.tester,cmdstart=news.cmdstart)
+                volume = newins.tester.get_volume(volume_id = newins.block_device_mapping.get(newins.root_device_name).volume_id)
+                newins.bdm_root_vol = EuVolume.make_euvol_from_vol(volume, tester=newins.tester,cmdstart=newins.cmdstart)
             except:pass
                 
         if newins.auto_connect:
             newins.connect_to_instance(timeout=timeout)
         if newins.ssh:
             newins.set_rootfs_device()
+        #Allow non-root users to try sudo if available else su -c to execute privileged commands
+        newins.try_non_root_exec = try_non_root_exec
+        if newins.try_non_root_exec:
+            if username.strip() != 'root':
+                if newins.has_sudo():
+                    newins.use_sudo = True
+                else:
+                    newins.use_sudo = False
+
         return newins
     
     def update(self):
@@ -183,26 +201,23 @@ class EuInstance(Instance, TaggedResource):
         
     
     def printself(self,title=True, footer=True, printmethod=None):
-        if self.bdm_vol:
-            bdmvol = self.bdm_vol.id
+        if self.bdm_root_vol:
+            bdmvol = self.bdm_root_vol.id
         else:
             bdmvol = None
             
         buf = "\n"
         if title:
             buf += str("-------------------------------------------------------------------------------------------------------------------------------------------------------------------\n")
-            buf += str('INST_ID').center(11)+'|'+str('EMI').center(13)+'|'+str('RES_ID').center(11)+'|'+str('LASTSTATE').center(10)+'|'+str('PRIV_ADDR').center(10)+'|'+str('AGE@STATUS').center(13)+'|'+str('VMTYPE').center(12)+'|'+str('BDM_VOL').center(13)+'|'+str('CLUSTER').center(25)+'|'+str('PUB_IP').center(16)+'|'+str('PRIV_IP')+'\n'
+            buf += str('INST_ID').center(11)+'|'+str('EMI').center(13)+'|'+str('RES_ID').center(11)+'|'+str('LASTSTATE').center(10)+'|'+str('PRIV_ADDR').center(10)+'|'+str('AGE@STATUS').center(13)+'|'+str('VMTYPE').center(12)+'|'+str('ROOT_VOL').center(13)+'|'+str('CLUSTER').center(25)+'|'+str('PUB_IP').center(16)+'|'+str('PRIV_IP')+'\n'
             buf += str("-------------------------------------------------------------------------------------------------------------------------------------------------------------------\n")
-        buf += str(self.id).center(11)+'|'+str(self.image_id).center(13)+'|'+str(self.reservation.id).center(11)+'|'+str(self.laststate).center(10)+'|'+str(self.private_addressing).center(10)+'|'+str(self.age_at_state).center(13)+'|'+str(self.instance_type).center(12)+'|'+str(bdmvol).center(13)+'|'+str(self.placement).center(25)+'|'+str(self.public_dns_name).center(16)+'|'+str(self.private_ip_address).rstrip()
+        buf += str(self.id).center(11)+'|'+str(self.image_id).center(13)+'|'+str(self.reservation.id).center(11)+'|'+str(self.laststate).center(10)+'|'+str(self.private_addressing).center(10)+'|'+str(self.age_at_state).center(13)+'|'+str(self.instance_type).center(12)+'|'+str(bdmvol).center(13)+'|'+str(self.placement).center(25)+'|'+str(self.ip_address).center(16)+'|'+str(self.private_ip_address).rstrip()
         if footer:
             buf += str("\n-------------------------------------------------------------------------------------------------------------------------------------------------------------------")
         if printmethod:
             printmethod(buf)
         return buf
-        
-        
-        
-        
+
     
     def reset_ssh_connection(self, timeout=None):
         timeout = timeout or self.timeout
@@ -212,7 +227,7 @@ class EuInstance(Instance, TaggedResource):
                 self.ssh.close()
             self.debug('Connecting ssh '+str(self.id))
             self.ssh = sshconnection.SshConnection(
-                                                    self.public_dns_name, 
+                                                    self.ip_address,
                                                     keypair=self.keypair, 
                                                     keypath=self.keypath,          
                                                     password=self.password, 
@@ -231,7 +246,7 @@ class EuInstance(Instance, TaggedResource):
         Attempts to connect to an instance via ssh.
         timeout - optional - time in seconds to wait for connection before failure
         '''
-        self.debug("Attempting to reconnect_to_instance:"+self.id)
+        self.debug("Attempting to reconnect_to_instance:" + self.id)
         attempts = 0
         if ((self.keypath is not None) or ((self.username is not None)and(self.password is not None))):
             start = time.time()
@@ -242,6 +257,7 @@ class EuInstance(Instance, TaggedResource):
             while (elapsed < timeout):
                 attempts += 1
                 try:
+                    self.update()
                     self.reset_ssh_connection()
                     self.debug('Try some sys...')
                     self.sys("")
@@ -253,11 +269,23 @@ class EuInstance(Instance, TaggedResource):
                     pass
                 else:
                     break
+            elapsed = int(time.time()-start)
             if self.ssh is None:
                 raise Exception(str(self.id)+":Failed establishing ssh connection to instance, elapsed:"+str(elapsed)+
                                 "/"+str(timeout))
         else:
-            self.debug("keypath or username/password need to be populated for ssh connection") 
+            self.debug("keypath or username/password need to be populated for ssh connection")
+
+    def has_sudo(self):
+        try:
+            # Run ssh command directly from ssh interface not local sys()
+            self.ssh.sys('which sudo', code=0)
+            return True
+        except sshconnection.CommandExitCodeException, se:
+            self.debug('Could not find sudo on remote machine:' + str(self.ip_address))
+        return False
+
+
     
     def debug(self,msg,traceback=1,method=None,frame=False):
         '''
@@ -267,7 +295,7 @@ class EuInstance(Instance, TaggedResource):
         if ( self.verbose is True ):
             self.debugmethod(msg)
 
-    def sys(self, cmd, verbose=True, code=None, timeout=120):
+    def sys(self, cmd, verbose=True, code=None, try_non_root_exec=None, enable_debug=False, timeout=120):
         '''
         Issues a command against the ssh connection to this instance
         Returns a list of the lines from stdout+stderr as a result of the command
@@ -275,12 +303,168 @@ class EuInstance(Instance, TaggedResource):
         verbose - optional - boolean flag to enable debug
         timeout - optional - command timeout in seconds 
         '''
-        output = []
-        if (self.ssh is not None):
-            output = self.ssh.sys(cmd, verbose=verbose, code=code, timeout=timeout)
-            return output
-        else:
+        if (self.ssh is None):
             raise Exception("Euinstance ssh connection is None")
+        if try_non_root_exec is None:
+            try_non_root_exec = self.try_non_root_exec
+        if self.username != 'root' and try_non_root_exec:
+            if self.use_sudo:
+                results = self.sys_with_sudo(cmd, verbose=verbose, code=code, enable_debug=enable_debug, timeout=timeout)
+                for content in results:
+                    if content.startswith("sudo"):
+                        results.remove(content)
+                        break
+                return results
+            else:
+                return self.sys_with_su(cmd, verbose=verbose, code=code, enable_debug=enable_debug, timeout=timeout)
+
+        return self.ssh.sys(cmd, verbose=verbose, code=code, timeout=timeout)
+
+
+    def sys_with_su(self, cmd, verbose=True, enable_debug=False, code=None, prompt='^Password:', username='root', password=None, retry=0, timeout=120):
+        password = password or self.exec_password
+        out = self.cmd_with_su(cmd, username=username, password=password, prompt=prompt,
+                               verbose=verbose, enable_debug=enable_debug, timeout=timeout, retry=retry, listformat=True)
+        output = out['output']
+        if code is not None:
+            if out['status'] != code:
+                self.debug(output)
+                raise sshconnection.CommandExitCodeException('Cmd:' + str(cmd) + ' failed with status code:'
+                                               + str(out['status']) + ", output:" + str(output))
+        return output
+
+    def cmd_with_su(self,
+                    cmd,
+                    verbose=True,
+                    prompt="^Password:",
+                    username='root',
+                    password=None,
+                    listformat=False,
+                    cb=None,
+                    cbargs=[],
+                    get_pty=True,
+                    timeout=120,
+                    retry=0,
+                    enable_debug=False):
+        password = password or self.exec_password
+        cmd = 'su ' + str(username) +' -c "' + str(cmd) + '"'
+        return self.cmd_expect_password(cmd,
+                                        password=password,
+                                        prompt=prompt,
+                                        verbose=verbose,
+                                        enable_debug=enable_debug,
+                                        timeout=timeout,
+                                        listformat=listformat,
+                                        cb=cb,
+                                        cbargs=cbargs,
+                                        get_pty=get_pty,
+                                        retry=retry)
+
+
+    def sys_with_sudo(self, cmd, verbose=True, enable_debug=False, prompt='^\[sudo\] password', code=None, password=None, retry=0, timeout=120):
+        password = password or self.exec_password
+        out = self.cmd_with_sudo(cmd, password=password, enable_debug=enable_debug, prompt=prompt, verbose=verbose, timeout=timeout, retry=retry, listformat=True)
+        output = out['output']
+        if code is not None:
+            if out['status'] != code:
+                self.debug(output)
+                raise sshconnection.CommandExitCodeException('Cmd:' + str(cmd) + ' failed with status code:'
+                                                             + str(out['status']) + ", output:" + str(output))
+        return output
+
+    def cmd_with_sudo(self,
+                      cmd,
+                      verbose=True,
+                      enable_debug=False,
+                      prompt="^\[sudo\] password",
+                      password=None,
+                      listformat=False,
+                      cb=None,
+                      cbargs=[],
+                      get_pty=True,
+                      timeout=120,
+                      retry=0):
+        password = password or self.exec_password
+        if re.search("'", cmd):
+            delim = '"'
+        else:
+            delim = "'"
+
+        cmd = "sudo sh -c " + delim + str(cmd) + delim
+        return self.cmd_expect_password(cmd,
+                                       password=password,
+                                       prompt=prompt,
+                                       verbose=verbose,
+                                       timeout=timeout,
+                                       listformat=listformat,
+                                       enable_debug=enable_debug,
+                                       cb=cb,
+                                       cbargs=cbargs,
+                                       get_pty=get_pty,
+                                       retry=retry)
+
+
+    def cmd_expect_password(self,
+                            cmd,
+                            verbose=None,
+                            enable_debug=False,
+                            prompt='password',
+                            password=None,
+                            timeout=120,
+                            listformat=False,
+                            cb=None,
+                            cbargs=[],
+                            get_pty=True,
+                            retry=0):
+
+        if (self.ssh is None):
+            raise Exception("Euinstance ssh connection is None")
+        password = password or self.exec_password
+        return self.ssh.cmd(cmd,verbose=verbose, timeout=timeout, listformat=listformat,
+                            cb=self.ssh.expect_password_cb, cbargs=[password, prompt, cb, cbargs, retry, 0, enable_debug], get_pty=get_pty)
+
+
+    def start_interactive_ssh(self, timeout=180):
+        return self.ssh.start_interactive(timeout=timeout)
+
+    def cmd(self, cmd, verbose=None, enable_debug=False, try_non_root_exec=None, timeout=120, listformat=False, cb=None, cbargs=[], get_pty=True):
+        """
+        Runs a command 'cmd' within an ssh connection.
+        Upon success returns dict representing outcome of the command.
+
+        Returns dict:
+            ['cmd'] - The command which was executed
+            ['output'] - The std out/err from the executed command
+            ['status'] - The exitcode of the command. Note in the case a call back fires, this exitcode is unreliable.
+            ['cbfired']  - Boolean to indicate whether or not the provided callback fired (ie returned False)
+            ['elapsed'] - Time elapsed waiting for command loop to end.
+        Arguments:
+        :param cmd: - mandatory - string representing the command to be run  against the remote ssh session
+        :param verbose: - optional - will default to global setting, can be set per cmd() as well here
+        :param timeout: - optional - integer used to timeout the overall cmd() operation in case of remote blocking
+        :param listformat: - optional - boolean, if set returns output as list of lines, else a single buffer/string
+        :param cb: - optional - callback, method that can be used to handle output as it's rx'd instead of...
+                        waiting for the cmd to finish and return buffer. Called like: cb(ssh_cmd_out_buffer, *cbargs)
+                        Must accept string buffer, and return an integer to be used as cmd status.
+                        Must return type 'sshconnection.SshCbReturn'
+                        If cb returns stop, recv loop will end, and channel will be closed.
+                        if cb settimer is > 0, timer timeout will be adjusted for this time
+                        if cb statuscode is != -1 cmd status will return with this value
+                        if cb nextargs is set, the next time cb is called these args will be passed instead of cbargs
+        :param cbargs: - optional - list of arguments to be appended to output buffer and passed to cb
+
+        """
+        if (self.ssh is None):
+            raise Exception("Euinstance ssh connection is None")
+        if try_non_root_exec is None:
+            try_non_root_exec = self.try_non_root_exec
+        if self.username != 'root' and try_non_root_exec:
+            if self.use_sudo:
+                return self.cmd_with_sudo(cmd, verbose=verbose, timeout=timeout, enable_debug=enable_debug, listformat=listformat, cb=cb, cbargs=cbargs, get_pty=get_pty)
+            else:
+                return self.cmd_with_su(cmd, verbose=verbose, timeout=timeout, enable_debug=enable_debug,listformat=listformat, cb=cb, cbargs=cbargs, get_pty=get_pty)
+        return self.ssh.cmd(cmd, verbose=verbose, timeout=timeout, listformat=listformat, cb=cb, cbargs=cbargs, get_pty=get_pty)
+
     
     def found(self, command, regex):
         """ Returns a Boolean of whether the result of the command contains the regex"""
@@ -312,14 +496,14 @@ class EuInstance(Instance, TaggedResource):
         filepath - mandatory - string, the filepath to verify
         '''
         filepath = str(filepath).strip()
-        out = self.ssh.cmd("ls "+filepath)['status']
+        out = self.cmd("ls "+filepath)['status']
         self.debug('exit code:'+str(out))
         if out != 0:
             raise Exception("File:"+filepath+" not found on instance:"+self.id)
         self.debug('File '+filepath+' is present on '+self.id)
         
     
-    def attach_volume(self, volume,  dev=None, timeout=60, overwrite=False):
+    def attach_volume(self, volume,  dev=None, timeout=180, overwrite=False):
         '''
         Method used to attach a volume to an instance and track it's use by that instance
         required - euvolume - the euvolume object being attached
@@ -333,7 +517,7 @@ class EuInstance(Instance, TaggedResource):
         return self.attach_euvolume(volume,  dev=dev, timeout=timeout, overwrite=overwrite)
     
         
-    def attach_euvolume(self, euvolume, dev=None, timeout=60, overwrite=False):
+    def attach_euvolume(self, euvolume, dev=None, timeout=180, overwrite=False):
         '''
         Method used to attach a volume to an instance and track it's use by that instance
         required - euvolume - the euvolume object being attached
@@ -354,10 +538,13 @@ class EuInstance(Instance, TaggedResource):
         start= time.time()
         elapsed = 0
         if dev is None:
+            #update our block device prefix, detect if virtio is now in use
+            self.set_block_device_prefix()
             dev = self.get_free_scsi_dev()
-        if (self.tester.attach_volume(self, euvolume, dev, pause=10,timeout=timeout)): 
-            #update our block device prefix, detect if virtio is now in use 
-            self.set_block_device_prefix()     
+        if (self.tester.attach_volume(self, euvolume, dev, pause=10,timeout=timeout)):
+            if euvolume.attach_data.device != dev:
+                raise Exception('Attached device:' + str(euvolume.attach_data.device) +
+                                ", does not equal requested dev:" + str(dev))
             while (elapsed < timeout):
                 self.debug("Checking for volume attachment on guest, elapsed time("+str(elapsed)+")")
                 dev_list_after = self.get_dev_dir()
@@ -367,10 +554,10 @@ class EuInstance(Instance, TaggedResource):
                     devlist = str(diff[0]).split('/')
                     attached_dev = '/dev/'+devlist[len(devlist)-1]
                     euvolume.guestdev = attached_dev.strip()
-                    euvolume.clouddev = dev
+
                     self.debug("Volume:"+str(euvolume.id)+" guest device:"+str(euvolume.guestdev))
                     self.attached_vols.append(euvolume)
-                    self.debug(euvolume.id+" Requested dev:"+str(euvolume.clouddev)+", attached to guest device:"+str(euvolume.guestdev))
+                    self.debug(euvolume.id+" Requested dev:"+str(euvolume.attach_data.device)+", attached to guest device:"+str(euvolume.guestdev))
                     break
                 elapsed = int(time.time() - start)
                 time.sleep(2)
@@ -384,7 +571,7 @@ class EuInstance(Instance, TaggedResource):
         if (attached_dev is None):
             self.debug("List after\n"+" ".join(dev_list_after))
             raise Exception('Volume:'+str(euvolume.id)+' attached, but not found on guest'+str(self.id)+' after '+str(elapsed)+' seconds?')
-        self.debug('Success attaching volume:'+str(euvolume.id)+' to instance:'+self.id+', cloud dev:'+str(euvolume.clouddev)+', attached dev:'+str(attached_dev))
+        self.debug('Success attaching volume:'+str(euvolume.id)+' to instance:'+self.id+', cloud dev:'+str(euvolume.attach_data.device)+', attached dev:'+str(attached_dev))
         return attached_dev
     
     def detach_euvolume(self, euvolume, waitfordev=True, timeout=180):
@@ -394,7 +581,6 @@ class EuInstance(Instance, TaggedResource):
         waitfordev - boolean to indicate whether or no to poll guest instance for local device to be removed
         optional - timeout - integer seconds to wait before timing out waiting for the volume to detach 
         '''
-
         start = time.time()
         elapsed = 0 
         for vol in self.attached_vols:
@@ -434,42 +620,42 @@ class EuInstance(Instance, TaggedResource):
     def get_metadata(self, element_path, prefix='latest/meta-data/'): 
         """Return the lines of metadata from the element path provided"""
         ### If i can reach the metadata service ip use it to get metadata otherwise try the clc directly
-        if self.found("ping -c 1 169.254.169.254", "1 received"):
+        try:
+            self.sys("ping -c 1 169.254.169.254", code=0, verbose=False)
             return self.sys("curl http://169.254.169.254/"+str(prefix)+str(element_path), code=0)
-        else:
+        except:
             return self.sys("curl http://" + self.tester.get_ec2_ip()  + ":8773/"+str(prefix) + str(element_path), code=0)
-        
+          
     def set_block_device_prefix(self):
         return self.set_rootfs_device()
-        '''
-        if self.found("dmesg | grep vda", "vda"):
+
+    def set_rootfs_device(self):
+        self.rootfs_device = "sda"
+        self.block_device_prefix = "sd"
+        self.virtio_blk = False
+        try:
+            self.sys("dmesg | grep vda",code=0)
+            self.rootfs_device = "vda"
             self.block_device_prefix = "vd"
             self.virtio_blk = True
-            self.rootfs_device = "vda"
-        elif self.found("dmesg | grep xvda", "xvda"):
+        except:
+            pass
+        try:
+            self.sys("dmesg | grep xvda",code=0)
+            self.rootfs_device = "xvda"
             self.block_device_prefix = "xvd"
             self.virtio_blk = False
-            self.rootfs_device = "xvda"
-        else:
+        except:
+            pass
+        try:
+            self.sys("dmesg | grep sda",code=0)
+            self.rootfs_device = "sda"
             self.block_device_prefix = "sd"
             self.virtio_blk = False
-            self.rootfs_device = "sda"
-            
-        '''
-    def set_rootfs_device(self):
-        if self.found("dmesg | grep vda", "vda"):
-            self.rootfs_device = "vda"
-            self.virtio_blk = True
-        elif self.found("dmesg | grep xvda", "xvda"):
-            self.rootfs_device = "xvda"
-            self.virtio_blk = False
-        else:
-            self.rootfs_device = "sda"
-            self.virtio_blk = False
-        
-    
-    
-    def terminate_and_verify(self,verify_vols=True,volto=30, timeout=300):
+        except:
+            pass
+
+    def terminate_and_verify(self,verify_vols=True, volto=180, timeout=300, poll_interval=10):
         '''
         Attempts to terminate the instance and verify delete on terminate state of an ebs root block dev if any. 
         If flagged will attempt to verify the correct
@@ -484,52 +670,68 @@ class EuInstance(Instance, TaggedResource):
         :type timeout: integer
         :param timeout: timeout in seconds when waiting for an instance to go to terminated state. 
         '''
-        bad_vols = []
-        bad_vol_ids = []
-        start = time.time()
+        all_vols = []
+        err_buff = ""
+        elapsed = 0
         if verify_vols:
-            self.debug('Checking euinstance attached volumes states are in sync with clouds...')
+            #Check that local obj's attached volume state matches cloud's, mainly to alert to errors in test script...
+            self.debug('Checking euinstance attached volumes states are in sync with clouds')
             for vol in self.attached_vols:
                 try:
                     self.verify_attached_vol_cloud_status(vol)
-                except Exception, e: 
-                    self.debug('Caught exception verifying attached status for:'+str(vol.id)+", adding to list for post terminate info. Error:"+str(e))
-                    bad_vols.append(vol)
-                    bad_vol_ids.append(vol.id)
-        self.tester.terminate_single_instance(self, timeout=timeout)
-        elapsed = int(time.time()-start)
-        if self.bdm_vol:
-            #check for bfebs backing volume state
-            if self.block_device_mapping.current_value.delete_on_termination:
-                vol_state='deleted'
-            else:
-                vol_state='available'
-            self.bdm_vol.update()
-            while self.bdm_vol.status != vol_state and elapsed < timeout:
-                elapsed = int(time.time()-start)
-                self.debug('Delete on terminate:'+str(self.block_device_mapping.current_value.delete_on_termination)+', expected state:'+str(vol_state)+', '+str(self.bdm_vol.id)+" in state:"+str(self.bdm_vol.status)+", elapsed:"+str(elapsed)+"/"+str(timeout))
-                self.bdm_vol.update()
-                time.sleep(5)
+                except Exception, e:
+                    err_buff += "ERROR: Unsynced volumes found prior to issuing terminate, check test code:"
+                    err_buff += '\n'+str(self.id)+':Caught exception verifying attached status for:'+str(vol.id)+", Error:"+str(e)
         if verify_vols:
-            self.debug('Waiting for attached volumes to go to available...')
-            while self.attached_vols and (elapsed < timeout): 
-                for vol in self.attached_vols:
-                    elapsed = int(time.time()-start)
-                    vol.update()
-                    self.debug(str(self.id)+' terminated, waiting for attached volume:'+str(vol.id)+ ', status:'+str(vol.status))
-                    if vol.status == 'available':
+            all_vols = self.tester.get_volumes(attached_instance=self.id)
+            for device in self.block_device_mapping:
+                dev_map = self.block_device_mapping[device]
+                self.debug(str(self.id) + ", has volume:" + str(dev_map.volume_id) +" mapped at device:" + str(device))
+                for volume in all_vols:
+                    if volume.id == dev_map.volume_id:
+                        volume.delete_on_termination = dev_map.delete_on_termination
+
+        self.tester.terminate_single_instance(self, timeout=timeout)
+        start = time.time()
+        while all_vols and elapsed < volto:
+            elapsed = int(time.time()-start)
+            loop_vols = copy.copy(all_vols)
+            for vol in loop_vols:
+                vol_status = 'available'
+                fail_fast_status = 'deleted'
+                if hasattr(vol, 'delete_on_termination'):
+                    if vol.delete_on_termination:
+                        vol_status='deleted'
+                        fail_fast_status = 'available'
+                    self.debug('volume:' + str(vol.id) + "/" + str(vol.status) +", from BDM, D.O.T.:" +
+                               str(vol.delete_on_termination) + ", waiting on status:" + str(vol_status) + ", elapsed:"
+                               + str(elapsed) + "/" + str(volto) )
+                else:
+                    self.debug('volume:' + str(vol.id) + "/" + str(vol.status) +", was attached, waiting on status:" +
+                               str(vol_status) + ", elapsed:" + str(elapsed) + "/" + str(volto) )
+                vol.expected_status = vol_status
+                vol.update()
+                #if volume has reached it's intended status or
+                # the volume is no longer on the system and it's intended status is 'deleted'
+                if vol.status == vol_status or (not self.tester.get_volume(volume_id=vol.id, eof=False) and vol_status == 'deleted'):
+                    self.debug(str(self.id)+' terminated, ' + str(vol.id) + "/" + str(vol.status) +
+                               ": volume entered expected state:" + str(vol_status))
+                    all_vols.remove(vol)
+                    if vol in self.attached_vols:
                         self.attached_vols.remove(vol)
-                if self.attached_vols and (elapsed < timeout):
-                        time.sleep(5)
-            
-            if self.attached_vols or bad_vols:
-                if bad_vols:
-                    bad_vol_error = 'ERROR: Unsynced volumes found prior to issuing terminate, check test code:'+",".join(bad_vol_ids)
-                if self.attached_vols:
-                    attached_vol_error += 'ERROR: Volumes did not become available after instance was terminated:'
-                    for vol in self.attached_vols:
-                        attached_vol_error += str(vol.id)+':'+str(vol.status)+", "                        
-                raise Exception(str(self.id)+", volume errors found during instance terminate:\n"+bad_vol_error+"\n"+attached_vol_error )
+                if vol.status == fail_fast_status and elapsed >= 30:
+                    self.debug('Incorrect status for volume:' + str(vol.id) + ', status:' + str(vol.status))
+                    all_vols.remove(vol)
+                    err_buff += "\n" + str(self.id) + ":" +str(vol.id) + " Volume incorrect status:" + str(vol.status) + \
+                                ", expected status:" + str(vol.expected_status) + ", elapsed:" + str(elapsed)
+            if all_vols:
+                time.sleep(poll_interval)
+        for vol in all_vols:
+            err_buff += "\n" + str(self.id) + ":" +str(vol.id) + " Volume timeout on current status:" + str(vol.status) + \
+                        ", expected status:" + str(vol.expected_status) + ", elapsed:" + str(elapsed)
+
+        if err_buff:
+            raise Exception(str(self.id)+", volume errors found during instance terminate_and_verify:\n"+  str(err_buff))
                 
                 
         
@@ -563,7 +765,7 @@ class EuInstance(Instance, TaggedResource):
                 prefix= prefix+'e'
             dev = "/dev/"+prefix+str(d)
             for avol in self.attached_vols:
-                if avol.clouddev == dev:
+                if avol.attach_data.device == dev:
                     inuse = True
                     in_use_guest += str(avol.id)+", "
                     continue
@@ -591,7 +793,8 @@ class EuInstance(Instance, TaggedResource):
         self.assertFilePresent(voldev)
         fillcmd = "dd if=/dev/zero of="+str(voldev)+"; sync"
         return self.time_dd(fillcmd)
-    
+
+    @Eutester.printinfo
     def random_fill_volume(self,euvolume,srcdev=None, length=None, timepergig=90):
         '''
         Attempts to fill the entie given euvolume with unique non-zero data.
@@ -620,19 +823,32 @@ class EuInstance(Instance, TaggedResource):
                 fsize = randint(1048576,10485760)
         if not length:
             timeout = int(euvolume.size) * timepergig
-            return self.dd_monitor(ddif=str(srcdev), ddof=str(voldev), ddbs=bs,timeout=timeout)
         else:
-            timeout = timepergig * ((length/gb) or 1) 
-            #write the volume id into the volume for starters
-            ddcmd = 'echo '+str(euvolume.id)+' | dd of='+str(voldev)
-            dd_res_for_id = self.dd_monitor(ddcmd=ddcmd, timeout=timeout)
-            len_remaining = length - int(dd_res_for_id['dd_bytes'])
-            if len_remaining <= length:
-                return dd_res_for_id
-            if length < mb:
-                return self.dd_monitor(ddif=str(srcdev), ddof=str(voldev), ddbs=length, ddseek=int(dd_res_for_id['dd_bytes']), timeout=timeout)
-            else:
-                return self.dd_monitor(ddif=str(srcdev), ddof=str(voldev), ddbytes=length, ddseek=int(dd_res_for_id['dd_bytes']), timeout=timeout)
+            timeout = timepergig * ((length/gb) or 1)
+        #write the volume id into the volume for starters
+        ddcmd = 'echo '+str(euvolume.id)+' | dd of='+str(voldev)
+        dd_res_for_id = self.dd_monitor(ddcmd=ddcmd, timeout=timeout)
+        len_remaining = length - int(dd_res_for_id['dd_bytes'])
+        self.debug('length remaining to write after adding volumeid:' + str(len_remaining))
+        if len_remaining <= 0:
+            return dd_res_for_id
+        ddbs = 1024
+        if len_remaining < ddbs:
+            ddbs = len_remaining
+        if not length:
+            return self.dd_monitor(ddif=str(srcdev),
+                                   ddof=str(voldev),
+                                   ddbs=fsize,
+                                   ddseek=int(dd_res_for_id['dd_bytes']),
+                                   timeout=timeout)
+        else:
+            return self.dd_monitor(ddif=str(srcdev),
+                                   ddof=str(voldev),
+                                   ddbs=ddbs,
+                                   ddbytes=len_remaining,
+                                   ddseek=int(dd_res_for_id['dd_bytes']),
+                                   timeout=timeout)
+
                 
             
     
@@ -641,8 +857,20 @@ class EuInstance(Instance, TaggedResource):
         (Added for legacy support, use dd_monitor instead) Executes dd command on instance, parses and returns stats on dd outcome
         '''
         return self.dd_monitor(ddcmd=ddcmd, poll_interval=poll_interval, tmpfile=tmpfile)
-        
-    def dd_monitor(self, ddif=None, ddof=None, ddcount=None, ddbs=1024, ddbytes=None, ddcmd=None, ddseek=None, timeout=300, poll_interval=1, tmpfile=None):
+
+
+    @Eutester.printinfo
+    def dd_monitor(self,
+                   ddif=None,
+                   ddof=None,
+                   ddcount=None,
+                   ddbs=1024,
+                   ddbytes=None,
+                   ddcmd=None,
+                   ddseek=None,
+                   timeout=300,
+                   poll_interval=1,
+                   tmpfile=None):
         '''
         Executes dd command on instance, monitors and displays ongoing status, and returns stats dict for dd outcome
         :type ddif: str
@@ -685,6 +913,7 @@ class EuInstance(Instance, TaggedResource):
         if not tmpfile:
             tstamp = time.time()
             tmpfile = '/tmp/eutesterddcmd.'+str(int(tstamp))
+        tmppidfile = tmpfile + ".pid"
         #init return dict 
         ret = {
                'dd_records_in' : 0,
@@ -706,6 +935,7 @@ class EuInstance(Instance, TaggedResource):
         elapsed = 0
         done = False
         infobuf = None
+        outbuf = None
         start = time.time()
         if ddcmd:
             ddcmd = ddcmd
@@ -716,7 +946,7 @@ class EuInstance(Instance, TaggedResource):
             if ddcount:
                 ddcount_str = str(' count='+str(ddcount)+' ')
             elif ddbytes and ddbs:
-                ddcount_str = str(' count='+str(ddbytes/ddbs)+' ')
+                ddcount_str = str(' count='+str((ddbytes/ddbs) or 1)+' ')
             else:
                 ddcount_str = ''
             if ddseek:
@@ -732,7 +962,16 @@ class EuInstance(Instance, TaggedResource):
         '''
         cmd = 'nohup '+str(ddcmd)+' 2> '+str(tmpfile)+' & echo $! && sleep 2'
         #Execute dd command and store echo'd pid from output
-        dd_pid = self.sys(cmd)[0]
+        try:
+            dd_pid = self.sys(cmd, code=0)[0]
+        except sshconnection.CommandExitCodeException, se:
+            dbg_buf = ""
+            file_contents = self.sys('cat ' + str(tmpfile))
+            if file_contents:
+                dbg_buf = "\n".join(file_contents)
+            raise Exception('Failed dd cmd:"' +str(cmd) + '", tmpfile contents:\n' + str(dbg_buf) )
+
+
         
         #Form the table headers for printing dd status...
         linediv = '\n----------------------------------------------------------------------------------------------------------------------------\n'
@@ -765,7 +1004,7 @@ class EuInstance(Instance, TaggedResource):
         #Keep getting and printing dd status until done...
         while not done and (elapsed < timeout):
             #send sig usr1 to have dd process dump status to stderr redirected to tmpfile
-            output = self.ssh.cmd('kill -USR1 '+str(dd_pid), verbose=False)
+            output = self.cmd('kill -USR1 '+str(dd_pid), verbose=False)
             cmdstatus = int(output['status'])
             if cmdstatus != 0:
                 done = True
@@ -814,7 +1053,7 @@ class EuInstance(Instance, TaggedResource):
             buf += '|'+str(ret['test_time']).center(10)
             buf += '|'+str(str(ret['dd_rate'])+" "+str(ret['dd_units'])).center(12)
             buf += '|'+str(str(ret['test_rate'])+" "+str('MB/s')).center(12)
-            buf += '|'+str("F:"+str(ret['dd_full_rec_in'])+" P:"+str(ret['dd_partial_rec_in'])+" ").center(18)
+            buf += '|'+str("F:"+str(ret['dd_full_rec_in'])+" P:"+str(ret['dd_partial_rec_in'])).center(18)
             buf += '|'+str("F:"+str(ret['dd_full_rec_out'])+" P:"+str(ret['dd_partial_rec_out'])).center(18)
             sys.stdout.write("\r\x1b[K"+str(buf))
             sys.stdout.flush()
@@ -839,13 +1078,15 @@ class EuInstance(Instance, TaggedResource):
                 outbuf = "\n".join(out)
             raise Exception('Did not transfer any data using dd cmd:'+str(ddcmd)+"\nstderr: "+str(outbuf))
         self.debug('Done with dd, copied '+str(ret['dd_bytes'])+' over elapsed:'+str(elapsed))
+        self.sys('rm -f ' + str(tmpfile))
+        self.sys('rm -f ' + str(tmppidfile))
         return ret
     
     def vol_write_random_data_get_md5(self, euvolume, srcdev=None, length=32, timepergig=90, overwrite=False):
         '''
         Attempts to copy some amount of data into an attached volume, and return the md5sum of that volume
         A brief check of the first 32 bytes is performed to see if this volume has pre-existing non-zero filled data. 
-        If pre-existing data is found, and the overwrite flag is not set then the write is not performed. 
+        If pre-existing data is found, and the overwrite flag is not set then the write is not performed.
         Returns string with MD5 checksum calculated on 'length' bytes from the head of the device. 
         volume - mandatory - boto volume object of the attached volume 
         srcdev - optional - string, the file to copy into the volume
@@ -858,12 +1099,14 @@ class EuInstance(Instance, TaggedResource):
         if overwrite or ( int(self.sys('head -c '+str(length)+ ' '+str(voldev)+' | xargs -0 printf %s | wc -c')[0]) == 0):
             
             self.random_fill_volume(euvolume, srcdev=srcdev, length=length)
+            #length = dd_dict['dd_bytes']
         else:
             self.debug("Volume has existing data, skipping random data fill")
         #calculate checksum of euvolume attached device for given length
         md5 = self.md5_attached_euvolume(euvolume, timepergig=timepergig,length=length)
         self.debug("Filled Volume:"+euvolume.id+" dev:"+voldev+" md5:"+md5)
         euvolume.md5 = md5
+        euvolume.md5len = length
         return md5
     
     def md5_attached_euvolume(self, euvolume, timepergig=90,length=None,updatevol=True):
@@ -888,6 +1131,8 @@ class EuInstance(Instance, TaggedResource):
                 euvolume.md5=md5
                 euvolume.md5len=length
         except Exception, e:
+            tb = self.tester.get_traceback()
+            print str(tb)
             raise Exception("Failed to md5 attached volume: " +str(e))
         return md5
     
@@ -899,7 +1144,13 @@ class EuInstance(Instance, TaggedResource):
             md5 = str(self.sys("head -c "+str(length)+" "+str(devpath)+" | md5sum")[0]).split(' ')[0].strip()
         return md5
         
-    def reboot_instance_and_verify(self,waitconnect=30, timeout=300, connect=True, checkvolstatus=False, pad=5):
+    def reboot_instance_and_verify(self,
+                                   waitconnect=30,
+                                   timeout=300,
+                                   connect=True,
+                                   checkvolstatus=False,
+                                   pad=5,
+                                   uptime_retries=3):
         '''
         Attempts to reboot an instance and verify it's state post reboot. 
         waitconnect-optional-integer representing seconds to wait before attempting to connect to instance after reboot
@@ -908,8 +1159,15 @@ class EuInstance(Instance, TaggedResource):
         checkvolstatus - optional -boolean to be used to check volume status post start up
         '''
         msg=""
+        newuptime = None
+        def get_safe_uptime():
+            uptime = None
+            try:
+                uptime = self.get_uptime()
+            except: pass
+            return uptime
         self.debug('Attempting to reboot instance:'+str(self.id)+', check attached volume state first')
-        uptime = int(self.sys('cat /proc/uptime')[0].split()[1].split('.')[0])
+        uptime = self.tester.wait_for_result( get_safe_uptime, None, oper=operator.ne)
         elapsed = 0
         start = time.time()
         if checkvolstatus:
@@ -923,8 +1181,11 @@ class EuInstance(Instance, TaggedResource):
         self.reboot()
         time.sleep(waitconnect)
         self.connect_to_instance(timeout=timeout)
+
+        #Wait for the system to provide a valid response for uptime, early connections may not
+        newuptime = self.tester.wait_for_result( get_safe_uptime, None, oper=operator.ne)
+
         elapsed = int(time.time()-start)
-        newuptime = int(self.sys('cat /proc/uptime')[0].split()[1].split('.')[0])
         #Check to see if new uptime is at least 'pad' less than before, allowing for some pad 
         if (newuptime - (uptime+elapsed)) > pad:
             raise Exception("Instance uptime does not represent a reboot. Orig:"+str(uptime)+", New:"+str(newuptime)+", elapsed:"+str(elapsed))
@@ -936,7 +1197,11 @@ class EuInstance(Instance, TaggedResource):
                 raise Exception("Missing volumes post reboot:"+str(msg)+"\n")
         self.debug(self.id+" reboot_instance_and_verify Success")
         
-        
+
+    def get_uptime(self):
+        return int(self.sys('cat /proc/uptime', code=0)[0].split()[1].split('.')[0])
+
+
     def attach_euvolume_list(self,list,intervoldelay=0, timepervol=90, md5len=32):
         '''
         Attempts to attach a list of euvolumes. Due to limitations with KVM and detecting the location/device
@@ -959,10 +1224,10 @@ class EuInstance(Instance, TaggedResource):
             dev = self.get_free_scsi_dev()
             if euvol.md5:
                 #Monitor volume to attached, dont write/read head for md5 use existing. Check md5 sum later in get_unsynced_volumes. 
-                if (self.tester.attach_volume(self, euvolume, dev, pause=10,timeout=timepervol)):
+                if (self.tester.attach_volume(self, euvol, dev, pause=10,timeout=timepervol)):
                     self.attached_vols.append(euvol)
                 else:
-                    raise Exception('attach_euvolume_list: Test Failed to attach volume:'+str(euvolume.id))
+                    raise Exception('attach_euvolume_list: Test Failed to attach volume:'+str(euvol.id))
             else:
                 #monitor volume to attached and write unique string to head and record it's md5sum 
                 self.attach_euvolume(euvol, dev, timeout=timepervol)
@@ -1054,7 +1319,7 @@ class EuInstance(Instance, TaggedResource):
                         except:pass 
                         if found:
                             break
-                        self.debug('Local device for volume not found. Sleeping and checking again...')
+                        self.debug('Local device for volume:' + str(vol.id) + ' not found. Sleeping and checking again...')
                         time.sleep(10)
                         elapsed = int(time.time() - start)
                     if not found:
@@ -1068,13 +1333,40 @@ class EuInstance(Instance, TaggedResource):
                     bad_list.append(vol)
                     pass
         return bad_list
-        
+
+    def find_blockdev_by_md5(self, md5=None, md5len=None, euvolume=None, add_to_attached_list=False):
+        guestdev = None
+
+        md5 = md5 or euvolume.md5
+        md5len = md5len or euvolume.md5len
+        for vdev in  self.get_dev_dir():
+            vdev = '/dev/'+ str(vdev).replace('/dev/','')
+            self.debug('Checking '+str(vdev)+" for a matching block device")
+            block_md5 = self.get_dev_md5(vdev, md5len )
+            self.debug('comparing dev' + str(vdev) +': '+str(block_md5)+' vs vol:'+str(md5))
+            if block_md5 == md5:
+                self.debug('Found match at dev:'+str(vdev))
+                if (euvolume):
+                    if ( euvolume.guestdev != vdev ):
+                        self.debug("("+str(euvolume.id)+")Found dev match. Guest dev changed! Updating from previous:'"+str(euvolume.guestdev)+"' to:'"+str(vdev)+"'")
+                    else:
+                        self.debug("("+str(euvolume.id)+")Found dev match. Previous dev:'"+str(euvolume.guestdev)+"', Current dev:'"+str(vdev)+"'")
+                    euvolume.guestdev = vdev
+                guestdev = vdev
+                break
+        if add_to_attached_list:
+            if not euvolume in self.attached_vols:
+                euvolume.md5 = md5
+                euvolume.md5len = md5len
+                self.attached_vols.append(euvolume)
+        return guestdev
+
     def verify_attached_vol_cloud_status(self,euvolume ):
         '''
         Confirm that the cloud is showing the state for this euvolume as attached to this instance
         '''
         try:
-            euvolume = cloudlist=self.tester.get_volume(volume_id=euvolume.id)
+            euvolume = self.tester.get_volume(volume_id=euvolume.id)
         except Exception, e:
             self.debug("Error in verify_attached_vol_status, try running init_volume_list first")
             raise Exception("Failed to get volume in get_attached_vol_cloud_status, err:"+str(e))
@@ -1109,7 +1401,7 @@ class EuInstance(Instance, TaggedResource):
         for vol in cloudlist:
             #check to see if the volume is attached to us, but is not involved with the bdm for this instance
             found = False
-            if (vol.attach_data.instance_id == self.id) and not ( self.root_device_type == 'ebs' and self.bdm_vol.id != vol.id):
+            if (vol.attach_data.instance_id == self.id) and not ( self.root_device_type == 'ebs' and self.bdm_root_vol.id != vol.id):
                 for avol in self.attached_vols:
                     if avol.id == vol.id:
                         self.debug("Volume"+vol.id+" found attached")
@@ -1122,7 +1414,6 @@ class EuInstance(Instance, TaggedResource):
                         if not detach:
                             evol = EuVolume.make_euvol_from_vol(vol)
                             evol.guestdev = dev
-                            evol.clouddev = dev
                             self.attached_vols.append(evol)
                         else:
                             self.tester.detach_volume(vol,timeout=timeout)
@@ -1137,7 +1428,7 @@ class EuInstance(Instance, TaggedResource):
                 
         
         
-    def stop_instance_and_verify(self, timeout=120, state='stopped', failstate='terminated'):
+    def stop_instance_and_verify(self, timeout=200, state='stopped', failstate='terminated', check_vols=True):
         '''
         Attempts to stop instance and verify the state has gone to stopped state
         timeout -optional-time to wait on instance to go to state 'state' before failing
@@ -1157,13 +1448,19 @@ class EuInstance(Instance, TaggedResource):
                 raise Exception(str(self.id)+" instance went to state:"+str(self.state)+" while stopping")
             elapsed = int(time.time()- start)
             if elapsed % 10 == 0 :
-                self.debug(str(self.id)+"wait for stop, in state:"+str(self.state)+",time remaining:"+str(elapsed)+"/"+str(timeout) )
+                self.debug(str(self.id)+" wait for stop, in state:"+str(self.state)+",time remaining:"+str(elapsed)+"/"+str(timeout) )
         if self.state != state:
             raise Exception(self.id+" state: "+str(self.state)+" expected:"+str(state)+", after elapsed:"+str(elapsed))
+        if check_vols:
+            for volume in self.attached_vols:
+                volume.update
+                if volume.status != 'in-use':
+                    raise Exception(str(self.id) + ', Volume ' + str(volume.id) + ':' + str(volume.status)
+                                    + ' state did not remain in-use during stop'  )
         self.debug(self.id+" stop_instance_and_verify Success")
         
     
-    def start_instance_and_verify(self, timeout=300, state = 'running', failstate='terminated', connect=True, checkvolstatus=False):
+    def start_instance_and_verify(self, timeout=300, state = 'running', failstates=['terminated'], failfasttime=30, connect=True, checkvolstatus=True):
         '''
         Attempts to start instance and verify state, and reconnects ssh session
         timeout -optional-time to wait on instance to go to state 'state' before failing
@@ -1173,20 +1470,35 @@ class EuInstance(Instance, TaggedResource):
         checkvolstatus - optional -boolean to be used to check volume status post start up
         '''
         self.debug(self.id+" Attempting to start instance...")
+        if checkvolstatus:
+            for volume in self.attached_vols:
+                volume.update
+                if checkvolstatus:
+                    if volume.status != 'in-use':
+                        raise Exception(str(self.id) + ', Volume ' + str(volume.id) + ':' + str(volume.status)
+                                        + ' state did not remain in-use during stop'  )
+        self.debug("\n"+ str(self.id) + ": Printing Instance 'attached_vol' list:\n")
+        self.tester.print_euvolume_list(self.attached_vols)
         msg=""
         start = time.time()
         elapsed = 0
+        self.update()
+        #Add fail fast states...
+        if self.state == 'stopped':
+            failstates.extend(['stopped','stopping'])
         self.start()
+
         while (elapsed < timeout):
-            time.sleep(2)
+            elapsed = int(time.time()- start)
             self.update()
+            self.debug(str(self.id)+" wait for start, in state:"+str(self.state)+",time remaining:"+str(elapsed)+"/"+str(timeout) )
             if self.state == state:
                 break
-            if self.state == failstate:
-                raise Exception(str(self.id)+" instance went to state:"+str(self.state)+" while starting")
-            elapsed = int(time.time()- start)
-            if elapsed % 10 == 0 :
-                self.debug(str(self.id)+"wait for start, in state:"+str(self.state)+",time remaining:"+str(elapsed)+"/"+str(timeout) )
+            if elapsed >= failfasttime:
+                for failstate in failstates:
+                    if self.state == failstate:
+                        raise Exception(str(self.id)+" instance went to state:"+str(self.state)+" while starting")
+            time.sleep(10)
         if self.state != state:
             raise Exception(self.id+" not in "+str(state)+" state after elapsed:"+str(elapsed))
         else:
@@ -1194,7 +1506,7 @@ class EuInstance(Instance, TaggedResource):
             if connect:
                 self.connect_to_instance(timeout=timeout)
             if checkvolstatus:
-                badvols= self.get_unsynced_volumes()
+                badvols= self.get_unsynced_volumes(check_md5=True)
                 if badvols != []:
                     for vol in badvols:
                         msg = msg+"\nVolume:"+vol.id+" Local Dev:"+vol.guestdev
@@ -1256,10 +1568,237 @@ class EuInstance(Instance, TaggedResource):
             return groups
         except Exception, e:
             self.debug("No group found for user:"+str(username)+", err:"+str(e))
-    
-    
-    
-    
+
+
+
+    def mount_attached_volume(self,
+                           volume,
+                           mkfs_cmd="mkfs.ext3",
+                           force_mkfs=False,
+                           mountdir="/mnt",
+                           name=None):
+        """
+        Attempts to mount a block device associated with an attached volume.
+        Attempts to mkfs, and mkdir for mount if needed.
+
+        :param volume: euvolume obj
+        :param mkfs_cmd: string representing mkfs cmd, defaults to 'mkfs.ext3'
+        :param mountdir: dir to mount, defaults to '/mnt'
+        :param name: name of dir create within mountdir to mount volume, defaults to volume's id
+        :return: string representing path to volume's mounted dir
+        """
+        dev = volume.guestdev
+        name = name or volume.id
+        mountdir = mountdir.rstrip("/")+"/"
+        if not dev:
+            raise Exception(str(volume.id) + ': Volume guest device was not set, is this volume attached?')
+        mounted_dir = self.get_volume_mounted_dir(volume)
+        if mounted_dir:
+            return mounted_dir
+        if force_mkfs:
+            self.sys(mkfs_cmd + " -F " + dev, code=0)
+        else:
+            try:
+                self.sys('blkid -o value -s TYPE ' + str(dev) + '*', code=0)
+            except:
+                self.sys(mkfs_cmd + " " + dev, code=0)
+        mount_point = mountdir+name
+        try:
+            self.assertFilePresent(mount_point)
+        except:
+            self.sys('mkdir -p ' + mount_point, code=0)
+        self.sys('mount ' + dev + ' ' + mount_point, code = 0)
+        return mount_point
+
+
+    def get_volume_mounted_dir(self, volume):
+        """
+        Attempts to fetch the dir/mount point for a given block-guestdev or a euvolume that contains attached guestdev
+        information.
+
+        :param volume: attached euvolume
+        :param guestdev: local block device path
+        :return: string representing path to mounted dir, or None if not found
+        """
+        mount_dir = None
+        guestdev = volume.guestdev
+        if not guestdev:
+            raise Exception('No guest device found or provided for to check for mounted state')
+        try:
+            mount_dir = self.sys('mount | grep ' + str(guestdev), code=0)[0].split()[2]
+        except Exception, e:
+            self.debug('Mount point for ' + str(guestdev) + 'not found:' + str(e))
+            return mount_dir
+        return mount_dir
+
+
+    def update_vm_type_info(self):
+        self.vmtype_info =  self.tester.get_vm_type_from_zone(self.placement,self.instance_type)
+        return self.vmtype_info
+
+
+    def get_ephemeral_dev(self):
+        """
+        Attempts to find the block device path on this instance
+
+        :return: string representing path to ephemeral block device
+        """
+        ephem_name = None
+        dev_prefixs = ['s','v','xd','xvd']
+        if not self.root_device_type == 'ebs':
+            try:
+                self.assertFilePresent('/dev/' + str(self.rootfs_device))
+                return self.rootfs_device
+            except:
+                ephem_name = 'da'
+        else:
+            ephem_name = 'db'
+        devs = self.get_dev_dir()
+        for prefix in dev_prefixs:
+            if str(prefix+ephem_name) in devs:
+                return str('/dev/'+prefix+ephem_name)
+        raise Exception('Could not find ephemeral device?')
+
+    def get_blockdev_size_in_bytes(self,devpath):
+        bytes = self.sys('blockdev --getsize64 ' + str(devpath), code=0)[0]
+        return int(bytes)
+
+
+    def check_ephemeral_against_vmtype(self):
+        gb = 1073741824
+        size = self.vmtype_info.disk
+        ephemeral_dev = self.get_ephemeral_dev()
+        block_size = self.get_blockdev_size_in_bytes(ephemeral_dev)
+        gbs = block_size / gb
+        self.debug('Ephemeral check: ephem_dev:'
+                   + str(ephemeral_dev)
+                   + ", bytes:"
+                   + str(block_size)
+                   + ", gbs:"
+                   + str(gbs)
+                   + ", vmtype size:"
+                   + str(size))
+        if gbs != size:
+            raise Exception('Ephemeral check failed. ' + str(ephemeral_dev) + ' Blocksize: '
+                            + str(gbs) + "gb (" + str(block_size) + "bytes)"
+                            + ' != vmtype size:' +str(size) + "gb")
+        else:
+            self.debug('check_ephemeral_against_vmtype, passed')
+        return ephemeral_dev
+
+
+    def get_memtotal_in_mb(self):
+        kb_to_mb = 1024
+        return long(self.sys('cat /proc/meminfo | grep MemTotal',code=0)[0].split()[1]) / kb_to_mb
+
+    def check_ram_against_vmtype(self, pad=32):
+        total_ram = self.get_memtotal_in_mb()
+        self.debug('Ram check: vm_ram:' + str(self.vmtype_info.ram)
+                   + "mb vs memtotal:" + str(total_ram)
+                   + "mb. Diff:" + str(self.vmtype_info.ram - total_ram)
+                   + "mb, pad:" + str(pad) + "mb")
+        if not ((self.vmtype_info.ram - total_ram) <= pad):
+            raise Exception('Ram check failed. vm_ram:' + str(self.vmtype_info.ram)
+                            + " vs memtotal:" + str(total_ram) + ". Diff is greater than allowed pad:" + str(pad) + "mb")
+        else:
+            self.debug('check_ram_against_vmtype, passed')
+
+    def get_guest_dev_for_block_device_map_device(self, md5, md5len, map_device):
+        '''
+        Finds a device in the block device mapping and attempts to locate which guest device is the volume is using
+        based upon the provided md5 sum, and length in bytes that were read in to create the checksum. If found the volume
+        is appended to the local list of attached volumes and the md5 checksum and len are set in the volume for later test
+        use.
+        returns the guest device if found.
+        '''
+        self.debug('Attempting to find block device for mapped device name:' + str(map_device) +
+                   ', md5:' + str(md5) +
+                   ', md5len:' + str(md5len))
+        dbg_buf = "\nInstance 'attached_vol' list:\n"
+        for vol in self.attached_vols:
+            dbg_buf += "Volume:" + str(vol.id) + ", md5:" + str(vol.md5) + ", md5len" + str(vol.md5len) + "\n"
+        self.debug(dbg_buf)
+        mapped_device = self.block_device_mapping.get(map_device)
+        volume_id = mapped_device.volume_id
+        volume = self.tester.get_volume(volume_id=volume_id)
+        if volume.attach_data.device != map_device:
+            raise Exception('mapped device name:' + str(mapped_device) + ', does not match attached device name:' +
+                            str(volume.attach_data.device ))
+        local_dev = self.find_blockdev_by_md5(md5=md5, md5len=md5len)
+        if not local_dev:
+            raise Exception('dev:' + str(map_device) +', vol:'+ str(volume_id) + ' - Could not find a device matching md5:' +
+                            str(md5) + ", len:" + str(md5len))
+        self.debug('Recording volume:' + str(volume.id) + ' md5 info in volume, and adding to attached list')
+        if not local_dev:
+            raise Exception('Could not find mapped device:' + str(map_device) + ', using md5:' + str(md5) + ', md5len' + str(md5len))
+        volume.guestdev=local_dev
+        volume.md5 = md5
+        volume.md5len = md5len
+        if not volume in self.attached_vols:
+            self.attached_vols.append(volume)
+        return local_dev
+
+    def check_instance_meta_data_for_block_device_mapping(self, root_dev=None, bdm=None):
+        '''
+        Checks current instances meta data against a provided block device map & root_dev, or
+        against the current values of the instance; self.block_device_mapping & self.root_device_name
+        '''
+        self.tester.print_block_device_map(self.block_device_mapping)
+        meta_dev_names = self.get_metadata('block-device-mapping')
+        meta_devices = {}
+        root_dev = root_dev or self.root_device_name
+        root_dev = os.path.basename(root_dev)
+        orig_bdm = bdm or self.block_device_mapping
+        bdm = copy.copy(orig_bdm)
+        if root_dev in bdm:
+            bdm.pop(root_dev)
+        if '/dev/'+root_dev in bdm:
+            bdm.pop('/dev/'+root_dev)
+
+        for device in meta_dev_names:
+            #Check root device meta data against the root device, else add to dict for comparison against block dev map
+            if device == 'ami' or device == 'emi' or device == 'root' or \
+            (device == 'ebs1' and self.root_device_type == 'ebs'):
+                meta_device = self.get_metadata('block-device-mapping/' + str(device))
+                if not meta_device:
+                    raise Exception('Device:' + str(device) + ' metadata response:' + str(meta_device))
+                if not root_dev in meta_device and not '/dev/'+str(root_dev) in meta_device:
+                    raise Exception('Meta data "block-device-mapping/' + str(device) + '", root dev:'
+                                    + str(root_dev) + ' not in ' + str(meta_device))
+            else:
+                meta_devices[device] =  self.get_metadata('block-device-mapping/' + str(device))[0]
+
+        for device in bdm:
+            found = False
+            device_map = bdm[device]
+            if device_map.no_device:
+                continue
+            else:
+                if device_map.ephemeral_name:
+                    dev_name_prefix = 'ephemeral'
+                else:
+                    dev_name_prefix = 'ebs'
+                for meta_dev in meta_devices:
+                    if str(meta_dev).startswith(dev_name_prefix):
+                        if meta_devices.get(meta_dev) == device:
+                            self.debug('Found meta data match for block device:' + str(device) + " at: " + str(meta_dev))
+                            meta_devices.pop(meta_dev)
+                            found = True
+                            break
+                if not found:
+                    raise Exception('No meta data found for block dev map device:' + str(device))
+        if meta_devices:
+            err_buf = 'Unknown meta data found for the following not in:' + str(self.id) + "'s block_device_mapping:"
+            for meta_dev in meta_devices:
+                err_buf += "'" + str(meta_dev) + ":" + str(meta_devices.get(meta_dev)) + "', "
+            raise Exception(err_buf)
+
+
+
+
+
+
+
     
         
         

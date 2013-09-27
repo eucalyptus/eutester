@@ -93,12 +93,17 @@ import re
 import select
 import socket
 import time
+import types
+import sys
+import termios
+import tty
+import eucaops
 
 
 
 
 class SshCbReturn():
-    def __init__(self, stop=False, statuscode=-1, settimer=0, buf=None, nextargs=None):
+    def __init__(self, stop=False, statuscode=-1, settimer=0, buf=None, nextargs=None, nextcb=None, removecb=False):
         """
         Used to return data from an ssh cmd callback method that can be used to handle output as it's rx'd instead of...
         waiting for the cmd to finish and returned buffer. See SshConnection.cmd() for more info.
@@ -107,12 +112,18 @@ class SshCbReturn():
         :param settimer: if cb settimer is > 0, timer timeout will be adjusted for this time
         :param statuscode: if cb statuscode is != -1 cmd status will return with this value
         :param nextargs: if cb nextargs is set, the next time cb is called these args will be passed instead
-        :param buf: if cb buf is not None, the cmd['output'] buffer will be appended with this buf
+        :param buf: if cb buf is not None, the cmd['output'] buffer will be appended with this buf instead of std-out/err
+        :param sendstring: ssh.cmd() will send this string to the channel if not None
+        :param nextcb: optional callback can be return to ssh.cmd() to handle future output rx'd on the channel
+        :param removecb: boolean used to remove any callback from future output for ssh.cmd()
         """
         self.stop = stop
         self.statuscode = statuscode
         self.settimer = settimer
+        self.sendstring = None
         self.nextargs = nextargs or []
+        self.nextcb = nextcb
+        self.removecb = removecb
         self.buf = buf
 
 
@@ -131,8 +142,8 @@ class SshConnection():
                  proxy_password=None,
                  proxy_keyname=None,
                  proxy_keypath=None,
-                 pub_key_file=None,
-                 use_pub_keys=True,
+                 key_files=None,
+                 find_keys=True,
                  enable_ipv6_dns=False,
                  timeout=60,
                  retry=1,
@@ -140,8 +151,6 @@ class SshConnection():
                  verbose=False,
                  debug_connect=False):
         """
-
-
         :param host: -mandatory - string, hostname or ip address to establish ssh connection to
         :param username: - optional - string, username used to establish ssh session when keypath is not provided
         :param password: - optional - string, password used to establish ssh session when keypath is not provided
@@ -151,6 +160,7 @@ class SshConnection():
         :param proxy_username:  - optional ssh username of proxy host for authentication
         :param proxy_password: - optional ssh password of proxy host for authentication
         :param proxy_keypath: - optional path to ssh key to use for proxy authentication
+        :param key_files: - optional ',' comma delimited list of key file paths
         :param proxy_keyname: - optional keyname for proxy authentication, will attempt to derive keypath from this
         :param enable_ipv6_dns: - optional - boolean to allow ipv6 dns hostname resolution
         :param timeout: - optional - integer, tcp timeout in seconds
@@ -170,13 +180,16 @@ class SshConnection():
         self.proxy_password = proxy_password
         self.proxy_keyname = proxy_keyname
         self.proxy_keypath = proxy_keypath
-        self.use_pub_keys = use_pub_keys
         self.enable_ipv6_dns = enable_ipv6_dns
         self.timeout = timeout
         self.retry = retry
         self.debugmethod = debugmethod
         self.verbose = verbose
-        self.pub_key_file = pub_key_file
+        self.sftp = None
+        self.key_files = key_files or []
+        if not isinstance(self.key_files, types.ListType):
+            self.key_files = str(self.key_files).split(',')
+        self.find_keys = find_keys
         self.debug_connect = debug_connect
 
         #Used to store the last cmd attempted and it's exit code
@@ -201,7 +214,7 @@ class SshConnection():
                 self.debug("SSH proxy has hostname:" + str(self.proxy) + " user:" +
                            str(proxy_username) + " password:" + str(self.mask_password(proxy_password)))
 
-        if self.use_pub_keys or \
+        if self.find_keys or \
                 self.keypath is not None or \
                 ((self.username is not None) and (self.password is not None)):
             self.connection = self.get_ssh_connection(self.host,
@@ -218,6 +231,7 @@ class SshConnection():
         else:
             raise Exception("Need either a keypath or username+password to create ssh connection")
 
+
     def get_proxy_transport(self,
                             proxy_host=None,
                             dest_host=None,
@@ -225,12 +239,12 @@ class SshConnection():
                             proxy_username='root',
                             proxy_password=None,
                             proxy_keypath=None,
-                            pub_key_file=None,
+                            key_files=None,
                             verbose=True):
         """
 
 
-        :param pub_key_file: pubkey file. If 'None' will check global self.pub_key_file default:'~/.ssh/authorized_keys'
+        :param key_files: pubkey file. If 'None' will check global self.key_files default:'~/.ssh/authorized_keys'
         :param verbose: print debug
         :param proxy_host: hostname of ssh proxy
         :param port: ssh proxy port
@@ -245,12 +259,14 @@ class SshConnection():
         proxy_username = proxy_username or self.proxy_username
         proxy_password = proxy_password or self.proxy_password
         proxy_keypath = proxy_keypath or self.proxy_keypath
+        key_files = key_files or self.key_files or []
+        if key_files and not isinstance(key_files, types.ListType):
+            key_files = key_files.split(',')
 
         #Make sure there is at least one likely way to authenticate...
         ssh = paramiko.SSHClient()
-        if self.use_pub_keys or \
-                        proxy_keypath is not None or \
-                        ((proxy_username is not None) and (proxy_password is not None)):
+        if (proxy_username is not None) and (key_files or self.find_keys or proxy_keypath is not None or \
+                         proxy_password is not None ):
             p_transport = paramiko.Transport(proxy_host)
             ssh._transport = p_transport
             p_transport.start_client()
@@ -259,13 +275,10 @@ class SshConnection():
                 p_transport.auth_publickey(proxy_username,priv_key)
             elif proxy_password:
                 p_transport.auth_password(proxy_username, proxy_password)
-            else:
-                file = pub_key_file or self.pub_key_file or os.path.expanduser('~/.ssh/authorized_keys')
-                if not os.path.isfile(file):
-                    raise Exception('No way to authenticate, need key, password, or file of keys, etc..')
-                self.debug("Proxy auth -Using local keys, no keypath/password provided, trying:" + str(file),
+            elif self.find_keys:
+                self.debug("Proxy auth -Using local keys, no keypath/password provided",
                            verbose=verbose)
-                ssh._auth(proxy_username, None,None,[file], True, True)
+                ssh._auth(proxy_username, None,None,key_files, True, True)
                 p_transport = ssh._transport
             #forward from 127.0.0.1:<free_random_port> to |dest_host|
             channel = p_transport.open_channel('direct-tcpip', dest_host, ('127.0.0.1', 0))
@@ -301,7 +314,7 @@ class SshConnection():
             "SSH Command timer fired after " + str(int(elapsed)) + " seconds. Cmd:'" + str(cmd) + "'")
 
 
-    def sys(self, cmd, verbose=False, timeout=120, listformat=True, code=None):
+    def sys(self, cmd, verbose=False, timeout=120, listformat=True, enable_debug=False, code=None):
         """
         Issue a command cmd and return output in list format
 
@@ -311,7 +324,7 @@ class SshConnection():
         :param listformat:  - optional - format output into single buffer or list of lines
         :param code: - optional - expected exitcode, will except if cmd's  exitcode does not match this value
         """
-        out = self.cmd(cmd, verbose=verbose, timeout=timeout, listformat=listformat)
+        out = self.cmd(cmd, verbose=verbose, timeout=timeout, listformat=listformat, enable_debug=enable_debug)
         output = out['output']
         if code is not None:
             if out['status'] != code:
@@ -321,7 +334,7 @@ class SshConnection():
         return output
 
 
-    def cmd(self, cmd, verbose=None, timeout=120, listformat=False, cb=None, cbargs=[], get_pty=False):
+    def cmd(self, cmd, verbose=None, timeout=120, listformat=False, enable_debug=False, cb=None, cbargs=[], get_pty=True):
         """ 
         Runs a command 'cmd' within an ssh connection. 
         Upon success returns dict representing outcome of the command.
@@ -338,14 +351,15 @@ class SshConnection():
         :param timeout: - optional - integer used to timeout the overall cmd() operation in case of remote blocking
         :param listformat: - optional - boolean, if set returns output as list of lines, else a single buffer/string
         :param cb: - optional - callback, method that can be used to handle output as it's rx'd instead of...
-                        waiting for the cmd to finish and return buffer. 
+                        waiting for the cmd to finish and return buffer. Called like: cb(ssh_cmd_out_buffer, *cbargs)
                         Must accept string buffer, and return an integer to be used as cmd status. 
                         Must return type 'sshconnection.SshCbReturn'
                         If cb returns stop, recv loop will end, and channel will be closed.
                         if cb settimer is > 0, timer timeout will be adjusted for this time
                         if cb statuscode is != -1 cmd status will return with this value
-                        if cb nextargs is set, the next time cb is called these args will be passed instead
+                        if cb nextargs is set, the next time cb is called these args will be passed instead of cbargs
         :param cbargs: - optional - list of arguments to be appended to output buffer and passed to cb
+        :param enable_debug: - optional - boolean, if set will use self.debug() to print additional messages during cmd()
 
         """
         if verbose is None:
@@ -357,6 +371,9 @@ class SshConnection():
         self.lastexitcode = SshConnection.cmd_not_executed_code
         start = time.time()
         status = None
+        def cmddebug(msg):
+            if enable_debug:
+                self.debug(msg)
         if verbose:
             self.debug("[" + self.username + "@" + str(self.host) + "]# " + cmd)
         try:
@@ -370,12 +387,13 @@ class SshConnection():
             if get_pty:
                 chan.get_pty()
             chan.exec_command(cmd)
-            output = ""
+            output = None
             fd = chan.fileno()
             chan.setblocking(0)
             cmdstart = start = time.time()
             newdebug = "\n"
-            while True and chan.closed == 0:
+            while not chan.closed:
+                time.sleep(0.05)
                 try:
                     rl, wl, xl = select.select([fd], [], [], timeout)
                 except select.error:
@@ -384,19 +402,33 @@ class SshConnection():
                 if elapsed >= timeout:
                     raise CommandTimeoutException(
                         "SSH Command timer fired after " + str(int(elapsed)) + " seconds. Cmd:'" + str(cmd) + "'")
-                time.sleep(0.05)
                 if len(rl) > 0:
+                    cmddebug('ssh cmd: got input on recv channel')
                     while chan.recv_ready():
                         new = chan.recv(1024)
+                        if verbose:
+                            cmddebug('ssh cmd: got new data on channel:"' + str(new) + '"')
                         if new is not None:
                             #We have data to handle...
                             #Run call back if there is one, let call back handle data read in
                             if cb is not None:
+                                if enable_debug:
+                                    cbname = 'unknown'
+                                    try:
+                                        cbname = str(cb.im_func.func_code.co_name)
+                                    except: pass
+                                    self.debug('ssh cmd: sending new data to callback: ' + str(cbname))
                                 #If cb returns false break, end rx loop, return cmd outcome/output dict. 
                                 #cbreturn = SshCbReturn()
                                 cbreturn = cb(new, *cbargs)
                                 #Let the callback control whether or not to continue
                                 if cbreturn.stop:
+                                    cmddebug('ssh cmd: callback sent stop')
+                                    if cbreturn.buf:
+                                        if output is None:
+                                            output = cbreturn.buf
+                                        else:
+                                            output += cbreturn.buf
                                     cbfired = True
                                     #Let the callback dictate the return code, otherwise -1 for connection err may occur
                                     if cbreturn.statuscode != -1:
@@ -406,17 +438,41 @@ class SshConnection():
                                     chan.close()
                                     break
                                 else:
+
                                     #Let the callback update its calling args if needed
-                                    cbargs = cbreturn.nextargs or cbargs
+                                    if cbreturn.nextargs is not None:
+                                        cbargs = cbreturn.nextargs
                                     #Let the callback update/reset the timeout if needed
                                     if cbreturn.settimer > 0:
                                         start = time.time()
                                         timeout = cbreturn.settimer
+                                    #Let the callback update the output buffer to be returned
                                     if cbreturn.buf:
-                                        output += cbreturn.buf
+                                        cmddebug('ssh cmd: cb returned buf:"' + str(cbreturn.buf) + '"')
+                                        if output is None:
+                                            output = cbreturn.buf
+                                        else:
+                                            output += cbreturn.buf
+                                    #Change the callback to handle future output from this cmd
+                                    if cbreturn.nextcb:
+                                        cmddebug('ssh cmd: updating to new callback provided in cb return nextcb')
+                                        cb = cbreturn.nextcb
+                                    #Remove all callbacks
+                                    if cbreturn.removecb:
+                                        cmddebug('ssh cmd: removing all callbacks per cb return removecb value')
+                                        cb = None
+                                    #Send a string to the channel provided in callback (similar to expect)
+                                    if cbreturn.sendstring is not None:
+                                        if verbose:
+                                            cmddebug('Sending string:' + str(cbreturn.sendstring))
+                                        chan.send(s=str(cbreturn.sendstring))
+                                        cmddebug('channel status after sending string. Is closed = ' + str(chan.closed))
                             else:
                                 #if no call back then append output to return dict and handle debug
-                                output += new
+                                if output == None:
+                                    output = new
+                                else:
+                                    output += new
                                 if verbose:
                                     #Dont print line by line output if cb is used, let cb handle that 
                                     newdebug += new
@@ -427,20 +483,25 @@ class SshConnection():
                     if newdebug and verbose:
                         self.debug(str(newdebug))
                         newdebug = ''
-
+                elif enable_debug:
+                    self.debug('ssh cmd: len of rl was < 0')
+            cmddebug('ssh cmd: channel closed')
+            if output is None:
+                output = ""
             if listformat:
                 #return output as list of lines
                 output = output.splitlines()
                 if output is None:
                     output = []
-                #add command outcome in return dict.
-            if not status:
+
+            #add command outcome in return dict.
+            if status is None:
                 status = self.lastexitcode = chan.recv_exit_status()
             ret['cmd'] = cmd
             ret['output'] = output
             ret['status'] = status
             ret['cbfired'] = cbfired
-            ret['elapsed'] = elapsed = int(time.time() - cmdstart)
+            ret['elapsed'] = int(time.time() - cmdstart)
             if verbose:
                 self.debug("done with exec")
         except CommandTimeoutException, cte:
@@ -478,7 +539,7 @@ class SshConnection():
                            proxy_username=None,
                            proxy_password=None,
                            proxy_keypath=None,
-                           use_pub_keys=None,
+                           key_files=None,
                            enable_ipv6_dns=None,
                            port=22,
                            timeout=60,
@@ -509,11 +570,12 @@ class SshConnection():
         connected = False
         iplist = []
         ip = None
-        if use_pub_keys is None:
-            use_pub_keys = self.use_pub_keys
+        key_files = key_files or self.key_files or []
+        if key_files and not isinstance(key_files, types.ListType):
+            key_files = key_files.split(',')
         proxy_ip = None
-        if not use_pub_keys and password is None and keypath is None:
-            raise Exception("ssh_connect: both password and keypath were set to None")
+        if not key_files and password is None and keypath is None and not self.find_keys:
+            raise Exception("ssh_connect: Need to set password, keypath, keyfiles, or find_keys")
         if enable_ipv6_dns is None:
             enable_ipv6_dns = self.enable_ipv6_dns
         proxy = proxy or self.proxy
@@ -579,12 +641,9 @@ class SshConnection():
                         #ssh.connect(ip, port=port, username=username, key_filename=keypath, timeout=timeout)
                         connected = True
                         break
-                    else:
-                        file = self.pub_key_file or os.path.expanduser('~/.ssh/authorized_keys')
-                        if not os.path.isfile(file):
-                            raise Exception('No way to authenticate, need key, password, or file of keys, etc..')
-                        self.debug("Using local keys, no keypath/password provided, trying:" + str(file), verbose=verbose)
-                        ssh._auth(username, password,None,[file], True, True)
+                    elif key_files or self.find_keys:
+                        self.debug("Using local keys, no keypath/password provided.", verbose=verbose)
+                        ssh._auth(username, password,None,key_files, True, True)
                         #ssh.connect(ip, port=port, username=username, key_filename=keypath, timeout=timeout)
                         connected = True
 
@@ -662,6 +721,191 @@ class SshConnection():
             show += password[len(password)-1]
         return show
 
+    def expect_password_cb(self,
+                           buf,
+                           password,
+                           prompt="^Password",
+                           nextcb=None,
+                           cbargs=[],
+                           retry=0,
+                           password_attempts=0,
+                           verbose=False):
+        '''
+        Sample callback to handle password prompts to be provided to ssh.cmd()
+        :param buf: output from cmd()
+        :param password: string password to be supplied to a detected 'password' prompt
+        :param nextcb: function/method callback to be returned, this cmd() will use to handle it's future output.
+        :param prompt: regex string used to match prompt. case insensitive match used
+        :
+        '''
+        ret = SshCbReturn(stop=False)
+        #newbuf = None
+        def debug(msg, ssh=self):
+            if verbose:
+                ssh.debug(msg)
+
+        def add_to_buffer(lines_to_add, newbuf):
+            for line in lines_to_add:
+                debug('Adding line to buf:"' + str(line) +'"')
+                if newbuf is None:
+                    newbuf = line+ '\n'
+                else:
+                    newbuf += line + '\n'
+            return newbuf
+        bufadd = lambda line: add_to_buffer(line, ret.buf)
+        debug('STARTING expect_password_cb: password:' + str(password)+", prompt:"+str(prompt))
+        debug('Starting buf:"' + str(buf) + '"')
+        #Create a callback return obj for the cmd() loop to consume...
+
+        lines = buf.splitlines()
+
+        #See if we've already gone through password dialog, if so there may be a left over newline. Remove it.
+        if password_attempts and lines[0] == "":
+            debug('Removing first blank line(s) after sending password')
+            lines.pop(0)
+            if not lines:
+                #self.debug('Skipping blanklines...')
+                ret.buf = None
+                ret.nextargs=[password, prompt, nextcb, cbargs, retry, password_attempts, verbose]
+                return ret
+
+        #See if we have a prompt for password, assume we only have one match and were blocking waiting on password input
+        prompt_indices = [i for i, s in enumerate(lines) if re.match(prompt, s, re.IGNORECASE)]
+        if prompt_indices:
+            debug('Got password prompt, sending password...')
+            #Check to see if we've already tried a password, and if we should retry or fail
+            if password_attempts > retry:
+                raise CommandExpectPasswordException("Password dialog attempts:" + str(password_attempts) +
+                                                     " exceeded retry limit:" + str(retry))
+            prompt_index = prompt_indices[0]
+            #Add any lines other than password prompt back to return buffer
+            #Remove line with password prompt first
+            lines.pop(prompt_index)
+            ret.buf = bufadd(lines)
+            #Add password to CbReturn sendstring value to be sent to channel in cmd() loop...
+            ret.sendstring = str(password).rstrip() + "\n"
+            #Increment our password attempts value, and args to return obj for next time we get called. Expecting to
+            # get called at least 1 more time to handle the blank line after password dialog, may also get called for a
+            # login, and prompted for a password again...
+            password_attempts += 1
+            ret.removecb = False
+            ret.nextcb = None
+            ret.nextargs=[password, prompt, nextcb, cbargs, retry, password_attempts, verbose]
+            debug('Ending buf:"' + str(ret.buf) + '"')
+            return ret
+        else:
+            debug('\nPassword prompt not found, continuing. password_attempts:'+ str(password_attempts) +
+                       ', prompt:' + str(prompt) + ', len lines: ' + str(len(lines)))
+            #Assume the password dialog is complete, pass buffer to next handler,
+            # attempt to make password portion look transparent
+            ret.buf = bufadd(lines)
+            if nextcb is not None:
+                debug('Got nextcb, calling it on our buffer now...')
+                ret = nextcb(ret.buf, *cbargs)
+                if ret.nextcb and not ret.removecb:
+                    nextcb=ret.nextcb
+                else:
+                    nextcb=None
+            #tweak the return values, store the real ones in our nextargs and handle things in this method instead
+            ret.nextcb = None
+        ret.removecb = False
+        ret.nextargs = [password, prompt, nextcb, cbargs, retry, password_attempts, verbose]
+        debug('Ending buf:"' + str(ret.buf) + '"')
+        return ret
+
+
+    def start_interactive(self, timeout=180):
+        '''
+        Example method to invoke an interactive shell
+        :pararm timeout: inactive session timeout, a value of 0 will wait for input/output forever
+        '''
+        tran = self.connection.get_transport()
+        if tran is None:
+            self.debug("SSH transport was None, attempting to re-establish ssh to: "+str(self.host))
+            self.refresh_connection()
+            tran = self.connection.get_transport()
+        chan = tran.open_session()
+        chan.get_pty()
+        chan.setblocking(0)
+        print('Opened channel, starting interactive mode...')
+        oldtty = termios.tcgetattr(sys.stdin)
+        try:
+            tty.setraw(sys.stdin.fileno())
+            tty.setcbreak(sys.stdin.fileno())
+            chan.settimeout(0)
+            chan.invoke_shell()
+            fd = chan.fileno()
+            while True:
+                time.sleep(0.05)
+                try:
+                    read_ready, wlist, xlist = select.select([fd, sys.stdin], [], [],timeout)
+                except select.error, se:
+                    print 'select error:' + str(se)
+                    break
+                if fd in read_ready:
+                    try:
+                        recv = chan.recv(1024)
+                        if recv is None or len(recv) == 0:
+                            self.debug('Session closing (chan)...   ')
+                            break
+                        sys.stdout.write(recv)
+                        sys.stdout.flush()
+                    except socket.timeout:
+                        pass
+                elif sys.stdin in read_ready:
+                    user_input = sys.stdin.read(1)
+                    if user_input is None or len(user_input) == 0:
+                        self.debug('Session closing (stdin)...')
+                        break
+                    chan.send(user_input)
+                else:
+                    self.debug('Got nothing, closing...')
+                    break
+        finally:
+            try:
+                termios.tcsetattr(sys.stdin, termios.TCSADRAIN, oldtty)
+            except:pass
+            if chan:
+                chan.close()
+
+
+
+    def open_sftp(self, transport=None):
+        transport = transport or self.connection._transport
+        self.sftp = paramiko.SFTPClient.from_transport(transport)
+
+    def close_sftp(self):
+        self.sftp.close()
+
+
+
+    def sftp_put(self,localfilepath,remotefilepath):
+        """
+        sftp transfer file from localfilepath to remote system at remotefilepath
+        :param localfilepath: path to file on local system
+        :param remotefilepath: destination path for put on remote system
+        """
+        if not self.connection._transport:
+            self.refresh_connection()
+        transport = self.connection._transport
+        self.open_sftp()
+        self.sftp.put(remotepath=remotefilepath, localpath=localfilepath)
+        self.close_sftp()
+
+    def sftp_get(self, localfilepath, remotefilepath):
+        """
+        sftp transfer file from remotefilepath to remote system at localfilepath
+        :param localfilepath: path where remote file 'get' will place file on local system
+        :param remotefilepath: destination path for file to 'get' on remote system
+        """
+        if not self.connection._transport:
+            self.refresh_connection()
+        transport = self.connection._transport
+        self.open_sftp()
+        self.sftp.get(remotepath=remotefilepath, localpath=localfilepath)
+        self.close_sftp()
+
+
     def close(self):
         self.connection.close()
 
@@ -674,6 +918,13 @@ class CommandExitCodeException(Exception):
         return repr(self.value)
 
 class CommandTimeoutException(Exception):
+    def __init__(self, value):
+        self.value = value
+
+    def __str__(self):
+        return repr(self.value)
+
+class CommandExpectPasswordException(Exception):
     def __init__(self, value):
         self.value = value
 

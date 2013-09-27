@@ -29,14 +29,20 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 # Author: tony@eucalyptus.com
-from eutester import Eutester
 import re
 import copy
-import boto.ec2.autoscale
+
+import boto
+from boto.ec2 import autoscale
 from boto.ec2.autoscale import ScalingPolicy
+from boto.ec2.autoscale import Tag
 from boto.ec2.autoscale import LaunchConfiguration
 from boto.ec2.autoscale import AutoScalingGroup
 from boto.ec2.regioninfo import RegionInfo
+import time
+
+from eutester import Eutester
+
 
 ASRegionData = {
     'us-east-1': 'autoscaling.us-east-1.amazonaws.com',
@@ -85,6 +91,7 @@ class ASops(Eutester):
         self.test_resources = {}
         self.setup_as_resource_trackers()
 
+    @Eutester.printinfo
     def setup_as_connection(self, endpoint=None, aws_access_key_id=None, aws_secret_access_key=None, is_secure=True,
                             host=None, region=None, path="/", port=443, boto_debug=0):
         """
@@ -146,7 +153,9 @@ class ASops(Eutester):
         self.test_resources["security-groups"] = []
         self.test_resources["images"] = []
 
-    def create_launch_config(self, name=None, image_id=None, key_name=None, security_groups=None):
+    def create_launch_config(self, name, image_id, key_name=None, security_groups=None, user_data=None,
+                             instance_type=None, kernel_id=None, ramdisk_id=None, block_device_mappings=None,
+                             instance_monitoring=False, instance_profile_name=None):
         """
         Creates a new launch configuration with specified attributes.
 
@@ -158,9 +167,20 @@ class ASops(Eutester):
         lc = LaunchConfiguration(name=name,
                                  image_id=image_id,
                                  key_name=key_name,
-                                 security_groups=security_groups)
+                                 security_groups=security_groups,
+                                 user_data=user_data,
+                                 instance_type=instance_type,
+                                 kernel_id=kernel_id,
+                                 ramdisk_id=ramdisk_id,
+                                 block_device_mappings=block_device_mappings,
+                                 instance_monitoring=instance_monitoring,
+                                 instance_profile_name=instance_profile_name)
         self.debug("Creating launch config: " + name)
         self.autoscale.create_launch_configuration(lc)
+        if len(self.describe_launch_config([name])) != 1:
+            raise Exception('Launch Config not created')
+        self.debug('SUCCESS: Created Launch Config: ' +
+                   self.describe_launch_config([name])[0].name)
 
     def describe_launch_config(self, names=None):
         """
@@ -174,9 +194,13 @@ class ASops(Eutester):
     def delete_launch_config(self, launch_config_name):
         self.debug("Deleting launch config: " + launch_config_name)
         self.autoscale.delete_launch_configuration(launch_config_name)
+        if len(self.describe_launch_config([launch_config_name])) != 0:
+            raise Exception('Launch Config not deleted')
+        self.debug('SUCCESS: Deleted Launch Config: ' + launch_config_name)
 
-    def create_as_group(self, group_name=None, load_balancers=None, availability_zones=None, launch_config=None,
-                        min_size=None, max_size=None, connection=None):
+    def create_as_group(self, group_name, launch_config, availability_zones, min_size, max_size, load_balancers=None,
+                        desired_capacity=None, termination_policies=None, default_cooldown=None, health_check_type=None,
+                        health_check_period=None, tags=None):
         """
         Create auto scaling group.
 
@@ -186,34 +210,63 @@ class ASops(Eutester):
         :param launch_config: Name of launch configuration (required).
         :param min_size:  Minimum size of group (required).
         :param max_size: Maximum size of group (required).
-        :param connection: connection to auto scaling service
         """
-        as_group = AutoScalingGroup(group_name=group_name,
+        self.debug("Creating Auto Scaling group: " + group_name)
+        as_group = AutoScalingGroup(connection=self.autoscale,
+                                    group_name=group_name,
                                     load_balancers=load_balancers,
                                     availability_zones=availability_zones,
                                     launch_config=launch_config,
                                     min_size=min_size,
                                     max_size=max_size,
-                                    connection=connection)
-        self.debug("Creating Auto Scaling group: " + group_name)
+                                    desired_capacity=desired_capacity,
+                                    default_cooldown=default_cooldown,
+                                    health_check_type=health_check_type,
+                                    health_check_period=health_check_period,
+                                    tags=tags,
+                                    termination_policies=termination_policies)
         self.autoscale.create_auto_scaling_group(as_group)
 
-    def describe_as_group(self, names=None):
-        return self.autoscale.get_all_groups(names=names)
+        as_group = self.describe_as_group(group_name)
 
-    def delete_as_group(self, names=None, force=None):
-        self.debug("Deleting Auto Scaling Group: " + names)
+        self.debug("SUCCESS: Created Auto Scaling Group: " + as_group.name)
+        return as_group
+
+    def describe_as_group(self, name=None):
+        """
+        Returns a full description of each Auto Scaling group in the given
+        list. This includes all Amazon EC2 instances that are members of the
+        group. If a list of names is not provided, the service returns the full
+        details of all Auto Scaling groups.
+        :param name:
+        :return:
+        """
+        groups = self.autoscale.get_all_groups(names=[name])
+        if len(groups) > 1:
+            raise Exception("More than one group with name: " + name)
+        if len(groups) == 0:
+            raise Exception("No group found with name: " + name)
+        return groups[0]
+
+    def delete_as_group(self, name=None, force=None):
+        self.debug("Deleting Auto Scaling Group: " + name)
         self.debug("Forcing: " + str(force))
-        self.autoscale.delete_auto_scaling_group(name=names, force_delete=force)
+        # self.autoscale.set_desired_capacity(group_name=names, desired_capacity=0)
+        self.autoscale.delete_auto_scaling_group(name=name, force_delete=force)
+        try:
+            self.describe_as_group([name])
+            raise Exception('Auto Scaling Group not deleted')
+        except:
+            self.debug('SUCCESS: Deleted Auto Scaling Group: ' + name)
 
-    def create_as_policy(self, name=None, adjustment_type=None, as_name=None, scaling_adjustment=None, cooldown=None):
+    def create_as_policy(self, name, adjustment_type, scaling_adjustment, as_name, cooldown=None):
         """
         Create an auto scaling policy
 
         :param name:
         :param adjustment_type: (ChangeInCapacity, ExactCapacity, PercentChangeInCapacity)
-        :param as_name:
         :param scaling_adjustment:
+        :param as_name:
         :param cooldown: (if something gets scaled, the wait in seconds before trying again.)
         """
         scaling_policy = ScalingPolicy(name=name,
@@ -225,6 +278,13 @@ class ASops(Eutester):
         self.autoscale.create_scaling_policy(scaling_policy)
 
     def describe_as_policies(self, as_group=None, policy_names=None):
+        """
+        If no group name or list of policy names are provided, all
+        available policies are returned.
+
+        :param as_group:
+        :param policy_names:
+        """
         self.autoscale.get_all_policies(as_group=as_group, policy_names=policy_names)
 
     def execute_as_policy(self, policy_name=None, as_group=None, honor_cooldown=None):
@@ -233,7 +293,7 @@ class ASops(Eutester):
 
     def delete_as_policy(self, policy_name=None, autoscale_group=None):
         self.debug("Deleting Policy: " + policy_name + " from group: " + autoscale_group)
-        self.autoscale.delete_policy(policy_name=policy_name,autoscale_group=autoscale_group)
+        self.autoscale.delete_policy(policy_name=policy_name, autoscale_group=autoscale_group)
 
     def delete_all_autoscaling_groups(self):
         """
@@ -242,7 +302,7 @@ class ASops(Eutester):
         ### clear all ASGs
         for asg in self.describe_as_group():
             self.debug("Found Auto Scaling Group: " + asg.name)
-            self.delete_as_group(names=asg.name, force=True)
+            self.delete_as_group(name=asg.name, force=True)
         if len(self.describe_as_group()) != 0:
             self.debug("Some AS groups remain")
             for asg in self.describe_as_group():
@@ -266,29 +326,65 @@ class ASops(Eutester):
         as_url = self.parse_eucarc("AWS_AUTO_SCALING_URL")
         return as_url.split("/")[2].split(":")[0]
 
-    # def wait_for_group(self, as_group=None, state="Successful", poll_count=None, timeout=480):
-    #     """
-    #     conn.get_all_activities(ag)
-    #     autoscale_group, activity_ids=None
-    #      [Activity:Launching a new EC2 instance status:Successful progress:100, ...]
-    #     """
-    #     if poll_count is not None:
-    #         timeout = poll_count * 10
-    #     self.debug("Beginning poll loop for group " + as_group + " to go to " + str(state) )
-    #     start = time.time()
-    #     elapsed = 0
-    #     while(elapsed < timeout) and (self.AS.get_all_activities(as_group)[0].status != state):
-    #         self.debug( "Auto Scaling Group(" + as_group.id + ") State(" + as_group.state + "), elapsed:" +
-    #                     str(elapsed) + "/" + str(timeout))
-    #         time.sleep(10)
-    #         self.AS.get_all_activities(as_group)
-    #         elapsed = int(time.time()- start)
-    #         if self.AS.get_all_activities(as_group).status != instance_original_state:
-    #             break
-    #     self.debug("Instance("+as_group.id+") State("+as_group.state+") time elapsed (" +str(elapsed).split('.')[0]+")")
-    #     #self.debug( "Waited a total o" + str( (self.poll_count - poll_count) * 10 ) + " seconds" )
-    #     if as_group.state != state:
-    #         raise Exception( str(as_group) + " did not enter "+str(state)+" state after elapsed:"+str(elapsed))
-    #
-    #     self.debug( str(as_group) + ' is now in ' + as_group.state )
-    #     return True
+    def get_last_instance_id(self):
+        reservations = self.ec2.get_all_instances()
+        instances = [i for r in reservations for i in r.instances]
+        newest_time = None
+        newest_id = None
+        for i in instances:
+            if not newest_time or i.launch_time > newest_time:
+                newest_time = i.launch_time
+                newest_id = i.id
+        return newest_id
+
+    def create_group_tag(self, key, value, resource_id, propagate_at_launch=None):
+        # self.debug("Number of tags: " + str(len(self.tester.autoscale.get_all_tags())))
+        # self.debug("Autoscale group info: " + str(self.tester.autoscale.get_all_groups(names=[auto_scaling_group_name])[0].tags))
+
+        tag = Tag(key=key, value=value, propagate_at_launch=propagate_at_launch, resource_id=resource_id)
+        self.autoscale.create_or_update_tags([tag])
+        if len(self.autoscale.get_all_tags(filters=key)) != 1:
+            self.debug("Number of tags: " + str(len(self.autoscale.get_all_tags(filters=key))))
+            raise Exception('Tag not created')
+        self.debug("created or updated tag: " + str(self.autoscale.get_all_tags(filters=key)[0]))
+
+    def delete_all_group_tags(self):
+        all_tags = self.autoscale.get_all_tags()
+        self.autoscale.delete_tags(all_tags)
+        self.debug("Number of tags: " + str(len(self.autoscale.get_all_tags())))
+
+    def delete_all_policies(self):
+        for policy in self.autoscale.get_all_policies():
+            self.delete_as_policy(policy_name=policy.name, autoscale_group=policy.as_name)
+        if len(self.autoscale.get_all_policies()) != 0:
+            raise Exception('Not all auto scaling policies deleted')
+        self.debug("SUCCESS: Deleted all auto scaling policies")
+
+    def update_as_group(self, group_name, launch_config, min_size, max_size, availability_zones=None,
+                        desired_capacity=None, termination_policies=None, default_cooldown=None, health_check_type=None,
+                        health_check_period=None):
+        """
+
+        :param group_name: REQUIRED
+        :param launch_config: REQUIRED
+        :param min_size: REQUIRED
+        :param max_size: REQUIRED
+        :param availability_zones:
+        :param desired_capacity:
+        :param termination_policies:
+        :param default_cooldown:
+        :param health_check_type:
+        :param health_check_period:
+        """
+        self.debug("Updating ASG: " + group_name)
+        return AutoScalingGroup(connection=self.autoscale,
+                         name=group_name,
+                         launch_config=launch_config,
+                         min_size=min_size,
+                         max_size=max_size,
+                         availability_zones=availability_zones,
+                         desired_capacity=desired_capacity,
+                         default_cooldown=default_cooldown,
+                         health_check_type=health_check_type,
+                         health_check_period=health_check_period,
+                         termination_policies=termination_policies).update()

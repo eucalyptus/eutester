@@ -35,6 +35,8 @@ class MyTestCase(EutesterTestCase):
             target_machines = self.tester.get_component_machines(self.args.component)
 
         for machine in target_machines:
+            if machine.distro.name is "vmware":
+                continue
             machine.sys(self.args.command)
 
 if __name__ == "__main__":

@@ -7,7 +7,6 @@
     <property name="build.dir" value="build"/>
     <property name="classes.dir" value="${build.dir}/classes"/>
     <property name="deps.dir" value="dependencies"/>
-    <mkdir dir="${deps.dir}"/>
     <property name="testng.output.dir" value="eutester4j_results"/>
     <property name="testng.version" value="6.8"/>
     <property name="testng-jar" value="${deps.dir}/testng-${testng.version}.jar"/>
@@ -15,9 +14,11 @@
     <property name="log4j-jar" value="${deps.dir}/log4j-${log4j.version}.jar"/>
     <property name="aws.dir" value="${deps.dir}/aws-java-sdk"/>
     <property name="eucarc" value="eucarc"/>
+    <property name="tests" value="AllTestsSuite.xml"/>
 
     <!-- download and ready testng and AWS JAVA SDK -->
     <target name="download-deps">
+        <mkdir dir="${deps.dir}"/>
         <echo message="installing testng..."/>
         <get src="http://testng.org/testng-${testng.version}.zip"
              dest="${deps.dir}/testng-${testng.version}.zip"/>
@@ -64,7 +65,14 @@
     <!-- delete build and resutls directories -->
     <target name="clean">
         <delete dir="${build.dir}"/>
+        <delete dir="${deps.dir}"/>
+    </target>
+
+    <!-- delete build, results and dependencies directories -->
+    <target name="clean-all">
+        <delete dir="${build.dir}"/>
         <delete dir="${testng.output.dir}"/>
+        <delete dir="${deps.dir}"/>
     </target>
 
     <!-- compile all classes of src.dir -->
@@ -74,18 +82,17 @@
         <copy file="log4j.properties" todir="${classes.dir}"/>
     </target>
 
-    <!-- compile all and run tests per testng.xml -->
+    <!-- compile all and run tests per AllTestsSuite.xml -->
     <target name="runTestNG" depends="compile">
-
-        <taskdef name="testng" classname="org.testng.TestNGAntTask">
+    <taskdef name="testng" classname="org.testng.TestNGAntTask">
             <classpath>
                 <pathelement location="${testng-jar}"/>
             </classpath>
         </taskdef>
 
         <mkdir dir="${testng.output.dir}"/>
-        <testng outputdir="${testng.output.dir}" classpathref="classpath">
-            <xmlfileset dir="." includes="testng.xml"/>
+        <testng outputdir="${testng.output.dir}" classpathref="classpath" haltonfailure="true">
+            <xmlfileset dir="./TestSuites" includes="${tests}"/>
             <jvmarg value="-Deucarc=${eucarc}" />
         </testng>
     </target>
@@ -93,4 +100,6 @@
     <!-- clean, build and run tests -->
     <target name="clean-build" depends="clean, runTestNG"/>
 
+    <!-- clean all, build and run tests -->
+    <target name="clean-all-build" depends="clean-all, runTestNG"/>
 </project>

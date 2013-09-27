@@ -59,15 +59,13 @@ public class Eutester4jTemplateTest {
 		System.out.println("Test complete");
 	}
 
-	private void test() throws Exception {
+	public void test() throws Exception {
         testInfo(this.getClass().getSimpleName());
 		// get cloud endpoints and keys create connection and find images
-		getCloudInfo();
-		final AmazonEC2 ec2 = getEc2Client(ACCESS_KEY, SECRET_KEY, EC2_ENDPOINT);
-		final String imageId = findImage(ec2);
+        getCloudInfo();
 		
 		// create a security group
-		createSecurityGoup(ec2, securityGroup, "A Test Security Group");
+		createSecurityGoup(securityGroup, "A Test Security Group");
 		DescribeSecurityGroupsRequest describeSecurityGroupsRequest = new DescribeSecurityGroupsRequest();
 		DescribeSecurityGroupsResult securityGroupsResult = ec2
 				.describeSecurityGroups(describeSecurityGroupsRequest);
@@ -75,7 +73,7 @@ public class Eutester4jTemplateTest {
 				"Security Group Not Created");
 
 		// create a keypair
-		createKeyPair(ec2, keyName);
+		createKeyPair(keyName);
 		DescribeKeyPairsRequest describeKeyPairsRequest = new DescribeKeyPairsRequest();
 		DescribeKeyPairsResult describeKeyPairsResult = ec2
 				.describeKeyPairs(describeKeyPairsRequest);
@@ -83,25 +81,25 @@ public class Eutester4jTemplateTest {
 				"Keypair not created");
 
 		// Run an Instance
-		int initalInstanceCount = getInstancesList(ec2).size();
+		int initalInstanceCount = getInstancesList().size();
 		ArrayList<String> securityGroups = new ArrayList<String>();
 		securityGroups.add(securityGroup);
-		runInstances(ec2, imageId, keyName, INSTANCE_TYPE, securityGroups, 0, 1);
-		assertThat(getInstancesList(ec2).size() > initalInstanceCount, "Instance not launched");
+		runInstances(IMAGE_ID, keyName, INSTANCE_TYPE, securityGroups, 0, 1);
+		assertThat(getInstancesList().size() > initalInstanceCount, "Instance not launched");
 	}
 
 	public void cleanup() {
 		// terminate the last launched instance
 		final AmazonEC2 ec2 = getEc2Client(ACCESS_KEY, SECRET_KEY, EC2_ENDPOINT);
 		List<String> instanceIds = new ArrayList<String>();
-		instanceIds.add(getLastlaunchedInstance(ec2).get(0).getInstanceId());
-		terminateInstances(ec2, instanceIds);
+		instanceIds.add(getLastlaunchedInstance().get(0).getInstanceId());
+		terminateInstances(instanceIds);
 
-        System.out.println("Instance state: " + getLastlaunchedInstance(ec2).get(0).getState().getName());
+        System.out.println("Instance state: " + getLastlaunchedInstance().get(0).getState().getName());
 
         // wait for the instance to be terminated before trying to delete group
-		while(!getLastlaunchedInstance(ec2).get(0).getState().getName().equals("terminated")){}
-		deleteKeyPair(ec2, keyName);
-		deleteSecurityGroup(ec2, securityGroup);
+		while(!getLastlaunchedInstance().get(0).getState().getName().equals("terminated")){}
+		deleteKeyPair(keyName);
+		deleteSecurityGroup(securityGroup);
 	}
 }

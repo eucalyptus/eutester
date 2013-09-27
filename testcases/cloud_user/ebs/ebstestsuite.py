@@ -37,7 +37,8 @@ import os
 from eucaops import Eucaops
 from eutester import euinstance
 from eutester.eutestcase import EutesterTestCase
-
+from eucaops import ec2ops
+from eutester.eutestcase import TestColor
 
 class TestZone():
     def __init__(self, partition):
@@ -72,12 +73,14 @@ class EbsTestSuite(EutesterTestCase):
                  keypair=None, 
                  group=None, 
                  emi=None,
+                 wait_on_progress=20,
                  root_device_type='instance-store',
                  vmtype='c1.medium',
                  eof=1):
         
         self.args = args
         self.setuptestcase(name)
+        self.wait_on_progress = wait_on_progress
         if tester is None:
             self.tester = Eucaops( config_file=config_file,password=password,credpath=credpath)
         else:
@@ -316,6 +319,13 @@ class EbsTestSuite(EutesterTestCase):
                         instance = zone.instances[i]
                         try:
                             instance.attach_euvolume(volume,timeout=timeout, overwrite=overwrite)
+                        except ec2ops.VolumeStateException, vse:
+                            self.status("This is a temp work around for testing, this is to avoid bug euca-5297"+str(vse),
+                                        testcolor=TestColor.get_canned_color('failred'))
+                            time.sleep(10)
+                            self.debug('Monitoring volume post VolumeStateException...')
+                            volume.eutest_attached_status = None
+                            self.tester.monitor_euvolumes_to_status([volume],status='in-use',attached_status='attached',timeout=60)
                         except Exception, e:
                             self.debug("attach_all_vols_to_instances_in_zones failed to attach volume")
                             raise e
@@ -495,13 +505,14 @@ class EbsTestSuite(EutesterTestCase):
                 
         
         
-    def create_snapshots_all_vols_in_zone(self, zonelist=None, volstate="all", wait_on_progress=20):
+    def create_snapshots_all_vols_in_zone(self, zonelist=None, volstate="all", wait_on_progress=None):
         """
         Description:
                     Attempts to iterate through each zone in zonelist, and create a snapshot from each volume
                     in the zone's volume list who's state matches volstate
                     
         """
+        wait_on_progress = wait_on_progress or self.wait_on_progress
         zonelist = zonelist or self.zonelist
         if not zonelist:
             raise Exception("Zone list was empty")
@@ -511,7 +522,7 @@ class EbsTestSuite(EutesterTestCase):
             for volume in zone.volumes:
                 volume.update()
                 if volstate == "all" or volume.status == volstate:
-                    self.snaps.append(self.tester.create_snapshot_from_volume(volume, description="ebstest", wait_on_progress=20))
+                    self.snaps.append(self.tester.create_snapshot_from_volume(volume, description="ebstest", wait_on_progress=wait_on_progress))
         #self.endsuccess()
         
         
@@ -808,15 +819,36 @@ class EbsTestSuite(EutesterTestCase):
             self.run_test_case_list(testlist)
         else:
             return testlist
-                   
-    
-    
-                
-        
+
+
+    def expand_volume_size(self, zonelist=None, volsperzone=1, size=1):
+        """
+        Description:
+                    Intention of this test is to verify creation of volume(s) from a snapshot and expanding
+                    the size of the volume
+        """
+        zonelist = zonelist or self.zonelist
+        if not zonelist:
+            raise Exception("Zone list was empty")
+        for testzone in zonelist:
+            vols = self.tester.create_volumes(testzone, size=size, count=volsperzone)
+            testzone.volumes.extend(vols)
+            snapshots = []
+            for volume in vols:
+                snapshots.append(self.tester.create_snapshot_from_volume(volume))
+            larger_volumes = []
+            for snaphot in snapshots:
+                larger_volumes.append(self.tester.create_volume(testzone, snapshot=snaphot, size=size+1))
+            for volume in larger_volumes:
+                assert volume.size > size
+
+
     def ebs_basic_test_suite(self, run=True):  
         testlist = [] 
         #create first round of volumes
         testlist.append(self.create_testunit_from_method(self.create_vols_per_zone, eof=True))
+        #create volumes that have their sizes expanded from their original snapshots
+        testlist.append(self.create_testunit_from_method(self.expand_volume_size, eof=True))
         #launch instances to interact with ebs volumes
         testlist.append(self.create_testunit_from_method(self.create_test_instances_for_zones, eof=True))
         #attach first round of volumes
@@ -913,9 +945,18 @@ class EbsTestSuite(EutesterTestCase):
         if zones is None or zones == []:
             zones = self.zones
     def clean_method(self):
+        """
+        Definition:
+        Attempts to clean up test artifacts created during this test
+        """
+
         self.clean_created_resources(zonelist=self.zonelist, timeout=360)
     
     def clean_created_resources(self, zonelist=None, timeout=360):
+        """
+        Definition:
+        Attempts to clean up test artifacts created during this test
+        """
         self.tester.cleanup_artifacts()
         #self.terminate_test_instances_for_zones(zonelist=zonelist, timeout=timeout)
         #self.delete_volumes_in_zones(zonelist=zonelist, timeout=timeout)

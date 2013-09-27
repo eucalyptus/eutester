@@ -33,7 +33,14 @@
 import re
 import time
 from eutester import sshconnection
+from eutester.sshconnection import SshCbReturn, CommandTimeoutException
+import types
+import stat
+import eutester
+import copy
+import os
 from eutester import machine
+from xml.dom.minidom import parse, parseString
 
 
 class log_marker:
@@ -91,6 +98,8 @@ class Eunode:
                  partition,
                  name=None,
                  instance_ids=None,
+                 instances=None,
+                 state = None,
                  machine = None,
                  debugmethod = None,
                  ):
@@ -110,6 +119,7 @@ class Eunode:
         self.part_name = partition.name
         self.name = name or self.hostname
         self.instance_ids = instance_ids or []
+        self.state = state
         self.tester = tester
         self.machine = machine
         self.service_state = None
@@ -123,6 +133,7 @@ class Eunode:
                 self.debug("Failed to get machine for this node:" + str(hostname) + ", err:" + str(e))
         #if self.machine:
             #self.hypervisor =
+
 
     def debug(self, msg):
         """
@@ -167,8 +178,11 @@ class Eunode:
         service_state = None
         if self.machine:
             try:
-                self.sys("service eucalyptus-nc status", code=0)
-                service_state = 'running'
+                if self.machine.distro.name is not "vmware":
+                    self.sys("service eucalyptus-nc status", code=0)
+                    service_state = 'running'
+                else:
+                    service_state = 'running'
             except sshconnection.CommandExitCodeException:
                 service_state = 'not_running'
             except Exception, e:
@@ -185,7 +199,7 @@ class Eunode:
         dict should have dict['id'], dict['name'], dict['state']
 
         """
-        return_list = {}
+        instance_list = []
         if self.machine:
             keys = []
             output = self.machine.sys('virsh list', code=0)
@@ -193,13 +207,182 @@ class Eunode:
                 keys = str(output[0]).strip().lower().split()
                 for line in output[2:]:
                     line = line.strip()
-                    #skip blank lines...
                     if line == "":
                         continue
                     domain_line = line.split()
-                    for key in keys:
-                        return_list[key] = domain_line[keys.index(key)]
-        return return_list
+                    instance_list.append({keys[0]:domain_line[0], keys[1]:domain_line[1], keys[2]:domain_line[2]})
+        return instance_list
+
+    def tail_instance_console(self,
+                              instance,
+                              max_lines=None,
+                              timeout=30,
+                              idle_timeout=30,
+                              print_method=None):
+        '''
+
+
+        '''
+        if timeout < idle_timeout:
+            idle_timeout = timeout
+        if not isinstance(instance,types.StringTypes):
+            instance = instance.id
+        console_path = self.get_instance_console_path(instance)
+        start_time = time.time()
+        lines_read = 0
+        print_method = print_method or self.debug
+        prefix = str(instance) + " Console Output:"
+        try:
+            self.machine.cmd('tail -F ' + str(console_path),
+                             verbose=False,
+                             cb=self.remote_tail_monitor_cb,
+                             cbargs=[instance,
+                                     max_lines,
+                                     lines_read,
+                                     start_time,
+                                     timeout,
+                                     print_method,
+                                     prefix,
+                                     idle_timeout],
+                             timeout=idle_timeout)
+        except CommandTimeoutException, cte:
+            self.debug('Idle timeout fired while tailing console: ' + str(cte))
+
+
+    def remote_tail_monitor_cb(self,
+                               buf,
+                               instance_id,
+                               max_lines,
+                               lines_read,
+                               start_time,
+                               timeout,
+                               print_method,
+                               prefix,
+                               idle_timeout):
+        ret = SshCbReturn(stop=False, settimer=idle_timeout)
+        return_buf = ""
+        now = time.time()
+        if (timeout and (now - start_time) >= timeout) or (max_lines and lines_read >= max_lines):
+            ret.statuscode = 0
+            ret.stop = True
+        try:
+            for line in str(buf).splitlines():
+                lines_read += 1
+                print_method(str(prefix) + str(line))
+        except Exception, e:
+            return_buf = "Error in remote_tail_monitor:" + str(e)
+            ret.statuscode = 69
+            ret.stop = True
+        finally:
+            ret.buf = return_buf
+            ret.nextargs = [instance_id, max_lines, lines_read, start_time,timeout]
+            return ret
+
+
+    def get_instance_multipath_dev_info_for_instance_ebs_volume(self, instance, volume):
+        if not isinstance(instance,types.StringTypes):
+            instance = instance.id
+        if isinstance(volume,types.StringTypes):
+            volume = self.tester.get_volume(volume_id=volume)
+        if volume.attach_data and volume.attach_data.instance_id == instance:
+            dev = volume.attach_data.device
+        else:
+            raise Exception(str(volume.id) + 'Vol not attached to instance: ' + str(instance))
+        return self.get_instance_multipath_dev_info_for_instance_block_dev(instance, dev)
+
+
+    def get_instance_multipath_dev_info_for_instance_block_dev(self, instance, ebs_block_dev, verbose=False):
+        if not isinstance(instance,types.StringTypes):
+            instance = instance.id
+        mpath_dev = self.get_instance_multipath_dev_for_instance_block_dev(instance, ebs_block_dev)
+        mpath_dev_info = self.machine.sys('multipath -ll ' + str(mpath_dev) + " | sed 's/[[:cntrl:]]//g' ",
+                                          verbose=verbose, code=0)
+        return mpath_dev_info
+
+    def get_instance_multipath_dev_for_instance_ebs_volume(self, instance, volume):
+        if not isinstance(instance,types.StringTypes):
+            instance = instance.id
+        if isinstance(volume,types.StringTypes):
+            volume = self.tester.get_volume(volume_id=volume)
+
+    def get_instance_multipath_dev_for_instance_block_dev(self, instance, ebs_block_dev, verbose=False):
+        mpath_dev = None
+        ebs_block_dev = os.path.basename(ebs_block_dev)
+        if not isinstance(instance,types.StringTypes):
+            instance = instance.id
+        dm_dev = self.get_instance_block_disk_dev_on_node(instance, ebs_block_dev)
+        sym_links = self.machine.sys('udevadm info --name ' + str(dm_dev) + ' --query symlink',
+                                     verbose=verbose, code=0)[0]
+        for path in str(sym_links).split():
+            if str(path).startswith('mapper/'):
+                mpath_dev = path.split('/')[1]
+                break
+        return mpath_dev
+
+
+    def get_instance_block_disk_dev_on_node(self, instance, block_dev):
+        block_dev = os.path.basename(block_dev)
+        if not isinstance(instance,types.StringTypes):
+            instance = instance.id
+        paths = self.get_instance_block_disk_source_paths(instance)
+        sym_link  = paths[block_dev]
+        real_dev = self.machine.sys('readlink -e ' + sym_link, verbose=False, code=0)[0]
+        fs_stat = self.machine.get_file_stat(real_dev)
+        if stat.S_ISBLK(fs_stat.st_mode):
+            return real_dev
+        else:
+            raise(str(instance) + ", dev:" + str(block_dev) + ',Error, device on node is not block type :' + str(real_dev))
+
+    def get_instance_block_disk_source_paths(self, instance, target_dev=None):
+        '''
+        Returns dict mapping target dev to source path dev/file on NC
+        Example return dict: {'vdb':'/NodeDiskPath/dev/sde'}
+        '''
+        ret_dict = {}
+        if target_dev:
+            target_dev = os.path.basename(target_dev)
+        if not isinstance(instance,types.StringTypes):
+            instance = instance.id
+        disk_doms = self.get_instance_block_disk_xml_dom_list(instance_id=instance)
+        for disk in disk_doms:
+            source_dev = disk.getElementsByTagName('source')[0].attributes.get('dev').nodeValue
+            target_bus = disk.getElementsByTagName('target')[0].attributes.get('dev').nodeValue
+            if not target_dev or target_dev == target_bus:
+                ret_dict[target_bus] = str(source_dev)
+        return ret_dict
+
+    def get_instance_console_path(self, instance_id):
+        if not isinstance(instance_id,types.StringTypes):
+            instance = instance_id.id
+        dev_dom = self.get_instance_device_xml_dom(instance_id=instance_id)
+        console_dom = dev_dom.getElementsByTagName('console')[0]
+        return console_dom.getElementsByTagName('source')[0].attributes.get('path').nodeValue
+
+
+    def get_instance_device_xml_dom(self, instance_id):
+        if not isinstance(instance_id,types.StringTypes):
+            instance = instance_id.id
+        dom = self.get_instance_xml_dom(instance_id)
+        return dom.getElementsByTagName('devices')[0]
+
+    def get_instance_block_disk_xml_dom_list(self, instance_id):
+        if not isinstance(instance_id,types.StringTypes):
+            instance = instance_id.id
+        dev_dom = self.get_instance_xml_dom(instance_id)
+        return dev_dom.getElementsByTagName('disk')
+
+    def get_instance_xml_dom(self, instance_id):
+        if not isinstance(instance_id,types.StringTypes):
+            instance = instance_id.id
+        output = self.get_instance_xml_text(instance_id)
+        dom_xml = parseString(output)
+        return dom_xml.getElementsByTagName('domain')[0]
+
+    def get_instance_xml_text(self, instance_id):
+        if not isinstance(instance_id,types.StringTypes):
+            instance = instance_id.id
+        return self.machine.sys('virsh dumpxml ' + str(instance_id),listformat=False, verbose=False, code=0)
+
 
     #def get_iscsi_connections(self,):
     #def get_exported_volumes(self,)
@@ -348,9 +531,10 @@ class EuserviceManager(object):
         self.eucaprefix = ". " + self.tester.credpath + "/eucarc && " + self.tester.eucapath
         if self.tester.clc is None:
             raise AttributeError("Tester object does not have CLC machine to use for SSH")
+        self.last_updated = None
         self.update()
 
-    
+    @eutester.Eutester.printinfo
     def get(self, type=None, partition=None, attempt_both=True, poll_interval=15, allow_clc_start_time=300):
         """
         Method attempts to 'get' euservices by parsing euca-describe-services on the CLC(s). The method
@@ -450,9 +634,10 @@ class EuserviceManager(object):
 
     def print_services_list(self, services=None):
         services = services or self.all_services
-        service1 = services.pop(0)
+        services_list = copy.copy(services)
+        service1 = services_list.pop(0)
         buf = service1.print_self()
-        for service in services:
+        for service in services_list:
             buf += service.print_self(header=False,)
         self.debug(buf)
 
@@ -469,6 +654,36 @@ class EuserviceManager(object):
             self.partitions[k].vbs = []
 
 
+    def compare_versions(self, version1, version2):
+        '''
+        :param version1:
+        :param version2:
+        :returns: 1 - if version1 is newer than version2
+        :returns: 0 - if versions are equal
+        :returns: -1 - if version1 is older than version2
+        '''
+        ver1 = str(version1).split('.')
+        ver2 = str(version2).split('.')
+        if not ver1 or not ver2:
+            raise Exception('Failed to parse versions from strings:' + str(version1) + ", " + str(version2))
+        while ver1:
+            if not len(ver2):
+                return 1
+            sub_ver1 = int(ver1.pop(0))
+            sub_ver2 = int(ver2.pop(0))
+            if sub_ver1 > sub_ver2:
+                return 1
+            if sub_ver1 < sub_ver2:
+                return -1
+        #version 1 has no additional sub release ids, and until this point ver1 == ver2...
+        while ver2:
+            if int(ver2.pop(0)) != 0:
+                #ver2 has a none '0' sub release id so it is > than ver1
+                return -1
+        #versions are equal
+        return 0
+
+
     def populate_nodes(self, enabled_clc=None):
         """
         Sort output of 'list nodes cmd' on clc, create/update eunode objects.
@@ -478,7 +693,97 @@ class EuserviceManager(object):
                             also be used to test nc lookup on disabled CLC by providing this component obj instead.
         :return: list of eunode objects
         """
-        #name = 0
+        return_list = []
+        #to avoid update() loop allow enabled_clc to be provided as arg
+        clc = enabled_clc or self.get_enabled_clc()
+        clc_version = clc.machine.get_eucalyptus_version()
+        if self.compare_versions(clc_version,'3.3') >= 0:
+            try:
+                return self.populate_nodes_3_3(enabled_clc)
+            except:
+                return self.populate_nodes_pre_3_3(enabled_clc)
+        else:
+            return self.populate_nodes_pre_3_3(enabled_clc)
+
+
+    def populate_nodes_3_3(self, enabled_clc=None):
+        """
+        Sort output of 'list nodes cmd' on clc, create/update eunode objects.
+        Returned list is used to update:'service_manager.node_list'
+
+        :param enabled_clc: To avoid an update() or update() loop the current enabled clc can be provided. This can
+                            also be used to test nc lookup on disabled CLC by providing this component obj instead.
+        :return: list of eunode objects
+
+        version >= 3.3.0 output (note state and instances on lines to follow node(s)
+        [type]  [partition]     [node hostname] [state]
+        NODE    PARTI00         192.168.51.15   ENABLED
+        NODE    PARTI00         192.168.51.13   ENABLED
+        [type]           [instances per line]
+        INSTANCE        i-A1BE4281
+        """
+        type_loc = 0
+        partition_loc = 1
+        hostname_loc = 2
+        state_loc = 3
+        instance_id_loc = 1
+        return_list = []
+        instance_list = []
+        last_node = None
+        #to avoid update() loop allow enabled_clc to be provided as arg
+        clc = enabled_clc or self.get_enabled_clc()
+        nodes_strings = clc.machine.sys(self.eucaprefix + \
+                                        "/usr/sbin/euca_conf --list-nodes 2>1 | grep 'NODE\|INSTANCE'")
+        for node_string in nodes_strings:
+            #handle/skip any blank lines first...
+            node_string = node_string.strip()
+            if not node_string:
+                continue
+            partition = None
+            #sort out the node string...
+            split_string = node_string.split()
+            if split_string[type_loc] == 'INSTANCE':
+                node.instance_ids.append(split_string[instance_id_loc])
+            elif(split_string[type_loc] == 'NODE'):
+                hostname = split_string[hostname_loc]
+                partition_name = split_string[partition_loc]
+                state = split_string[state_loc]
+                # grab the list of instances if any found in the string
+                #Try to match the part_name to the partition name it resides in
+                for part in self.get_all_partitions():
+                    if part.name == partition_name:
+                            partition = part
+                            break
+                if not partition:
+                    raise Exception('populate_nodes: Node:' + str(hostname) + ' Failed to find partition for name: '
+                                    + str(partition_name))
+                node = Eunode(self.tester,
+                              hostname,
+                              partition,
+                              state = state)
+                return_list.append(node)
+                if node in part.ncs:
+                    part.ncs[part.ncs.index(node)]=node
+                else:
+                    part.ncs.append(node)
+        self.node_list = return_list
+        return return_list
+
+
+    def populate_nodes_pre_3_3(self,enabled_clc=None):
+        """
+        Sort output of 'list nodes cmd' on clc, create/update eunode objects.
+        Returned list is used to update:'service_manager.node_list'
+
+        :param enabled_clc: To avoid an update() or update() loop the current enabled clc can be provided. This can
+                            also be used to test nc lookup on disabled CLC by providing this component obj instead.
+        :return: list of eunode objects
+
+        output for <= 3.2.2
+        [type]  [node hostname] [cc_name] [instances....]
+        NODE	192.168.51.72	CC_71	i-9A293E9B
+        """
+        type_loc = 0
         hostname_loc = 1
         cc_name_loc = 2
         instances_loc = 3
@@ -486,10 +791,11 @@ class EuserviceManager(object):
         #to avoid update() loop allow enabled_clc to be provided as arg
         clc = enabled_clc or self.get_enabled_clc()
         nodes_strings = clc.machine.sys(self.eucaprefix + \
-                                        "/usr/sbin/euca_conf --list-nodes 2>1 | grep -v warning | grep '^NODE'")
+                                        "/usr/sbin/euca_conf --list-nodes 2>/dev/null | grep '^NODE'")
 
         for node_string in nodes_strings:
             #handle/skip any blank lines first...
+            self.debug('Handling Node string:' + str(node_string))
             node_string = node_string.strip()
             if not node_string:
                 continue
@@ -502,7 +808,7 @@ class EuserviceManager(object):
             # grab the list of instances if any found in the string
             if len(split_string) > instances_loc:
                 instance_list = split_string[instances_loc:]
-            #Try to match the part_name to the partition name it resides in
+                #Try to match the part_name to the partition name it resides in
             for part in self.get_all_partitions():
                 for cc in part.ccs:
                     if cc.name == cc_name:
@@ -514,7 +820,8 @@ class EuserviceManager(object):
             node = Eunode(self.tester,
                           hostname,
                           partition,
-                          instance_ids = instance_list)
+                          instance_ids = instance_list,
+                          state = 'ENABLED')
             return_list.append(node)
             if node in part.ncs:
                 part.ncs[part.ncs.index(node)]=node
@@ -523,12 +830,14 @@ class EuserviceManager(object):
         self.node_list = return_list
         return return_list
 
+
     def update_node_list(self, enabled_clc=None):
         self.populate_nodes(enabled_clc=enabled_clc)
 
     def update_service_list(self):
         return self.get()
 
+    @eutester.Eutester.printinfo
     def get_all_services_by_filter(self,
                                    type=None,
                                    partition=None,
@@ -729,6 +1038,7 @@ class EuserviceManager(object):
             return_list.append(node)
         return return_list
 
+
     def get_all_partitions(self):
         return_list = []
         for key in self.partitions:
@@ -799,6 +1109,9 @@ class EuserviceManager(object):
 
     def update(self, name=None):
         ### Get all services
+        if self.last_updated:
+            if (time.time() - self.last_updated) < 1:
+                return
         self.reset()
         services = self.get(name)
         self.all_services = services
@@ -840,6 +1153,7 @@ class EuserviceManager(object):
         if enabled_clc:
             enabled_clc = enabled_clc[0]
             self.update_node_list(enabled_clc=enabled_clc)
+        self.last_updated=time.time()
     
     def isReachable(self, address):
         return self.tester.ping(address)
@@ -887,7 +1201,7 @@ class EuserviceManager(object):
     def disable(self,euservice):
         self.modify_service(euservice, "DISABLED")
         
-    def wait_for_service(self, euservice, state = "ENABLED", attempt_both = True, timeout=600):
+    def wait_for_service(self, euservice, state = "ENABLED", states=None,attempt_both = True, timeout=600):
         interval = 20
         poll_count = timeout / interval
         while (poll_count > 0):
@@ -895,8 +1209,13 @@ class EuserviceManager(object):
             try:
                 matching_services = self.get(euservice.type, euservice.partition, attempt_both)
                 for service in matching_services:
-                    if re.search(state, service.state):
-                        return service 
+                    if states:
+                        for state in states:
+                            if re.search(state, service.state):
+                                return service
+                    else:
+                        if re.search(state, service.state):
+                            return service
             except Exception, e:
                 self.tester.debug("Caught " + str(e) + " when trying to get services. Retrying in " + str(interval) + "s")
             poll_count -= 1
@@ -907,12 +1226,15 @@ class EuserviceManager(object):
             raise Exception("Service: " + euservice.name + " did not enter "  + state + " state")
         
     def all_services_operational(self):
+        self.debug('all_services_operational starting...')
         all_services_to_check = self.get_all_services()
+        self.print_services_list(all_services_to_check)
         while all_services_to_check:
             ha_counterpart = None
             service = all_services_to_check.pop()
+            self.debug('Checking for operational state of services type:' + str(service.type))
             for serv in all_services_to_check:
-                if serv.type == service.type and serv.partition == serv.partition:
+                if serv.type == service.type and serv.partition == service.partition:
                     ha_counterpart = serv
                     break
             if ha_counterpart:
@@ -921,7 +1243,35 @@ class EuserviceManager(object):
                 self.wait_for_service(service,"DISABLED")
             else:
                 self.wait_for_service(service,"ENABLED")
-    
+
+    def wait_for_all_services_operational(self, timeout=600):
+        '''
+        Attempts to wait for a core set of eutester monitored services on the cloud and/or specified in the
+        config file to transition to ENABLED. In the HA case will look for both an ENABLED and DISABLED service.
+        '''
+        start = time.time()
+        elapsed = 0
+        while elapsed < timeout:
+            self.debug("wait_for_all_services_operational, elapsed: " + str(elapsed) + "/" + str(timeout))
+            elapsed = int(time.time() - start)
+            try:
+                self.print_services_list()
+                self.all_services_operational()
+                self.debug('All services were detected as operational')
+                return
+            except Exception, e:
+                tb = self.tester.get_traceback()
+                elapsed = int(time.time() - start )
+                error = tb + "\n Error waiting for all services operational, elapsed: " + \
+                        str(elapsed) + "/" + str(timeout) + ", error:" + str(e)
+                if elapsed < timeout:
+                    self.debug(error)
+                else:
+                    raise(error)
+            time.sleep(15)
+
+
+
     def get_enabled_clc(self):
         clc = self.get_enabled(self.clcs)
         if clc is None:

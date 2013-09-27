@@ -54,27 +54,23 @@ public class TestEC2DescribeInstanceStatus {
 	public void EC2DescribeInstanceStatusTest() throws Exception {
         testInfo(this.getClass().getSimpleName());
         getCloudInfo();
-        final AmazonEC2 ec2 = getEc2Client(ACCESS_KEY, SECRET_KEY, EC2_ENDPOINT);
-        final String imageId = findImage(ec2);
-        final String namePrefix = eucaUUID() + "-";
-        logger.info("Using resource prefix for test: " + namePrefix);
 
 		// End discovery, start test
 		final List<Runnable> cleanupTasks = new ArrayList<Runnable>();
 		try {
 			// Create launch configuration
-			logger.info("Running instance");
+			print("Running instance");
 			final RunInstancesResult runResult = ec2
 					.runInstances(new RunInstancesRequest()
-							.withImageId(imageId).withMinCount(1)
+							.withImageId(IMAGE_ID).withMinCount(1)
 							.withMaxCount(1));
 			final String instanceId = getInstancesIds(
 					runResult.getReservation()).get(0);
-			logger.info("Launched instance: " + instanceId);
+			print("Launched instance: " + instanceId);
 			cleanupTasks.add(new Runnable() {
 				@Override
 				public void run() {
-					logger.info("Terminating instance: " + instanceId);
+					print("Terminating instance: " + instanceId);
 					ec2.terminateInstances(new TerminateInstancesRequest()
 							.withInstanceIds(instanceId));
 				}
@@ -124,7 +120,7 @@ public class TestEC2DescribeInstanceStatus {
 				final String filterGoodValue = values[1];
 				final String filterBadValue = values[2];
 
-				logger.info("Testing filter - " + filterName);
+				print("Testing filter - " + filterName);
 				assertThat(
 						describeInstanceStatus(ec2, instanceId, filterName,
 								filterGoodValue, 1), "Expected result for "
@@ -135,7 +131,7 @@ public class TestEC2DescribeInstanceStatus {
 								+ filterName + "=" + filterBadValue);
 			}
 
-			logger.info("Test complete");
+			print("Test complete");
 		} finally {
 			// Attempt to clean up anything we created
 			Collections.reverse(cleanupTasks);
@@ -184,7 +180,7 @@ public class TestEC2DescribeInstanceStatus {
 
 	private String waitForInstance(final AmazonEC2 ec2, final long timeout,
 			final String expectedId, final String state) throws Exception {
-		logger.info("Waiting for instance state " + state);
+		print("Waiting for instance state " + state);
 		String az = null;
 		final long startTime = System.currentTimeMillis();
 		boolean completed = false;
@@ -214,7 +210,7 @@ public class TestEC2DescribeInstanceStatus {
 		}
 		assertThat(completed,
 				"Instance not reported within the expected timeout");
-		logger.info("Instance reported " + state + " in "
+		print("Instance reported " + state + " in "
 				+ (System.currentTimeMillis() - startTime) + "ms");
 		return az;
 	}

@@ -24,10 +24,11 @@ from eucaops import ec2ops
 #from eutester.euvolume import EuVolume
 #from eutester.eusnapshot import EuSnapshot
 from eucaops import Eucaops
+import eutester
 import time
 import copy
 
-class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
+class Ebs_Persistance_Tests(EutesterTestCase):
     def __init__(self):
         #### Pre-conditions
         self.setuptestcase()
@@ -54,7 +55,7 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
         self.parser.add_argument('--timepergig',
                                  type=int,
                                  help='Time allowed per gig size of volume during volume creation, default:120',
-                                 default=120)
+                                 default=300)
         self.parser.add_argument('--deletetimeout',
                                  type=int,
                                  help='Time allowed for volume to transition from deleting to deleted, default:120',
@@ -72,16 +73,20 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
             self.zones = str(self.args.zone).split(',')
         else:
             self.zones = self.tester.get_zones()
+        if not self.zones:
+            raise Exception('No zones found for test?')
+
+        self.debug('Using zones for testing: ' + ",".join(self.zones))
         self.groupname = 'jenkins'
         self.group = self.tester.add_group(self.groupname)
         self.tester.authorize_group(self.group)
         self.tester.authorize_group(self.group, protocol='icmp',port='-1')
         try:
             keys = self.tester.get_all_current_local_keys()
-            if keys != []:
+            if keys:
                 self.keypair = keys[0]
             else:
-                self.keypair = keypair = self.tester.add_keypair('qa214volumechurn')
+                self.keypair = keypair = self.tester.add_keypair('qa214volumechurn'+str(time.time()))
         except Exception, ke:
             raise Exception("Failed to find/create a keypair, error:" + str(ke))
 
@@ -96,16 +101,18 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
 
         if self.args.testbfebs:
             if self.args.bfebsemi:
-                self.image = self.tester.get_emi(emi=str(self.args.emi))
+                self.bfebs_image = self.tester.get_emi(emi=str(self.args.emi))
                 if self.image.root_device_type != "ebs":
                     raise Exception(str(self.args.bfebsemi) + ": Does not have EBS root_device_type")
             else:
-                self.image = self.tester.get_emi(root_device_type="ebs",not_location='windows')
+                self.bfebs_image = self.tester.get_emi(root_device_type="ebs",not_location='windows')
             if not self.image:
                 raise Exception('"testbfebs" argument was set, but no BFEBS image found or provided')
         self.volumes = []
         self.instances = []
+        self.bfebs_instances = []
         self.snapshots = []
+        self.bfebs_volumes = []
         self.timepergig = self.args.timepergig
 
 
@@ -113,12 +120,7 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
 
     def cleanup(self, instances=True):
         '''
-        if instances:
-            try:
-                if self.reservation:
-                    self.tester.terminate_instances(self.reservation)
-            except Exception, e:
-                err = str(e)
+        Attempts to clean up test artifacts...
         '''
         try:
             self.tester.cleanup_artifacts()
@@ -148,7 +150,7 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
     def pretest2_pre_service_restart_create_volume_resources(self,
                                                      volsperinstance=2,
                                                      size=1,
-                                                     timepergig=120):
+                                                     timepergig=300):
         """
         Definition: Create volumes to be used in this test based upon volsperinstance and size args provided.
          This tests should be completed per zone prior to restarting services.
@@ -179,8 +181,6 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
         Definition: Attach all volumes created in this test to all instances created in this test.
         This tests should be completed per zone prior to restarting services.
         '''
-
-
         self.status("\'pre_service_restart_attach_all_volumes\' starting...",
                     testcolor=TestColor.get_canned_color('whiteonblue'))
 
@@ -194,12 +194,14 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
                             self.status("This is a temp work around for testing, this is to avoid bug euca-5297"+str(vse),
                                         testcolor=TestColor.get_canned_color('failred'))
                             time.sleep(10)
+                            self.debug('Monitoring volume post VolumeStateException...')
+                            vol.eutest_attached_status = None
                             self.tester.monitor_euvolumes_to_status([vol],status='in-use',attached_status='attached',timeout=60)
         self.status("\'pre_service_restart_attach_all_volumes\' done",
                         testcolor=TestColor.get_canned_color('whiteonblue'))
 
 
-    def pretest4_pre_service_restart_create_snap_per_zone(self,timepergig=120):
+    def pretest4_pre_service_restart_create_snap_per_zone(self,timepergig=300):
         """
         Definition: Create a single snapshot. This tests should be completed per zone prior to restarting services.
         :param timepergig: integer time allowed per GB in seconds during creation
@@ -212,17 +214,89 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
             for vol in self.volumes:
                 if vol.zone == zone:
                     snapvols.append(vol)
-                break
+                    break
         #Create a snapshot of each volume...
         wait_on_progress = len(snapvols)*25
         for vol in snapvols:
             snaps.extend(self.tester.create_snapshots(vol,
                                                       count=1,
                                                       wait_on_progress=wait_on_progress,
-                                                      monitor_to_completed=False))
+                                                      monitor_to_completed=False,))
         self.tester.monitor_eusnaps_to_completed(snaps, wait_on_progress=wait_on_progress)
         self.snapshots = snaps
 
+
+    def pretest5_pre_service_restart_launch_bfebs_test_instances(self):
+        """
+        For each zone, check if there are multiple nodes.
+        If so launch 2 bfebs instances per that zone (no need to do more for
+        this test). If there is only 1 node launch 1 instance. This should produce a multi-node and multi-cluster
+        test. This tests should be completed per zone prior to restarting services.
+        """
+        instances = []
+        for zone in self.zones:
+            count = 2 if len(self.tester.service_manager.get_all_node_controllers(part_name=str(zone))) > 1 else 1
+            instances.extend(self.tester.run_image(image=self.image,
+                                                   zone=zone,
+                                                   min=count,
+                                                   max=count,
+                                                   group=self.group,
+                                                   keypair=self.keypair,
+                                                   monitor_to_running=False))
+        self.bfebs_instances = self.tester.monitor_euinstances_to_running(instances)
+
+
+    def pretest6_pre_service_restart_create_bfebs_volume_resources(self,
+                                                                    volsperinstance=2,
+                                                                    size=1,
+                                                                    timepergig=300):
+        """
+        Definition: Create volumes to be used in this test based upon volsperinstance and size args provided.
+         This tests should be completed per zone prior to restarting services.
+
+        :param volsperinstance: integer how many concurrent volumes to create/delete per instance
+        :param size: integer size of volume(s) in GB
+        :param timepergig: integer time allowed per GB in seconds during creation
+        """
+        volumes = []
+        for zone in self.zones:
+            instancecount = 0
+            for instance in self.bfebs_instances:
+                if instance.placement == zone:
+                    instancecount += 1
+            volcount = instancecount*volsperinstance
+            volumes.extend(self.tester.create_volumes(zone,
+                                                      size=size,
+                                                      count=volcount,
+                                                      monitor_to_state=None,
+                                                      timepergig=timepergig))
+        self.bfebs_volumes = self.tester.monitor_created_euvolumes_to_state(volumes,timepergig=timepergig)
+        self.status('pretest6_pre_service_restart_create_bfebs_volume_resources, done',
+                    testcolor=TestColor.get_canned_color('whiteonblue'))
+
+    def pretest7_per_service_restart_attach_vols_to_bfebs_instances(self,volsperinstance=2):
+        '''
+        Definition: Attach all volumes created in this test for bfebs to all bfebs instances created in this test.
+        This tests should be completed per zone prior to restarting services.
+        '''
+        self.status("\' pretest7_per_service_restart_attach_vols_to_bfebs_instances\' starting...",
+                    testcolor=TestColor.get_canned_color('whiteonblue'))
+
+        for instance in self.bfebs_instances:
+            for x in xrange(0, volsperinstance):
+                for vol in self.bfebs_volumes:
+                    if vol.zone == instance.placement and vol.status == 'available':
+                        try:
+                            instance.attach_volume(vol,timeout=90)
+                        except ec2ops.VolumeStateException, vse:
+                            self.status("This is a temp work around for testing, this is to avoid bug euca-5297"+str(vse),
+                                        testcolor=TestColor.get_canned_color('failred'))
+                            time.sleep(10)
+                            self.debug('Monitoring volume post VolumeStateException...')
+                            vol.eutest_attached_status = None
+                            self.tester.monitor_euvolumes_to_status([vol],status='in-use',attached_status='attached',timeout=60)
+        self.status("\' pretest7_per_service_restart_attach_vols_to_bfebs_instances\' done",
+                    testcolor=TestColor.get_canned_color('whiteonblue'))
 
     def print_all_test_resources(self):
         self.status('Printing test resources prior to service interruption...',
@@ -240,19 +314,24 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
         debug_str = ""
         #first make sure everything is good before we star the test...
         self.tester.service_manager.all_services_operational()
-
+        storage_controllers = []
+        self.zones = self.zones or self.tester.get_zones()
         for zone in self.zones:
-            storage_controllers = self.tester.service_manager.get_all_storage_controllers()
-            self.tester.service_manager.print_services_list(storage_controllers)
-            for sc in storage_controllers:
-                debug_str = ""
-                all_services_on_sc = self.tester.service_manager.get_all_services_by_filter(hostname=sc.hostname)
-                for service in all_services_on_sc:
-                    debug_str += "(" + str(service.hostname) + ":" + service.type + "), "
-                self.status("Now rebooting machine hosting services:"+str(debug_str),
-                            testcolor=TestColor.get_canned_color('whiteonblue'))
-                sc.machine.reboot()
-
+            self.debug('Getting storage controllers for :' + str(zone))
+            storage_controllers.extend(self.tester.service_manager.get_all_storage_controllers(partition=zone))
+        self.tester.service_manager.print_services_list(storage_controllers)
+        if not storage_controllers:
+            raise Exception('Storage controller list was not populated for zones:' + ",".join(self.zones))
+        for sc in storage_controllers:
+            debug_str = ""
+            all_services_on_sc = self.tester.service_manager.get_all_services_by_filter(hostname=sc.hostname)
+            for service in all_services_on_sc:
+                debug_str += "(" + str(service.hostname) + ":" + service.type + "), "
+            self.status("Now rebooting machine hosting services:"+str(debug_str),
+                        testcolor=TestColor.get_canned_color('whiteonblue'))
+            sc.machine.reboot()
+        if not storage_controllers:
+            raise Exception('Storage controller list post reboot was not populated for zones:' + ",".join(self.zones))
         start = time.time()
         elapsed = 0
         waiting = copy.copy(storage_controllers)
@@ -274,7 +353,8 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
                 break
         if waiting:
             raise("SC machines were not reachable after: "+str(elapsed)+" seconds:"+str(debug_str))
-
+        if not storage_controllers:
+            raise Exception('Storage controller list was not populated after waiting for reachable')
         start = time.time()
         elapsed = 0
         waiting_for_ssh = copy.copy(storage_controllers)
@@ -302,21 +382,29 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
                 break
         if waiting_for_ssh:
             raise("SC machines failed to establish SSH after: "+str(elapsed)+" seconds:"+str(debug_str))
+        if not storage_controllers:
+            raise Exception('Storage controller list was not populated after waiting for ssh')
         self.start_all_services_on_storage_controllers(storage_controllers)
 
     def start_tgtd_service(self,sc_list):
         for sc in sc_list:
             sc.machine.sys('service tgtd start', code=0)
 
+    @eutester.Eutester.printinfo
     def start_all_services_on_storage_controllers(self, sc_list):
-        self.status("Waiting for storage controller's services to start...")
+        self.status("Waiting for storage controller's services to start...",
+                    testcolor=TestColor.get_canned_color('whiteonblue'))
+        all_services_on_sc = []
+        if not sc_list:
+            raise Exception("sc_list was empty in: start_all_services_on_storage_controllers")
         #wait = 10 * 60
         for sc in sc_list:
-            all_services_on_sc = self.tester.service_manager.get_all_services_by_filter(hostname=sc.hostname)
-            for service in all_services_on_sc:
-                service.start()
-                #uptime = int(tester.clc.sys('cat /proc/uptime')[0].split()[0])
+            self.debug('Getting all services co-existing on sc: ' + str(sc.hostname))
+            all_services_on_sc.extend(self.tester.service_manager.get_all_services_by_filter(hostname=sc.hostname))
 
+        for service in all_services_on_sc:
+            service.start()
+        self.debug('Issued start to all services, now wait for: all_services_operational')
         self.tester.service_manager.all_services_operational()
         try:
             for service in all_services_on_sc:
@@ -329,16 +417,20 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
         self.tester.service_manager.print_services_list(all_services_on_sc)
 
 
-    def test1_post_service_interruption_check_attached_volumes(self):
+    def test1_post_service_interruption_check_attached_volumes(self, check_vols=None, check_instances=None):
+        """
+        Definition: Attempts to verify that volumes maintained their attached state through the SC reboot.
+        """
+        check_vols = check_vols or self.volumes
+        check_instances = check_instances or self.instances
         write_length = 10000
         errmsg = ""
-        self.status("Checking volumes for attached state post service interruption...",
-                    testcolor=TestColor.get_canned_color('whiteonblue'))
-        self.tester.print_euvolume_list(self.volumes)
-        for vol in self.volumes:
+        self.tester.print_euvolume_list(check_vols)
+
+        for vol in check_vols:
             vol.update()
             if vol.status == "in-use" and (vol.attach_data and vol.attach_data.status == 'attached' ):
-                for instance in self.instances:
+                for instance in check_instances:
                     if instance.id == vol.attach_data.instance_id:
                         if not vol in instance.attached_vols:
                             errmsg += "Volume:" + str(vol.id) \
@@ -353,9 +445,20 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
 
         self.status("Attached state passed. Now checking read/write with attached volumes...",
                     testcolor=TestColor.get_canned_color('whiteonblue'))
-        for instance in self.instances:
+        for instance in check_instances:
             instance.update()
             instance.reset_ssh_connection()
+            try:
+                bad_vols = instance.get_unsynced_volumes()
+                if bad_vols:
+                    errmsg = str(instance.id) + "Unsynced vols found:"
+                    for bad_vol in bad_vols:
+                        errmsg = errmsg + str(bad_vol.id) + ":" + str(bad_vol.status) + ","
+                    errmsg = errmsg + "\n"
+            except Exception, ve:
+                errmsg = errmsg + "\n" + str(ve)
+            if errmsg:
+                raise Exception(errmsg)
             for vol in instance.attached_vols:
                 try:
                     md5before = vol.md5
@@ -388,6 +491,10 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
 
 
     def test2_post_service_interuption_check_volume_from_snapshots(self):
+
+        """
+        Definition: Attempts to check volume creation from snapshots created before SC restart.
+        """
         self.status("Checking creation of volumes from pre-existing snapshots post service interruption...",
                     testcolor=TestColor.get_canned_color('whiteonblue'))
         vols = []
@@ -396,7 +503,8 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
         for snap in self.snapshots:
             for zone in self.zones:
                 vols.extend(self.tester.create_volumes(zone, snapshot=snap, monitor_to_state=None))
-        self.volumes.extend(self.tester.monitor_created_euvolumes_to_state(vols, state='available'))
+        #Now monitor created volumes to state available, use a large timeout per gig here.
+        self.volumes.extend(self.tester.monitor_created_euvolumes_to_state(vols, state='available', timepergig=360))
         self.status("Done creating volumes from pre-existing snapshots post service interruption.",
                     testcolor=TestColor.get_canned_color('whiteonblue'))
 
@@ -405,17 +513,26 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
         vols = []
         errmsg = ""
         for snap in self.snapshots:
-            vols.extend(self.tester.get_volumes(snapid=snap.id))
+            vols.extend(self.tester.get_volumes(status='available', snapid=snap.id))
+
         if not vols:
             raise Exception("No vols were found as created from previous snapshots")
         if not self.instances:
             raise Exception('No instances to use for this test')
         if not self.snapshots:
             raise Exception('No snapshots to use for this test')
-        self.tester.print_euvolume_list(vols)
+        for vol in vols:
+            vol.update()
+        availvols = copy.copy(vols)
+        self.status('Attempting to attach the following volumes:',testcolor=TestColor.get_canned_color('whiteonblue'))
+        self.tester.print_euvolume_list(availvols)
+        #Iterate through the volumes, and attach them all to at least one instance in each zone.
         for instance in self.instances:
-            for vol in vols:
+            if not availvols:
+                break
+            for vol in availvols:
                 if vol.zone == instance.placement:
+                    availvols.remove(vol)
                     try:
                         try:
                             instance.attach_volume(vol, timeout=90)
@@ -437,7 +554,9 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
                                               + " --vs volmd5:-- " + str(vol.md5)
                     except Exception, e:
                         errmsg += str(instance.id) +"Volume:" + str(vol.id) \
-                                  + " error when attaching and comparing md5, err:" + str(e)
+                              + " error when attaching and comparing md5, err:" + str(e)
+        self.status('Volume status post attachment operation:',testcolor=TestColor.get_canned_color('whiteonblue'))
+        self.tester.print_euvolume_list(vols)
         if errmsg:
             raise Exception(errmsg)
 
@@ -445,6 +564,8 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
 
 
     def test4_post_service_interuption_check_snapshot_creation(self):
+        self.status('Attempting to verify snapshot creation post reboot',\
+                    testcolor=TestColor.get_canned_color('whiteonblue'))
         testvols = []
         testsnaps = []
         for zone in self.zones:
@@ -458,15 +579,29 @@ class Ebs_Multi_Node_Multi_Cluster_Persistance_Tests(EutesterTestCase):
         self.tester.monitor_eusnaps_to_completed(testsnaps,wait_on_progress=wait_on_progress)
         self.snapshots.extend(testsnaps)
 
-
+    def test5_post_service_interruption_check_bfebs_instances(self):
+        """
+        Definition: Attempts to check the state of bfebs instances launched in this test prior
+        to restarting the SC.
+        """
+        for instance in self.bfebs_instances:
+            last_state = instance.state
+            instance.update()
+            if instance.state != last_state:
+                raise Exception('Instance state before SC restart: '
+                                + str(last_state) + " != post restart:"
+                                + str(instance.state))
+            self.test1_post_service_interruption_check_attached_volumes(check_vols=self.bfebs_volumes,
+                                                                        check_instances=self.bfebs_instances)
 
 
 if __name__ == "__main__":
-    testcase = Ebs_Multi_Node_Multi_Cluster_Persistance_Tests()
+    testcase = Ebs_Persistance_Tests()
 
     ### Use the list of tests passed from config/command line to determine what subset of tests to run
     ### or use a predefined list
-    list = testcase.args.tests or [ 'pretest1_pre_service_restart_launch_test_instances',
+
+    instance_store_only_tests = [ 'pretest1_pre_service_restart_launch_test_instances',
                                     'pretest2_pre_service_restart_create_volume_resources',
                                     'pretest3_pre_service_restart_attach_all_volumes',
                                     'pretest4_pre_service_restart_create_snap_per_zone',
@@ -474,8 +609,28 @@ if __name__ == "__main__":
                                     'test1_post_service_interruption_check_attached_volumes',
                                     'test2_post_service_interuption_check_volume_from_snapshots',
                                     'test3_post_service_interuption_check_volume_attachment_of_new_vols_from_old_snaps',
-                                    'test4_post_service_interuption_check_snapshot_creation'
-                                    ]
+                                    'test4_post_service_interuption_check_snapshot_creation']
+    bfebs_test_list = [ 'pretest1_pre_service_restart_launch_test_instances',
+                        'pretest2_pre_service_restart_create_volume_resources',
+                        'pretest3_pre_service_restart_attach_all_volumes',
+                        'pretest4_pre_service_restart_create_snap_per_zone',
+                        'pretest5_pre_service_restart_launch_bfebs_test_instances',
+                        'pretest6_pre_service_restart_create_bfebs_volume_resources',
+                        'pretest7_per_service_restart_attach_vols_to_bfebs_instances',
+                        'reboot_sc_machine_verify_post_reboot',
+                        'test1_post_service_interruption_check_attached_volumes',
+                        'test2_post_service_interuption_check_volume_from_snapshots',
+                        'test3_post_service_interuption_check_volume_attachment_of_new_vols_from_old_snaps',
+                        'test4_post_service_interuption_check_snapshot_creation',
+                        'test5_post_service_interruption_check_bfebs_instances']
+
+    list = testcase.args.tests
+    if not list:
+        if testcase.args.testbfebs:
+            list = bfebs_test_list
+        else:
+            list = instance_store_only_tests
+
 
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]

@@ -34,10 +34,12 @@ import threading
 import time
 import eulogger
 from eutester import Eutester
+from eutester.euconfig import EuConfig
 import sshconnection
 import re
 import os
 import sys
+import tempfile
 from repoutils import RepoUtils
 
 class DistroName:
@@ -129,6 +131,9 @@ class Machine:
                                                     debugmethod=self.debugmethod,
                                                     verbose=True)
             self.sftp = self.ssh.connection.open_sftp()
+        # If we were given a conf file, and have an ssh/sftp session, attempt to populate eucalyptus_conf into
+        # a euconfig object for this machine...
+        self.get_eucalyptus_conf()
             
     def convert_to_distro(self, distro_name, distro_release):
         distro_name = distro_name.lower()
@@ -140,7 +145,15 @@ class Machine:
                 return distro
         raise Exception("Unable to find distro " + str(distro_name) + " and version "
                         + str(distro_release) + " for hostname " + str(self.hostname))
-    
+
+    def put_templated_file(self, local_src, remote_dest, **kwargs):
+        tmp = tempfile.mktemp()
+        try:
+            Eutester.render_file_template(local_src, tmp, **kwargs)
+            self.ssh.sftp_put(tmp, remote_dest)
+        finally:
+            os.remove(tmp)
+
     def refresh_ssh(self):
         self.ssh.refresh_connection()
         
@@ -169,7 +182,7 @@ class Machine:
     
     def interrupt_network(self, time = 120, interface = "eth0"):
         try:
-            self.sys("ifdown " + interface + " && sleep " + str(time) + " && ifup eth0",  timeout=3)
+            self.sys("ifdown " + interface + " && sleep " + str(time) + " && ifup " + interface,  timeout=3)
         except Exception,e:
             pass
 
@@ -277,6 +290,9 @@ class Machine:
         """
         return self.get_eucalyptus_service_pid('eucalyptus-cc.pid')
 
+    def get_uptime(self):
+        return int(self.sys('cat /proc/uptime', code=0)[0].split()[1].split('.')[0])
+
     def get_eucalyptus_cloud_process_uptime(self):
         """
         Attempts to look up the elapsed running time of the PID associated with the eucalyptus-cloud process/service.
@@ -335,7 +351,8 @@ class Machine:
         except sshconnection.CommandExitCodeException:
             return False
         except Exception, e:
-            self.debug('Could not get service state from node:' + str(self.hostname) + ", err:"+str(e))
+            self.debug('Could not get "'+ str(service) + '" service state from machine:'
+                       + str(self.hostname) + ", err:"+str(e))
 
     def get_elapsed_seconds_since_pid_started(self, pid):
         """
@@ -347,7 +364,10 @@ class Machine:
         seconds_min = 60
         seconds_hour = 3600
         seconds_day = 86400
+        elapsed = 0
         try:
+            if not pid:
+                raise Exception('Empty pid passed to get_elapsed_seconds_since_pid_started')
             cmd = "ps -eo pid,etime | grep " + str(pid) + " | awk '{print $2}'"
             self.debug('starting get pid uptime"' + str(cmd) + '"...')
             #expected format: days-HH:MM:SS
@@ -373,6 +393,30 @@ class Machine:
         except:
             print Eutester.get_traceback()
         return int(elapsed)
+
+    def get_eucalyptus_version(self,versionpath="/etc/eucalyptus/eucalyptus-version"):
+        """
+
+        :param versionpath: path to version file
+        :return: eucalyptus version string
+        """
+        try:
+            return self.sys('cat ' + versionpath, code=0)[0]
+        except Exception, e:
+            return self.sys('cat /opt/eucalyptus' + versionpath, code=0)[0]
+
+
+
+    def is_file_present(self, filepath):
+        try:
+            self.get_file_stat(filepath)
+        except IOError, io:
+            #IOError: [Errno 2] No such file
+            if io.errno == 2:
+                return False
+            else:
+                raise io
+        return True
 
 
     def get_file_stat(self,path):
@@ -603,8 +647,39 @@ class Machine:
         """Save log buffers to a file"""
         for log_file in self.log_buffers.keys():
             self.save_log(log_file,path)
-    
-    
+
+    def get_eucalyptus_conf(self,eof=False,verbose=False):
+        out = None
+        config = None
+        use_path = None
+        paths = [ "/" , "/opt/eucalyptus" ]
+        for path in paths:
+            try:
+                self.sys('ls '+ str(path) + '/etc/eucalyptus/eucalyptus.conf', code=0, verbose=verbose)
+                use_path = path + '/etc/eucalyptus/eucalyptus.conf'
+                break
+            except:
+                pass
+        if not use_path:
+            out = 'eucalyptus.conf not found on this system'
+            if eof:
+                raise Exception(eof)
+            else:
+                self.debug(out)
+        else:
+            try:
+                config = EuConfig(filename=use_path, ssh=self.ssh, default_section_name='eucalyptus_conf')
+                self.config = config
+                if hasattr(config, 'eucalyptus_conf'):
+                    self.eucalyptus_conf = config.eucalyptus_conf
+            except Exception, e:
+                out = 'Error while trying to create euconfig from eucalyptus_conf:' + str(e)
+                if eof:
+                    raise Exception(out)
+                else:
+                    self.debug(out)
+        return config
+
             
         
     

@@ -34,27 +34,21 @@
 
 package com.eucalyptus.tests.awssdk;
 
-import static com.eucalyptus.tests.awssdk.Eutester4j.*;
-
-import org.testng.annotations.AfterClass;
-import org.testng.annotations.Test;
-import org.testng.annotations.BeforeClass;
+import com.amazonaws.auth.AWSCredentials;
+import com.amazonaws.auth.BasicAWSCredentials;
+import com.amazonaws.services.autoscaling.model.LaunchConfiguration;
+import com.amazonaws.services.ec2.AmazonEC2;
+import com.amazonaws.services.ec2.AmazonEC2Client;
+import com.amazonaws.services.ec2.model.*;
 import org.testng.AssertJUnit;
+import org.testng.annotations.AfterClass;
+import org.testng.annotations.BeforeClass;
+import org.testng.annotations.Test;
 
 import java.util.ArrayList;
 import java.util.List;
 
-import com.amazonaws.auth.AWSCredentials;
-import com.amazonaws.auth.BasicAWSCredentials;
-import com.amazonaws.services.autoscaling.AmazonAutoScaling;
-import com.amazonaws.services.ec2.AmazonEC2;
-import com.amazonaws.services.ec2.AmazonEC2Client;
-import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesResult;
-import com.amazonaws.services.ec2.model.DescribeInstanceStatusRequest;
-import com.amazonaws.services.ec2.model.DescribeInstanceStatusResult;
-import com.amazonaws.services.ec2.model.InstanceStatus;
-import com.amazonaws.services.ec2.model.SecurityGroup;
-import com.amazonaws.services.autoscaling.model.LaunchConfiguration;
+import static com.eucalyptus.tests.awssdk.Eutester4j.*;
 
 /**
  * At this time eucarc path needs to be hard coded. 
@@ -63,15 +57,12 @@ import com.amazonaws.services.autoscaling.model.LaunchConfiguration;
  * test ie. "//euca" lines and uncomment the one you do ie. the "//AWS" lines
  */
 public class Eutester4jTest {
-	
-	private static AmazonEC2 ec2;
-	private static AmazonAutoScaling as;
-	private static String emi;
+
 	private static String secGroupName = "TestGroup-" + eucaUUID();
 	private static String secGroupDesc = "TestDesc-" + eucaUUID();
 	private static String keyName = "TestKey-" + eucaUUID();
 	private static ArrayList<String> securityGroups = new ArrayList<String>();
-	
+
 //	private static String emi = "emi-8A1144D2"; //euca an emi you have access to
 
 	/**
@@ -82,16 +73,13 @@ public class Eutester4jTest {
 	@BeforeClass
 	public void setUpBeforeClass() throws Exception {
         testInfo(this.getClass().getSimpleName());
-		getCloudInfo();
-		as = getAutoScalingClient(ACCESS_KEY, SECRET_KEY, AS_ENDPOINT);
-		ec2 = getEc2Client(ACCESS_KEY, SECRET_KEY, EC2_ENDPOINT);
-		emi = findImage(ec2);
+        getCloudInfo();
 		
 //		ec2Endpoint = "http://ec2.us-west-1.amazonaws.com"; //AWS
 //		asEndpoint = "http://autoscaling.us-west-1.amazonaws.com"; //AWS
 
-		createSecurityGoup(ec2, secGroupName, secGroupDesc);
-		createKeyPair(ec2, keyName);
+		createSecurityGoup(secGroupName, secGroupDesc);
+		createKeyPair(keyName);
 		securityGroups.add(secGroupName);
 	}
 
@@ -103,8 +91,8 @@ public class Eutester4jTest {
 	@AfterClass
 	public void tearDownAfterClass() throws Exception {
 //		sleep(60); // give the system a chance to complete test actions
-		deleteKeyPair(ec2, keyName);
-		deleteSecurityGroup(ec2, secGroupName);
+		deleteKeyPair(keyName);
+		deleteSecurityGroup(secGroupName);
 		ec2 = null;
 		as=null;
 	}
@@ -121,7 +109,7 @@ public class Eutester4jTest {
 		try {
 			ec2Conn.describeAvailabilityZones();
 		} catch (Exception e) {
-			logger.info("Got Expected Failure: " +e.getMessage());
+			print("Got Expected Failure: " + e.getMessage());
 			AssertJUnit.assertTrue(e.getMessage().length() > 0);
 		} 
 	}
@@ -138,7 +126,7 @@ public class Eutester4jTest {
 		try {
 			ec2Conn.describeAvailabilityZones();
 		} catch (Exception e) {
-			logger.info("Got Expected Faiilure: " +e.getMessage());
+			print("Got Expected Faiilure: " + e.getMessage());
 			AssertJUnit.assertTrue(e.getMessage().length() > 0);
 		} 
 	}
@@ -161,17 +149,17 @@ public class Eutester4jTest {
 		String name = eucaUUID();
 		String desc = eucaUUID();
 		
-		List<SecurityGroup> secGroups = describeSecurityGroups(ec2);
+		List<SecurityGroup> secGroups = describeSecurityGroups();
 		int initialSize = secGroups.size();
 	
 		try {
-			createSecurityGoup(ec2, name, desc);
-			secGroups = describeSecurityGroups(ec2);
+			createSecurityGoup(name, desc);
+			secGroups = describeSecurityGroups();
 			AssertJUnit.assertTrue(secGroups.size() > initialSize);
 		} catch (Exception e) {
 			e.printStackTrace();
 		} finally {
-			deleteSecurityGroup(ec2, name);
+			deleteSecurityGroup(name);
 		}
 	}
 	
@@ -184,13 +172,13 @@ public class Eutester4jTest {
 		String desc = eucaUUID();
 	
 		try {
-			createSecurityGoup(ec2, name, desc);
+			createSecurityGoup(name, desc);
 			
-			List<SecurityGroup> secGroups = describeSecurityGroups(ec2);
+			List<SecurityGroup> secGroups = describeSecurityGroups();
 			int initialSize = secGroups.size();
 			
-			deleteSecurityGroup(ec2, name);
-			secGroups = describeSecurityGroups(ec2);
+			deleteSecurityGroup(name);
+			secGroups = describeSecurityGroups();
 			AssertJUnit.assertTrue(secGroups.size() < initialSize);
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -202,16 +190,16 @@ public class Eutester4jTest {
 	 */
 	@Test(enabled=false)
 	public void testRunInstances(){
-		int initalInstanceCount = getInstancesList(ec2).size();
-		runInstances(ec2, emi, keyName, INSTANCE_TYPE, securityGroups, 1, 1);
-		AssertJUnit.assertTrue(getInstancesList(ec2).size() > initalInstanceCount);
+		int initalInstanceCount = getInstancesList().size();
+		runInstances(IMAGE_ID, keyName, INSTANCE_TYPE, securityGroups, 1, 1);
+		AssertJUnit.assertTrue(getInstancesList().size() > initalInstanceCount);
 		
 		// terminate after the test
 		List<String> instanceIds = new ArrayList<String>();
-		instanceIds.add(getLastlaunchedInstance(ec2).get(0).getInstanceId());
-		logger.info("Going to terminate " + getLastlaunchedInstance(ec2).get(0).getInstanceId());
-		terminateInstances(ec2, instanceIds);
-		logger.info("Terminate requested");
+		instanceIds.add(getLastlaunchedInstance().get(0).getInstanceId());
+		print("Going to terminate " + getLastlaunchedInstance().get(0).getInstanceId());
+		terminateInstances(instanceIds);
+		print("Terminate requested");
 
 	}
 	
@@ -223,11 +211,11 @@ public class Eutester4jTest {
 	 */
 	@Test(enabled=false)
 	public void testStopInstances(){
-		runInstances(ec2, emi, keyName, INSTANCE_TYPE, securityGroups, 1, 1);
+		runInstances(IMAGE_ID, keyName, INSTANCE_TYPE, securityGroups, 1, 1);
 		List<String> instanceIds = new ArrayList<String>();
-		instanceIds.add(getLastlaunchedInstance(ec2).get(0).getInstanceId());
+		instanceIds.add(getLastlaunchedInstance().get(0).getInstanceId());
 		
-		String instance = getLastlaunchedInstance(ec2).get(0).getInstanceId();
+		String instance = getLastlaunchedInstance().get(0).getInstanceId();
 		
 		final DescribeInstanceStatusResult instanceStatusResult = ec2
 				.describeInstanceStatus(new DescribeInstanceStatusRequest()
@@ -235,13 +223,13 @@ public class Eutester4jTest {
 		
 		final InstanceStatus status = instanceStatusResult
 				.getInstanceStatuses().get(0);
-		logger.info("Status: " + status.getInstanceState().toString());
-		while(!getLastlaunchedInstance(ec2).get(0).getState().getName().equals("running")){}
-		stopInstances(ec2, instanceIds);
-		while(!getLastlaunchedInstance(ec2).get(0).getState().getName().equals("stopped")){}
-		AssertJUnit.assertTrue(getLastlaunchedInstance(ec2).get(0).getState().getName().equals("stopped"));
+		print("Status: " + status.getInstanceState().toString());
+		while(!getLastlaunchedInstance().get(0).getState().getName().equals("running")){}
+		stopInstances(instanceIds);
+		while(!getLastlaunchedInstance().get(0).getState().getName().equals("stopped")){}
+		AssertJUnit.assertTrue(getLastlaunchedInstance().get(0).getState().getName().equals("stopped"));
 		// after test terminate the instance
-		terminateInstances(ec2, instanceIds);
+		terminateInstances(instanceIds);
 	}
 	
 	/**
@@ -252,16 +240,16 @@ public class Eutester4jTest {
 	 */
 	@Test(enabled=false)
 	public void testTerminateInstances(){
-		runInstances(ec2, emi, keyName, INSTANCE_TYPE, securityGroups, 1, 1);
+		runInstances(IMAGE_ID, keyName, INSTANCE_TYPE, securityGroups, 1, 1);
 		List<String> instanceIds = new ArrayList<String>();
-		instanceIds.add(getLastlaunchedInstance(ec2).get(0).getInstanceId());
-		logger.info("Created instance = " + getLastlaunchedInstance(ec2).get(0).getInstanceId());
-		logger.info("State: " + getLastlaunchedInstance(ec2).get(0).getState());
-		logger.info("State before terminate = " + getLastlaunchedInstance(ec2).get(0).getState().getName());
-		terminateInstances(ec2, instanceIds);
-		logger.info("State after terminate = " + getLastlaunchedInstance(ec2).get(0).getState().getName());
-		while(!getLastlaunchedInstance(ec2).get(0).getState().getName().equals("terminated")){}
-		AssertJUnit.assertTrue(getLastlaunchedInstance(ec2).get(0).getState().getName().equals("terminated"));
+		instanceIds.add(getLastlaunchedInstance().get(0).getInstanceId());
+		print("Created instance = " + getLastlaunchedInstance().get(0).getInstanceId());
+		print("State: " + getLastlaunchedInstance().get(0).getState());
+		print("State before terminate = " + getLastlaunchedInstance().get(0).getState().getName());
+		terminateInstances(instanceIds);
+		print("State after terminate = " + getLastlaunchedInstance().get(0).getState().getName());
+		while(!getLastlaunchedInstance().get(0).getState().getName().equals("terminated")){}
+		AssertJUnit.assertTrue(getLastlaunchedInstance().get(0).getState().getName().equals("terminated"));
 	}
 	
 	/**
@@ -270,10 +258,10 @@ public class Eutester4jTest {
 	@Test(enabled=true)
 	public void testCreateKeyPair() {
 		String keyName = "test key";
-		int initialKeyPairCount = getKeyPairCount(ec2);
-		createKeyPair(ec2, keyName);
-		AssertJUnit.assertTrue(getKeyPairCount(ec2) > initialKeyPairCount);
-		deleteKeyPair(ec2, keyName);
+		int initialKeyPairCount = getKeyPairCount();
+		createKeyPair(keyName);
+		AssertJUnit.assertTrue(getKeyPairCount() > initialKeyPairCount);
+		deleteKeyPair(keyName);
 	}
 	
 	/**
@@ -281,16 +269,13 @@ public class Eutester4jTest {
 	 */
 	@Test(enabled=true)
 	public void testBasicLaunchConfig(){
-		String launchConfigurationName = "LC-" + eucaUUID();
+        String launchConfig = "LC-" + eucaUUID();
 		try {
-			createLaunchConfig(as, launchConfigurationName, emi, INSTANCE_TYPE, keyName, securityGroups);
-			
-			List<LaunchConfiguration> launchConfigs = describeLaunchConfigs(as);
-			
+            createLaunchConfig(launchConfig,IMAGE_ID,INSTANCE_TYPE,null,null,null,null,null,null,null,null);
+			List<LaunchConfiguration> launchConfigs = describeLaunchConfigs();
 			int initialSize = launchConfigs.size();
-			deleteLaunchConfig(as, "LC-3fd0d59cd39bf7fc");
-			deleteLaunchConfig(as, launchConfigurationName);
-			launchConfigs = describeLaunchConfigs(as);
+			deleteLaunchConfig(launchConfig);
+			launchConfigs = describeLaunchConfigs();
 			AssertJUnit.assertTrue(launchConfigs.size() < initialSize);
 		} catch (Exception e) {
 			e.printStackTrace();

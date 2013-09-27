@@ -34,6 +34,7 @@ from boto.ec2.image import Image
 from boto.ec2.volume import Volume
 from cwops import CWops
 from asops import ASops
+from eucaops.elbops import ELBops
 from iamops import IAMops
 from ec2ops import EC2ops
 from s3ops import S3ops
@@ -41,16 +42,21 @@ from stsops import STSops
 import time
 from eutester.euservice import EuserviceManager
 from boto.ec2.instance import Reservation
+from boto.exception import EC2ResponseError
 from eutester.euconfig import EuConfig
+from eutester.euproperties import Euproperty_Manager
 from eutester.machine import Machine
 from eutester.euvolume import EuVolume
 from eutester import eulogger
 import re
 import os
 
-class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops):
+class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
     
-    def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,  account="eucalyptus", user="admin", username=None, APIVersion='2011-01-01', region=None, ec2_ip=None, s3_ip=None, as_ip=None, download_creds=True,boto_debug=0):
+    def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None,
+                 aws_secret_access_key = None,  account="eucalyptus", user="admin", username=None, APIVersion='2011-01-01',
+                 region=None, ec2_ip=None, s3_ip=None, as_ip=None, elb_ip=None, download_creds=True,boto_debug=0,
+                 debug_method=None):
         self.config_file = config_file 
         self.APIVersion = APIVersion
         self.eucapath = "/opt/eucalyptus"
@@ -69,13 +75,14 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops):
         self.credpath = credpath
         self.download_creds = download_creds
         self.logger = eulogger.Eulogger(identifier="EUCAOPS")
-        self.debug = self.logger.log.debug
+        self.debug = debug_method or self.logger.log.debug
         self.critical = self.logger.log.critical
         self.info = self.logger.log.info
         self.username = username
         self.account_id = None
         self.aws_access_key_id = aws_access_key_id
-        self.aws_secret_access_key = aws_secret_access_key 
+        self.aws_secret_access_key = aws_secret_access_key
+
 
         if self.config_file is not None:
             ## read in the config file
@@ -107,10 +114,11 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops):
                         self.credpath = self.get_credentials(account,user)
                         self.debug("Successfully downloaded and synced credentials")
                     except Exception, e:
+                        tb = self.get_traceback()
                         self.debug("Caught an exception when getting credentials from first CLC: " + str(e))
                         ### If i only have one clc this is a critical failure, else try on the other clc
                         if len(clc_array) < 2:
-                            raise Exception("Could not get credentials from first CLC and no other to try")
+                            raise Exception(str(tb) + "\nCould not get credentials from first CLC and no other to try")
                         self.swap_clc()
                         self.sftp = self.clc.ssh.connection.open_sftp()
                         self.get_credentials(account,user)
@@ -137,7 +145,8 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops):
                 self.setup_cw_connection( endpoint=ec2_ip, path="/services/CloudWatch", port=8773, is_secure=False, region=region, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
                 self.setup_cw_resource_trackers()
             except Exception, e:
-                raise Exception("Unable to create EC2 connection because of: " + str(e) )
+                tb = self.get_traceback()
+                raise Exception(tb + "\nUnable to create EC2 connection because of: " + str(e) )
 
             try:
                 if self.credpath and not s3_ip:
@@ -153,6 +162,15 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops):
                 self.setup_as_connection(endpoint=as_ip, path="/services/AutoScaling", port=8773, is_secure=False, region=region, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
             except Exception, e:
                 self.debug("Unable to create AS connection because of: " + str(e) )
+
+            try:
+                if self.credpath and not elb_ip:
+                    elb_ip = self.get_elb_ip()
+                self.setup_elb_connection(endpoint=elb_ip, path="/services/LoadBalancing", port=8773, is_secure=False, region=region, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
+            except Exception, e:
+                self.debug("Unable to create ELB connection because of: " + str(e) )
+        if self.clc:
+            self.update_property_manager()
 
     def get_available_vms(self, type=None, zone=None):
         """
@@ -170,20 +188,31 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops):
                 current_zone = zones[zone_index]
                 if re.search( zone, current_zone.name):
                     break
-                zone_index += 7
-            if zone_index > (len(zones) - 1)   :
-                self.fail("Was not able to find AZ: " + zone)
+                zone_index += 20
+            if zone_index > (len(zones) - 1):
                 raise Exception("Unable to find Availability Zone")    
         else:
             zone = zones[0].name
             
         ### Inline switch statement
-        type_index = {
-                      'm1.small': 2,
-                      'c1.medium': 3,
-                      'm1.large': 4,
-                      'm1.xlarge': 5,
-                      'c1.xlarge': 6,
+        type_index = {  "t1.micro": 2,
+                        "m1.small": 3,
+                        "m1.large": 4,
+                        "m1.xlarge" : 5,
+                        "c1.xlarge" : 6,
+                        "m2.xlarge" : 7,
+                        "c1.medium" : 8,
+                        "m1.medium" : 9,
+                        "m3.xlarge" : 10,
+                        "m2.2xlarge" : 11,
+                        "m3.2xlarge" : 12,
+                        "m2.4xlarge" : 13,
+                        "cc1.4xlarge" : 14,
+                        "hi1.4xlarge" : 15,
+                        "cc2.8xlarge" : 16,
+                        "cg1.4xlarge" : 17,
+                        "cr1.8xlarge" : 18,
+                        "hs1.8xlarge" : 19
                       }[type] 
         type_state = zones[ zone_index + type_index ].state.split()
         self.debug("Finding available VMs: Partition=" + zone +" Type= " + type + " Number=" +  str(int(type_state[0])) )
@@ -198,19 +227,26 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops):
         property        Property to modify
         value           Value to set it too
         """
-        command = self.eucapath + "/usr/sbin/euca-modify-property -p " + property + "=" + value
-        if self.found(command, property):
+        command = "source " + self.credpath + "/eucarc && " + self.eucapath + "/usr/sbin/euca-modify-property -p " + property + "=" + value
+        if self.clc.found(command, property):
             self.debug("Properly modified property " + property)
         else:
             raise Exception("Setting property " + property + " failed")
     
    
-    def cleanup_artifacts(self):
+    def cleanup_artifacts(self,instances=True, snapshots=True, volumes=True):
+        """
+        Description: Attempts to remove artifacts created during and through this eutester's lifespan.
+        """
+
         self.debug("Starting cleanup of artifacts")
-        for res in self.test_resources["reservations"]:
-            self.terminate_instances(res)
-        self.clean_up_test_volumes()
-        self.cleanup_test_snapshots()
+        if instances:
+            for res in self.test_resources["reservations"]:
+                self.terminate_instances(res)
+        if volumes:
+            self.clean_up_test_volumes()
+        if snapshots:
+            self.cleanup_test_snapshots()
 
         for key,array in self.test_resources.iteritems():
             for item in array:
@@ -232,7 +268,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops):
                 except Exception, e:
                     self.fail("Unable to delete item: " + str(item) + "\n" + str(e))
 
-    def cleanup_test_snapshots(self,snaps=None, clean_images=False, add_time_per_snap=10, wait_for_valid_state=120, base_timeout=120):
+    def cleanup_test_snapshots(self,snaps=None, clean_images=False, add_time_per_snap=10, wait_for_valid_state=120, base_timeout=180):
         """
         :param snaps: optional list of snapshots, else will attempt to delete from test_resources[]
         :param clean_images: Boolean, if set will attempt to delete registered images referencing the snapshots first.
@@ -244,18 +280,24 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops):
         snaps = snaps or self.test_resources['snapshots']
         if not snaps:
             return
+        self.debug('Attempting to clean the following snapshots:')
+        self.print_eusnapshot_list(snaps)
         if clean_images:
             for snap in snaps:
                 for image in self.test_resources['images']:
                     for dev in image.block_device_mapping:
                         if image.block_device_mapping[dev].snapshot_id == snap.id:
                             self.delete_image(image)
-        return self.delete_snapshots(snaps,base_timeout=base_timeout, add_time_per_snap=add_time_per_snap, wait_for_valid_state=wait_for_valid_state)
+        if snaps:
+            return self.delete_snapshots(snaps,
+                                        base_timeout=base_timeout,
+                                        add_time_per_snap=add_time_per_snap,
+                                        wait_for_valid_state=wait_for_valid_state)
 
 
 
 
-    def clean_up_test_volumes(self, volumes=None):
+    def clean_up_test_volumes(self, volumes=None, min_timeout=180, timeout_per_vol=20):
         """
         Definition: cleaup helper method intended to clean up volumes created within a test, after the test has ran.
 
@@ -263,6 +305,8 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops):
         """
         euvolumes = []
         detaching = []
+        not_exist = []
+        line = '\n----------------------------------------------------------------------------------------------------\n'
         vol_str = volumes or "test_resources['volumes']"
         self.debug('clean_up_test_volumes starting, volumes:'+str(vol_str))
 
@@ -272,36 +316,63 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops):
 
         for vol in volumes:
             try:
-                vol.update()
-                if not isinstance(vol, EuVolume):
-                    vol = EuVolume.make_euvol_from_vol(vol, self)
-                euvolumes.append(vol)
+                vol = self.get_volume(volume_id=vol.id)
             except:
-                print self.get_traceback()
+                tb = self.get_traceback()
+                self.debug("\n" + line + " Ignoring caught Exception:\n" + str(tb) + "\n"+ str(vol.id) +
+                           ', Could not retrieve volume, may no longer exist?' + line)
+                vol = None
+            if vol:
+                try:
+                    vol.update()
+                    if not isinstance(vol, EuVolume):
+                        vol = EuVolume.make_euvol_from_vol(vol, self)
+                    euvolumes.append(vol)
+                except:
+                    tb = self.get_traceback()
+                    self.debug('Ignoring caught Exception: \n' + str(tb))
         try:
+            self.debug('Attempting to clean up the following volumes:')
             self.print_euvolume_list(euvolumes)
         except: pass
         self.debug('Clean_up_volumes: Detaching any attached volumes to be deleted...')
-        for vol in volumes:
+        for vol in euvolumes:
             try:
+                vol.update()
                 if vol.status == 'in-use':
-                    if vol.attach_data and vol.attach_data.status != 'detaching':
-                        vol.detach()
+                    if vol.attach_data and (vol.attach_data.status != 'detaching' or vol.attach_data.status != 'detached'):
+                        try:
+                            self.debug(str(vol.id) + ', Sending detach. Status:' +str(vol.status) +
+                                       ', attach_data.status:' + str(vol.attach_data.status))
+                            vol.detach()
+                        except EC2ResponseError, be:
+                            if 'Volume does not exist' in be.error_message:
+                                not_exist.append(vol)
+                                self.debug(str(vol.id) + ', volume no longer exists')
+                            else:
+                                raise be
                     detaching.append(vol)
             except:
                 print self.get_traceback()
+        #If the volume was found to no longer exist on the system, remove it from further monitoring...
+        for vol in not_exist:
+            if vol in detaching:
+                detaching.remove(vol)
+            if vol in euvolumes:
+                euvolumes.remove(vol)
+        self.test_resources['volumes'] = euvolumes
+        timeout = min_timeout + (len(volumes) * timeout_per_vol)
+        #If detaching wait for detaching to transition to detached...
         if detaching:
-            self.monitor_euvolumes_to_status(detaching, status='available', attached_status=None)
+            self.monitor_euvolumes_to_status(detaching, status='available', attached_status=None,timeout=timeout)
         self.debug('clean_up_volumes: Deleteing volumes now...')
-        self.delete_volumes(euvolumes)
-
-
+        self.print_euvolume_list(euvolumes)
+        self.delete_volumes(euvolumes, timeout=timeout)
 
                     
     def get_current_resources(self,verbose=False):
         '''Return a dictionary with all known resources the system has. Optional pass the verbose=True flag to print this info to the logs
            Included resources are: addresses, images, instances, key_pairs, security_groups, snapshots, volumes, zones
-        
         '''
         current_artifacts = dict()
         current_artifacts["addresses"] = self.ec2.get_all_addresses()
@@ -348,7 +419,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops):
         f = None
         try:
             #f = open(filepath, 'r')
-            self.testconf = EuConfig(filepath)
+            self.testconf = EuConfig(filepath, legacy_qa_config=True)
             f = self.testconf.legacybuf.splitlines()
         except IOError as (errno, strerror):
             self.debug( "ERROR: Could not find config file " + self.config_file)
@@ -367,12 +438,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops):
                 machine_dict["arch"] = machine_details[3]
                 machine_dict["source"] = machine_details[4]
                 machine_dict["components"] = map(str.lower, machine_details[5].strip('[]').split())
-               
-                ### We dont want to login to ESX boxes
-                if re.search("vmware", machine_dict["distro"], re.IGNORECASE):
-                    connect=False
-                else:
-                    connect=True
+
                 ### ADD the machine to the array of machine
                 cloud_machine = Machine(   machine_dict["hostname"], 
                                         distro = machine_dict["distro"], 
@@ -380,7 +446,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops):
                                         arch = machine_dict["arch"], 
                                         source = machine_dict["source"], 
                                         components = machine_dict["components"],
-                                        connect = connect,
+                                        connect = True,
                                         password = self.password,
                                         keypath = self.keypath,
                                         username = username
@@ -397,7 +463,11 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops):
         #f.close()   
         config_hash["machines"] = machines 
         return config_hash
-    
+
+    def update_property_manager(self,machine=None):
+        machine = machine or self.clc
+        self.property_manager = Euproperty_Manager(self,debugmethod=self.debug)
+
     def swap_clc(self):
         all_clcs = self.get_component_machines("clc")
         if self.clc is all_clcs[0]:
@@ -438,16 +508,19 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops):
             return None
         else:
             return machines[0]
-         
-    def get_component_machines(self, component):
+
+    def get_component_machines(self, component = None):
         #loop through machines looking for this component type
         """ Parse the machine list and a list of bm_machine objects that match the component passed in"""
-        component.lower()
-        machines_with_role = [machine for machine in self.config['machines'] if re.search(component, " ".join(machine.components))]
-        if len(machines_with_role) == 0:
-            raise Exception("Could not find component "  + component + " in list of machines")
+        if component is None:
+            return self.config['machines']
         else:
-            return machines_with_role
+            component.lower()
+            machines_with_role = [machine for machine in self.config['machines'] if re.search(component, " ".join(machine.components))]
+            if len(machines_with_role) == 0:
+                raise IndexError("Could not find component "  + component + " in list of machines")
+            else:
+                return machines_with_role
 
     def swap_component_hostname(self, hostname):
         if hostname != None:
@@ -508,7 +581,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops):
         
     
     def download_creds_from_clc(self, admin_cred_dir):
-        self.debug("Downloading credentials from " + self.clc.hostname)
+        self.debug("Downloading credentials from " + self.clc.hostname + ", path:" + admin_cred_dir + "/creds.zip")
         self.sftp.get(admin_cred_dir + "/creds.zip" , admin_cred_dir + "/creds.zip")
         os.system("unzip -o " + admin_cred_dir + "/creds.zip -d " + admin_cred_dir )
     
