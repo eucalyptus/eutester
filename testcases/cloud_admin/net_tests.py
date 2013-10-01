@@ -68,9 +68,33 @@ test3:
                 private ips.
 
 test4:
-    Description:
+    Definition:
         Test attempts to verify that the local machine cannot ssh to the instances within group2 which is not authorized
         for ssh access from this source.
+
+test5 (Multi-zone/cluster env):
+    Definition:
+        This test attempts to check connectivity for instances in the same security group, but in different zones.
+        Note: This test requires the CC have tunnelling enabled, or the CCs in each zone be on same
+        layer 2 network segment.
+        Test attempts to:
+            -Iterate through each zone and attempt to ssh from an instance in group1 to an instance in a separate zone
+             but same security group1 over their private ips.
+
+test 6 (Multi-zone/cluster env):
+    Definition:
+        This test attempts to set up security group rules between group1 and group2 to authorize group2 access
+        from group1 across different zones.
+        If no_cidr is True security groups will be setup using cidr notication ip/mask for each instance in
+        group1, otherwise the entire source group 1 will authorized.
+        the group will be
+        Note: This test requires the CC have tunnelling enabled, or the CCs in each zone be on same
+        layer 2 network segment.
+        Test attempts to:
+            -Authorize security groups for inter group private ip access.
+            -Iterate through each zone and attempt to ssh from an instance in group1 to an instance in group2 over their
+             private ips.
+
 
 '''
 
@@ -305,7 +329,7 @@ class Net_Tests(EutesterTestCase):
     def test2_create_instance_in_zones_for_security_group2(self):
         '''
         Definition:
-        This test attempts to create an instance in each within security group2 which should not
+        This test attempts to create an instance in each zone within security group2 which should not
         be authorized for any remote access (outside of the CC).
         The test attempts the following:
             -To run an instance in each zone and confirm it reaches 'running' state.
@@ -347,9 +371,9 @@ class Net_Tests(EutesterTestCase):
         '''
         Definition:
         This test attempts to set up security group rules between group1 and group2 to authorize group2 access
-        from group1. If no_cidr is True security groups will be setup using cidr notication ip/mask for each instance in
-        group1, otherwise the entire source group 1 will authorized.
-        the group will be
+        from group1. If no_cidr is True security groups will be setup using cidr notation ip/mask for each instance in
+        group1, otherwise the entire source group 1 will be authorized.
+
         Test attempts to:
             -Authorize security groups for inter group private ip access.
             -Iterate through each zone and attempt to ssh from an instance in group1 to an instance in group2 over their
