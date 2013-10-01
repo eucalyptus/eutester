@@ -545,6 +545,8 @@ class EuInstance(Instance, TaggedResource):
             if euvolume.attach_data.device != dev:
                 raise Exception('Attached device:' + str(euvolume.attach_data.device) +
                                 ", does not equal requested dev:" + str(dev))
+            #Find device this volume is using on guest...
+            euvolume.guestdev = None
             while (elapsed < timeout):
                 self.debug("Checking for volume attachment on guest, elapsed time("+str(elapsed)+")")
                 dev_list_after = self.get_dev_dir()
@@ -563,6 +565,8 @@ class EuInstance(Instance, TaggedResource):
                 time.sleep(2)
             if not euvolume.guestdev:
                 raise Exception('Device not found on guest after '+str(elapsed)+' seconds')
+            self.debug(str(euvolume.id) + "Found attached to guest at dev:" +str(euvolume.guestdev) +
+                       ', after elapsed:' +str(elapsed))
             #Check to see if this volume has unique data in the head otherwise write some and md5 it
             self.vol_write_random_data_get_md5(euvolume,overwrite=overwrite)
         else:
