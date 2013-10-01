@@ -121,7 +121,7 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
             try:
                 self.tester = self.do_with_args(Eucaops)
             except Exception, e:
-                raise Exception('Couldnt create Eucaops tester object, make sure credpath, '
+                raise Exception('Couldnt create Eucaops tester object, make sure credpath, ' \
                                 'or config_file and password was provided, err:' + str(e))
             #replace default eutester debugger with eutestcase's for more verbosity...
             self.tester.debug = lambda msg: self.debug(msg, traceback=2, linebyline=False)
@@ -335,6 +335,7 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
     def create_bfebs_image(self,
                            snapshot,
                            root_device_name = '/dev/sda',
+                           name=None,
                            delete_on_terminate=True,
                            size=None,
                            block_device_map=None):
@@ -429,7 +430,8 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         -will look for 'no' ephemeral
         '''
         errmsg = ""
-        image = self.create_bfebs_image(snapshot=self.build_image_snapshot, delete_on_terminate=True)
+        image_name = self.test_image1_tag_name + "_" + str(self.build_image_snapshot.id)
+        image = self.create_bfebs_image(snapshot=self.build_image_snapshot, name=image_name, delete_on_terminate=True)
         if not image.block_device_mapping.get(image.root_device_name).delete_on_termination:
             raise Exception('Expected DOT is True, instead image delete on termination set to:' +
                             str(image.block_device_mapping.get(image.root_device_name.delete_on_termination)))
@@ -480,7 +482,8 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         -will look for 'no' ephemeral
         '''
         errmsg = ""
-        image = self.create_bfebs_image(snapshot=self.build_image_snapshot, delete_on_terminate=False)
+        image_name = self.test_image2_tag_name + "_" + str(self.build_image_snapshot.id)
+        image = self.create_bfebs_image(snapshot=self.build_image_snapshot, name=image_name, delete_on_terminate=False)
         if image.block_device_mapping.get(image.root_device_name).delete_on_termination:
             raise Exception('Expected DOT is False, instead image delete on termination set to:' +
                             str(image.block_device_mapping.get(image.root_device_name.delete_on_termination)))
@@ -541,6 +544,7 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         -will verify delete on terminate set to True, and all volumes are deleted post instance termination
         '''
         errmsg = ""
+        image_name = self.test_image3_tag_name + "_" + str(self.build_image_snapshot.id)
         bdm_emptyvol_dev = '/dev/vdd'
         bdm_snapshot_dev = '/dev/vdc'
         bdm_ephemeral_dev = '/dev/vdb'
@@ -563,6 +567,7 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         self.tester.print_block_device_map(bdm)
         image = self.create_bfebs_image(snapshot=self.build_image_snapshot,
                                         block_device_map=bdm,
+                                        name=image_name,
                                         delete_on_terminate=True)
         self.tester.print_block_device_map(image.block_device_mapping)
         self.test_image3 = image
@@ -642,6 +647,7 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         -will verify delete on terminate set to False, and all volumes are not deleted post instance termination
         '''
         errmsg = ""
+        image_name = self.test_image4_tag_name + "_" + str(self.build_image_snapshot.id)
         bdm_emptyvol_dev = '/dev/vdd'
         bdm_snapshot_dev = '/dev/vdc'
         bdm_ephemeral_dev = '/dev/vdb'
@@ -664,6 +670,7 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         self.tester.print_block_device_map(bdm)
         image = self.create_bfebs_image(snapshot=self.build_image_snapshot,
                                         block_device_map=bdm,
+                                        name=image_name,
                                         delete_on_terminate=False)
         self.tester.print_block_device_map(image.block_device_mapping)
         self.test_image4 = image
@@ -1564,7 +1571,7 @@ if __name__ == "__main__":
                      'misc_test3_run_image1_check_attached_volume_states_during_stop_start',
                      'misc_test4_run_image1_terminate_during_stopped_verify_volume_dot',
                      'misc_test5_run_image1_with_multiple_bdm_terminate_in_stopped_state'])
-        
+
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
     for test in list:
