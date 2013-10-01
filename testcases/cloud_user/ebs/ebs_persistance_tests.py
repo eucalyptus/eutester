@@ -360,7 +360,7 @@ class Ebs_Persistance_Tests(EutesterTestCase):
                             testcolor=TestColor.get_canned_color('whiteonblue'))
                 break
         if waiting:
-            raise("SC machines were not reachable after: "+str(elapsed)+" seconds:"+str(debug_str))
+            raise Exception("SC machines were not reachable after: "+str(elapsed)+" seconds:"+str(debug_str))
         if not storage_controllers:
             raise Exception('Storage controller list was not populated after waiting for reachable')
         start = time.time()
