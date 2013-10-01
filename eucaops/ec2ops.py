@@ -2794,6 +2794,7 @@ disable_root: false"""
         for instance in monitor:
             if not isinstance(instance, EuInstance):
                 instance = EuInstance.make_euinstance_from_instance( instance, self, auto_connect=False)
+
         good = []
         failed = []
         elapsed = 0
@@ -3227,32 +3228,41 @@ disable_root: false"""
         :raise: Exception when instance does not reach terminated state
         """
         ### If a reservation is not passed then kill all instances
-        aggregate_result = True
-        if reservation is None:
-            reservations = self.ec2.get_all_instances()
-            #first send terminate for all instances
-            for res in reservations:
-                self.debug('Attempting to terminate instances:')
-                self.print_euinstance_list(euinstance_list=res.instances)
-                for instance in res.instances:
-                    self.debug( "Sending terminate for " + str(instance) )
-                    instance.terminate()
-            #now go wait on the instance states
-            for res in reservations:
-                if self.wait_for_reservation(res, state="terminated", timeout=timeout) is False:
-                    aggregate_result = False
-            self.test_resources['reservations'] = [other_reservation for other_reservation in self.test_resources['reservations'] if other_reservation is not reservation]
-        ### Otherwise just kill this reservation
-        else:
-            instance_list = reservation
+        aggregate_result = False
+        instance_list = []
+        monitor_list = []
+        if reservation and not isinstance(reservation, types.ListType):
             if isinstance(reservation, Reservation):
                 instance_list = reservation.instances
-            for instance in instance_list:
-                self.debug( "Sending terminate for " + str(instance) )
-                instance.terminate()
-            if self.wait_for_reservation(reservation, state="terminated", timeout=timeout) is False:
-                aggregate_result = False
-            self.test_resources['reservations'] = []
+            else:
+                raise Exception('Unknown type:' + str(type(reservation)) + ', for reservation passed to terminate_instances')
+        else:
+            if reservation is None:
+                reservation = self.ec2.get_all_instances()
+            #first send terminate for all instances
+            for res in reservation:
+                if isinstance(res, Reservation):
+                    instance_list.extend(res.instances)
+                elif isinstance(res, Instance):
+                        instance_list.append(res)
+                else:
+                    raise Exception('Need type instance or reservation in terminate_instances. type:' + str(type(res)))
+
+        for instance in instance_list:
+                    self.debug( "Sending terminate for " + str(instance) )
+                    self.print_euinstance_list(euinstance_list=res.instances)
+                    instance.terminate()
+                    instance.update()
+                    if instance.state != 'terminated':
+                        monitor_list.append(instance)
+                    else:
+                        self.debug('Instance: ' + str(instance.id) + ' in terminated state:' + str(instance.state))
+        try:
+            self.monitor_euinstances_to_state(instance_list=monitor_list, state='terminated', timeout=timeout)
+            aggregate_result = True
+        except Exception, e:
+            self.debug('Caught Exception in monitoring instances to terminated state:' + str(e))
+
         return aggregate_result
     
     def stop_instances(self,reservation, timeout=480):
