@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 import os
 import time
 
@@ -13,6 +13,7 @@ class SOSreport(EutesterTestCase):
         self.setup_parser()
         self.start_time = int(time.time())
         self.parser.add_argument("--ticket-number", default=str(self.start_time))
+        self.parser.add_argument("--timeout", default=1200, type=int)
         self.parser.add_argument("--remote-dir", default="/root/")
         self.parser.add_argument("--local-dir", default=os.getcwd())
         self.parser.add_argument("--package-url", default="http://mongo.beldurnik.com/RPMS/eucalyptus-sos-plugins-0.1.1-0.el6.noarch.rpm")
@@ -36,23 +37,39 @@ class SOSreport(EutesterTestCase):
             machine.sys("yum install -y " + self.args.package_url)
 
     def Run(self):
+        error_msg = ""
         for machine in self.tester.get_component_machines():
-            assert isinstance(machine, Machine)
-            if machine.distro.name is "vmware":
-                continue
-            machine.sys("mkdir -p " + self.args.remote_dir)
-            machine.sys("sosreport --batch --skip-plugins=emc --tmp-dir " + self.args.remote_dir + " --ticket-number " + str(self.args.ticket_number),code=0)
+            try:
+                assert isinstance(machine, Machine)
+                if machine.distro.name is "vmware":
+                    continue
+                machine.sys("mkdir -p " + self.args.remote_dir)
+                machine.sys("sosreport --batch --skip-plugins=emc --tmp-dir " + self.args.remote_dir + " --ticket-number " + str(self.args.ticket_number),
+                            code=0, timeout=self.args.timeout)
+            except Exception, e:
+                error_msg += 'Error running SOS report on:' + str(machine.hostname) + '. Error:' + str(e)
+        if error_msg:
+            raise Exception(error_msg)
+
+
 
     def Download(self):
+        error_msg = ""
         for machine in self.tester.get_component_machines():
             assert isinstance(machine, Machine)
             if machine.distro.name is "vmware":
                 continue
-            remote_tarball_path = machine.sys("ls -1 " + self.args.remote_dir + "*" + str(self.args.ticket_number) + "*", code=0)[0]
-            tarball = remote_tarball_path.split("/")[-1]
-            local_tarball_path = self.args.local_dir + '/' + tarball
-            self.tester.debug("Downloading file to: " + local_tarball_path)
-            machine.sftp.get(remote_tarball_path, local_tarball_path)
+            try:
+                remote_tarball_path = machine.sys("ls -1 " + self.args.remote_dir + "*" + str(self.args.ticket_number) + "*", code=0)[0]
+                tarball = remote_tarball_path.split("/")[-1]
+                local_tarball_path = self.args.local_dir + '/' + tarball
+                self.tester.debug("Downloading file to: " + local_tarball_path)
+                machine.sftp.get(remote_tarball_path, local_tarball_path)
+            except Exception, e:
+                error_msg += 'Error Downloading from:' + str(machine.hostname) + '. Error:' + str(e)
+        if error_msg:
+            raise Exception(error_msg)
+
 
     def RunAll(self):
         self.Install()

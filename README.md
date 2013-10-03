@@ -1,6 +1,8 @@
 Eutester
 ======================
 
+[![Build Status](https://secure.travis-ci.org/eucalyptus/eutester.png)](https://travis-ci.org/eucalyptus/eutester)
+
 [Intro to Eutester](http://testingclouds.wordpress.com/2012/03/04/test1/)
 
 [Video - Eutester Overview: An Introduction to the Functional Testing Framework for Eucalyptus](http://vimeo.com/51627165)

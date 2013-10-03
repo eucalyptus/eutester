@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # Software License Agreement (BSD License)
 #
 # Copyright (c) 2009-2011, Eucalyptus Systems, Inc.
@@ -29,33 +30,16 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 # Author: Vic Iglesias vic.iglesias@eucalyptus.com
-#         
+#
+import mock
+import unittest
+from eucaops import Eucaops
+class EucaopsTest(unittest.TestCase):
+    def setUp(self):
+        self.tester = Eucaops(download_creds=False)
 
-try:
-    from setuptools import setup
-except ImportError:
-    from distutils.core import setup
-import eutester
+    def test_logger(self):
+        self.assertNotEqual(self.tester.logger, None)
 
-setup(name = "eutester",
-      version = eutester.__version__,
-      description = "Test Framework for AWS compatible clouds",
-      long_description="Test Framework for AWS compatible clouds",
-      author = "Victor Iglesias",
-      author_email = "vic.iglesias@eucalyptus.com",
-      url = "http://open.eucalyptus.com",
-      install_requires = ['paramiko >= 1.7','boto >= 2.5.2', 'jinja2 >= 2.7', 'argparse', 'futures', 'python-dateutil',
-                          'mock', 'dnspython'],
-      packages = ["eutester","eucaops", "eucaweb", "testcases", "testcases.cloud_admin", "testcases.cloud_user",
-                  "testcases.cloud_user.instances", "testcases.cloud_user.s3",  "testcases.cloud_user.load",  
-                  "testcases.cloud_user.images", "testcases.cloud_user.images.eustore", "testcases.cloud_user.images.windows",
-                  "testcases.cloud_user.ebs"],
-      license = 'BSD (Simplified)',
-      platforms = 'Posix; MacOS X; Windows',
-      classifiers = [ 'Development Status :: 3 - Alpha',
-                      'Intended Audience :: System Administrators',
-                      'License :: OSI Approved :: BSD License',
-                      'Operating System :: OS Independent',
-                      'Topic :: System :: Systems Administration',
-                      ],
-      )
+if __name__ == "__main__":
+    unittest.main()

@@ -31,6 +31,7 @@
 # Author: vic.iglesias@eucalyptus.com
 import re
 import copy
+import time
 from boto.ec2.regioninfo import RegionInfo
 import boto
 from concurrent.futures import ThreadPoolExecutor
@@ -134,7 +135,7 @@ class ELBops(Eutester):
             elb_connection_args = copy.copy(connection_args)
             elb_connection_args['path'] = path
             elb_connection_args['region'] = elb_region
-            self.debug("Attempting to create cloud watch connection to " + elb_region.endpoint + str(port) + path)
+            self.debug("Attempting to create load balancer connection to " + elb_region.endpoint + ':' + str(port) + path)
             self.elb = boto.connect_elb(**elb_connection_args)
         except Exception, e:
             self.critical("Was unable to create elb connection because of exception: " + str(e))
@@ -158,32 +159,77 @@ class ELBops(Eutester):
                            instance_port=instance_port)
         return listner
 
-    def generate_http_requests(self, url, count=100):
+    def generate_http_requests(self, url, count=100, worker_threads=20):
+        self.debug("Generating {0} http requests against {1}".format(count, url))
         response_futures = []
-        with ThreadPoolExecutor(max_workers=count / 2 ) as executor:
-            response_futures.append(executor.submit(urllib2.urlopen, url))
+        with ThreadPoolExecutor(max_workers=worker_threads) as executor:
+            for _ in range(count):
+                response_futures.append(executor.submit(urllib2.urlopen, url))
 
         responses = []
         for response in response_futures:
             http_response = response.result()
-            http_error_code = http_response.getcode()
-            if http_error_code == 200:
-                responses.append(http_response)
-            else:
-                raise Exception("Error code " + http_error_code +" found when sending " +
-                                str(count/2) + " concurrent requests to " + url)
+            try:
+                http_error_code = http_response.getcode()
+                if http_error_code == 200:
+                    self.debug("Request response: {0}".format(http_response.read().rstrip()))
+                    responses.append(http_response)
+                else:
+                    raise Exception("Error code " + http_error_code +" found when sending " +
+                                    str(worker_threads) + " concurrent requests to " + url)
+            finally:
+                http_response.close()
         return responses
 
-    def create_load_balancer(self, zones, name="test", load_balancer_port=80):
+    def register_lb_instances(self, name, instances, timeout=360, poll_count=15):
+        inst_ids = [inst.id for inst in instances]
+        self.debug("Registering instances {0} with lb {1}".format(inst_ids, name))
+        self.elb.register_instances(name, inst_ids)
+        poll_sleep = timeout/poll_count
+        for _ in range(poll_count):
+            self.debug("Checking instance health for {0}".format(inst_ids))
+            inst_states = self.elb.describe_instance_health(name, instances=inst_ids)
+            states = [state.state for state in inst_states]
+            if not states or 'OutOfService' in states:
+                time.sleep(poll_sleep)
+            elif 'InService' in states:
+                self.debug("Instances {0} for lb {1} are InService".format(inst_ids, name))
+                return
+            else:
+                # This should never happen
+                pass
+        raise Exception("Instances {0} failed to enter InService state before timeout".format(inst_ids))
+
+    def create_load_balancer(self, zones, name="test", load_balancer_port=80, instances=None):
         self.debug("Creating load balancer: " + name + " on port " + str(load_balancer_port))
         listener = self.create_listner(load_balancer_port=load_balancer_port)
         self.elb.create_load_balancer(name, zones=zones, listeners=[listener])
+        if instances:
+            self.register_instances(name, instances)
 
         ### Validate the creation of the load balancer
-        load_balancer = self.elb.get_all_load_balancers(load_balancer_names=[name])
-        if len(load_balancer) == 1:
-            return load_balancer[0]
+        lbs = self.elb.get_all_load_balancers(load_balancer_names=[name])
+        if not "load_balancers" in self.test_resources:
+            self.test_resources["load_balancers"] = []
+
+        if len(lbs) == 1:
+            self.test_resources["load_balancers"].append(lbs[0])
+            return lbs[0]
         else:
             raise Exception("Unable to retrieve load balancer after creation")
 
+    def delete_load_balancers(self, lbs, timeout=60):
+        for lb in lbs:
+            self.delete_load_balancer(lb, timeout)
+
+    def delete_load_balancer(self, lb, timeout=60, poll_sleep=10):
+        self.debug("Deleting Loadbalancer: {0}".format(lb.name))
+        self.elb.delete_load_balancer(lb.name)
+        poll_count = timeout/poll_sleep
+        for _ in range(poll_count):
+            lbs = self.elb.get_all_load_balancers(load_balancer_names=[lb.name])
+            if lb in lbs:
+                time.sleep(poll_sleep)
+        if lb in self.test_resources["load_balancers"]:
+            self.test_resources["load_balancers"].remove(lb)
 

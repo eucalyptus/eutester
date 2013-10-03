@@ -11,16 +11,12 @@ class PopulateUpgrade(EutesterTestCase):
     def __init__(self, extra_args= None):
         self.setuptestcase()
         self.setup_parser()
-        self.parser.add_argument("--region", default=None)
         if extra_args:
             for arg in extra_args:
                 self.parser.add_argument(arg)
         self.get_args()
         # Setup basic eutester object
-        if self.args.region:
-            self.tester = EC2ops( credpath=self.args.credpath, region=self.args.region)
-        else:
-            self.tester = Eucaops( credpath=self.args.credpath, config_file=self.args.config,password=self.args.password)
+        self.tester = Eucaops( credpath=self.args.credpath, config_file=self.args.config,password=self.args.password)
         self.tester.poll_count = 120
 
         self.security_groups = []

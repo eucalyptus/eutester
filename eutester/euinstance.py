@@ -545,6 +545,8 @@ class EuInstance(Instance, TaggedResource):
             if euvolume.attach_data.device != dev:
                 raise Exception('Attached device:' + str(euvolume.attach_data.device) +
                                 ", does not equal requested dev:" + str(dev))
+            #Find device this volume is using on guest...
+            euvolume.guestdev = None
             while (elapsed < timeout):
                 self.debug("Checking for volume attachment on guest, elapsed time("+str(elapsed)+")")
                 dev_list_after = self.get_dev_dir()
@@ -563,6 +565,8 @@ class EuInstance(Instance, TaggedResource):
                 time.sleep(2)
             if not euvolume.guestdev:
                 raise Exception('Device not found on guest after '+str(elapsed)+' seconds')
+            self.debug(str(euvolume.id) + "Found attached to guest at dev:" +str(euvolume.guestdev) +
+                       ', after elapsed:' +str(elapsed))
             #Check to see if this volume has unique data in the head otherwise write some and md5 it
             self.vol_write_random_data_get_md5(euvolume,overwrite=overwrite)
         else:
@@ -797,7 +801,7 @@ class EuInstance(Instance, TaggedResource):
     @Eutester.printinfo
     def random_fill_volume(self,euvolume,srcdev=None, length=None, timepergig=90):
         '''
-        Attempts to fill the entie given euvolume with unique non-zero data.
+        Attempts to fill the entire given euvolume with unique non-zero data.
         The srcdev is read from in a set size, and then used to write to the euvolume to populate it. The file 
         helps with both speed up the copy in the urandom case, and adds both some level of randomness another src device as well as 
         allows smaller src devs to be used to fill larger euvolumes by repeatedly reading into the copy. 
@@ -827,10 +831,11 @@ class EuInstance(Instance, TaggedResource):
             timeout = timepergig * ((length/gb) or 1)
         #write the volume id into the volume for starters
         ddcmd = 'echo '+str(euvolume.id)+' | dd of='+str(voldev)
-        dd_res_for_id = self.dd_monitor(ddcmd=ddcmd, timeout=timeout)
+        dd_res_for_id = self.dd_monitor(ddcmd=ddcmd, timeout=timeout, sync=False)
         len_remaining = length - int(dd_res_for_id['dd_bytes'])
         self.debug('length remaining to write after adding volumeid:' + str(len_remaining))
         if len_remaining <= 0:
+            self.sys('sync')
             return dd_res_for_id
         ddbs = 1024
         if len_remaining < ddbs:
@@ -870,7 +875,8 @@ class EuInstance(Instance, TaggedResource):
                    ddseek=None,
                    timeout=300,
                    poll_interval=1,
-                   tmpfile=None):
+                   tmpfile=None,
+                   sync=True):
         '''
         Executes dd command on instance, monitors and displays ongoing status, and returns stats dict for dd outcome
         :type ddif: str
@@ -1067,8 +1073,9 @@ class EuInstance(Instance, TaggedResource):
             raise Exception('dd_monitor timed out before dd cmd completed, elapsed:'+str(elapsed)+'/'+str(timeout))
         else:
             #sync to ensure writes to dev
-            self.sys('sync', code=0)
-            elapsed = int(time.time()-start)
+            if sync:
+                self.sys('sync', code=0)
+                elapsed = int(time.time()-start)
         #if we have any info from exceptions caught during parsing, print that here...
         if infobuf:
             print infobuf

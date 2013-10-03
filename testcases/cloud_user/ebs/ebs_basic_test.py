@@ -63,6 +63,8 @@ if __name__ == "__main__":
     testcase.setup_parser(description="Attempts to test and provide info on focused areas related to Eucalyptus EBS related functionality.", 
                           testlist=False)
     testcase.parser.add_argument('--instance_password',dest='inst_pass', help='String representing root password for instance, will replace keypair ssh login',default=None)
+    testcase.parser.add_argument('--reboot_timeout',dest='waitconnect', help='Time to wait before trying to connect to rebooted guests',default=30)
+
     testcase.get_args()
     ebstestsuite= testcase.do_with_args(EbsTestSuite)
     testcase.clean_method = ebstestsuite.clean_created_resources

@@ -1,3 +1,4 @@
+#!/usr/bin/python
 # Software License Agreement (BSD License)
 #
 # Copyright (c) 2009-2011, Eucalyptus Systems, Inc.
@@ -1152,6 +1153,7 @@ class Mpath_Suite(EutesterTestCase):
     def test7_test_storage_controller_sanhost_fallback(self,zone=None, wait_for_host=120):
         zone = zone or self.zone
         errmsg=""
+        self.pre_test_check_should_run_sc_multihosts_tests_on_this_system(zone)
         self.status('Attempting to get enabled sc and sanhosts from zone:' +str(zone))
         sc = self.get_enabled_storage_controller_for_zone(zone=zone)
         sanhosts = self.get_sc_sanhosts_by_sc(sc)
@@ -1253,10 +1255,10 @@ class Mpath_Suite(EutesterTestCase):
 
     def test9_test_storage_controller_path_fail_while_create_snapshot_in_progress(self):
         errmsg=""
+        self.pre_test_check_should_run_sc_multipath_tests_on_this_system()
         self.status('Get test instance to run test...')
         instance = self.get_test_instance()
         zone = str(instance.placement)
-        self.pre_test_check_should_run_sc_multipath_tests_on_this_system()
         self.status('Attempting to get enabled sc and scpaths from zone:' +str(zone))
         sc = self.get_enabled_storage_controller_for_zone(zone=zone)
         paths = self.get_sc_paths_by_sc(sc)
@@ -1346,10 +1348,8 @@ if __name__ == "__main__":
     ### Use the list of tests passed from config/command line to determine what subset of tests to run
     ### or use a predefined list
     if testcase.args.run_suite:
-        testcase.pre_test_check_should_run_multipath_tests_on_this_system()
-        unit_list = testcase.testsuite()
+        unit_list = testcase.test_suite()
     else:
-        testcase.pre_test_check_should_run_multipath_tests_on_this_system()
         test_names = testcase.args.tests or ['test1_check_volume_io_on_guest_while_blocking_clearing_all_paths_once']
         ### Convert test suite methods to EutesterUnitTest objects
         unit_list = [ ]

@@ -41,6 +41,7 @@ import copy
 import os
 from eutester import machine
 from xml.dom.minidom import parse, parseString
+import dns.resolver
 
 
 class log_marker:
@@ -390,9 +391,7 @@ class Eunode:
 
 
 
-
-
-class Euservice:
+class Euservice(object):
 
     def __init__(self, service_string, tester = None):
         values = service_string.split()
@@ -457,20 +456,54 @@ class Euservice:
         if printmethod:
             printmethod(buf)
         return buf
-    
+
+    @staticmethod
+    def create_service(service_string, tester=None):
+        if service_string.split()[1] == 'dns':
+            return DnsService(service_string)
+        else:
+            return Euservice(service_string, tester)
+
+
+
+class DnsService(Euservice):
+    def __init__(self, service_string):
+        super(DnsService, self).__init__(service_string)
+        self.resolver = dns.resolver.Resolver(configure=False)
+        self.resolver.nameservers = [self.hostname]
+
+    def resolve(self, name, timeout=360, poll_count=20):
+        """Resolve hostnames against the Eucalyptus DNS service"""
+        poll_sleep = timeout/poll_count
+        for _ in range(poll_count):
+            try:
+                print("DNSQUERY: Resolving `{0}' against nameserver(s) {1}".format(name, self.resolver.nameservers))
+                ans = self.resolver.query(name)
+                return str(ans[0])
+            except dns.resolver.NXDOMAIN:
+                raise Exception("Unable to resolve hostname `{0}'".format(name))
+            except dns.resolver.NoNameservers:
+                # Note that this usually means our DNS server returned a malformed message
+                pass
+            finally:
+                time.sleep(poll_sleep)
+        raise Exception("Unable to resolve hostname `{0}'".format(name))
+
+
         
 class Partition:
-    name = ""
-    ccs = []
-    scs = []
-    vbs = []
-    ncs = []
-    volumes = []
-    instances = []
+
     
     def __init__(self, name, service_manager ):
         self.name = name
         self.service_manager = service_manager
+        name = ""
+        self.ccs = []
+        self.scs = []
+        self.vbs = []
+        self.ncs = []
+        self.volumes = []
+        self.instances = []
         
     def get_enabled(self, list):
         self.service_manager.update()
@@ -628,9 +661,8 @@ class EuserviceManager(object):
                 time.sleep(poll_interval)
         #Create euservice objects from command output and return list of euservices.
         for service_line in describe_services:
-            services.append(Euservice(service_line, self.tester))
+            services.append(Euservice.create_service(service_line, self.tester))
         return services
-
 
     def print_services_list(self, services=None):
         services = services or self.all_services
@@ -1244,6 +1276,34 @@ class EuserviceManager(object):
             else:
                 self.wait_for_service(service,"ENABLED")
 
+    def wait_for_all_services_operational(self, timeout=600):
+        '''
+        Attempts to wait for a core set of eutester monitored services on the cloud and/or specified in the
+        config file to transition to ENABLED. In the HA case will look for both an ENABLED and DISABLED service.
+        '''
+        start = time.time()
+        elapsed = 0
+        while elapsed < timeout:
+            self.debug("wait_for_all_services_operational, elapsed: " + str(elapsed) + "/" + str(timeout))
+            elapsed = int(time.time() - start)
+            try:
+                self.print_services_list()
+                self.all_services_operational()
+                self.debug('All services were detected as operational')
+                return
+            except Exception, e:
+                tb = self.tester.get_traceback()
+                elapsed = int(time.time() - start )
+                error = tb + "\n Error waiting for all services operational, elapsed: " + \
+                        str(elapsed) + "/" + str(timeout) + ", error:" + str(e)
+                if elapsed < timeout:
+                    self.debug(error)
+                else:
+                    raise Exception(error)
+            time.sleep(15)
+
+
+
     def get_enabled_clc(self):
         clc = self.get_enabled(self.clcs)
         if clc is None:
@@ -1271,6 +1331,13 @@ class EuserviceManager(object):
             raise Exception("Neither Walrus is disabled")
         else:
             return walrus
+
+    def get_enabled_dns(self):
+        dns = self.get_enabled([self.dns])
+        if dns is None:
+            raise Exception("DNS service is not available")
+        else:
+            return dns
     
     def get_enabled(self, list_of_services):
         self.update()

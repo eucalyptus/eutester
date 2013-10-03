@@ -129,6 +129,8 @@ class InstanceBasics(EutesterTestCase):
             self.tester.disassociate_address_from_instance(instance)
             self.tester.release_address(self.address)
             self.address = None
+            assert isinstance(instance, EuInstance)
+            self.tester.sleep(5)
             instance.update()
             self.assertTrue( self.tester.ping(instance.ip_address), "Could not ping after dissassociate")
         self.set_reservation(reservation)

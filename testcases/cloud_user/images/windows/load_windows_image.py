@@ -21,6 +21,7 @@ testcase.parser.add_argument('--urlpass', dest='wget_password',help='Password ne
 testcase.parser.add_argument('--urluser',dest='wget_user', help='Username needed to retrieve remote url', default=None)
 testcase.parser.add_argument('--gigtime',dest='time_per_gig', help='Time allowed per gig size of image to be used', default=300)
 testcase.parser.add_argument('--interbundletime',dest='inter_bundle_timeout', help='Inter-bundle timeout', default=120)
+testcase.parser.add_argument('--virtualization_type', help='bucketname', default=None)
 testcase.parser.add_argument('--bucket',dest='bucketname', help='bucketname', default=None)
 
 args = testcase.get_args()

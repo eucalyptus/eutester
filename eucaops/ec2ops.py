@@ -69,6 +69,9 @@ EC2RegionData = {
 
 class EC2ops(Eutester):
 
+    enable_root_user_data = """#cloud-config
+disable_root: false"""
+
     @Eutester.printinfo
     def __init__(self,
                  host=None,
@@ -157,7 +160,7 @@ class EC2ops(Eutester):
             ec2_connection_args['path'] = path
             ec2_connection_args['api_version'] = APIVersion
             ec2_connection_args['region'] = ec2_region
-            self.debug("Attempting to create ec2 connection to " + ec2_region.endpoint + str(port) + path)
+            self.debug("Attempting to create ec2 connection to " + ec2_region.endpoint + ':' + str(port) + path)
             self.ec2 = boto.connect_ec2(**ec2_connection_args)
         except Exception, e:
             self.critical("Was unable to create ec2 connection because of exception: " + str(e))
@@ -1820,7 +1823,7 @@ class EC2ops(Eutester):
             bdmdev=root_device_name
         if name is None:
             name="bfebs_"+ snap_id
-        if ( windows is True ) and ( kernel is not None):
+        if ( windows ) and (not kernel):
             kernel="windows"     
             
         bdmap = block_device_map or BlockDeviceMapping()
@@ -1844,6 +1847,8 @@ class EC2ops(Eutester):
                         image_location,
                         root_device_name=None,
                         description=None,
+                        architecture=None,
+                        virtualization_type=None,
                         bdmdev=None,
                         name=None,
                         ramdisk=None,
@@ -1860,13 +1865,33 @@ class EC2ops(Eutester):
         :param kernel: kernel id (note for windows this name should be "windows")
         :return: image id string
         """
+        ri_kwargs = { 'name':name,
+                   'description':description,
+                   'kernel_id':kernel,
+                   'image_location':image_location,
+                   'ramdisk_id':ramdisk,
+                   'architecture':architecture,
+                   'block_device_map':bdmdev,
+                   'root_device_name':root_device_name}
+        #Check to see if boto is recent enough to have this param...
+        if virtualization_type:
+            if 'virtualization_type' in self.ec2.register_image.im_func.func_code.co_varnames:
+                ri_kwargs['virtualization_type'] = virtualization_type
+            else:
+                raise Exception('virtualization_type arg populated but not found in this version of ec2.register_image?')
+        image_id = self.ec2.register_image(**ri_kwargs)
+
+        '''
         image_id = self.ec2.register_image(name=name,
                                            description=description,
                                            kernel_id=kernel,
                                            image_location=image_location,
                                            ramdisk_id=ramdisk,
+                                           architecture=architecture,
+                                           virtualization_type=virtualization_type,
                                            block_device_map=bdmdev,
                                            root_device_name=root_device_name)
+        '''
         self.test_resources["images"].append(image_id)
         return image_id
 
@@ -1931,7 +1956,8 @@ class EC2ops(Eutester):
         :param state: example: 'available'
         :param arch: example: 'x86_64'
         :param owner_id: owners numeric id
-        :param not_location: skip if location string matches this string. Example: not_location='windows'
+        :param not_location: skip if location string matches this comma separated string or list of strings. Examples:
+                            not_location='windows,centos', not_location=['loadbalancer', 'lucid']
         :param max_count: return after finding 'max_count' number of matching images
         :return: image id
         :raise: Exception if image is not found
@@ -1940,9 +1966,8 @@ class EC2ops(Eutester):
             emi = "mi-"
         ret_list = []
         images = self.ec2.get_all_images(filters=filters)
-        self.debug("Got " + str(len(images)) + " images matching prefix: " + str(emi) + ", now filtering..." )
+        self.debug("Got " + str(len(images)) + " total images " + str(emi) + ", now filtering..." )
         for image in images:
-            
             if not re.search(emi, image.id):      
                 continue  
             if (root_device_type is not None) and (image.root_device_type != root_device_type):
@@ -1957,8 +1982,16 @@ class EC2ops(Eutester):
                 continue                
             if (owner_id is not None) and (image.owner_id != owner_id):
                 continue
-            if (not_location is not None) and (re.search( not_location, image.location)):
-                continue
+            if (not_location is not None):
+                if not isinstance(not_location,types.ListType):
+                    not_location = not_location.split(',')
+                skip = False
+                for loc in not_location:
+                    if (re.search( str(loc), image.location)):
+                        skip = True
+                        break
+                if skip:
+                    continue
             self.debug("Returning image:"+str(image.id))
             ret_list.append(image)
             if max_count and len(ret_list) >= max_count:
@@ -2136,7 +2169,10 @@ class EC2ops(Eutester):
         
         start = time.time()
         ### Ensure instance gets correct address
-        while instance.ip_address != address.public_ip:
+        ### When private addressing is enabled the pub address should be equal to the priv address
+        ### Otherwise we want to the pub address to be anything but its current and not the priv address
+        while (not instance.private_addressing and instance.ip_address != address.public_ip and instance.ip_address != address.private_ip_address) or \
+                (instance.private_addressing and instance.ip_address == instance.private_ip_address):
             self.debug('Instance {0} has IP "{1}" still using address "{2}" after {3} seconds'.format(instance.id, instance.ip_address, address.public_ip, str(elapsed)) )
             if elapsed > timeout:
                 raise Exception('Address ' + str(address) + ' never disassociated with instance after '+str(elapsed)+' seconds')
@@ -2144,7 +2180,7 @@ class EC2ops(Eutester):
             self.sleep(5)
             elapsed = int(time.time()-start)
             address = self.ec2.get_all_addresses(addresses=[address.public_ip])[0]
-        self.debug("Disassociated IP successfully")    
+        self.debug("Disassociated IP successfully")
 
     def release_address(self, address):
         """
@@ -2305,7 +2341,9 @@ class EC2ops(Eutester):
         if not isinstance(image, Image):
             image = self.get_emi(emi=str(image))
         if image is None:
-            raise Exception("emi is None. run_instance could not auto find an emi?")   
+            raise Exception("emi is None. run_instance could not auto find an emi?")
+        if not user_data:
+            user_data = self.enable_root_user_data
         if private_addressing is True:
             addressing_type = "private"
             is_reachable= False
@@ -2363,7 +2401,7 @@ class EC2ops(Eutester):
 
             if not private_addressing:
                 try:
-                    self.wait_for_valid_ip(instance, private_addressing=private_addressing)
+                    self.wait_for_valid_ip(instance)
                 except Exception, e:
                     ip_err = "WARNING in wait_for_valid_ip: "+str(e)
                     self.debug(ip_err)
@@ -2379,7 +2417,7 @@ class EC2ops(Eutester):
         #if we can establish an SSH session convert the instances to the test class euinstance for access to instance specific test methods
         if is_reachable:
             self.debug("Converting " + str(reservation) + " into euinstances")
-            return self.convert_reservation_to_euinstance(reservation, username=username, password=password,
+            return self.convert_reservation_to_euinstance(reservation, username=username, password=password, private_addressing=private_addressing,
                                                           keyname=keypair, timeout=timeout)
         else:
             return reservation
@@ -2397,7 +2435,7 @@ class EC2ops(Eutester):
                   user_data=None,
                   private_addressing=False, 
                   username="root", 
-                  password=None, 
+                  password=None,
                   auto_connect=True,
                   clean_on_fail=True,
                   monitor_to_running = True,
@@ -2433,7 +2471,9 @@ class EC2ops(Eutester):
             if not isinstance(image, Image):
                 image = self.get_emi(emi=str(image))
             if image is None:
-                raise Exception("emi is None. run_instance could not auto find an emi?")   
+                raise Exception("emi is None. run_instance could not auto find an emi?")
+            if not user_data:
+                user_data = self.enable_root_user_data
             if private_addressing is True:
                 addressing_type = "private"
                 connect = False
@@ -2754,6 +2794,7 @@ class EC2ops(Eutester):
         for instance in monitor:
             if not isinstance(instance, EuInstance):
                 instance = EuInstance.make_euinstance_from_instance( instance, self, auto_connect=False)
+
         good = []
         failed = []
         elapsed = 0
@@ -2836,11 +2877,7 @@ class EC2ops(Eutester):
                 raise Exception(failmsg)
             else:
                 self.debug(failmsg)
-        
 
-
-
-        
     def print_euinstance_list(self,
                               euinstance_list=None,
                               state=None,
@@ -2889,11 +2926,11 @@ class EC2ops(Eutester):
         for instance in plist:
             buf += instance.printself(title=False, footer=False)
         self.debug("\n"+str(buf)+"\n")
-    
+
     @Eutester.printinfo
-    def wait_for_valid_ip(self, instances, private_addressing=False, poll_interval=10, timeout = 60):
+    def wait_for_valid_ip(self, instances, regex="0.0.0.0", poll_interval=10, timeout = 60):
         """
-        Wait for instance public DNS name to clear from 0.0.0.0
+        Wait for instance public DNS name to clear from regex
 
         :param instances:
         :param private_addressing: boolean for whether instance has private addressing enabled
@@ -2911,7 +2948,7 @@ class EC2ops(Eutester):
         elapsed = 0
         good = []
         start = time.time()
-        zeros = re.compile("0.0.0.0")
+        zeros = re.compile(regex)
         while monitoring and (elapsed <= timeout):
             elapsed = int(time.time()- start)
             for instance in monitoring:
@@ -2986,7 +3023,7 @@ class EC2ops(Eutester):
         self.debug("Done with check_system_for_dup_ip")
         
 
-    def convert_reservation_to_euinstance(self, reservation, username="root", password=None, keyname=None, timeout=60):
+    def convert_reservation_to_euinstance(self, reservation, username="root", password=None, keyname=None, private_addressing=False, timeout=60):
         """
         Convert all instances in an entire reservation into eutester.euinstance.Euinstance objects.
 
@@ -3009,7 +3046,8 @@ class EC2ops(Eutester):
                                                                                      keypair=keypair, 
                                                                                      username = username, 
                                                                                      password=password, 
-                                                                                     timeout=timeout ))
+                                                                                     timeout=timeout,
+                                                                                     private_addressing=private_addressing))
                 except Exception, e:
                     self.debug(self.get_traceback())
                     euinstance_list.append(instance)
@@ -3190,32 +3228,41 @@ class EC2ops(Eutester):
         :raise: Exception when instance does not reach terminated state
         """
         ### If a reservation is not passed then kill all instances
-        aggregate_result = True
-        if reservation is None:
-            reservations = self.ec2.get_all_instances()
-            #first send terminate for all instances
-            for res in reservations:
-                self.debug('Attempting to terminate instances:')
-                self.print_euinstance_list(euinstance_list=res.instances)
-                for instance in res.instances:
-                    self.debug( "Sending terminate for " + str(instance) )
-                    instance.terminate()
-            #now go wait on the instance states
-            for res in reservations:
-                if self.wait_for_reservation(res, state="terminated", timeout=timeout) is False:
-                    aggregate_result = False
-            self.test_resources['reservations'] = [other_reservation for other_reservation in self.test_resources['reservations'] if other_reservation is not reservation]
-        ### Otherwise just kill this reservation
-        else:
-            instance_list = reservation
+        aggregate_result = False
+        instance_list = []
+        monitor_list = []
+        if reservation and not isinstance(reservation, types.ListType):
             if isinstance(reservation, Reservation):
                 instance_list = reservation.instances
-            for instance in instance_list:
-                self.debug( "Sending terminate for " + str(instance) )
-                instance.terminate()
-            if self.wait_for_reservation(reservation, state="terminated", timeout=timeout) is False:
-                aggregate_result = False
-            self.test_resources['reservations'] = []
+            else:
+                raise Exception('Unknown type:' + str(type(reservation)) + ', for reservation passed to terminate_instances')
+        else:
+            if reservation is None:
+                reservation = self.ec2.get_all_instances()
+            #first send terminate for all instances
+            for res in reservation:
+                if isinstance(res, Reservation):
+                    instance_list.extend(res.instances)
+                elif isinstance(res, Instance):
+                        instance_list.append(res)
+                else:
+                    raise Exception('Need type instance or reservation in terminate_instances. type:' + str(type(res)))
+
+        for instance in instance_list:
+                    self.debug( "Sending terminate for " + str(instance) )
+                    self.print_euinstance_list(euinstance_list=res.instances)
+                    instance.terminate()
+                    instance.update()
+                    if instance.state != 'terminated':
+                        monitor_list.append(instance)
+                    else:
+                        self.debug('Instance: ' + str(instance.id) + ' in terminated state:' + str(instance.state))
+        try:
+            self.monitor_euinstances_to_state(instance_list=monitor_list, state='terminated', timeout=timeout)
+            aggregate_result = True
+        except Exception, e:
+            self.debug('Caught Exception in monitoring instances to terminated state:' + str(e))
+
         return aggregate_result
     
     def stop_instances(self,reservation, timeout=480):
@@ -3469,13 +3516,13 @@ class EC2ops(Eutester):
         for instance in reservation.instances:
             assert isinstance(instance, EuInstance)
             try:
-                instance.sys("which apt-get",code=0)
+                instance.sys("which apt-get", code=0)
                 ## Debian based Linux
-                instance.sys("apt-get install -y apache2")
+                instance.sys("apt-get install -y apache2", code=0)
                 instance.sys("echo \"" + instance.id +"\" > /var/www/" + filename)
             except eutester.sshconnection.CommandExitCodeException, e:
                 ### Enterprise Linux
-                instance.sys("yum install -y httpd")
+                instance.sys("yum install -y httpd", code=0)
                 instance.sys("service httpd start")
                 instance.sys("chkconfig httpd on")
                 instance.sys("echo \"" + instance.id +"\" > /var/www/html/" + filename)
@@ -3607,3 +3654,4 @@ class VolumeStateException(Exception):
 
     def __str__(self):
         return repr(self.value)
+
