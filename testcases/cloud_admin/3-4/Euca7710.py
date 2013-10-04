@@ -51,11 +51,9 @@ class Euca7710(unittest.TestCase):
         assert str(self.out).count('InvalidParameterValue') > 0
 
     def test(self):
-        #self.emi = self.tester.get_emi(location=self.imgName)
         self.emi = self.tester.get_emi()
-        #Start the windows instance
         self.runInstances(1)
-        # Attempt to bundle the running windows instance with invalid parameters
+        # Attempt to bundle the running instance with invalid parameters
         # regex used to validate bucket and prefix parameters = ( ^[a-zA-Z\d\.\-_]{3,255}$ )
         # two few chars
         self.badBucket = 'xx'
