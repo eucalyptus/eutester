@@ -3490,13 +3490,30 @@ disable_root: false"""
 
 
 
-    def register_manifest(self,manifest):
+    def register_manifest(self,
+                          manifest,
+                          root_device_name=None,
+                          description=None,
+                          architecture=None,
+                          virtualization_type=None,
+                          bdmdev=None,
+                          name=None,
+                          ramdisk=None,
+                          kernel=None):
         """
         Attempts to register the provided manifest and return the image id created by it
         :param manifest: manifest string to register
         :return: : image id string
         """
-        image = self.register_image(manifest)
+        image = self.register_image(manifest,
+                                    root_device_name=root_device_name,
+                                    description=description,
+                                    architecture=architecture,
+                                    virtualization_type=virtualization_type,
+                                    bdmdev=bdmdev,
+                                    name=name,
+                                    ramdisk=ramdisk,
+                                    kernel=kernel)
         #check to see if really registered by getting image obj to be returned
         try:
             image_obj = self.get_emi(emi=image)
