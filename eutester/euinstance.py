@@ -547,7 +547,7 @@ class EuInstance(Instance, TaggedResource):
                                 ", does not equal requested dev:" + str(dev))
             #Find device this volume is using on guest...
             euvolume.guestdev = None
-            while (elapsed < timeout):
+            while (not euvolume.guestdev and elapsed < timeout):
                 self.debug("Checking for volume attachment on guest, elapsed time("+str(elapsed)+")")
                 dev_list_after = self.get_dev_dir()
                 self.debug("dev_list_after:"+" ".join(dev_list_after))
@@ -556,25 +556,24 @@ class EuInstance(Instance, TaggedResource):
                     devlist = str(diff[0]).split('/')
                     attached_dev = '/dev/'+devlist[len(devlist)-1]
                     euvolume.guestdev = attached_dev.strip()
-
                     self.debug("Volume:"+str(euvolume.id)+" guest device:"+str(euvolume.guestdev))
                     self.attached_vols.append(euvolume)
                     self.debug(euvolume.id+" Requested dev:"+str(euvolume.attach_data.device)+", attached to guest device:"+str(euvolume.guestdev))
                     break
                 elapsed = int(time.time() - start)
                 time.sleep(2)
-            if not euvolume.guestdev:
+            if not euvolume.guestdev or not attached_dev:
                 raise Exception('Device not found on guest after '+str(elapsed)+' seconds')
             self.debug(str(euvolume.id) + "Found attached to guest at dev:" +str(euvolume.guestdev) +
                        ', after elapsed:' +str(elapsed))
-            #Check to see if this volume has unique data in the head otherwise write some and md5 it
-            self.vol_write_random_data_get_md5(euvolume,overwrite=overwrite)
         else:
             self.debug('Failed to attach volume:'+str(euvolume.id)+' to instance:'+self.id)
             raise Exception('Failed to attach volume:'+str(euvolume.id)+' to instance:'+self.id)
         if (attached_dev is None):
             self.debug("List after\n"+" ".join(dev_list_after))
             raise Exception('Volume:'+str(euvolume.id)+' attached, but not found on guest'+str(self.id)+' after '+str(elapsed)+' seconds?')
+        #Check to see if this volume has unique data in the head otherwise write some and md5 it
+        self.vol_write_random_data_get_md5(euvolume,overwrite=overwrite)
         self.debug('Success attaching volume:'+str(euvolume.id)+' to instance:'+self.id+', cloud dev:'+str(euvolume.attach_data.device)+', attached dev:'+str(attached_dev))
         return attached_dev
     
