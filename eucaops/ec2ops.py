@@ -3244,13 +3244,13 @@ disable_root: false"""
                 if isinstance(res, Reservation):
                     instance_list.extend(res.instances)
                 elif isinstance(res, Instance):
-                        instance_list.append(res)
+                    instance_list.append(res)
                 else:
                     raise Exception('Need type instance or reservation in terminate_instances. type:' + str(type(res)))
 
         for instance in instance_list:
                     self.debug( "Sending terminate for " + str(instance) )
-                    self.print_euinstance_list(euinstance_list=res.instances)
+                    self.print_euinstance_list(euinstance_list=instance_list)
                     instance.terminate()
                     instance.update()
                     if instance.state != 'terminated':
