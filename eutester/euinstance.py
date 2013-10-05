@@ -155,8 +155,11 @@ class EuInstance(Instance, TaggedResource):
         newins.timeout = timeout
         newins.retry = retry    
         newins.private_addressing = private_addressing
-        newins.reservation = reservation or newins.tester.get_reservation_for_instance(newins)
-        newins.security_groups = newins.tester.get_instance_security_groups(newins)
+        newins.reservation = reservation or newins.get_reservation()
+        if newins.reservation:
+            newins.security_groups = newins.tester.get_instance_security_groups(newins)
+        else:
+            newins.security_groups = None
         newins.laststate = newins.state
         newins.cmdstart = cmdstart
         newins.auto_connect = auto_connect
@@ -239,8 +242,18 @@ class EuInstance(Instance, TaggedResource):
         else:
             self.debug("keypath or username/password need to be populated for ssh connection") 
             
-    
-    
+
+    def get_reservation(self):
+        res = None
+        try:
+            res = self.tester.get_reservation_for_instance(self)
+        except Exception, e:
+            self.update()
+            if self.state != 'terminated':
+                raise e
+        return res
+
+
     def connect_to_instance(self, timeout=60):
         '''
         Attempts to connect to an instance via ssh.
@@ -1100,7 +1113,13 @@ class EuInstance(Instance, TaggedResource):
         overwrite - optional - boolean. write to volume regardless of whether existing data is found
         '''
         
-        voldev = euvolume.guestdev.strip()  
+        voldev = euvolume.guestdev.strip()
+        if not isinstance(euvolume, EuVolume):
+            raise Exception('EuVolume() type not passed to vol_write_random_data_get_md5, got type:' + str(type(euvolume)) )
+        if not voldev:
+            raise Exception('Guest device not populated for euvolume:' + str(euvolume.id) +
+                            ', euvolume.guestdev:' + str(euvolume.guestdev) +
+                            ', voldev:' + str(voldev))
         #check to see if there's existing data that we should avoid overwriting 
         if overwrite or ( int(self.sys('head -c '+str(length)+ ' '+str(voldev)+' | xargs -0 printf %s | wc -c')[0]) == 0):
             
@@ -1310,9 +1329,11 @@ class EuInstance(Instance, TaggedResource):
                                             self.debug('Found match at dev:'+str(vdev))
                                             found = True
                                             if (vol.guestdev != vdev ):
-                                                self.debug("("+str(vol.id)+")Found dev match. Guest dev changed! Updating from previous:'"+str(vol.guestdev)+"' to:'"+str(vdev)+"'")
+                                                self.debug("("+str(vol.id)+")Found dev match. Guest dev changed! Updating from previous:'"
+                                                           + str(vol.guestdev) + "' to:'"+str(vdev)+"'")
                                             else:
-                                                self.debug("("+str(vol.id)+")Found dev match. Previous dev:'"+str(vol.guestdev)+"', Current dev:'"+str(vdev)+"'")
+                                                self.debug("(" + str(vol.id) + ")Found dev match. Previous dev:'"
+                                                           + str(vol.guestdev) + "', Current dev:'" + str(vdev) + "'")
                                             vol.guestdev = vdev
                                         checked_vdevs.append(vdev) # add to list of devices we've already checked.
                                     if found:
