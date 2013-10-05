@@ -250,6 +250,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
         if load_balancers:
             self.cleanup_load_balancers()
 
+        failmsg = ""
         for key,array in self.test_resources.iteritems():
             for item in array:
                 try:
@@ -264,11 +265,16 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
                             self.detach_volume(item)
                         except:
                             pass
-                        self.delete_volume(item)
+                        item.update()
+                        if item.status != 'deleted':
+                            self.delete_volume(item)
                     else:
                         item.delete()
                 except Exception, e:
-                    self.fail("Unable to delete item: " + str(item) + "\n" + str(e))
+                    tb = self.get_traceback()
+                    failmsg += str(tb) + "\nUnable to delete item: " + str(item) + "\n" + str(e)+"\n"
+        if failmsg:
+            raise Exception(failmsg)
 
     def cleanup_load_balancers(self, lbs=None):
         """
