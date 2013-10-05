@@ -2762,6 +2762,10 @@ disable_root: false"""
         :param instance: boto instance or euinstance obj to use for lookup
         :return: :raise:
         """
+        if hasattr(self.ec2, 'get_all_reservations'):
+            res = self.ec2.get_all_reservations(instance_ids=instance.id)
+            if res and isinstance(res, types.ListType):
+                return res[0]
         for res in self.ec2.get_all_instances():
             for inst in res.instances:
                 if inst.id == instance.id:
@@ -3233,7 +3237,7 @@ disable_root: false"""
         monitor_list = []
         if reservation and not isinstance(reservation, types.ListType):
             if isinstance(reservation, Reservation):
-                instance_list = reservation.instances
+                instance_list = reservation.instances or []
             else:
                 raise Exception('Unknown type:' + str(type(reservation)) + ', for reservation passed to terminate_instances')
         else:
@@ -3250,13 +3254,14 @@ disable_root: false"""
 
         for instance in instance_list:
                     self.debug( "Sending terminate for " + str(instance) )
-                    self.print_euinstance_list(euinstance_list=instance_list)
                     instance.terminate()
                     instance.update()
                     if instance.state != 'terminated':
                         monitor_list.append(instance)
                     else:
                         self.debug('Instance: ' + str(instance.id) + ' in terminated state:' + str(instance.state))
+
+        self.print_euinstance_list(euinstance_list=monitor_list)
         try:
             self.monitor_euinstances_to_state(instance_list=monitor_list, state='terminated', timeout=timeout)
             aggregate_result = True
