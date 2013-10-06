@@ -347,6 +347,7 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
                                                         root_device_name=root_device_name,
                                                         size=size,
                                                         dot=delete_on_terminate,
+                                                        name=name,
                                                         block_device_map=block_device_map
                                                         )
         new_image = self.tester.get_emi(emi=image_id)
