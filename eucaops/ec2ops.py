@@ -2605,7 +2605,7 @@ disable_root: false"""
         good = []
         elapsed = 0
         start = time.time()
-        self.debug("Instances in running state and IPs are valid, attempting connections...")
+        self.debug("Instances in running state and wait_for_valid_ip complete, attempting connections...")
         while waiting and (elapsed < timeout):
             self.debug("Checking "+str(len(waiting))+" instance ssh connections...")
             elapsed = int(time.time()-start)
@@ -2639,8 +2639,9 @@ disable_root: false"""
                 time.sleep(poll_interval)
                 
         if waiting:
-            buf = "Timed out waiting to connect to the following instances:\n"
-            buf += ip_err + "\n"
+            buf = "Following Errors occurred while waiting for instances:\n"
+            buf += 'Errors while waiting for valid ip:'+ ip_err + "\n"
+            buf += "Timed out waiting:" + str(elapsed) + " to connect to the following instances:\n"
             for instance in waiting:
                 buf += str(instance.id)+":"+str(instance.ip_address)+","
             raise Exception(buf)
@@ -2957,7 +2958,7 @@ disable_root: false"""
             elapsed = int(time.time()- start)
             for instance in monitoring:
                 instance.update()
-                if zeros.search(instance.ip_address):
+                if zeros.search(str(instance.ip_address)):
                     self.debug(str(instance.id)+": WAITING for public ip. Current:"+str(instance.ip_address)+
                                ", elapsed:"+str(elapsed)+"/"+str(timeout))
                 else:
