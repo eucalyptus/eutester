@@ -395,14 +395,14 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
                 raise Exception('URL to bfebs image is needed to build snapshot test resource')
             self.setup_bfebs_instance_volume_and_snapshots_from_url(url=url)
         if not self.build_image_volume:
-            self.build_test_volume = self.tester.create_euvolume(zone=self.zone, snapshot=self.build_image_snapshot)
+            self.build_test_volume = self.tester.create_volume(zone=self.zone, snapshot=self.build_image_snapshot)
             self.build_image_volume.md5 = self.build_image_snapshot.md5=self.build_image_snapshot.eutest_volume_md5
             self.build_image_volume.md5len = self.build_image_snapshot.eutest_volume_md5len
             self.build_image_volume.add_tag('md5', self.build_image_volume.md5)
             self.build_image_volume.add_tag('md5len', self.build_image_volume.md5len)
         if not self.base_test_volume:
             self.status('Creating base_test_volume from base_test_snapshot: ')
-            self.base_test_volume = self.tester.create_euvolume(zone=self.zone, snapshot=self.base_test_snapshot)
+            self.base_test_volume = self.tester.create_volume(zone=self.zone, snapshot=self.base_test_snapshot)
             self.base_test_volume.md5 = self.base_test_snapshot.md5=self.build_image_snapshot.eutest_volume_md5
             self.base_test_volume.md5len = self.base_test_snapshot.eutest_volume_md5len
             self.base_test_volume.add_tag('md5', self.base_test_volume.md5)
