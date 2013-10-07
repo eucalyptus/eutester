@@ -1,7 +1,7 @@
 .classpath
 .project
-eucarc
-awsrc
+eucarc*
+awsrc*
 build/
 dependencies/
 eutester4j_results/
