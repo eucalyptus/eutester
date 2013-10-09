@@ -181,8 +181,8 @@ disable_root: false"""
 
     def get_ec2_ip(self):
         """Parse the eucarc for the S3_URL"""
-        walrus_url = self.parse_eucarc("EC2_URL")
-        return walrus_url.split("/")[2].split(":")[0]
+        ec2_url = self.parse_eucarc("EC2_URL")
+        return ec2_url.split("/")[2].split(":")[0]
 
     def create_tags(self, resource_ids, tags):
         """
@@ -2403,7 +2403,8 @@ disable_root: false"""
                 try:
                     self.wait_for_valid_ip(instance)
                 except Exception, e:
-                    ip_err = "WARNING in wait_for_valid_ip: "+str(e)
+                    tb = self.get_traceback()
+                    ip_err = str(tb)  + "\nWARNING in wait_for_valid_ip: "+str(e)
                     self.debug(ip_err)
                     self.terminate_instances(reservation)
                     raise Exception("Reservation " +  str(reservation) + " has been terminated because instance " +
