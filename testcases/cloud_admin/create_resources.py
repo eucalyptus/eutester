@@ -53,13 +53,17 @@ class ResourceGeneration(EutesterTestCase):
     def clean_method(self):
         if not self.args.no_cleanup:
             for tester in self.testers:
-                tester.show_euare_whoami()
+                try:
+                    tester.show_euare_whoami()
+                except: pass
                 tester.cleanup_artifacts()
 
     def CreateResources(self):
         users = self.tester.get_all_users()
         self.testers.append(self.tester)
-        self.tester.show_all_users()
+        try:
+            self.tester.show_all_users()
+        except: pass
         for user in users:
             user_name = user['user_name']
             user_account = user['account_name']
@@ -73,8 +77,9 @@ class ResourceGeneration(EutesterTestCase):
                 self.testers.append(new_tester)
 
         self.tester.debug("Created a total of " + str(len(self.testers)) + " testers" )
-        self.tester.show_all_users()
-
+        try:
+            self.tester.show_all_users()
+        except: pass
         for resource_tester in self.testers:
             import random
             assert isinstance(resource_tester, Eucaops)
