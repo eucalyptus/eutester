@@ -83,7 +83,9 @@ class ResourceGeneration(EutesterTestCase):
         for resource_tester in self.testers:
             import random
             assert isinstance(resource_tester, Eucaops)
-            resource_tester.show_euare_whoami()
+            try:
+                resource_tester.show_euare_whoami()
+            except:pass
             zone = random.choice(resource_tester.get_zones())
             keypair = resource_tester.add_keypair(resource_tester.id_generator())
             group = resource_tester.add_group(resource_tester.id_generator())
