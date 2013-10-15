@@ -1157,8 +1157,9 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
             if not meta_bdm.has_key(bdm_ephemeral_dev):
                 self.resulterr('Ephemeral disk not reported in instance block dev mapping: see euca-6048')
                 meta_bdm[bdm_ephemeral_dev] = eph_dev
-            self.status('Attaching the base test volume to this running instance...')
-            instance.attach_euvolume(self.base_test_volume, timeout=120, overwrite=False)
+            new_vol = self.tester.create_volume(zone=self.zone,size=1, timepergig=180)
+            self.status('Attaching new test volume to this running instance...')
+            instance.attach_euvolume(new_vol, timeout=120, overwrite=False)
             self.status('Block dev map after attaching volume to running instance:')
             instance.update()
             self.tester.print_block_device_map(instance.block_device_mapping)
@@ -1167,8 +1168,8 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
             self.status('Block dev map after detaching volume from instance...')
             instance.update()
             self.tester.print_block_device_map(instance.block_device_mapping)
-            self.status('Re-Attaching the base test volume to this running instance for remainder of test...')
-            instance.attach_euvolume(self.base_test_volume, timeout=120, overwrite=False)
+            self.status('Attaching the same test volume to this running instance for remainder of test...')
+            instance.attach_euvolume(new_vol, timeout=120, overwrite=True)
             self.status('Block dev map after re-attaching volume to running instance:')
             instance.update()
             self.tester.print_block_device_map(instance.block_device_mapping)
