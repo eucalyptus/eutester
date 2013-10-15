@@ -244,7 +244,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
             for res in self.test_resources["reservations"]:
                 self.terminate_instances(res)
         if volumes:
-            self.clean_up_test_volumes()
+            self.clean_up_test_volumes(timeout_per_vol=60)
         if snapshots:
             self.cleanup_test_snapshots()
         if load_balancers:
