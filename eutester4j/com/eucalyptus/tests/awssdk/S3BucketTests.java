@@ -28,14 +28,13 @@ import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.CanonicalGrantee;
 import com.amazonaws.services.s3.model.Grant;
 import com.amazonaws.services.s3.model.GroupGrantee;
+import com.amazonaws.services.s3.model.ListMultipartUploadsRequest;
 import com.amazonaws.services.s3.model.Permission;
 import com.amazonaws.services.s3.model.SetBucketLoggingConfigurationRequest;
 import com.amazonaws.services.s3.model.SetBucketVersioningConfigurationRequest;
 
 /**
  * <p>This class contains tests for basic operations on S3 buckets.</p>
- * 
- * <p>As of 9/24/2013 all tests passed against S3</p>
  * 
  * <p>{@link #versioningConfiguration()} fails against Walrus due to <a href="https://eucalyptus.atlassian.net/browse/EUCA-7635">EUCA-7635</a></p>
  * 
@@ -128,15 +127,97 @@ public class S3BucketTests {
 			assertTrue("Invalid result for bucket versioning configuration", versioning != null);
 			assertTrue("Expected bucket versioning configuration to be OFF, but found it to be " + versioning.getStatus(),
 					versioning.getStatus().equals(BucketVersioningConfiguration.OFF));
-
-			// NPE against Walrus
-			// print("Fetching bucket policy for " + bucketName);
-			// BucketPolicy bucketPolicy = s3.getBucketPolicy(bucketName);
-			// assertTrue("Invalid result for bucket policy", bucketPolicy != null);
-			// assertTrue("Expected empty or null policy text, but got back " + bucketPolicy.getPolicyText(), bucketPolicy.getPolicyText() == null);
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run bucketBasics");
+		}
+	}
+
+	/**
+	 * Tests for S3 operations that are not implemented by Walrus. It should fail against S3 and pass against Walrus. Every unimplemented operation should
+	 * return a 501 NotImplemented error response
+	 */
+	@Test
+	public void unimplementedOps() throws Exception {
+		testInfo(this.getClass().getSimpleName() + " - notImplementedOps");
+
+		boolean error;
+
+		error = false;
+		try {
+			print("Fetching bucket cors for " + bucketName);
+			s3.getBucketCrossOriginConfiguration(bucketName);
+		} catch (AmazonServiceException ase) {
+			verifyException(ase);
+			error = true;
+		} finally {
+			assertTrue("Expected to receive a 501 NotImplemented error but did not", error);
+		}
+
+		error = false;
+		try {
+			print("Fetching bucket lifecycle configuration for " + bucketName);
+			s3.getBucketLifecycleConfiguration(bucketName);
+		} catch (AmazonServiceException ase) {
+			verifyException(ase);
+			error = true;
+		} finally {
+			assertTrue("Expected to receive a 501 NotImplemented error but did not", error);
+		}
+
+		error = false;
+		try {
+			print("Fetching bucket policy for " + bucketName);
+			s3.getBucketPolicy(bucketName);
+		} catch (AmazonServiceException ase) {
+			verifyException(ase);
+			error = true;
+		} finally {
+			assertTrue("Expected to receive a 501 NotImplemented error but did not", error);
+		}
+
+		error = false;
+		try {
+			print("Fetching bucket notification configuration for " + bucketName);
+			s3.getBucketNotificationConfiguration(bucketName);
+		} catch (AmazonServiceException ase) {
+			verifyException(ase);
+			error = true;
+		} finally {
+			assertTrue("Expected to receive a 501 NotImplemented error but did not", error);
+		}
+
+		error = false;
+		try {
+			print("Fetching bucket tagging configuration for " + bucketName);
+			s3.getBucketTaggingConfiguration(bucketName);
+		} catch (AmazonServiceException ase) {
+			verifyException(ase);
+			error = true;
+		} finally {
+			assertTrue("Expected to receive a 501 NotImplemented error but did not", error);
+		}
+
+		error = false;
+		try {
+			print("Fetching bucket website configuration for " + bucketName);
+			s3.getBucketWebsiteConfiguration(bucketName);
+		} catch (AmazonServiceException ase) {
+			verifyException(ase);
+			error = true;
+		} finally {
+			assertTrue("Expected to receive a 501 NotImplemented error but did not", error);
+		}
+
+		error = false;
+		try {
+			print("Fetching multipart uploads for " + bucketName);
+			s3.listMultipartUploads(new ListMultipartUploadsRequest(bucketName));
+		} catch (AmazonServiceException ase) {
+			verifyException(ase);
+			error = true;
+		} finally {
+			assertTrue("Expected to receive a 501 NotImplemented error but did not", error);
 		}
 	}
 
@@ -265,5 +346,17 @@ public class S3BucketTests {
 		print("Caught Exception: " + ase.getMessage());
 		print("HTTP Status Code: " + ase.getStatusCode());
 		print("Amazon Error Code: " + ase.getErrorCode());
+		print("Request ID: " + ase.getRequestId());
+	}
+
+	private void verifyException(AmazonServiceException ase) {
+		print("Caught Exception: " + ase.getMessage());
+		print("HTTP Status Code: " + ase.getStatusCode());
+		print("Amazon Error Code: " + ase.getErrorCode());
+		print("Request ID: " + ase.getRequestId());
+		assertTrue("Expected HTTP status code to be 501 but got " + ase.getStatusCode(), ase.getStatusCode() == 501);
+		assertTrue("Expected AWS error code to be NotImplemented bug got " + ase.getErrorCode(), ase.getErrorCode().equals("NotImplemented"));
+		assertTrue("Invalid or blank message", ase.getMessage() != null || !ase.getMessage().isEmpty());
+		assertTrue("Invalid or blank request ID", ase.getRequestId() != null || !ase.getRequestId().isEmpty());
 	}
 }
