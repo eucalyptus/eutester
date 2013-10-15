@@ -2082,8 +2082,10 @@ disable_root: false"""
             self.debug("Allocating an address")
             address = self.ec2.allocate_address()
         except Exception, e:
-            self.critical("Unable to allocate address")
-            return False
+            tb = self.get_traceback()
+            err_msg = 'Unable to allocate address'
+            self.critical(str(err_msg))
+            raise Exception(str(tb) + "\n" + str(err_msg))
         self.debug("Allocated " + str(address))
         return address
 
