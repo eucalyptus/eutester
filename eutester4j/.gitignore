@@ -1,0 +1,7 @@
+/build
+/dependencies
+/test-output
+.classpath
+.project
+eucarc
+*.class

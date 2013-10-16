@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<project name="Eutester4J" basedir="." default="clean-build">
+<project name="Eutester4J" basedir="." default="clean-build" xmlns:ivy="antlib:org.apache.ivy.ant">
 
 
     <property name="src.dir" value="com/eucalyptus/tests/awssdk"/>
@@ -19,6 +19,8 @@
     <!-- download and ready testng and AWS JAVA SDK -->
     <target name="download-deps">
         <mkdir dir="${deps.dir}"/>
+        <ivy:retrieve pattern="${deps.dir}/[artifact]-[type]-[revision].[ext]"/>
+        <!--
         <echo message="installing testng..."/>
         <get src="http://testng.org/testng-${testng.version}.zip"
              dest="${deps.dir}/testng-${testng.version}.zip"/>
@@ -48,10 +50,15 @@
             </patternset>
             <mapper type="flatten"/>
         </unzip>
+        -->
     </target>
 
     <!-- set classpath to include AWS java sdk, testng.jar and build location -->
     <path id="classpath">
+        <fileset dir="${deps.dir}">
+            <include name="**/*.jar" />
+        </fileset>
+        <!--
         <fileset dir="${aws.dir}">
             <include name="**/*.jar"/>
         </fileset>
@@ -60,6 +67,7 @@
             <include name="**/classes"/>
         </dirset>
         <pathelement location="${log4j-jar}"/>
+        -->
     </path>
 
     <!-- delete build and resutls directories -->
