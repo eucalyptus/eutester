@@ -2070,8 +2070,51 @@ disable_root: false"""
             if addr.instance_id and re.search(r"(available|nobody)", addr.instance_id):
                 ret.append(addr)
         return ret
-    
-    
+
+
+    def show_all_addresses_verbose(self, display=True):
+        """
+        Print table to debug output showing all addresses available to cloud admin using verbose filter
+        """
+        address_width = 20
+        info_width = 64
+        account_width = 24
+        buf = ""
+        line = ""
+        header = "| " + str("PUBLIC IP").ljust(address_width) + " | " + str("ADDRESS INFO").ljust(info_width) + \
+                 " | " + str("ACCOUNT NAME").ljust(account_width) + " | " + str("REGION") + "\n"
+        longest = len(header)
+        try:
+            ad_list = self.ec2.get_all_addresses(addresses='verbose')
+            for ad in ad_list:
+                account_name = ""
+                adline = ""
+                match = re.findall('\(arn:*.*\)', ad.instance_id)
+                if match:
+                    try:
+                        match = match[0]
+                        account_id = match.split(':')[4]
+                        account_name = self.get_all_accounts(account_id=account_id)[0]['account_name']
+                    except:pass
+                if ad.region:
+                    region = ad.region.name
+                adline = "| " + str(ad.public_ip ).ljust(address_width) + " | " + str(ad.instance_id).ljust(info_width) + \
+                       " | " + str(account_name).ljust(account_width)  + " | " + str(region) + "\n"
+                buf += adline
+                if len(adline) > longest:
+                    longest = len(adline)
+        except Exception, e:
+            tb = self.get_traceback()
+            buf = str(tb) + "\n ERROR in show_all_addresses_verbose:" + str(e)
+        for x in xrange(0,longest):
+            line += "-"
+        line += "\n"
+        buf = "\n" + line + header + line + buf + line
+        if not display:
+            return buf
+        self.debug(buf)
+
+
     def allocate_address(self):
         """
         Allocate an address for the current user
