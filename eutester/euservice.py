@@ -1223,9 +1223,11 @@ class EuserviceManager(object):
                 euservice.running = True
                 return
         else:
-            if not euservice.machine.get_eucalyptus_cloud_is_running_status():
-                self.modify_process(euservice, "start")
-        euservice.running = True
+            if euservice.machine.get_eucalyptus_cloud_is_running_status():
+                euservice.running = True
+                return
+        self.modify_process(euservice, "start")
+
     
     def enable(self,euservice):
         self.modify_service(euservice, "ENABLED")
