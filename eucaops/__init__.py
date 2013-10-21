@@ -238,19 +238,39 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
         """
         Description: Attempts to remove artifacts created during and through this eutester's lifespan.
         """
-
+        failmsg = ""
+        failcount = 0
         self.debug("Starting cleanup of artifacts")
         if instances:
             for res in self.test_resources["reservations"]:
-                self.terminate_instances(res)
+                try:
+                    self.terminate_instances(res)
+                except Exception, e:
+                    tb = self.get_traceback()
+                    failcount +=1
+                    failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
         if volumes:
-            self.clean_up_test_volumes(timeout_per_vol=60)
+            try:
+                self.clean_up_test_volumes(timeout_per_vol=60)
+            except Exception, e:
+                tb = self.get_traceback()
+                failcount +=1
+                failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
         if snapshots:
-            self.cleanup_test_snapshots()
+            try:
+                self.cleanup_test_snapshots()
+            except Exception, e:
+                tb = self.get_traceback()
+                failcount +=1
+                failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
         if load_balancers:
-            self.cleanup_load_balancers()
+            try:
+                self.cleanup_load_balancers()
+            except Exception, e:
+                tb = self.get_traceback()
+                failcount +=1
+                failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
 
-        failmsg = ""
         for key,array in self.test_resources.iteritems():
             for item in array:
                 try:
@@ -272,8 +292,10 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
                         item.delete()
                 except Exception, e:
                     tb = self.get_traceback()
+                    failcount += 1
                     failmsg += str(tb) + "\nUnable to delete item: " + str(item) + "\n" + str(e)+"\n"
         if failmsg:
+            failmsg += "\nFound " + str(failcount) + " number of errors while cleaning up. See above"
             raise Exception(failmsg)
 
     def cleanup_load_balancers(self, lbs=None):
