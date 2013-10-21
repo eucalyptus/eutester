@@ -155,11 +155,7 @@ class EuInstance(Instance, TaggedResource):
         newins.timeout = timeout
         newins.retry = retry    
         newins.private_addressing = private_addressing
-        try:
-            newins.reservation = reservation or newins.get_reservation()
-        except Exception, e:
-            newins.debug('Caught Error looking up reservation:' + str(e))
-            newins.reservation = None
+        newins.reservation = reservation or newins.get_reservation()
         if newins.reservation:
             newins.security_groups = newins.tester.get_instance_security_groups(newins)
         else:
@@ -212,13 +208,16 @@ class EuInstance(Instance, TaggedResource):
             bdmvol = self.bdm_root_vol.id
         else:
             bdmvol = None
-            
+        reservation_id = None
+        if self.reservation:
+            reservation_id = self.reservation.id
+
         buf = "\n"
         if title:
             buf += str("-------------------------------------------------------------------------------------------------------------------------------------------------------------------\n")
             buf += str('INST_ID').center(11)+'|'+str('EMI').center(13)+'|'+str('RES_ID').center(11)+'|'+str('LASTSTATE').center(10)+'|'+str('PRIV_ADDR').center(10)+'|'+str('AGE@STATUS').center(13)+'|'+str('VMTYPE').center(12)+'|'+str('ROOT_VOL').center(13)+'|'+str('CLUSTER').center(25)+'|'+str('PUB_IP').center(16)+'|'+str('PRIV_IP')+'\n'
             buf += str("-------------------------------------------------------------------------------------------------------------------------------------------------------------------\n")
-        buf += str(self.id).center(11)+'|'+str(self.image_id).center(13)+'|'+str(self.reservation.id).center(11)+'|'+str(self.laststate).center(10)+'|'+str(self.private_addressing).center(10)+'|'+str(self.age_at_state).center(13)+'|'+str(self.instance_type).center(12)+'|'+str(bdmvol).center(13)+'|'+str(self.placement).center(25)+'|'+str(self.ip_address).center(16)+'|'+str(self.private_ip_address).rstrip()
+        buf += str(self.id).center(11)+'|'+str(self.image_id).center(13)+'|'+str(self.reservation_id).center(11)+'|'+str(self.laststate).center(10)+'|'+str(self.private_addressing).center(10)+'|'+str(self.age_at_state).center(13)+'|'+str(self.instance_type).center(12)+'|'+str(bdmvol).center(13)+'|'+str(self.placement).center(25)+'|'+str(self.ip_address).center(16)+'|'+str(self.private_ip_address).rstrip()
         if footer:
             buf += str("\n-------------------------------------------------------------------------------------------------------------------------------------------------------------------")
         if printmethod:
