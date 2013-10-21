@@ -1939,6 +1939,7 @@ disable_root: false"""
                 emi=None,
                 root_device_type=None,
                 root_device_name=None,
+                virtualization_type=None,
                 location=None,
                 state="available",
                 arch=None,
@@ -1952,6 +1953,7 @@ disable_root: false"""
         :param emi: Partial ID of the emi to return, defaults to the 'emi-" prefix to grab any
         :param root_device_type: example: 'instance-store' or 'ebs'
         :param root_device_name: example: '/dev/sdb'
+        :param virtualization_type: example: 'hvm' or 'paravirtualized'
         :param location: partial on location match example: 'centos'
         :param state: example: 'available'
         :param arch: example: 'x86_64'
@@ -1971,7 +1973,13 @@ disable_root: false"""
             if not re.search(emi, image.id):      
                 continue  
             if (root_device_type is not None) and (image.root_device_type != root_device_type):
-                continue            
+                continue
+            if (virtualization_type is not None):
+                if hasattr(image, 'virtualization_type'):
+                    if image.virtualization_type != virtualization_type:
+                        continue
+                else:
+                    self.debug('Filter by virtualization type requested but not supported in this boto version?')
             if (root_device_name is not None) and (image.root_device_name != root_device_name):
                 continue       
             if (state is not None) and (image.state != state):
