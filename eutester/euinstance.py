@@ -155,7 +155,11 @@ class EuInstance(Instance, TaggedResource):
         newins.timeout = timeout
         newins.retry = retry    
         newins.private_addressing = private_addressing
-        newins.reservation = reservation or newins.get_reservation()
+        try:
+            newins.reservation = reservation or newins.get_reservation()
+        except Exception, e:
+            newins.debug('Caught Error looking up reservation:' + str(e))
+            newins.reservation = None
         if newins.reservation:
             newins.security_groups = newins.tester.get_instance_security_groups(newins)
         else:
