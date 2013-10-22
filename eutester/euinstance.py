@@ -251,9 +251,9 @@ class EuInstance(Instance, TaggedResource):
         try:
             res = self.tester.get_reservation_for_instance(self)
         except Exception, e:
+            tb = self.tester.get_traceback()
             self.update()
-            if self.state != 'terminated':
-                raise e
+            self.debug('Could not get reservation for instance in state:' + str(self.state) + ", err:" + str(e))
         return res
 
 
@@ -1188,6 +1188,7 @@ class EuInstance(Instance, TaggedResource):
         '''
         msg=""
         newuptime = None
+        attempt = 0
         def get_safe_uptime():
             uptime = None
             try:
@@ -1208,15 +1209,22 @@ class EuInstance(Instance, TaggedResource):
         self.debug('Rebooting now...')
         self.reboot()
         time.sleep(waitconnect)
-        self.connect_to_instance(timeout=timeout)
+        while attempt <= uptime_retries:
+            attempt += 1
+            self.connect_to_instance(timeout=timeout)
 
-        #Wait for the system to provide a valid response for uptime, early connections may not
-        newuptime = self.tester.wait_for_result( get_safe_uptime, None, oper=operator.ne)
+            #Wait for the system to provide a valid response for uptime, early connections may not
+            newuptime = self.tester.wait_for_result( get_safe_uptime, None, oper=operator.ne)
 
-        elapsed = int(time.time()-start)
-        #Check to see if new uptime is at least 'pad' less than before, allowing for some pad 
-        if (newuptime - (uptime+elapsed)) > pad:
-            raise Exception("Instance uptime does not represent a reboot. Orig:"+str(uptime)+", New:"+str(newuptime)+", elapsed:"+str(elapsed))
+            elapsed = int(time.time()-start)
+            #Check to see if new uptime is at least 'pad' less than before, allowing for some pad
+            if (newuptime - (uptime+elapsed)) > pad:
+                err_msg = "Instance uptime does not represent a reboot. Orig:"+str(uptime)+\
+                          ", New:"+str(newuptime)+", elapsed:"+str(elapsed)+", attempts:" + str(attempt)
+                if attempt > uptime_retries:
+                    raise Exception(err_msg)
+                else:
+                    self.debug(err_msg)
         if checkvolstatus:
             badvols= self.get_unsynced_volumes()
             if badvols != []:
