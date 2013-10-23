@@ -119,7 +119,7 @@ class Install(EutesterTestCase):
         for machine in self.tester.get_component_machines("ws"):
             machine.sys("service eucalyptus-cloud stop", timeout=480)
         for machine in self.tester.get_component_machines("cc"):
-            machine.sys("service eucalyptus-cc cleanstop", timeout=480)
+            machine.sys("service eucalyptus-cc stop", timeout=480)
         for machine in self.tester.get_component_machines("nc"):
             if machine.distro.name is "vmware":
                 continue
