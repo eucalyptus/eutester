@@ -3600,9 +3600,9 @@ disable_root: false"""
             except eutester.sshconnection.CommandExitCodeException, e:
                 ### Enterprise Linux
                 instance.sys("yum install -y httpd", code=0)
+                instance.sys("echo \"" + instance.id +"\" > /var/www/html/" + filename)
                 instance.sys("service httpd start")
                 instance.sys("chkconfig httpd on")
-                instance.sys("echo \"" + instance.id +"\" > /var/www/html/" + filename)
         return (reservation, filename)
 
 
