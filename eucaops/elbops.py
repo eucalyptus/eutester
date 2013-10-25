@@ -38,6 +38,7 @@ from concurrent.futures import ThreadPoolExecutor
 import urllib2
 from eutester import Eutester
 from boto.ec2.elb.listener import Listener
+from boto.ec2.elb.healthcheck import HealthCheck
 
 ELBRegionData = {
     'us-east-1': 'elasticloadbalancing.us-east-1.amazonaws.com',
@@ -73,14 +74,14 @@ class ELBops(Eutester):
         super(ELBops, self).__init__(credpath=credpath)
 
         self.setup_elb_connection(host=host,
-                                 region=region,
-                                 endpoint=endpoint,
-                                 aws_access_key_id=self.aws_access_key_id,
-                                 aws_secret_access_key=self.aws_secret_access_key,
-                                 is_secure=is_secure,
-                                 path=path,
-                                 port=port,
-                                 boto_debug=boto_debug)
+                                  region=region,
+                                  endpoint=endpoint,
+                                  aws_access_key_id=self.aws_access_key_id,
+                                  aws_secret_access_key=self.aws_secret_access_key,
+                                  is_secure=is_secure,
+                                  path=path,
+                                  port=port,
+                                  boto_debug=boto_debug)
         self.poll_count = 48
         self.username = username
         self.test_resources = {}
@@ -88,8 +89,8 @@ class ELBops(Eutester):
 
     @Eutester.printinfo
     def setup_elb_connection(self, endpoint=None, aws_access_key_id=None, aws_secret_access_key=None, is_secure=True,
-                            host=None,
-                            region=None, path="/", port=443, boto_debug=0):
+                             host=None,
+                             region=None, path="/", port=443, boto_debug=0):
         """
 
         :param endpoint:
@@ -135,7 +136,8 @@ class ELBops(Eutester):
             elb_connection_args = copy.copy(connection_args)
             elb_connection_args['path'] = path
             elb_connection_args['region'] = elb_region
-            self.debug("Attempting to create load balancer connection to " + elb_region.endpoint + ':' + str(port) + path)
+            self.debug(
+                "Attempting to create load balancer connection to " + elb_region.endpoint + ':' + str(port) + path)
             self.elb = boto.connect_elb(**elb_connection_args)
         except Exception, e:
             self.critical("Was unable to create elb connection because of exception: " + str(e))
@@ -152,12 +154,25 @@ class ELBops(Eutester):
         return elb_url.split("/")[2].split(":")[0]
 
     def create_listner(self, load_balancer_port=80, protocol="HTTP", instance_port=80, load_balancer=None):
-        self.debug("Creating ELB Listner for protocol " + protocol + " and port " + str(load_balancer_port) + "->" + str(instance_port))
+        self.debug(
+            "Creating ELB Listner for protocol " + protocol + " and port " + str(load_balancer_port) + "->" + str(
+                instance_port))
         listner = Listener(load_balancer=load_balancer,
                            protocol=protocol,
                            load_balancer_port=load_balancer_port,
                            instance_port=instance_port)
         return listner
+
+    def create_healthcheck(self, target="HTTP:80/instance-name", interval=10, timeout=5, healthy_threshold=2,
+                           unhealthy_threshold=10):
+        self.debug("Creating healthcheck: " + target + " interval=" + str(interval) + " timeout=" + str(timeout) +
+                   " healthy threshold=" + str(healthy_threshold) + " unhealthy threshold=" + str(unhealthy_threshold))
+        healthcheck = HealthCheck(target=target,
+                                  timeout=timeout,
+                                  interval=interval,
+                                  healthy_threshold=healthy_threshold,
+                                  unhealthy_threshold=unhealthy_threshold)
+        return healthcheck
 
     def generate_http_requests(self, url, count=100, worker_threads=20):
         self.debug("Generating {0} http requests against {1}".format(count, url))
@@ -175,7 +190,7 @@ class ELBops(Eutester):
                     self.debug("Request response: {0}".format(http_response.read().rstrip()))
                     responses.append(http_response)
                 else:
-                    raise Exception("Error code " + http_error_code +" found when sending " +
+                    raise Exception("Error code " + http_error_code + " found when sending " +
                                     str(worker_threads) + " concurrent requests to " + url)
             finally:
                 http_response.close()
@@ -185,7 +200,7 @@ class ELBops(Eutester):
         inst_ids = [inst.id for inst in instances]
         self.debug("Registering instances {0} with lb {1}".format(inst_ids, name))
         self.elb.register_instances(name, inst_ids)
-        poll_sleep = timeout/poll_count
+        poll_sleep = timeout / poll_count
         for _ in range(poll_count):
             self.debug("Checking instance health for {0}".format(inst_ids))
             inst_states = self.elb.describe_instance_health(name, instances=inst_ids)
@@ -204,6 +219,10 @@ class ELBops(Eutester):
         self.debug("Creating load balancer: " + name + " on port " + str(load_balancer_port))
         listener = self.create_listner(load_balancer_port=load_balancer_port)
         self.elb.create_load_balancer(name, zones=zones, listeners=[listener])
+
+        healthcheck = self.create_healthcheck()
+        self.elb.configure_health_check(name, healthcheck)
+
         if instances:
             self.register_instances(name, instances)
 
@@ -225,7 +244,7 @@ class ELBops(Eutester):
     def delete_load_balancer(self, lb, timeout=60, poll_sleep=10):
         self.debug("Deleting Loadbalancer: {0}".format(lb.name))
         self.elb.delete_load_balancer(lb.name)
-        poll_count = timeout/poll_sleep
+        poll_count = timeout / poll_sleep
         for _ in range(poll_count):
             lbs = self.elb.get_all_load_balancers(load_balancer_names=[lb.name])
             if lb in lbs:
