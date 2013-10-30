@@ -324,6 +324,7 @@ class EuInstance(Instance, TaggedResource):
         if try_non_root_exec is None:
             try_non_root_exec = self.try_non_root_exec
         if self.username != 'root' and try_non_root_exec:
+            """ Check to make sure there were no sudo resolution errors"""
             if self.use_sudo:
                 results = self.sys_with_sudo(cmd, verbose=verbose, code=code, enable_debug=enable_debug, timeout=timeout)
                 for content in results:
@@ -643,6 +644,7 @@ class EuInstance(Instance, TaggedResource):
             self.sys("ping -c 1 169.254.169.254", code=0, verbose=False)
             return self.sys("curl http://169.254.169.254/"+str(prefix)+str(element_path), code=0)
         except:
+            """ Check to make sure there were no sudo resolution errors"""
             return self.sys("curl http://" + self.tester.get_ec2_ip()  + ":8773/"+str(prefix) + str(element_path), code=0)
           
     def set_block_device_prefix(self):
@@ -1124,6 +1126,7 @@ class EuInstance(Instance, TaggedResource):
                             ', euvolume.guestdev:' + str(euvolume.guestdev) +
                             ', voldev:' + str(voldev))
         #check to see if there's existing data that we should avoid overwriting 
+        #check to make sure there were no sudo resolution errors
         if overwrite or ( int(self.sys('head -c '+str(length)+ ' '+str(voldev)+' | xargs -0 printf %s | wc -c')[0]) == 0):
             
             self.random_fill_volume(euvolume, srcdev=srcdev, length=length)
