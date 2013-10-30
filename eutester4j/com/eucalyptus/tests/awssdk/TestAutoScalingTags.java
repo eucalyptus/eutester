@@ -215,7 +215,7 @@ public class TestAutoScalingTags {
                     new Tag().withResourceType("auto-scaling-group").withResourceId(groupName2).withKey("tag07").withValue("700"),
                     new Tag().withResourceType("auto-scaling-group").withResourceId(groupName2).withKey("tag08").withValue("800"),
                     new Tag().withResourceType("auto-scaling-group").withResourceId(groupName2).withKey("tag09").withValue("900"),
-                    new Tag().withResourceType("auto-scaling-group").withResourceId(groupName2).withKey("tag10").withValue("1000")
+                    new Tag().withResourceType("auto-scaling-group").withResourceId(groupName2).withKey("tag10").withValue("1000").withPropagateAtLaunch( true )
             ));
 
             // Verify tags updated
