@@ -1,78 +1,39 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<project name="Eutester4J" basedir="." default="clean-build">
-
+<!--<project name="Eutester4J" basedir="." default="clean-build">-->
+<project name="Eutester4J" basedir="." default="clean-build" xmlns:ivy="antlib:org.apache.ivy.ant">
 
     <property name="src.dir" value="com/eucalyptus/tests/awssdk"/>
     <property name="build.dir" value="build"/>
     <property name="classes.dir" value="${build.dir}/classes"/>
     <property name="deps.dir" value="dependencies"/>
     <property name="testng.output.dir" value="eutester4j_results"/>
-    <property name="testng.version" value="6.8"/>
-    <property name="testng-jar" value="${deps.dir}/testng-${testng.version}.jar"/>
-    <property name="log4j.version" value="1.2.17"/>
-    <property name="log4j-jar" value="${deps.dir}/log4j-${log4j.version}.jar"/>
-    <property name="aws.dir" value="${deps.dir}/aws-java-sdk"/>
     <property name="eucarc" value="eucarc"/>
     <property name="tests" value="AllTestsSuite.xml"/>
 
-    <!-- download and ready testng and AWS JAVA SDK -->
+    <!-- download testng and AWS JAVA SDK -->
     <target name="download-deps">
         <mkdir dir="${deps.dir}"/>
-        <echo message="installing testng..."/>
-        <get src="http://testng.org/testng-${testng.version}.zip"
-             dest="${deps.dir}/testng-${testng.version}.zip"/>
-        <unzip src="${deps.dir}/testng-${testng.version}.zip" dest="${deps.dir}">
-            <patternset>
-                <include name="**/testng-${testng.version}.jar"/>
-            </patternset>
-            <mapper type="flatten"/>
-        </unzip>
-
-        <echo message="installing log4j..."/>
-        <get src="http://www.eng.lsu.edu/mirrors/apache/logging/log4j/${log4j.version}/log4j-${log4j.version}.zip"
-             dest="${deps.dir}/log4j-${log4j.version}.zip"/>
-        <unzip src="${deps.dir}/log4j-${log4j.version}.zip" dest="${deps.dir}">
-            <patternset>
-                <include name="**/log4j-${log4j.version}.jar"/>
-            </patternset>
-            <mapper type="flatten"/>
-        </unzip>
-
-        <echo message="installing aws java sdk..."/>
-        <get src="http://sdk-for-java.amazonwebservices.com/latest/aws-java-sdk.zip"
-             dest="${deps.dir}/aws-java-sdk.zip"/>
-        <unzip src="${deps.dir}/aws-java-sdk.zip" dest="${aws.dir}">
-            <patternset>
-                <include name="**/*.jar"/>
-            </patternset>
-            <mapper type="flatten"/>
-        </unzip>
+        <ivy:retrieve conf="default" pattern="${deps.dir}/[artifact]-[revision].[ext]"/>
     </target>
 
-    <!-- set classpath to include AWS java sdk, testng.jar and build location -->
+    <!-- set classpath to include dependencies and build output -->
     <path id="classpath">
-        <fileset dir="${aws.dir}">
-            <include name="**/*.jar"/>
+        <fileset dir="${deps.dir}">
+            <include name="*.jar"/>
         </fileset>
-        <pathelement location="${testng-jar}"/>
-        <dirset dir="${build.dir}">
-            <include name="**/classes"/>
-        </dirset>
-        <pathelement location="${log4j-jar}"/>
+        <pathelement path="${classes.dir}"/>
     </path>
 
-    <!-- delete build and resutls directories -->
+    <!-- delete build and results directories -->
     <target name="clean">
         <delete dir="${build.dir}"/>
         <delete dir="${deps.dir}"/>
     </target>
 
     <!-- delete build, results and dependencies directories -->
-    <target name="clean-all">
-        <delete dir="${build.dir}"/>
+    <target name="clean-all" depends="clean">
         <delete dir="${testng.output.dir}"/>
-        <delete dir="${deps.dir}"/>
     </target>
 
     <!-- compile all classes of src.dir -->
@@ -84,9 +45,11 @@
 
     <!-- compile all and run tests per AllTestsSuite.xml -->
     <target name="runTestNG" depends="compile">
-    <taskdef name="testng" classname="org.testng.TestNGAntTask">
+        <taskdef name="testng" classname="org.testng.TestNGAntTask">
             <classpath>
-                <pathelement location="${testng-jar}"/>
+                <fileset dir="${deps.dir}">
+                    <include name="testng-*.jar"/>
+                </fileset>
             </classpath>
         </taskdef>
 
