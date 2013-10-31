@@ -65,7 +65,7 @@ public class Eutester4jTemplateTest {
         getCloudInfo();
 		
 		// create a security group
-		createSecurityGoup(securityGroup, "A Test Security Group");
+		createSecurityGroup(securityGroup, "A Test Security Group");
 		DescribeSecurityGroupsRequest describeSecurityGroupsRequest = new DescribeSecurityGroupsRequest();
 		DescribeSecurityGroupsResult securityGroupsResult = ec2
 				.describeSecurityGroups(describeSecurityGroupsRequest);
