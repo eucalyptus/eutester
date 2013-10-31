@@ -116,7 +116,7 @@ public class TestAutoScalingLaunchAndTerminate {
 			// Wait for instances to launch
 			print("Waiting for instances to terminate");
 			final long terminateStartTime = System.currentTimeMillis();
-			final long terminateTimeout = TimeUnit.MINUTES.toMillis(2);
+			final long terminateTimeout = TimeUnit.MINUTES.toMillis(3);
 			boolean terminated = false;
 			while (!terminated
 					&& (System.currentTimeMillis() - terminateStartTime) < terminateTimeout) {

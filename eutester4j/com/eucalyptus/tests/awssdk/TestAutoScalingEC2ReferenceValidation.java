@@ -62,7 +62,7 @@ public class TestAutoScalingEC2ReferenceValidation {
 			final String securityGroupName = NAME_PREFIX + "EC2ReferenceTest";
 			print("Creating a security group for test use: "
 					+ securityGroupName);
-            createSecurityGoup(securityGroupName, securityGroupName);
+            createSecurityGroup(securityGroupName, securityGroupName);
 			cleanupTasks.add(new Runnable() {
 				@Override
 				public void run() {

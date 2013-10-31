@@ -215,7 +215,7 @@ public class TestAutoScalingTags {
                     new Tag().withResourceType("auto-scaling-group").withResourceId(groupName2).withKey("tag07").withValue("700"),
                     new Tag().withResourceType("auto-scaling-group").withResourceId(groupName2).withKey("tag08").withValue("800"),
                     new Tag().withResourceType("auto-scaling-group").withResourceId(groupName2).withKey("tag09").withValue("900"),
-                    new Tag().withResourceType("auto-scaling-group").withResourceId(groupName2).withKey("tag10").withValue("1000")
+                    new Tag().withResourceType("auto-scaling-group").withResourceId(groupName2).withKey("tag10").withValue("1000").withPropagateAtLaunch(true)
             ));
 
             // Verify tags updated
@@ -240,7 +240,7 @@ public class TestAutoScalingTags {
                 assertTag(group.getTags().get(6), "tag07", "700", false);
                 assertTag(group.getTags().get(7), "tag08", "800", false);
                 assertTag(group.getTags().get(8), "tag09", "900", false);
-                assertTag(group.getTags().get(9), "tag10", "1000", false);
+                assertTag(group.getTags().get(9), "tag10", "1000", true);
             }
 
             // Launch instance
