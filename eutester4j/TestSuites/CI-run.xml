@@ -54,4 +54,9 @@
             <class name="com.eucalyptus.tests.awssdk.JCloudsTest"/>
         </classes>
     </test>
+    <test name="Artifact Clean Up">
+        <classes>
+            <class name="com.eucalyptus.tests.awssdk.CloudCleaner"/>
+        </classes>
+    </test>
 </suite>
