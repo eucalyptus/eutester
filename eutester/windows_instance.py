@@ -53,6 +53,14 @@ import types
 import operator
 
 
+class WinInstanceDisk():
+    def __init__(self,deviceid, size, description, freespace ):
+        self.deviceid = deviceid
+        self.size = size
+        self.description = description
+        self.freespace = freespace
+
+
 class WinInstance(Instance, TaggedResource):
 
     @classmethod
@@ -403,7 +411,10 @@ class WinInstance(Instance, TaggedResource):
 
     def update_system_info(self):
         '''
-        Gather basic system info for this windows instance object
+        Gather basic system info for this windows instance object and store in self.system_info
+        Example:
+        # print wins.system_info.OS_NAME
+          'Microsoft Windows 7 Professional'
         '''
         currentkey = None
         swap = re.compile('([!@#$%^&*. ])')
@@ -416,8 +427,11 @@ class WinInstance(Instance, TaggedResource):
             for line in info:
                 if re.match("^\w.+:", line):
                     linevals = line.split(':')
-                    currentkey = re.sub('[()]', '', linevals.pop(0))
+                    currentkey = linevals.pop(0)
+                    #clean up the key string...
+                    currentkey = re.sub('[()]', '', currentkey)
                     currentkey = re.sub(swap, '_', currentkey)
+                    currentkey = currentkey.upper()
                     value = ":".join(str(x) for x in linevals) or ""
                     setattr(system_info, currentkey, str(value).strip())
                 elif currentkey:
@@ -428,6 +442,63 @@ class WinInstance(Instance, TaggedResource):
                     updated_value.append(str(line).strip())
                     setattr(system_info, currentkey, updated_value)
         self.system_info = system_info
+
+
+    def get_metadata(self, element_path, prefix='latest/meta-data/'):
+        """Return the lines of metadata from the element path provided"""
+        ### If i can reach the metadata service ip use it to get metadata otherwise try the clc directly
+        try:
+            self.sys("ping -c 1 169.254.169.254", code=0, verbose=False)
+            return self.sys("curl http://169.254.169.254/"+str(prefix)+str(element_path), code=0)
+        except:
+            return self.sys("curl http://" + self.tester.get_ec2_ip()  + ":8773/"+str(prefix) + str(element_path), code=0)
+
+
+
+    def update_disk_info(self):
+        self.logical_disks =[]
+        new_info = []
+        header_list = []
+        diskinfo = self.sys('wmic logicaldisk get size,freespace,deviceid,description')
+        header_line = diskinfo.pop(0)
+        headers = header_line.split()
+        for x in xrange(0,len(headers)-1):
+            if x < len(headers)-1:
+                y = x + 1
+            else:
+                y = len(header_line)
+            start = header_line.index(headers[x])
+            stop = header_line.index(headers[y])
+            header_list.append({'name':headers[x],'start':start, 'stop':stop})
+        for line in diskinfo:
+            if len(line):
+                deviceid = None
+                description = None
+                size = None
+                freespace = None
+                for header in header_list:
+                    if re.match('deviceid', header['name'], re.IGNORECASE):
+                        deviceid = line[header['start']:header['stop']]
+                    if re.match('description', header['name'], re.IGNORECASE):
+                        description =  line[header['start']:header['stop']]
+                    if re.match('size', header['name'], re.IGNORECASE):
+                        size = line[header['start']:header['stop']]
+                    if re.match('freespace', header['name'], re.IGNORECASE):
+                        freespace = line[header['start']:header['stop']]
+                new_disk = WinInstanceDisk(deviceid=deviceid.strip(),
+                                           size=size.strip(),
+                                           description=description.strip(),
+                                           freespace=freespace.strip())
+                new_info.append(new_disk)
+        self.logical_disks = new_info
+
+
+
+
+
+
+
+
 
 
 
