@@ -61,7 +61,7 @@ class Winrm_Connection:
         tb = ""
         e = None
         self.close_shell()
-        self.debug('reset_shell connection, host:' + str(self.hostname) + ":" + str(self.port) + ", Username:" + str(self.username) + ', password:' + str(self.password))
+        self.debug('reset_shell connection, Host:' + str(self.hostname) + ":" + str(self.port) + ", Username:" + str(self.username) + ', Password:' + str(self.password))
         while retry < retries:
             retry += 1
             try:
@@ -82,12 +82,13 @@ class Winrm_Connection:
         errmsg = ""
         if verbose is None:
             verbose = self.verbose
+        if verbose:
+            self.debug("winrm cmd:" + str(command))
         arguments = command.split(' ')
         command = arguments.pop(0)
         self.command_id = None
         self.reset_shell()
-        if verbose:
-            self.debug("winrm cmd:" + str(command))
+
         if timeout is not None:
             #convert timeout to ISO8601 format
             timeout = self.convert_iso8601_timeout(timeout)
