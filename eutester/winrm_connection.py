@@ -7,6 +7,7 @@ from isodate.isoduration import duration_isoformat
 from datetime import timedelta
 import StringIO
 import traceback
+import copy
 import sys
 import time
 import re
@@ -83,7 +84,7 @@ class Winrm_Connection:
         if verbose is None:
             verbose = self.verbose
         if verbose:
-            self.debug("winrm cmd:" + str(command))
+            orig_cmd = copy.copy(command)
         arguments = command.split(' ')
         command = arguments.pop(0)
         self.command_id = None
@@ -94,6 +95,8 @@ class Winrm_Connection:
             timeout = self.convert_iso8601_timeout(timeout)
             #self.winproto.transport.timeout = timeout
         try:
+            if verbose:
+                self.debug('winrm cmd:' + str(orig_cmd))
             self.command_id = self.winproto.run_command(self.shell_id, command, arguments)
             stdout, stderr, statuscode = self.winproto.get_command_output(self.shell_id, self.command_id)
         except WinRMTransportError as wte:
@@ -112,7 +115,7 @@ class Winrm_Connection:
             else:
                 raise Exception(errmsg)
         if verbose:
-            self.debug(str(stdout) + "\n" + str(stderr))
+            self.debug("\n" + str(stdout) + "\n" + str(stderr))
         return {'stdout':stdout, 'stderr':stderr, 'statuscode':statuscode}
 
 
@@ -121,7 +124,7 @@ class Winrm_Connection:
             self.winproto.close_shell(self.shell_id)
         self.shell_id = None
 
-    def sys(self, command, include_stderr=False, listformat=False, timeout=None, code=None, verbose=None):
+    def sys(self, command, include_stderr=False, listformat=True, carriage_return=False, timeout=None, code=None, verbose=None):
         ret = []
         if verbose is None:
             verbose = self.verbose
@@ -131,7 +134,12 @@ class Winrm_Connection:
                                                + str(output['statuscode'])
                                                + "\n, stdout:" + str(output['stdout'])
                                                + "\n, stderr:" + str(output['stderr']))
-        ret = output['stdout'].splitlines()
+        ret = output['stdout']
+        if not carriage_return:
+            #remove the '\r' chars from the return buffer, leave '\n'
+            ret = ret.replace('\r','')
+        if listformat:
+            ret = ret.splitlines()
 
         if include_stderr:
                 ret = ret.extend(output['stderr'].splitlines())

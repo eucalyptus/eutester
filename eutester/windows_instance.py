@@ -53,12 +53,99 @@ import types
 import operator
 
 
-class WinInstanceDisk():
-    def __init__(self,deviceid, size, description, freespace ):
-        self.deviceid = deviceid
-        self.size = size
-        self.description = description
-        self.freespace = freespace
+class WinInstanceDiskDrive():
+    gigabyte = 1073741824
+    def __init__(self, win_instance, wmic_dict):
+        if not ('deviceid' in wmic_dict and
+                'size' in wmic_dict and
+                'serialnumber' in wmic_dict and
+                'caption' in wmic_dict and
+                'index' in wmic_dict):
+            raise Exception('wmic_dict passed does not contain needed attributes; deviceid, size, and description')
+        self.__dict__ = self.convert_ints_in_dict(copy.copy(wmic_dict))
+        self.win_instance = win_instance
+        self.size_in_gb = self.get_size_in_gb()
+        self.update_ebs_info_from_serial_number()
+
+    def convert_ints_in_dict(self, dict):
+        #convert strings representing numbers to ints
+        for key in dict:
+            value = str(dict[key])
+            if (re.search("\S", str(dict[key])) and not re.search("\D", str(dict[key]))):
+                dict[key] = int(dict[key])
+        return dict
+
+
+    def get_size_in_gb(self):
+        '''
+        Attempts to convert self.size from bytes to gigabytes as well as round up > .99 to account for a differences
+        in how the size is represented
+        '''
+        gigs = self.size / self.gigabyte
+        if (self.size % self.gigabyte) /float(self.gigabyte) > .99:
+            gigs += 1
+        return gigs
+
+
+    def update_ebs_info_from_serial_number(self):
+        '''
+        Attempts to parse the serial number field from an EBS volume and find the correlating ebs volume
+        example format: vol-81C13EA4-dev-sdg
+        '''
+        if re.match("^vol-", self.serialnumber):
+            split = self.serialnumber.split('-')
+            self.ebs_volume = str(split[0]) + "-" + str(split[1])
+            self.ebs_cloud_dev = "/" + str(split[2]) + "/" + str(split[3])
+        else:
+            self.ebs_volume = ''
+            self.ebs_cloud_dev = ''
+
+
+    def print_self(self):
+        self.get_summary(printmethod=self.win_instance.debug)
+
+    def get_summary(self, printheader=True, printmethod=None):
+        buf = ""
+        deviceid = 24
+        size = 16
+        sizegb = 12
+        serialnumber = 24
+        caption = 30
+        header = "DEVICEID".center(deviceid) + "|" + \
+                 "SIZE B".center(size) + "|" + \
+                 "SIZE GB".center(sizegb) + "|" + \
+                 "SERIAL NUMBER".center(serialnumber) + "|" + \
+                 "CAPTION".center(caption) + "|"
+        summary = str(self.deviceid).center(deviceid) + "|" + \
+                  str(self.size).center(size) + "|" + \
+                  str(self.size_in_gb).center(sizegb) + "|" + \
+                  str(self.serialnumber).center(serialnumber) + "|" + \
+                  str(self.caption).center(caption) + "|"
+        length = len(header)
+        if len(summary) > length:
+            length = len(summary)
+        line = self.get_line(length)
+        if printheader:
+            buf += line + header + line
+        buf += summary + line
+        if printmethod:
+            printmethod(buf)
+        return buf
+
+    def get_line(self, length):
+        line = ""
+        for x in xrange(0,int(length)):
+            line += "-"
+        return "\n" + line + "\n"
+
+
+    def print_self_full(self, printmethod=None):
+        '''
+        formats and prints self.dict
+        '''
+        self.win_instance.print_dict(dict=self.__dict__, printmethod=printmethod)
+
+
 
 
 class WinInstance(Instance, TaggedResource):
@@ -88,6 +175,7 @@ class WinInstance(Instance, TaggedResource):
                                       bdm_root_vol = None,
                                       attached_vols = [],
                                       virtio_blk = True,
+                                      disk_update_interval=5,
                                       retry=2
                                       ):
         '''
@@ -112,7 +200,6 @@ class WinInstance(Instance, TaggedResource):
         newins.winrm_port = winrm_port
         newins.rdp_port = rdp_port
         newins.winrm_protocol = winrm_protocol
-
         newins.debugmethod = debugmethod
         if newins.debugmethod is None:
             newins.logger = eulogger.Eulogger(identifier= str(instance.id))
@@ -134,7 +221,7 @@ class WinInstance(Instance, TaggedResource):
         newins.attached_vols=attached_vols
         newins.timeout = timeout
         newins.virtio_blk  = virtio_blk
-
+        newins.disk_update_interval = disk_update_interval
         newins.retry = retry
         newins.rootfs_device =  rootfs_device
         newins.block_device_prefix = block_device_prefix
@@ -150,6 +237,9 @@ class WinInstance(Instance, TaggedResource):
         newins.set_last_status()
         newins.update_vm_type_info()
         newins.system_info = None
+        newins.disk_drives = []
+        newins.logical_disks = []
+        newins.disk_partitions = []
         #newins.set_block_device_prefix()
         if newins.root_device_type == 'ebs':
             try:
@@ -161,6 +251,8 @@ class WinInstance(Instance, TaggedResource):
         newins.winrm = None
         if newins.auto_connect:
             newins.connect_to_instance(timeout=timeout)
+            newins.update_diskinfo()
+            newins.update_system_info()
         return newins
 
     def update(self):
@@ -182,7 +274,20 @@ class WinInstance(Instance, TaggedResource):
         else:
             self.age_from_run_cmd = None
 
-
+    def print_dict(self, dict=None, printmethod=None):
+        '''
+        formats and prints
+        '''
+        printmethod = printmethod or self.debug
+        buf = "\n"
+        dict = dict or self.__dict__
+        longest_key = 0
+        for key in self.__dict__:
+            if len(key) > longest_key:
+                longest_key = len(key)
+        for key in self.__dict__:
+            buf += str(key).ljust(longest_key) + " -----> :" + str(self.__dict__[key]) + "\n"
+        printmethod(buf)
 
     def printself(self,title=True, footer=True, printmethod=None):
         if self.bdm_root_vol:
@@ -454,48 +559,219 @@ class WinInstance(Instance, TaggedResource):
             return self.sys("curl http://" + self.tester.get_ec2_ip()  + ":8773/"+str(prefix) + str(element_path), code=0)
 
 
+    def print_disk_drive_summary(self,printmethod=None):
+        printmethod = printmethod or self.debug
+        if not self.disk_drives:
+            printmethod('No disk drives to print?')
+            return
+        disklist = copy.copy(self.disk_drives)
+        buf = (disklist.pop()).get_summary()
+        for disk in disklist:
+            buf += disk.get_summary(printheader=False)
+        printmethod(buf)
 
-    def update_disk_info(self):
-        self.logical_disks =[]
-        new_info = []
-        header_list = []
-        diskinfo = self.sys('wmic logicaldisk get size,freespace,deviceid,description')
-        header_line = diskinfo.pop(0)
-        headers = header_line.split()
-        for x in xrange(0,len(headers)-1):
-            if x < len(headers)-1:
-                y = x + 1
+
+    def update_diskinfo(self, forceupdate=False):
+        '''
+        Populate self.disk_drives with WinInstanceDisk objects containing info parsed from wmic command.
+        Since wmic doesn't seem to use delimeters this method attempts to derive the lengh of each column/header
+        in order to parse out the info per disk.
+        :pararm force: boolean. Will force an update, otherwise this method will wait a minimum of
+        self.disk_update_interval before updating again.
+        '''
+        cmd = "wmic diskdrive get  /format:textvaluelist.xsl"
+        if self.disk_drives:
+            if not forceupdate and (time.time() - self.disk_drives[0].last_updated) <= self.disk_update_interval:
+                return
+        for disk_dict in self.get_parsed_wmic_command_output(cmd):
+            try:
+                self.disk_drives.append(WinInstanceDiskDrive(self,disk_dict))
+            except Exception, e:
+                tb = self.tester.get_traceback()
+                self.debug('Error attempting to create WinInstanceDiskDrive from following dict:')
+                self.print_dict(dict=disk_dict)
+                raise Exception(str(tb) + "\n Error attempting to create WinInstanceDiskDrive:" + str(e))
+
+
+    def get_parsed_wmic_command_output(self, wmic_command, verbose=False):
+        '''
+        Attempts to parse a wmic command using "/format:textvaluelist.xsl" for key value format into a list of
+        dicts.
+        :param wmic_command: string representing the remote wmic command to be run
+        :returns : list of dict(s) created from the parsed key value output of the command.
+                   Note keys will be in lowercase
+
+        '''
+        ret_dicts = []
+        output = self.sys(wmic_command, verbose=verbose, code=0)
+        newdict = {}
+        for line in output:
+            if not re.match(r"^\w",line):
+                #If there is a blank line(s) then the previous object is complete
+                if newdict:
+                    ret_dicts.append(newdict)
+                    newdict = {}
             else:
-                y = len(header_line)
-            start = header_line.index(headers[x])
-            stop = header_line.index(headers[y])
-            header_list.append({'name':headers[x],'start':start, 'stop':stop})
-        for line in diskinfo:
-            if len(line):
-                deviceid = None
-                description = None
-                size = None
-                freespace = None
-                for header in header_list:
-                    if re.match('deviceid', header['name'], re.IGNORECASE):
-                        deviceid = line[header['start']:header['stop']]
-                    if re.match('description', header['name'], re.IGNORECASE):
-                        description =  line[header['start']:header['stop']]
-                    if re.match('size', header['name'], re.IGNORECASE):
-                        size = line[header['start']:header['stop']]
-                    if re.match('freespace', header['name'], re.IGNORECASE):
-                        freespace = line[header['start']:header['stop']]
-                new_disk = WinInstanceDisk(deviceid=deviceid.strip(),
-                                           size=size.strip(),
-                                           description=description.strip(),
-                                           freespace=freespace.strip())
-                new_info.append(new_disk)
-        self.logical_disks = new_info
+                splitline = line.split('=')
+                key = str(splitline.pop(0)).lower()
+                if len(splitline) > 1:
+                    value = "=".join(str(x) for x in splitline)
+                else:
+                    value = splitline.pop() or ''
+                newdict[key] = value
+        return ret_dicts
+
+    def get_logical_disk_ids(self, forceupdate=False):
+        '''
+        :param forceupdate: boolean, to force an update of logical disks detected on the guest. Otherwise updates are
+                throttled to self.disk_update_interval
+        :returns list of device ids (ie: [A:,C:,D:]
+        '''
+        ret = []
+        self.update_disk_info(forceupdate=forceupdate)
+        for disk in self.logical_disks:
+            ret.append(disk.deviceid)
+        return ret
+
+    def found(self, command, regex):
+        """ Returns a Boolean of whether the result of the command contains the regex"""
+        result = self.sys(command)
+        for line in result:
+            found = re.search(regex,line)
+            if found:
+                return True
+        return False
+
+    def assertFilePresent(self,filepath):
+        '''
+        Raise exception if file not found at filepath on remote guest. dirs '\' need to be represented as '\\'
+        '''
+        self.sys('dir ' + str(filepath), code=0)
 
 
+    def attach_volume(self, volume,  dev=None, timeout=180, overwrite=False):
+        '''
+        Method used to attach a volume to an instance and track it's use by that instance
+        required - euvolume - the euvolume object being attached
+        required - tester - the eucaops/eutester object/connection for this cloud
+        optional - dev - string to specify the dev path to 'request' when attaching the volume to
+        optional - timeout - integer- time allowed before failing
+        optional - overwrite - flag to indicate whether to overwrite head data of a non-zero filled volume upon attach for md5
+        '''
+        if not isinstance(volume, EuVolume):
+            volume = EuVolume.make_euvol_from_vol(volume)
+        return self.attach_euvolume(volume,  dev=dev, timeout=timeout, overwrite=overwrite)
 
 
+    def attach_euvolume(self, euvolume, dev=None, timeout=180, overwrite=False):
+        '''
+        Method used to attach a volume to an instance and track it's use by that instance
+        required - euvolume - the euvolume object being attached
+        required - tester - the eucaops/eutester object/connection for this cloud
+        optional - dev - string to specify the dev path to 'request' when attaching the volume to
+        optional - timeout - integer- time allowed before failing
+        optional - overwrite - flag to indicate whether to overwrite head data of a non-zero filled volume upon attach for md5
+        '''
+        if not isinstance(euvolume, EuVolume):
+            raise Exception("Volume needs to be of type euvolume, try attach_volume() instead?")
 
+        self.debug("Attempting to attach volume:"+str(euvolume.id)+" to instance:" +str(self.id)+" to dev:"+ str(dev))
+        #grab a snapshot of our devices before attach for comparison purposes
+        dev_list_before = self.get_logical_disk_ids(forceupdate=True)
+
+        dev_list_after = []
+        attached_dev = None
+        start= time.time()
+        elapsed = 0
+        if dev is None:
+            #update our block device prefix, detect if virtio is now in use
+            dev = self.get_free_scsi_dev()
+        if (self.tester.attach_volume(self, euvolume, dev, pause=10,timeout=timeout)):
+            if euvolume.attach_data.device != dev:
+                raise Exception('Attached device:' + str(euvolume.attach_data.device) +
+                                ", does not equal requested dev:" + str(dev))
+            #Find device this volume is using on guest...
+            euvolume.guestdev = None
+            while (not euvolume.guestdev and elapsed < timeout):
+                self.debug("Checking for volume attachment on guest, elapsed time("+str(elapsed)+")")
+                dev_list_after = self.get_logical_disk_ids()
+                self.debug("dev_list_after:"+" ".join(dev_list_after))
+                diff =list( set(dev_list_after) - set(dev_list_before) )
+                if len(diff) > 0:
+                    devlist = str(diff[0]).split('/')
+                    attached_dev = '/dev/'+devlist[len(devlist)-1]
+                    euvolume.guestdev = attached_dev.strip()
+                    self.debug("Volume:"+str(euvolume.id)+" guest device:"+str(euvolume.guestdev))
+                    self.attached_vols.append(euvolume)
+                    self.debug(euvolume.id+" Requested dev:"+str(euvolume.attach_data.device)+", attached to guest device:"+str(euvolume.guestdev))
+                    break
+                elapsed = int(time.time() - start)
+                time.sleep(2)
+            if not euvolume.guestdev or not attached_dev:
+                raise Exception('Device not found on guest after '+str(elapsed)+' seconds')
+            self.debug(str(euvolume.id) + "Found attached to guest at dev:" +str(euvolume.guestdev) +
+                       ', after elapsed:' +str(elapsed))
+        else:
+            self.debug('Failed to attach volume:'+str(euvolume.id)+' to instance:'+self.id)
+            raise Exception('Failed to attach volume:'+str(euvolume.id)+' to instance:'+self.id)
+        if (attached_dev is None):
+            self.debug("List after\n"+" ".join(dev_list_after))
+            raise Exception('Volume:'+str(euvolume.id)+' attached, but not found on guest'+str(self.id)+' after '+str(elapsed)+' seconds?')
+        #Check to see if this volume has unique data in the head otherwise write some and md5 it
+        #self.vol_write_random_data_get_md5(euvolume,overwrite=overwrite)
+        self.debug('Success attaching volume:'+str(euvolume.id)+' to instance:'+self.id+', cloud dev:'+str(euvolume.attach_data.device)+', attached dev:'+str(attached_dev))
+        return attached_dev
+
+
+    def get_guestdevs_inuse_by_vols(self):
+        retlist = []
+        for vol in self.attached_vols:
+            retlist.append(vol.guestdev)
+        return retlist
+
+
+    def get_free_scsi_dev(self, prefix=None,maxdevs=16):
+        '''
+        The volume attach command requires a cloud level device name that is not currently associated with a volume
+        Note: This is the device name from the clouds perspective, not necessarily the guest's
+        This method attempts to find a free device name to use in the command
+        optional - prefix - string, pre-pended to the the device search string
+        optional - maxdevs - number use to specify the max device names to iterate over.Some virt envs have a limit of 16 devs.
+        '''
+        d='e'
+        in_use_cloud = ""
+        in_use_guest = ""
+        dev = None
+        if prefix is None:
+            prefix = self.block_device_prefix
+        cloudlist=self.tester.get_volumes(attached_instance=self.id)
+
+        for x in xrange(0,maxdevs):
+            inuse=False
+            #double up the letter identifier to avoid exceeding z
+            if d == 'z':
+                prefix= prefix+'e'
+            dev = "/dev/"+prefix+str(d)
+            for avol in self.attached_vols:
+                if avol.attach_data.device == dev:
+                    inuse = True
+                    in_use_guest += str(avol.id)+", "
+                    continue
+            #Check to see if the cloud has a conflict with this device name...
+            for vol in cloudlist:
+                vol.update()
+                if (vol.attach_data is not None) and (vol.attach_data.device == dev):
+                    inuse = True
+                    in_use_cloud += str(vol.id)+", "
+                    continue
+            if inuse is False:
+                self.debug("Instance:"+str(self.id)+" returning available cloud scsi dev:"+str(dev))
+                return str(dev)
+            else:
+                d = chr(ord('e') + x) #increment the letter we append to the device string prefix
+                dev = None
+        if dev is None:
+            raise Exception("Could not find a free scsi dev on instance:"+self.id+", maxdevs:"+str(maxdevs)+"\nCloud_devs:"+str(in_use_cloud)+"\nGuest_devs:"+str(in_use_guest))
 
 
 
