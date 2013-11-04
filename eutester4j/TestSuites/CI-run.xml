@@ -5,7 +5,6 @@
         <classes>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingActivities"/>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingAvailabilityZoneRebalancing"/>
-            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingCooldown"/>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingDescribeGroupsInstances"/>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingDescribeInstances"/>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingDescribePolicyAlarms"/>
@@ -52,6 +51,11 @@
     <test name="JClouds Test">
         <classes>
             <class name="com.eucalyptus.tests.awssdk.JCloudsTest"/>
+        </classes>
+    </test>
+    <test name="Artifact Clean Up">
+        <classes>
+            <class name="com.eucalyptus.tests.awssdk.CloudCleaner"/>
         </classes>
     </test>
 </suite>
