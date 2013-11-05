@@ -52,20 +52,24 @@ import copy
 import types
 import operator
 
-
-class WinInstanceDiskDrive():
+class WinInstanceDiskType():
     gigabyte = 1073741824
+    megabyte = 1048576
     def __init__(self, win_instance, wmic_dict):
-        if not ('deviceid' in wmic_dict and
-                'size' in wmic_dict and
-                'serialnumber' in wmic_dict and
-                'caption' in wmic_dict and
-                'index' in wmic_dict):
-            raise Exception('wmic_dict passed does not contain needed attributes; deviceid, size, and description')
+        self.check_dict_requires(wmic_dict)
         self.__dict__ = self.convert_ints_in_dict(copy.copy(wmic_dict))
         self.win_instance = win_instance
         self.size_in_gb = self.get_size_in_gb()
-        self.update_ebs_info_from_serial_number()
+        self.size_in_mb = self.get_size_in_mb()
+        self.size = self.size or 0
+        self.last_updated = time.time()
+        self.setup()
+
+    def setup(self):
+        raise Exception('Not Implemented')
+
+    def check_dict_requires(self, wmic_dict):
+        raise Exception('Not Implemented')
 
     def convert_ints_in_dict(self, dict):
         #convert strings representing numbers to ints
@@ -75,17 +79,85 @@ class WinInstanceDiskDrive():
                 dict[key] = int(dict[key])
         return dict
 
+    def get_partition_ids(self):
+        retlist = []
+        for part in self.disk_partitions:
+            retlist.append(part.deviceid)
+        return retlist
+
+    def get_logicaldisk_ids(self):
+        retlist = []
+        for part in self.disk_partitions:
+            retlist.extend(part.get_logicaldisk_ids())
+        return retlist
 
     def get_size_in_gb(self):
         '''
         Attempts to convert self.size from bytes to gigabytes as well as round up > .99 to account for a differences
         in how the size is represented
         '''
+        self.size = int(self.size or 0)
         gigs = self.size / self.gigabyte
         if (self.size % self.gigabyte) /float(self.gigabyte) > .99:
             gigs += 1
         return gigs
 
+    def get_size_in_mb(self):
+        '''
+        Attempts to convert self.size from bytes to gigabytes as well as round up > .99 to account for a differences
+        in how the size is represented
+        '''
+        self.size = int(self.size or 0)
+        mb = self.size / self.megabyte
+        if (self.size % self.megabyte) /float(self.megabyte) > .99:
+            mb += 1
+        return mb
+
+    def print_self(self):
+        self.get_summary(printmethod=self.win_instance.debug)
+
+    def get_summary(self, printheader=True, printmethod=None):
+        raise Exception('Method not implemented')
+
+    def get_line(self, length):
+        line = ""
+        for x in xrange(0,int(length)):
+            line += "-"
+        return "\n" + line + "\n"
+
+    def print_self_full(self, printmethod=None):
+        '''
+        formats and prints self.dict
+        '''
+        self.win_instance.print_dict(dict=self.__dict__, printmethod=printmethod)
+
+
+
+class WinInstanceDiskDrive(WinInstanceDiskType):
+
+    def setup(self):
+        self.update_ebs_info_from_serial_number()
+        self.disk_partitions = []
+
+    def check_dict_requires(self, wmic_dict):
+        if not ('deviceid' in wmic_dict and
+                'size' in wmic_dict and
+                'serialnumber' in wmic_dict and
+                'caption' in wmic_dict and
+                'index' in wmic_dict):
+            raise Exception('wmic_dict passed does not contain needed attributes; deviceid, size, serialnumber, caption, and index')
+
+    def get_partition_ids(self):
+        retlist = []
+        for part in self.disk_partitions:
+            retlist.append(part.deviceid)
+        return retlist
+
+    def get_logicaldisk_ids(self):
+        retlist = []
+        for part in self.disk_partitions:
+            retlist.extend(part.get_logicaldisk_ids())
+        return retlist
 
     def update_ebs_info_from_serial_number(self):
         '''
@@ -100,27 +172,31 @@ class WinInstanceDiskDrive():
             self.ebs_volume = ''
             self.ebs_cloud_dev = ''
 
-
-    def print_self(self):
-        self.get_summary(printmethod=self.win_instance.debug)
-
     def get_summary(self, printheader=True, printmethod=None):
         buf = ""
-        deviceid = 24
+        deviceid = 20
         size = 16
-        sizegb = 12
+        sizegb = 7
         serialnumber = 24
-        caption = 30
+        caption = 36
+        part_ids = 12
+        logical_ids = 16
         header = "DEVICEID".center(deviceid) + "|" + \
                  "SIZE B".center(size) + "|" + \
                  "SIZE GB".center(sizegb) + "|" + \
                  "SERIAL NUMBER".center(serialnumber) + "|" + \
-                 "CAPTION".center(caption) + "|"
+                 "CAPTION".center(caption) + "|" \
+                 "PARTITIONS".center(part_ids) + "|" \
+                 "LOGICAL_DISKS".center(logical_ids) + "|"
+
         summary = str(self.deviceid).center(deviceid) + "|" + \
                   str(self.size).center(size) + "|" + \
                   str(self.size_in_gb).center(sizegb) + "|" + \
                   str(self.serialnumber).center(serialnumber) + "|" + \
-                  str(self.caption).center(caption) + "|"
+                  str(self.caption).center(caption) + "|" + \
+                  str(self.partitions).center(part_ids) + "|" + \
+                  str(",".join(str(x) for x in self.get_logicaldisk_ids())).center(logical_ids) + "|"
+
         length = len(header)
         if len(summary) > length:
             length = len(summary)
@@ -132,19 +208,97 @@ class WinInstanceDiskDrive():
             printmethod(buf)
         return buf
 
-    def get_line(self, length):
-        line = ""
-        for x in xrange(0,int(length)):
-            line += "-"
-        return "\n" + line + "\n"
+
+class WinInstanceDiskPartition(WinInstanceDiskType):
+
+    def setup(self):
+        self.logicaldisks = []
+
+    def check_dict_requires(self, wmic_dict):
+        if not ('deviceid' in wmic_dict and
+                'size' in wmic_dict and
+                'bootable' in wmic_dict and
+                'index' in wmic_dict):
+            raise Exception('wmic_dict passed does not contain needed attributes; deviceid, size, index and bootable')
 
 
-    def print_self_full(self, printmethod=None):
-        '''
-        formats and prints self.dict
-        '''
-        self.win_instance.print_dict(dict=self.__dict__, printmethod=printmethod)
+    def get_logicaldisk_ids(self):
+        retlist = []
+        for disk in self.logicaldisks:
+            retlist.append(disk.deviceid)
+        return retlist
 
+    def get_summary(self, printheader=True, printmethod=None):
+        buf = ""
+        deviceid = 24
+        size = 16
+        sizegb = 12
+        sizemb = 12
+        bootable = 10
+        header = "DEVICEID".center(deviceid) + "|" + \
+                 "SIZE B".center(size) + "|" + \
+                 "SIZE GB".center(sizegb) + "|" + \
+                 "SIZE MB".center(sizemb) + "|" + \
+                 "BOOTABLE".center(bootable) + "|"
+
+        summary = str(self.deviceid).center(deviceid) + "|" + \
+                  str(self.size).center(size) + "|" + \
+                  str(self.size_in_gb).center(sizegb) + "|" + \
+                  str(self.size_in_mb).center(sizemb) + "|" + \
+                  str(self.bootable).center(bootable) + "|"
+
+        length = len(header)
+        if len(summary) > length:
+            length = len(summary)
+        line = self.get_line(length)
+        if printheader:
+            buf += line + header + line
+        buf += summary + line
+        if printmethod:
+            printmethod(buf)
+        return buf
+
+
+class WinInstanceLogicalDisk(WinInstanceDiskType):
+
+    def setup(self):
+        self.partition = None
+
+    def check_dict_requires(self, wmic_dict):
+        if not ('deviceid' in wmic_dict and
+                'size' in wmic_dict and
+                'description' in wmic_dict and
+                'freespace' in wmic_dict and
+                'filesystem' in wmic_dict):
+            raise Exception('wmic_dict passed does not contain needed attributes; deviceid, size, and description')
+
+    def get_summary(self, printheader=True, printmethod=None):
+        buf = ""
+        deviceid = 24
+        size = 16
+        freespace = 16
+        filesystem = 24
+        description = 30
+        header = "DEVICEID".center(deviceid) + "|" + \
+                 "SIZE".center(size) + "|" + \
+                 "FREE SPACE".center(freespace) + "|" + \
+                 "FILE SYSTEM".center(filesystem) + "|" + \
+                 "DESCRIPTION".center(description) + "|"
+        summary = str(self.deviceid).center(deviceid) + "|" + \
+                  str(self.size).center(size) + "|" + \
+                  str(self.freespace).center(freespace) + "|" + \
+                  str(self.filesystem).center(filesystem) + "|" + \
+                  str(self.description).center(description) + "|"
+        length = len(header)
+        if len(summary) > length:
+            length = len(summary)
+        line = self.get_line(length)
+        if printheader:
+            buf += line + header + line
+        buf += summary + line
+        if printmethod:
+            printmethod(buf)
+        return buf
 
 
 
@@ -237,9 +391,9 @@ class WinInstance(Instance, TaggedResource):
         newins.set_last_status()
         newins.update_vm_type_info()
         newins.system_info = None
-        newins.disk_drives = []
-        newins.logical_disks = []
+        newins.diskdrives = []
         newins.disk_partitions = []
+        newins.logicaldisks = []
         #newins.set_block_device_prefix()
         if newins.root_device_type == 'ebs':
             try:
@@ -251,7 +405,8 @@ class WinInstance(Instance, TaggedResource):
         newins.winrm = None
         if newins.auto_connect:
             newins.connect_to_instance(timeout=timeout)
-            newins.update_diskinfo()
+            newins.update_disk_info()
+            newins.print_diskdrive_summary()
             newins.update_system_info()
         return newins
 
@@ -282,11 +437,11 @@ class WinInstance(Instance, TaggedResource):
         buf = "\n"
         dict = dict or self.__dict__
         longest_key = 0
-        for key in self.__dict__:
+        for key in dict:
             if len(key) > longest_key:
                 longest_key = len(key)
-        for key in self.__dict__:
-            buf += str(key).ljust(longest_key) + " -----> :" + str(self.__dict__[key]) + "\n"
+        for key in dict:
+            buf += str(key).ljust(longest_key) + " -----> :" + str(dict[key]) + "\n"
         printmethod(buf)
 
     def printself(self,title=True, footer=True, printmethod=None):
@@ -436,7 +591,7 @@ class WinInstance(Instance, TaggedResource):
         '''
         if (self.winrm is None):
             raise Exception("WinInstance winrm connection is None")
-        return self.winrm.sys(command=cmd, include_stderr=include_stderr, timeout=None, code=code)
+        return self.winrm.sys(command=cmd, include_stderr=include_stderr, timeout=None, verbose=verbose, code=code)
 
 
 
@@ -549,7 +704,7 @@ class WinInstance(Instance, TaggedResource):
         self.system_info = system_info
 
 
-    def get_metadata(self, element_path, prefix='latest/meta-data/'):
+    def get_metadata(self, element_path='', prefix='latest/meta-data/'):
         """Return the lines of metadata from the element path provided"""
         ### If i can reach the metadata service ip use it to get metadata otherwise try the clc directly
         try:
@@ -559,38 +714,136 @@ class WinInstance(Instance, TaggedResource):
             return self.sys("curl http://" + self.tester.get_ec2_ip()  + ":8773/"+str(prefix) + str(element_path), code=0)
 
 
-    def print_disk_drive_summary(self,printmethod=None):
+    def print_diskdrive_summary(self,printmethod=None):
         printmethod = printmethod or self.debug
-        if not self.disk_drives:
+        if not self.diskdrives:
             printmethod('No disk drives to print?')
             return
-        disklist = copy.copy(self.disk_drives)
+        disklist = copy.copy(self.diskdrives)
+        buf = (disklist.pop()).get_summary()
+        for disk in disklist:
+            buf += disk.get_summary(printheader=False)
+        printmethod(buf)
+
+    def print_partition_summary(self,printmethod=None):
+        printmethod = printmethod or self.debug
+        if not self.disk_partitions:
+            printmethod('No disk partitions to print?')
+            return
+        partlist = copy.copy(self.disk_partitions)
+        buf = (partlist.pop()).get_summary()
+        for part in partlist:
+            buf += part.get_summary(printheader=False)
+        printmethod(buf)
+
+    def print_logicaldisk_summary(self,printmethod=None):
+        printmethod = printmethod or self.debug
+        if not self.logicaldisks:
+            printmethod('No disk disk_partitions to print?')
+            return
+        disklist = copy.copy(self.logicaldisks)
         buf = (disklist.pop()).get_summary()
         for disk in disklist:
             buf += disk.get_summary(printheader=False)
         printmethod(buf)
 
 
-    def update_diskinfo(self, forceupdate=False):
+    def update_disk_info(self , forceupdate=False):
+        if self.diskdrives:
+            if not forceupdate and (time.time() - self.diskdrives[0].last_updated) <= self.disk_update_interval:
+                return
+        self.debug('Fetching updated disk info...')
+        self.diskdrives =  self.get_updated_diskdrive_info()
+        self.disk_partitions = self.get_updated_partition_info()
+        self.logicaldisks = self.get_updated_logicaldisk_info()
+        self.associate_diskdrives_to_partitions()
+        self.associate_partitions_to_logicaldrives()
+
+    def get_updated_diskdrive_info(self, forceupdate=False):
         '''
-        Populate self.disk_drives with WinInstanceDisk objects containing info parsed from wmic command.
+        Populate self.diskdrives with WinInstanceDisk objects containing info parsed from wmic command.
         Since wmic doesn't seem to use delimeters this method attempts to derive the lengh of each column/header
         in order to parse out the info per disk.
         :pararm force: boolean. Will force an update, otherwise this method will wait a minimum of
         self.disk_update_interval before updating again.
         '''
         cmd = "wmic diskdrive get  /format:textvaluelist.xsl"
-        if self.disk_drives:
-            if not forceupdate and (time.time() - self.disk_drives[0].last_updated) <= self.disk_update_interval:
-                return
+
+        diskdrives = []
         for disk_dict in self.get_parsed_wmic_command_output(cmd):
             try:
-                self.disk_drives.append(WinInstanceDiskDrive(self,disk_dict))
+                diskdrives.append(WinInstanceDiskDrive(self,disk_dict))
             except Exception, e:
                 tb = self.tester.get_traceback()
                 self.debug('Error attempting to create WinInstanceDiskDrive from following dict:')
                 self.print_dict(dict=disk_dict)
                 raise Exception(str(tb) + "\n Error attempting to create WinInstanceDiskDrive:" + str(e))
+        return diskdrives
+
+
+    def get_updated_partition_info(self, forceupdate=False):
+        '''
+        Populate self.diskdrives with WinInstanceDisk objects containing info parsed from wmic command.
+        Since wmic doesn't seem to use delimeters this method attempts to derive the lengh of each column/header
+        in order to parse out the info per disk.
+        :pararm force: boolean. Will force an update, otherwise this method will wait a minimum of
+        self.disk_update_interval before updating again.
+        '''
+        cmd = "wmic partition list full"
+
+        disk_partitions = []
+        for part_dict in self.get_parsed_wmic_command_output(cmd):
+            try:
+                disk_partitions.append(WinInstanceDiskPartition(self,part_dict))
+            except Exception, e:
+                tb = self.tester.get_traceback()
+                self.debug('Error attempting to create WinInstanceDiskPartition from following dict:')
+                self.print_dict(dict=part_dict)
+                raise Exception(str(tb) + "\n Error attempting to create WinInstanceDiskPartition:" + str(e))
+        return disk_partitions
+
+
+    def get_updated_logicaldisk_info(self, forceupdate=False):
+        cmd ='wmic logicaldisk list /format:textvaluelist.xsl'
+        logicaldisks = []
+        for part_dict in self.get_parsed_wmic_command_output(cmd):
+            try:
+                logicaldisks.append(WinInstanceLogicalDisk(self,part_dict))
+            except Exception, e:
+                tb = self.tester.get_traceback()
+                self.debug('Error attempting to create WinInstanceLogicalDisk from following dict:')
+                self.print_dict(dict=part_dict)
+                raise Exception(str(tb) + "\n Error attempting to create WinInstanceLogicalDisk:" + str(e))
+        return logicaldisks
+
+
+    def associate_diskdrives_to_partitions(self):
+        for disk in self.diskdrives:
+            disk.disk_partitions = []
+            for part in self.disk_partitions:
+                if part.diskindex == disk.index:
+                    disk.disk_partitions.append(part)
+
+    def associate_partitions_to_logicaldrives(self, verbose=False):
+        for part in self.disk_partitions:
+            drive_id = None
+            part.logicaldisks = []
+            cmd = 'wmic partition where (DeviceID="Disk #' + str(part.diskindex) + \
+                  ', Partition #' + str(part.index) + '") assoc /assocclass:Win32_LogicalDiskToPartition'
+            output = self.sys(cmd, verbose=verbose, code=0)
+            for line in output:
+                if re.search('Win32_LogicalDisk.DeviceID',line):
+                    try:
+                        drive_id =  str(line.split()[0].split('=')[1]).replace('"','').strip()
+                    except Exception, e:
+                        tb = self.tester.get_traceback()
+                        self.debug(str(tb)+ "\nError getting logical drive info:" + str(e))
+                    if drive_id:
+                        for disk in self.logicaldisks:
+                            if re.match(disk.deviceid, drive_id):
+                                part.logicaldisks.append(disk)
+                                disk.partition = part
+                                break
 
 
     def get_parsed_wmic_command_output(self, wmic_command, verbose=False):
@@ -621,7 +874,7 @@ class WinInstance(Instance, TaggedResource):
                 newdict[key] = value
         return ret_dicts
 
-    def get_logical_disk_ids(self, forceupdate=False):
+    def get_logicaldisk_ids(self, forceupdate=False):
         '''
         :param forceupdate: boolean, to force an update of logical disks detected on the guest. Otherwise updates are
                 throttled to self.disk_update_interval
@@ -629,7 +882,19 @@ class WinInstance(Instance, TaggedResource):
         '''
         ret = []
         self.update_disk_info(forceupdate=forceupdate)
-        for disk in self.logical_disks:
+        for disk in self.logicaldisks:
+            ret.append(disk.deviceid)
+        return ret
+
+    def get_diskdrive_ids(self, forceupdate=False):
+        '''
+        :param forceupdate: boolean, to force an update of logical disks detected on the guest. Otherwise updates are
+                throttled to self.disk_update_interval
+        :returns list of device ids ie: ['\\.\PHYSICALDRIVE0','\\.\PHYSICALDRIVE1,'\\.\PHYSICALDRIVE2']
+        '''
+        ret = []
+        self.update_disk_info(forceupdate=forceupdate)
+        for disk in self.diskdrives:
             ret.append(disk.deviceid)
         return ret
 
@@ -677,14 +942,20 @@ class WinInstance(Instance, TaggedResource):
 
         self.debug("Attempting to attach volume:"+str(euvolume.id)+" to instance:" +str(self.id)+" to dev:"+ str(dev))
         #grab a snapshot of our devices before attach for comparison purposes
-        dev_list_before = self.get_logical_disk_ids(forceupdate=True)
+        logicaldrive_list_before = self.get_logicaldisk_ids(forceupdate=True)
+        diskdrive_list_before = self.get_diskdrive_ids()
+        use_serial = False
+        for disk in self.diskdrives:
+            if re.search('vol-', disk.serialnumber):
+                use_serial = True
+                break
 
         dev_list_after = []
         attached_dev = None
         start= time.time()
         elapsed = 0
         if dev is None:
-            #update our block device prefix, detect if virtio is now in use
+            #update our block device prefix
             dev = self.get_free_scsi_dev()
         if (self.tester.attach_volume(self, euvolume, dev, pause=10,timeout=timeout)):
             if euvolume.attach_data.device != dev:
@@ -693,33 +964,44 @@ class WinInstance(Instance, TaggedResource):
             #Find device this volume is using on guest...
             euvolume.guestdev = None
             while (not euvolume.guestdev and elapsed < timeout):
+                #Since all hypervisors may not support serial number info, check for an incremental diff in the
+                # list of physical diskdrives on this guest.
                 self.debug("Checking for volume attachment on guest, elapsed time("+str(elapsed)+")")
-                dev_list_after = self.get_logical_disk_ids()
-                self.debug("dev_list_after:"+" ".join(dev_list_after))
-                diff =list( set(dev_list_after) - set(dev_list_before) )
+                diskdrive_list_after = self.get_logicaldisk_ids(forceupdate=True)
+                self.debug("dev_list_after:"+" ".join(diskdrive_list_after))
+                diff =list( set(diskdrive_list_after) - set(diskdrive_list_before) )
                 if len(diff) > 0:
-                    devlist = str(diff[0]).split('/')
-                    attached_dev = '/dev/'+devlist[len(devlist)-1]
-                    euvolume.guestdev = attached_dev.strip()
-                    self.debug("Volume:"+str(euvolume.id)+" guest device:"+str(euvolume.guestdev))
-                    self.attached_vols.append(euvolume)
-                    self.debug(euvolume.id+" Requested dev:"+str(euvolume.attach_data.device)+", attached to guest device:"+str(euvolume.guestdev))
-                    break
+                    for disk in self.diskdrives:
+                        if re.search('vol-', disk.serialnumber):
+                            use_serial = True
+                        if euvolume.id == disk.ebs_volume:
+                            attached_dev = disk.deviceid
+                            euvolume.guestdev = attached_dev
+                            self.debug("Volume:"+str(euvolume.id)+" guest device by serialnumber:"+str(euvolume.guestdev))
+                            break
+                    if not use_serial:
+                        attached_dev = str(diff[0])
+                        euvolume.guestdev = attached_dev.strip()
+                        self.debug("Volume:"+str(euvolume.id)+"found guest device by diff:"+str(euvolume.guestdev))
+                    if attached_dev:
+                        self.attached_vols.append(euvolume)
+                        self.debug(euvolume.id+": Requested dev:"+str(euvolume.attach_data.device)+", attached to guest device:"+str(euvolume.guestdev))
+                        break
                 elapsed = int(time.time() - start)
                 time.sleep(2)
             if not euvolume.guestdev or not attached_dev:
                 raise Exception('Device not found on guest after '+str(elapsed)+' seconds')
-            self.debug(str(euvolume.id) + "Found attached to guest at dev:" +str(euvolume.guestdev) +
-                       ', after elapsed:' +str(elapsed))
         else:
             self.debug('Failed to attach volume:'+str(euvolume.id)+' to instance:'+self.id)
             raise Exception('Failed to attach volume:'+str(euvolume.id)+' to instance:'+self.id)
         if (attached_dev is None):
-            self.debug("List after\n"+" ".join(dev_list_after))
+            self.debug("List after\n"+" ".join(diskdrive_list_after))
             raise Exception('Volume:'+str(euvolume.id)+' attached, but not found on guest'+str(self.id)+' after '+str(elapsed)+' seconds?')
         #Check to see if this volume has unique data in the head otherwise write some and md5 it
         #self.vol_write_random_data_get_md5(euvolume,overwrite=overwrite)
-        self.debug('Success attaching volume:'+str(euvolume.id)+' to instance:'+self.id+', cloud dev:'+str(euvolume.attach_data.device)+', attached dev:'+str(attached_dev))
+        self.debug('Success attaching volume:'+str(euvolume.id)+' to instance:'+self.id +
+                   ', cloud dev:'+str(euvolume.attach_data.device)+', attached dev:'+str(attached_dev) +
+                    ", elapsed:" + str(elapsed))
         return attached_dev
 
 
@@ -775,6 +1057,9 @@ class WinInstance(Instance, TaggedResource):
 
 
 
+
+    def get_process_list(self):
+        cmd = "wmic process list full"
 
 
 

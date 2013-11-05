@@ -26,6 +26,7 @@ class Winrm_Connection:
                  url=None,
                  debug_method=None,
                  verbose=True):
+        self.debug_method = debug_method
         self.hostname = hostname
         self.username = username
         self.password = password
@@ -38,11 +39,12 @@ class Winrm_Connection:
         self.shell_id = None
         self.command_id = None
         self.last_used = None
-        self.debug_method = debug_method
+
         self.verbose = verbose
 
 
     def get_proto(self):
+        self.debug('Creating winrm connection:' + str(self.hostname) + ":" + str(self.port) + ", Username:" + str(self.username) + ', Password:' + str(self.password))
         winproto = Protocol(endpoint=self.url,transport=self.transport,username=self.username,password=self.password)
         #winproto.transport.timeout = self.default_command_timeout
         return winproto
@@ -62,7 +64,7 @@ class Winrm_Connection:
         tb = ""
         e = None
         self.close_shell()
-        self.debug('reset_shell connection, Host:' + str(self.hostname) + ":" + str(self.port) + ", Username:" + str(self.username) + ', Password:' + str(self.password))
+        #self.debug('reset_shell connection, Host:' + str(self.hostname) + ":" + str(self.port) + ", Username:" + str(self.username) + ', Password:' + str(self.password))
         while retry < retries:
             retry += 1
             try:
@@ -128,7 +130,7 @@ class Winrm_Connection:
         ret = []
         if verbose is None:
             verbose = self.verbose
-        output = self.cmd(command, timeout=timeout)
+        output = self.cmd(command, timeout=timeout, verbose=verbose )
         if code is not None and output['statuscode'] != code:
             raise CommandExitCodeException('Cmd:' + str(command) + ' failed with status code:'
                                                + str(output['statuscode'])
