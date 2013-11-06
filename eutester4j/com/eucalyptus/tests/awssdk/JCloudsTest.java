@@ -68,7 +68,7 @@ public class JCloudsTest {
             print( "Creating volume…" );
             final String volumeId = createVolume( findAvailablityZone(), 1 );
             print( "Waiting for volume availability…" );
-            waitForVolumes( TimeUnit.MINUTES.toMillis( 3 ) );
+            waitForVolumes( TimeUnit.MINUTES.toMillis( 5 ) );
             cleanup.add( new Runnable() {
                 @Override
                 public void run() {
@@ -78,7 +78,7 @@ public class JCloudsTest {
             print( "Creating snapshot…" );
             final String snapshotId = createSnapshot( volumeId, snapshotDescription );
             print( "Waiting for snapshot availability…" );
-            waitForSnapshots( TimeUnit.MINUTES.toMillis( 3 ) );
+            waitForSnapshots( TimeUnit.MINUTES.toMillis( 5 ) );
             cleanup.add( new Runnable() {
                 @Override
                 public void run() {
@@ -99,7 +99,7 @@ public class JCloudsTest {
                 @Override
                 public void run() {
                     terminateInstances( Collections.singletonList( id ) );
-                    waitForInstances( TimeUnit.MINUTES.toMillis( 3 ) );
+                    waitForInstances( TimeUnit.MINUTES.toMillis( 5 ) );
                 }
             } );
 

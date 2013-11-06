@@ -20,20 +20,8 @@
 
 package com.eucalyptus.tests.awssdk;
 
-import com.amazonaws.services.autoscaling.model.AutoScalingGroup;
-import com.amazonaws.services.autoscaling.model.DescribeAutoScalingGroupsRequest;
-import com.amazonaws.services.autoscaling.model.DescribeAutoScalingGroupsResult;
-import com.amazonaws.services.ec2.AmazonEC2;
-import com.amazonaws.services.ec2.model.DescribeInstancesResult;
-import com.amazonaws.services.ec2.model.Filter;
+import com.amazonaws.services.autoscaling.model.*;
 import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
-import com.amazonaws.services.ec2.model.Instance;
-import com.amazonaws.services.ec2.model.Reservation;
-import com.amazonaws.services.autoscaling.model.CreateAutoScalingGroupRequest;
-import com.amazonaws.services.autoscaling.model.CreateLaunchConfigurationRequest;
-import com.amazonaws.services.autoscaling.model.DeleteAutoScalingGroupRequest;
-import com.amazonaws.services.ec2.model.DescribeInstancesRequest;
-
 import org.testng.annotations.Test;
 
 import java.util.ArrayList;
@@ -42,7 +30,6 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import static com.eucalyptus.tests.awssdk.Eutester4j.*;
-import static com.eucalyptus.tests.awssdk.Eutester4j.waitForInstances;
 
 /**
  * This application tests the inclusion of instance data when describing groups
@@ -103,7 +90,7 @@ public class TestAutoScalingDescribeGroupsInstances {
 
             // Wait for instances to launch
             print( "Waiting for instance to launch" );
-            final long timeout = TimeUnit.MINUTES.toMillis( 2 );
+            final long timeout = TimeUnit.MINUTES.toMillis( 5 );
             final String instanceId = (String) waitForInstances(timeout, 1, groupName,true).get( 0 );
 
             // Verify instances are included when describing the group

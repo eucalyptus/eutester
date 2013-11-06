@@ -106,7 +106,7 @@ public class TestAutoScalingMultipleAvailabilityZones {
 
 			// Wait for instances to launch
 			print("Waiting for 2 instances to launch");
-			final long timeout = TimeUnit.MINUTES.toMillis(3);
+			final long timeout = TimeUnit.MINUTES.toMillis(5);
 			List<Instance> instances = (List<Instance>) waitForInstances(timeout, 2, groupName, false);
 			assertBalanced(instances, availabilityZone1, availabilityZone2);
 
