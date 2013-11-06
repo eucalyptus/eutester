@@ -24,6 +24,7 @@ import com.amazonaws.services.autoscaling.model.ScalingPolicy;
 import com.amazonaws.services.ec2.model.*;
 import com.amazonaws.services.autoscaling.model.LaunchConfiguration;
 import com.amazonaws.services.autoscaling.model.AutoScalingGroup;
+import org.testng.annotations.Test;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -34,7 +35,7 @@ import static com.eucalyptus.tests.awssdk.Eutester4j.*;
  *
  *  !!! CAUTION !!!
  *  !!! WARNING !!!
- *  This will NUKE all instances, keypairs, groups, policies, launch configs and autoscaling groups
+ *  This will NUKE all instances, keypairs, groups, volumes, snapshots, policies, launch configs and autoscaling groups
  *
  * @author tony
  */
@@ -49,6 +50,7 @@ public class CloudCleaner {
         print("Test complete");
     }
 
+    @Test
     public void clean() throws Exception {
         testInfo(this.getClass().getSimpleName());
         getCloudInfo();
@@ -88,7 +90,7 @@ public class CloudCleaner {
         List<SecurityGroup> groups = describeSecurityGroups();
         if (groups.size() > 1) {
             print("Found security groups to delete");
-            for(SecurityGroup group : describeSecurityGroups()){
+            for(SecurityGroup group : groups){
                 if (!group.getGroupName().equals("default")){
                     deleteSecurityGroup(group.getGroupName());
                 }
@@ -101,7 +103,7 @@ public class CloudCleaner {
         List<ScalingPolicy> policies = describePolicies();
         if (policies.size() > 0) {
             print("Found Policies to delete");
-            for(ScalingPolicy policy :policies){
+            for(ScalingPolicy policy : policies){
                 deletePolicy(policy.getPolicyName());
             }
         } else {
@@ -112,7 +114,7 @@ public class CloudCleaner {
         List<LaunchConfiguration> lcs = describeLaunchConfigs();
         if (lcs.size() > 0) {
             print("Found Launch Configs to delete");
-            for(LaunchConfiguration lc : describeLaunchConfigs()){
+            for(LaunchConfiguration lc : lcs){
                 deleteLaunchConfig(lc.getLaunchConfigurationName());
             }
         } else {
@@ -123,11 +125,33 @@ public class CloudCleaner {
         List<AutoScalingGroup> asGroups = describeAutoScalingGroups();
         if (asGroups.size() > 0) {
             print("Found Auto Scaling Groups to delete");
-            for(AutoScalingGroup asg : describeAutoScalingGroups()){
+            for(AutoScalingGroup asg : asGroups){
                 deleteAutoScalingGroup(asg.getAutoScalingGroupName(), true);
             }
         } else {
             print("No auto scaling groups found");
+        }
+
+        // delete volumes
+        List<Volume> volumes = ec2.describeVolumes().getVolumes();
+        if (volumes.size() > 0) {
+            print("Found volumes to delete");
+            for(Volume vol : volumes){
+                deleteVolume(vol.getVolumeId());
+            }
+        } else {
+            print("No volumes found");
+        }
+
+        //delete snapshots
+        List<Snapshot> snapshots = ec2.describeSnapshots().getSnapshots();
+        if (snapshots.size() > 0) {
+            print("Found snapshots to delete");
+            for(Snapshot snap : snapshots){
+                deleteSnapshot(snap.getSnapshotId());
+            }
+        } else {
+            print("No volumes found");
         }
     }
 

@@ -8,6 +8,7 @@
         <suite-file path="IAMSuite.xml" />
         <suite-file path="WalrusSuite.xml" />
         <suite-file path="ELBSuite.xml" />
+        <suite-file path="JCloudsSuite.xml" />
     </suite-files>
 
     <test name="Eutester4j_Sanity_Test">

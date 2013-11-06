@@ -150,7 +150,7 @@ public class TestAutoScalingDescribeInstances {
 			// Wait for instances to terminate
 			print("Waiting for instance to terminate");
 			final long terminateStartTime = System.currentTimeMillis();
-			final long terminateTimeout = TimeUnit.MINUTES.toMillis(2);
+			final long terminateTimeout = TimeUnit.MINUTES.toMillis(3);
 			boolean terminated = false;
 			while (!terminated
 					&& (System.currentTimeMillis() - terminateStartTime) < terminateTimeout) {
