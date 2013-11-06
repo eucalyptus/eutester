@@ -266,6 +266,11 @@ class Install(EutesterTestCase):
         for machine in self.tester.get_component_machines("nc"):
             self.set_config_option(machine, "VNET_MODE", self.args.vnet_mode)
 
+    def configure_cloud_in_a_box_networking(self):
+        for machine in self.tester.get_component_machines("cc"):
+            self.set_config_option(machine, "VNET_PRIVINTERFACE", "br0")
+            self.set_config_option(machine, "VNET_PUBINTERFACE", "br0")
+
     def setup_dns(self):
         if not hasattr(self.tester, 'service_manager'):
             self.tester = Eucaops(config_file=self.args.config_file, password=self.args.password)
