@@ -246,7 +246,7 @@ public class TestAutoScalingTags {
             // Launch instance
             print("Launching instance to test tag propagation");
             as.setDesiredCapacity(new SetDesiredCapacityRequest().withAutoScalingGroupName(groupName1).withHonorCooldown(false).withDesiredCapacity(1));
-            final String instanceId = (String) waitForInstances(TimeUnit.MINUTES.toMillis(2), 1, groupName1, true).get(0);
+            final String instanceId = (String) waitForInstances(TimeUnit.MINUTES.toMillis(5), 1, groupName1, true).get(0);
 
             // Verify tag on instance
             final com.amazonaws.services.ec2.model.DescribeTagsResult describeTagsResult =
