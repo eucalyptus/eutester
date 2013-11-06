@@ -16,9 +16,10 @@ class Install(EutesterTestCase):
         self.parser.add_argument("--nightly",action='store_true')
         self.parser.add_argument("--lvm-extents")
         self.parser.add_argument("--vnet-mode", default="MANAGED-NOVLAN")
-        self.parser.add_argument("--vnet-subnet", default="172.17.0.0")
+        self.parser.add_argument("--vnet-subnet", default="1.0.0.0")
         self.parser.add_argument("--vnet-netmask", default="255.255.0.0")
         self.parser.add_argument("--vnet-publicips")
+        self.parser.add_argument("--vnet_addrspernet", default="32")
         self.parser.add_argument("--vnet-dns", default="8.8.8.8")
         self.parser.add_argument("--root-lv", default="/dev/vg01/")
         self.parser.add_argument("--dnsdomain")
@@ -249,21 +250,21 @@ class Install(EutesterTestCase):
             self.tester.modify_property("storage.blockstoragemanager", ebs_manager)
             self.tester.modify_property("storage.dasdevice", self.args.root_lv)
 
+    def set_config_option(self, machine, option, parameter):
+        sed_command = 'sed -i -e "s/^.*{0}=.*$/{0}={1}/" {2}/etc/eucalyptus/eucalyptus.conf'.format(option, parameter, self.tester.eucapath)
+        machine.sys(sed_command)
+
     def configure_network(self):
         for machine in self.tester.get_component_machines("cc"):
-            machine.eucalyptus_conf.VNET_MODE.config_file_set_this_line(self.args.vnet_mode)
-            machine.config.uncomment_line("VNET_SUBNET")
-            machine.config.uncomment_line("VNET_NETMASK")
-            machine.config.uncomment_line("VNET_PUBLICIPS")
-            machine.config.uncomment_line("VNET_DNS")
-            machine.eucalyptus_conf.update()
-            machine.eucalyptus_conf.VNET_SUBNET.config_file_set_this_line(self.args.vnet_subnet)
-            machine.eucalyptus_conf.VNET_NETMASK.config_file_set_this_line(self.args.vnet_netmask)
-            machine.eucalyptus_conf.VNET_PUBLICIPS.config_file_set_this_line(self.args.vnet_publicips)
-            machine.eucalyptus_conf.VNET_DNS.config_file_set_this_line(self.args.vnet_dns)
+            self.set_config_option(machine, "VNET_MODE", self.args.vnet_mode)
+            self.set_config_option(machine, "VNET_SUBNET", self.args.vnet_subnet)
+            self.set_config_option(machine, "VNET_NETMASK", self.args.vnet_netmask)
+            self.set_config_option(machine, "VNET_PUBLICIPS", self.args.vnet_publicips)
+            self.set_config_option(machine, "VNET_DNS", self.args.vnet_dns)
+            self.set_config_option(machine, "VNET_ADDRSPERNET", self.args.vnet_addrspernet)
 
         for machine in self.tester.get_component_machines("nc"):
-            machine.eucalyptus_conf.VNET_MODE.config_file_set_this_line(self.args.vnet_mode)
+            self.set_config_option(machine, "VNET_MODE", self.args.vnet_mode)
 
     def setup_dns(self):
         if not hasattr(self.tester, 'service_manager'):
@@ -284,7 +285,7 @@ class Install(EutesterTestCase):
         self.initialize_db()
         self.sync_ssh_keys()
         self.remove_host_check()
-        #self.configure_network()
+        self.configure_network()
         self.start_components()
         self.wait_for_creds()
         self.register_components()
