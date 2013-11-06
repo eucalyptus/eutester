@@ -38,6 +38,8 @@ import com.amazonaws.services.s3.model.SetBucketVersioningConfigurationRequest;
  * 
  * <p>{@link #versioningConfiguration()} fails against Walrus due to <a href="https://eucalyptus.atlassian.net/browse/EUCA-7635">EUCA-7635</a></p>
  * 
+ * <p>{@link #unimplementedOps()} passes only against Walrus as the APIs are not implemented by Walrus
+ * 
  * @author Swathi Gangisetty
  * 
  */
@@ -290,8 +292,10 @@ public class S3BucketTests {
 	/**
 	 * Test for changing versioning configuration of a bucket and verifying it.
 	 * 
-	 * <p> Test failed against Walrus. Versioning configuration cannot be turned OFF once its ENABLED/SUSPENDED on a bucket. While S3 throws an exception for
-	 * such a request, Walrus does not. The versioning configuration remains unchanged but no error is received </p>
+	 * Test failed against Walrus. Versioning configuration cannot be turned OFF once its ENABLED/SUSPENDED on a bucket. While S3 throws an exception for such a
+	 * request, Walrus does not. The versioning configuration remains unchanged but no error is received.</p>
+	 * 
+	 * @see <a href="https://eucalyptus.atlassian.net/browse/EUCA-7635">EUCA-7635</a>
 	 */
 	@Test
 	public void versioningConfiguration() throws Exception {
