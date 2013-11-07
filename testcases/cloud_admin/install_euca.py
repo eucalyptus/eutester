@@ -151,15 +151,14 @@ class Install(EutesterTestCase):
             machine.sys("lvextend " + logical_volume + " -l" + extents )
             machine.sys("resize2fs -f " + logical_volume, timeout=12000)
 
-    def wait_for_creds(self, timeout=300):
-        while timeout > 0:
+    def wait_for_creds(self, timeout=180):
+        def get_creds():
             try:
                 self.tester = Eucaops(config_file=self.args.config_file, password=self.args.password)
-                break
-            except Exception,e:
-                pass
-            timeout -= 20
-            self.tester.sleep(20)
+                return True
+            except Exception:
+                return False
+        self.tester.wait_for_result(get_creds, True, timeout=timeout)
 
     def sync_ssh_keys(self):
         ### Sync CLC SSH key to all machines
@@ -174,7 +173,7 @@ class Install(EutesterTestCase):
                 for machine in self.tester.get_component_machines("cc" + cluster):
                     cc_pub_key = machine.sys("cat ~/.ssh/id_rsa.pub")[0]
                     for nc in self.tester.get_component_machines("nc" + cluster):
-                        nc.sys("echo " + clc_pub_key + " >> ~/.ssh/authorized_keys")
+                        nc.sys("echo " + cc_pub_key + " >> ~/.ssh/authorized_keys")
         except IndexError:
             pass
 
@@ -182,9 +181,9 @@ class Install(EutesterTestCase):
         for machine in self.tester.get_component_machines():
             ssh_config_file = 'Host *\nStrictHostKeyChecking no\nUserKnownHostsFile=/dev/null\n'
             #assert isinstance(machine, Machine)
-            file = machine.sftp.open("/root/.ssh/config", "w")
-            file.write(ssh_config_file)
-            file.close()
+            ssh_config_file = machine.sftp.open("/root/.ssh/config", "w")
+            ssh_config_file.write(ssh_config_file)
+            ssh_config_file.close()
 
     def register_components(self):
         clcs = self.tester.get_component_machines("clc")
@@ -249,8 +248,8 @@ class Install(EutesterTestCase):
                             ebs_manager = "emc-fastsnap"
             else:
                 ebs_manager = self.args.block_device_manager
-            self.tester.modify_property("storage.blockstoragemanager", ebs_manager)
-            self.tester.modify_property("storage.dasdevice", self.args.root_lv)
+            self.tester.modify_property(zone + ".storage.blockstoragemanager", ebs_manager)
+            self.tester.modify_property(zone + ".storage.dasdevice", self.args.root_lv)
 
     def set_config_option(self, machine, option, parameter):
         sed_command = 'sed -i -e "s/^.*{0}=.*$/{0}={1}/" {2}/etc/eucalyptus/eucalyptus.conf'.format(option, parameter, self.tester.eucapath)
@@ -299,12 +298,11 @@ class Install(EutesterTestCase):
 if __name__ == "__main__":
     testcase = Install()
     ### Either use the list of tests passed from config/command line to determine what subset of tests to run
-    list = testcase.args.tests or ["InstallEuca"]
+    test_list = testcase.args.tests or ["InstallEuca"]
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
-    for test in list:
+    for test in test_list:
         unit_list.append( testcase.create_testunit_by_name(test) )
         ### Run the EutesterUnitTest objects
-
     result = testcase.run_test_case_list(unit_list,clean_on_exit=True)
     exit(result)
