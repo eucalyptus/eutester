@@ -1329,13 +1329,13 @@
 				<ServiceName>ec2</ServiceName>
 				<Http>true</Http>
 				<Https>true</Https>
-				<Hostname>http://10.111.1.68:8773/services/Eucalyptus</Hostname>
+				<Hostname>http://10.111.1.14:8773/services/Eucalyptus</Hostname>
 			</Endpoint>
 			<Endpoint>
 				<ServiceName>s3</ServiceName>
 				<Http>true</Http>
 				<Https>true</Https>
-				<Hostname>http://10.111.1.68:8773/services/Walrus</Hostname>
+				<Hostname>http://10.111.1.40:8773/services/Walrus</Hostname>
 			</Endpoint>
 		</Region>
 	</Regions>
