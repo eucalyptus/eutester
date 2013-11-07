@@ -112,11 +112,11 @@ public class TestAutoScalingELBInstanceHealthMonitoring {
 
             // Wait for instance to launch
             print("Waiting for instance to launch");
-            final long timeout = TimeUnit.MINUTES.toMillis(2);
+            final long timeout = TimeUnit.MINUTES.toMillis(5);
             final String instanceId = (String) waitForInstances(timeout, 1, groupName,true).get(0);
 
             print("Waiting for instance to be added to ELB");
-            waitForElbInstances(loadBalancerName, TimeUnit.MINUTES.toMillis(2), Arrays.asList(instanceId));
+            waitForElbInstances(loadBalancerName, TimeUnit.MINUTES.toMillis(5), Arrays.asList(instanceId));
             print("Instance added to ELB");
 
             // Verify initial health status

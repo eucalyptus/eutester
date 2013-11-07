@@ -115,7 +115,7 @@ public class TestAutoScalingInstanceProfile {
             String instanceId = null;
             {
                 final long startTime = System.currentTimeMillis();
-                final long launchTimeout = TimeUnit.MINUTES.toMillis(2);
+                final long launchTimeout = TimeUnit.MINUTES.toMillis(5);
                 boolean launched = false;
                 while (!launched && (System.currentTimeMillis() - startTime) < launchTimeout) {
                     Thread.sleep(5000);
@@ -168,7 +168,7 @@ public class TestAutoScalingInstanceProfile {
             instanceId = null;
             {
                 final long startTime = System.currentTimeMillis();
-                final long launchTimeout = TimeUnit.MINUTES.toMillis(2);
+                final long launchTimeout = TimeUnit.MINUTES.toMillis(5);
                 boolean launched = false;
                 while (!launched && (System.currentTimeMillis() - startTime) < launchTimeout) {
                     Thread.sleep(5000);
