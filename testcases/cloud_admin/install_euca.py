@@ -2,7 +2,6 @@ __author__ = 'viglesias'
 import re
 from eucaops import Eucaops
 from eutester.eutestcase import EutesterTestCase
-#from eutester.machine import Machine
 
 class Install(EutesterTestCase):
 
@@ -20,6 +19,9 @@ class Install(EutesterTestCase):
         self.parser.add_argument("--vnet-netmask", default="255.255.0.0")
         self.parser.add_argument("--vnet-publicips")
         self.parser.add_argument("--vnet_addrspernet", default="32")
+        self.parser.add_argument("--vnet_privinterface", default="br0")
+        self.parser.add_argument("--vnet_pubinterface", default="br0")
+        self.parser.add_argument("--vnet_bridge", default="br0")
         self.parser.add_argument("--vnet-dns", default="8.8.8.8")
         self.parser.add_argument("--root-lv", default="/dev/vg01/")
         self.parser.add_argument("--dnsdomain")
@@ -262,14 +264,12 @@ class Install(EutesterTestCase):
             self.set_config_option(machine, "VNET_PUBLICIPS", self.args.vnet_publicips)
             self.set_config_option(machine, "VNET_DNS", self.args.vnet_dns)
             self.set_config_option(machine, "VNET_ADDRSPERNET", self.args.vnet_addrspernet)
+            self.set_config_option(machine, "VNET_PRIVINTERFACE", self.args.vnet_privinterface)
+            self.set_config_option(machine, "VNET_PUBINTERFACE", self.args.vnet_pubinterface)
 
         for machine in self.tester.get_component_machines("nc"):
             self.set_config_option(machine, "VNET_MODE", self.args.vnet_mode)
-
-    def configure_cloud_in_a_box_networking(self):
-        for machine in self.tester.get_component_machines("cc"):
-            self.set_config_option(machine, "VNET_PRIVINTERFACE", "br0")
-            self.set_config_option(machine, "VNET_PUBINTERFACE", "br0")
+            self.set_config_option(machine, "VNET_BRIDGE", self.args.vnet_bridge)
 
     def setup_dns(self):
         if not hasattr(self.tester, 'service_manager'):
