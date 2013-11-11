@@ -29,6 +29,7 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -39,6 +40,7 @@ import java.util.concurrent.TimeUnit;
 class Eutester4j {
 
     static String eucarc = System.getProperty("eucarc");
+    static String endpointFile = System.getProperty("endpoints");
     static Logger logger = Logger.getLogger(Eutester4j.class.getCanonicalName());
 	static String EC2_ENDPOINT = null;
 	static String AS_ENDPOINT = null;
@@ -51,6 +53,7 @@ class Eutester4j {
 	static String ACCESS_KEY = null;
 	static String CREDPATH = null;
     static String NAME_PREFIX;
+    static String endpoints;
 
     static AmazonAutoScaling as;
     static AmazonEC2 ec2;
@@ -71,6 +74,13 @@ class Eutester4j {
         } else {
             CREDPATH = "eucarc";
         }
+
+        if (endpointFile != null){
+             endpoints = endpointFile;
+        } else {
+            endpoints = "endpoints.xml";
+        }
+
         print("Getting cloud information from " + CREDPATH);
 		EC2_ENDPOINT = parseEucarc(CREDPATH, "EC2_URL") + "/";
 		AS_ENDPOINT = parseEucarc(CREDPATH, "AWS_AUTO_SCALING_URL") + "/";
@@ -81,6 +91,9 @@ class Eutester4j {
         TOKENS_ENDPOINT = parseEucarc(CREDPATH, "TOKEN_URL") + "/";
 		SECRET_KEY = parseEucarc(CREDPATH, "EC2_SECRET_KEY").replace("'", "");
 		ACCESS_KEY = parseEucarc(CREDPATH, "EC2_ACCESS_KEY").replace("'", "");
+
+        print("Updating endpoints file");
+        updateEndpoints(endpoints, EC2_ENDPOINT,S3_ENDPOINT);
 
         print("Getting cloud connections");
         as = getAutoScalingClient(ACCESS_KEY, SECRET_KEY, AS_ENDPOINT);
@@ -203,6 +216,15 @@ class Eutester4j {
 		}
 		return result;
 	}
+
+    public static void updateEndpoints(String endpoints, String ec2Endpoint, String s3Endpoint) throws IOException {
+        Path path = Paths.get(endpoints);
+        Charset charset = Charset.forName("UTF-8");
+        String content = new String(Files.readAllBytes(path), charset);
+        content = content.replaceAll("http://10.111.1.14:8773/services/Eucalyptus", ec2Endpoint);
+        content = content.replaceAll("http://10.111.1.40:8773/services/Walrus", s3Endpoint);
+        Files.write(path, content.getBytes(charset));
+    }
 
 	public static String eucaUUID() {
 		return Long.toHexString(Double.doubleToLongBits(Math.random()));
