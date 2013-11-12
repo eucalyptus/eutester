@@ -158,6 +158,7 @@ class WinInstanceDiskDrive(WinInstanceDiskType):
                 self.model = self.caption
 
         self.update_ebs_info_from_serial_number()
+        self.cygwin_scsi_drive = self.win_instance.get_cygwin_scsi_dev_for_windows_drive(drive_id=self.deviceid)
         self.disk_partitions = []
 
     def check_dict_requires(self, wmic_dict):
@@ -199,23 +200,26 @@ class WinInstanceDiskDrive(WinInstanceDiskType):
         sizegb = 7
         serialnumber = 24
         caption = 36
-        part_ids = 12
-        logical_ids = 16
+        part_count = 6
+        logical_ids = 8
+        cygdrive = 10
         header = "DEVICEID".center(deviceid) + "|" + \
                  "SIZE B".center(size) + "|" + \
                  "SIZE GB".center(sizegb) + "|" + \
                  "SERIAL NUMBER".center(serialnumber) + "|" + \
-                 "CAPTION".center(caption) + "|" \
-                 "PARTITIONS".center(part_ids) + "|" \
-                 "LOGICAL_DISKS".center(logical_ids) + "|"
+                 "CAPTION".center(caption) + "|" + \
+                 "PARTS".center(part_count) + "|" + \
+                 "LOGICAL".center(logical_ids) + "|" + \
+                 "CYGDRIVE".center(cygdrive) + "|"
 
         summary = str(self.deviceid).center(deviceid) + "|" + \
                   str(self.size).center(size) + "|" + \
                   str(self.size_in_gb).center(sizegb) + "|" + \
                   str(self.serialnumber).center(serialnumber) + "|" + \
                   str(self.caption).center(caption) + "|" + \
-                  str(self.partitions).center(part_ids) + "|" + \
-                  str(",".join(str(x) for x in self.get_logicaldisk_ids())).center(logical_ids) + "|"
+                  str(self.partitions).center(part_count) + "|" + \
+                  str(",".join(str(x) for x in self.get_logicaldisk_ids())).center(logical_ids) + "|" + \
+                  str(self.cygwin_scsi_drive).center(cygdrive)
 
         length = len(header)
         if len(summary) > length:
@@ -232,6 +236,7 @@ class WinInstanceDiskDrive(WinInstanceDiskType):
 class WinInstanceDiskPartition(WinInstanceDiskType):
 
     def setup(self):
+        #self.cygwin_scsi_drive = self.win_instance.get_cygwin_scsi_dev_for_windows_drive(drive_id=self.deviceid)
         self.logicaldisks = []
 
     def check_dict_requires(self, wmic_dict):
@@ -282,6 +287,7 @@ class WinInstanceDiskPartition(WinInstanceDiskType):
 class WinInstanceLogicalDisk(WinInstanceDiskType):
 
     def setup(self):
+        self.cygwin_scsi_drive = self.win_instance.get_cygwin_scsi_dev_for_windows_drive(drive_id=self.deviceid)
         self.partition = None
 
     def check_dict_requires(self, wmic_dict):
@@ -299,16 +305,19 @@ class WinInstanceLogicalDisk(WinInstanceDiskType):
         freespace = 16
         filesystem = 24
         description = 30
+        cygdrive = 10
         header = "DEVICEID".center(deviceid) + "|" + \
                  "SIZE".center(size) + "|" + \
                  "FREE SPACE".center(freespace) + "|" + \
                  "FILE SYSTEM".center(filesystem) + "|" + \
-                 "DESCRIPTION".center(description) + "|"
+                 "DESCRIPTION".center(description) + "|" + \
+                 "CYGDRIVE".center(cygdrive) + "|"
         summary = str(self.deviceid).center(deviceid) + "|" + \
                   str(self.size).center(size) + "|" + \
                   str(self.freespace).center(freespace) + "|" + \
                   str(self.filesystem).center(filesystem) + "|" + \
-                  str(self.description).center(description) + "|"
+                  str(self.description).center(description) + "|" + \
+                  str(self.cygwin_scsi_drive).center(cygdrive) + "|"
         length = len(header)
         if len(summary) > length:
             length = len(summary)
@@ -323,6 +332,8 @@ class WinInstanceLogicalDisk(WinInstanceDiskType):
 
 
 class WinInstance(Instance, TaggedResource):
+    gigabyte = 1073741824
+    megabyte = 1048576
 
     @classmethod
     def make_euinstance_from_instance(cls,
@@ -413,6 +424,7 @@ class WinInstance(Instance, TaggedResource):
         newins.diskdrives = []
         newins.disk_partitions = []
         newins.logicaldisks = []
+        newins.cygwin_dev_map  = {}
         #newins.set_block_device_prefix()
         if newins.root_device_type == 'ebs':
             try:
@@ -906,6 +918,21 @@ class WinInstance(Instance, TaggedResource):
                                 disk.partition = part
                                 break
 
+    def get_cygwin_scsi_dev_for_windows_drive(self, drive_id, retries=2):
+        self.update_cygwin_windows_device_map()
+        for retry in xrange(0, retries):
+            for device in self.cygwin_dev_map:
+                if re.search("dev", device):
+                    win_dev = str(self.cygwin_dev_map[device].split('\\').pop()).strip().upper()
+                    formated_drive_id = str(drive_id.split('\\').pop()).strip().upper()
+                    #self.debug('Attempt to match:"' + str(win_dev) + '" with "' + str(formated_drive_id) + '"')
+                    if formated_drive_id == win_dev:
+                        #self.debug('Found match')
+                        return device
+            self.update_cygwin_windows_device_map(force_update=True)
+
+        self.debug('WARNING: Could not find cygwin device for:' + str(drive_id))
+        return ""
 
     def get_parsed_wmic_command_output(self, wmic_command, verbose=False):
         '''
@@ -1229,6 +1256,7 @@ class WinInstance(Instance, TaggedResource):
             self.debug('check_ram_against_vmtype, passed')
 
     def check_ephemeral_against_vmtype(self):
+        gb = self.gigabyte
         size = self.vmtype_info.disk
         ephemeral_dev = self.get_ephemeral_dev()
         block_size = self.get_blockdev_size_in_bytes(ephemeral_dev)
@@ -1272,9 +1300,9 @@ class WinInstance(Instance, TaggedResource):
         raise Exception('Could not find ephemeral device?')
 
 
-    def cygwin_cmd(self, cmd, timeout=120, code=None):
+    def cygwin_cmd(self, cmd, timeout=120, verbose=True, code=None):
         cmd = self.get_cygwin_path() + '\\bin\\bash.exe --login -c "' + str(cmd) + '"'
-        self.sys(cmd,timeout=timeout, code=code)
+        return self.sys(cmd,timeout=timeout, verbose=verbose, code=code)
 
     def get_dev_md5(self, devpath, length, timeout=60):
         self.assertCygwinFilePresent(devpath)
@@ -1283,6 +1311,32 @@ class WinInstance(Instance, TaggedResource):
         else:
             md5 = str(self.cygwin_cmd("head -c " + str(length) + " " + str(devpath) + " | md5sum")[0]).split(' ')[0].strip()
         return md5
+
+
+    def update_cygwin_windows_device_map(self, prefix='/dev/*', force_update=False):
+        cygwin_dev_map = {}
+        if not force_update:
+            if self.cygwin_dev_map:
+                if time.time() - self.cygwin_dev_map['last_updated'] <= 2:
+                    cygwin_dev_map = self.cygwin_dev_map
+        if not cygwin_dev_map:
+            self.debug('Updating cygwin to windows device mapping...')
+            output = self.cygwin_cmd("for DEV in " + prefix + " ; do printf $DEV=$(cygpath -w $DEV); echo ''; done",
+                                     verbose=False, code=0)
+            for line in output:
+                if re.match(prefix, line):
+                    split = line.split('=')
+                    key = split.pop(0)
+                    if split:
+                        value = split.pop()
+                    else:
+                        value = ''
+                    cygwin_dev_map[key]=value
+            cygwin_dev_map['last_updated'] = time.time()
+            self.cygwin_dev_map = cygwin_dev_map
+        return cygwin_dev_map
+
+
 
 
 
