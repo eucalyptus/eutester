@@ -245,7 +245,10 @@ class IAMops(Eutester):
         userlist=[]
         accounts = self.get_all_accounts(account_id=account_id, account_name=account_name, search=search)
         for account in accounts:
-            users = self.get_users_from_account(path=path, user_name=user_name, user_id=user_id, delegate_account=account['account_name'], search=search)
+            if account['account_id'] == self.account_id:
+                users =self.get_users_from_account()
+            else:
+                users = self.get_users_from_account(path=path, user_name=user_name, user_id=user_id, delegate_account=account['account_name'], search=search)
             for user in users:
                 user['account_name']=account['account_name']
                 user['account_id']=account['account_id']

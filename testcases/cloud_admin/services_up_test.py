@@ -31,9 +31,9 @@
 #
 # Author: clarkmatthew
 
-
-from eucaops import Eucaops
+import eucaops
 from eutester.eutestcase import EutesterTestCase
+import time
 
 class MyTestCase(EutesterTestCase):
     def __init__(self, config_file=None, password=None):
@@ -41,8 +41,7 @@ class MyTestCase(EutesterTestCase):
         self.setup_parser()
         self.parser.add_argument("--timeout", default=600)
         self.get_args()
-        # Setup basic eutester object
-        self.tester = Eucaops( config_file=self.args.config_file, password=self.args.password)
+
 
     def clean_method(self):
         self.debug('No clean_method defined for this test')
@@ -56,6 +55,21 @@ class MyTestCase(EutesterTestCase):
         instance of each.
         """
         timeout= timeout or self.args.timeout
+        last_err = ""
+        elapsed = 0
+        start = time.time()
+        self.tester = None
+        while (not self.tester and elapsed < timeout):
+            elapsed = int(time.time() - start)
+            self.status('Attempting to create tester object. Elapsed:' + str(elapsed))
+            try:
+                self.tester = eucaops.Eucaops(config_file=self.args.config_file, password=self.args.password)
+            except Exception, e:
+                tb = eucaops.get_traceback()
+                last_err = str(tb) + "\n" + str(e)
+        if not self.tester:
+            raise Exception(str(last_err) + 'Could not create tester object after elapsed:' + str(elapsed))
+        timeout = timeout - elapsed
         self.status('starting wait for all services operational, timeout:' + str(timeout))
         self.tester.service_manager.wait_for_all_services_operational(timeout)
         self.status('All services are up')

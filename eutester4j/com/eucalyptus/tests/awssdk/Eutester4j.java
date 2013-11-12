@@ -91,12 +91,33 @@ class Eutester4j {
         s3 = getS3Client(ACCESS_KEY, SECRET_KEY, S3_ENDPOINT);
         IMAGE_ID = findImage();
         KERNEL_ID = findKernel();
-        RAMDISK_ID = finadRamdisk();
-        AVAILABILITY_ZONE = findAvalablityZone();
+        RAMDISK_ID = findRamdisk();
+        AVAILABILITY_ZONE = findAvailablityZone();
         NAME_PREFIX = eucaUUID() + "-";
         print("Using resource prefix for test: " + NAME_PREFIX);
         print("Cloud Discovery Complete");
 	}
+	
+	// Quick way to initialize just the S3 client without initializing other clients in getCloudInfo(). 
+	// For ease of use against AWS (mainly) as well as Eucalyptus
+	public static void initS3Client() throws Exception {
+		if (eucarc != null){
+            CREDPATH = eucarc;
+        } else {
+            CREDPATH = "eucarc";
+        }
+        print("Getting cloud information from " + CREDPATH);
+        
+        S3_ENDPOINT = parseEucarc(CREDPATH, "S3_URL") + "/";
+        
+        SECRET_KEY = parseEucarc(CREDPATH, "EC2_SECRET_KEY").replace("'", "");
+		ACCESS_KEY = parseEucarc(CREDPATH, "EC2_ACCESS_KEY").replace("'", "");
+		
+		print("Initializing S3 connections");
+		s3 = getS3Client(ACCESS_KEY, SECRET_KEY, S3_ENDPOINT);
+		
+		print("S3 Discovery Complete");
+    }
 
     public static void testInfo(String testName){
         print("*****TEST NAME: " + testName);
@@ -297,7 +318,84 @@ class Eutester4j {
 		}
 	}
 
-	public static String findImage() {
+    /**
+     * Wait for instance steady state (no PENDING, no STOPPING, no SHUTTING-DOWN)
+     */
+    public static void waitForInstances( final long timeout ) {
+        final long startTime = System.currentTimeMillis( );
+        withWhile:
+        while ( true ) {
+            if ( ( System.currentTimeMillis() - startTime ) > timeout ) {
+                throw new IllegalStateException( "Instance wait timed out" );
+            }
+            try {
+                Thread.sleep( 2000 );
+            } catch ( InterruptedException e ) {
+                Thread.currentThread().interrupt();
+            }
+            DescribeInstancesResult result = ec2.describeInstances( );
+            for ( final Reservation reservation : result.getReservations() ) {
+                for ( final Instance instance : reservation.getInstances() ) {
+                    switch ( instance.getState().getCode( ) ) {
+                        case 0:
+                        case 32:
+                        case 64:
+                            continue withWhile;
+                    }
+                }
+            }
+            break;
+        }
+    }
+
+    /**
+     * Wait for volume steady state (no creating, no deleting)
+     */
+    public static void waitForVolumes( final long timeout ) {
+        final long startTime = System.currentTimeMillis( );
+        withWhile:
+        while ( true ) {
+            if ( ( System.currentTimeMillis() - startTime ) > timeout ) {
+                throw new IllegalStateException( "Volume wait timed out" );
+            }
+            try {
+                Thread.sleep( 2000 );
+            } catch ( InterruptedException e ) {
+                Thread.currentThread().interrupt();
+            }
+            final DescribeVolumesResult result = ec2.describeVolumes( );
+            for ( final Volume volume : result.getVolumes() ) {
+                if ( "creating".equals( volume.getState( ) ) ||
+                        "deleting".equals( volume.getState( ) ) ) continue withWhile;
+            }
+            break;
+        }
+    }
+
+    /**
+     * Wait for snapshot steady state (no pending)
+     */
+    public static void waitForSnapshots( final long timeout ) {
+        final long startTime = System.currentTimeMillis( );
+        withWhile:
+        while ( true ) {
+            if ( ( System.currentTimeMillis() - startTime ) > timeout ) {
+                throw new IllegalStateException( "Snapshot wait timed out" );
+            }
+            try {
+                Thread.sleep( 2000 );
+            } catch ( InterruptedException e ) {
+                Thread.currentThread().interrupt();
+            }
+            final DescribeSnapshotsResult result = ec2.describeSnapshots( );
+            for ( final Snapshot snapshot : result.getSnapshots() ) {
+                if ( "pending".equals( snapshot.getState( ) ) ) continue withWhile;
+            }
+            break;
+        }
+    }
+
+    public static String findImage() {
 		// Find an appropriate image to launch
 		final DescribeImagesResult imagesResult = ec2
 				.describeImages(new DescribeImagesRequest().withFilters(
@@ -327,7 +425,7 @@ class Eutester4j {
         return imagesResult.getImages().get(0).getKernelId();
     }
 
-    public static String finadRamdisk(){
+    public static String findRamdisk(){
         // Find an appropriate image to launch
         final DescribeImagesResult imagesResult = ec2
                 .describeImages(new DescribeImagesRequest()
@@ -341,7 +439,7 @@ class Eutester4j {
         return imagesResult.getImages().get(0).getRamdiskId();
     }
 
-	public static String findAvalablityZone() {
+	public static String findAvailablityZone() {
 		// Find an AZ to use
 		final DescribeAvailabilityZonesResult azResult = ec2
 				.describeAvailabilityZones();
@@ -371,7 +469,7 @@ class Eutester4j {
 	 * @param name
 	 * @param desc
 	 */
-	public static void createSecurityGoup(String name, String desc) {
+	public static void createSecurityGroup(String name, String desc) {
 		try {
 			CreateSecurityGroupRequest securityGroupRequest = new CreateSecurityGroupRequest(
 					name, desc);
@@ -424,7 +522,7 @@ class Eutester4j {
 	 * @param securityGroups
 	 */
 	public static void runInstances(String emi, String keyName,
-			String type, ArrayList<String> securityGroups, int minCount,
+			String type, List<String> securityGroups, int minCount,
 			int maxCount) {
 		RunInstancesRequest runInstancesRequest = new RunInstancesRequest()
 				.withInstanceType(type).withImageId(emi).withMinCount(minCount)
@@ -512,10 +610,57 @@ class Eutester4j {
 		DeleteKeyPairRequest deleteKeyPairRequest = new DeleteKeyPairRequest(
 				keyName);
 		ec2.deleteKeyPair(deleteKeyPairRequest);
-		print("Delted keypair: " + keyName);
+		print("Deleted keypair: " + keyName);
 	}
 
-	/**
+    /**
+     * Create a volume, returning the identifier.
+     */
+    public static String createVolume( final String zone, final int size ) {
+        final String volumeId = ec2.createVolume(
+                new CreateVolumeRequest( )
+                        .withAvailabilityZone( zone )
+                        .withSize( size )
+        ).getVolume( ).getVolumeId( );
+        print( "Created Volume: " + volumeId );
+        return volumeId;
+    }
+
+    public static void deleteVolume( final String volumeId ) {
+        ec2.deleteVolume( new DeleteVolumeRequest( ).withVolumeId( volumeId ) );
+        print( "Deleted Volume: " + volumeId );
+    }
+
+    /**
+     * Create a snapshot, returning the identifier.
+     */
+    public static String createSnapshot( final String volumeId, final String description ) {
+        final String snapshotId = ec2.createSnapshot(
+                new CreateSnapshotRequest( )
+                        .withVolumeId( volumeId )
+                        .withDescription( description )
+        ).getSnapshot().getSnapshotId();
+        print( "Created Snapshot: " + snapshotId );
+        return snapshotId;
+    }
+
+    public static void deleteSnapshot( final String snapshotId ) {
+        ec2.deleteSnapshot( new DeleteSnapshotRequest( ).withSnapshotId( snapshotId ) );
+        print( "Deleted Snapshot: " + snapshotId );
+    }
+
+    public static String allocateElasticIP( ) {
+        final String ip = ec2.allocateAddress( ).getPublicIp( );
+        print( "Allocated Elastic IP: " + ip );
+        return ip;
+    }
+
+    public static void releaseElasticIP( final String ip ) {
+        ec2.releaseAddress( new ReleaseAddressRequest( ).withPublicIp( ip ) );
+        print( "Released Elastic IP: " + ip );
+    }
+
+    /**
 	 * 
 	 * @return
 	 */

@@ -74,6 +74,7 @@ class EbsTestSuite(EutesterTestCase):
                  keypair=None, 
                  group=None, 
                  emi=None,
+                 waitconnect=30,
                  wait_on_progress=20,
                  root_device_type='instance-store',
                  vmtype='c1.medium',
@@ -95,7 +96,8 @@ class EbsTestSuite(EutesterTestCase):
         else:
             self.image = self.tester.get_emi(root_device_type=root_device_type, not_location='windows')
         self.vmtype = vmtype
-        self.zone = None    
+        self.zone = None
+        self.waitconnect=int(waitconnect)
         self.zonelist = []
         self.user_data = user_data
         #create some zone objects and append them to the zonelist
@@ -893,7 +895,7 @@ class EbsTestSuite(EutesterTestCase):
         #attach second round of volumes
         testlist.append(self.create_testunit_from_method(self.attach_all_avail_vols_to_instances_in_zones, overwrite=True))
         #reboot instances and confirm volumes remain attached
-        testlist.append(self.create_testunit_from_method(self.reboot_instances_in_zone_verify_volumes))
+        testlist.append(self.create_testunit_from_method(self.reboot_instances_in_zone_verify_volumes, waitconnect=self.waitconnect))
         #detach 1 volume leave the 2nd attached
         testlist.append(self.create_testunit_from_method(self.detach_volumes_in_zones))
         #attempt to create volumes from snaps, attach and verify md5 in same zone it was created in

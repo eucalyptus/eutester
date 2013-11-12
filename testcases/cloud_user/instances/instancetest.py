@@ -285,7 +285,7 @@ class InstanceBasics(EutesterTestCase):
             reservation = self.reservation
         for instance in reservation.instances:
             ### Create 1GB volume in first AZ
-            volume = self.tester.create_volume(instance.placement, 1)
+            volume = self.tester.create_volume(instance.placement,size=1, timepergig=180)
             volume_device = instance.attach_volume(volume)
             ### Reboot instance
             instance.reboot_instance_and_verify(waitconnect=20)

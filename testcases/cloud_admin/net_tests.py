@@ -68,9 +68,33 @@ test3:
                 private ips.
 
 test4:
-    Description:
+    Definition:
         Test attempts to verify that the local machine cannot ssh to the instances within group2 which is not authorized
         for ssh access from this source.
+
+test5 (Multi-zone/cluster env):
+    Definition:
+        This test attempts to check connectivity for instances in the same security group, but in different zones.
+        Note: This test requires the CC have tunnelling enabled, or the CCs in each zone be on same
+        layer 2 network segment.
+        Test attempts to:
+            -Iterate through each zone and attempt to ssh from an instance in group1 to an instance in a separate zone
+             but same security group1 over their private ips.
+
+test 6 (Multi-zone/cluster env):
+    Definition:
+        This test attempts to set up security group rules between group1 and group2 to authorize group2 access
+        from group1 across different zones.
+        If no_cidr is True security groups will be setup using cidr notication ip/mask for each instance in
+        group1, otherwise the entire source group 1 will authorized.
+        the group will be
+        Note: This test requires the CC have tunnelling enabled, or the CCs in each zone be on same
+        layer 2 network segment.
+        Test attempts to:
+            -Authorize security groups for inter group private ip access.
+            -Iterate through each zone and attempt to ssh from an instance in group1 to an instance in group2 over their
+             private ips.
+
 
 '''
 
@@ -100,6 +124,10 @@ class Net_Tests(EutesterTestCase):
                                  action='store_false',
                                  help="Boolean to authorize sec group with cidr notation or by group ",
                                  default=True)
+        self.parser.add_argument("--freeze_on_fail",
+                                 action='store_true',
+                                 help="Boolean flag to avoid cleaning test resources upon failure, default: True ",
+                                 default=False)
         '''
         self.parser.add_argument('--user',
                                  default='Admin',
@@ -187,7 +215,10 @@ class Net_Tests(EutesterTestCase):
             self.tester.authorize_group(group, cidr_ip=instance.private_ip_address + "/32")
 
     def clean_method(self):
-        self.tester.cleanup_artifacts()
+        if self.args.freeze_on_fail:
+            self.status('freeze_on_fail arg set, not cleaning test resources')
+        else:
+            self.tester.cleanup_artifacts()
 
     def create_ssh_connection_to_instance_through_cc(self, instance, retry=10):
         cc = self.get_active_cc_for_instance(instance)
@@ -254,7 +285,7 @@ class Net_Tests(EutesterTestCase):
     ################################################################
 
 
-    def test1_create_instance_in_zones_for_security_group1(self):
+    def test1_create_instance_in_zones_for_security_group1(self, ping_timeout=180):
         '''
         Definition:
         Create test instances within each zone within security group1. This security group is authorized for
@@ -284,7 +315,7 @@ class Net_Tests(EutesterTestCase):
             self.debug('Attempting to ping instances private ip from cc...')
             self.tester.wait_for_result( self.ping_instance_private_ip_from_active_cc,
                                          result=True,
-                                         timeout=90,
+                                         timeout=ping_timeout,
                                          instance=instance)
             self.debug('Attempting to ssh to instance from local test machine...')
             self.debug('Check some debug information re this data connection in this security group first...')
@@ -302,10 +333,10 @@ class Net_Tests(EutesterTestCase):
 
 
 
-    def test2_create_instance_in_zones_for_security_group2(self):
+    def test2_create_instance_in_zones_for_security_group2(self, ping_timeout=180):
         '''
         Definition:
-        This test attempts to create an instance in each within security group2 which should not
+        This test attempts to create an instance in each zone within security group2 which should not
         be authorized for any remote access (outside of the CC).
         The test attempts the following:
             -To run an instance in each zone and confirm it reaches 'running' state.
@@ -329,7 +360,7 @@ class Net_Tests(EutesterTestCase):
             self.assertIsInstance(instance, EuInstance)
             self.tester.wait_for_result( self.ping_instance_private_ip_from_active_cc,
                                          result=True,
-                                         timeout=90,
+                                         timeout=ping_timeout,
                                          instance=instance)
             self.status('Make sure ssh is working through CC path before trying between instances...')
             instance.cc_ssh = self.create_ssh_connection_to_instance_through_cc(instance)
@@ -347,9 +378,9 @@ class Net_Tests(EutesterTestCase):
         '''
         Definition:
         This test attempts to set up security group rules between group1 and group2 to authorize group2 access
-        from group1. If no_cidr is True security groups will be setup using cidr notication ip/mask for each instance in
-        group1, otherwise the entire source group 1 will authorized.
-        the group will be
+        from group1. If no_cidr is True security groups will be setup using cidr notation ip/mask for each instance in
+        group1, otherwise the entire source group 1 will be authorized.
+
         Test attempts to:
             -Authorize security groups for inter group private ip access.
             -Iterate through each zone and attempt to ssh from an instance in group1 to an instance in group2 over their

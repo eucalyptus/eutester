@@ -21,9 +21,9 @@ public class BasicWalrusTest {
         testInfo(this.getClass().getSimpleName());
         getCloudInfo();
 
-        File fileToPut = new File("/Users/tony/Documents/Eutester/eutester4j/3wolfmoon-download.jpg");
+        File fileToPut = new File("3wolfmoon-download.jpg");
         File fileToGet = new File("3wolfmoon-download.jpg");
-        bucketName = new String("mybucket-new");
+        bucketName = "mybucket-new";
 
         /* A welcome message does not hurt your eyes */
         print("===========================================");
@@ -46,7 +46,7 @@ public class BasicWalrusTest {
                 print("Error creating bucket: " + bucketName);
                 ase.printStackTrace();
                 print("Caught Exception: " + ase.getMessage());
-                print("Reponse Status Code: " + ase.getStatusCode());
+                print("Response Status Code: " + ase.getStatusCode());
                 print("Error Code: " + ase.getErrorCode());
                 print("Request ID: " + ase.getRequestId());
                 assertThat(false,"Failed to create bucket");
@@ -66,7 +66,7 @@ public class BasicWalrusTest {
                 print("Error uploading file to the bucket: " + bucketName);
                 ase.printStackTrace();
                 print("Caught Exception: " + ase.getMessage());
-                print("Reponse Status Code: " + ase.getStatusCode());
+                print("Response Status Code: " + ase.getStatusCode());
                 print("Error Code: " + ase.getErrorCode());
                 print("Request ID: " + ase.getRequestId());
                 assertThat(false,"Failed to upload file to bucket");
