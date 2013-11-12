@@ -119,13 +119,24 @@ class Eutester4j {
         } else {
             CREDPATH = "eucarc";
         }
+
+        if (endpointFile != null){
+            endpoints = endpointFile;
+        } else {
+            endpoints = "endpoints.xml";
+        }
+
         print("Getting cloud information from " + CREDPATH);
-        
+
+        EC2_ENDPOINT = parseEucarc(CREDPATH, "EC2_URL") + "/";
         S3_ENDPOINT = parseEucarc(CREDPATH, "S3_URL") + "/";
         
         SECRET_KEY = parseEucarc(CREDPATH, "EC2_SECRET_KEY").replace("'", "");
 		ACCESS_KEY = parseEucarc(CREDPATH, "EC2_ACCESS_KEY").replace("'", "");
-		
+
+        print("Updating endpoints file");
+        updateEndpoints(endpoints, EC2_ENDPOINT,S3_ENDPOINT);
+
 		print("Initializing S3 connections");
 		s3 = getS3Client(ACCESS_KEY, SECRET_KEY, S3_ENDPOINT);
 		
