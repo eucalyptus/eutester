@@ -983,6 +983,9 @@ class WinInstance(Instance, TaggedResource):
         '''
         self.sys('dir ' + str(filepath), code=0)
 
+    def assertCygwinFilePresent(self, filepath):
+        self.cygwin_cmd('ls ' + str(filepath), code=0)
+
 
     def attach_volume(self, volume,  dev=None, timeout=180, overwrite=False):
         '''
@@ -1267,6 +1270,21 @@ class WinInstance(Instance, TaggedResource):
             if str(prefix+ephem_name) in devs:
                 return str('/dev/'+prefix+ephem_name)
         raise Exception('Could not find ephemeral device?')
+
+
+    def cygwin_cmd(self, cmd, timeout=120, code=None):
+        cmd = self.get_cygwin_path() + '\\bin\\bash.exe --login -c "' + str(cmd) + '"'
+        self.sys(cmd,timeout=timeout, code=code)
+
+    def get_dev_md5(self, devpath, length, timeout=60):
+        self.assertCygwinFilePresent(devpath)
+        if length == 0:
+            md5 = str(self.cygwin_cmd('md5sum ' + devpath, timeout=timeout)[0]).split(' ')[0].strip()
+        else:
+            md5 = str(self.cygwin_cmd("head -c " + str(length) + " " + str(devpath) + " | md5sum")[0]).split(' ')[0].strip()
+        return md5
+
+
 
 
 
