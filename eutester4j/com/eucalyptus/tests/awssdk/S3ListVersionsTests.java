@@ -28,8 +28,10 @@ import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 import com.amazonaws.AmazonServiceException;
+import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.Bucket;
 import com.amazonaws.services.s3.model.BucketVersioningConfiguration;
+import com.amazonaws.services.s3.model.ListBucketsRequest;
 import com.amazonaws.services.s3.model.ListVersionsRequest;
 import com.amazonaws.services.s3.model.PutObjectResult;
 import com.amazonaws.services.s3.model.S3VersionSummary;
@@ -41,8 +43,10 @@ import com.amazonaws.util.Md5Utils;
 /**
  * <p>This class contains tests for listing object versions in a bucket.</p>
  * 
- * <li>All tests fail against Walrus due to <a href="https://eucalyptus.atlassian.net/browse/EUCA-7855">EUCA-7855</a> unless the owner canonical ID verification
- * is commented out</li>
+ * <p>All tests are passing after the commit 2841c3707b6b918bd84b2e849d107d154ad2a2e2</p>
+ * 
+ * <li>All tests failed against Walrus due to <a href="https://eucalyptus.atlassian.net/browse/EUCA-7855">EUCA-7855</a> unless the owner canonical ID
+ * verification is commented out</li>
  * 
  * <li>{@link #deleteMarker()} fails against Walrus due to <a href="https://eucalyptus.atlassian.net/browse/EUCA-7818">EUCA-7818</a></li>
  * 
@@ -51,7 +55,7 @@ import com.amazonaws.util.Md5Utils;
  * <li>{@link #keyMarkerVersionIdMarker()} fails against Walrus due to <a href="https://eucalyptus.atlassian.net/browse/EUCA-7985">EUCA-7985</a> and <a
  * href="https://eucalyptus.atlassian.net/browse/EUCA-7986">EUCA-7986</a></li>
  * 
- * <li>{@link #delimiter_2()} fails against Walrus due to <a href="https://eucalyptus.atlassian.net/browse/EUCA-7991">EUCA-7991</a></li>
+ * <li>{@link #delimiterAndPrefix()} fails against Walrus due to <a href="https://eucalyptus.atlassian.net/browse/EUCA-7991">EUCA-7991</a></li>
  * 
  * <li>{@link #maxKeys()} fails against Walrus due to <a href="https://eucalyptus.atlassian.net/browse/EUCA-7985">EUCA-7985</a> and <a
  * href="https://eucalyptus.atlassian.net/browse/EUCA-7986">EUCA-7986</a></li>
@@ -84,6 +88,7 @@ public class S3ListVersionsTests {
 	public void setup() throws Exception {
 		print("*** PRE TEST SETUP ***");
 		bucketName = eucaUUID();
+		// bucketName = "test-bucket";
 		// bucketName = "marker-test";
 		cleanupTasks = new ArrayList<Runnable>();
 		print("Creating bucket " + bucketName);
@@ -108,7 +113,7 @@ public class S3ListVersionsTests {
 		enableBucketVersioning(bucketName);
 	}
 
-	// @AfterMethod
+	@AfterMethod
 	public void cleanup() throws Exception {
 		print("*** POST TEST CLEANUP ***");
 		Collections.reverse(cleanupTasks);
@@ -514,8 +519,8 @@ public class S3ListVersionsTests {
 	 * Test for verifying common prefixes using a delimiter
 	 */
 	@Test
-	public void delimiter_1() throws Exception {
-		testInfo(this.getClass().getSimpleName() + " - delimiter_1");
+	public void delimiter() throws Exception {
+		testInfo(this.getClass().getSimpleName() + " - delimiter");
 
 		try {
 			int prefixes = 3 + random.nextInt(3); // 3-5 prefixes
@@ -574,7 +579,7 @@ public class S3ListVersionsTests {
 			}
 		} catch (AmazonServiceException ase) {
 			printException(ase);
-			assertThat(false, "Failed to run delimiter_1");
+			assertThat(false, "Failed to run delimiter");
 		}
 	}
 
@@ -587,8 +592,8 @@ public class S3ListVersionsTests {
 	 * @see <a href="https://eucalyptus.atlassian.net/browse/EUCA-7991">EUCA-7991</a>
 	 */
 	@Test
-	public void delimiter_2() throws Exception {
-		testInfo(this.getClass().getSimpleName() + " - delimiter_2");
+	public void delimiterAndPrefix() throws Exception {
+		testInfo(this.getClass().getSimpleName() + " - delimiterAndPrefix");
 
 		try {
 			int innerP = 2 + random.nextInt(4); // 2-5 inner prefixes
@@ -677,8 +682,11 @@ public class S3ListVersionsTests {
 			assertTrue("Expected common prefixes list to be of size " + commonPrefixes.size() + ", but got a list of size "
 					+ versions.getCommonPrefixes().size(), versions.getCommonPrefixes().size() == commonPrefixes.size());
 
+			Iterator<String> prefixIterator = versions.getCommonPrefixes().iterator();
 			for (String prefix : commonPrefixes) {
-				// assertTrue("Expected common prefix list to contain " + prefix, versions.getCommonPrefixes().contains(prefix));
+				String nextCommonPrefix = prefixIterator.next();
+				assertTrue("Common prefixes are not ordered lexicographically. Expected " + prefix + ", but got " + nextCommonPrefix,
+						prefix.equals(nextCommonPrefix));
 			}
 
 			// last key versions should be in the summary list
@@ -692,12 +700,12 @@ public class S3ListVersionsTests {
 			}
 		} catch (AmazonServiceException ase) {
 			printException(ase);
-			assertThat(false, "Failed to run delimiter_2");
+			assertThat(false, "Failed to run delimiterAndPrefix");
 		}
 	}
 
 	/**
-	 * Test for listing and verifying the order of versions using max-keys, next-key-marker and next-version-id-marker
+	 * Test for verifying paginated listing of versions
 	 * 
 	 * <p>Test failed against Walrus. Results returned by Walrus are inclusive of the version summary that matches the key-marker and version-id-marker pair
 	 * where as S3's results are exclusive. Version ID marker is missing in the response</p>
@@ -778,9 +786,18 @@ public class S3ListVersionsTests {
 		}
 	}
 
+	/**
+	 * Test for verifying paginated listing of common prefixes
+	 * 
+	 * Test fails against Walrus, prefixes in the common prefix list are incorrectly represented. Results returned by Walrus are inclusive of the key that
+	 * matches the key-marker where as S3's results are exclusive.
+	 * 
+	 * @see <a href="https://eucalyptus.atlassian.net/browse/EUCA-8113">EUCA-8112</a>
+	 * @see <a href="https://eucalyptus.atlassian.net/browse/EUCA-8112">EUCA-8113</a>
+	 */
 	@Test
-	public void delimiterMaxKeys() throws Exception {
-		testInfo(this.getClass().getSimpleName() + " - delimiterMaxKeys");
+	public void delimiterPrefixAndMaxKeys() throws Exception {
+		testInfo(this.getClass().getSimpleName() + " - delimiterPrefixAndMaxKeys");
 
 		try {
 			int maxKeys = 3 + random.nextInt(3); // Max keys 3-5
@@ -865,8 +882,232 @@ public class S3ListVersionsTests {
 			}
 		} catch (AmazonServiceException ase) {
 			printException(ase);
-			assertThat(false, "Failed to run delimiterMaxKeys");
+			assertThat(false, "Failed to run delimiterPrefixAndMaxKeys");
 		}
+	}
+
+	@Test
+	public void toggleVersioning() throws Exception {
+		testInfo(this.getClass().getSimpleName() + " - toggleVersioning");
+
+		try {
+			String key = eucaUUID();
+			LinkedList<KeyEntry> history = new LinkedList<KeyEntry>();
+
+			history.addFirst(new KeyEntry(putObject(bucketName, key, fileToPut), Element.VERSION_ENTRY));
+			history.addFirst(new KeyEntry(deleteObject(bucketName, key), Element.DELETE_MARKER));
+			history.addFirst(new KeyEntry(putObject(bucketName, key, fileToPut), Element.VERSION_ENTRY));
+
+			VersionListing versions = listVersions(bucketName, key, null, null, null, null, false);
+			compare(history, versions);
+
+			// Suspend versioning
+			print("Suspending versioning");
+			s3.setBucketVersioningConfiguration(new SetBucketVersioningConfigurationRequest(bucketName, new BucketVersioningConfiguration()
+					.withStatus(BucketVersioningConfiguration.SUSPENDED)));
+			print("Versioning state: " + s3.getBucketVersioningConfiguration(bucketName).getStatus());
+
+			history.addFirst(new KeyEntry(deleteObject(bucketName, key), Element.DELETE_MARKER));
+			versions = listVersions(bucketName, key, null, null, null, null, false);
+			compare(history, versions);
+			history.remove();
+
+			history.addFirst(new KeyEntry(putObject(bucketName, key, fileToPut), Element.VERSION_ENTRY));
+			versions = listVersions(bucketName, key, null, null, null, null, false);
+			compare(history, versions);
+			history.remove();
+
+			history.addFirst(new KeyEntry(deleteObject(bucketName, key), Element.DELETE_MARKER));
+			versions = listVersions(bucketName, key, null, null, null, null, false);
+			compare(history, versions);
+
+			// Enable versioning
+			print("Enabling versioning");
+			s3.setBucketVersioningConfiguration(new SetBucketVersioningConfigurationRequest(bucketName, new BucketVersioningConfiguration()
+					.withStatus(BucketVersioningConfiguration.ENABLED)));
+			print("Versioning state: " + s3.getBucketVersioningConfiguration(bucketName).getStatus());
+
+			history.addFirst(new KeyEntry(putObject(bucketName, key, fileToPut), Element.VERSION_ENTRY));
+			versions = listVersions(bucketName, key, null, null, null, null, false);
+			compare(history, versions);
+
+			history.addFirst(new KeyEntry(deleteObject(bucketName, key), Element.DELETE_MARKER));
+			versions = listVersions(bucketName, key, null, null, null, null, false);
+			compare(history, versions);
+
+			// Suspend versioning
+			print("Suspending versioning");
+			s3.setBucketVersioningConfiguration(new SetBucketVersioningConfigurationRequest(bucketName, new BucketVersioningConfiguration()
+					.withStatus(BucketVersioningConfiguration.SUSPENDED)));
+			print("Versioning state: " + s3.getBucketVersioningConfiguration(bucketName).getStatus());
+
+			// Remove all previous null versions from history
+			history.remove(new KeyEntry("null", Element.DELETE_MARKER));
+			history.remove(new KeyEntry("null", Element.VERSION_ENTRY));
+
+			history.addFirst(new KeyEntry(putObject(bucketName, key, fileToPut), Element.VERSION_ENTRY));
+			versions = listVersions(bucketName, key, null, null, null, null, false);
+			compare(history, versions);
+			history.remove();
+
+			history.addFirst(new KeyEntry(deleteObject(bucketName, key), Element.DELETE_MARKER));
+			versions = listVersions(bucketName, key, null, null, null, null, false);
+			compare(history, versions);
+			history.remove();
+
+			history.addFirst(new KeyEntry(putObject(bucketName, key, fileToPut), Element.VERSION_ENTRY));
+			versions = listVersions(bucketName, key, null, null, null, null, false);
+			compare(history, versions);
+
+			// Enable versioning
+			print("Suspending versioning");
+			s3.setBucketVersioningConfiguration(new SetBucketVersioningConfigurationRequest(bucketName, new BucketVersioningConfiguration()
+					.withStatus(BucketVersioningConfiguration.ENABLED)));
+			print("Versioning state: " + s3.getBucketVersioningConfiguration(bucketName).getStatus());
+
+			history.addFirst(new KeyEntry(deleteObject(bucketName, key), Element.DELETE_MARKER));
+			versions = listVersions(bucketName, key, null, null, null, null, false);
+			compare(history, versions);
+
+			history.addFirst(new KeyEntry(putObject(bucketName, key, fileToPut), Element.VERSION_ENTRY));
+			versions = listVersions(bucketName, key, null, null, null, null, false);
+			compare(history, versions);
+		} catch (AmazonServiceException ase) {
+			printException(ase);
+			assertThat(false, "Failed to run toggleVersioning");
+		} finally {
+			for (S3VersionSummary version : listVersions(bucketName, null, null, null, null, null, false).getVersionSummaries()) {
+				try {
+					print("Deleting object " + version.getKey() + ", version " + version.getVersionId());
+					s3.deleteVersion(bucketName, version.getKey(), version.getVersionId());
+				} catch (AmazonServiceException ase) {
+					printException(ase);
+				}
+			}
+		}
+	}
+
+	@Test
+	public void suspendVersioningAndDeleteVersions() throws Exception {
+		testInfo(this.getClass().getSimpleName() + " - suspendVersioningAndDeleteVersions");
+
+		try {
+			String key = eucaUUID();
+			LinkedList<KeyEntry> history = new LinkedList<KeyEntry>();
+
+			history.addFirst(new KeyEntry(putObject(bucketName, key, fileToPut), Element.VERSION_ENTRY));
+			history.addFirst(new KeyEntry(deleteObject(bucketName, key), Element.DELETE_MARKER));
+			history.addFirst(new KeyEntry(putObject(bucketName, key, fileToPut), Element.VERSION_ENTRY));
+
+			VersionListing versions = listVersions(bucketName, key, null, null, null, null, false);
+			compare(history, versions);
+
+			// Suspend versioning
+			print("Suspending versioning");
+			s3.setBucketVersioningConfiguration(new SetBucketVersioningConfigurationRequest(bucketName, new BucketVersioningConfiguration()
+					.withStatus(BucketVersioningConfiguration.SUSPENDED)));
+			print("Versioning state: " + s3.getBucketVersioningConfiguration(bucketName).getStatus());
+
+			history.addFirst(new KeyEntry(putObject(bucketName, key, fileToPut), Element.VERSION_ENTRY));
+			versions = listVersions(bucketName, key, null, null, null, null, false);
+			compare(history, versions);
+			history.remove();
+
+			history.addFirst(new KeyEntry(deleteObject(bucketName, key), Element.DELETE_MARKER));
+			versions = listVersions(bucketName, key, null, null, null, null, false);
+			compare(history, versions);
+			history.remove();
+
+			history.addFirst(new KeyEntry(putObject(bucketName, key, fileToPut), Element.VERSION_ENTRY));
+			versions = listVersions(bucketName, key, null, null, null, null, false);
+			compare(history, versions);
+
+			// AmazonS3 s3clientA = getS3Client("awsrc_mcflurry");
+			// print("S3 account for delete: " + s3clientA.getS3AccountOwner().getDisplayName());
+
+			boolean error = false;
+			for (S3VersionSummary version : versions.getVersionSummaries()) {
+				try {
+					print("Deleting object " + version.getKey() + ", version " + version.getVersionId());
+					s3.deleteVersion(bucketName, version.getKey(), version.getVersionId());
+				} catch (AmazonServiceException ase) {
+					error = true;
+					printException(ase);
+				}
+			}
+			assertTrue("Error deleting one of the versions", !error);
+		} catch (AmazonServiceException ase) {
+			printException(ase);
+			assertThat(false, "Failed to run suspendVersioningAndDeleteVersions");
+		}
+	}
+
+	@Test
+	public void deleteBucketWithDeleteMarker() throws Exception {
+		testInfo(this.getClass().getSimpleName() + " - deleteBucketWithDeleteMarker");
+
+		try {
+			String key = eucaUUID();
+			LinkedList<KeyEntry> history = new LinkedList<KeyEntry>();
+
+			history.addFirst(new KeyEntry(putObject(bucketName, key, fileToPut), Element.VERSION_ENTRY));
+			history.addFirst(new KeyEntry(deleteObject(bucketName, key), Element.DELETE_MARKER));
+			history.addFirst(new KeyEntry(putObject(bucketName, key, fileToPut), Element.VERSION_ENTRY));
+			history.addFirst(new KeyEntry(deleteObject(bucketName, key), Element.DELETE_MARKER));
+
+			VersionListing versions = listVersions(bucketName, key, null, null, null, null, false);
+			compare(history, versions);
+
+			boolean error = false;
+			for (S3VersionSummary version : versions.getVersionSummaries()) {
+				try {
+					if (!version.isDeleteMarker()) {
+						print("Deleting version element: key " + version.getKey() + ", version " + version.getVersionId());
+						s3.deleteVersion(bucketName, version.getKey(), version.getVersionId());
+					}
+				} catch (AmazonServiceException ase) {
+					error = true;
+					printException(ase);
+				}
+			}
+			assertTrue("Error deleting versions", !error);
+
+			error = false;
+			try {
+				print("Deleting bucket " + bucketName);
+				s3.deleteBucket(bucketName);
+			} catch (AmazonServiceException ase) {
+				error = true;
+				assertTrue("Expected HTTP status code to be 409, but got " + ase.getStatusCode(), ase.getStatusCode() == 409);
+				assertTrue("Expected error code to be BucketNotEmpty, but got " + ase.getErrorCode(), ase.getErrorCode().equals("BucketNotEmpty"));
+			}
+			assertTrue("Expected bucket delete to fail", error);
+			versions = listVersions(bucketName, null, null, null, null, null, false);
+		} catch (AmazonServiceException ase) {
+			printException(ase);
+			assertThat(false, "Failed to run deleteBucketWithDeleteMarker");
+		} finally {
+			for (S3VersionSummary version : listVersions(bucketName, null, null, null, null, null, false).getVersionSummaries()) {
+				try {
+					print("Deleting object " + version.getKey() + ", version " + version.getVersionId());
+					s3.deleteVersion(bucketName, version.getKey(), version.getVersionId());
+				} catch (AmazonServiceException ase) {
+					printException(ase);
+				}
+			}
+		}
+	}
+
+	private AmazonS3 getS3Client(String credPath) throws Exception {
+		print("Getting cloud information from " + credPath);
+
+		String s3Endpoint = Eutester4j.parseEucarc(credPath, "S3_URL") + "/";
+
+		String secretKey = Eutester4j.parseEucarc(credPath, "EC2_SECRET_KEY").replace("'", "");
+		String accessKey = Eutester4j.parseEucarc(credPath, "EC2_ACCESS_KEY").replace("'", "");
+
+		print("Initializing S3 connections");
+		return Eutester4j.getS3Client(accessKey, secretKey, s3Endpoint);
 	}
 
 	// @Test
@@ -950,17 +1191,103 @@ public class S3ListVersionsTests {
 		print("Common prefixes: " + versions.getCommonPrefixes());
 	}
 
+	enum Element {
+		DELETE_MARKER, VERSION_ENTRY;
+	}
+
+	public static class KeyEntry {
+		private String versionId;
+		private Element element;
+
+		public KeyEntry(String versionId, Element element) {
+			this.versionId = versionId;
+			this.element = element;
+		}
+
+		public String getVersionId() {
+			return versionId;
+		}
+
+		public void setVersionId(String versionId) {
+			this.versionId = versionId;
+		}
+
+		public Element getElement() {
+			return element;
+		}
+
+		public void setElement(Element element) {
+			this.element = element;
+		}
+
+		@Override
+		public int hashCode() {
+			final int prime = 31;
+			int result = 1;
+			result = prime * result + ((element == null) ? 0 : element.hashCode());
+			result = prime * result + ((versionId == null) ? 0 : versionId.hashCode());
+			return result;
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj)
+				return true;
+			if (obj == null)
+				return false;
+			if (getClass() != obj.getClass())
+				return false;
+			KeyEntry other = (KeyEntry) obj;
+			if (element != other.element)
+				return false;
+			if (versionId == null) {
+				if (other.versionId != null)
+					return false;
+			} else if (!versionId.equals(other.versionId))
+				return false;
+			return true;
+		}
+
+		@Override
+		public String toString() {
+			return "KeyEntry [versionId=" + versionId + ", element=" + element + "]";
+		}
+	}
+
+	private void compare(LinkedList<KeyEntry> history, VersionListing versions) {
+		assertTrue("Expected " + history.size() + " elements, but got " + versions.getVersionSummaries().size(), history.size() == versions
+				.getVersionSummaries().size());
+		Iterator<S3VersionSummary> versionIterator = versions.getVersionSummaries().iterator();
+		Iterator<KeyEntry> historyIterator = history.iterator();
+
+		// First one should always be the latest
+		S3VersionSummary version = versionIterator.next();
+		KeyEntry key = historyIterator.next();
+		assertTrue("Expected element to be latest", version.isLatest());
+		assertTrue("Mimatch in key type. Expected " + key.getElement() + " but got isDeleteMarker=" + version.isDeleteMarker(),
+				key.getElement().equals(Element.DELETE_MARKER) ? version.isDeleteMarker() : !version.isDeleteMarker());
+
+		// Rest of them should not be the latest
+		while (versionIterator.hasNext()) {
+			version = versionIterator.next();
+			key = historyIterator.next();
+			assertTrue("Expected element to be not latest", !version.isLatest());
+			assertTrue("Mimatch in key type. Expected " + key.getElement() + " but got isDeleteMarker=" + version.isDeleteMarker(),
+					key.getElement().equals(Element.DELETE_MARKER) ? version.isDeleteMarker() : !version.isDeleteMarker());
+		}
+	}
+
 	private void enableBucketVersioning(String bucketName) throws InterruptedException {
-		print("Setting bucket versioning configuration to ENABLED");
+		print("Enabling versioning");
 		s3.setBucketVersioningConfiguration(new SetBucketVersioningConfigurationRequest(bucketName, new BucketVersioningConfiguration()
 				.withStatus(BucketVersioningConfiguration.ENABLED)));
 
-		print("Fetching bucket versioning configuration after setting it to ENABLED");
 		BucketVersioningConfiguration versioning = null;
 		int counter = 0;
 		do {
 			Thread.sleep(1000);
 			versioning = s3.getBucketVersioningConfiguration(bucketName);
+			print("Versioning state: " + versioning.getStatus());
 			if (versioning.getStatus().equals(BucketVersioningConfiguration.ENABLED)) {
 				break;
 			}
@@ -990,6 +1317,24 @@ public class S3ListVersionsTests {
 		assertTrue("Invalid version ID: " + putResult.getVersionId(), StringUtils.isNotBlank(putResult.getVersionId()));
 		assertTrue("Expected version ID to be unique", !versionIdList.contains(putResult.getVersionId()));
 		versionIdList.add(putResult.getVersionId());
+	}
+
+	private String putObject(String bucketName, String key, File fileToPut) {
+		print("Putting object " + key + " in bucket " + bucketName);
+		PutObjectResult putResult = s3.putObject(bucketName, key, fileToPut);
+		assertTrue("Invalid put object result", putResult != null);
+		return putResult.getVersionId() != null ? putResult.getVersionId() : new String("null");
+	}
+
+	private String deleteObject(String bucketName, String key) {
+		print("Deleting object " + key + " in bucket " + bucketName);
+		s3.deleteObject(bucketName, key);
+		VersionListing versions = listVersions(bucketName, key, null, null, null, null, false);
+		S3VersionSummary deleteMarker = versions.getVersionSummaries().get(0);
+		assertTrue("Invalid version summary", deleteMarker != null);
+		assertTrue("Expected version element to be a delete marker", deleteMarker.isDeleteMarker());
+		assertTrue("Expected delete marker to be the latest", deleteMarker.isLatest());
+		return deleteMarker.getVersionId();
 	}
 
 	private void verifyVersionSummaries(String key, LinkedList<String> versionIdList, List<S3VersionSummary> versionSummaries) {
