@@ -95,7 +95,7 @@ public class TestAutoScalingAvailabilityZoneRebalancing {
 
             // Wait for instances to launch
             print("Waiting for 1 instance to launch");
-            final long timeout = TimeUnit.MINUTES.toMillis(2);
+            final long timeout = TimeUnit.MINUTES.toMillis(10);
             waitForInstances(as, "InService", availabilityZone1, timeout, 1, groupName, false);
 
             // Change availability zones

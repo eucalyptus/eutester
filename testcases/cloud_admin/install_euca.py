@@ -2,7 +2,6 @@ __author__ = 'viglesias'
 import re
 from eucaops import Eucaops
 from eutester.eutestcase import EutesterTestCase
-#from eutester.machine import Machine
 
 class Install(EutesterTestCase):
 
@@ -16,9 +15,13 @@ class Install(EutesterTestCase):
         self.parser.add_argument("--nightly",action='store_true')
         self.parser.add_argument("--lvm-extents")
         self.parser.add_argument("--vnet-mode", default="MANAGED-NOVLAN")
-        self.parser.add_argument("--vnet-subnet", default="172.17.0.0")
+        self.parser.add_argument("--vnet-subnet", default="1.0.0.0")
         self.parser.add_argument("--vnet-netmask", default="255.255.0.0")
         self.parser.add_argument("--vnet-publicips")
+        self.parser.add_argument("--vnet_addrspernet", default="32")
+        self.parser.add_argument("--vnet_privinterface", default="br0")
+        self.parser.add_argument("--vnet_pubinterface", default="br0")
+        self.parser.add_argument("--vnet_bridge", default="br0")
         self.parser.add_argument("--vnet-dns", default="8.8.8.8")
         self.parser.add_argument("--root-lv", default="/dev/vg01/")
         self.parser.add_argument("--dnsdomain")
@@ -108,8 +111,6 @@ class Install(EutesterTestCase):
             machine.sys("service eucalyptus-cloud start", timeout=480)
         for machine in self.tester.get_component_machines("clc"):
             machine.sys("service eucalyptus-cloud start", timeout=480)
-        ### Wait for components to come up (mainly CLC)
-        self.tester.sleep(180)
 
     def stop_components(self):
         for machine in self.tester.get_component_machines("clc"):
@@ -148,15 +149,14 @@ class Install(EutesterTestCase):
             machine.sys("lvextend " + logical_volume + " -l" + extents )
             machine.sys("resize2fs -f " + logical_volume, timeout=12000)
 
-    def wait_for_creds(self, timeout=300):
-        while timeout > 0:
+    def wait_for_creds(self, timeout=180):
+        def get_creds():
             try:
                 self.tester = Eucaops(config_file=self.args.config_file, password=self.args.password)
-                break
-            except Exception,e:
-                pass
-            timeout -= 20
-            self.tester.sleep(20)
+                return True
+            except Exception:
+                return False
+        self.tester.wait_for_result(get_creds, True, timeout=timeout)
 
     def sync_ssh_keys(self):
         ### Sync CLC SSH key to all machines
@@ -171,7 +171,7 @@ class Install(EutesterTestCase):
                 for machine in self.tester.get_component_machines("cc" + cluster):
                     cc_pub_key = machine.sys("cat ~/.ssh/id_rsa.pub")[0]
                     for nc in self.tester.get_component_machines("nc" + cluster):
-                        nc.sys("echo " + clc_pub_key + " >> ~/.ssh/authorized_keys")
+                        nc.sys("echo " + cc_pub_key + " >> ~/.ssh/authorized_keys")
         except IndexError:
             pass
 
@@ -179,9 +179,9 @@ class Install(EutesterTestCase):
         for machine in self.tester.get_component_machines():
             ssh_config_file = 'Host *\nStrictHostKeyChecking no\nUserKnownHostsFile=/dev/null\n'
             #assert isinstance(machine, Machine)
-            file = machine.sftp.open("/root/.ssh/config", "w")
-            file.write(ssh_config_file)
-            file.close()
+            ssh_config_file = machine.sftp.open("/root/.ssh/config", "w")
+            ssh_config_file.write(ssh_config_file)
+            ssh_config_file.close()
 
     def register_components(self):
         clcs = self.tester.get_component_machines("clc")
@@ -246,24 +246,27 @@ class Install(EutesterTestCase):
                             ebs_manager = "emc-fastsnap"
             else:
                 ebs_manager = self.args.block_device_manager
-            self.tester.modify_property("storage.blockstoragemanager", ebs_manager)
-            self.tester.modify_property("storage.dasdevice", self.args.root_lv)
+            self.tester.modify_property(zone + ".storage.blockstoragemanager", ebs_manager)
+            self.tester.modify_property(zone + ".storage.dasdevice", self.args.root_lv)
+
+    def set_config_option(self, machine, option, parameter):
+        sed_command = 'sed -i -e "s/^.*{0}=.*$/{0}={1}/" {2}/etc/eucalyptus/eucalyptus.conf'.format(option, parameter, self.tester.eucapath)
+        machine.sys(sed_command)
 
     def configure_network(self):
         for machine in self.tester.get_component_machines("cc"):
-            machine.eucalyptus_conf.VNET_MODE.config_file_set_this_line(self.args.vnet_mode)
-            machine.config.uncomment_line("VNET_SUBNET")
-            machine.config.uncomment_line("VNET_NETMASK")
-            machine.config.uncomment_line("VNET_PUBLICIPS")
-            machine.config.uncomment_line("VNET_DNS")
-            machine.eucalyptus_conf.update()
-            machine.eucalyptus_conf.VNET_SUBNET.config_file_set_this_line(self.args.vnet_subnet)
-            machine.eucalyptus_conf.VNET_NETMASK.config_file_set_this_line(self.args.vnet_netmask)
-            machine.eucalyptus_conf.VNET_PUBLICIPS.config_file_set_this_line(self.args.vnet_publicips)
-            machine.eucalyptus_conf.VNET_DNS.config_file_set_this_line(self.args.vnet_dns)
+            self.set_config_option(machine, "VNET_MODE", self.args.vnet_mode)
+            self.set_config_option(machine, "VNET_SUBNET", self.args.vnet_subnet)
+            self.set_config_option(machine, "VNET_NETMASK", self.args.vnet_netmask)
+            self.set_config_option(machine, "VNET_PUBLICIPS", self.args.vnet_publicips)
+            self.set_config_option(machine, "VNET_DNS", self.args.vnet_dns)
+            self.set_config_option(machine, "VNET_ADDRSPERNET", self.args.vnet_addrspernet)
+            self.set_config_option(machine, "VNET_PRIVINTERFACE", self.args.vnet_privinterface)
+            self.set_config_option(machine, "VNET_PUBINTERFACE", self.args.vnet_pubinterface)
 
         for machine in self.tester.get_component_machines("nc"):
-            machine.eucalyptus_conf.VNET_MODE.config_file_set_this_line(self.args.vnet_mode)
+            self.set_config_option(machine, "VNET_MODE", self.args.vnet_mode)
+            self.set_config_option(machine, "VNET_BRIDGE", self.args.vnet_bridge)
 
     def setup_dns(self):
         if not hasattr(self.tester, 'service_manager'):
@@ -284,7 +287,7 @@ class Install(EutesterTestCase):
         self.initialize_db()
         self.sync_ssh_keys()
         self.remove_host_check()
-        #self.configure_network()
+        self.configure_network()
         self.start_components()
         self.wait_for_creds()
         self.register_components()
@@ -293,12 +296,11 @@ class Install(EutesterTestCase):
 if __name__ == "__main__":
     testcase = Install()
     ### Either use the list of tests passed from config/command line to determine what subset of tests to run
-    list = testcase.args.tests or ["InstallEuca"]
+    test_list = testcase.args.tests or ["InstallEuca"]
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
-    for test in list:
+    for test in test_list:
         unit_list.append( testcase.create_testunit_by_name(test) )
         ### Run the EutesterUnitTest objects
-
     result = testcase.run_test_case_list(unit_list,clean_on_exit=True)
     exit(result)

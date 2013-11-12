@@ -48,14 +48,4 @@
             <class name="com.eucalyptus.tests.awssdk.TestIAMRoleManagement"/>
         </classes>
     </test>
-    <test name="JClouds Test">
-        <classes>
-            <class name="com.eucalyptus.tests.awssdk.JCloudsTest"/>
-        </classes>
-    </test>
-    <test name="Artifact Clean Up">
-        <classes>
-            <class name="com.eucalyptus.tests.awssdk.CloudCleaner"/>
-        </classes>
-    </test>
 </suite>
