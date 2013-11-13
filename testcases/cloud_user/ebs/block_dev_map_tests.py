@@ -347,6 +347,7 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
                                                         root_device_name=root_device_name,
                                                         size=size,
                                                         dot=delete_on_terminate,
+                                                        name=name,
                                                         block_device_map=block_device_map
                                                         )
         new_image = self.tester.get_emi(emi=image_id)
@@ -394,14 +395,14 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
                 raise Exception('URL to bfebs image is needed to build snapshot test resource')
             self.setup_bfebs_instance_volume_and_snapshots_from_url(url=url)
         if not self.build_image_volume:
-            self.build_test_volume = self.tester.create_euvolume(zone=self.zone, snapshot=self.build_image_snapshot)
+            self.build_test_volume = self.tester.create_volume(zone=self.zone, snapshot=self.build_image_snapshot)
             self.build_image_volume.md5 = self.build_image_snapshot.md5=self.build_image_snapshot.eutest_volume_md5
             self.build_image_volume.md5len = self.build_image_snapshot.eutest_volume_md5len
             self.build_image_volume.add_tag('md5', self.build_image_volume.md5)
             self.build_image_volume.add_tag('md5len', self.build_image_volume.md5len)
         if not self.base_test_volume:
             self.status('Creating base_test_volume from base_test_snapshot: ')
-            self.base_test_volume = self.tester.create_euvolume(zone=self.zone, snapshot=self.base_test_snapshot)
+            self.base_test_volume = self.tester.create_volume(zone=self.zone, snapshot=self.base_test_snapshot)
             self.base_test_volume.md5 = self.base_test_snapshot.md5=self.build_image_snapshot.eutest_volume_md5
             self.base_test_volume.md5len = self.base_test_snapshot.eutest_volume_md5len
             self.base_test_volume.add_tag('md5', self.base_test_volume.md5)
@@ -1156,8 +1157,9 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
             if not meta_bdm.has_key(bdm_ephemeral_dev):
                 self.resulterr('Ephemeral disk not reported in instance block dev mapping: see euca-6048')
                 meta_bdm[bdm_ephemeral_dev] = eph_dev
-            self.status('Attaching the base test volume to this running instance...')
-            instance.attach_euvolume(self.base_test_volume, timeout=120, overwrite=False)
+            new_vol = self.tester.create_volume(zone=self.zone,size=1, timepergig=180)
+            self.status('Attaching new test volume to this running instance...')
+            instance.attach_euvolume(new_vol, timeout=120, overwrite=False)
             self.status('Block dev map after attaching volume to running instance:')
             instance.update()
             self.tester.print_block_device_map(instance.block_device_mapping)
@@ -1166,8 +1168,8 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
             self.status('Block dev map after detaching volume from instance...')
             instance.update()
             self.tester.print_block_device_map(instance.block_device_mapping)
-            self.status('Re-Attaching the base test volume to this running instance for remainder of test...')
-            instance.attach_euvolume(self.base_test_volume, timeout=120, overwrite=False)
+            self.status('Attaching the same test volume to this running instance for remainder of test...')
+            instance.attach_euvolume(new_vol, timeout=120, overwrite=True)
             self.status('Block dev map after re-attaching volume to running instance:')
             instance.update()
             self.tester.print_block_device_map(instance.block_device_mapping)

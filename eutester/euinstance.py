@@ -155,8 +155,11 @@ class EuInstance(Instance, TaggedResource):
         newins.timeout = timeout
         newins.retry = retry    
         newins.private_addressing = private_addressing
-        newins.reservation = reservation or newins.tester.get_reservation_for_instance(newins)
-        newins.security_groups = newins.tester.get_instance_security_groups(newins)
+        newins.reservation = reservation or newins.get_reservation()
+        if newins.reservation:
+            newins.security_groups = newins.tester.get_instance_security_groups(newins)
+        else:
+            newins.security_groups = None
         newins.laststate = newins.state
         newins.cmdstart = cmdstart
         newins.auto_connect = auto_connect
@@ -205,13 +208,16 @@ class EuInstance(Instance, TaggedResource):
             bdmvol = self.bdm_root_vol.id
         else:
             bdmvol = None
-            
+        reservation_id = None
+        if self.reservation:
+            reservation_id = self.reservation.id
+
         buf = "\n"
         if title:
             buf += str("-------------------------------------------------------------------------------------------------------------------------------------------------------------------\n")
             buf += str('INST_ID').center(11)+'|'+str('EMI').center(13)+'|'+str('RES_ID').center(11)+'|'+str('LASTSTATE').center(10)+'|'+str('PRIV_ADDR').center(10)+'|'+str('AGE@STATUS').center(13)+'|'+str('VMTYPE').center(12)+'|'+str('ROOT_VOL').center(13)+'|'+str('CLUSTER').center(25)+'|'+str('PUB_IP').center(16)+'|'+str('PRIV_IP')+'\n'
             buf += str("-------------------------------------------------------------------------------------------------------------------------------------------------------------------\n")
-        buf += str(self.id).center(11)+'|'+str(self.image_id).center(13)+'|'+str(self.reservation.id).center(11)+'|'+str(self.laststate).center(10)+'|'+str(self.private_addressing).center(10)+'|'+str(self.age_at_state).center(13)+'|'+str(self.instance_type).center(12)+'|'+str(bdmvol).center(13)+'|'+str(self.placement).center(25)+'|'+str(self.ip_address).center(16)+'|'+str(self.private_ip_address).rstrip()
+        buf += str(self.id).center(11)+'|'+str(self.image_id).center(13)+'|'+str(reservation_id).center(11)+'|'+str(self.laststate).center(10)+'|'+str(self.private_addressing).center(10)+'|'+str(self.age_at_state).center(13)+'|'+str(self.instance_type).center(12)+'|'+str(bdmvol).center(13)+'|'+str(self.placement).center(25)+'|'+str(self.ip_address).center(16)+'|'+str(self.private_ip_address).rstrip()
         if footer:
             buf += str("\n-------------------------------------------------------------------------------------------------------------------------------------------------------------------")
         if printmethod:
@@ -239,8 +245,18 @@ class EuInstance(Instance, TaggedResource):
         else:
             self.debug("keypath or username/password need to be populated for ssh connection") 
             
-    
-    
+
+    def get_reservation(self):
+        res = None
+        try:
+            res = self.tester.get_reservation_for_instance(self)
+        except Exception, e:
+            tb = self.tester.get_traceback()
+            self.update()
+            self.debug('Could not get reservation for instance in state:' + str(self.state) + ", err:" + str(e))
+        return res
+
+
     def connect_to_instance(self, timeout=60):
         '''
         Attempts to connect to an instance via ssh.
@@ -1100,7 +1116,13 @@ class EuInstance(Instance, TaggedResource):
         overwrite - optional - boolean. write to volume regardless of whether existing data is found
         '''
         
-        voldev = euvolume.guestdev.strip()  
+        voldev = euvolume.guestdev.strip()
+        if not isinstance(euvolume, EuVolume):
+            raise Exception('EuVolume() type not passed to vol_write_random_data_get_md5, got type:' + str(type(euvolume)) )
+        if not voldev:
+            raise Exception('Guest device not populated for euvolume:' + str(euvolume.id) +
+                            ', euvolume.guestdev:' + str(euvolume.guestdev) +
+                            ', voldev:' + str(voldev))
         #check to see if there's existing data that we should avoid overwriting 
         if overwrite or ( int(self.sys('head -c '+str(length)+ ' '+str(voldev)+' | xargs -0 printf %s | wc -c')[0]) == 0):
             
@@ -1166,6 +1188,7 @@ class EuInstance(Instance, TaggedResource):
         '''
         msg=""
         newuptime = None
+        attempt = 0
         def get_safe_uptime():
             uptime = None
             try:
@@ -1186,15 +1209,22 @@ class EuInstance(Instance, TaggedResource):
         self.debug('Rebooting now...')
         self.reboot()
         time.sleep(waitconnect)
-        self.connect_to_instance(timeout=timeout)
+        while attempt <= uptime_retries:
+            attempt += 1
+            self.connect_to_instance(timeout=timeout)
 
-        #Wait for the system to provide a valid response for uptime, early connections may not
-        newuptime = self.tester.wait_for_result( get_safe_uptime, None, oper=operator.ne)
+            #Wait for the system to provide a valid response for uptime, early connections may not
+            newuptime = self.tester.wait_for_result( get_safe_uptime, None, oper=operator.ne)
 
-        elapsed = int(time.time()-start)
-        #Check to see if new uptime is at least 'pad' less than before, allowing for some pad 
-        if (newuptime - (uptime+elapsed)) > pad:
-            raise Exception("Instance uptime does not represent a reboot. Orig:"+str(uptime)+", New:"+str(newuptime)+", elapsed:"+str(elapsed))
+            elapsed = int(time.time()-start)
+            #Check to see if new uptime is at least 'pad' less than before, allowing for some pad
+            if (newuptime - (uptime+elapsed)) > pad:
+                err_msg = "Instance uptime does not represent a reboot. Orig:"+str(uptime)+\
+                          ", New:"+str(newuptime)+", elapsed:"+str(elapsed)+", attempts:" + str(attempt)
+                if attempt > uptime_retries:
+                    raise Exception(err_msg)
+                else:
+                    self.debug(err_msg)
         if checkvolstatus:
             badvols= self.get_unsynced_volumes()
             if badvols != []:
@@ -1310,9 +1340,11 @@ class EuInstance(Instance, TaggedResource):
                                             self.debug('Found match at dev:'+str(vdev))
                                             found = True
                                             if (vol.guestdev != vdev ):
-                                                self.debug("("+str(vol.id)+")Found dev match. Guest dev changed! Updating from previous:'"+str(vol.guestdev)+"' to:'"+str(vdev)+"'")
+                                                self.debug("("+str(vol.id)+")Found dev match. Guest dev changed! Updating from previous:'"
+                                                           + str(vol.guestdev) + "' to:'"+str(vdev)+"'")
                                             else:
-                                                self.debug("("+str(vol.id)+")Found dev match. Previous dev:'"+str(vol.guestdev)+"', Current dev:'"+str(vdev)+"'")
+                                                self.debug("(" + str(vol.id) + ")Found dev match. Previous dev:'"
+                                                           + str(vol.guestdev) + "', Current dev:'" + str(vdev) + "'")
                                             vol.guestdev = vdev
                                         checked_vdevs.append(vdev) # add to list of devices we've already checked.
                                     if found:

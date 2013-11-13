@@ -53,11 +53,17 @@ class ResourceGeneration(EutesterTestCase):
     def clean_method(self):
         if not self.args.no_cleanup:
             for tester in self.testers:
-                self.tester.cleanup_artifacts()
+                try:
+                    tester.show_euare_whoami()
+                except: pass
+                tester.cleanup_artifacts()
 
     def CreateResources(self):
         users = self.tester.get_all_users()
         self.testers.append(self.tester)
+        try:
+            self.tester.show_all_users()
+        except: pass
         for user in users:
             user_name = user['user_name']
             user_account = user['account_name']
@@ -71,11 +77,15 @@ class ResourceGeneration(EutesterTestCase):
                 self.testers.append(new_tester)
 
         self.tester.debug("Created a total of " + str(len(self.testers)) + " testers" )
-
-
+        try:
+            self.tester.show_all_users()
+        except: pass
         for resource_tester in self.testers:
             import random
             assert isinstance(resource_tester, Eucaops)
+            try:
+                resource_tester.show_euare_whoami()
+            except:pass
             zone = random.choice(resource_tester.get_zones())
             keypair = resource_tester.add_keypair(resource_tester.id_generator())
             group = resource_tester.add_group(resource_tester.id_generator())
@@ -85,6 +95,7 @@ class ResourceGeneration(EutesterTestCase):
             instance = reservation.instances[0]
             assert isinstance(instance, EuInstance)
             if not instance.ip_address == instance.private_ip_address:
+                self.tester.show_all_addresses_verbose()
                 address = resource_tester.allocate_address()
                 resource_tester.associate_address(instance=instance, address=address)
                 resource_tester.disassociate_address_from_instance(instance)

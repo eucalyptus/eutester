@@ -181,8 +181,8 @@ disable_root: false"""
 
     def get_ec2_ip(self):
         """Parse the eucarc for the S3_URL"""
-        walrus_url = self.parse_eucarc("EC2_URL")
-        return walrus_url.split("/")[2].split(":")[0]
+        ec2_url = self.parse_eucarc("EC2_URL")
+        return ec2_url.split("/")[2].split(":")[0]
 
     def create_tags(self, resource_ids, tags):
         """
@@ -1939,6 +1939,7 @@ disable_root: false"""
                 emi=None,
                 root_device_type=None,
                 root_device_name=None,
+                virtualization_type=None,
                 location=None,
                 state="available",
                 arch=None,
@@ -1952,6 +1953,7 @@ disable_root: false"""
         :param emi: Partial ID of the emi to return, defaults to the 'emi-" prefix to grab any
         :param root_device_type: example: 'instance-store' or 'ebs'
         :param root_device_name: example: '/dev/sdb'
+        :param virtualization_type: example: 'hvm' or 'paravirtualized'
         :param location: partial on location match example: 'centos'
         :param state: example: 'available'
         :param arch: example: 'x86_64'
@@ -1971,7 +1973,13 @@ disable_root: false"""
             if not re.search(emi, image.id):      
                 continue  
             if (root_device_type is not None) and (image.root_device_type != root_device_type):
-                continue            
+                continue
+            if (virtualization_type is not None):
+                if hasattr(image, 'virtualization_type'):
+                    if image.virtualization_type != virtualization_type:
+                        continue
+                else:
+                    self.debug('Filter by virtualization type requested but not supported in this boto version?')
             if (root_device_name is not None) and (image.root_device_name != root_device_name):
                 continue       
             if (state is not None) and (image.state != state):
@@ -2070,8 +2078,51 @@ disable_root: false"""
             if addr.instance_id and re.search(r"(available|nobody)", addr.instance_id):
                 ret.append(addr)
         return ret
-    
-    
+
+
+    def show_all_addresses_verbose(self, display=True):
+        """
+        Print table to debug output showing all addresses available to cloud admin using verbose filter
+        """
+        address_width = 20
+        info_width = 64
+        account_width = 24
+        buf = ""
+        line = ""
+        header = "| " + str("PUBLIC IP").ljust(address_width) + " | " + str("ADDRESS INFO").ljust(info_width) + \
+                 " | " + str("ACCOUNT NAME").ljust(account_width) + " | " + str("REGION") + "\n"
+        longest = len(header)
+        try:
+            ad_list = self.ec2.get_all_addresses(addresses='verbose')
+            for ad in ad_list:
+                account_name = ""
+                adline = ""
+                match = re.findall('\(arn:*.*\)', ad.instance_id)
+                if match:
+                    try:
+                        match = match[0]
+                        account_id = match.split(':')[4]
+                        account_name = self.get_all_accounts(account_id=account_id)[0]['account_name']
+                    except:pass
+                if ad.region:
+                    region = ad.region.name
+                adline = "| " + str(ad.public_ip ).ljust(address_width) + " | " + str(ad.instance_id).ljust(info_width) + \
+                       " | " + str(account_name).ljust(account_width)  + " | " + str(region) + "\n"
+                buf += adline
+                if len(adline) > longest:
+                    longest = len(adline)
+        except Exception, e:
+            tb = self.get_traceback()
+            buf = str(tb) + "\n ERROR in show_all_addresses_verbose:" + str(e)
+        for x in xrange(0,longest):
+            line += "-"
+        line += "\n"
+        buf = "\n" + line + header + line + buf + line
+        if not display:
+            return buf
+        self.debug(buf)
+
+
     def allocate_address(self):
         """
         Allocate an address for the current user
@@ -2082,8 +2133,10 @@ disable_root: false"""
             self.debug("Allocating an address")
             address = self.ec2.allocate_address()
         except Exception, e:
-            self.critical("Unable to allocate address")
-            return False
+            tb = self.get_traceback()
+            err_msg = 'Unable to allocate address'
+            self.critical(str(err_msg))
+            raise Exception(str(tb) + "\n" + str(err_msg))
         self.debug("Allocated " + str(address))
         return address
 
@@ -2403,7 +2456,8 @@ disable_root: false"""
                 try:
                     self.wait_for_valid_ip(instance)
                 except Exception, e:
-                    ip_err = "WARNING in wait_for_valid_ip: "+str(e)
+                    tb = self.get_traceback()
+                    ip_err = str(tb)  + "\nWARNING in wait_for_valid_ip: "+str(e)
                     self.debug(ip_err)
                     self.terminate_instances(reservation)
                     raise Exception("Reservation " +  str(reservation) + " has been terminated because instance " +
@@ -2605,7 +2659,7 @@ disable_root: false"""
         good = []
         elapsed = 0
         start = time.time()
-        self.debug("Instances in running state and IPs are valid, attempting connections...")
+        self.debug("Instances in running state and wait_for_valid_ip complete, attempting connections...")
         while waiting and (elapsed < timeout):
             self.debug("Checking "+str(len(waiting))+" instance ssh connections...")
             elapsed = int(time.time()-start)
@@ -2639,8 +2693,9 @@ disable_root: false"""
                 time.sleep(poll_interval)
                 
         if waiting:
-            buf = "Timed out waiting to connect to the following instances:\n"
-            buf += ip_err + "\n"
+            buf = "Following Errors occurred while waiting for instances:\n"
+            buf += 'Errors while waiting for valid ip:'+ ip_err + "\n"
+            buf += "Timed out waiting:" + str(elapsed) + " to connect to the following instances:\n"
             for instance in waiting:
                 buf += str(instance.id)+":"+str(instance.ip_address)+","
             raise Exception(buf)
@@ -2762,6 +2817,10 @@ disable_root: false"""
         :param instance: boto instance or euinstance obj to use for lookup
         :return: :raise:
         """
+        if hasattr(self.ec2, 'get_all_reservations'):
+            res = self.ec2.get_all_reservations(instance_ids=instance.id)
+            if res and isinstance(res, types.ListType):
+                return res[0]
         for res in self.ec2.get_all_instances():
             for inst in res.instances:
                 if inst.id == instance.id:
@@ -2953,7 +3012,7 @@ disable_root: false"""
             elapsed = int(time.time()- start)
             for instance in monitoring:
                 instance.update()
-                if zeros.search(instance.ip_address):
+                if zeros.search(str(instance.ip_address)):
                     self.debug(str(instance.id)+": WAITING for public ip. Current:"+str(instance.ip_address)+
                                ", elapsed:"+str(elapsed)+"/"+str(timeout))
                 else:
@@ -3233,7 +3292,7 @@ disable_root: false"""
         monitor_list = []
         if reservation and not isinstance(reservation, types.ListType):
             if isinstance(reservation, Reservation):
-                instance_list = reservation.instances
+                instance_list = reservation.instances or []
             else:
                 raise Exception('Unknown type:' + str(type(reservation)) + ', for reservation passed to terminate_instances')
         else:
@@ -3250,13 +3309,14 @@ disable_root: false"""
 
         for instance in instance_list:
                     self.debug( "Sending terminate for " + str(instance) )
-                    self.print_euinstance_list(euinstance_list=instance_list)
                     instance.terminate()
                     instance.update()
                     if instance.state != 'terminated':
                         monitor_list.append(instance)
                     else:
                         self.debug('Instance: ' + str(instance.id) + ' in terminated state:' + str(instance.state))
+
+        self.print_euinstance_list(euinstance_list=monitor_list)
         try:
             self.monitor_euinstances_to_state(instance_list=monitor_list, state='terminated', timeout=timeout)
             aggregate_result = True
@@ -3540,9 +3600,9 @@ disable_root: false"""
             except eutester.sshconnection.CommandExitCodeException, e:
                 ### Enterprise Linux
                 instance.sys("yum install -y httpd", code=0)
+                instance.sys("echo \"" + instance.id +"\" > /var/www/html/" + filename)
                 instance.sys("service httpd start")
                 instance.sys("chkconfig httpd on")
-                instance.sys("echo \"" + instance.id +"\" > /var/www/html/" + filename)
         return (reservation, filename)
 
 

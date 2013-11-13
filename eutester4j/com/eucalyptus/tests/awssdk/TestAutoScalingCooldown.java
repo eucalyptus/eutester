@@ -149,7 +149,7 @@ public class TestAutoScalingCooldown {
 					.withPolicyName(policyName).withHonorCooldown(true));
 
 			print("Waiting for scaling to complete");
-			waitForInstances(TimeUnit.MINUTES.toMillis(2), 2, groupName,true);
+			waitForInstances(TimeUnit.MINUTES.toMillis(5), 2, groupName,true);
 
 			print("Test complete");
 		} finally {

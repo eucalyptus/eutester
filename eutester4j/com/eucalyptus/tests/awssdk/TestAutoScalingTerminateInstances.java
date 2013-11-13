@@ -90,7 +90,7 @@ public class TestAutoScalingTerminateInstances {
 
 			// Wait for instances to launch
 			print("Waiting for instances to launch");
-			final long timeout = TimeUnit.MINUTES.toMillis(2);
+			final long timeout = TimeUnit.MINUTES.toMillis(5);
 			List<String> instanceIds = (List<String>) waitForInstances(timeout, 2, asGroupName, true);
 
 			// Terminate instance with capacity decrement
