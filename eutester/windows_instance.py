@@ -69,11 +69,11 @@ class WinInstanceDiskType():
     megabyte = 1048576
     def __init__(self, win_instance, wmic_dict):
         self.check_dict_requires(wmic_dict)
-        self.__dict__ =  self.convert_ints_in_dict(copy.copy(wmic_dict))
+        self.__dict__ =  self.convert_numbers_in_dict(copy.copy(wmic_dict))
         self.win_instance = win_instance
         self.size_in_gb = self.get_size_in_gb()
         self.size_in_mb = self.get_size_in_mb()
-        self.size = int(self.size or 0)
+        self.size = long(self.size or 0)
         self.last_updated = time.time()
         self.setup()
 
@@ -83,12 +83,12 @@ class WinInstanceDiskType():
     def check_dict_requires(self, wmic_dict):
         raise Exception('Not Implemented')
 
-    def convert_ints_in_dict(self, dict):
+    def convert_numbers_in_dict(self, dict):
         #convert strings representing numbers to ints
         for key in dict:
             value = str(dict[key])
             if (re.search("\S", str(dict[key])) and not re.search("\D", str(dict[key]))):
-                dict[key] = int(dict[key])
+                dict[key] = long(dict[key])
         return dict
 
     def get_partition_ids(self):
@@ -825,6 +825,9 @@ class WinInstance(Instance, TaggedResource):
             if not forceupdate and (time.time() - self.diskdrives[0].last_updated) <= self.disk_update_interval:
                 return
         self.debug('Fetching updated disk info...')
+        self.diskdrives = []
+        self.disk_partitions = []
+        self.logicaldisks = []
         self.diskdrives =  self.get_updated_diskdrive_info()
         self.disk_partitions = self.get_updated_partition_info()
         self.logicaldisks = self.get_updated_logicaldisk_info()
@@ -1335,6 +1338,16 @@ class WinInstance(Instance, TaggedResource):
             cygwin_dev_map['last_updated'] = time.time()
             self.cygwin_dev_map = cygwin_dev_map
         return cygwin_dev_map
+
+
+    def rescan_disks(self):
+        scriptname = 'eutester_diskpart_script'
+        self.sys('(echo rescan && echo list disk ) > ' + str(scriptname), code=0)
+        self.sys('diskpart /s ' + str(scriptname), code=0)
+
+
+
+
 
 
 
