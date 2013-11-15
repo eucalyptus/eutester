@@ -252,3 +252,19 @@ class ELBops(Eutester):
         if lb in self.test_resources["load_balancers"]:
             self.test_resources["load_balancers"].remove(lb)
 
+    def create_app_cookie_stickiness_policy(self, name, lb_name, policy_name):
+        self.debug("Create app cookie stickiness policy: " + str(policy_name))
+        self.elb.create_app_cookie_stickiness_policy(name, lb_name, policy_name)
+
+    def create_lb_cookie_stickiness_policy(self, cookie_expiration_period, lb_name, policy_name):
+        self.debug("Create lb cookie stickiness policy: " + str(policy_name))
+        self.elb.create_lb_cookie_stickiness_policy(cookie_expiration_period, lb_name, policy_name)
+
+    def delete_lb_policy(self, lb_name, policy_name):
+        self.debug("Deleting lb policy " + str(policy_name) + " from " + str(lb_name))
+        self.elb.delete_lb_policy(lb_name,policy_name)
+
+    ### can be used later. right now boto does not return policies with loadbalancer request
+    def describe_lb_policies(self,lb):
+        lbs = self.elb.get_all_load_balancers(load_balancer_names=[lb])
+        self.debug("Loadbalancer Details: " + str(lbs[0].policies))
