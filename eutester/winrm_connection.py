@@ -7,6 +7,7 @@ from isodate.isoduration import duration_isoformat
 from datetime import timedelta
 import StringIO
 import traceback
+import socket
 import copy
 import sys
 import time
@@ -33,7 +34,7 @@ class Winrm_Connection:
         self.port = int(port)
         self.protocol = protocol
         self.transport = transport
-        self.default_command_timeout = self.convert_iso8601_timeout(default_command_timeout)
+        self.default_command_timeout = default_command_timeout #self.convert_iso8601_timeout(default_command_timeout)
         self.url = url or str(protocol)+"://"+str(hostname)+":"+str(port)+"/wsman"
         self.winproto = self.get_proto()
         self.shell_id = None
@@ -59,11 +60,13 @@ class Winrm_Connection:
         else:
             print(msg)
 
-    def reset_shell(self, retries=5):
+    def reset_shell(self, timeout=None, retries=5):
         retry = 0
         tb = ""
         e = None
         self.close_shell()
+        timeout = timeout or self.default_command_timeout
+        self.winproto.transport.timeout = timeout #self.default_command_timeout
         #self.debug('reset_shell connection, Host:' + str(self.hostname) + ":" + str(self.port) + ", Username:" + str(self.username) + ', Password:' + str(self.password))
         while retry < retries:
             retry += 1
@@ -85,27 +88,39 @@ class Winrm_Connection:
         errmsg = ""
         if verbose is None:
             verbose = self.verbose
-        if verbose:
-            orig_cmd = copy.copy(command)
+        orig_cmd = copy.copy(command)
         arguments = command.split(' ')
         command = arguments.pop(0)
         self.command_id = None
-        self.reset_shell()
 
-        if timeout is not None:
+        #if timeout is not None:
             #convert timeout to ISO8601 format
-            timeout = self.convert_iso8601_timeout(timeout)
-            #self.winproto.transport.timeout = timeout
+            #timeout = self.convert_iso8601_timeout(timeout)
+        self.reset_shell(timeout=timeout)
         try:
-            if verbose:
-                self.debug('winrm cmd:' + str(orig_cmd))
-            self.command_id = self.winproto.run_command(self.shell_id, command, arguments)
-            stdout, stderr, statuscode = self.winproto.get_command_output(self.shell_id, self.command_id)
+            self.command_id= self.winproto.run_command(self.shell_id,
+                                      command,
+                                      arguments=arguments,
+                                      console_mode_stdin=console_mode_stdin,
+                                      skip_cmd_shell=skip_cmd_shell)
+            self.debug('winrm timeout:' + str(timeout) + ', cmd:' + str(orig_cmd))
+            if timeout is not None:
+                sockdefault = socket.getdefaulttimeout()
+                socket.setdefaulttimeout(timeout)
+                stdout, stderr, statuscode = self.get_timed_command_output(self.shell_id, self.command_id, active_timeout=timeout)
+            else:
+                stdout, stderr, statuscode = self.winproto.get_command_output(self.shell_id, self.command_id)
+            self.debug( 'Command:"' + str(orig_cmd) + '" , Done.')
         except WinRMTransportError as wte:
             errmsg = str(wte)
+        except CommandTimeoutException as cte:
+            self.debug(str(cte))
+            errmsg = 'timed out'
         finally:
             try:
                 #self.winproto.transport.timeout = self.default_command_timeout
+                if timeout is not None:
+                    socket.setdefaulttimeout(sockdefault)
                 self.winproto.cleanup_command(self.shell_id, self.command_id)
             except: pass
             self.close_shell()
@@ -113,12 +128,36 @@ class Winrm_Connection:
             if re.search('timed out', errmsg, re.IGNORECASE):
                 raise CommandTimeoutException('ERROR: Timed out after:' +
                                               str(self.winproto.transport.timeout) +
-                                              ', Cmd:"' + str(command))
+                                              ', Cmd:"' + str(orig_cmd))
             else:
                 raise Exception(errmsg)
         if verbose:
             self.debug("\n" + str(stdout) + "\n" + str(stderr))
         return {'stdout':stdout, 'stderr':stderr, 'statuscode':statuscode}
+
+
+
+    def get_timed_command_output(self, shell_id, command_id, active_timeout=0):
+        """
+        Get the Output of the given shell and command
+        @param string shell_id: The shell id on the remote machine.  See #open_shell
+        @param string command_id: The command id on the remote machine.  See #run_command
+        @param int active_timeout: Time out used during an active session. For example as the shell is actively returning
+                                  data, but we want to timeout anyways. See cmd timeout for idle timeout where no
+                                  data has been read.
+        """
+        stdout_buffer, stderr_buffer = [], []
+        command_done = False
+        start = time.time()
+        while not command_done:
+            elapsed = time.time()-start
+            if active_timeout and (elapsed > active_timeout):
+                raise CommandTimeoutException('Active timeout fired after:' + str(elapsed))
+            stdout, stderr, return_code, command_done = \
+                self.winproto._raw_get_command_output(shell_id, command_id)
+            stdout_buffer.append(stdout)
+            stderr_buffer.append(stderr)
+        return ''.join(stdout_buffer), ''.join(stderr_buffer), return_code
 
 
     def close_shell(self):
@@ -137,13 +176,13 @@ class Winrm_Connection:
                                                + "\n, stdout:" + str(output['stdout'])
                                                + "\n, stderr:" + str(output['stderr']))
         ret = output['stdout']
-        if not carriage_return:
-            #remove the '\r' chars from the return buffer, leave '\n'
-            ret = ret.replace('\r','')
-        if listformat:
-            ret = ret.splitlines()
-
-        if include_stderr:
+        if ret:
+            if not carriage_return:
+                #remove the '\r' chars from the return buffer, leave '\n'
+                ret = ret.replace('\r','')
+            if listformat:
+                ret = ret.splitlines()
+            if include_stderr:
                 ret = ret.extend(output['stderr'].splitlines())
         return ret
 
