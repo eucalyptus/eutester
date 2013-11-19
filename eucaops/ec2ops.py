@@ -2309,7 +2309,9 @@ disable_root: false"""
                     continue
                 if (attached_dev is not None) and (volume.attach_data.device != attached_dev):
                     continue
-            if not (volume.size >= minsize) and (maxsize is None or volume.size <= maxsize):
+            if volume.size <  minsize:
+                continue
+            if maxsize is not None and volume.size > maxsize:
                 continue
             if not hasattr(volume,'md5'):
                 volume = EuVolume.make_euvol_from_vol(volume)
