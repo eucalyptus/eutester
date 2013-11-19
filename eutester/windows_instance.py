@@ -157,8 +157,8 @@ class WinInstanceDiskDrive(WinInstanceDiskType):
             else:
                 self.model = self.caption
 
-        self.update_ebs_info_from_serial_number()
-        self.cygwin_scsi_drive = self.win_instance.get_cygwin_scsi_dev_for_windows_drive(drive_id=self.deviceid)
+        self.update_ebs_info()
+        self.cygwin_scsi_drive = self.win_instance.get_cygwin_scsi_dev_for_windows_drive(windisk=self)
         self.disk_partitions = []
 
     def check_dict_requires(self, wmic_dict):
@@ -193,33 +193,55 @@ class WinInstanceDiskDrive(WinInstanceDiskType):
             self.ebs_volume = ''
             self.ebs_cloud_dev = ''
 
+    def update_ebs_info(self):
+        self.update_ebs_info_from_serial_number()
+        if not self.ebs_volume:
+            if self.index == 0 and self.win_instance.root_device_type == 'ebs':
+                bdm = self.win_instance.block_device_mapping[self.win_instance.root_device_name]
+                self.ebs_volume = bdm.volume_id
+            for vol in self.win_instance.attached_vols:
+                if vol.guestdev == self.deviceid:
+                    self.ebs_volume = vol.id
+                    break
+
+        if not self.ebs_cloud_dev and self.ebs_volume:
+            volume = self.win_instance.tester.get_volume(volume_id=self.ebs_volume)
+            if hasattr(volume,'attach_data') and volume.attach_data:
+                self.ebs_cloud_dev = volume.attach_data.device
+
+
+
+
     def get_summary(self, printheader=True, printmethod=None):
         buf = ""
         deviceid = 20
         size = 16
         sizegb = 7
+        ebsvol = 12
         serialnumber = 24
         caption = 36
         part_count = 6
         logical_ids = 8
         cygdrive = 10
-        header = "DEVICEID".center(deviceid) + "|" + \
+        header = "DISKDRIVE DEV ID".center(deviceid) + "|" + \
                  "SIZE B".center(size) + "|" + \
                  "SIZE GB".center(sizegb) + "|" + \
-                 "SERIAL NUMBER".center(serialnumber) + "|" + \
+                 "EBS VOL".center(ebsvol) + "|" + \
                  "CAPTION".center(caption) + "|" + \
                  "PARTS".center(part_count) + "|" + \
                  "LOGICAL".center(logical_ids) + "|" + \
-                 "CYGDRIVE".center(cygdrive) + "|"
+                 "CYGDRIVE".center(cygdrive) + "|" + \
+                 "SERIAL NUMBER".center(serialnumber) + "|"
 
         summary = str(self.deviceid).center(deviceid) + "|" + \
                   str(self.size).center(size) + "|" + \
                   str(self.size_in_gb).center(sizegb) + "|" + \
-                  str(self.serialnumber).center(serialnumber) + "|" + \
+                  str(self.ebs_volume).center(ebsvol) + "|" + \
                   str(self.caption).center(caption) + "|" + \
                   str(self.partitions).center(part_count) + "|" + \
                   str(",".join(str(x) for x in self.get_logicaldisk_ids())).center(logical_ids) + "|" + \
-                  str(self.cygwin_scsi_drive).center(cygdrive)
+                  str(self.cygwin_scsi_drive).center(cygdrive) + "|" + \
+                  str(self.serialnumber).center(serialnumber) + "|"
 
         length = len(header)
         if len(summary) > length:
@@ -238,14 +260,28 @@ class WinInstanceDiskPartition(WinInstanceDiskType):
     def setup(self):
         #self.cygwin_scsi_drive = self.win_instance.get_cygwin_scsi_dev_for_windows_drive(drive_id=self.deviceid)
         self.logicaldisks = []
+        #Set values in case 'brief' was used when fetching partitions
+        if not hasattr(self,'deviceid'):
+            self.deviceid = self.name
+        if not hasattr(self,'bootable'):
+            self.bootable = self.bootpartition
+        if not hasattr(self,'diskindex'):
+            self.diskindex = self.get_disk_index_from_name()
 
     def check_dict_requires(self, wmic_dict):
-        if not ('deviceid' in wmic_dict and
+        if not ('name' in wmic_dict and
                 'size' in wmic_dict and
-                'bootable' in wmic_dict and
+                'bootpartition' in wmic_dict and
                 'index' in wmic_dict):
             raise Exception('wmic_dict passed does not contain needed attributes; deviceid, size, index and bootable')
 
+
+    def get_disk_index_from_name(self):
+        diskindex = None
+        diskindexstring = self.name.split(',')[0]
+        if re.search('disk', diskindexstring, re.IGNORECASE):
+            diskindex = int(diskindexstring.split('#')[1])
+        return diskindex
 
     def get_logicaldisk_ids(self):
         retlist = []
@@ -260,7 +296,7 @@ class WinInstanceDiskPartition(WinInstanceDiskType):
         sizegb = 12
         sizemb = 12
         bootable = 10
-        header = "DEVICEID".center(deviceid) + "|" + \
+        header = "PARTITION DEV ID".center(deviceid) + "|" + \
                  "SIZE B".center(size) + "|" + \
                  "SIZE GB".center(sizegb) + "|" + \
                  "SIZE MB".center(sizemb) + "|" + \
@@ -287,7 +323,7 @@ class WinInstanceDiskPartition(WinInstanceDiskType):
 class WinInstanceLogicalDisk(WinInstanceDiskType):
 
     def setup(self):
-        self.cygwin_scsi_drive = self.win_instance.get_cygwin_scsi_dev_for_windows_drive(drive_id=self.deviceid)
+        self.cygwin_scsi_drive = self.win_instance.get_cygwin_scsi_dev_for_windows_drive(windisk=self)
         self.partition = None
 
     def check_dict_requires(self, wmic_dict):
@@ -306,7 +342,7 @@ class WinInstanceLogicalDisk(WinInstanceDiskType):
         filesystem = 24
         description = 30
         cygdrive = 10
-        header = "DEVICEID".center(deviceid) + "|" + \
+        header = "LOGICAL DEV ID".center(deviceid) + "|" + \
                  "SIZE".center(size) + "|" + \
                  "FREE SPACE".center(freespace) + "|" + \
                  "FILE SYSTEM".center(filesystem) + "|" + \
@@ -360,7 +396,7 @@ class WinInstance(Instance, TaggedResource):
                                       attached_vols = [],
                                       virtio_blk = True,
                                       cygwin_path = None,
-                                      disk_update_interval=5,
+                                      disk_update_interval=10,
                                       retry=2
                                       ):
         '''
@@ -473,6 +509,17 @@ class WinInstance(Instance, TaggedResource):
         printmethod(buf)
 
     def printself(self,title=True, footer=True, printmethod=None):
+        instid = 11
+        emi = 13
+        resid = 11
+        laststate =10
+        privaddr = 10
+        age = 13
+        vmtype = 12
+        rootvol = 13
+        cluster = 25
+        pubip = 16
+
         if self.bdm_root_vol:
             bdmvol = self.bdm_root_vol.id
         else:
@@ -480,19 +527,51 @@ class WinInstance(Instance, TaggedResource):
         reservation_id = None
         if self.reservation:
             reservation_id = self.reservation.id
-
-        buf = "\n"
+        header = ""
+        buf = ""
         if title:
-            buf += str("-------------------------------------------------------------------------------------------------------------------------------------------------------------------\n")
-            buf += str('INST_ID').center(11)+'|'+str('EMI').center(13)+'|'+str('RES_ID').center(11)+'|'+str('LASTSTATE').center(10)+'|'+str('PRIV_ADDR').center(10)+'|'+str('AGE@STATUS').center(13)+'|'+str('VMTYPE').center(12)+'|'+str('ROOT_VOL').center(13)+'|'+str('CLUSTER').center(25)+'|'+str('PUB_IP').center(16)+'|'+str('PRIV_IP')+'\n'
-            buf += str("-------------------------------------------------------------------------------------------------------------------------------------------------------------------\n")
-        buf += str(self.id).center(11)+'|'+str(self.image_id).center(13)+'|'+str(reservation_id).center(11)+'|'+str(self.laststate).center(10)+'|'+str(self.private_addressing).center(10)+'|'+str(self.age_at_state).center(13)+'|'+str(self.instance_type).center(12)+'|'+str(bdmvol).center(13)+'|'+str(self.placement).center(25)+'|'+str(self.ip_address).center(16)+'|'+str(self.private_ip_address).rstrip()
+            header = str('INST_ID').center(instid) +'|' + \
+                     str('EMI').center(emi) + '|' +  \
+                     str('RES_ID').center(resid) + '|' +  \
+                     str('LASTSTATE').center(laststate) + '|' +  \
+                     str('PRIV_ADDR').center(privaddr) + '|' +  \
+                     str('AGE@STATUS').center(age) + '|' +  \
+                     str('VMTYPE').center(vmtype) + '|' +  \
+                     str('ROOT_VOL').center(rootvol) + '|' +  \
+                     str('CLUSTER').center(cluster) + '|' +  \
+                     str('PUB_IP').center(pubip) + '|' +  \
+                     str('PRIV_IP')
+        summary = str(self.id).center(instid) + '|' + \
+                  str(self.image_id).center(emi) + '|' +  \
+                  str(reservation_id).center(resid) + '|' +  \
+                  str(self.laststate).center(laststate) + '|' +  \
+                  str(self.private_addressing).center(privaddr) + '|' + \
+                  str(self.age_at_state).center(age) + '|' +  \
+                  str(self.instance_type).center(vmtype) + '|' +  \
+                  str(bdmvol).center(rootvol) + '|' +  \
+                  str(self.placement).center(cluster) + '|' + \
+                  str(self.ip_address).center(pubip) + '|' + \
+                  str(self.private_ip_address).rstrip()
+
+        length = len(header)
+        if len(summary) > length:
+            length = len(summary)
+        line = self.get_line(length)
+        if title:
+            buf = line + header + line
+        buf += summary
         if footer:
-            buf += str("\n-------------------------------------------------------------------------------------------------------------------------------------------------------------------")
+            buf += line
         if printmethod:
             printmethod(buf)
         return buf
 
+
+    def get_line(self, length):
+        line = ""
+        for x in xrange(0,int(length)):
+            line += "-"
+        return "\n" + line + "\n"
 
     def get_password(self, private_key_path=None, key=None, dir=None, exten=".pem", encoded=True):
         '''
@@ -528,6 +607,10 @@ class WinInstance(Instance, TaggedResource):
             #Allow but warn here as this may be a valid negative test
             self.debug('Warning username and/or password were None in winrm connnection?')
         #Create a new winrm interface if this is a new instance or an attribute has changed...
+        try:
+            #Check the port in order to provide debug if the connection fails
+            self.test_port_status(port=self.winrm_port, ip=self.ip_address)
+        except:pass
         if force or not (self.winrm and \
                          self.winrm.hostname == self.ip_address and \
                          self.winrm.username == self.username and \
@@ -580,7 +663,8 @@ class WinInstance(Instance, TaggedResource):
                 self.debug('Try some sys...')
                 self.sys("whoami")
             except Exception, se:
-                self.debug('Caught exception attempting to connect winrm shell:'+ str(se))
+                tb = self.tester.get_traceback()
+                self.debug('Caught exception attempting to connect winrm shell:\n'+ str(tb) + str(se))
                 elapsed = int(time.time()-start)
                 self.debug('connect_to_instance: Attempts:'+str(attempts)+', elapsed:'+str(elapsed)+'/'+str(timeout))
                 if self.winrm is not None:
@@ -592,7 +676,7 @@ class WinInstance(Instance, TaggedResource):
                 break
         elapsed = int(time.time()-start)
         if self.winrm is None:
-            raise Exception(str(self.id)+":Failed establishing ssh connection to instance, elapsed:"+str(elapsed)+
+            raise Exception(str(self.id)+":Failed establishing management connection to instance, elapsed:"+str(elapsed)+
                             "/"+str(timeout))
         self.update_system_and_disk_info()
 
@@ -605,6 +689,8 @@ class WinInstance(Instance, TaggedResource):
             self.debug(str(tb) + "\nError updating system info:" + str(sie))
         try:
             self.update_disk_info()
+            self.print_partition_summary()
+            self.print_logicaldisk_summary()
             self.print_diskdrive_summary()
         except Exception, ude:
             tb = self.tester.get_traceback()
@@ -623,7 +709,7 @@ class WinInstance(Instance, TaggedResource):
         if ( self.verbose is True ):
             self.debugmethod(msg)
 
-    def sys(self, cmd, verbose=True, code=None, include_stderr=False, enable_debug=False, timeout=120):
+    def sys(self, cmd, verbose=True, code=None, include_stderr=False, enable_debug=False, timeout=None):
         '''
         Issues a command against the ssh connection to this instance
         Returns a list of the lines from stdout+stderr as a result of the command
@@ -633,7 +719,7 @@ class WinInstance(Instance, TaggedResource):
         '''
         if (self.winrm is None):
             raise Exception("WinInstance winrm connection is None")
-        return self.winrm.sys(command=cmd, include_stderr=include_stderr, timeout=None, verbose=verbose, code=code)
+        return self.winrm.sys(command=cmd, include_stderr=include_stderr, timeout=timeout, verbose=verbose, code=code)
 
 
 
@@ -834,7 +920,7 @@ class WinInstance(Instance, TaggedResource):
         self.associate_diskdrives_to_partitions()
         self.associate_partitions_to_logicaldrives()
 
-    def get_updated_diskdrive_info(self, forceupdate=False):
+    def get_updated_diskdrive_info(self):
         '''
         Populate self.diskdrives with WinInstanceDisk objects containing info parsed from wmic command.
         Since wmic doesn't seem to use delimeters this method attempts to derive the lengh of each column/header
@@ -843,6 +929,7 @@ class WinInstance(Instance, TaggedResource):
         self.disk_update_interval before updating again.
         '''
         #cmd = "wmic diskdrive get  /format:textvaluelist.xsl"
+        self.debug('Getting updated diskdrive info...')
         cmd = "wmic diskdrive list full"
 
         diskdrives = []
@@ -854,10 +941,11 @@ class WinInstance(Instance, TaggedResource):
                 self.debug('Error attempting to create WinInstanceDiskDrive from following dict:')
                 self.print_dict(dict=disk_dict)
                 raise Exception(str(tb) + "\n Error attempting to create WinInstanceDiskDrive:" + str(e))
+        self.debug('get_updated_diskdrive_info, Done')
         return diskdrives
 
 
-    def get_updated_partition_info(self, forceupdate=False):
+    def get_updated_partition_info(self):
         '''
         Populate self.diskdrives with WinInstanceDisk objects containing info parsed from wmic command.
         Since wmic doesn't seem to use delimeters this method attempts to derive the lengh of each column/header
@@ -865,7 +953,8 @@ class WinInstance(Instance, TaggedResource):
         :pararm force: boolean. Will force an update, otherwise this method will wait a minimum of
         self.disk_update_interval before updating again.
         '''
-        cmd = "wmic partition list full"
+        self.debug('Getting udpated partition info...')
+        cmd = "wmic partition list brief /format:textvaluelist.xsl"
 
         disk_partitions = []
         for part_dict in self.get_parsed_wmic_command_output(cmd):
@@ -876,10 +965,12 @@ class WinInstance(Instance, TaggedResource):
                 self.debug('Error attempting to create WinInstanceDiskPartition from following dict:')
                 self.print_dict(dict=part_dict)
                 raise Exception(str(tb) + "\n Error attempting to create WinInstanceDiskPartition:" + str(e))
+        self.debug('get_updated_partition_info, Done')
         return disk_partitions
 
 
-    def get_updated_logicaldisk_info(self, forceupdate=False):
+    def get_updated_logicaldisk_info(self):
+        self.debug('Getting updated logicaldisk info...')
         cmd ='wmic logicaldisk list /format:textvaluelist.xsl'
         logicaldisks = []
         for part_dict in self.get_parsed_wmic_command_output(cmd):
@@ -890,6 +981,7 @@ class WinInstance(Instance, TaggedResource):
                 self.debug('Error attempting to create WinInstanceLogicalDisk from following dict:')
                 self.print_dict(dict=part_dict)
                 raise Exception(str(tb) + "\n Error attempting to create WinInstanceLogicalDisk:" + str(e))
+        self.debug('get_updated_logicaldisk_info, Done')
         return logicaldisks
 
 
@@ -921,7 +1013,24 @@ class WinInstance(Instance, TaggedResource):
                                 disk.partition = part
                                 break
 
-    def get_cygwin_scsi_dev_for_windows_drive(self, drive_id, retries=2):
+    def get_cygwin_scsi_dev_for_windows_drive(self, windisk=None, drive_id=""):
+        '''
+        param windisk: WinInstanceDiskType object. windisk.deviceid is used to look up the associated cygwin device
+        param drive_id: String representing the deviceid. Can be used instead of passing a WinInstanceDiskType
+        '''
+        windisk_classname = ""
+        update = False
+        retries = 2
+        if windisk:
+            drive_id = windisk.deviceid
+            windisk_classname = str(windisk.__class__).split('.').pop()
+            #If this is a disk drive allow a retry which set the force update flag, otherwise don't force and retry
+            if isinstance(windisk,WinInstanceDiskDrive):
+                update = True
+        if not drive_id:
+            raise Exception('WinInstanceDiskType or string w/ device id not provided')
+
+        self.debug('Attempting to get cygwin dev for windows drive:' + str(drive_id))
         self.update_cygwin_windows_device_map()
         for retry in xrange(0, retries):
             for device in self.cygwin_dev_map:
@@ -932,9 +1041,11 @@ class WinInstance(Instance, TaggedResource):
                     if formated_drive_id == win_dev:
                         #self.debug('Found match')
                         return device
-            self.update_cygwin_windows_device_map(force_update=True)
-
-        self.debug('WARNING: Could not find cygwin device for:' + str(drive_id))
+            if update:
+                self.update_cygwin_windows_device_map(force_update=True)
+            else:
+                break
+        self.debug('WARNING: Could not find cygwin device for type:"' + str(windisk_classname) + '", deviceid:' + str(drive_id))
         return ""
 
     def get_parsed_wmic_command_output(self, wmic_command, verbose=False):
@@ -946,6 +1057,7 @@ class WinInstance(Instance, TaggedResource):
                    Note keys will be in lowercase
 
         '''
+        self.debug('get_parsed_wmic_command_output, command:' + str(wmic_command))
         ret_dicts = []
         output = self.sys(wmic_command, verbose=verbose, code=0)
         newdict = {}
@@ -980,15 +1092,17 @@ class WinInstance(Instance, TaggedResource):
             ret.append(disk.deviceid)
         return ret
 
-    def get_diskdrive_ids(self, forceupdate=False):
+    def get_diskdrive_ids(self, drivelist=None, forceupdate=False):
         '''
         :param forceupdate: boolean, to force an update of logical disks detected on the guest. Otherwise updates are
                 throttled to self.disk_update_interval
         :returns list of device ids ie: ['\\.\PHYSICALDRIVE0','\\.\PHYSICALDRIVE1,'\\.\PHYSICALDRIVE2']
         '''
         ret = []
-        self.update_disk_info(forceupdate=forceupdate)
-        for disk in self.diskdrives:
+        if not drivelist:
+            self.update_disk_info(forceupdate=forceupdate)
+            drivelist = self.diskdrives
+        for disk in drivelist:
             ret.append(disk.deviceid)
         return ret
 
@@ -1111,6 +1225,10 @@ class WinInstance(Instance, TaggedResource):
         self.debug('Success attaching volume:'+str(euvolume.id)+' to instance:'+self.id +
                    ', cloud dev:'+str(euvolume.attach_data.device)+', attached dev:'+str(attached_dev) +
                     ", elapsed:" + str(elapsed))
+        try:
+            self.rescan_disks(timeout=20)
+        except Exception, e:
+            self.debug('Warning. Error while trying to rescan disks after attaching volume. Error: ' + str(e))
         disk = self.get_diskdrive_by_deviceid(attached_dev)
         disk.print_self()
         return attached_dev
@@ -1128,6 +1246,12 @@ class WinInstance(Instance, TaggedResource):
             volume = EuVolume.make_euvol_from_vol(volume=volume, tester=self.tester)
 
 
+    def get_disk_drive_by_id(self, deviceid):
+        self.update_system_info()
+        for disk in self.diskdrives:
+            if disk.deviceid == deviceid:
+                return disk
+        return None
 
 
     def get_guestdevs_inuse_by_vols(self):
@@ -1190,38 +1314,51 @@ class WinInstance(Instance, TaggedResource):
         '''
         start = time.time()
         elapsed = 0
+        found = True
         for vol in self.attached_vols:
             if vol.id == euvolume.id:
                 dev = vol.guestdev
                 if (self.tester.detach_volume(euvolume,timeout=timeout)):
                     if waitfordev:
-                        self.debug("Wait for device:"+str(dev)+" to be removed on guest...")
+                        self.debug("Cloud has detached" + str(vol.id) + ", Wait for device:"+str(dev)+" to be removed on guest...")
                         while (elapsed < timeout):
+                            diskdrive_ids = []
                             try:
-                                #check to see if device is still present on guest
-                                self.assertFilePresent(dev)
-                            except Exception, e:
-                                #if device is not present remove it
-                                self.attached_vols.remove(vol)
+                                disk_drives = self.get_updated_diskdrive_info()
+                                for disk in disk_drives:
+                                    if dev == disk.deviceid:
+                                        found = True
+                                        break
+                                    found = False
+                                    self.debug('Diskdrive associated with ' + str(vol.id) + ' has been removed from guest.')
+                                    #if device is not present remove it
+                                    self.attached_vols.remove(vol)
+
+                            except Exception, de:
+                                self.debug('Warning, error getting diskdrive id during detach:' + str(de))
+                            if not found:
+                                try:
+                                    self.rescan_disks(timeout=20)
+                                except Exception, re:
+                                    self.debug('Warning: Error while trying to rescan disks after detaching volume:' + str(re))
+                                try:
+                                    self.update_disk_info()
+                                except Exception, ue:
+                                    self.debug('Warning: Error while trying to update disk info:' + str(ue))
                                 return True
                             time.sleep(10)
                             elapsed = int(time.time()-start)
+                            diskdrive_ids = self.get_diskdrive_ids(drivelist=disk_drives)
+                            self.debug('Current disk drives on guest:' + ",".join(str(x) for x in diskdrive_ids))
                             self.debug("Waiting for device '"+str(dev)+"' on guest to be removed.Elapsed:"+str(elapsed))
-                        #one last check, in case dev has changed.
-                        self.debug("Device "+str(dev)+" still present on "+str(self.id)+" checking sync state...")
-                        if self.get_dev_md5(dev, euvolume.md5len) == euvolume.md5:
-                            raise Exception("Volume("+str(vol.id)+") detached, but device("+str(dev)+") still present on ("+str(self.id)+")")
-                        else:
-                            #assume the cloud has successfully released the device, guest may have not
-                            self.debug(str(self.id)+'previously attached device for vol('+str(euvolume.id)+') no longer matches md5')
-                            return True
+
                     else:
                         self.attached_vols.remove(vol)
                         return True
-
                 else:
                     raise Exception("Volume("+str(vol.id)+") failed to detach from device("+str(dev)+") on ("+str(self.id)+")")
-        raise Exception("Detach Volume("+str(euvolume.id)+") not found on ("+str(self.id)+")")
+
+            raise Exception("Detach Volume("+str(euvolume.id)+") not found on ("+str(self.id)+")")
         return True
 
     def check_hostname(self):
@@ -1236,9 +1373,59 @@ class WinInstance(Instance, TaggedResource):
         else:
             raise Exception('check_hostname failed: System_info.hostname not populated')
 
-    def get_process_list(self):
+    def get_process_list_brief(self):
+        '''
+        Returns a list of dicts representing the processes running on the remote guest. Each service is represented by a
+        dict containing information about the service.
+        '''
+        cmd = "wmic process list brief /format:textvaluelist.xsl"
+        return self.get_parsed_wmic_command_output(cmd)
+
+    def get_process_list_full(self):
+        '''
+        Returns a list of dicts representing the processes running on the remote guest. Each service is represented by a
+        dict containing information about the service.
+        '''
         cmd = "wmic process list full"
         return self.get_parsed_wmic_command_output(cmd)
+
+    def get_service_by_name(self,service_name):
+        '''
+        Attempts to lookup a service on the remote guest.
+        param service_name: string. The name of the service to get info
+        returns a dict representing the information returned from the remote guest
+        '''
+        cmd = 'wmic process ' + str(service_name) + ' get /format:textvaluelist.xsl'
+        result = self.get_parsed_wmic_command_output(cmd)
+        if result:
+            return result[0]
+    
+    def get_services_list_brief(self):
+        '''
+        Returns a list of dicts representing the services from the remote guest. Each service is represented by a
+        dict containing information about the service.
+        '''
+        cmd = 'wmic service list brief /format:textvaluelist.xsl'
+        return self.get_parsed_wmic_command_output(cmd)
+
+    def get_services_list_full(self):
+        '''
+        Returns a list of dicts representing the services from the remote guest. Each service is represented by a
+        dict containing information about the service.
+        '''
+        cmd = 'wmic service list full'
+        return self.get_parsed_wmic_command_output(cmd)
+
+    def get_service_by_name(self,service_name):
+        '''
+        Attempts to lookup a service on the remote guest.
+        param service_name: string. The name of the service to get info
+        returns a dict representing the information returned from the remote guest
+        '''
+        cmd = 'wmic service ' + str(service_name) + ' get /format:textvaluelist.xsl'
+        result = self.get_parsed_wmic_command_output(cmd)
+        if result:
+            return result[0]
 
     def get_memtotal_in_mb(self):
         return long(self.system_info.total_physical_memory.split()[0].replace(',',''))
@@ -1303,7 +1490,7 @@ class WinInstance(Instance, TaggedResource):
         raise Exception('Could not find ephemeral device?')
 
 
-    def cygwin_cmd(self, cmd, timeout=120, verbose=True, code=None):
+    def cygwin_cmd(self, cmd, timeout=120, verbose=False, code=None):
         cmd = self.get_cygwin_path() + '\\bin\\bash.exe --login -c "' + str(cmd) + '"'
         return self.sys(cmd,timeout=timeout, verbose=verbose, code=code)
 
@@ -1320,7 +1507,7 @@ class WinInstance(Instance, TaggedResource):
         cygwin_dev_map = {}
         if not force_update:
             if self.cygwin_dev_map:
-                if time.time() - self.cygwin_dev_map['last_updated'] <= 2:
+                if time.time() - self.cygwin_dev_map['last_updated'] <= 30:
                     cygwin_dev_map = self.cygwin_dev_map
         if not cygwin_dev_map:
             self.debug('Updating cygwin to windows device mapping...')
@@ -1337,13 +1524,20 @@ class WinInstance(Instance, TaggedResource):
                     cygwin_dev_map[key]=value
             cygwin_dev_map['last_updated'] = time.time()
             self.cygwin_dev_map = cygwin_dev_map
+            self.debug('Updated cygwin to windows device mapping')
         return cygwin_dev_map
 
 
-    def rescan_disks(self):
+    def rescan_disks(self, timeout=20):
+        '''
+        Attempts to rescan disks on the guest. This may help expedite updates/discovery when attaching/detaching
+        volumes to the guest. This has also been found to hang post device removal so is used with a 20 second
+        command timeout as the default.
+        param timeout: integer. Seconds to wait on command before failing
+        '''
         scriptname = 'eutester_diskpart_script'
         self.sys('(echo rescan && echo list disk ) > ' + str(scriptname), code=0)
-        self.sys('diskpart /s ' + str(scriptname), code=0)
+        self.sys('diskpart /s ' + str(scriptname), code=0, timeout=timeout)
 
 
 
