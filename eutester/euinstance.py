@@ -188,6 +188,17 @@ class EuInstance(Instance, TaggedResource):
         
     
     def printself(self,title=True, footer=True, printmethod=None):
+        instid = 11
+        emi = 13
+        resid = 11
+        laststate =10
+        privaddr = 10
+        age = 13
+        vmtype = 12
+        rootvol = 13
+        cluster = 25
+        pubip = 16
+
         if self.bdm_root_vol:
             bdmvol = self.bdm_root_vol.id
         else:
@@ -195,15 +206,41 @@ class EuInstance(Instance, TaggedResource):
         reservation_id = None
         if self.reservation:
             reservation_id = self.reservation.id
-
-        buf = "\n"
+        header = ""
+        buf = ""
         if title:
-            buf += str("-------------------------------------------------------------------------------------------------------------------------------------------------------------------\n")
-            buf += str('INST_ID').center(11)+'|'+str('EMI').center(13)+'|'+str('RES_ID').center(11)+'|'+str('LASTSTATE').center(10)+'|'+str('PRIV_ADDR').center(10)+'|'+str('AGE@STATUS').center(13)+'|'+str('VMTYPE').center(12)+'|'+str('ROOT_VOL').center(13)+'|'+str('CLUSTER').center(25)+'|'+str('PUB_IP').center(16)+'|'+str('PRIV_IP')+'\n'
-            buf += str("-------------------------------------------------------------------------------------------------------------------------------------------------------------------\n")
-        buf += str(self.id).center(11)+'|'+str(self.image_id).center(13)+'|'+str(reservation_id).center(11)+'|'+str(self.laststate).center(10)+'|'+str(self.private_addressing).center(10)+'|'+str(self.age_at_state).center(13)+'|'+str(self.instance_type).center(12)+'|'+str(bdmvol).center(13)+'|'+str(self.placement).center(25)+'|'+str(self.ip_address).center(16)+'|'+str(self.private_ip_address).rstrip()
+            header = str('INST_ID').center(instid) +'|' + \
+                     str('EMI').center(emi) + '|' +  \
+                     str('RES_ID').center(resid) + '|' +  \
+                     str('LASTSTATE').center(laststate) + '|' +  \
+                     str('PRIV_ADDR').center(privaddr) + '|' +  \
+                     str('AGE@STATUS').center(age) + '|' +  \
+                     str('VMTYPE').center(vmtype) + '|' +  \
+                     str('ROOT_VOL').center(rootvol) + '|' +  \
+                     str('CLUSTER').center(cluster) + '|' +  \
+                     str('PUB_IP').center(pubip) + '|' +  \
+                     str('PRIV_IP')
+        summary = str(self.id).center(instid) + '|' + \
+                  str(self.image_id).center(emi) + '|' +  \
+                  str(reservation_id).center(resid) + '|' +  \
+                  str(self.laststate).center(laststate) + '|' +  \
+                  str(self.private_addressing).center(privaddr) + '|' + \
+                  str(self.age_at_state).center(age) + '|' +  \
+                  str(self.instance_type).center(vmtype) + '|' +  \
+                  str(bdmvol).center(rootvol) + '|' +  \
+                  str(self.placement).center(cluster) + '|' + \
+                  str(self.ip_address).center(pubip) + '|' + \
+                  str(self.private_ip_address).rstrip()
+
+        length = len(header)
+        if len(summary) > length:
+            length = len(summary)
+        line = self.get_line(length)
+        if title:
+            buf = line + header + line
+        buf += summary
         if footer:
-            buf += str("\n-------------------------------------------------------------------------------------------------------------------------------------------------------------------")
+            buf += line
         if printmethod:
             printmethod(buf)
         return buf
