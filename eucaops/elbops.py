@@ -254,17 +254,34 @@ class ELBops(Eutester):
 
     def create_app_cookie_stickiness_policy(self, name, lb_name, policy_name):
         self.debug("Create app cookie stickiness policy: " + str(policy_name))
-        self.elb.create_app_cookie_stickiness_policy(name, lb_name, policy_name)
+        self.elb.create_app_cookie_stickiness_policy(name=name,
+                                                     lb_name=lb_name,
+                                                     policy_name=policy_name)
 
     def create_lb_cookie_stickiness_policy(self, cookie_expiration_period, lb_name, policy_name):
         self.debug("Create lb cookie stickiness policy: " + str(policy_name))
-        self.elb.create_lb_cookie_stickiness_policy(cookie_expiration_period, lb_name, policy_name)
+        self.elb.create_lb_cookie_stickiness_policy(cookie_expiration_period=cookie_expiration_period,
+                                                    lb_name=lb_name,
+                                                    policy_name=policy_name)
+
+    def create_lb_policy(self, lb_name, policy_name, policy_type, policy_attributes):
+        self.debug("Create lb policy: " + str(policy_name))
+        self.elb.create_lb_policy(lb_name=lb_name,
+                                  policy_name=policy_name,
+                                  policy_type=policy_type,
+                                  policy_attributes=policy_attributes)
+
+    def set_lb_policy(self, lb_name, lb_port, policy_name=None):
+        self.debug("Set policy " + str(policy_name) + " for " + lb_name)
+        self.elb.set_lb_policies_of_listener(lb_name=lb_name,
+                                             lb_port=lb_port,
+                                             policies=policy_name)
 
     def delete_lb_policy(self, lb_name, policy_name):
         self.debug("Deleting lb policy " + str(policy_name) + " from " + str(lb_name))
-        self.elb.delete_lb_policy(lb_name,policy_name)
+        self.elb.delete_lb_policy(lb_name=lb_name,
+                                  policy_name=policy_name)
 
-    ### can be used later. right now boto does not return policies with loadbalancer request
     def describe_lb_policies(self,lb):
         lbs = self.elb.get_all_load_balancers(load_balancer_names=[lb])
-        self.debug("Loadbalancer Details: " + str(lbs[0].policies))
+        return lbs[0].policies

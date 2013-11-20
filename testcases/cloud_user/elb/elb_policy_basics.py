@@ -68,53 +68,46 @@ class LoadBalancerPolicy(EutesterTestCase):
 
     def Policy_CRUD(self):
         """
-        This will test creating and deleting AppCookieStickiness and LBCookieStickiness policies.
-
-        Since policies are not part of get_all_loadbalancers method I have chosen to test that policy has been added
-        by trying to add the same policy again which should fail if the load balancer already has that policy.
-
-        Now we will know whether add policy works and we can check delete. In this case we delete the policy and try to
-        add the same policy again. This time it should succeed because it has been deleted.
+        This will test creating, retrieving and deleting AppCookieStickiness and LBCookieStickiness policies.
 
         @raise Exception:
         """
         self.debug("policy test")
 
         ### create policies
-        appcookiestickinesspolicy = "Test-AppCookieStickinessPolicy"
         lbcookiestickinesspolicy = "Test-LBCookieStickinessPolicy"
-        self.tester.create_app_cookie_stickiness_policy(name="test_cookie", lb_name=self.lb_name, policy_name=appcookiestickinesspolicy)
-        self.tester.create_lb_cookie_stickiness_policy(cookie_expiration_period=300, lb_name=self.lb_name, policy_name=lbcookiestickinesspolicy)
-
-        ### try to add duplicate policies
-        try:
-            self.tester.create_app_cookie_stickiness_policy(name="test_cookie", lb_name=self.lb_name, policy_name=appcookiestickinesspolicy)
-        except BotoServerError:
-            self.debug("Successfully caught exception trying to add duplicate app cookie policy")
-        else:
-            raise Exception("app cookie policy not added to lb")
-
-        try:
-            self.tester.create_lb_cookie_stickiness_policy(cookie_expiration_period=300, lb_name=self.lb_name, policy_name=lbcookiestickinesspolicy)
-        except BotoServerError:
-            self.debug("Successfully caught exception trying to add duplicate lb cookie policy")
-        else:
-            raise Exception("lb cookie policy not added to lb")
-
-        ### now we delete the policies and add them again. There are grace periods added between calls
+        self.tester.create_lb_cookie_stickiness_policy(cookie_expiration_period=300,
+                                                       lb_name=self.lb_name,
+                                                       policy_name=lbcookiestickinesspolicy)
+        appcookiestickinesspolicy = "Test-AppCookieStickinessPolicy"
+        self.tester.create_app_cookie_stickiness_policy(name="test_cookie",
+                                                        lb_name=self.lb_name,
+                                                        policy_name=appcookiestickinesspolicy)
+        ### check that the policies were added
         self.tester.sleep(2)
+        policies = self.tester.describe_lb_policies(self.lb_name)
+        if lbcookiestickinesspolicy not in str(policies):
+            raise Exception(lbcookiestickinesspolicy + " not created.")
+        if appcookiestickinesspolicy not in str(policies):
+            raise Exception(appcookiestickinesspolicy + " not created.")
+
+        ### now we delete the policies. There are grace periods added between calls
+        self.tester.sleep(1)
         self.tester.delete_lb_policy(lb_name=self.lb_name, policy_name=appcookiestickinesspolicy)
-        self.tester.sleep(2)
+        self.tester.sleep(1)
         self.tester.delete_lb_policy(lb_name=self.lb_name, policy_name=lbcookiestickinesspolicy)
-        self.tester.sleep(2)
-        self.tester.create_app_cookie_stickiness_policy(name="test_cookie", lb_name=self.lb_name, policy_name=appcookiestickinesspolicy)
-        self.tester.sleep(2)
-        self.tester.create_lb_cookie_stickiness_policy(cookie_expiration_period=300, lb_name=self.lb_name, policy_name=lbcookiestickinesspolicy)
-        self.tester.sleep(2)
+        self.tester.sleep(1)
 
+        ### check that the policies were deleted
+        policies = self.tester.describe_lb_policies(self.lb_name)
+        if lbcookiestickinesspolicy in str(policies):
+            raise Exception(lbcookiestickinesspolicy + " not deleted.")
+        if appcookiestickinesspolicy in str(policies):
+            raise Exception(appcookiestickinesspolicy + " not deleted.")
 
     def clean_method(self):
         self.tester.cleanup_artifacts()
+        #self.debug("done")
 
 if __name__ == "__main__":
     testcase = LoadBalancerPolicy()
