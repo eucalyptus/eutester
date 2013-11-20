@@ -2599,7 +2599,7 @@ disable_root: false"""
         except Exception, e:
             trace = self.get_traceback()
             self.debug('!!! Run_instance failed, terminating reservation. Error:'+str(e)+"\n"+trace)
-            if reservation:
+            if reservation and clean_on_fail:
                 self.terminate_instances(reservation=reservation)
             raise e 
     
