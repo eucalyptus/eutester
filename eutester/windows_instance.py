@@ -54,6 +54,7 @@ from eutester.euvolume import EuVolume
 from eutester import eulogger
 from eutester.taggedresource import TaggedResource
 from random import randint
+from datetime import datetime
 import winrm_connection
 import socket
 import sys
@@ -63,6 +64,7 @@ import time
 import copy
 import types
 import operator
+
 
 class WinInstanceDiskType():
     gigabyte = 1073741824
@@ -156,9 +158,8 @@ class WinInstanceDiskDrive(WinInstanceDiskType):
                 self.caption = self.model
             else:
                 self.model = self.caption
-
-        self.update_ebs_info()
         self.cygwin_scsi_drive = self.win_instance.get_cygwin_scsi_dev_for_windows_drive(windisk=self)
+        self.update_ebs_info()
         self.disk_partitions = []
 
     def check_dict_requires(self, wmic_dict):
@@ -167,6 +168,7 @@ class WinInstanceDiskDrive(WinInstanceDiskType):
                 ('caption' in wmic_dict  or 'model in wmic_dict') and
                 'index' in wmic_dict):
             raise Exception('wmic_dict passed does not contain needed attributes; deviceid, size, caption, and index')
+
 
     def get_partition_ids(self):
         retlist = []
@@ -179,6 +181,18 @@ class WinInstanceDiskDrive(WinInstanceDiskType):
         for part in self.disk_partitions:
             retlist.extend(part.get_logicaldisk_ids())
         return retlist
+
+    def update_md5_info_from_ebs(self):
+        self.md5 = None
+        self.md5len = None
+        for vol in self.win_instance.attached_vols:
+            if vol.guestdev == self.deviceid:
+                if not vol.md5:
+                    vol.md5len = 1024
+                    vol.md5 = self.win_instance.get_dev_md5(self.cygwin_scsi_drive, vol.md5len)
+                self.md5 = vol.md5
+                self.md5len = vol.md5len
+                break
 
     def update_ebs_info_from_serial_number(self):
         '''
@@ -193,21 +207,23 @@ class WinInstanceDiskDrive(WinInstanceDiskType):
             self.ebs_volume = ''
             self.ebs_cloud_dev = ''
 
+
     def update_ebs_info(self):
         self.update_ebs_info_from_serial_number()
         if not self.ebs_volume:
             if self.index == 0 and self.win_instance.root_device_type == 'ebs':
                 bdm = self.win_instance.block_device_mapping[self.win_instance.root_device_name]
                 self.ebs_volume = bdm.volume_id
-            for vol in self.win_instance.attached_vols:
-                if vol.guestdev == self.deviceid:
-                    self.ebs_volume = vol.id
-                    break
-
+            else:
+                for vol in self.win_instance.attached_vols:
+                    if vol.guestdev == self.deviceid:
+                        self.ebs_volume = vol.id
+                        break
         if not self.ebs_cloud_dev and self.ebs_volume:
             volume = self.win_instance.tester.get_volume(volume_id=self.ebs_volume)
             if hasattr(volume,'attach_data') and volume.attach_data:
                 self.ebs_cloud_dev = volume.attach_data.device
+        self.update_md5_info_from_ebs()
 
 
 
@@ -223,6 +239,7 @@ class WinInstanceDiskDrive(WinInstanceDiskType):
         part_count = 6
         logical_ids = 8
         cygdrive = 10
+        md5 = 32
         header = "DISKDRIVE DEV ID".center(deviceid) + "|" + \
                  "SIZE B".center(size) + "|" + \
                  "SIZE GB".center(sizegb) + "|" + \
@@ -231,7 +248,8 @@ class WinInstanceDiskDrive(WinInstanceDiskType):
                  "PARTS".center(part_count) + "|" + \
                  "LOGICAL".center(logical_ids) + "|" + \
                  "CYGDRIVE".center(cygdrive) + "|" + \
-                 "SERIAL NUMBER".center(serialnumber) + "|"
+                 "SERIAL NUMBER".center(serialnumber) + "|" + \
+                 "MD5 CHECK SUM".center(md5) + "|"
 
         summary = str(self.deviceid).center(deviceid) + "|" + \
                   str(self.size).center(size) + "|" + \
@@ -241,7 +259,8 @@ class WinInstanceDiskDrive(WinInstanceDiskType):
                   str(self.partitions).center(part_count) + "|" + \
                   str(",".join(str(x) for x in self.get_logicaldisk_ids())).center(logical_ids) + "|" + \
                   str(self.cygwin_scsi_drive).center(cygdrive) + "|" + \
-                  str(self.serialnumber).center(serialnumber) + "|"
+                  str(self.serialnumber).center(serialnumber) + "|" + \
+                  str(self.md5).center(md5) + "|"
 
         length = len(header)
         if len(summary) > length:
@@ -680,6 +699,27 @@ class WinInstance(Instance, TaggedResource):
                             "/"+str(timeout))
         self.update_system_and_disk_info()
 
+    def update_root_device_diskdrive(self):
+        if not self.root_device_type == 'ebs':
+            return
+        for disk in self.diskdrives:
+            if disk.index == 0:
+                if disk.ebs_volume:
+                    for vol in self.attached_vols:
+                        if vol.id == disk.ebs_volume:
+                            if not disk.md5:
+                                disk.update_md5_info_from_ebs()
+                            return
+                    volume = self.tester.get_volume(volume_id=disk.ebs_volume)
+                    if not isinstance(volume, EuVolume):
+                        volume = EuVolume.make_euvol_from_vol(volume, self.tester)
+                    volume.guestdev = disk.deviceid
+                    volume.md5len = 1024
+                    volume.md5 = self.get_dev_md5(disk.cygwin_scsi_drive, volume.md5len)
+                    self.attached_vols.append(volume)
+                    disk.update_md5_info_from_ebs()
+                    return
+
 
     def update_system_and_disk_info(self):
         try:
@@ -689,6 +729,7 @@ class WinInstance(Instance, TaggedResource):
             self.debug(str(tb) + "\nError updating system info:" + str(sie))
         try:
             self.update_disk_info()
+            self.update_root_device_diskdrive()
             self.print_partition_summary()
             self.print_logicaldisk_summary()
             self.print_diskdrive_summary()
@@ -1162,7 +1203,6 @@ class WinInstance(Instance, TaggedResource):
         self.print_diskdrive_summary()
         self.debug("Attempting to attach volume:"+str(euvolume.id)+" to instance:" +str(self.id)+" to dev:"+ str(dev))
         #grab a snapshot of our devices before attach for comparison purposes
-        logicaldrive_list_before = self.get_logicaldisk_ids(forceupdate=True)
         diskdrive_list_before = self.get_diskdrive_ids()
         use_serial = False
         for disk in self.diskdrives:
@@ -1170,7 +1210,6 @@ class WinInstance(Instance, TaggedResource):
                 use_serial = True
                 break
 
-        dev_list_after = []
         attached_dev = None
         start= time.time()
         elapsed = 0
@@ -1207,6 +1246,7 @@ class WinInstance(Instance, TaggedResource):
                         euvolume.guestdev = attached_dev.strip()
                         self.debug("Volume:"+str(euvolume.id)+"found guest device by diff:"+str(euvolume.guestdev))
                     if attached_dev:
+                        euvolume.guestdev = attached_dev
                         self.attached_vols.append(euvolume)
                         self.debug(euvolume.id+": Requested dev:"+str(euvolume.attach_data.device)+", attached to guest device:"+str(euvolume.guestdev))
                         break
@@ -1220,8 +1260,12 @@ class WinInstance(Instance, TaggedResource):
         if (attached_dev is None):
             self.debug("List after\n"+" ".join(diskdrive_list_after))
             raise Exception('Volume:'+str(euvolume.id)+' attached, but not found on guest'+str(self.id)+' after '+str(elapsed)+' seconds?')
-        #Check to see if this volume has unique data in the head otherwise write some and md5 it
-        #self.vol_write_random_data_get_md5(euvolume,overwrite=overwrite)
+        #Store the md5sum of this diskdrive in the euvolume...
+        disk = self.get_diskdrive_by_deviceid(attached_dev)
+        euvolume.md5len = 1024
+        euvolume.md5 = self.get_dev_md5(devpath=disk.cygwin_scsi_drive, length=euvolume.md5len)
+        disk.ebs_volume = euvolume.id
+        disk.update_ebs_info()
         self.debug('Success attaching volume:'+str(euvolume.id)+' to instance:'+self.id +
                    ', cloud dev:'+str(euvolume.attach_data.device)+', attached dev:'+str(attached_dev) +
                     ", elapsed:" + str(elapsed))
@@ -1229,7 +1273,6 @@ class WinInstance(Instance, TaggedResource):
             self.rescan_disks(timeout=20)
         except Exception, e:
             self.debug('Warning. Error while trying to rescan disks after attaching volume. Error: ' + str(e))
-        disk = self.get_diskdrive_by_deviceid(attached_dev)
         disk.print_self()
         return attached_dev
 
@@ -1345,6 +1388,10 @@ class WinInstance(Instance, TaggedResource):
                                     self.update_disk_info()
                                 except Exception, ue:
                                     self.debug('Warning: Error while trying to update disk info:' + str(ue))
+                                try:
+                                    self.print_diskdrive_summary()
+                                except: pass
+                                self.debug('Volume:' + str(vol.id) + ', detached, and no longer found on guest at:' + str(dev))
                                 return True
                             time.sleep(10)
                             elapsed = int(time.time()-start)
@@ -1358,8 +1405,8 @@ class WinInstance(Instance, TaggedResource):
                 else:
                     raise Exception("Volume("+str(vol.id)+") failed to detach from device("+str(dev)+") on ("+str(self.id)+")")
 
-            raise Exception("Detach Volume("+str(euvolume.id)+") not found on ("+str(self.id)+")")
-        return True
+        raise Exception("Detach Volume("+str(euvolume.id)+") not found on ("+str(self.id)+")")
+        return False
 
     def check_hostname(self):
         if not hasattr(self, 'system_info'):
@@ -1389,17 +1436,17 @@ class WinInstance(Instance, TaggedResource):
         cmd = "wmic process list full"
         return self.get_parsed_wmic_command_output(cmd)
 
-    def get_service_by_name(self,service_name):
+    def get_process_by_name(self,process_name):
         '''
         Attempts to lookup a service on the remote guest.
         param service_name: string. The name of the service to get info
         returns a dict representing the information returned from the remote guest
         '''
-        cmd = 'wmic process ' + str(service_name) + ' get /format:textvaluelist.xsl'
+        cmd = 'wmic process ' + str(process_name) + ' get /format:textvaluelist.xsl'
         result = self.get_parsed_wmic_command_output(cmd)
         if result:
             return result[0]
-    
+
     def get_services_list_brief(self):
         '''
         Returns a list of dicts representing the services from the remote guest. Each service is represented by a
@@ -1538,6 +1585,91 @@ class WinInstance(Instance, TaggedResource):
         scriptname = 'eutester_diskpart_script'
         self.sys('(echo rescan && echo list disk ) > ' + str(scriptname), code=0)
         self.sys('diskpart /s ' + str(scriptname), code=0, timeout=timeout)
+
+
+    def reboot_instance_and_verify(self,
+                                   waitconnect=30,
+                                   timeout=300,
+                                   connect=True,
+                                   checkvolstatus=False,
+                                   pad=5,
+                                   uptime_retries=3):
+        '''
+        Attempts to reboot an instance and verify it's state post reboot.
+        waitconnect-optional-integer representing seconds to wait before attempting to connect to instance after reboot
+        timeout-optional-integer, seconds. If a connection has failed, this timer is used to determine a retry
+        onnect- optional - boolean to indicate whether an ssh session should be established once the expected state has been reached
+        checkvolstatus - optional -boolean to be used to check volume status post start up
+        '''
+        msg=""
+        newuptime = None
+        attempt = 0
+        def get_safe_uptime():
+            uptime = None
+            try:
+                uptime = self.get_uptime()
+            except: pass
+            return uptime
+        self.debug('Attempting to reboot instance:'+str(self.id)+', check attached volume state first')
+        uptime = self.tester.wait_for_result( get_safe_uptime, None, oper=operator.ne)
+        elapsed = 0
+        start = time.time()
+        if checkvolstatus:
+            #update the md5sums per volume before reboot
+            bad_vols=self.get_unsynced_volumes()
+            if bad_vols != []:
+                for bv in bad_vols:
+                    self.debug(str(self.id)+'Unsynced volume found:'+str(bv.id))
+                raise Exception(str(self.id)+"Could not reboot using checkvolstatus flag due to unsync'd volumes")
+        self.debug('Rebooting now...')
+        self.reboot()
+        time.sleep(waitconnect)
+        while attempt <= uptime_retries:
+            attempt += 1
+            self.connect_to_instance(timeout=timeout)
+
+            #Wait for the system to provide a valid response for uptime, early connections may not
+            newuptime = self.tester.wait_for_result( get_safe_uptime, None, oper=operator.ne)
+
+            elapsed = int(time.time()-start)
+            #Check to see if new uptime is at least 'pad' less than before, allowing for some pad
+            if (newuptime - (uptime+elapsed)) > pad:
+                err_msg = "Instance uptime does not represent a reboot. Orig:"+str(uptime)+\
+                          ", New:"+str(newuptime)+", elapsed:"+str(elapsed)+", attempts:" + str(attempt)
+                if attempt > uptime_retries:
+                    raise Exception(err_msg)
+                else:
+                    self.debug(err_msg)
+        if checkvolstatus:
+            badvols= self.get_unsynced_volumes()
+            if badvols != []:
+                for vol in badvols:
+                    msg = msg+"\nVolume:"+vol.id+" Local Dev:"+vol.guestdev
+                raise Exception("Missing volumes post reboot:"+str(msg)+"\n")
+        self.debug(self.id+" reboot_instance_and_verify Success")
+
+
+    def get_uptime(self, updateinterval=10):
+            #11/18/2013, 3:15:39 PM
+        if not hasattr(self, 'system_info'):
+            self.update_system_info()
+        splitdate = self.system_info.system_boot_time.split()
+        datestring = splitdate[0]
+        timestring = splitdate[1]
+        ampm = splitdate[2]
+        month, day, year = datestring.replace(',',"").split('/')
+        hours, minutes, seconds = timestring.split(':')
+        if ampm == 'PM':
+            hours = int(hours) + 12
+        datetimestring = str(year) + " " + \
+                         str(month) + " " + \
+                         str(day) + " " + \
+                         str(hours) + " " + \
+                         str(minutes) + " " + \
+                         str(seconds)
+        dt = datetime.strptime(datetimestring, "%Y %m %d %H %M %S")
+        return int(time.time() - time.mktime(dt.timetuple()))
+
 
 
 
