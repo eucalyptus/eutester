@@ -845,13 +845,38 @@ class WinInstance(Instance, TaggedResource):
 
         raise Exception('test_poll_for_ports_status:'+str(ip)+':'+str(port)+' FAILED after attempts:'+str(attempt)+', elapsed:'+str(elapsed)+' seconds')
 
-
     def init_attached_volumes(self):
-        volumes = self.tester.get_volumes(attached_instance=self.id)
-        for vol in volumes:
+        syncdict = self.sync_attached_volumes_with_clouds_view()
+        if syncdict['errors']:
+            errmsg = 'Errors syncing guest volumes with cloud at init:' + ",".join(str(e) for e in syncdict['errors'])
+            errmsg += 'Failed to sync guest volumes with cloud at init:' + ",".join(str(x) for x in syncdict['badvols'])
+            raise Exception(errmsg)
+
+    def sync_attached_volumes_with_clouds_view(self):
+        badvols = []
+        errors = []
+        ret = {'errors':errors, 'badvols':badvols}
+        #Get a list of volumes that the cloud believes are currently attached
+        cloud_volumes = self.tester.get_volumes(attached_instance=self.id)
+        #Make a copy of a list of volumes this instance thinks are currenlty attached
+        locallist = copy.copy(self.attached_vols)
+
+        for vol in cloud_volumes:
+            for local_vol in self.attached_vols:
+                if local_vol.id == vol.id:
+                    locallist.remove(vol)
             if not isinstance(vol, EuVolume):
                 vol = EuVolume.make_euvol_from_vol(vol, self.tester)
-            self.update_volume_guest_info(volume=vol)
+            try:
+                self.update_volume_guest_info(volume=vol)
+            except Exception, e:
+                badvols.append(vol)
+                errors.append(vol.id + ' Error syncing with cloud:' + str (e) + '. \n')
+        for local_vol in locallist:
+            badvols.append(local_vol)
+            errors.append(local_vol.id + ' Error unattached volume found in guests attach list. \n')
+        return ret
+
 
 
     def update_system_info(self):
@@ -1709,7 +1734,7 @@ class WinInstance(Instance, TaggedResource):
         volume.update_volume_attach_info_tags(md5=volume.md5, md5len=volume.md5len, instance_id=self.id, guestdev=volume.guestdev)
         return volume
 
-    def get_unsynced_volumes(self,euvol_list=None, md5length=1024, timepervol=90,min_polls=2, check_md5=False):
+    def get_unsynced_volumes(self, check_md5=True):
         '''
         Description: Returns list of volumes which are:
         -in a state the cloud believes the vol is no longer attached
@@ -1727,81 +1752,8 @@ class WinInstance(Instance, TaggedResource):
         :param check_md5: - optional - find devices by md5 comparision. Default is to only perform this check when virtio_blk is in use.
         '''
         bad_list = []
-        vol_list = []
-        checked_vdevs = []
-        poll_count = 0
-        dev_list = self.get_diskdrive_ids()
-        found = False
-
-        if euvol_list is not None:
-            vol_list.extend(euvol_list)
-        else:
-            vol_list = self.attached_vols
-        self.debug("Checking for volumes whos state is not in sync with our instance's test state...")
-        for vol in vol_list:
-            #first see if the cloud believes this volume is still attached.
-            vol.update()
-            try:
-                self.debug("Checking volume:"+str(vol.id))
-                #verify the cloud status is still attached to this instance
-                if hasattr(vol, 'attach_data') and vol.attach_data and (vol.attach_data.instance_id == self.id):
-                    self.debug("Cloud beleives volume:"+str(vol.id)+" is attached to:"+str(self.id)+", check for guest dev...")
-                    found = False
-                    elapsed = 0
-                    start = time.time()
-                    checked_vdevs = []
-                    #loop here for timepervol in case were waiting for a volume to appear in the guest. ie attaching
-                    while (not found) and ((elapsed <= timepervol) or (poll_count < min_polls)):
-                        try:
-                            poll_count += 1
-                            #Ugly... :-(
-                            #handle virtio and non virtio cases differently (KVM case needs improvement here).
-                            if check_md5:
-                                self.debug('Checking any new devs for md5:'+str(vol.md5))
-                                #Do some detective work to see what device name the previously attached volume is using
-                                devlist = self.get_diskdrive_ids()
-                                for vdev in devlist:
-                                    vdev = "/dev/"+str(vdev)
-
-                                    #if we've already checked the md5 on this dev no need to re-check it.
-                                    if not vdev in checked_vdevs:
-                                        self.debug('Checking '+str(vdev)+" for match against euvolume:"+str(vol.id))
-                                        md5 = self.get_dev_md5(vdev, vol.md5len )
-                                        self.debug('comparing '+str(md5)+' vs '+str(vol.md5))
-                                        if md5 == vol.md5:
-                                            self.debug('Found match at dev:'+str(vdev))
-                                            found = True
-                                            if (vol.guestdev != vdev ):
-                                                self.debug("("+str(vol.id)+")Found dev match. Guest dev changed! Updating from previous:'"
-                                                           + str(vol.guestdev) + "' to:'"+str(vdev)+"'")
-                                            else:
-                                                self.debug("(" + str(vol.id) + ")Found dev match. Previous dev:'"
-                                                           + str(vol.guestdev) + "', Current dev:'" + str(vdev) + "'")
-                                            vol.guestdev = vdev
-                                        checked_vdevs.append(vdev) # add to list of devices we've already checked.
-                                    if found:
-                                        break
-                            else:
-                                #Not using virtio_blk assume the device will be the same
-                                self.assertFilePresent(vol.guestdev.strip())
-                                self.debug("("+str(vol.id)+")Found local/volume match dev:"+vol.guestdev.strip())
-                                found = True
-                        except:pass
-                        if found:
-                            break
-                        self.debug('Local device for volume:' + str(vol.id) + ' not found. Sleeping and checking again...')
-                        time.sleep(10)
-                        elapsed = int(time.time() - start)
-                    if not found:
-                        bad_list.append(vol)
-                        self.debug("("+str(vol.id)+")volume.guestdev:"+str(vol.guestdev)+", dev not found on guest? Elapsed:"+str(elapsed))
-                else:
-                    self.debug("("+str(vol.id)+")Error, Volume.attach_data.instance_id:("+str(vol.attach_data.instance_id)+") != ("+str(self.id)+")")
-                    bad_list.append(vol)
-            except Exception, e:
-                    self.debug("Volume:"+str(vol.id)+" is no longer attached to this instance:"+str(self.id)+", error:"+str(e) )
-                    bad_list.append(vol)
-                    pass
+        retdict = self.sync_attached_volumes_with_clouds_view()
+        bad_list.extend(retdict['badvols'])
         return bad_list
 
 
@@ -1819,7 +1771,7 @@ class WinInstance(Instance, TaggedResource):
         Attempts to reboot an instance and verify it's state post reboot.
         waitconnect-optional-integer representing seconds to wait before attempting to connect to instance after reboot
         timeout-optional-integer, seconds. If a connection has failed, this timer is used to determine a retry
-        onnect- optional - boolean to indicate whether an ssh session should be established once the expected state has been reached
+        connect- optional - boolean to indicate whether an ssh session should be established once the expected state has been reached
         checkvolstatus - optional -boolean to be used to check volume status post start up
         '''
         msg=""
