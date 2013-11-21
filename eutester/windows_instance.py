@@ -862,9 +862,9 @@ class WinInstance(Instance, TaggedResource):
         locallist = copy.copy(self.attached_vols)
 
         for vol in cloud_volumes:
-            for local_vol in self.attached_vols:
+            for local_vol in locallist:
                 if local_vol.id == vol.id:
-                    locallist.remove(vol)
+                    locallist.remove(local_vol)
             if not isinstance(vol, EuVolume):
                 vol = EuVolume.make_euvol_from_vol(vol, self.tester)
             try:
@@ -1761,8 +1761,9 @@ class WinInstance(Instance, TaggedResource):
 
 
     def reboot_instance_and_verify(self,
-                                   waitconnect=30,
-                                   timeout=300,
+                                   waitconnect=60,
+                                   timeout=600,
+                                   wait_for_ports=180,
                                    connect=True,
                                    checkvolstatus=False,
                                    pad=5,
@@ -1797,7 +1798,12 @@ class WinInstance(Instance, TaggedResource):
         self.debug('Rebooting now...')
         self.reboot()
         time.sleep(waitconnect)
-        while attempt <= uptime_retries:
+        try:
+            self.poll_for_ports_status(ports=[3389,5589], timeout=wait_for_ports)
+        except:
+            self.debug('Failed to poll winrm and rdp ports after ' + str(wait_for_ports) + ' seconds, try to connect anyways...')
+        timeout=timeout - int(time.time()-start)
+        while (attempt <= uptime_retries) and (elapsed < timeout):
             attempt += 1
             self.connect_to_instance(timeout=timeout)
 
