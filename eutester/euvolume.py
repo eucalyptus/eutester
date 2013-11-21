@@ -43,44 +43,46 @@ import time
 
 
 class EuVolume(Volume, TaggedResource):
-    tester = None
-    md5 = None
-    md5len = 32
-    eutest_failmsg = None
-    eutest_laststatus = None
-    eutest_attached_status = None
-    eutest_laststatustime = None
-    eutest_cmdstart = None
-    eutest_createorder = None
-    eutest_cmdtime = None
-    eutest_ageatstatus = None
-    eutest_attached_instance_id = None
+    tag_md5_key = 'md5'
+    tag_md5len_key = 'md5len'
+    tag_instance_id_key = 'instance_id'
+    tag_guestdev_key = 'guestdev'
+
     '''
     Note: Different hypervisors will honor the requested cloud dev differently, so the requested device can not 
     be relied up as the device it attached to on the guest 'guestdev'
     '''
-    guestdev = "" #the guest device name in use by this attached volume
-    clouddev = "" #the device name given to the cloud as a request to be used. 
+
         
     @classmethod
     def make_euvol_from_vol(cls,volume, tester=None, cmdstart=None):
         newvol = EuVolume(volume.connection)
         newvol.__dict__ = volume.__dict__
         newvol.tester = tester
+        newvol.guestdev = "" #the guest device name in use by this attached volume
+        newvol.clouddev = "" #the device name given to the cloud as a request to be used.
         newvol.md5 = None
-        newvol.md5len = 32
+        newvol.md5len = 1024
         newvol.eutest_failmsg = None
         newvol.eutest_laststatus = newvol.status
         newvol.eutest_ageatstatus = 0 
         newvol.eutest_cmdstart = cmdstart or eucaops.EC2ops.get_volume_time_created(volume)
         newvol.eutest_createorder = None
         newvol.eutest_cmdtime = None
+        newvol.eutest_attached_instance_id = None
+        if newvol.tags.has_key(newvol.tag_md5_key):
+            newvol.md5 = newvol.tags[newvol.tag_md5_key]
+        if newvol.tags.has_key(newvol.tag_md5len_key):
+            newvol.md5len = newvol.tags[newvol.tag_md5len_key]
         newvol.set_attached_status()
 
         return newvol
     
     def update(self):
         super(EuVolume, self).update()
+        if (self.tags.has_key(self.tag_md5_key) and (self.md5 != self.tags[self.tag_md5_key])) or \
+            (self.tags.has_key(self.tag_md5len_key) and (self.md5len != self.tags[self.tag_md5len_key])):
+            self.update_volume_attach_info_tags()
         self.set_last_status()
     
     def set_last_status(self,status=None):
@@ -93,6 +95,12 @@ class EuVolume(Volume, TaggedResource):
         if self.attach_data:
             self.eutest_attached_status = self.attach_data.status
             self.eutest_attached_instance_id = self.attach_data.instance_id
+            if self.tags.has_key(self.tag_instance_id_key) and self.tags[self.tag_instance_id_key] != self.eutest_attached_instance_id:
+                self.remove_tag(self.tag_instance_id_key)
+                self.remove_tag(self.tag_guestdev_key)
+            else:
+                if not self.guestdev and self.tags.has_key(self.tag_guestdev_key):
+                    self.guestdev = self.tags[self.tag_guestdev_key]
         else:
             self.eutest_attached_status = None
             self.eutest_attached_instance_id = None
@@ -109,6 +117,24 @@ class EuVolume(Volume, TaggedResource):
         if printmethod:
             printmethod(buf)
         return buf
+
+    def update_volume_attach_info_tags(self, md5=None, md5len=None, instance_id=None, guestdev=None):
+        md5 = md5 or self.md5
+        md5len = md5len or self.md5len
+        self.add_tag(self.tag_md5len_key, md5)
+        self.add_tag(self.tag_md5len_key, md5len)
+        if self.status == 'in-use' and hasattr(self,'attach_data') and self.attach_data:
+            instance_id = instance_id or self.eutest_attached_instance_id
+            guestdev = guestdev or self.guestdev
+            self.add_tag(self.tag_instance_id_key, instance_id)
+            self.add_tag(self.tag_guestdev_key, guestdev)
+        else:
+            self.set_volume_detached_tags()
+
+
+    def set_volume_detached_tags(self):
+        self.remove_tag(self.tag_instance_id_key)
+        self.remove_tag(self.tag_guestdev_key)
     
         
         

@@ -698,6 +698,7 @@ class WinInstance(Instance, TaggedResource):
             raise Exception(str(self.id)+":Failed establishing management connection to instance, elapsed:"+str(elapsed)+
                             "/"+str(timeout))
         self.update_system_and_disk_info()
+        self.init_attached_volumes()
 
     def update_root_device_diskdrive(self):
         if not self.root_device_type == 'ebs':
@@ -719,6 +720,11 @@ class WinInstance(Instance, TaggedResource):
                     self.attached_vols.append(volume)
                     disk.update_md5_info_from_ebs()
                     return
+
+    def get_volume_from_attached_list_by_id(self, volume_id):
+        for vol in self.attached_vols:
+            if vol.id == volume_id:
+                return vol
 
 
     def update_system_and_disk_info(self):
@@ -838,6 +844,14 @@ class WinInstance(Instance, TaggedResource):
                 time.sleep(interval)
 
         raise Exception('test_poll_for_ports_status:'+str(ip)+':'+str(port)+' FAILED after attempts:'+str(attempt)+', elapsed:'+str(elapsed)+' seconds')
+
+
+    def init_attached_volumes(self):
+        volumes = self.tester.get_volumes(attached_instance=self.id)
+        for vol in volumes:
+            if not isinstance(vol, EuVolume):
+                vol = EuVolume.make_euvol_from_vol(vol, self.tester)
+            self.update_volume_guest_info(volume=vol)
 
 
     def update_system_info(self):
@@ -1264,8 +1278,8 @@ class WinInstance(Instance, TaggedResource):
         disk = self.get_diskdrive_by_deviceid(attached_dev)
         euvolume.md5len = 1024
         euvolume.md5 = self.get_dev_md5(devpath=disk.cygwin_scsi_drive, length=euvolume.md5len)
-        disk.ebs_volume = euvolume.id
-        disk.update_ebs_info()
+        #update the volume and instances information about the attachment...
+        self.update_volume_guest_info(volume=euvolume,md5=euvolume.md5, md5len=euvolume.md5len, guestdev=euvolume.guestdev)
         self.debug('Success attaching volume:'+str(euvolume.id)+' to instance:'+self.id +
                    ', cloud dev:'+str(euvolume.attach_data.device)+', attached dev:'+str(attached_dev) +
                     ", elapsed:" + str(elapsed))
@@ -1273,6 +1287,7 @@ class WinInstance(Instance, TaggedResource):
             self.rescan_disks(timeout=20)
         except Exception, e:
             self.debug('Warning. Error while trying to rescan disks after attaching volume. Error: ' + str(e))
+        euvolume.printself(printmethod=self.debug)
         disk.print_self()
         return attached_dev
 
@@ -1392,6 +1407,7 @@ class WinInstance(Instance, TaggedResource):
                                     self.print_diskdrive_summary()
                                 except: pass
                                 self.debug('Volume:' + str(vol.id) + ', detached, and no longer found on guest at:' + str(dev))
+                                vol.set_volume_detached_tags()
                                 return True
                             time.sleep(10)
                             elapsed = int(time.time()-start)
@@ -1401,6 +1417,7 @@ class WinInstance(Instance, TaggedResource):
 
                     else:
                         self.attached_vols.remove(vol)
+                        vol.set_volume_detached_tags()
                         return True
                 else:
                     raise Exception("Volume("+str(vol.id)+") failed to detach from device("+str(dev)+") on ("+str(self.id)+")")
@@ -1585,6 +1602,210 @@ class WinInstance(Instance, TaggedResource):
         scriptname = 'eutester_diskpart_script'
         self.sys('(echo rescan && echo list disk ) > ' + str(scriptname), code=0)
         self.sys('diskpart /s ' + str(scriptname), code=0, timeout=timeout)
+
+
+    def get_diskdrive_for_volume(self, volume):
+        if not self.is_volume_attached_to_this_instance(volume):
+            return None
+        ret_disk = None
+        for disk in self.diskdrives:
+            disk.update_ebs_info()
+            if disk.ebs_volume == volume.id:
+                ret_disk = disk
+        if not ret_disk:
+            ret_disk = self.find_diskdrive_for_volume_by_serial_number(volume, force_check=True)
+        if not ret_disk:
+            if hasattr(volume,'md5') and volume.md5:
+                ret_disk = self.find_diskdrive_for_volume_by_md5(volume, force_check=True)
+        return ret_disk
+
+
+
+    def find_diskdrive_for_volume_by_md5(self, volume, md5=None, length=None, force_check=False):
+        if not force_check and not self.is_volume_attached_to_this_instance(volume):
+            return None
+        if not isinstance(volume, EuVolume):
+            volume = EuVolume.make_euvol_from_vol(volume=volume,tester=self.tester)
+        md5 = md5 or volume.md5
+        if not md5:
+            return None
+        length = length or volume.md5len
+        for disk in self.diskdrives:
+            if disk.cygwin_scsi_drive:
+                disk_md5 = self.get_dev_md5(disk.cygwin_scsi_drive, length=length)
+                if disk_md5 == md5:
+                    volume.guestdev = disk.deviceid
+                    volume.md5 = disk_md5
+                    volume.md5len = length
+                    disk.ebs_volume = volume.id
+                    return disk
+        return None
+
+
+
+    def find_diskdrive_for_volume_by_serial_number(self, volume, serial_number=None, force_check=False):
+        '''
+        Attempt to iterate through all the diskdrives were aware of. If a diskdrive is found with a serial_number
+        associated with the volume, return that diskdrive obj..
+        example serial number format: vol-81C13EA4-dev-sdg
+
+        :param volume: volume obj to use for deriving the serial_number
+        :param serial_number: string. Optional. The string representing the serial # to match.
+        :returns WinInstanceDiskDrive if found, else None
+        '''
+        if not force_check and not self.is_volume_attached_to_this_instance(volume):
+            return None
+        if not serial_number:
+            serial_number = volume.id + volume.attach_data.device.replace('/','-')
+        for disk in self.diskdrives:
+            if disk.serialnumber == serial_number:
+                return disk
+        return None
+
+
+
+    def is_volume_attached_to_this_instance(self, volume):
+        '''
+        Attempts to look up volume state per cloud to confirm the cloud believe the state of this volume is attached
+        to this instance. This does not verify the guest/hypervisor also belives the volume is attached.
+        :param volume: volume obj.
+        :returns boolean
+        '''
+        volume.update()
+        if hasattr(volume, 'attach_data') and volume.attach_data and (volume.attach_data.instance_id == self.id):
+            self.debug('Volume:' + str(volume.id) + " is attached to this instance: " + str(self.id) + " per cloud perspective")
+            return True
+        else:
+            self.debug('Volume:' + str(volume.id) + " is NOT attached to this instance: " + str(self.id) + " per cloud perspective")
+            return False
+
+
+
+    def update_volume_guest_info(self, volume, md5=None, md5len=None, guestdev=None):
+        if not self.is_volume_attached_to_this_instance(volume):
+            raise Exception('Volume not attached to this instance')
+        disk = None
+        attached_volume = self.get_volume_from_attached_list_by_id(volume.id)
+        if attached_volume:
+            volume = attached_volume
+        else:
+            self.attached_vols.append(volume)
+        volume.guestdev = guestdev or volume.guestdev
+        if md5:
+            if not md5len:
+                raise Exception('Must provide md5len if providing the md5')
+            volume.md5 = md5
+            volume.md5len = md5len
+        else:
+            disk = self.get_diskdrive_for_volume(volume)
+            if not disk:
+                raise Exception('Could not find diskdrive for volume when attempting to update volume guest info:' + str(volume))
+            volume.md5len = md5len or 1024
+            volume.md5 = self.get_dev_md5(disk.cygwin_scsi_drive, volume.md5len)
+        if not guestdev:
+            volume.guestdev = disk.deviceid
+        disk = disk or self.get_diskdrive_for_volume(volume)
+        disk.update_ebs_info()
+        volume.update_volume_attach_info_tags(md5=volume.md5, md5len=volume.md5len, instance_id=self.id, guestdev=volume.guestdev)
+        return volume
+
+    def get_unsynced_volumes(self,euvol_list=None, md5length=1024, timepervol=90,min_polls=2, check_md5=False):
+        '''
+        Description: Returns list of volumes which are:
+        -in a state the cloud believes the vol is no longer attached
+        -the attached device has changed, or is not found.
+        If all euvols are shown as attached to this instance, and the last known local dev is present and/or a local device is found with matching md5 checksum
+        then the list will return 'None' as all volumes are successfully attached and state is in sync.
+        By default this method will iterate through all the known euvolumes attached to this euinstance.
+        A subset can be provided in the list argument 'euvol_list'.
+        Returns a list of euvolumes for which a corresponding guest device could not be found, or the cloud no longer believes is attached.
+
+        :param euvol_list: - optional - euvolume object list. Defaults to all self.attached_vols
+        :param md5length: - optional - defaults to the length given in each euvolume. Used to calc md5 checksum of devices
+        :param timerpervolume: -optional - time to wait for device to appear, per volume before failing
+        :param min_polls: - optional - minimum iterations to check guest devs before failing, despite timeout
+        :param check_md5: - optional - find devices by md5 comparision. Default is to only perform this check when virtio_blk is in use.
+        '''
+        bad_list = []
+        vol_list = []
+        checked_vdevs = []
+        poll_count = 0
+        dev_list = self.get_diskdrive_ids()
+        found = False
+
+        if euvol_list is not None:
+            vol_list.extend(euvol_list)
+        else:
+            vol_list = self.attached_vols
+        self.debug("Checking for volumes whos state is not in sync with our instance's test state...")
+        for vol in vol_list:
+            #first see if the cloud believes this volume is still attached.
+            vol.update()
+            try:
+                self.debug("Checking volume:"+str(vol.id))
+                #verify the cloud status is still attached to this instance
+                if hasattr(vol, 'attach_data') and vol.attach_data and (vol.attach_data.instance_id == self.id):
+                    self.debug("Cloud beleives volume:"+str(vol.id)+" is attached to:"+str(self.id)+", check for guest dev...")
+                    found = False
+                    elapsed = 0
+                    start = time.time()
+                    checked_vdevs = []
+                    #loop here for timepervol in case were waiting for a volume to appear in the guest. ie attaching
+                    while (not found) and ((elapsed <= timepervol) or (poll_count < min_polls)):
+                        try:
+                            poll_count += 1
+                            #Ugly... :-(
+                            #handle virtio and non virtio cases differently (KVM case needs improvement here).
+                            if check_md5:
+                                self.debug('Checking any new devs for md5:'+str(vol.md5))
+                                #Do some detective work to see what device name the previously attached volume is using
+                                devlist = self.get_diskdrive_ids()
+                                for vdev in devlist:
+                                    vdev = "/dev/"+str(vdev)
+
+                                    #if we've already checked the md5 on this dev no need to re-check it.
+                                    if not vdev in checked_vdevs:
+                                        self.debug('Checking '+str(vdev)+" for match against euvolume:"+str(vol.id))
+                                        md5 = self.get_dev_md5(vdev, vol.md5len )
+                                        self.debug('comparing '+str(md5)+' vs '+str(vol.md5))
+                                        if md5 == vol.md5:
+                                            self.debug('Found match at dev:'+str(vdev))
+                                            found = True
+                                            if (vol.guestdev != vdev ):
+                                                self.debug("("+str(vol.id)+")Found dev match. Guest dev changed! Updating from previous:'"
+                                                           + str(vol.guestdev) + "' to:'"+str(vdev)+"'")
+                                            else:
+                                                self.debug("(" + str(vol.id) + ")Found dev match. Previous dev:'"
+                                                           + str(vol.guestdev) + "', Current dev:'" + str(vdev) + "'")
+                                            vol.guestdev = vdev
+                                        checked_vdevs.append(vdev) # add to list of devices we've already checked.
+                                    if found:
+                                        break
+                            else:
+                                #Not using virtio_blk assume the device will be the same
+                                self.assertFilePresent(vol.guestdev.strip())
+                                self.debug("("+str(vol.id)+")Found local/volume match dev:"+vol.guestdev.strip())
+                                found = True
+                        except:pass
+                        if found:
+                            break
+                        self.debug('Local device for volume:' + str(vol.id) + ' not found. Sleeping and checking again...')
+                        time.sleep(10)
+                        elapsed = int(time.time() - start)
+                    if not found:
+                        bad_list.append(vol)
+                        self.debug("("+str(vol.id)+")volume.guestdev:"+str(vol.guestdev)+", dev not found on guest? Elapsed:"+str(elapsed))
+                else:
+                    self.debug("("+str(vol.id)+")Error, Volume.attach_data.instance_id:("+str(vol.attach_data.instance_id)+") != ("+str(self.id)+")")
+                    bad_list.append(vol)
+            except Exception, e:
+                    self.debug("Volume:"+str(vol.id)+" is no longer attached to this instance:"+str(self.id)+", error:"+str(e) )
+                    bad_list.append(vol)
+                    pass
+        return bad_list
+
+
+
 
 
     def reboot_instance_and_verify(self,
