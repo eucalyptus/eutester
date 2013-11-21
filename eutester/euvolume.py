@@ -121,7 +121,7 @@ class EuVolume(Volume, TaggedResource):
     def update_volume_attach_info_tags(self, md5=None, md5len=None, instance_id=None, guestdev=None):
         md5 = md5 or self.md5
         md5len = md5len or self.md5len
-        self.add_tag(self.tag_md5len_key, md5)
+        self.add_tag(self.tag_md5_key, md5)
         self.add_tag(self.tag_md5len_key, md5len)
         if self.status == 'in-use' and hasattr(self,'attach_data') and self.attach_data:
             instance_id = instance_id or self.eutest_attached_instance_id
