@@ -149,7 +149,7 @@ class Install(EutesterTestCase):
             machine.sys("lvextend " + logical_volume + " -l" + extents )
             machine.sys("resize2fs -f " + logical_volume, timeout=12000)
 
-    def wait_for_creds(self, timeout=180):
+    def wait_for_creds(self, timeout=900):
         def get_creds():
             try:
                 self.tester = Eucaops(config_file=self.args.config_file, password=self.args.password)
