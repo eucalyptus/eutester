@@ -53,7 +53,7 @@ import com.amazonaws.util.Md5Utils;
  * 
  * <li>{@link #delmiterAndPrefix()} fails against Walrus due to <a href="https://eucalyptus.atlassian.net/browse/EUCA-8112">EUCA-8112</a></li>
  * 
- * <li>{@link #maxKeys()} fails against Walrus due to <a href="https://eucalyptus.atlassian.net/browse/EUCA-7985">EUCA-7985</a> and <a
+ * <li>{@link #maxKeys_1()} fails against Walrus due to <a href="https://eucalyptus.atlassian.net/browse/EUCA-7985">EUCA-7985</a> and <a
  * href="https://eucalyptus.atlassian.net/browse/EUCA-7986">EUCA-7986</a></li>
  * 
  * @author Swathi Gangisetty
@@ -404,8 +404,8 @@ public class S3ListObjectsTests {
 	 * 
 	 */
 	@Test
-	public void maxKeys() throws Exception {
-		testInfo(this.getClass().getSimpleName() + " - maxKeys");
+	public void maxKeys_1() throws Exception {
+		testInfo(this.getClass().getSimpleName() + " - maxKeys_1");
 
 		try {
 			int maxKeys = 3 + random.nextInt(6); // Max keys 3-5
@@ -456,7 +456,66 @@ public class S3ListObjectsTests {
 			}
 		} catch (AmazonServiceException ase) {
 			printException(ase);
-			assertThat(false, "Failed to run maxKeys");
+			assertThat(false, "Failed to run maxKeys_1");
+		}
+	}
+
+	/**
+	 * Test for verifying paginated listing of objects with incrementing key names
+	 * 
+	 */
+	@Test
+	public void maxKeys_2() throws Exception {
+		testInfo(this.getClass().getSimpleName() + " - maxKeys_2");
+
+		try {
+			int maxKeys = 2 + random.nextInt(3); // Max keys 3-5
+			int multiplier = 3 + random.nextInt(4);
+			TreeSet<String> keySet = new TreeSet<String>();
+			ObjectListing objects = null;
+			String key = new String();
+
+			for (int i = 0; i < (maxKeys * multiplier); i++) {
+				key += VALID_CHARS.charAt(random.nextInt(VALID_CHARS.length()));
+				putObject(bucketName, key, fileToPut, keySet);
+			}
+
+			// List objects and verify that they are ordered lexicographically
+			objects = listObjects(bucketName, null, null, null, null, false);
+			verifyObjectSummaries(keySet, objects.getObjectSummaries());
+
+			Iterator<String> keyIterator = keySet.iterator();
+			String nextMarker = null;
+
+			for (int i = 1; i <= multiplier; i++) {
+				if (i != multiplier) {
+					objects = listObjects(bucketName, null, nextMarker, null, maxKeys, true);
+				} else {
+					objects = listObjects(bucketName, null, nextMarker, null, maxKeys, false);
+				}
+
+				assertTrue("Expected version summaries list to be of size " + maxKeys + "but got a list of size " + objects.getObjectSummaries().size(),
+						objects.getObjectSummaries().size() == maxKeys);
+				Iterator<S3ObjectSummary> summaryIterator = objects.getObjectSummaries().iterator();
+				S3ObjectSummary objectSummary = null;
+
+				// Verify the object list
+				while (summaryIterator.hasNext()) {
+					objectSummary = summaryIterator.next();
+					assertTrue("Expected keys to be ordered lexicographically", objectSummary.getKey().equals(keyIterator.next()));
+					verifyObjectCommonElements(objectSummary);
+				}
+
+				if (i != multiplier) {
+					nextMarker = objects.getNextMarker();
+					assertTrue("Expected next-marker to be " + objectSummary.getKey() + ", but got " + nextMarker, objectSummary.getKey().equals(nextMarker));
+				} else {
+					assertTrue("Expected next-marker to be null, but got " + objects.getNextMarker(), objects.getNextMarker() == null);
+				}
+			}
+		} catch (AmazonServiceException ase) {
+			printException(ase);
+			assertThat(false, "Failed to run maxKeys_2");
 		}
 	}
 

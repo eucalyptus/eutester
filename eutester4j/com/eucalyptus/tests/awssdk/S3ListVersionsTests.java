@@ -57,7 +57,7 @@ import com.amazonaws.util.Md5Utils;
  * 
  * <li>{@link #delimiterAndPrefix()} fails against Walrus due to <a href="https://eucalyptus.atlassian.net/browse/EUCA-7991">EUCA-7991</a></li>
  * 
- * <li>{@link #maxKeys()} fails against Walrus due to <a href="https://eucalyptus.atlassian.net/browse/EUCA-7985">EUCA-7985</a> and <a
+ * <li>{@link #maxKeysSingleKeyMultipleUploads()} fails against Walrus due to <a href="https://eucalyptus.atlassian.net/browse/EUCA-7985">EUCA-7985</a> and <a
  * href="https://eucalyptus.atlassian.net/browse/EUCA-7986">EUCA-7986</a></li>
  * 
  * @author Swathi Gangisetty
@@ -715,8 +715,8 @@ public class S3ListVersionsTests {
 	 * 
 	 */
 	@Test
-	public void maxKeys() throws Exception {
-		testInfo(this.getClass().getSimpleName() + " - maxKeys");
+	public void maxKeysSingleKeyMultipleUploads() throws Exception {
+		testInfo(this.getClass().getSimpleName() + " - maxKeysSingleKeyMultipleUploads");
 
 		try {
 			int maxKeys = 3 + random.nextInt(3); // Max keys 3-5
@@ -782,7 +782,175 @@ public class S3ListVersionsTests {
 			}
 		} catch (AmazonServiceException ase) {
 			printException(ase);
-			assertThat(false, "Failed to run maxKeys");
+			assertThat(false, "Failed to run maxKeysSingleKeyMultipleUploads");
+		}
+	}
+
+	@Test
+	public void maxKeysMultipleKeysMultipleUploads() throws Exception {
+		testInfo(this.getClass().getSimpleName() + " - maxKeysMultipleKeysMultipleUploads");
+
+		try {
+			int maxKeys = 3 + random.nextInt(3); // Max keys 3-5
+			int uploads = maxKeys + 1;
+			int numKeys = maxKeys * (1 + random.nextInt(3));
+			int counter = ((numKeys * uploads) / maxKeys);
+			TreeMap<String, List<String>> keyVersionMap = new TreeMap<String, List<String>>();
+			String key = new String();
+
+			print("Number of keys: " + numKeys);
+			print("Number of uploads per key: " + uploads);
+			print("Number of max-keys in list versions request: " + maxKeys);
+
+			for (int i = 0; i < numKeys; i++) {
+				key += VALID_CHARS.charAt(random.nextInt(VALID_CHARS.length()));
+				LinkedList<String> versionIdList = new LinkedList<String>();
+
+				for (int j = 0; j < uploads; j++) {
+					putObject(bucketName, key, fileToPut, versionIdList);
+				}
+
+				Collections.reverse(versionIdList);
+				keyVersionMap.put(key, versionIdList);
+			}
+
+			Iterator<String> keySetIterator = keyVersionMap.keySet().iterator();
+			key = keySetIterator.next();
+			Iterator<String> versionIdIterator = keyVersionMap.get(key).iterator();
+			boolean isFirst = true;
+
+			String nextKeyMarker = null;
+			String nextVersionIdMarker = null;
+			VersionListing versions = null;
+
+			for (int i = 1; i <= counter; i++) {
+				if (i != counter) {
+					versions = listVersions(bucketName, null, nextKeyMarker, nextVersionIdMarker, null, maxKeys, true);
+					assertTrue("Invalid next-version-ID-marker, expected it to contain next version ID but got null", versions.getNextVersionIdMarker() != null);
+				} else {
+					versions = listVersions(bucketName, null, nextKeyMarker, nextVersionIdMarker, null, maxKeys, false);
+				}
+
+				assertTrue("Expected version summaries list to be of size " + maxKeys + "but got a list of size " + versions.getVersionSummaries().size(),
+						versions.getVersionSummaries().size() == maxKeys);
+				Iterator<S3VersionSummary> summaryIterator = versions.getVersionSummaries().iterator();
+				S3VersionSummary versionSummary = null;
+
+				while (summaryIterator.hasNext()) {
+					if (!versionIdIterator.hasNext()) {
+						key = keySetIterator.next();
+						versionIdIterator = keyVersionMap.get(key).iterator();
+						isFirst = true;
+					}
+					versionSummary = summaryIterator.next();
+					if (isFirst) { // The first version summary must be marked as the latest
+						assertTrue("Expected version to be chronologically ordered", versionIdIterator.next().equals(versionSummary.getVersionId()));
+						assertTrue("Expected delete marker to be set to false but found it to be true", !versionSummary.isDeleteMarker());
+						assertTrue("Expected latest marker to be set to true but found it to be false", versionSummary.isLatest());
+						verifyVersionCommonElements(versionSummary, key);
+						isFirst = false;
+					} else { // Verify the remaining version summaries against the version ID list
+						assertTrue("Expected versions to be chronologically ordered", versionIdIterator.next().equals(versionSummary.getVersionId()));
+						assertTrue("Expected delete marker to be set to false but found it to be true", !versionSummary.isDeleteMarker());
+						assertTrue("Expected latest marker to be set to false but found it to be true", !versionSummary.isLatest());
+						verifyVersionCommonElements(versionSummary, key);
+					}
+				}
+
+				if (i != counter) {
+					nextKeyMarker = versions.getNextKeyMarker();
+					nextVersionIdMarker = versions.getNextVersionIdMarker();
+					assertTrue("Expected next-key-marker to be " + versionSummary.getKey() + ", but got " + nextKeyMarker,
+							versionSummary.getKey().equals(nextKeyMarker));
+					assertTrue("Expected nex-version-id-marker to be " + versionSummary.getVersionId() + ", but got " + nextVersionIdMarker, versionSummary
+							.getVersionId().equals(nextVersionIdMarker));
+				} else {
+					assertTrue("Expected next-key-marker to be mull, but got " + versions.getNextKeyMarker(), versions.getNextKeyMarker() == null);
+					assertTrue("Expected nex-version-id-marker to be null, but got " + versions.getNextVersionIdMarker(),
+							versions.getNextVersionIdMarker() == null);
+				}
+			}
+		} catch (AmazonServiceException ase) {
+			printException(ase);
+			assertThat(false, "Failed to run maxKeysMultipleKeysMultipleUploads");
+		}
+	}
+
+	@Test
+	public void maxKeysMultipleKeysSingleUpload() throws Exception {
+		testInfo(this.getClass().getSimpleName() + " - maxKeysMultipleKeysSingleUpload");
+
+		try {
+			int maxKeys = 3 + random.nextInt(3); // Max keys 3-5
+			int multiplier = 3 + random.nextInt(4); // Max uploads 9-18
+			int numKeys = maxKeys * multiplier;
+			TreeMap<String, String> keyVersionMap = new TreeMap<String, String>();
+			String key = new String();
+
+			print("Number of keys: " + numKeys);
+			print("Number of max-keys in list versions request: " + maxKeys);
+
+			for (int i = 0; i < numKeys; i++) {
+				key += VALID_CHARS.charAt(random.nextInt(VALID_CHARS.length()));
+				keyVersionMap.put(key, putObject(bucketName, key, fileToPut));
+			}
+
+			Iterator<String> keySetIterator = keyVersionMap.keySet().iterator();
+
+			String nextKeyMarker = null;
+			String nextVersionIdMarker = null;
+			VersionListing versions = null;
+
+			for (int i = 1; i <= multiplier; i++) {
+				if (i != multiplier) {
+					versions = listVersions(bucketName, null, nextKeyMarker, nextVersionIdMarker, null, maxKeys, true);
+					assertTrue("Invalid next-version-ID-marker, expected it to contain next version ID but got null", versions.getNextVersionIdMarker() != null);
+				} else {
+					versions = listVersions(bucketName, null, nextKeyMarker, nextVersionIdMarker, null, maxKeys, false);
+				}
+
+				assertTrue("Expected version summaries list to be of size " + maxKeys + "but got a list of size " + versions.getVersionSummaries().size(),
+						versions.getVersionSummaries().size() == maxKeys);
+				Iterator<S3VersionSummary> summaryIterator = versions.getVersionSummaries().iterator();
+				S3VersionSummary versionSummary = null;
+
+				while (summaryIterator.hasNext()) {
+					// The first version summary must be marked as the latest
+					versionSummary = summaryIterator.next();
+					key = keySetIterator.next();
+					String versionId = keyVersionMap.get(key);
+					assertTrue("Expected version to be " + versionId + ", but got " + versionSummary.getVersionId(),
+							versionId.equals(versionSummary.getVersionId()));
+					assertTrue("Expected delete marker to be set to false but found it to be true", !versionSummary.isDeleteMarker());
+					assertTrue("Expected latest marker to be set to true but found it to be false", versionSummary.isLatest());
+					verifyVersionCommonElements(versionSummary, key);
+				}
+
+				if (i != multiplier) {
+					nextKeyMarker = versions.getNextKeyMarker();
+					nextVersionIdMarker = versions.getNextVersionIdMarker();
+					assertTrue("Expected next-key-marker to be " + versionSummary.getKey() + ", but got " + nextKeyMarker,
+							versionSummary.getKey().equals(nextKeyMarker));
+					assertTrue("Expected nex-version-id-marker to be " + versionSummary.getVersionId() + ", but got " + nextVersionIdMarker, versionSummary
+							.getVersionId().equals(nextVersionIdMarker));
+				} else {
+					assertTrue("Expected next-key-marker to be mull, but got " + versions.getNextKeyMarker(), versions.getNextKeyMarker() == null);
+					assertTrue("Expected nex-version-id-marker to be null, but got " + versions.getNextVersionIdMarker(),
+							versions.getNextVersionIdMarker() == null);
+				}
+			}
+		} catch (AmazonServiceException ase) {
+			printException(ase);
+			assertThat(false, "Failed to run maxKeysMultipleKeysSingleUpload");
+		} finally {
+			for (S3VersionSummary version : listVersions(bucketName, null, null, null, null, null, false).getVersionSummaries()) {
+				try {
+					print("Deleting object " + version.getKey() + ", version " + version.getVersionId());
+					s3.deleteVersion(bucketName, version.getKey(), version.getVersionId());
+				} catch (AmazonServiceException ase) {
+					printException(ase);
+				}
+			}
 		}
 	}
 
