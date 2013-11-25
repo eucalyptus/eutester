@@ -3009,9 +3009,9 @@ disable_root: false"""
                 instance = self.convert_instance_to_euisntance(instance, auto_connect=False)
             plist.append(instance)
         first = plist.pop(0)
-        buf = first.printself(title=True, footer=False)
+        buf = first.printself(title=True, footer=True)
         for instance in plist:
-            buf += instance.printself(title=False, footer=False)
+            buf += instance.printself(title=False, footer=True)
         self.debug("\n"+str(buf)+"\n")
 
     @Eutester.printinfo
