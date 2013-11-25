@@ -1971,8 +1971,8 @@ disable_root: false"""
         images = self.ec2.get_all_images(filters=filters)
         self.debug("Got " + str(len(images)) + " total images " + str(emi) + ", now filtering..." )
         for image in images:
-            if not re.search(emi, image.id):      
-                continue  
+            if (re.search(emi, image.id) is None) and (re.search(emi, image.name) is None):      
+                continue
             if (root_device_type is not None) and (image.root_device_type != root_device_type):
                 continue
             if (virtualization_type is not None):
