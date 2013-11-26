@@ -232,8 +232,8 @@ class Eutester4j {
         Path path = Paths.get(endpoints);
         Charset charset = Charset.forName("UTF-8");
         String content = new String(Files.readAllBytes(path), charset);
-        content = content.replaceAll("http://10.111.1.14:8773/services/Eucalyptus", ec2Endpoint);
-        content = content.replaceAll("http://10.111.1.40:8773/services/Walrus", s3Endpoint);
+        content = content.replaceAll("http://EC2_URL:8773/services/Eucalyptus", ec2Endpoint);
+        content = content.replaceAll("http://WALRUS_URL:8773/services/Walrus", s3Endpoint);
         Files.write(path, content.getBytes(charset));
     }
 
