@@ -185,7 +185,12 @@ class EuInstance(Instance, TaggedResource):
         else:
             self.age_from_run_cmd = None
         
-        
+
+    def get_line(self, length):
+        line = ""
+        for x in xrange(0,int(length)):
+            line += "-"
+        return "\n" + line + "\n"
     
     def printself(self,title=True, footer=True, printmethod=None):
         instid = 11
