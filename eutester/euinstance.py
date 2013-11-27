@@ -1199,11 +1199,10 @@ class EuInstance(Instance, TaggedResource):
         
     def reboot_instance_and_verify(self,
                                    waitconnect=30,
-                                   timeout=300,
+                                   timeout=360,
                                    connect=True,
                                    checkvolstatus=False,
-                                   pad=5,
-                                   uptime_retries=3):
+                                   pad=5):
         '''
         Attempts to reboot an instance and verify it's state post reboot. 
         waitconnect-optional-integer representing seconds to wait before attempting to connect to instance after reboot
@@ -1234,22 +1233,32 @@ class EuInstance(Instance, TaggedResource):
         self.debug('Rebooting now...')
         self.reboot()
         time.sleep(waitconnect)
-        while attempt <= uptime_retries:
-            attempt += 1
-            self.connect_to_instance(timeout=timeout)
-
-            #Wait for the system to provide a valid response for uptime, early connections may not
-            newuptime = self.tester.wait_for_result( get_safe_uptime, None, oper=operator.ne)
+        timeout=timeout - int(time.time()-start)
+        while elapsed < timeout:
+            newuptime=None
+            retry_start = time.time()
+            try:
+                self.connect_to_instance(timeout=timeout)
+                #Wait for the system to provide a valid response for uptime, early connections may not
+                newuptime = self.tester.wait_for_result( get_safe_uptime, None, oper=operator.ne)
+            except: pass
 
             elapsed = int(time.time()-start)
-            #Check to see if new uptime is at least 'pad' less than before, allowing for some pad
-            if (newuptime - (uptime+elapsed)) > pad:
+            #Check to see if new uptime is at least 'pad' less than before reboot
+            if (newuptime is None) or (newuptime - (uptime+elapsed)) > pad:
                 err_msg = "Instance uptime does not represent a reboot. Orig:"+str(uptime)+\
-                          ", New:"+str(newuptime)+", elapsed:"+str(elapsed)+", attempts:" + str(attempt)
-                if attempt > uptime_retries:
+                          ", New:"+str(newuptime)+", elapsed:"+str(elapsed)+", elapsed:" + str(elapsed)+"/"+str(timeout)
+                if elapsed > timeout:
                     raise Exception(err_msg)
                 else:
                     self.debug(err_msg)
+                    pause_time = 10 - (time.time()-retry_start)
+                    if pause_time > 0:
+                        time.sleep(int(pause_time))
+            else:
+                self.debug("Instance uptime indicates a reboot. Orig:"+str(uptime)+\
+                          ", New:"+str(newuptime)+", elapsed:"+str(elapsed))
+                break
         if checkvolstatus:
             badvols= self.get_unsynced_volumes()
             if badvols != []:
@@ -1260,7 +1269,7 @@ class EuInstance(Instance, TaggedResource):
         
 
     def get_uptime(self):
-        return int(self.sys('cat /proc/uptime', code=0)[0].split()[1].split('.')[0])
+        return int(self.sys('cat /proc/uptime', code=0)[0].split()[0].split('.')[0])
 
 
     def attach_euvolume_list(self,list,intervoldelay=0, timepervol=90, md5len=32):

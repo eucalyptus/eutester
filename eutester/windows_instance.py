@@ -489,7 +489,7 @@ class WinInstance(Instance, TaggedResource):
         else:
             newins.bdm_root_vol = None
         newins.winrm = None
-        if newins.auto_connect:
+        if newins.auto_connect and newins.state == 'running':
             newins.connect_to_instance(timeout=timeout)
         return newins
 
@@ -1803,22 +1803,23 @@ class WinInstance(Instance, TaggedResource):
         except:
             self.debug('Failed to poll winrm and rdp ports after ' + str(wait_for_ports) + ' seconds, try to connect anyways...')
         timeout=timeout - int(time.time()-start)
-        while (attempt <= uptime_retries) and (elapsed < timeout):
-            attempt += 1
+        while (elapsed < timeout):
             self.connect_to_instance(timeout=timeout)
-
             #Wait for the system to provide a valid response for uptime, early connections may not
             newuptime = self.tester.wait_for_result( get_safe_uptime, None, oper=operator.ne)
-
             elapsed = int(time.time()-start)
             #Check to see if new uptime is at least 'pad' less than before, allowing for some pad
             if (newuptime - (uptime+elapsed)) > pad:
                 err_msg = "Instance uptime does not represent a reboot. Orig:"+str(uptime)+\
-                          ", New:"+str(newuptime)+", elapsed:"+str(elapsed)+", attempts:" + str(attempt)
-                if attempt > uptime_retries:
+                          ", New:"+str(newuptime)+", elapsed:"+str(elapsed)+"/"+str(timeout)
+                if elapsed > timeout:
                     raise Exception(err_msg)
                 else:
                     self.debug(err_msg)
+            else:
+                self.debug("Instance uptime indicates a reboot. Orig:"+str(uptime)+\
+                          ", New:"+str(newuptime)+", elapsed:"+str(elapsed))
+                break
         if checkvolstatus:
             badvols= self.get_unsynced_volumes()
             if badvols != []:
