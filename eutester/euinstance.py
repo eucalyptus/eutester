@@ -172,7 +172,7 @@ class EuInstance(Instance, TaggedResource):
                 newins.bdm_root_vol = EuVolume.make_euvol_from_vol(volume, tester=newins.tester,cmdstart=newins.cmdstart)
             except:pass
                 
-        if newins.auto_connect:
+        if newins.auto_connect and newins.state == 'running':
             newins.connect_to_instance(timeout=timeout)
         if newins.ssh:
             newins.set_rootfs_device()
