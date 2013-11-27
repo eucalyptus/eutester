@@ -345,8 +345,6 @@ class EuInstance(Instance, TaggedResource):
         '''
         if (self.ssh is None):
             raise Exception("Euinstance ssh connection is None")
-        if try_non_root_exec is None:
-            try_non_root_exec = self.try_non_root_exec
         if self.username != 'root' and try_non_root_exec:
             if self.use_sudo:
                 results = self.sys_with_sudo(cmd, verbose=verbose, code=code, enable_debug=enable_debug, timeout=timeout)
