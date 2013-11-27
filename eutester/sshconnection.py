@@ -103,7 +103,7 @@ import eucaops
 
 
 class SshCbReturn():
-    def __init__(self, stop=False, statuscode=-1, settimer=0, buf=None, nextargs=None, nextcb=None, removecb=False):
+    def __init__(self, stop=False, statuscode=-1, settimer=0, buf=None, sendstring=None, nextargs=None, nextcb=None, removecb=False):
         """
         Used to return data from an ssh cmd callback method that can be used to handle output as it's rx'd instead of...
         waiting for the cmd to finish and returned buffer. See SshConnection.cmd() for more info.
@@ -120,7 +120,7 @@ class SshCbReturn():
         self.stop = stop
         self.statuscode = statuscode
         self.settimer = settimer
-        self.sendstring = None
+        self.sendstring = sendstring
         self.nextargs = nextargs or []
         self.nextcb = nextcb
         self.removecb = removecb

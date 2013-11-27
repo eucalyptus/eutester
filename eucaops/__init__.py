@@ -349,12 +349,14 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
         detaching = []
         not_exist = []
         line = '\n----------------------------------------------------------------------------------------------------\n'
-        vol_str = volumes or "test_resources['volumes']"
-        self.debug('clean_up_test_volumes starting, volumes:'+str(vol_str))
 
-        volumes = volumes or  self.test_resources['volumes']
+        volumes = volumes or self.test_resources['volumes']
         if not volumes:
+            self.debug('clean_up_test_volumes, no volumes passed to delete')
             return
+        self.debug('clean_up_test_volumes starting\nVolumes to be deleted:' + ",".join(str(x) for x in volumes))
+
+
 
         for vol in volumes:
             try:
@@ -409,7 +411,8 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
             self.monitor_euvolumes_to_status(detaching, status='available', attached_status=None,timeout=timeout)
         self.debug('clean_up_volumes: Deleteing volumes now...')
         self.print_euvolume_list(euvolumes)
-        self.delete_volumes(euvolumes, timeout=timeout)
+        if euvolumes:
+            self.delete_volumes(euvolumes, timeout=timeout)
 
                     
     def get_current_resources(self,verbose=False):

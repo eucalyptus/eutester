@@ -24,16 +24,16 @@ testcase.parser.add_argument('--interbundletime',dest='inter_bundle_timeout', he
 testcase.parser.add_argument('--virtualization_type', help='bucketname', default=None)
 testcase.parser.add_argument('--bucket',dest='bucketname', help='bucketname', default=None)
 
-args = testcase.get_args()
+testcase.get_args()
 
-if (not args.url and not args.image_file_path) or (args.url and args.image_file_path):
+if (not testcase.args.url and not testcase.args.image_file_path) or (testcase.args.url and testcase.args.image_file_path):
     raise Exception('Must specify either a URL or FILE path to create Windows EMI from')
-if args.workip:
-    machine = Machine(hostname=args.workip,password=args.password)
+if testcase.args.workip:
+    machine = Machine(hostname=testcase.args.workip,password=testcase.args.password)
 
 WinTests = testcase.do_with_args(WindowsTests,work_component=machine)
 
-if args.image_file_path:
+if testcase.args.image_file_path:
     test = testcase.create_testunit_from_method(WinTests.create_windows_emi_from_file)
 else:
     test = testcase.create_testunit_from_method(WinTests.create_windows_emi_from_url)
