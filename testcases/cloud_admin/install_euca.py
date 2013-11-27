@@ -152,7 +152,8 @@ class Install(EutesterTestCase):
     def wait_for_creds(self, timeout=900):
         def get_creds():
             try:
-                self.tester = Eucaops(config_file=self.args.config_file, password=self.args.password)
+                self.tester = Eucaops(config_file=self.args.config_file, password=self.args.password,download_creds=False)
+                self.tester.get_credentials()
                 return True
             except Exception:
                 return False
