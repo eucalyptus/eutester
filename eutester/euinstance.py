@@ -156,7 +156,7 @@ class EuInstance(Instance, TaggedResource):
                 newins.bdm_root_vol = EuVolume.make_euvol_from_vol(volume, tester=newins.tester,cmdstart=newins.cmdstart)
             except:pass
                 
-        if newins.auto_connect:
+        if newins.auto_connect and newins.state == 'running':
             newins.connect_to_instance(timeout=timeout)
         if newins.ssh:
             newins.set_rootfs_device()
@@ -1204,7 +1204,7 @@ class EuInstance(Instance, TaggedResource):
                                    checkvolstatus=False,
                                    pad=5):
         '''
-        Attempts to reboot an instance and verify it's state post reboot. 
+        Attempts to reboot an instance and verify it's state post reboot.
         waitconnect-optional-integer representing seconds to wait before attempting to connect to instance after reboot
         timeout-optional-integer, seconds. If a connection has failed, this timer is used to determine a retry
         onnect- optional - boolean to indicate whether an ssh session should be established once the expected state has been reached
