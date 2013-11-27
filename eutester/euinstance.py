@@ -158,7 +158,6 @@ class EuInstance(Instance, TaggedResource):
                 
         if newins.auto_connect and newins.state == 'running':
             newins.connect_to_instance(timeout=timeout)
-        if newins.ssh:
             newins.set_rootfs_device()
         #Allow non-root users to try sudo if available else su -c to execute privileged commands
         newins.try_non_root_exec = try_non_root_exec
