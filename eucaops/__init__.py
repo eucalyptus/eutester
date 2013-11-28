@@ -100,12 +100,11 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
             ### Private cloud with root access 
             ### Need to get credentials for the user if there arent any passed in
             ### Need to create service manager for user if we have an ssh connection and password
+            clc_array = self.get_component_machines("clc")
+            self.clc = clc_array[0]
+            walrus_array = self.get_component_machines("ws")
+            self.walrus = walrus_array[0]
             if self.download_creds:
-                clc_array = self.get_component_machines("clc")
-                self.clc = clc_array[0]
-                walrus_array = self.get_component_machines("ws")
-                self.walrus = walrus_array[0]
-
                 if self.credpath is None:
                     ### TRY TO GET CREDS ON FIRST CLC if it fails try on second listed clc, if that fails weve hit a terminal condition
                     try:
