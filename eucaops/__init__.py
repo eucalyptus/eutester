@@ -104,6 +104,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
             self.clc = clc_array[0]
             walrus_array = self.get_component_machines("ws")
             self.walrus = walrus_array[0]
+            self.sftp = self.clc.ssh.connection.open_sftp()
             if self.download_creds:
                 if self.credpath is None:
                     ### TRY TO GET CREDS ON FIRST CLC if it fails try on second listed clc, if that fails weve hit a terminal condition
