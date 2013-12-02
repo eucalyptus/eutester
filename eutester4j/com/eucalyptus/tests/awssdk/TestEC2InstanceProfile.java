@@ -57,14 +57,14 @@ public class TestEC2InstanceProfile {
             // Create instance profile
             final String profileName = namePrefix + "EC2ProfileTest";
             print("Creating instance profile: " + profileName);
-            final CreateInstanceProfileResult instanceProfileResult = iam.createInstanceProfile(new CreateInstanceProfileRequest()
+            final CreateInstanceProfileResult instanceProfileResult = youAre.createInstanceProfile(new CreateInstanceProfileRequest()
                     .withInstanceProfileName(profileName)
                     .withPath("/path"));
             cleanupTasks.add(new Runnable() {
                 @Override
                 public void run() {
                     print("Deleting instance profile: " + profileName);
-                    iam.deleteInstanceProfile(new DeleteInstanceProfileRequest()
+                    youAre.deleteInstanceProfile(new DeleteInstanceProfileRequest()
                             .withInstanceProfileName(profileName));
                 }
             });

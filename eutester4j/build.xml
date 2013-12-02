@@ -16,6 +16,9 @@
     <target name="download-deps">
         <mkdir dir="${deps.dir}"/>
         <ivy:retrieve conf="default" pattern="${deps.dir}/[artifact]-[revision].[ext]"/>
+        <echo message="fetching YouAre SDk..."/>
+        <get src="https://github.com/tbeckham/you-are-sdk/releases/download/v0.0.1/YouAreSDK-1.0.jar"
+             dest="${deps.dir}/YouAreSDK-1.0.jar"/>
     </target>
 
     <!-- set classpath to include dependencies and build output -->

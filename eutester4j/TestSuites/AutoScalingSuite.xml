@@ -4,6 +4,7 @@
     <test name="Auto_Scaling_Tests">
         <classes>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingActivities"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingAdministration"/>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingAvailabilityZoneRebalancing"/>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingCooldown"/>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingDescribeGroupsInstances"/>

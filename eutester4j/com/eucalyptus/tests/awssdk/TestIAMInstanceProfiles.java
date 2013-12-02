@@ -44,14 +44,14 @@ public class TestIAMInstanceProfiles {
             // Create instance profile
             final String profileName = NAME_PREFIX + "ProfileTest";
             print("Creating instance profile: " + profileName);
-            iam.createInstanceProfile(new CreateInstanceProfileRequest()
+            youAre.createInstanceProfile(new CreateInstanceProfileRequest()
                     .withInstanceProfileName(profileName)
                     .withPath("/path"));
             cleanupTasks.add(new Runnable() {
                 @Override
                 public void run() {
                     print("Deleting instance profile: " + profileName);
-                    iam.deleteInstanceProfile(new DeleteInstanceProfileRequest()
+                    youAre.deleteInstanceProfile(new DeleteInstanceProfileRequest()
                             .withInstanceProfileName(profileName));
                 }
             });
@@ -60,7 +60,7 @@ public class TestIAMInstanceProfiles {
             print("Getting instance profile: " + profileName);
             {
                 final GetInstanceProfileResult getProfileResult =
-                        iam.getInstanceProfile(new GetInstanceProfileRequest()
+                        youAre.getInstanceProfile(new GetInstanceProfileRequest()
                                 .withInstanceProfileName(profileName));
                 assertThat(getProfileResult.getInstanceProfile() != null, "Expected profile");
                 assertThat(profileName.equals(getProfileResult.getInstanceProfile().getInstanceProfileName()), "Unexpected profile name");
@@ -71,7 +71,7 @@ public class TestIAMInstanceProfiles {
             // List instance profiles
             print("Listing instance profiles to verify profile present: " + profileName);
             {
-                final ListInstanceProfilesResult listProfilesResult = iam.listInstanceProfiles();
+                final ListInstanceProfilesResult listProfilesResult = youAre.listInstanceProfiles();
                 boolean foundProfile = isProfilePresent(profileName, listProfilesResult.getInstanceProfiles());
                 assertThat(foundProfile, "Profile not found in listing");
             }
@@ -80,7 +80,7 @@ public class TestIAMInstanceProfiles {
             print("Listing instance profiles by path to verify profile present: " + profileName);
             {
                 final ListInstanceProfilesResult listProfilesResult =
-                        iam.listInstanceProfiles(new ListInstanceProfilesRequest().withPathPrefix("/path"));
+                        youAre.listInstanceProfiles(new ListInstanceProfilesRequest().withPathPrefix("/path"));
                 boolean foundProfile = isProfilePresent(profileName, listProfilesResult.getInstanceProfiles());
                 assertThat(foundProfile, "Profile not found in listing for path");
             }
@@ -89,7 +89,7 @@ public class TestIAMInstanceProfiles {
             print("Listing instance profiles by path to verify profile not present: " + profileName);
             {
                 final ListInstanceProfilesResult listProfilesResult =
-                        iam.listInstanceProfiles(new ListInstanceProfilesRequest()
+                        youAre.listInstanceProfiles(new ListInstanceProfilesRequest()
                                 .withPathPrefix("/---should-not-match-any-profiles---4ad1c6d3-bfdd-4dc8-8754-523b6624ce15"));
                 boolean foundProfile = isProfilePresent(profileName, listProfilesResult.getInstanceProfiles());
                 assertThat(!foundProfile, "Profile listed when path should not match");
@@ -98,7 +98,7 @@ public class TestIAMInstanceProfiles {
             // Create role
             final String roleName = NAME_PREFIX + "ProfileTest";
             print("Creating role: " + roleName);
-            iam.createRole(new CreateRoleRequest()
+            youAre.createRole(new CreateRoleRequest()
                     .withRoleName(roleName)
                     .withAssumeRolePolicyDocument(
                             "{\n" +
@@ -114,14 +114,14 @@ public class TestIAMInstanceProfiles {
                 @Override
                 public void run() {
                     print("Deleting role: " + roleName);
-                    iam.deleteRole(new DeleteRoleRequest()
+                    youAre.deleteRole(new DeleteRoleRequest()
                             .withRoleName(roleName));
                 }
             });
 
             // Add role to instance profile
             print("Adding role: " + roleName + " to instance profile: " + profileName);
-            iam.addRoleToInstanceProfile(new AddRoleToInstanceProfileRequest()
+            youAre.addRoleToInstanceProfile(new AddRoleToInstanceProfileRequest()
                     .withInstanceProfileName(profileName)
                     .withRoleName(roleName));
 
@@ -129,7 +129,7 @@ public class TestIAMInstanceProfiles {
             print("Getting instance profile:" + profileName + " to check for role: " + roleName);
             {
                 final GetInstanceProfileResult getProfileResult =
-                        iam.getInstanceProfile(new GetInstanceProfileRequest()
+                        youAre.getInstanceProfile(new GetInstanceProfileRequest()
                                 .withInstanceProfileName(profileName));
                 assertThat(getProfileResult.getInstanceProfile() != null, "Expected profile");
                 assertThat(profileName.equals(getProfileResult.getInstanceProfile().getInstanceProfileName()), "Unexpected profile name");
@@ -141,7 +141,7 @@ public class TestIAMInstanceProfiles {
             print("Listing instance profiles for role: " + roleName);
             {
                 final ListInstanceProfilesForRoleResult listProfilesResult =
-                        iam.listInstanceProfilesForRole(new ListInstanceProfilesForRoleRequest()
+                        youAre.listInstanceProfilesForRole(new ListInstanceProfilesForRoleRequest()
                                 .withRoleName(roleName));
                 boolean foundProfile = isProfilePresent(profileName, listProfilesResult.getInstanceProfiles());
                 assertThat(foundProfile, "Profile not found in listing for role");
@@ -149,7 +149,7 @@ public class TestIAMInstanceProfiles {
 
             // Remove role from instance profile
             print("Removing role: " + roleName + " from instance profile: " + profileName);
-            iam.removeRoleFromInstanceProfile(new RemoveRoleFromInstanceProfileRequest()
+            youAre.removeRoleFromInstanceProfile(new RemoveRoleFromInstanceProfileRequest()
                     .withInstanceProfileName(profileName)
                     .withRoleName(roleName));
 
@@ -157,7 +157,7 @@ public class TestIAMInstanceProfiles {
             print("Getting instance profile:" + profileName + " to check role removed: " + roleName);
             {
                 final GetInstanceProfileResult getProfileResult =
-                        iam.getInstanceProfile(new GetInstanceProfileRequest()
+                        youAre.getInstanceProfile(new GetInstanceProfileRequest()
                                 .withInstanceProfileName(profileName));
                 assertThat(getProfileResult.getInstanceProfile() != null, "Expected profile");
                 assertThat(profileName.equals(getProfileResult.getInstanceProfile().getInstanceProfileName()), "Unexpected profile name");
@@ -166,13 +166,13 @@ public class TestIAMInstanceProfiles {
 
             // Delete instance profile
             print("Deleting instance profile: " + profileName);
-            iam.deleteInstanceProfile(new DeleteInstanceProfileRequest()
+            youAre.deleteInstanceProfile(new DeleteInstanceProfileRequest()
                     .withInstanceProfileName(profileName));
 
             // List instance profiles (check deleted)
             print("Listing instance profiles to check deletion of profile: " + profileName);
             {
-                final ListInstanceProfilesResult listProfilesResult = iam.listInstanceProfiles();
+                final ListInstanceProfilesResult listProfilesResult = youAre.listInstanceProfiles();
                 boolean foundProfile = isProfilePresent(profileName, listProfilesResult.getInstanceProfiles());
                 assertThat(!foundProfile, "Profile found in listing after deletion");
             }
