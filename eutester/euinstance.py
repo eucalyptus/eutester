@@ -64,36 +64,6 @@ import operator
 
 
 class EuInstance(Instance, TaggedResource):
-    keypair = None
-    keypath = None
-    username = None
-    password = None
-    rootfs_device = "sda"
-    block_device_prefix = "sd"
-    virtio_blk = False
-    bdm_root_vol = None
-    reservation = None
-    attached_vols = []
-    scsidevs = []
-    ops = None
-    ssh = None
-    logger = None
-    debugmethod = None
-    timeout =  60
-    retry = 1
-    verbose = True
-    ssh = None
-    private_addressing = False
-    tester = None
-    laststate = None
-    laststatetime = None
-    age_at_state = None
-    cmdstart = 0
-    auto_connect = True
-    security_groups = []
-    vmtype_info = None
-    try_non_root_exec = None
-    use_sudo = None
    
     @classmethod
     def make_euinstance_from_instance(cls, 
@@ -131,8 +101,24 @@ class EuInstance(Instance, TaggedResource):
         '''
         newins = EuInstance(instance.connection)
         newins.__dict__ = instance.__dict__
+
+        newins.rootfs_device = "sda"
+        newins.block_device_prefix = "sd"
+        newins.virtio_blk = False
+        newins.bdm_root_vol = None
+        newins.attached_vols = []
+        newins.scsidevs = []
+        newins.ops = None
+        newins.logger = None
+        newins.ssh = None
+        newins.laststate = None
+        newins.laststatetime = None
+        newins.age_at_state = None
+        newins.vmtype_info = None
+        newins.use_sudo = None
+        newins.security_groups = []
+
         newins.tester = tester
-        
         newins.debugmethod = debugmethod
         if newins.debugmethod is None:
             newins.logger = eulogger.Eulogger(identifier= str(instance.id))
@@ -151,7 +137,6 @@ class EuInstance(Instance, TaggedResource):
         newins.username = username
         newins.exec_password = exec_password or password
         newins.verbose = verbose
-        newins.attached_vols=[] 
         newins.timeout = timeout
         newins.retry = retry    
         newins.private_addressing = private_addressing
@@ -165,16 +150,14 @@ class EuInstance(Instance, TaggedResource):
         newins.auto_connect = auto_connect
         newins.set_last_status()
         newins.update_vm_type_info()
-        #newins.set_block_device_prefix()
         if newins.root_device_type == 'ebs':
             try:
                 volume = newins.tester.get_volume(volume_id = newins.block_device_mapping.get(newins.root_device_name).volume_id)
                 newins.bdm_root_vol = EuVolume.make_euvol_from_vol(volume, tester=newins.tester,cmdstart=newins.cmdstart)
             except:pass
                 
-        if newins.auto_connect:
+        if newins.auto_connect and newins.state == 'running':
             newins.connect_to_instance(timeout=timeout)
-        if newins.ssh:
             newins.set_rootfs_device()
         #Allow non-root users to try sudo if available else su -c to execute privileged commands
         newins.try_non_root_exec = try_non_root_exec
@@ -201,9 +184,25 @@ class EuInstance(Instance, TaggedResource):
         else:
             self.age_from_run_cmd = None
         
-        
+
+    def get_line(self, length):
+        line = ""
+        for x in xrange(0,int(length)):
+            line += "-"
+        return "\n" + line + "\n"
     
     def printself(self,title=True, footer=True, printmethod=None):
+        instid = 11
+        emi = 13
+        resid = 11
+        laststate =10
+        privaddr = 10
+        age = 13
+        vmtype = 12
+        rootvol = 13
+        cluster = 25
+        pubip = 16
+
         if self.bdm_root_vol:
             bdmvol = self.bdm_root_vol.id
         else:
@@ -211,15 +210,41 @@ class EuInstance(Instance, TaggedResource):
         reservation_id = None
         if self.reservation:
             reservation_id = self.reservation.id
-
-        buf = "\n"
+        header = ""
+        buf = ""
         if title:
-            buf += str("-------------------------------------------------------------------------------------------------------------------------------------------------------------------\n")
-            buf += str('INST_ID').center(11)+'|'+str('EMI').center(13)+'|'+str('RES_ID').center(11)+'|'+str('LASTSTATE').center(10)+'|'+str('PRIV_ADDR').center(10)+'|'+str('AGE@STATUS').center(13)+'|'+str('VMTYPE').center(12)+'|'+str('ROOT_VOL').center(13)+'|'+str('CLUSTER').center(25)+'|'+str('PUB_IP').center(16)+'|'+str('PRIV_IP')+'\n'
-            buf += str("-------------------------------------------------------------------------------------------------------------------------------------------------------------------\n")
-        buf += str(self.id).center(11)+'|'+str(self.image_id).center(13)+'|'+str(reservation_id).center(11)+'|'+str(self.laststate).center(10)+'|'+str(self.private_addressing).center(10)+'|'+str(self.age_at_state).center(13)+'|'+str(self.instance_type).center(12)+'|'+str(bdmvol).center(13)+'|'+str(self.placement).center(25)+'|'+str(self.ip_address).center(16)+'|'+str(self.private_ip_address).rstrip()
+            header = str('INST_ID').center(instid) +'|' + \
+                     str('EMI').center(emi) + '|' +  \
+                     str('RES_ID').center(resid) + '|' +  \
+                     str('LASTSTATE').center(laststate) + '|' +  \
+                     str('PRIV_ADDR').center(privaddr) + '|' +  \
+                     str('AGE@STATUS').center(age) + '|' +  \
+                     str('VMTYPE').center(vmtype) + '|' +  \
+                     str('ROOT_VOL').center(rootvol) + '|' +  \
+                     str('CLUSTER').center(cluster) + '|' +  \
+                     str('PUB_IP').center(pubip) + '|' +  \
+                     str('PRIV_IP')
+        summary = str(self.id).center(instid) + '|' + \
+                  str(self.image_id).center(emi) + '|' +  \
+                  str(reservation_id).center(resid) + '|' +  \
+                  str(self.laststate).center(laststate) + '|' +  \
+                  str(self.private_addressing).center(privaddr) + '|' + \
+                  str(self.age_at_state).center(age) + '|' +  \
+                  str(self.instance_type).center(vmtype) + '|' +  \
+                  str(bdmvol).center(rootvol) + '|' +  \
+                  str(self.placement).center(cluster) + '|' + \
+                  str(self.ip_address).center(pubip) + '|' + \
+                  str(self.private_ip_address).rstrip()
+
+        length = len(header)
+        if len(summary) > length:
+            length = len(summary)
+        line = self.get_line(length)
+        if title:
+            buf = line + header + line
+        buf += summary
         if footer:
-            buf += str("\n-------------------------------------------------------------------------------------------------------------------------------------------------------------------")
+            buf += line
         if printmethod:
             printmethod(buf)
         return buf
@@ -251,7 +276,6 @@ class EuInstance(Instance, TaggedResource):
         try:
             res = self.tester.get_reservation_for_instance(self)
         except Exception, e:
-            tb = self.tester.get_traceback()
             self.update()
             self.debug('Could not get reservation for instance in state:' + str(self.state) + ", err:" + str(e))
         return res
@@ -321,8 +345,6 @@ class EuInstance(Instance, TaggedResource):
         '''
         if (self.ssh is None):
             raise Exception("Euinstance ssh connection is None")
-        if try_non_root_exec is None:
-            try_non_root_exec = self.try_non_root_exec
         if self.username != 'root' and try_non_root_exec:
             if self.use_sudo:
                 results = self.sys_with_sudo(cmd, verbose=verbose, code=code, enable_debug=enable_debug, timeout=timeout)
@@ -1174,13 +1196,12 @@ class EuInstance(Instance, TaggedResource):
         
     def reboot_instance_and_verify(self,
                                    waitconnect=30,
-                                   timeout=300,
+                                   timeout=360,
                                    connect=True,
                                    checkvolstatus=False,
-                                   pad=5,
-                                   uptime_retries=3):
+                                   pad=5):
         '''
-        Attempts to reboot an instance and verify it's state post reboot. 
+        Attempts to reboot an instance and verify it's state post reboot.
         waitconnect-optional-integer representing seconds to wait before attempting to connect to instance after reboot
         timeout-optional-integer, seconds. If a connection has failed, this timer is used to determine a retry
         onnect- optional - boolean to indicate whether an ssh session should be established once the expected state has been reached
@@ -1209,22 +1230,32 @@ class EuInstance(Instance, TaggedResource):
         self.debug('Rebooting now...')
         self.reboot()
         time.sleep(waitconnect)
-        while attempt <= uptime_retries:
-            attempt += 1
-            self.connect_to_instance(timeout=timeout)
-
-            #Wait for the system to provide a valid response for uptime, early connections may not
-            newuptime = self.tester.wait_for_result( get_safe_uptime, None, oper=operator.ne)
+        timeout=timeout - int(time.time()-start)
+        while elapsed < timeout:
+            newuptime=None
+            retry_start = time.time()
+            try:
+                self.connect_to_instance(timeout=timeout)
+                #Wait for the system to provide a valid response for uptime, early connections may not
+                newuptime = self.tester.wait_for_result( get_safe_uptime, None, oper=operator.ne)
+            except: pass
 
             elapsed = int(time.time()-start)
-            #Check to see if new uptime is at least 'pad' less than before, allowing for some pad
-            if (newuptime - (uptime+elapsed)) > pad:
+            #Check to see if new uptime is at least 'pad' less than before reboot
+            if (newuptime is None) or (newuptime - (uptime+elapsed)) > pad:
                 err_msg = "Instance uptime does not represent a reboot. Orig:"+str(uptime)+\
-                          ", New:"+str(newuptime)+", elapsed:"+str(elapsed)+", attempts:" + str(attempt)
-                if attempt > uptime_retries:
+                          ", New:"+str(newuptime)+", elapsed:"+str(elapsed)+", elapsed:" + str(elapsed)+"/"+str(timeout)
+                if elapsed > timeout:
                     raise Exception(err_msg)
                 else:
                     self.debug(err_msg)
+                    pause_time = 10 - (time.time()-retry_start)
+                    if pause_time > 0:
+                        time.sleep(int(pause_time))
+            else:
+                self.debug("Instance uptime indicates a reboot. Orig:"+str(uptime)+\
+                          ", New:"+str(newuptime)+", elapsed:"+str(elapsed))
+                break
         if checkvolstatus:
             badvols= self.get_unsynced_volumes()
             if badvols != []:
@@ -1235,7 +1266,7 @@ class EuInstance(Instance, TaggedResource):
         
 
     def get_uptime(self):
-        return int(self.sys('cat /proc/uptime', code=0)[0].split()[1].split('.')[0])
+        return int(self.sys('cat /proc/uptime', code=0)[0].split()[0].split('.')[0])
 
 
     def attach_euvolume_list(self,list,intervoldelay=0, timepervol=90, md5len=32):
@@ -1743,7 +1774,7 @@ class EuInstance(Instance, TaggedResource):
 
     def get_guest_dev_for_block_device_map_device(self, md5, md5len, map_device):
         '''
-        Finds a device in the block device mapping and attempts to locate which guest device is the volume is using
+        Finds a device in the block device mapping and attempts to locate which guest device the volume is using
         based upon the provided md5 sum, and length in bytes that were read in to create the checksum. If found the volume
         is appended to the local list of attached volumes and the md5 checksum and len are set in the volume for later test
         use.

@@ -214,9 +214,9 @@ class WindowsTests(EutesterTestCase):
             if re.search(match,image.location):
                 retlist.append(image)
         return retlist
-        
-    
-        
+
+
+
     def update_proxy_instance_data(self, win_instance=None, instance_password=None ):
         if self.proxy is None:
             return
@@ -425,7 +425,12 @@ class WindowsTests(EutesterTestCase):
                                  group = group or self.group, 
                                  type = type, 
                                  zone=zone, 
-                                 min=min, max=max, user_data=user_data, private_addressing=private_addressing, is_reachable=False, timeout=timeout)
+                                 min=min,
+                                 max=max,
+                                 user_data=user_data,
+                                 private_addressing=private_addressing,
+                                 is_reachable=False,
+                                 timeout=timeout)
         
         
         self.instance = res.instances[0]
@@ -580,9 +585,7 @@ class WindowsTests(EutesterTestCase):
                 return dev
         raise Exception('Instance:'+str(instance.id)+", no free devs. Has "+str(count)+" devices in use by ebs already. max:"+str(max))    
         
-                
-                
-        
+
            
     def test_attach_single_volume(self, instance=None, dev=None):
         instance = instance or self.instance
