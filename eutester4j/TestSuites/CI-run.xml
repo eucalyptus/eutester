@@ -48,10 +48,10 @@
             <class name="com.eucalyptus.tests.awssdk.TestIAMRoleManagement"/>
         </classes>
     </test>
-    <test name="Walrus_Tests">
-        <classes>
-            <class name="com.eucalyptus.tests.awssdk.BasicWalrusTest"/>
-            <class name="com.eucalyptus.tests.awssdk.S3ObjectTests"/>
-        </classes>
-    </test>
+    <!--<test name="Walrus_Tests">-->
+        <!--<classes>-->
+            <!--<class name="com.eucalyptus.tests.awssdk.BasicWalrusTest"/>-->
+            <!--<class name="com.eucalyptus.tests.awssdk.S3ObjectTests"/>-->
+        <!--</classes>-->
+    <!--</test>-->
 </suite>

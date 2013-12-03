@@ -103,7 +103,6 @@ disable_root: false"""
         :param boto_debug:
         :param APIVersion:
         """
-        super(EC2ops, self).__init__(credpath=credpath)
         self.aws_access_key_id = aws_access_key_id
         self.aws_secret_access_key = aws_secret_access_key
         self.user_id = None
@@ -114,6 +113,7 @@ disable_root: false"""
         self.setup_ec2_resource_trackers()
         self.key_dir = "./"
         self.ec2_source_ip = None  #Source ip on local test machine used to reach instances
+        super(EC2ops, self).__init__(credpath=credpath)
         self.setup_ec2_connection(host= host,
                                   region=region,
                                   endpoint=endpoint,
