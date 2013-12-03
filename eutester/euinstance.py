@@ -1238,7 +1238,7 @@ class EuInstance(Instance, TaggedResource):
             try:
                 self.connect_to_instance(timeout=timeout)
                 #Wait for the system to provide a valid response for uptime, early connections may not
-                newuptime = self.tester.wait_for_result( get_safe_uptime, None, oper=operator.ne)
+                newuptime = self.tester.wait_for_result( get_safe_uptime, 0, oper=operator.gt)
             except: pass
 
             elapsed = int(time.time()-start)
