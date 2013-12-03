@@ -57,6 +57,7 @@ class Eutester4j {
     static String TOKENS_ENDPOINT = null;
     static String SECRET_KEY = null;
     static String ACCESS_KEY = null;
+    static String ACCOUNT_ID = null;
     static String CREDPATH = null;
     static String NAME_PREFIX;
     static String endpoints;
@@ -95,6 +96,7 @@ class Eutester4j {
         TOKENS_ENDPOINT = parseEucarc(CREDPATH, "TOKEN_URL") + "/";
         SECRET_KEY = parseEucarc(CREDPATH, "EC2_SECRET_KEY").replace("'", "");
         ACCESS_KEY = parseEucarc(CREDPATH, "EC2_ACCESS_KEY").replace("'", "");
+        ACCOUNT_ID = parseEucarc(CREDPATH,"EC2_ACCOUNT_NUMBER").replace("'", "");
 
         print("Updating endpoints file");
         updateEndpoints(endpoints, EC2_ENDPOINT, S3_ENDPOINT);
