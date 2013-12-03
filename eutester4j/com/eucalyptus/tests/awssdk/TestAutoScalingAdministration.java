@@ -44,19 +44,28 @@ public class TestAutoScalingAdministration {
         testInfo(this.getClass().getSimpleName());
         getCloudInfo();
 
-        // create non-admin user in non-euca account then get credentials and connection for user
-        final String user = NAME_PREFIX + "user";
-        final String account = NAME_PREFIX + "account";
-        createAccount(account);
-        createUser(account, user);
-        createIAMPolicy(account, user, NAME_PREFIX + "policy", null);
-        final AmazonAutoScaling as_user = new AmazonAutoScalingClient(getUserCreds(account, user));
-        as_user.setEndpoint(AS_ENDPOINT);
+
 
         // End discovery, start test
         final List<Runnable> cleanupTasks = new ArrayList<Runnable>();
         try {
             print( "Using prefix for test: " + NAME_PREFIX );
+
+            // create non-admin user in non-euca account then get credentials and connection for user
+            final String user = NAME_PREFIX + "user";
+            final String account = NAME_PREFIX + "account";
+            createAccount(account);
+            createUser(account, user);
+            createIAMPolicy(account, user, NAME_PREFIX + "policy", null);
+            final AmazonAutoScaling as_user = new AmazonAutoScalingClient(getUserCreds(account, user));
+            as_user.setEndpoint(AS_ENDPOINT);
+            cleanupTasks.add( new Runnable() {
+                @Override
+                public void run() {
+                    print( "Deleting account: " + account );
+                    deleteAccount(account);
+                }
+            } );
 
             // Create launch configuration
             final String launchConfigurationName = NAME_PREFIX + "Config1";
