@@ -1242,7 +1242,7 @@ class EuInstance(Instance, TaggedResource):
 
             elapsed = int(time.time()-start)
             #Check to see if new uptime is at least 'pad' less than before reboot
-            if (newuptime is None) or (newuptime - (uptime+elapsed)) > pad:
+            if (newuptime is None) or ((uptime+elapsed)-newuptime) > pad:
                 err_msg = "Instance uptime does not represent a reboot. Orig:"+str(uptime)+\
                           ", New:"+str(newuptime)+", elapsed:"+str(elapsed)+", elapsed:" + str(elapsed)+"/"+str(timeout)
                 if elapsed > timeout:
