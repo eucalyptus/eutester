@@ -2854,7 +2854,7 @@ disable_root: false"""
         else:
             res = self.get_reservation_for_instance(instance)
         for group in res.groups:
-         secgroups.extend(self.ec2.get_all_security_groups(groupnames=str(group.id))) 
+         secgroups.extend(self.ec2.get_all_security_groups(groupnames=str(group.name)))
         return secgroups
     
     def get_reservation_for_instance(self, instance):
