@@ -1965,9 +1965,28 @@ disable_root: false"""
         :return: image id
         :raise: Exception if image is not found
         """
+
+        ret_list = []
+        if not filters:
+            filters = {}
+            if emi:
+                filters['image-id'] = emi
+            if root_device_type:
+                filters['root-device-type'] = root_device_type
+            if root_device_name:
+                filters['root-device-name'] = root_device_name
+            if state:
+                filters['state'] = state
+            if virtualization_type:
+                filters['virtualization-type'] = virtualization_type
+            if arch:
+                filters['architecture'] = arch
+            if owner_id:
+                filters['owner-id'] = owner_id
+
         if emi is None:
             emi = "mi-"
-        ret_list = []
+
         images = self.ec2.get_all_images(filters=filters)
         self.debug("Got " + str(len(images)) + " total images " + str(emi) + ", now filtering..." )
         for image in images:
