@@ -1239,11 +1239,12 @@ class EuInstance(Instance, TaggedResource):
                 self.connect_to_instance(timeout=timeout)
                 #Wait for the system to provide a valid response for uptime, early connections may not
                 newuptime = self.tester.wait_for_result( get_safe_uptime, None, oper=operator.ne)
-            except: pass
+            except:
+                pass
 
             elapsed = int(time.time()-start)
             #Check to see if new uptime is at least 'pad' less than before reboot
-            if (newuptime is None) or ((uptime-newuptime) > 0):
+            if (newuptime is None) or (newuptime > uptime):
                 err_msg = "Instance uptime does not represent a reboot. Orig:"+str(uptime)+\
                           ", New:"+str(newuptime)+", elapsed:"+str(elapsed)+", elapsed:" + str(elapsed)+"/"+str(timeout)
                 if elapsed > timeout:
