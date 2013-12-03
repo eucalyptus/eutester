@@ -1214,7 +1214,8 @@ class EuInstance(Instance, TaggedResource):
             uptime = None
             try:
                 uptime = self.get_uptime()
-            except: pass
+            except:
+                pass
             return uptime
         self.debug('Attempting to reboot instance:'+str(self.id)+', check attached volume state first')
         uptime = self.tester.wait_for_result( get_safe_uptime, None, oper=operator.ne)
@@ -1237,7 +1238,7 @@ class EuInstance(Instance, TaggedResource):
             try:
                 self.connect_to_instance(timeout=timeout)
                 #Wait for the system to provide a valid response for uptime, early connections may not
-                newuptime = self.tester.wait_for_result( get_safe_uptime, None, oper=operator.ne)
+                newuptime = self.tester.wait_for_result( get_safe_uptime, 0, oper=operator.lt)
             except: pass
 
             elapsed = int(time.time()-start)
