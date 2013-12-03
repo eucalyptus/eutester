@@ -42,7 +42,7 @@ public class TestAutoScalingELBReferenceValidation {
         testInfo(this.getClass().getSimpleName());
         getCloudInfo();
 
-		final List<Runnable> cleanupTasks = new ArrayList<Runnable>();
+        final List<Runnable> cleanupTasks = new ArrayList<Runnable>();
 		try {
             // Generate a load balancer to use
             final String loadBalancer = NAME_PREFIX + "ELBReferenceTest";

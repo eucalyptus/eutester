@@ -60,7 +60,7 @@ public class TestSTSAssumeRole {
         testInfo(this.getClass().getSimpleName());
         getCloudInfo();
 
-        final GetUserResult userResult = iam.getUser(new GetUserRequest());
+        final GetUserResult userResult = youAre.getUser(new GetUserRequest());
         assertThat(userResult.getUser() != null, "Expected current user info");
         assertThat(userResult.getUser().getArn() != null, "Expected current user ARN");
         final String userArn = userResult.getUser().getArn();
@@ -73,7 +73,7 @@ public class TestSTSAssumeRole {
             {
                 final String roleNameA = NAME_PREFIX + "AssumeRoleTestA";
                 print("Creating role to determine account number: " + roleNameA);
-                final CreateRoleResult roleResult = iam.createRole(new CreateRoleRequest()
+                final CreateRoleResult roleResult = youAre.createRole(new CreateRoleRequest()
                         .withRoleName(roleNameA)
                         .withAssumeRolePolicyDocument(
                                 "{\n" +
@@ -94,7 +94,7 @@ public class TestSTSAssumeRole {
                     @Override
                     public void run() {
                         print("Deleting role: " + roleNameA);
-                        iam.deleteRole(new DeleteRoleRequest()
+                        youAre.deleteRole(new DeleteRoleRequest()
                                 .withRoleName(roleNameA));
                     }
                 });
@@ -111,7 +111,7 @@ public class TestSTSAssumeRole {
             // Create role
             final String roleName = NAME_PREFIX + "AssumeRoleTest";
             print("Creating role: " + roleName);
-            iam.createRole(new CreateRoleRequest()
+            youAre.createRole(new CreateRoleRequest()
                     .withRoleName(roleName)
                     .withPath("/path")
                     .withAssumeRolePolicyDocument(
@@ -133,14 +133,14 @@ public class TestSTSAssumeRole {
                 @Override
                 public void run() {
                     print("Deleting role: " + roleName);
-                    iam.deleteRole(new DeleteRoleRequest()
+                    youAre.deleteRole(new DeleteRoleRequest()
                             .withRoleName(roleName));
                 }
             });
 
             // Get role info
             print("Getting role: " + roleName);
-            final GetRoleResult result = iam.getRole(new GetRoleRequest().withRoleName(roleName));
+            final GetRoleResult result = youAre.getRole(new GetRoleRequest().withRoleName(roleName));
             assertThat(result.getRole() != null, "Expected role");
             assertThat(result.getRole().getArn() != null, "Expected role ARN");
             final String roleArn = result.getRole().getArn();
@@ -155,7 +155,7 @@ public class TestSTSAssumeRole {
             // Add policy to role
             final String policyName = NAME_PREFIX + "AssumeRoleTest";
             print("Adding policy: " + policyName + " to role: " + roleName);
-            iam.putRolePolicy(new PutRolePolicyRequest()
+            youAre.putRolePolicy(new PutRolePolicyRequest()
                     .withRoleName(roleName)
                     .withPolicyName(policyName)
                     .withPolicyDocument(
@@ -170,7 +170,7 @@ public class TestSTSAssumeRole {
                 @Override
                 public void run() {
                     print("Removing policy: " + policyName + ", from role: " + roleName);
-                    iam.deleteRolePolicy(new DeleteRolePolicyRequest().withRoleName(roleName).withPolicyName(policyName));
+                    youAre.deleteRolePolicy(new DeleteRolePolicyRequest().withRoleName(roleName).withPolicyName(policyName));
                 }
             });
 
