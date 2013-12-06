@@ -2391,7 +2391,7 @@ disable_root: false"""
                      password=None,
                      is_reachable=True,
                      monitoring_enabled=False,
-                     timeout=480):
+                     timeout=600):
         """
         Run instance/s and wait for them to go to the running state
 
