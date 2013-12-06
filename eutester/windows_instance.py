@@ -926,12 +926,12 @@ class WinInstance(Instance, TaggedResource):
                 break
         return path
 
-    def cygwin_curl(self, url):
+    def cygwin_curl(self, url, connect_timeout=30):
         cygpath = self.get_cygwin_path()
         if cygpath is None:
             raise Exception('Could not find cygwin path on guest for curl?')
-        curl = cygpath + 'bin\curl.exe '
-        return self.sys(curl + str(url), code=0)
+        curl = cygpath + 'bin\curl.exe --connect-timeout ' + str(connect_timeout) + ' '
+        return self.sys(curl + str(url), code=0, timeout=timeout)
 
 
 
@@ -940,11 +940,10 @@ class WinInstance(Instance, TaggedResource):
         """Return the lines of metadata from the element path provided"""
         ### If i can reach the metadata service ip use it to get metadata otherwise try the clc directly
         try:
-            self.sys("ping -c 1 169.254.169.254", code=0, verbose=False)
             if use_cygwin:
-                return self.cygwin_curl("http://169.254.169.254/"+str(prefix)+str(element_path))
+                return self.cygwin_curl("http://169.254.169.254/"+str(prefix)+str(element_path), connect_timeout=10)
             else:
-                return self.sys("curl http://169.254.169.254/"+str(prefix)+str(element_path), code=0)
+                return self.sys("curl --connect-timeout 10 http://169.254.169.254/"+str(prefix)+str(element_path), code=0)
         except:
             if use_cygwin:
                 return self.cygwin_curl("http://" + self.tester.get_ec2_ip()  + ":8773/"+str(prefix) + str(element_path))
