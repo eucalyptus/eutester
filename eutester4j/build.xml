@@ -12,13 +12,16 @@
     <property name="endpoints" value="endpoints.xml"/>
     <property name="tests" value="AllTestsSuite.xml"/>
 
+    <!--youare sdk location link-->
+    <property name="YouAre" value="https://github.com/tbeckham/you-are-sdk/releases/download/alpha/YouAreSDK.jar"/>
+
     <!-- download testng and AWS JAVA SDK -->
     <target name="download-deps">
         <mkdir dir="${deps.dir}"/>
         <ivy:retrieve conf="default" pattern="${deps.dir}/[artifact]-[revision].[ext]"/>
         <echo message="fetching YouAre SDk..."/>
-        <get src="http://github.com/tbeckham/you-are-sdk/releases/download/v0.0.1/YouAreSDK-1.0.jar"
-             dest="${deps.dir}/YouAreSDK-1.0.jar"/>
+        <get src="${YouAre}"
+             dest="${deps.dir}/YouAreSDK.jar"/>
     </target>
 
     <!-- set classpath to include dependencies and build output -->
