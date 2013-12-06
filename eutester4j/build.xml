@@ -17,7 +17,7 @@
         <mkdir dir="${deps.dir}"/>
         <ivy:retrieve conf="default" pattern="${deps.dir}/[artifact]-[revision].[ext]"/>
         <echo message="fetching YouAre SDk..."/>
-        <get src="https://github.com/tbeckham/you-are-sdk/releases/download/v0.0.1/YouAreSDK-1.0.jar"
+        <get src="http://github.com/tbeckham/you-are-sdk/releases/download/v0.0.1/YouAreSDK-1.0.jar"
              dest="${deps.dir}/YouAreSDK-1.0.jar"/>
     </target>
 
