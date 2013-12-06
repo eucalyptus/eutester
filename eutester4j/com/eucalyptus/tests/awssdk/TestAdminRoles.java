@@ -31,6 +31,7 @@ import com.amazonaws.services.securitytoken.AWSSecurityTokenService;
 import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceClient;
 import com.amazonaws.services.securitytoken.model.AssumeRoleRequest;
 import com.amazonaws.services.securitytoken.model.AssumeRoleResult;
+import com.github.sjones4.youcan.youare.model.Account;
 import org.testng.annotations.Test;
 import static com.eucalyptus.tests.awssdk.Eutester4j.*;
 
@@ -52,16 +53,6 @@ public class TestAdminRoles {
             "      \"Action\":\"ec2:*\",\n" +
             "      \"Resource\":\"*\"\n" +
             "   }]\n" +
-            "}";
-
-    private final String assumeRolePolicy = "{\n" +
-            "    \"Statement\": [ {\n" +
-            "      \"Effect\": \"Allow\",\n" +
-            "      \"Principal\": {\n" +
-            "         \"AWS\": [ \"arn:aws:iam::" + ACCOUNT_ID + ":user/admin\" ]\n" +
-            "      },\n" +
-            "      \"Action\": [ \"sts:AssumeRole\" ]\n" +
-            "    } ]\n" +
             "}";
 
     private AmazonEC2 getEc2ClientUsingRole(final String roleArn,
@@ -101,8 +92,6 @@ public class TestAdminRoles {
 
         testInfo(this.getClass().getSimpleName());
         getCloudInfo();
-
-        // create non-admin user in non-euca account then get credentials and connection for user
         final String user = NAME_PREFIX + "user";
         final String account = NAME_PREFIX + "account";
 
@@ -128,7 +117,7 @@ public class TestAdminRoles {
             print("Creating role with name: " + roleName);
             final String roleArn = youAre.createRole(new CreateRoleRequest()
                     .withRoleName(roleName)
-                    .withAssumeRolePolicyDocument(assumeRolePolicy)
+                    .withAssumeRolePolicyDocument(getAssumeRolePolicy(getAccountID("eucalyptus")))
             ).getRole().getArn();
             print("Created role with ARN " + roleArn);
 
@@ -202,6 +191,30 @@ public class TestAdminRoles {
                 }
             }
         }
+    }
+
+    public String getAccountID(String account){
+        String accountId = null;
+
+        List<Account> accounts = youAre.listAccounts().getAccounts();
+        for (Account a : accounts) {
+            if (a.getAccountName().equals(account)){
+                accountId = a.getAccountId();
+            }
+        }
+        return accountId == null ?  "no account named " + account + " was found." :  accountId;
+    }
+
+    public String getAssumeRolePolicy(String accountId){
+        return "{\n" +
+                "    \"Statement\": [ {\n" +
+                "      \"Effect\": \"Allow\",\n" +
+                "      \"Principal\": {\n" +
+                "         \"AWS\": [ \"arn:aws:iam::" + accountId + ":user/admin\" ]\n" +
+                "      },\n" +
+                "      \"Action\": [ \"sts:AssumeRole\" ]\n" +
+                "    } ]\n" +
+                "}";
     }
 
 }

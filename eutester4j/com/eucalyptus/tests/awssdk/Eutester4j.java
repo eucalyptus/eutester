@@ -37,10 +37,7 @@ import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 class Eutester4j {
@@ -943,11 +940,13 @@ class Eutester4j {
         int start = newKeys.lastIndexOf("AccessKeyId:") + 13;
         int end = newKeys.lastIndexOf(",Status");
         String accessKey = newKeys.substring(start, end);
+        print("Access Key: " + accessKey);
 
         // get secretkey from key gen result request
         start = newKeys.lastIndexOf("SecretAccessKey:") + 17;
         end = newKeys.lastIndexOf(",CreateDate:");
         String secretKey = newKeys.substring(start, end);
+        print("Secret Key: " + secretKey);
 
         return new BasicAWSCredentials(accessKey, secretKey);
     }
@@ -986,7 +985,39 @@ class Eutester4j {
                 .withPath("/");
         youAre.createUser(createUserRequest);
 
-        assertThat((numUsersBefore < youAre.listUsers().getUsers().size()),"Failed to create user " + userName);
+        assertThat((numUsersBefore < youAre.listUsers().getUsers().size()), "Failed to create user " + userName);
         print("Created new user " + userName + " in account " + accountName);
+    }
+
+    public static Map<String, String> getUserKeys(final String accountName, String userName){
+        Map<String, String> keys = new HashMap<>();
+
+        AWSCredentialsProvider awsCredentialsProvider = new StaticCredentialsProvider( new BasicAWSCredentials(ACCESS_KEY, SECRET_KEY));
+        final YouAreClient youAre = new YouAreClient(awsCredentialsProvider);
+        youAre.setEndpoint(IAM_ENDPOINT);
+
+        youAre.addRequestHandler(new AbstractRequestHandler() {
+            public void beforeRequest(final Request<?> request) {
+                request.addParameter("DelegateAccount", accountName);
+            }
+        });
+
+        CreateAccessKeyRequest createAccessKeyRequest = new CreateAccessKeyRequest().withUserName(userName);
+        String newKeys = String.valueOf(youAre.createAccessKey(createAccessKeyRequest));
+        print("Created new access key for user " + userName);
+
+        // get accesskey from key gen result request
+        int start = newKeys.lastIndexOf("AccessKeyId:") + 13;
+        int end = newKeys.lastIndexOf(",Status");
+        String accessKey = newKeys.substring(start, end);
+        keys.put("ak", accessKey);
+
+        // get secretkey from key gen result request
+        start = newKeys.lastIndexOf("SecretAccessKey:") + 17;
+        end = newKeys.lastIndexOf(",CreateDate:");
+        String secretKey = newKeys.substring(start, end);
+        keys.put("sk", secretKey);
+
+        return keys;
     }
 }
