@@ -12,8 +12,8 @@
     <property name="endpoints" value="endpoints.xml"/>
     <property name="tests" value="AllTestsSuite.xml"/>
 
-    <!--testing youare link-->
-    <property name="YouAre" value="http://github.com/tbeckham/you-are-sdk/releases/download/v0.0.1/YouAreSDK.jar"/>
+    <!--youare sdk location link-->
+    <property name="YouAre" value="https://github.com/tbeckham/you-are-sdk/releases/download/alpha/YouAreSDK.jar"/>
 
     <!-- download testng and AWS JAVA SDK -->
     <target name="download-deps">
