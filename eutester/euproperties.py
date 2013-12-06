@@ -97,7 +97,7 @@ class Euproperty_Type():
 
 
 class Euproperty():
-    def __init__(self, prop_mgr, property_string, service_type,  partition, name, value, mandatory=False):
+    def __init__(self, prop_mgr, property_string, service_type,  partition, name, value, mandatory=False, description=""):
         self.prop_mgr = prop_mgr
         self.service_type = Euproperty_Type.get_type_by_string(service_type)
         self.partition = partition
@@ -109,7 +109,8 @@ class Euproperty():
         self.mandatory=mandatory
         
     def update(self):
-        self.propmgr.update_property_list()
+        newprop = self.prop_mgr.update_property_list(property_name=self.property_string)[0]
+        self = newprop
 
     def get(self):
         return self.value
@@ -140,12 +141,16 @@ class Euproperty():
             line += "-"
         line += "\n"
         if include_header:
-            ret = "\n"+line+header+line+line+out
+            ret = "\n"+line+header+line+out+line
         else:
-            ret = line+out
+            ret = out+line
         if print_method:
             print_method(ret)
         return ret
+
+class Property_Methods():
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
 
     
 class Euproperty_Manager():
@@ -163,6 +168,7 @@ class Euproperty_Manager():
         self.service_url = 'http://'+str(self.tester.get_ec2_ip())+':8773/services/Eucalytpus'
         self.cmdpath = self.tester.eucapath+'/usr/sbin/'
         self.properties = []
+        self.property_methods = Property_Methods
         self.update_property_list()
         self.tester.property_manager = self
         
@@ -284,15 +290,56 @@ class Euproperty_Manager():
             ret_prop =  self.get_euproperty_by_name(name, list=list)
         return ret_prop
 
-    def update_property_list(self):
+    def update_property_list(self, property_name= ''):
         newlist = []
+        newprop = None
         self.debug("updating property list...")
-        cmdout = self.work_machine.sys(self.cmdpath+'euca-describe-properties -U '+str(self.service_url)+' -I '+str(self.access_key)+' -S '+ str(self.secret_key) +' | grep PROPERTY', code=0, verbose=self.verbose)
+        cmdout = self.work_machine.sys(self.cmdpath+'euca-describe-properties -v -U ' + str(self.service_url) +
+                                       ' -I ' + str(self.access_key) +
+                                       ' -S ' + str(self.secret_key) +
+                                       ' ' + property_name,
+                                       code=0, verbose=self.verbose)
         for propstring in cmdout:
-            newlist.append(self.parse_euproperty_from_string(propstring))
-        self.properties = newlist
+            try:
+                if re.search("^PROPERTY", propstring):
+                    newprop = self.parse_euproperty_from_string(propstring)
+
+                elif newprop:
+                    if re.search("^DESCRIPTION", propstring) and re.search(newprop.name, propstring):
+                        newprop.description = self.parse_euproperty_description(propstring)
+                    else:
+                        newprop.value = str(newprop.value) + str(propstring)
+            except Exception, e:
+                self.debug('Error processing property line: ' + propstring)
+                raise e
+
+            newlist.append(newprop)
+        if property_name:
+            for newprop in newlist:
+                for oldprop in self.properties:
+                    if oldprop.property_string  == newprop.property_string:
+                        oldprop = newprop
+                        self.create_dynamic_property_methods_from_property(newprop)
+        else:
+            self.properties = newlist
+            self.property_methods = Property_Methods()
+            for prop in self.properties:
+                self.create_dynamic_property_methods_from_property(prop)
         return newlist
-        
+
+    def parse_euproperty_description(self, propstring):
+        '''
+        Example string to parse: "DESCRIPTION	www.http_port	Listen to HTTP on this port."
+        '''
+        split = str(propstring).replace('DESCRIPTION','').split()
+        description = " ".join(str(x) for x in split[1:])
+        return str(description)
+
+    def parse_property_value_from_string(self, propstring):
+        split = str(propstring).replace('PROPERTY','').split()
+        prop_value = " ".join(str(x) for x in split[1:])
+        return str(prop_value)
+
                 
     def parse_euproperty_from_string(self, propstring):
         '''
@@ -343,7 +390,6 @@ class Euproperty_Manager():
         #Store the name of the property
         ret_name = ".".join(propattrs)
         newprop = Euproperty(self, ret_property_string, ret_service_type,  ret_partition, ret_name, ret_value)
-        self.create_dynamic_property_methods_from_property(newprop)
         return newprop
 
     def create_dynamic_property_methods_from_property(self, euproperty):
@@ -359,7 +405,7 @@ class Euproperty_Manager():
         #self.debug('Creating dynamic methods for property:'+str(method_name_string))
         #Add a set method for this property to this euproperty manager
 
-        if not hasattr(self,set_method_name):
+        if not hasattr(self.property_methods,set_method_name):
             def set_method(self, value, partition=None):
                 self.debug('Starting set Method for property:' + str(method_name_string))
                 service_type = euproperty.service_type
@@ -371,13 +417,13 @@ class Euproperty_Manager():
                                     + ', type:' + str(service_type) \
                                     + ', partition:' + str(partition))
                 return self.set_property(prop,value)
-            setattr(self, set_method_name, lambda value: set_method(self,value,partition=euproperty.partition))
-            new_set_method = getattr(self, set_method_name)
+            setattr(self.property_methods, set_method_name, lambda value: set_method(self,value,partition=euproperty.partition))
+            new_set_method = getattr(self.property_methods, set_method_name)
             new_set_method.__doc__ = set_method_doc
             new_set_method.__name__ = set_method_name
 
         #Add a get method for this property to this euproperty manager
-        if not hasattr(self,get_method_name):
+        if not hasattr(self.property_methods,get_method_name):
             def get_method(self, partition=None):
                 service_type = euproperty.service_type
                 prop_name = euproperty.name
@@ -391,8 +437,8 @@ class Euproperty_Manager():
                 if not prop:
                     raise Exception('property:'+str(prop_name) + ", not found for partition:"+str(partition))
                 return prop.value
-            setattr(self, get_method_name, lambda partition=None: get_method(self,partition=partition))
-            new_get_method = getattr(self, get_method_name)
+            setattr(self.property_methods, get_method_name, lambda partition=None: get_method(self,partition=partition))
+            new_get_method = getattr(self.property_methods, get_method_name)
             new_get_method.__name__ = get_method_name
             new_get_method.__doc__ =  get_method_doc
 
