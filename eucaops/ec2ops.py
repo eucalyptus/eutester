@@ -3586,7 +3586,7 @@ disable_root: false"""
                                         + str(bundle_task.state) + "' in monitor")
                     if bundle_task.state == 'failed':
                         raise Exception(str(bundle_id) + ": Bundle task reporting failed state during monitor")
-                    if bundle_task.state == 'completed':
+                    if bundle_task.state == 'complete':
                         self.debug(str(bundle_id) +":  Bundle task reported state is completed during monitor")
                         monitor_list.remove(bundle_id)
                 except Exception, e:
