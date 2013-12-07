@@ -148,7 +148,7 @@ class Euproperty():
             print_method(ret)
         return ret
 
-class Property_Methods():
+class setters_getters():
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
 
@@ -168,7 +168,7 @@ class Euproperty_Manager():
         self.service_url = 'http://'+str(self.tester.get_ec2_ip())+':8773/services/Eucalytpus'
         self.cmdpath = self.tester.eucapath+'/usr/sbin/'
         self.properties = []
-        self.property_methods = Property_Methods
+        self.setters_getters = setters_getters
         self.update_property_list()
         self.tester.property_manager = self
         
@@ -312,19 +312,19 @@ class Euproperty_Manager():
             except Exception, e:
                 self.debug('Error processing property line: ' + propstring)
                 raise e
-
-            newlist.append(newprop)
+            if not newprop in newlist:
+                newlist.append(newprop)
         if property_name:
             for newprop in newlist:
                 for oldprop in self.properties:
                     if oldprop.property_string  == newprop.property_string:
                         oldprop = newprop
-                        self.create_dynamic_property_methods_from_property(newprop)
+                        self.create_dynamic_setters_getters_from_property(newprop)
         else:
             self.properties = newlist
-            self.property_methods = Property_Methods()
+            self.setters_getters = setters_getters()
             for prop in self.properties:
-                self.create_dynamic_property_methods_from_property(prop)
+                self.create_dynamic_setters_getters_from_property(prop)
         return newlist
 
     def parse_euproperty_description(self, propstring):
@@ -339,6 +339,7 @@ class Euproperty_Manager():
         split = str(propstring).replace('PROPERTY','').split()
         prop_value = " ".join(str(x) for x in split[1:])
         return str(prop_value)
+
 
                 
     def parse_euproperty_from_string(self, propstring):
@@ -392,7 +393,7 @@ class Euproperty_Manager():
         newprop = Euproperty(self, ret_property_string, ret_service_type,  ret_partition, ret_name, ret_value)
         return newprop
 
-    def create_dynamic_property_methods_from_property(self, euproperty):
+    def create_dynamic_setters_getters_from_property(self, euproperty):
         method_name_string = str(euproperty.service_type).replace('.','_') + "_" + str(euproperty.name).replace('.','_')
         set_method_name = "set_" + str(method_name_string) + "_value"
         get_method_name = "get_" + str(method_name_string) + "_value"
@@ -405,7 +406,7 @@ class Euproperty_Manager():
         #self.debug('Creating dynamic methods for property:'+str(method_name_string))
         #Add a set method for this property to this euproperty manager
 
-        if not hasattr(self.property_methods,set_method_name):
+        if not hasattr(self.setters_getters,set_method_name):
             def set_method(self, value, partition=None):
                 self.debug('Starting set Method for property:' + str(method_name_string))
                 service_type = euproperty.service_type
@@ -417,13 +418,13 @@ class Euproperty_Manager():
                                     + ', type:' + str(service_type) \
                                     + ', partition:' + str(partition))
                 return self.set_property(prop,value)
-            setattr(self.property_methods, set_method_name, lambda value: set_method(self,value,partition=euproperty.partition))
-            new_set_method = getattr(self.property_methods, set_method_name)
+            setattr(self.setters_getters, set_method_name, lambda value: set_method(self,value,partition=euproperty.partition))
+            new_set_method = getattr(self.setters_getters, set_method_name)
             new_set_method.__doc__ = set_method_doc
             new_set_method.__name__ = set_method_name
 
         #Add a get method for this property to this euproperty manager
-        if not hasattr(self.property_methods,get_method_name):
+        if not hasattr(self.setters_getters,get_method_name):
             def get_method(self, partition=None):
                 service_type = euproperty.service_type
                 prop_name = euproperty.name
@@ -437,8 +438,8 @@ class Euproperty_Manager():
                 if not prop:
                     raise Exception('property:'+str(prop_name) + ", not found for partition:"+str(partition))
                 return prop.value
-            setattr(self.property_methods, get_method_name, lambda partition=None: get_method(self,partition=partition))
-            new_get_method = getattr(self.property_methods, get_method_name)
+            setattr(self.setters_getters, get_method_name, lambda partition=None: get_method(self,partition=partition))
+            new_get_method = getattr(self.setters_getters, get_method_name)
             new_get_method.__name__ = get_method_name
             new_get_method.__doc__ =  get_method_doc
 
@@ -517,6 +518,27 @@ class Euproperty_Manager():
             raise EupropertiesException("set property("+property.property_string+") to value("+str(value)+") failed.Ret Value ("+str(ret_value)+")\nRet String\n"+ret_string)
         property.value = ret_value
         return ret_value
+
+    def get_property_by_string(self, property_string):
+        property = None
+        for prop in self.properties:
+            if prop.property_string == property_string:
+                property = prop
+                break
+        return property
+
+    def set_property_value_by_string(self, property_string, value):
+        property = self.get_property_by_string(property_string)
+        if not property:
+            raise Exception('Property not found for:' + str(property_string))
+        property.set(value)
+
+    def get_property_value_by_string(self, property_string):
+        property = self.get_property_by_string(property_string)
+        if not property:
+            raise Exception('Property not found for:' + str(property_string))
+        return property.value
+
         
     def reset_property_to_default(self, prop):
         '''
