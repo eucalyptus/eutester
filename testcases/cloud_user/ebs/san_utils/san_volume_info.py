@@ -35,15 +35,15 @@ __author__ = 'clarkmatthew'
 import re
 
 class San_Volume_Info():
-    def __init__(self, volumeid,  info_dict, san_connection):
+    def __init__(self, volumeid,  info_dict, san_client):
         self.__dict__ = self.convert_numbers_in_dict(info_dict)
         self.volumeid = volumeid
-        self.san_connection = san_connection
-        self.debug = san_connection.debug
+        self.san_client = san_client
+        self.debug = san_client.debug
 
 
     def update(self):
-        info = self.get_volume_info(self.volumeid, self.san_connection)
+        info = self.get_volume_info(self.volumeid, self.san_client)
         self.__dict__ = self.convert_numbers_in_dict(info)
 
     def convert_numbers_in_dict(self, dict):
@@ -53,8 +53,8 @@ class San_Volume_Info():
                 dict[key] = long(dict[key])
         return dict
 
-    def get_volume_info(self, volumeid, san_connection):
-        return self.san_connection.get_info_for_volume_id(self.volumeid)
+    def get_volume_info(self, volumeid, san_client):
+        return self.san_client.get_info_for_volume_id(self.volumeid)
 
 
     def print_self(self, printmethod=None):

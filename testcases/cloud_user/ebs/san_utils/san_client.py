@@ -42,7 +42,7 @@ import copy
 
 
 
-class San_Connection():
+class San_Client():
 
     def __init__(self, host, username, password):
             self.host = host
@@ -53,7 +53,7 @@ class San_Connection():
             self.debug= self.logger.log.debug
 
     @classmethod
-    def get_san_connection_by_type(cls, host, username, password, santype):
+    def get_san_client_by_type(cls, host, username, password, santype):
         if santype == 'netapp':
             return Netapp_Connection(host, username, password)
         else:
@@ -70,30 +70,25 @@ class San_Connection():
 
 
 
-
-
-
-
-
-class netapp_menu_dir():
-    def __init__(self, path_string,  san_connection, help_string = "", dir_list_raw=None):
+class netapp_menu():
+    def __init__(self, path_string,  san_client, help_string = "", dir_list_raw=None):
         self._path_string = path_string
         self._helpstring = help_string
         self.__doc__ = self._helpstring
-        self._san_connection = san_connection
+        self._san_client = san_client
         self._dir_list_raw = dir_list_raw or self._get_dir_list_raw()
         self._parse_dir_list()
 
     def _get_dir_list_raw(self, listformat=True):
-        return self._san_connection.sys(self._path_string + " ?", listformat=listformat)
+        return self._san_client.sys(self._path_string + " ?", listformat=listformat)
 
     def print_help(self):
-        return self._san_connection.debug("\n"+ self._get_dir_list_raw(listformat=False))
+        return self._san_client.debug("\n"+ self._get_dir_list_raw(listformat=False))
 
     def _exec_sys(self, cmd, verbose=True):
         if verbose:
-            self._san_connection.debug(str(cmd))
-        return self._san_connection.sys(cmd)
+            self._san_client.debug(str(cmd))
+        return self._san_client.sys(cmd)
 
     def _get_new_command(self, path, docstring =""):
         def new_command(value='', runmethod=self._exec_sys):
@@ -103,7 +98,7 @@ class netapp_menu_dir():
 
 
     def _parse_dir_list(self):
-        self._san_connection.debug('Populating CLI dir:' + self._path_string)
+        self._san_client.debug('Populating CLI dir:' + self._path_string)
         last_obj = None
         for line in self._dir_list_raw:
             split = line.split()
@@ -114,14 +109,14 @@ class netapp_menu_dir():
                         last_obj.__doc__ += keyname + " ".join(str(x) for x in split)
                 elif re.search('>', keyname):
                     keyname = keyname.replace('>','')
-                    dir = netapp_menu_dir(self._path_string + " " + keyname, self._san_connection)
+                    dir = netapp_menu(self._path_string + " " + keyname, self._san_client)
                     dir.__doc__ = " ".join(str(x) for x in split)
                     setattr(self, keyname, dir)
                     last_obj = dir
                 else:
                     newpath = str(self._path_string) + " " + str(keyname)
                     docstring = "Command:" + str(newpath) + ". " + " ".join(str(x) for x in split)
-                    self._san_connection.debug('Creating new method:' + str(self._path_string) + "." + str(keyname))
+                    self._san_client.debug('Creating new method:' + str(self._path_string) + "." + str(keyname))
                     command = self._get_new_command(newpath, docstring=docstring)
 
                     setattr(self, keyname, command)
@@ -129,7 +124,7 @@ class netapp_menu_dir():
                     last_obj = command
 
 
-class Netapp_Connection(San_Connection):
+class Netapp_Connection(San_Client):
 
 
     def connect(self):
@@ -161,8 +156,8 @@ class Netapp_Connection(San_Connection):
 
     #def create_efficiency_policy(self, policy_name, schedule_name, duraction_hours, enabled=True, comment='eutester_created' ):
 
-    def get_cli_commands(self):
-        self.cli_commands = netapp_menu_dir("", self, help_string='Parent dir for netapp commands')
+    def discover_cli_menu(self):
+        self.cli = netapp_menu("", self, help_string='Parent dir for netapp commands')
 
 
     def get_volume_efficiency_info_by_id(self, volumeid):

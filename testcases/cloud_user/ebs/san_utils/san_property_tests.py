@@ -43,7 +43,7 @@ and it creates a small amount of additional metadata in the process.
 
 from eucaops import Eucaops
 from eutester.eutestcase import EutesterTestCase
-from san_connection import San_Connection
+from san_client import San_Client
 from eutester.euvolume import EuVolume
 import time
 import types
@@ -111,12 +111,12 @@ class San_Properties_Test(EutesterTestCase):
                     self.keypair = self.tester.add_keypair('sanpropertytestskey'+str(time.time()))
             except Exception, ke:
                 raise Exception("Failed to find/create a keypair, error:" + str(ke))
-        self.get_san_connection()
+        self.get_san_client()
 
 
 
-    def get_san_connection(self):
-        self.san = San_Connection.get_san_connection_by_type(host=self.host,
+    def get_san_client(self):
+        self.san = san_client.get_san_client_by_type(host=self.host,
                                                              username=self.username,
                                                              password=self.password,
                                                              santype=self.santype)
