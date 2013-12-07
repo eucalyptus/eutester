@@ -73,19 +73,22 @@ import copy
 
 class Euproperty_Type():
     authentication = 'authentication'
+    autoscaling = 'autoscaling'
     bootstrap = 'bootstrap'
     cloud = 'cloud'
+    cloudwatch = 'cloudwatch'
     cluster = 'cluster'
+    dns ='dns'
+    loadbalancing = 'loadbalancing'
     reporting = 'reporting'
     storage = 'storage'
     system = 'system'
+    tagging = 'tagging'
     vmwarebroker = 'vmwarebroker'
     walrus = 'walrus'
     www = 'www'
-    autoscaling = 'autoscaling'
-    loadbalancing = 'loadbalancing'
-    tagging = 'tagging'
-    
+
+
     @classmethod
     def get_type_by_string(cls, typestring):
         try:
@@ -118,12 +121,15 @@ class Euproperty():
     def set(self, value):
         return self.prop_mgr.set_property(self,value)
 
-    def print_self(self, include_header=True, print_method=None):
+    def print_self(self, include_header=True, show_description=True, print_method=None, printout=True):
+        if printout and not print_method:
+            print_method = self.prop_mgr.debug
         name_len = 50
         service_len = 20
         part_len = 20
         value_len = 30
         line_len = 120
+        ret = ""
 
         header = str('NAME').ljust(name_len)
         header += "|" + str('SERVICE TYPE').center(service_len)
@@ -141,14 +147,16 @@ class Euproperty():
             line += "-"
         line += "\n"
         if include_header:
-            ret = "\n"+line+header+line+out+line
-        else:
-            ret = out+line
+            ret = "\n"+line+header+line
+        ret += out
+        if show_description:
+            ret += "DESCRIPTION: " + self.description + "\n"
+        ret += line
         if print_method:
             print_method(ret)
         return ret
 
-class setters_getters():
+class Property_Map():
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
 
@@ -168,7 +176,7 @@ class Euproperty_Manager():
         self.service_url = 'http://'+str(self.tester.get_ec2_ip())+':8773/services/Eucalytpus'
         self.cmdpath = self.tester.eucapath+'/usr/sbin/'
         self.properties = []
-        self.setters_getters = setters_getters
+        self.property_map = Property_Map()
         self.update_property_list()
         self.tester.property_manager = self
         
@@ -232,14 +240,15 @@ class Euproperty_Manager():
                             value=None,
                             search_string=None,
                             list=None,
-                            debug_method=None):
+                            debug_method=None,
+                            descriptions=True):
         debug_method = debug_method or self.debug
         list = list or self.get_properties(partition=partition,
                                            service_type=service_type,
                                            value=value,
                                            search_string=search_string)
         first = list.pop(0)
-        buf = first.print_self(include_header=True)
+        buf = first.print_self(include_header=True, printout=False)
         count = 1
         last_service_type = first.service_type
         for prop in list:
@@ -249,7 +258,7 @@ class Euproperty_Manager():
                 print_header = True
             else:
                 print_header = False
-            buf += prop.print_self(include_header=print_header)
+            buf += prop.print_self(include_header=print_header, show_description=descriptions, printout=False)
         debug_method(buf)
 
 
@@ -319,12 +328,12 @@ class Euproperty_Manager():
                 for oldprop in self.properties:
                     if oldprop.property_string  == newprop.property_string:
                         oldprop = newprop
-                        self.create_dynamic_setters_getters_from_property(newprop)
+                        self.create_dynamic_property_map_from_property(newprop)
         else:
             self.properties = newlist
-            self.setters_getters = setters_getters()
+            self.property_map = Property_Map()
             for prop in self.properties:
-                self.create_dynamic_setters_getters_from_property(prop)
+                self.create_dynamic_property_map_from_property(prop)
         return newlist
 
     def parse_euproperty_description(self, propstring):
@@ -350,32 +359,34 @@ class Euproperty_Manager():
         :returns euproperty
         '''
         #self.debug('parse_euproperty_from_string, string:'+str(propstring))
+        propstring = str(propstring).replace('PROPERTY','').strip()
         ret_service_type = None
         ret_partition = None
         splitstring = propstring.split()
-        toss = splitstring.pop(0)
-        ret_property_string = splitstring.pop(0)
+        #get the property string, example: "walrus.storagemaxbucketsizeinmb"
+        property_string = splitstring.pop(0)
         ret_value = " ".join(splitstring)
-        #self.debug('ret_property_string:'+str(ret_property_string)+", ret_value:"+str(ret_value))
-        #toss, ret_property_string, ret_value = propstring.split()
+        #self.debug('property_string:'+str(property_string)+", ret_value:"+str(ret_value))
+        #toss, property_string, ret_value = propstring.split()
         for prop in self.properties:
             #if this property is in our list, update the value and return
-            if prop.property_string == ret_property_string:
+            if prop.property_string == property_string:
                 prop.lastvalue = prop.value
                 prop.value = ret_value
                 return prop
-        ret_name = ret_property_string
+        ret_name = property_string
         #...otherwise this property is not in our list yet, create a new property
         #parse property string into values...
-        propattrs = ret_property_string.split('.')
+        propattrs = property_string.split('.')
+
+        #See if the first element is a partition
         partitions = self.tester.service_manager.get_all_partitions()
-        for item in propattrs:
-            for part in partitions:
-                if part.name == item:
-                    #Assume this is the partition id/name, remove it from the propattrs list
-                    ret_partition = item
-                    propattrs.remove(item)
-                    break
+
+        for part in partitions:
+            if part.name == propattrs[0]:
+                #Assume this is the partition id/name, remove it from the propattrs list
+                ret_partition = propattrs.pop(0)
+                break
         #Move along items in list until we reach a service type
         for index in xrange(0,len(propattrs)):
             try:
@@ -385,63 +396,37 @@ class Euproperty_Manager():
             except AttributeError:
                 pass
             except IndexError:
-                raise Exception('No service type found for: ' + str(ret_property_string))
+                self.debug("\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n" +
+                           "Need to add new service? No service type found for: " + str(property_string) +
+                           "\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n")
+                ret_service_type = propattrs.pop(0)
+
         #self.debug("ret_service_type: "+str(ret_service_type))
 
         #Store the name of the property
         ret_name = ".".join(propattrs)
-        newprop = Euproperty(self, ret_property_string, ret_service_type,  ret_partition, ret_name, ret_value)
+        newprop = Euproperty(self, property_string, ret_service_type,  ret_partition, ret_name, ret_value)
         return newprop
 
-    def create_dynamic_setters_getters_from_property(self, euproperty):
-        method_name_string = str(euproperty.service_type).replace('.','_') + "_" + str(euproperty.name).replace('.','_')
-        set_method_name = "set_" + str(method_name_string) + "_value"
-        get_method_name = "get_" + str(method_name_string) + "_value"
+    def create_dynamic_property_map_from_property(self, euproperty):
+        context = self.property_map
+        if not hasattr(context, 'all'):
+            setattr(context, 'all', Property_Map())
+        all_map = getattr(context, 'all')
+        if euproperty.partition:
+            if not hasattr(context, str(euproperty.partition)):
+                setattr(context, str(euproperty.partition), Property_Map())
+            context = getattr(context, str(euproperty.partition))
+        if euproperty.service_type:
+            if not hasattr(context, str(euproperty.service_type)):
+                setattr(context, str(euproperty.service_type), Property_Map())
+            context = getattr(context, str(euproperty.service_type))
+        object_name = str(euproperty.service_type).replace('.','_') + "_" + str(euproperty.name).replace('.','_')
+        if not hasattr(context,object_name):
+            setattr(context, object_name, euproperty)
+        if not hasattr(all_map, object_name):
+            setattr(all_map, object_name, euproperty)
 
-        get_method_doc = "Attempts to get property: " + str(method_name_string) \
-                                                      + "\nparam partitions: partition for this property"
-        set_method_doc = "Attempts to set property: " + str(method_name_string) \
-                                                      + "\nparam partitions: partition for this property"
-        prop_mgr=self
-        #self.debug('Creating dynamic methods for property:'+str(method_name_string))
-        #Add a set method for this property to this euproperty manager
-
-        if not hasattr(self.setters_getters,set_method_name):
-            def set_method(self, value, partition=None):
-                self.debug('Starting set Method for property:' + str(method_name_string))
-                service_type = euproperty.service_type
-                prop_name = euproperty.name
-                try:
-                    prop = self.get_property(name=prop_name,service_type=service_type,partition=partition)
-                except IndexError:
-                    raise Exception('Property not found. name:' + str(prop_name) \
-                                    + ', type:' + str(service_type) \
-                                    + ', partition:' + str(partition))
-                return self.set_property(prop,value)
-            setattr(self.setters_getters, set_method_name, lambda value: set_method(self,value,partition=euproperty.partition))
-            new_set_method = getattr(self.setters_getters, set_method_name)
-            new_set_method.__doc__ = set_method_doc
-            new_set_method.__name__ = set_method_name
-
-        #Add a get method for this property to this euproperty manager
-        if not hasattr(self.setters_getters,get_method_name):
-            def get_method(self, partition=None):
-                service_type = euproperty.service_type
-                prop_name = euproperty.name
-                self.debug("get method:"+str(prop_name)+", Partition:"+str(partition)+", service_type:"+str(service_type))
-                try:
-                    prop = self.get_property(name=prop_name,service_type=service_type,partition=partition)
-                except IndexError:
-                    raise Exception('Property not found. name:' + str(prop_name) \
-                                    + ', type:' + str(service_type) \
-                                    + ', partition:' + str(partition))
-                if not prop:
-                    raise Exception('property:'+str(prop_name) + ", not found for partition:"+str(partition))
-                return prop.value
-            setattr(self.setters_getters, get_method_name, lambda partition=None: get_method(self,partition=partition))
-            new_get_method = getattr(self.setters_getters, get_method_name)
-            new_get_method.__name__ = get_method_name
-            new_get_method.__doc__ =  get_method_doc
 
 
     def get_euproperty_by_name(self,name, list=None):
