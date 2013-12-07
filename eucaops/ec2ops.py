@@ -37,6 +37,9 @@ import os
 import copy
 import socket
 import types
+import hmac
+import json
+import hashlib
 import base64
 from datetime import datetime, timedelta
 import time
@@ -3637,8 +3640,7 @@ disable_root: false"""
                 instance.sys("chkconfig httpd on")
         return (reservation, filename)
 
-
-    def generate_default_s3_upload_policy(self, bucket, prefix, expiration=24, acl='ec2-bundle-read'):
+    def generate_default_s3_upload_policy(self, bucket, prefix, expiration=24, acl='ec2-bundle-read', encode=True):
         """
         Generates s3 upload policy for bundle instance operation
 
@@ -3648,19 +3650,29 @@ disable_root: false"""
         :param acl: acl to be used
         :return: s3 upload encoded policy
         """
+
         delta = timedelta(hours=expiration)
         expiration_time = (datetime.utcnow() + delta).replace(microsecond=0)
         expiration_str = expiration_time.isoformat()
-
+        
         policy = '{"expiration": "%s",' % expiration_str + \
-                 '"conditions": [' + \
-                 '{"bucket": "%s" },' % bucket + \
-                 '{"acl": "%s" },' % acl + \
-                 '["starts-with", "$key", "%s"]' % prefix + \
-                 ']' + \
-                 '}'
-        encoded_policy = base64.b64encode(policy)
-        return encoded_policy
+        '"conditions": [' + \
+        '{"bucket": "%s" },' % bucket + \
+        '{"acl": "%s" },' % acl + \
+        '["starts-with", "$key", "%s"]' % prefix + \
+        ']' + \
+        '}'
+
+        if encode:
+            policy = base64.b64encode(policy)
+        return policy
+
+
+
+    def sign_policy(self, policy):
+        my_hmac = hmac.new(self.aws_secret_access_key, policy, digestmod=hashlib.sha1)
+        return base64.b64encode(my_hmac.digest())
+
 
 
     def get_euzones(self, zones=None):
