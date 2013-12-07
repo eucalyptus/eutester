@@ -43,6 +43,10 @@ import copy
 
 
 class San_Client():
+    '''
+    Basic San Client test interface to be implemented by each SAN client. The intention is to use a common
+    interface to verify SAN side operations when resources from that san are used in cloud operations.
+    '''
 
     def __init__(self, host, username, password):
             self.host = host
@@ -54,24 +58,56 @@ class San_Client():
 
     @classmethod
     def get_san_client_by_type(cls, host, username, password, santype):
+        '''
+        Returns a SAN client type object by santype.
+
+        param host: string representing the hostname/ip of the SAN
+        param username: string username used to access the SAN
+        param password: string password used to access the SAN
+        param santype: string used to determine what SAN client to create and return. Supported Values: 'netapp'
+        returns San_Client obj of type santype
+        '''
         if santype == 'netapp':
             return Netapp_Client(host, username, password)
         else:
             raise Exception('Unknown santype provided:' + str(santype))
 
     def connect(self):
+        '''
+        Will perform the steps needed to connect/interface with the SAN/San_Client
+        '''
         raise Exception('Not Implemented')
 
     def sys(self, cmd, timeout=60, code=0):
+        '''
+        Will Executes the command provided against the San_Client interface
+        param cmd: string representing the command to be executed against this san San_Client
+        param timeout: optional timeout for the command which is executed
+        param code: optional integer value used to provide the expected return code
+        returns sanclient's output from the executed command
+        '''
         raise Exception('Not Implemented')
 
     def get_san_volume_info_by_id(self, volumeid):
+        '''
+        Attempt to populate a san_volume_info obj with information about a given volumeid
+        param volumeid: string representing the volume's id in which to gather information
+        returns san_volume_info
+        '''
         raise Exception('Not Implemented')
 
 
 
 class netapp_menu():
+
     def __init__(self, path_string,  san_client, help_string = "", dir_list_raw=None):
+        '''
+        Represent a Netapp cli menu context.
+        param path_string: the relative path or context within the san client Netapp_Client cli
+        param san_client: the Netapp_Client
+        param help_string: optional string which can be used as a doc string and help string for this menu context
+        param dir_list_raw: optional Netapp_Client list of strings representing the menu context
+        '''
         self._path_string = path_string
         self._helpstring = help_string
         self.__doc__ = self._helpstring
@@ -80,24 +116,47 @@ class netapp_menu():
         self._parse_dir_list()
 
     def _get_dir_list_raw(self, listformat=True):
+        '''
+        Will attempt to get the contents of this menu context and will present the text returned from the san Netapp_Client
+        in either a single string buffer or list of lines/strings
+        param listformat: boolean when true, the output will be returned as a list of strings
+        '''
         return self._san_client.sys(self._path_string + " ?", listformat=listformat)
 
     def print_help(self):
+        '''
+        method that will print the help contents for this menu context
+        '''
         return self._san_client.debug("\n"+ self._get_dir_list_raw(listformat=False))
 
     def _exec_sys(self, cmd, verbose=True):
+        '''
+        Helper function to execute commands on the remote san via the provided san client interface
+        param cmd: string representing the command to execute on the san_volume_info
+        param verbose: boolean if true will print the command to the san client's debug method
+        '''
         if verbose:
             self._san_client.debug(str(cmd))
         return self._san_client.sys(cmd)
 
     def _get_new_command(self, path, docstring =""):
-        def new_command(value='', runmethod=self._exec_sys):
-            return runmethod(path + ' ' + value)
+        '''
+        Attempt to create dynamic methods for the menu items found when traversing the cli menu(s)
+        param path: string representing the cli menu path to this obj/command
+        param docstring: optional string will be used to populate the docstring of the returned method
+        '''
+        def new_command( string = "" ):
+            return self._exec_sys(path + ' ' + string)
         new_command.__doc__ = docstring
+        new_command.help = lambda x='?':new_command(x)
         return new_command
 
 
     def _parse_dir_list(self):
+        '''
+        Attempt to traverse and discover  all the items in the menu item and either create executable methods or
+        new netapp_menu items which contain more cli methods/menus.
+        '''
         self._san_client.debug('Populating CLI dir:' + self._path_string)
         last_obj = None
         for line in self._dir_list_raw:
@@ -116,9 +175,7 @@ class netapp_menu():
                 else:
                     newpath = str(self._path_string) + " " + str(keyname)
                     docstring = "Command:" + str(newpath) + ". " + " ".join(str(x) for x in split)
-                    self._san_client.debug('Creating new method:' + str(self._path_string) + "." + str(keyname))
                     command = self._get_new_command(newpath, docstring=docstring)
-
                     setattr(self, keyname, command)
                     #setattr(self, keyname, lambda input = '': self._exec_sys(str(copy.copy(newpath)) + " " + input, verbose=True))
                     last_obj = command
@@ -128,23 +185,32 @@ class Netapp_Client(San_Client):
 
 
     def connect(self):
+        '''
+        Attempts to connect to the SAN cli via ssh
+        '''
         ssh = SshConnection(host=self.host, username=self.username, password=self.password)
         self.sys = ssh.sys
 
     def get_san_volume_info_by_id(self, volumeid):
+        '''
+        Attempts to gather info from the san client about the volume id provided.
+        Returns a San_Volume_Info object representing the volume's san client information
 
-        info_dict = self.get_volume_basic_info_by_id(volumeid)
-        eff_dict = self.get_volume_efficiency_info_by_id(volumeid)
+        param volumeid: string representing the volumeid ie:vol-abcd123
+        returns San_Volume_Info object
+        '''
+        info_dict = self._get_volume_basic_info_by_id(volumeid)
+        eff_dict = self._get_volume_efficiency_info_by_id(volumeid)
         san_info_obj = San_Volume_Info( volumeid, dict(info_dict.items() + eff_dict.items()), self)
         return san_info_obj
 
-    def format_volume_id(self,volumeid):
+    def _format_volume_id(self,volumeid):
         id = str(volumeid).replace('-','_')
         return id
 
 
-    def get_volume_basic_info_by_id(self, volumeid):
-        cmd = 'volume show ' + str(self.format_volume_id(volumeid))
+    def _get_volume_basic_info_by_id(self, volumeid):
+        cmd = 'volume show ' + str(self._format_volume_id(volumeid))
         return self.get_cmd_dict(cmd)
 
     def get_efficiency_policy(self, policy_name):
@@ -157,15 +223,24 @@ class Netapp_Client(San_Client):
     #def create_efficiency_policy(self, policy_name, schedule_name, duraction_hours, enabled=True, comment='eutester_created' ):
 
     def discover_cli_menu(self):
+        '''
+        Attempts to traverse and discover the CLI menu creating executable python methods and help strings for the
+        items found in each menu context. CLI menu items will be available from self.cli
+        '''
         self.cli = netapp_menu("", self, help_string='Parent dir for netapp commands')
 
 
-    def get_volume_efficiency_info_by_id(self, volumeid):
-        cmd = 'volume efficiency show -volume ' + str(self.format_volume_id(volumeid))
+    def _get_volume_efficiency_info_by_id(self, volumeid):
+        cmd = 'volume efficiency show -volume ' + str(self._format_volume_id(volumeid))
         return self.get_cmd_dict(cmd)
 
 
     def get_cmd_dict(self, cmd):
+        '''
+        Execute a command via the client and attempt to parse the results into a returned dict
+        param cmd: string representing the command to be run on the san client
+        returns dict
+        '''
         info = {}
         out = self.sys(cmd)
         for line in out:
