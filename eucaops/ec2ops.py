@@ -1968,9 +1968,28 @@ disable_root: false"""
         :return: image id
         :raise: Exception if image is not found
         """
+
+        ret_list = []
+        if not filters:
+            filters = {}
+            if emi:
+                filters['image-id'] = emi
+            if root_device_type:
+                filters['root-device-type'] = root_device_type
+            if root_device_name:
+                filters['root-device-name'] = root_device_name
+            if state:
+                filters['state'] = state
+            if virtualization_type:
+                filters['virtualization-type'] = virtualization_type
+            if arch:
+                filters['architecture'] = arch
+            if owner_id:
+                filters['owner-id'] = owner_id
+
         if emi is None:
             emi = "mi-"
-        ret_list = []
+
         images = self.ec2.get_all_images(filters=filters)
         self.debug("Got " + str(len(images)) + " total images " + str(emi) + ", now filtering..." )
         for image in images:
@@ -2375,7 +2394,7 @@ disable_root: false"""
                      password=None,
                      is_reachable=True,
                      monitoring_enabled=False,
-                     timeout=480):
+                     timeout=600):
         """
         Run instance/s and wait for them to go to the running state
 
@@ -2838,7 +2857,7 @@ disable_root: false"""
         else:
             res = self.get_reservation_for_instance(instance)
         for group in res.groups:
-         secgroups.extend(self.ec2.get_all_security_groups(groupnames=str(group.id))) 
+         secgroups.extend(self.ec2.get_all_security_groups(groupnames=str(group.name)))
         return secgroups
     
     def get_reservation_for_instance(self, instance):
@@ -3043,7 +3062,7 @@ disable_root: false"""
             elapsed = int(time.time()- start)
             for instance in monitoring:
                 instance.update()
-                if zeros.search(str(instance.ip_address)):
+                if zeros.search(str(instance.ip_address)) or zeros.search(str(instance.private_ip_address)):
                     self.debug(str(instance.id)+": WAITING for public ip. Current:"+str(instance.ip_address)+
                                ", elapsed:"+str(elapsed)+"/"+str(timeout))
                 else:
@@ -3059,7 +3078,7 @@ disable_root: false"""
         if monitoring:
             buf = "Instances timed out waiting for a valid IP, elapsed:"+str(elapsed)+"/"+str(timeout)+"\n"
             for instance in instances:
-                buf += "Instance: "+str(instance.id)+", public ip: "+str(instance.ip_address)+"\n"
+                buf += "Instance: "+str(instance.id)+", public ip: "+str(instance.ip_address)+", private ip: "+str(instance.private_ip_address)+"\n"
             raise Exception(buf)
         self.check_system_for_dup_ip(instances=good)
         self.debug('Wait_for_valid_ip done')
