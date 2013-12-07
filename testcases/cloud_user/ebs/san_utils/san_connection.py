@@ -5,6 +5,7 @@ from san_volume_info import  San_Volume_Info
 from eutester.sshconnection import SshConnection
 from eutester.eulogger import Eulogger
 import re
+import copy
 
 
 
@@ -51,8 +52,23 @@ class netapp_menu_dir():
         self._dir_list_raw = dir_list_raw or self._get_dir_list_raw()
         self._parse_dir_list()
 
-    def _get_dir_list_raw(self):
-        return self._san_connection.sys(self._path_string + " ?")
+    def _get_dir_list_raw(self, listformat=True):
+        return self._san_connection.sys(self._path_string + " ?", listformat=listformat)
+
+    def print_help(self):
+        return self._san_connection.debug("\n"+ self._get_dir_list_raw(listformat=False))
+
+    def _exec_sys(self, cmd, verbose=True):
+        if verbose:
+            self._san_connection.debug(str(cmd))
+        return self._san_connection.sys(cmd)
+
+    def _get_new_command(self, path, docstring =""):
+        def new_command(value='', runmethod=self._exec_sys):
+            return runmethod(path + ' ' + value)
+        new_command.__doc__ = docstring
+        return new_command
+
 
     def _parse_dir_list(self):
         self._san_connection.debug('Populating CLI dir:' + self._path_string)
@@ -71,9 +87,13 @@ class netapp_menu_dir():
                     setattr(self, keyname, dir)
                     last_obj = dir
                 else:
-                    command = lambda input='': self._san_connection.sys(self._path_string + " " + input)
-                    command.__doc__ = " ".join(str(x) for x in split)
+                    newpath = str(self._path_string) + " " + str(keyname)
+                    docstring = "Command:" + str(newpath) + ". " + " ".join(str(x) for x in split)
+                    self._san_connection.debug('Creating new method:' + str(self._path_string) + "." + str(keyname))
+                    command = self._get_new_command(newpath, docstring=docstring)
+
                     setattr(self, keyname, command)
+                    #setattr(self, keyname, lambda input = '': self._exec_sys(str(copy.copy(newpath)) + " " + input, verbose=True))
                     last_obj = command
 
 
