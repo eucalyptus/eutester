@@ -55,7 +55,7 @@ class San_Client():
     @classmethod
     def get_san_client_by_type(cls, host, username, password, santype):
         if santype == 'netapp':
-            return Netapp_Connection(host, username, password)
+            return Netapp_Client(host, username, password)
         else:
             raise Exception('Unknown santype provided:' + str(santype))
 
@@ -124,7 +124,7 @@ class netapp_menu():
                     last_obj = command
 
 
-class Netapp_Connection(San_Client):
+class Netapp_Client(San_Client):
 
 
     def connect(self):
