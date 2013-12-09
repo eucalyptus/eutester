@@ -99,10 +99,6 @@ class Machine:
         
         self.hostname = hostname
         self.distro_ver = distro_ver
-        self.distro = self.convert_to_distro(distro, distro_ver)
-        if self.distro.package_manager is not None:
-            self.repo_utils = RepoUtils(self, self.distro.package_manager)
-            self.package_manager = self.repo_utils.package_manager
         self.arch = arch
         self.source = source
         self.components = components
@@ -133,9 +129,45 @@ class Machine:
             self.sftp = self.ssh.connection.open_sftp()
         # If we were given a conf file, and have an ssh/sftp session, attempt to populate eucalyptus_conf into
         # a euconfig object for this machine...
+        self.distro = self._get_distro(distro_name=distro, distro_release=distro_ver)
+        if self.distro.package_manager is not None:
+            self.repo_utils = RepoUtils(self, self.distro.package_manager)
+            self.package_manager = self.repo_utils.package_manager
         self.get_eucalyptus_conf()
-            
-    def convert_to_distro(self, distro_name, distro_release):
+
+
+    def get_distro_info_from_machine(self):
+        if not self.ssh:
+            raise Exception('Need SSH connection to retrieve distribution info from machine')
+        ret_dict = {'distro': '', 'release': ''}
+        out = self.sys('cat /etc/*-release',code=0)
+        for line in out:
+            if not ret_dict['distro']:
+                if re.search('red hat', line, re.IGNORECASE):
+                    ret_dict['distro'] = DistroName.rhel
+                else:
+                    for distro in DistroName.__dict__:
+                        if not str(distro).startswith('_') and re.search(distro,line, re.IGNORECASE):
+                            ret_dict['distro'] = distro
+                            break
+            if not ret_dict['release'] and re.search(r"release", line, re.IGNORECASE):
+                rel = re.search(r"\d+\.\d+",line)
+                if rel:
+                     ret_dict['release'] = rel.group()
+        if not ret_dict['distro'] or not ret_dict['release']:
+            raise Exception('Could not retrieve distro:"' + str(ret_dict['distro']) + '", and release:"' + str(ret_dict['release']) + '"' )
+        return ret_dict
+
+
+    def _get_distro(self, distro_name=None, distro_release=None):
+        if not distro_name or not distro_release:
+            self.debug('distro_name and/or distro_release were not provided. Attempt to retrieve from ssh...')
+            dist_info = self.get_distro_info_from_machine()
+            distro_name  = dist_info['distro']
+            distro_releae = dist_info['release']
+        return self._convert_to_distro(distro_name=distro_name, distro_release=distro_release)
+
+    def _convert_to_distro(self, distro_name, distro_release):
         distro_name = distro_name.lower()
         distro_release = distro_release.lower()
         for distro in Distro.get_distros():
