@@ -63,7 +63,7 @@ class InstanceBasics(EutesterTestCase):
             self.zone = zone
         self.reservation = None
         self.reservation_lock = threading.Lock()
-        self.run_instance_params = {'image': self.image, 'user_data': user_data, 'username': instance_user,
+        self.run_instance_params = {'image': self.image, 'user_data': self.args.user_data, 'username': instance_user,
                                 'keypair': self.keypair.name, 'group': self.group.name,'zone': self.zone,
                                 'timeout': self.instance_timeout}
         self.managed_network = True
