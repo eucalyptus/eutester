@@ -249,7 +249,7 @@ class InstanceBasics(EutesterTestCase):
                 elif re.search("gzip", file_type):
                     gzip_file = gzip.GzipFile(fileobj=open(self.user_data))
                     user_data = gzip_file.read()
-                self.assertTrue(re.search(instance.get_userdata(), user_data), 'Incorrect User Data File')
+                self.assertTrue(re.search(instance.get_userdata(), self.user_data), 'Incorrect User Data File')
             else:
                 self.assertTrue(re.search(instance.get_userdata(), self.user_data), 'Incorrect User Data String')
 
