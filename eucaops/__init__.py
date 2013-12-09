@@ -74,7 +74,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
         self.clc_index = 0
         self.credpath = credpath
         self.account_name = account
-        self.user_name = user
+        self.aws_username = user
         self.download_creds = download_creds
         self.logger = eulogger.Eulogger(identifier="EUCAOPS")
         self.debug = debug_method or self.logger.log.debug
