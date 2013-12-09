@@ -580,8 +580,8 @@ class SshConnection():
             enable_ipv6_dns = self.enable_ipv6_dns
         proxy = proxy or self.proxy
 
-        self.debug("ssh_connect args:\nhostname:" + hostname
-                    + "\nusername:" + username
+        self.debug("ssh_connect args:\nhostname:" + str(hostname)
+                    + "\nusername:" + str(username)
                     + "\npassword:" + str(password)
                     + "\nkeypath:" + str(keypath)
                     + "\nproxy_username:" + str(proxy_username)
