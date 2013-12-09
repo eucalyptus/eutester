@@ -76,10 +76,6 @@ class WindowsTests(EutesterTestCase):
                  emi_location=None,
                  image_path=None, #note this must be available on the work_component
                  instance=None,
-                 win_proxy_hostname = None, 
-                 win_proxy_username = 'Administrator',
-                 win_proxy_password = None, 
-                 win_proxy_keypath = None,
                  clean_on_exit=False,
                  authports=['tcp:3389','tcp:80','tcp:443', 'tcp:5985', 'tcp:5986']
                  ):
@@ -161,20 +157,8 @@ class WindowsTests(EutesterTestCase):
         self.run_timeout=780 
         #setup zone list
         self.setupWindowsZones()
-        #setup windows proxy 
-        self.win_proxy_hostname = win_proxy_hostname
-        self.proxy = None
-        if win_proxy_hostname is not None:
-            self.setup_proxy(win_proxy_hostname,
-                             proxy_keypath = win_proxy_keypath,
-                             proxy_username = win_proxy_username,
-                             proxy_password = win_proxy_password,
-                             debugmethod = lambda msg: self.debug(msg, traceback=2)
-                             )
+        #setup windows proxy
         self.setup_test_env()
-
-
-
 
     def setup_test_env(self):
         self.setupWindowsKeypair()
@@ -188,8 +172,6 @@ class WindowsTests(EutesterTestCase):
                 retlist.append(image)
         return retlist
 
-
-            
     def setupWindowsSecurityGroup(self, portlist=None):
         portlist = portlist or self.authports
         #Setup our security group for later use...
@@ -273,9 +255,7 @@ class WindowsTests(EutesterTestCase):
             while len(zone.volumes) < self.testvolcount:
                 volume = EuVolume.make_euvol_from_vol(self.tester.create_volume(zone,timepergig=180))
                 zone.volumes.append(volume)
-            
-        
-                
+
     def create_vols_per_zone(self, zonelist=None, volsperzone=2, size=1, snapshot=None, timepergig=300):
         testmsg =   """
                     Intention of this test is to verify creation of volume(s) per zone given.
@@ -315,7 +295,7 @@ class WindowsTests(EutesterTestCase):
         Work is done on a given machine and requires euca2ools present on that machine. 
         Returns the emi of the registered image
         '''
-        return self.iu.create_emi_from_url(url = (url or self.url), 
+        return self.iu.create_emi(url = (url or self.url),
                                            component = (component or self.component), 
                                            bucketname = (bucketname or self.bucketname), 
                                            component_credpath = (component_credpath or self.component_credpath), 
@@ -343,29 +323,28 @@ class WindowsTests(EutesterTestCase):
         Work is done on a given machine and requires euca2ools present on that machine. 
         Returns the emi of the registered image
         '''
-        return self.iu.create_emi_from_url(
-                                           url = None,
-                                           component = (component or self.component), 
-                                           bucketname = (bucketname or self.bucketname), 
-                                           component_credpath = (component_credpath or self.component_credpath), 
-                                           destination = (destpath or self.destpath),
-                                           interbundle_timeout = (inter_bundle_timeout or self.inter_bundle_timeout), 
-                                           upload_timeout = (upload_timeout or self.upload_timeout),
-                                           destpath = (destpath or self.destpath),
-                                           filepath = image_file_path,
-                                           time_per_gig = (time_per_gig or self.time_per_gig) )
+        return self.iu.create_emi( url = None,
+                                   component = (component or self.component),
+                                   bucketname = (bucketname or self.bucketname),
+                                   component_credpath = (component_credpath or self.component_credpath),
+                                   destination = (destpath or self.destpath),
+                                   interbundle_timeout = (inter_bundle_timeout or self.inter_bundle_timeout),
+                                   upload_timeout = (upload_timeout or self.upload_timeout),
+                                   destpath = (destpath or self.destpath),
+                                   filepath = image_file_path,
+                                   time_per_gig = (time_per_gig or self.time_per_gig) )
         
     def test_run_windows_emi(self,
-                      emi=None, 
-                      zone=None,
-                      keypair=None,
-                      type=None, 
-                      group=None, 
-                      min=1, 
-                      max=1,
-                      user_data=None,
-                      private_addressing=None,
-                      timeout=None):
+                              emi=None,
+                              zone=None,
+                              keypair=None,
+                              type=None,
+                              group=None,
+                              min=1,
+                              max=1,
+                              user_data=None,
+                              private_addressing=None,
+                              timeout=None):
         '''
         Description: Attempts to return a reservation of running emi instances run with the provided parameters.
         '''
