@@ -189,7 +189,10 @@ class Netapp_Client(San_Client):
         Attempts to connect to the SAN cli via ssh
         '''
         ssh = SshConnection(host=self.host, username=self.username, password=self.password)
+        if not ssh:
+            raise Exception('Could not connect to SAN at:' + str(self.host))
         self.sys = ssh.sys
+        return ssh
 
     def get_san_volume_info_by_id(self, volumeid):
         '''
@@ -210,7 +213,7 @@ class Netapp_Client(San_Client):
 
 
     def _get_volume_basic_info_by_id(self, volumeid):
-        cmd = 'volume show ' + str(self._format_volume_id(volumeid))
+        cmd = 'volume show ' + str(self._format_volume_id(volumeid), code=0)
         return self.get_cmd_dict(cmd)
 
     def get_efficiency_policy(self, policy_name):

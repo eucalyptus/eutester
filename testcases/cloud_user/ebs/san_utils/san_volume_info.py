@@ -43,7 +43,7 @@ class San_Volume_Info():
 
 
     def update(self):
-        info = self.get_volume_info(self.volumeid, self.san_client)
+        info = self.san_client.get_san_volume_info_by_id(self.volumeid)
         self.__dict__ = self.convert_numbers_in_dict(info)
 
     def convert_numbers_in_dict(self, dict):
@@ -52,10 +52,6 @@ class San_Volume_Info():
             if (re.search("\S", str(dict[key])) and not re.search("\D", str(dict[key]))):
                 dict[key] = long(dict[key])
         return dict
-
-    def get_volume_info(self, volumeid, san_client):
-        return self.san_client.get_info_for_volume_id(self.volumeid)
-
 
     def print_self(self, printmethod=None):
         '''
