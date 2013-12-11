@@ -158,7 +158,7 @@ class Net_Tests(EutesterTestCase):
                                 'or config_file and password was provided, err:' + str(e))
                 #replace default eutester debugger with eutestcase's for more verbosity...
             self.tester.debug = lambda msg: self.debug(msg, traceback=2, linebyline=False)
-        self.assertIsInstance(self.tester, Eucaops)
+        assert isinstance(self.tester, Eucaops)
         self.cc_last_checked = time.time()
 
         ### Create local zone list to run tests in
@@ -211,7 +211,7 @@ class Net_Tests(EutesterTestCase):
 
     def authorize_group_for_instance_list(self, group, instances):
         for instance in instances:
-            self.assertIsInstance(instance, EuInstance)
+            assert isinstance(instance, EuInstance)
             self.tester.authorize_group(group, cidr_ip=instance.private_ip_address + "/32")
 
     def clean_method(self):
@@ -269,7 +269,7 @@ class Net_Tests(EutesterTestCase):
         return cc
 
     def ping_instance_private_ip_from_active_cc(self, instance, refresh_active_cc=30):
-        self.assertIsInstance(instance, EuInstance)
+        assert isinstance(instance, EuInstance)
         cc = self.get_active_cc_for_instance(instance=instance, refresh_active_cc=refresh_active_cc)
         try:
             cc.machine.ping_check(instance.private_ip_address)
@@ -311,7 +311,7 @@ class Net_Tests(EutesterTestCase):
         for instance in self.group1_instances:
             self.status('Checking connectivity to:' + str(instance.id) + ":" + str(instance.private_ip_address)+
                         ", zone:" + str(instance.placement) )
-            self.assertIsInstance(instance, EuInstance)
+            assert isinstance(instance, EuInstance)
             self.debug('Attempting to ping instances private ip from cc...')
             self.tester.wait_for_result( self.ping_instance_private_ip_from_active_cc,
                                          result=True,
@@ -357,7 +357,7 @@ class Net_Tests(EutesterTestCase):
         for instance in self.group2_instances:
             self.status('Checking connectivity to:' + str(instance.id) + ":" + str(instance.private_ip_address)+
                         ", zone:" + str(instance.placement) )
-            self.assertIsInstance(instance, EuInstance)
+            assert isinstance(instance, EuInstance)
             self.tester.wait_for_result( self.ping_instance_private_ip_from_active_cc,
                                          result=True,
                                          timeout=ping_timeout,
@@ -399,7 +399,7 @@ class Net_Tests(EutesterTestCase):
             instance2 = None
             for instance in self.group1_instances:
                 if instance.placement == zone:
-                    self.assertIsInstance(instance, EuInstance)
+                    assert isinstance(instance, EuInstance)
                     instance1 = instance
                     break
             if not instance1:
@@ -407,7 +407,7 @@ class Net_Tests(EutesterTestCase):
 
             for instance in self.group2_instances:
                 if instance.placement == zone:
-                    self.assertIsInstance(instance, EuInstance)
+                    assert isinstance(instance, EuInstance)
                     instance2 = instance
                     break
             if not instance2:
@@ -435,7 +435,7 @@ class Net_Tests(EutesterTestCase):
         for ssh access from this source.
         '''
         for instance in self.group2_instances:
-            self.assertIsInstance(instance, EuInstance)
+            assert isinstance(instance, EuInstance)
             #Provide some debug information re this data connection in this security group
             self.tester.does_instance_sec_group_allow(instance=instance, src_addr=None, protocol='tcp',port=22)
             try:
@@ -473,7 +473,7 @@ class Net_Tests(EutesterTestCase):
             instance = None
             for instance in self.group1_instances:
                 if instance.placement == zone.zone:
-                    self.assertIsInstance(instance, EuInstance)
+                    assert isinstance(instance, EuInstance)
                     zone.test_instance_group1 = instance
                     break
                 instance = None
@@ -547,7 +547,7 @@ class Net_Tests(EutesterTestCase):
             instance = None
             for instance in self.group1_instances:
                 if instance.placement == zone.zone:
-                    self.assertIsInstance(instance, EuInstance)
+                    assert isinstance(instance, EuInstance)
                     zone.test_instance_group1 = instance
                     break
                 instance = None
@@ -556,7 +556,7 @@ class Net_Tests(EutesterTestCase):
             instance = None
             for instance in self.group2_instances:
                 if instance.placement == zone.zone:
-                    self.assertIsInstance(instance, EuInstance)
+                    assert isinstance(instance, EuInstance)
                     zone.test_instance_group2 = instance
                     break
             if not zone.test_instance_group2:
