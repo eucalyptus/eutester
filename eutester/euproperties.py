@@ -121,6 +121,9 @@ class Euproperty():
     def set(self, value):
         return self.prop_mgr.set_property(self,value)
 
+    def set_to_default(self):
+        return self.prop_mgr.set_property(self, None, reset_to_default=True)
+
     def print_self(self, include_header=True, show_description=True, print_method=None, printout=True):
         if printout and not print_method:
             print_method = self.prop_mgr.debug
@@ -195,43 +198,82 @@ class Euproperty_Manager():
             self.debugmethod(msg)
 
     def show_all_authentication_properties(self,partition=None,debug_method=None):
-        return self.show_all_properties(service_type=Euproperty_Type.authentication, partition=partition,debug_method=debug_method)
+        return self.show_all_properties(service_type=Euproperty_Type.authentication,
+                                        partition=partition,
+                                        debug_method=debug_method,
+                                        descriptions=True)
 
     def show_all_bootstrap_properties(self,partition=None,debug_method=None):
-        return self.show_all_properties(service_type=Euproperty_Type.bootstrap, partition=partition,debug_method=debug_method)
+        return self.show_all_properties(service_type=Euproperty_Type.bootstrap,
+                                        partition=partition,
+                                        debug_method=debug_method,
+                                        descriptions=True)
 
     def show_all_cloud_properties(self,partition=None,debug_method=None):
-        return self.show_all_properties(service_type=Euproperty_Type.cloud, partition=partition,debug_method=debug_method)
+        return self.show_all_properties(service_type=Euproperty_Type.cloud,
+                                        partition=partition,
+                                        debug_method=debug_method,
+                                        descriptions=True)
 
     def show_all_cluster_properties(self,partition=None,debug_method=None):
-        return self.show_all_properties(service_type=Euproperty_Type.cluster, partition=partition,debug_method=debug_method)
+        return self.show_all_properties(service_type=Euproperty_Type.cluster,
+                                        partition=partition,
+                                        debug_method=debug_method,
+                                        descriptions=True)
 
     def show_all_reporting_properties(self,partition=None,debug_method=None):
-        return self.show_all_properties(service_type=Euproperty_Type.reporting, partition=partition,debug_method=debug_method)
+        return self.show_all_properties(service_type=Euproperty_Type.reporting,
+                                        partition=partition,
+                                        debug_method=debug_method,
+                                        descriptions=True)
 
     def show_all_storage_properties(self,partition=None,debug_method=None):
-        return self.show_all_properties(service_type=Euproperty_Type.storage, partition=partition,debug_method=debug_method)
+        return self.show_all_properties(service_type=Euproperty_Type.storage,
+                                        partition=partition,
+                                        debug_method=debug_method,
+                                        descriptions=True)
 
     def show_all_system_properties(self,partition=None,debug_method=None):
-        return self.show_all_properties(service_type=Euproperty_Type.system, partition=partition,debug_method=debug_method)
+        return self.show_all_properties(service_type=Euproperty_Type.system,
+                                        partition=partition,
+                                        debug_method=debug_method,
+                                        descriptions=True)
 
     def show_all_vmwarebroker_properties(self,partition=None,debug_method=None):
-        return self.show_all_properties(service_type=Euproperty_Type.vmwarebroker, partition=partition,debug_method=debug_method)
+        return self.show_all_properties(service_type=Euproperty_Type.vmwarebroker,
+                                        partition=partition,
+                                        debug_method=debug_method,
+                                        descriptions=True)
 
     def show_all_walrus_properties(self,partition=None,debug_method=None):
-        return self.show_all_properties(service_type=Euproperty_Type.walrus, partition=partition,debug_method=debug_method)
+        return self.show_all_properties(service_type=Euproperty_Type.walrus,
+                                        partition=partition,
+                                        debug_method=debug_method,
+                                        descriptions=True)
 
     def show_all_www_properties(self,partition=None,debug_method=None):
-        return self.show_all_properties(service_type=Euproperty_Type.www, partition=partition,debug_method=debug_method)
+        return self.show_all_properties(service_type=Euproperty_Type.www,
+                                        partition=partition,
+                                        debug_method=debug_method,
+                                        descriptions=True)
 
     def show_all_autoscaling_properties(self,partition=None,debug_method=None):
-        return self.show_all_properties(service_type=Euproperty_Type.autoscaling, partition=partition,debug_method=debug_method)
+        return self.show_all_properties(service_type=Euproperty_Type.autoscaling,
+                                        partition=partition,
+                                        debug_method=debug_method,
+                                        descriptions=True)
 
     def show_all_loadbalancing_properties(self,partition=None,debug_method=None):
-        return self.show_all_properties(service_type=Euproperty_Type.loadbalancing, partition=partition,debug_method=debug_method)
+        return self.show_all_properties(service_type=Euproperty_Type.loadbalancing,
+                                        partition=partition,
+                                        debug_method=debug_method,
+                                        descriptions=True)
 
     def show_all_tagging_properties(self,partition=None,debug_method=None):
-        return self.show_all_properties(service_type=Euproperty_Type.tagging, partition=partition,debug_method=debug_method)
+        return self.show_all_properties(service_type=Euproperty_Type.tagging,
+                                        partition=partition,
+                                        debug_method=debug_method,
+                                        descriptions=True)
 
 
     def show_all_properties(self,
@@ -248,7 +290,7 @@ class Euproperty_Manager():
                                            value=value,
                                            search_string=search_string)
         first = list.pop(0)
-        buf = first.print_self(include_header=True, printout=False)
+        buf = first.print_self(include_header=True, show_description=descriptions, printout=False)
         count = 1
         last_service_type = first.service_type
         for prop in list:
@@ -472,7 +514,7 @@ class Euproperty_Manager():
         else:
             return self.set_property_by_property_string(str(property), value)
 
-    def set_property(self,  property, value):
+    def set_property(self,  property, value, reset_to_default=False):
         '''
         Sets the property 'prop' at eucaops/eutester object 'tester' to 'value'    
         Returns new value  
@@ -492,14 +534,17 @@ class Euproperty_Manager():
                 raise Exception('Could not fetch property to set. Using string:' +str(property))
         property.lastvalue = property.value
         self.debug('Setting property('+property.property_string+') to value:'+str(value))
-        ret_string = self.work_machine.sys(self.cmdpath+'euca-modify-property -U '+str(self.service_url)+' -I '+str(self.access_key)+' -S '+ str(self.secret_key) +' -p '+property.property_string+'='+str(value), code=0)[0]
-
-        if (ret_string):
+        if reset_to_default:
+            ret_string = self.work_machine.sys(self.cmdpath+'euca-modify-property -U '+str(self.service_url)+' -I '+str(self.access_key)+' -S '+ str(self.secret_key) +' -r '+str(property.property_string),code=0)[0]
+        else:
+            ret_string = self.work_machine.sys(self.cmdpath+'euca-modify-property -U '+str(self.service_url)+' -I '+str(self.access_key)+' -S '+ str(self.secret_key) +' -p '+str(property.property_string)+'='+str(value), code=0)[0]
+        if ret_string:
             ret_value= str(ret_string).split()[2]
         else:
             raise EupropertiesException("set_property output from modify was None")
-        
-        if (ret_value != value):
+        #Confirm property value was set
+        if not reset_to_default and (ret_value != value) and not (not value and ret_value == '{}'):
+            ret_string = "\n".join(str(x) for x in ret_string)
             raise EupropertiesException("set property("+property.property_string+") to value("+str(value)+") failed.Ret Value ("+str(ret_value)+")\nRet String\n"+ret_string)
         property.value = ret_value
         return ret_value
@@ -535,12 +580,7 @@ class Euproperty_Manager():
 
         if not isinstance(prop, Euproperty):
                prop = self.get_all_properties_by_search_string(prop)[0]
-        property_string = prop.property_string
-        prop.lastvalue = prop.value
-        ret_string = str(self.work_machine.sys(self.cmdpath+'euca-modify-property -U '+str(self.service_url)+' -I '+str(self.access_key)+' -S '+ str(self.secret_key) +' -r '+str(property_string),code=0)[0])
-        ret_value= ret_string.split()[2]
-        self.debug('Reset property('+str(prop.name)+') to default value('+str(ret_value)+')')
-        return ret_value
+        return self.set_property(prop, None, reset_to_default=True)
         
     def get_property_default_value(self, prop, ireadthewarning=False):
         '''
