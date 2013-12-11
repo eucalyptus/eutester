@@ -663,7 +663,7 @@ class EuInstance(Instance, TaggedResource):
         ### If i can reach the metadata service ip use it to get metadata otherwise try the clc directly
         try:
             return self.sys("curl http://169.254.169.254/"+str(prefix)+str(element_path), code=0,timeout=timeout)
-        except sshconnection.CommandTimeoutException, se:
+        except sshconnection.CommandTimeoutException as se:
             if staticmode:
                 return self.sys("curl http://" + self.tester.get_ec2_ip()  + ":8773/"+str(prefix) + str(element_path), code=0)
             else:
