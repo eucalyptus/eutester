@@ -121,8 +121,8 @@ class Euproperty():
     def set(self, value):
         return self.prop_mgr.set_property(self,value)
 
-    def set_to_default(self):
-        return self.prop_mgr.set_property(self, None, reset_to_default=True)
+    def reset_to_default(self):
+        return self.prop_mgr.reset_property_to_default(self)
 
     def print_self(self, include_header=True, show_description=True, print_method=None, printout=True):
         if printout and not print_method:
