@@ -378,7 +378,7 @@ class SshConnection():
             self.debug("[" + self.username + "@" + str(self.host) + "]# " + cmd)
         try:
             tran = self.connection.get_transport()
-            if tran is None:
+            if tran is None or not tran.active:
                 self.debug("SSH transport was None, attempting to restablish ssh to: "+str(self.host))
                 self.refresh_connection()
                 tran = self.connection.get_transport()
