@@ -22,8 +22,8 @@ package com.eucalyptus.tests.awssdk;
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSCredentialsProvider;
-import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.auth.BasicSessionCredentials;
+import com.amazonaws.internal.StaticCredentialsProvider;
 import com.amazonaws.services.ec2.AmazonEC2;
 import com.amazonaws.services.ec2.AmazonEC2Client;
 import com.amazonaws.services.ec2.model.DescribeImagesRequest;
@@ -34,6 +34,7 @@ import com.amazonaws.services.securitytoken.AWSSecurityTokenService;
 import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceClient;
 import com.amazonaws.services.securitytoken.model.AssumeRoleRequest;
 import com.amazonaws.services.securitytoken.model.AssumeRoleResult;
+import com.github.sjones4.youcan.youare.YouAreClient;
 import org.testng.annotations.Test;
 
 import java.util.ArrayList;
@@ -59,17 +60,39 @@ public class TestSTSAssumeRole {
     public void STSAssumeRoleTest() throws Exception {
         testInfo(this.getClass().getSimpleName());
         getCloudInfo();
-
-        final GetUserResult userResult = youAre.getUser(new GetUserRequest());
-        assertThat(userResult.getUser() != null, "Expected current user info");
-        assertThat(userResult.getUser().getArn() != null, "Expected current user ARN");
-        final String userArn = userResult.getUser().getArn();
-        print("Got user ARN (will convert account alias to ID if necessary): " + userArn);
+        final String user = NAME_PREFIX + "user";
+        final String account = NAME_PREFIX + "account";
 
         final List<Runnable> cleanupTasks = new ArrayList<Runnable>();
         try {
             // Create role to get a client id
             final String accountId;
+
+            // create non-admin user in non-euca account then get credentials and connection for user
+            createAccount(account);
+            createUser(account, user);
+            createIAMPolicy(account, user, NAME_PREFIX + "policy", null);
+
+            // get youAre connection for new user
+            AWSCredentialsProvider awsCredentialsProvider = new StaticCredentialsProvider(getUserCreds(account,user));
+            final YouAreClient youAre = new YouAreClient(awsCredentialsProvider);
+            youAre.setEndpoint(IAM_ENDPOINT);
+
+            cleanupTasks.add(new Runnable() {
+                @Override
+                public void run() {
+                    print("Deleting account " + account);
+                    deleteAccount(account);
+                }
+            });
+
+            final GetUserResult userResult = youAre.getUser(new GetUserRequest());
+            assertThat(userResult.getUser() != null, "Expected current user info");
+            assertThat(userResult.getUser().getArn() != null, "Expected current user ARN");
+            final String userArn = userResult.getUser().getArn();
+            print("Got user ARN (will convert account alias to ID if necessary): " + userArn);
+
+
             {
                 final String roleNameA = NAME_PREFIX + "AssumeRoleTestA";
                 print("Creating role to determine account number: " + roleNameA);
@@ -148,12 +171,12 @@ public class TestSTSAssumeRole {
             // Describe images using role, no permissions so should see nothing
             print("Describing images to ensure no permission with role: " + roleName);
             {
-                final DescribeImagesResult imagesResult = getImagesUsingRole(roleName, roleArn, "222222222222");
+                final DescribeImagesResult imagesResult = getImagesUsingRole(account, user, roleName, roleArn, "222222222222");
                 assertThat(imagesResult.getImages().size() == 0, "Image found when using role with no permissions");
             }
 
             // Add policy to role
-            final String policyName = NAME_PREFIX + "AssumeRoleTest";
+            final String policyName = NAME_PREFIX + "AssumeRoleTestPolicy";
             print("Adding policy: " + policyName + " to role: " + roleName);
             youAre.putRolePolicy(new PutRolePolicyRequest()
                     .withRoleName(roleName)
@@ -176,7 +199,7 @@ public class TestSTSAssumeRole {
 
             // Describe images using role
             {
-                final DescribeImagesResult imagesResult = getImagesUsingRole(roleName, roleArn, "222222222222");
+                final DescribeImagesResult imagesResult = getImagesUsingRole(account, user, roleName, roleArn, "222222222222");
                 assertThat(imagesResult.getImages().size() > 0, "Image not found when using role");
                 final String imageId = imagesResult.getImages().get(0).getImageId();
                 print("Found image: " + imageId);
@@ -185,7 +208,7 @@ public class TestSTSAssumeRole {
             // Describe images using role with incorrect external id
             print("Ensuring listing images fails when incorrect external id used with role: " + roleName);
             try {
-                getImagesUsingRole(roleName, roleArn, "222222222221");
+                getImagesUsingRole(account, user, roleName, roleArn, "222222222221");
                 assertThat(false, "Expected error due to incorrect external id when assuming role (test must not be run as cloud admin)");
             } catch (AmazonServiceException e) {
                 print("Received expected exception: " + e);
@@ -207,13 +230,15 @@ public class TestSTSAssumeRole {
         }
     }
 
-    private AmazonEC2 getEc2ClientUsingRole(final String roleArn,
+    private AmazonEC2 getEc2ClientUsingRole(final String account,
+                                            final String user,
+                                            final String roleArn,
                                             final String externalId,
                                             final String sessionName) {
         final AmazonEC2 ec2 = new AmazonEC2Client(new AWSCredentialsProvider() {
             @Override
             public AWSCredentials getCredentials() {
-                AWSCredentials creds = new BasicAWSCredentials(ACCESS_KEY, SECRET_KEY);
+                AWSCredentials creds = getUserCreds(account,user);
                 final AWSSecurityTokenService sts = new AWSSecurityTokenServiceClient(creds);
                 sts.setEndpoint(TOKENS_ENDPOINT);
                 final AssumeRoleResult assumeRoleResult = sts.assumeRole(new AssumeRoleRequest()
@@ -240,8 +265,12 @@ public class TestSTSAssumeRole {
         return ec2;
     }
 
-    private DescribeImagesResult getImagesUsingRole(final String roleName, final String roleArn, String externalId) {
-        final AmazonEC2 ec2 = getEc2ClientUsingRole(roleArn, externalId, "session-name-here");
+    private DescribeImagesResult getImagesUsingRole(final String account,
+                                                    final String user,
+                                                    final String roleName,
+                                                    final String roleArn,
+                                                    String externalId) {
+        final AmazonEC2 ec2 = getEc2ClientUsingRole(account, user, roleArn, externalId, "session-name-here");
 
         print("Searching images using role: " + roleName);
         return ec2.describeImages(new DescribeImagesRequest().withFilters(

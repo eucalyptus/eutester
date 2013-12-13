@@ -26,12 +26,7 @@ class SampleTest(EutesterTestCase):
         allow_all_policy = """{
           "Statement": [
             {
-             "Action": "ec2:*",
-              "Effect": "Allow",
-              "Resource": "*"
-            },
-            {
-              "Action": "s3:*",
+             "Action": "*",
               "Effect": "Allow",
               "Resource": "*"
             }]
