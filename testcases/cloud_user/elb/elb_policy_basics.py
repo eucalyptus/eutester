@@ -35,9 +35,7 @@ import time
 from eucaops import Eucaops
 from eucaops import ELBops
 from boto.ec2.elb import LoadBalancer
-from boto.exception import BotoServerError
 from eutester.eutestcase import EutesterTestCase
-import os
 import random
 
 class LoadBalancerPolicy(EutesterTestCase):
