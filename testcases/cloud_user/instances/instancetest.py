@@ -21,7 +21,7 @@ import gzip
 
 class InstanceBasics(EutesterTestCase):
     def __init__( self, name="InstanceBasics", credpath=None, region=None, config_file=None, password=None, emi=None, zone=None,
-                  user_data=None, instance_user=None, **kwargs):
+                  instance_user=None, **kwargs):
         """
         EC2 API tests focused on instance store instances
 
@@ -31,7 +31,6 @@ class InstanceBasics(EutesterTestCase):
         :param password: SSH password for bare metal machines if config is passed and keys arent synced
         :param emi: Image id to use for test
         :param zone: Availability Zone to run test in
-        :param user_data: User Data to pass to instance
         :param instance_user: User to login to instance as
         :param kwargs: Additional arguments
         """
@@ -53,8 +52,8 @@ class InstanceBasics(EutesterTestCase):
             self.image = emi
         else:
             self.image = self.tester.get_emi(root_device_type="instance-store",not_location="loadbalancer")
-        if user_data:
-            self.user_data = user_data
+        self.user_data = 'testcases/cloud_user/instances/user-data-tests/userdata-max-size.txt'
+
         self.address = None
         self.volume = None
         self.private_addressing = False
@@ -231,6 +230,7 @@ class InstanceBasics(EutesterTestCase):
         the data supplied by the user-data service within the instance. Supported
         user data formats can be found here: https://cloudinit.readthedocs.org/en/latest/topics/format.html
         If this test fails, the test case will error out; logging the results.
+        The userdata tested is 16K string (maximum size of userdata string defined by AWS)
         """
         if not self.reservation:
             reservation = self.tester.run_instance(**self.run_instance_params)
@@ -238,20 +238,13 @@ class InstanceBasics(EutesterTestCase):
             reservation = self.reservation
         for instance in reservation.instances:
             """
-            Test to see if user data value is a file; if its a file, convert to string then compare,
-            if not, do a string compare
+            For aesthetics, the user data value is a 16K file thats converted to string then compare,
             """
-            if os.path.isfile(self.user_data):
-                file_type = magic.from_file(self.user_data, mime=True)
-                if re.search("text", file_type):
-                    with open(self.user_data) as user_data_file:
-                        user_data = user_data_file.read()
-                elif re.search("gzip", file_type):
-                    gzip_file = gzip.GzipFile(fileobj=open(self.user_data))
-                    user_data = gzip_file.read()
+            file_type = magic.from_file(self.user_data, mime=True)
+            if re.search("text", file_type):
+                with open(self.user_data) as user_data_file:
+                    user_data = user_data_file.read()
                 self.assertTrue(re.search(instance.get_userdata(), user_data), 'Incorrect User Data File')
-            else:
-                self.assertTrue(re.search(instance.get_userdata(), self.user_data), 'Incorrect User Data String')
 
     def DNSResolveCheck(self, zone=None):
         """
