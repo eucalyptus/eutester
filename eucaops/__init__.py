@@ -154,10 +154,16 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
             try:
                 if self.credpath and not s3_ip:
                     s3_ip = self.get_s3_ip()
-                self.setup_s3_connection(endpoint=s3_ip, path="/services/Walrus", port=8773, is_secure=False,aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,  boto_debug=boto_debug)
+                
+                #Eucalyptus version 4.0+ the s3 endpoint is /services/objectstorage
+                service_path = "/services/Walrus";
+                if self.service_manager.get_enabled_clc().get_eucalyptus_version() >= "4.0":
+                    service_path = "/services/objectstorage"
+                    
+                self.setup_s3_connection(endpoint=s3_ip, path=service_path, port=8773, is_secure=False,aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,  boto_debug=boto_debug)
                 self.setup_s3_resource_trackers()
             except Exception, e:
-                raise Exception("Unable to create S3 connection because of: " + str(e) )
+                self.debug("Unable to create S3 connection because of: " + str(e) )
 
             try:
                 if self.credpath and not as_ip:
@@ -224,17 +230,25 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
     
     
             
-    def modify_property(self, property, value):
+    def modify_property(self, euca_property, value):
         """
         Modify a eucalyptus property through the command line euca-modify-property tool
         property        Property to modify
         value           Value to set it too
         """
-        command = "source " + self.credpath + "/eucarc && " + self.eucapath + "/usr/sbin/euca-modify-property -p " + property + "=" + value
-        if self.clc.found(command, property):
-            self.debug("Properly modified property " + property)
+        if self.credpath == None or self.eucapath == None or euca_property == None or value == None:
+            self.fail("Cannot set property value due to insufficient arguments")
+            self.fail("credpath: " + ("None" if self.credpath is None else self.credpath))
+            self.fail("eucapath: " + ("None" if self.eucapath is None else self.eucapath))
+            self.fail("property: " + ("None" if euca_property is None else euca_property))
+            self.fail("value: " + ("None" if value is None else value))
+            raise Exception("Cannot set property: " + (euca_property if euca_property is not None else "unknown"))
+        
+        command = "source " + self.credpath + "/eucarc && " + self.eucapath + "/usr/sbin/euca-modify-property -p " + euca_property + "=" + value
+        if self.clc.found(command, euca_property):
+            self.debug("Properly modified property " + euca_property)
         else:
-            raise Exception("Setting property " + property + " failed")
+            raise Exception("Setting property " + euca_property + " failed")
     
    
     def cleanup_artifacts(self,instances=True, snapshots=True, volumes=True, load_balancers=True):

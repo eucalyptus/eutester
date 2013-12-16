@@ -13,7 +13,7 @@ class InstallRiak(EutesterTestCase):
         self.parser.add_argument("--admin-email", default="admin@admin.com")
         self.get_args()
         # Setup basic eutester object
-        self.tester = Eucaops( config_file=self.args.config,password=self.args.password, download_creds=False)
+        self.tester = Eucaops( config_file=self.args.config,password=self.args.password)
 
     def clean_method(self):
         pass
