@@ -237,25 +237,25 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
     
     
             
-    def modify_property(self, euca_property, value):
+    def modify_property(self, property, value):
         """
         Modify a eucalyptus property through the command line euca-modify-property tool
         property        Property to modify
         value           Value to set it too
         """
-        if self.credpath == None or self.eucapath == None or euca_property == None or value == None:
+        if self.credpath == None or self.eucapath == None or property == None or value == None:
             self.fail("Cannot set property value due to insufficient arguments")
             self.fail("credpath: " + ("None" if self.credpath is None else self.credpath))
             self.fail("eucapath: " + ("None" if self.eucapath is None else self.eucapath))
-            self.fail("property: " + ("None" if euca_property is None else euca_property))
+            self.fail("property: " + ("None" if property is None else property))
             self.fail("value: " + ("None" if value is None else value))
-            raise Exception("Cannot set property: " + (euca_property if euca_property is not None else "unknown"))
+            raise Exception("Cannot set property: " + (property if property is not None else "unknown"))
         
-        command = "source " + self.credpath + "/eucarc && " + self.eucapath + "/usr/sbin/euca-modify-property -p " + euca_property + "=" + value
-        if self.clc.found(command, euca_property):
-            self.debug("Properly modified property " + euca_property)
+        command = "source " + self.credpath + "/eucarc && " + self.eucapath + "/usr/sbin/euca-modify-property -p " + property + "=" + value
+        if self.clc.found(command, property):
+            self.debug("Properly modified property " + property)
         else:
-            raise Exception("Setting property " + euca_property + " failed")
+            raise Exception("Setting property " + property + " failed")
     
    
     def cleanup_artifacts(self,instances=True, snapshots=True, volumes=True, load_balancers=True):
