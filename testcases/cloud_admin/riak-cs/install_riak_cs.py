@@ -51,8 +51,24 @@ class InstallRiak(EutesterTestCase):
                 key_contents = key.read()
                 cs_tester.debug("Uploaded Key contents: " + key_contents + "  Original:" + response_dict["id"])
                 assert key_contents == response_dict["id"]
+                
+                self.tester.info("Configuring OSG to use RiakCS backend")
+                self.tester.modify_property("objectstorage.providerclient","s3")
+
+                endpoint = machine.hostname + ":8080"
+                self.tester.info("Configuring OSG to use s3 endpoint: " + endpoint)
+                self.tester.modify_property("objectstorage.s3_endpoint", endpoint)
+
+                self.tester.info("Configuring OSG to use s3 access key: " + response_dict["key_id"])
+                self.tester.modify_property("objectstorage.s3_access_key", response_dict["key_id"])
+
+                self.tester.info("Configuring OSG to use s3 secret key: " + response_dict["key_secret"][-4:])
+                self.tester.modify_property("objectstorage.s3_secret_key",response_dict["key_secret"])
+
         except IndexError as e:
             self.tester.info("No RIAK component found in component specification. Skipping installation")
+            self.tester.info("Configuring OSG to use walrus backend");
+            self.tester.modify_property("objectstorage.providerclient", "walrus");
             
 if __name__ == "__main__":
     testcase = InstallRiak()
