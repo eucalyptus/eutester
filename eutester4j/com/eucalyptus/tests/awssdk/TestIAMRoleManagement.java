@@ -46,7 +46,7 @@ public class TestIAMRoleManagement {
             // Create role
             final String roleName = NAME_PREFIX + "RoleTest";
             print("Creating role: " + roleName);
-            iam.createRole(new CreateRoleRequest()
+            youAre.createRole(new CreateRoleRequest()
                     .withRoleName(roleName)
                     .withPath("/path")
                     .withAssumeRolePolicyDocument(
@@ -63,7 +63,7 @@ public class TestIAMRoleManagement {
                 @Override
                 public void run() {
                     print("Deleting role: " + roleName);
-                    iam.deleteRole(new DeleteRoleRequest()
+                    youAre.deleteRole(new DeleteRoleRequest()
                             .withRoleName(roleName));
                 }
             });
@@ -72,7 +72,7 @@ public class TestIAMRoleManagement {
             print("Getting role: " + roleName);
             {
                 final GetRoleResult getRoleResult =
-                        iam.getRole(new GetRoleRequest()
+                        youAre.getRole(new GetRoleRequest()
                                 .withRoleName(roleName));
                 assertThat(getRoleResult.getRole() != null, "Expected role");
                 assertThat(roleName.equals(getRoleResult.getRole().getRoleName()), "Unexpected role name");
@@ -86,7 +86,7 @@ public class TestIAMRoleManagement {
             // List roles
             print("Listing roles to verify role present: " + roleName);
             {
-                final ListRolesResult listRolesResult = iam.listRoles();
+                final ListRolesResult listRolesResult = youAre.listRoles();
                 boolean foundRole = isRolePresent(roleName, listRolesResult.getRoles());
                 assertThat(foundRole, "Role not found in listing");
             }
@@ -95,7 +95,7 @@ public class TestIAMRoleManagement {
             print("Listing roles by path to verify role present: " + roleName);
             {
                 final ListRolesResult listRolesResult =
-                        iam.listRoles(new ListRolesRequest().withPathPrefix("/path"));
+                        youAre.listRoles(new ListRolesRequest().withPathPrefix("/path"));
                 boolean foundRole = isRolePresent(roleName, listRolesResult.getRoles());
                 assertThat(foundRole, "Role not found in listing for path");
             }
@@ -104,7 +104,7 @@ public class TestIAMRoleManagement {
             print("Listing roles by path to verify role not present: " + roleName);
             {
                 final ListRolesResult listRolesResult =
-                        iam.listRoles(new ListRolesRequest()
+                        youAre.listRoles(new ListRolesRequest()
                                 .withPathPrefix("/---should-not-match-any-profiles---4ad1c6d3-bfdd-4dc8-8754-523b6624ce15"));
                 boolean foundRole = isRolePresent(roleName, listRolesResult.getRoles());
                 assertThat(!foundRole, "Role listed when path should not match");
@@ -112,7 +112,7 @@ public class TestIAMRoleManagement {
 
             // Test UpdateAssumeRolePolicy
             print("Updating assume role policy for role: " + roleName);
-            iam.updateAssumeRolePolicy(new UpdateAssumeRolePolicyRequest()
+            youAre.updateAssumeRolePolicy(new UpdateAssumeRolePolicyRequest()
                     .withRoleName(roleName)
                     .withPolicyDocument(
                             "{\n" +
@@ -129,7 +129,7 @@ public class TestIAMRoleManagement {
             print("Getting role to check for updated assume role policy: " + roleName);
             {
                 final GetRoleResult getRoleResult =
-                        iam.getRole(new GetRoleRequest()
+                        youAre.getRole(new GetRoleRequest()
                                 .withRoleName(roleName));
                 assertThat(getRoleResult.getRole() != null, "Expected role");
                 assertThat(roleName.equals(getRoleResult.getRole().getRoleName()), "Unexpected role name");
@@ -143,7 +143,7 @@ public class TestIAMRoleManagement {
             // Add policy to role
             final String policyName = NAME_PREFIX + "RoleTest";
             print("Adding policy: " + policyName + " to role: " + roleName);
-            iam.putRolePolicy(new PutRolePolicyRequest()
+            youAre.putRolePolicy(new PutRolePolicyRequest()
                     .withRoleName(roleName)
                     .withPolicyName(policyName)
                     .withPolicyDocument(
@@ -158,14 +158,14 @@ public class TestIAMRoleManagement {
                 @Override
                 public void run() {
                     print("Removing policy: " + policyName + ", from role: " + roleName);
-                    iam.deleteRolePolicy(new DeleteRolePolicyRequest().withRoleName(roleName).withPolicyName(policyName));
+                    youAre.deleteRolePolicy(new DeleteRolePolicyRequest().withRoleName(roleName).withPolicyName(policyName));
                 }
             });
 
             // Get and validate role policy
             print("Getting policy: " + policyName + ", for role: " + roleName);
             {
-                final GetRolePolicyResult policyResult = iam.getRolePolicy(new GetRolePolicyRequest()
+                final GetRolePolicyResult policyResult = youAre.getRolePolicy(new GetRolePolicyRequest()
                         .withRoleName(roleName)
                         .withPolicyName(policyName));
                 assertThat(roleName.equals(policyResult.getRoleName()), "Unexpected role name: " + policyResult.getRoleName());
@@ -177,7 +177,7 @@ public class TestIAMRoleManagement {
             print("Listing policies for role:" + roleName + ", to check for policy: " + policyName);
             {
                 final ListRolePoliciesResult listRolePoliciesResult =
-                        iam.listRolePolicies(new ListRolePoliciesRequest()
+                        youAre.listRolePolicies(new ListRolePoliciesRequest()
                                 .withRoleName(roleName));
                 assertThat(listRolePoliciesResult.getPolicyNames() != null, "Expected policies");
                 assertThat(listRolePoliciesResult.getPolicyNames().size() == 1, "Expected one policy");
@@ -186,25 +186,25 @@ public class TestIAMRoleManagement {
 
             // Remove policy from role
             print("Removing policy: " + policyName + ", from role: " + roleName);
-            iam.deleteRolePolicy(new DeleteRolePolicyRequest().withRoleName(roleName).withPolicyName(policyName));
+            youAre.deleteRolePolicy(new DeleteRolePolicyRequest().withRoleName(roleName).withPolicyName(policyName));
 
             // List role policies, ensure policy removed
             print("Listing policies for role:" + roleName + ", to check policy removed: " + policyName);
             {
                 final ListRolePoliciesResult listRolePoliciesResult =
-                        iam.listRolePolicies(new ListRolePoliciesRequest()
+                        youAre.listRolePolicies(new ListRolePoliciesRequest()
                                 .withRoleName(roleName));
                 assertThat(listRolePoliciesResult.getPolicyNames() == null || listRolePoliciesResult.getPolicyNames().isEmpty(), "Expected policies");
             }
 
             // Delete role
             print("Deleting role: " + roleName);
-            iam.deleteRole(new DeleteRoleRequest().withRoleName(roleName));
+            youAre.deleteRole(new DeleteRoleRequest().withRoleName(roleName));
 
             // List roles (check deleted)
             print("Listing roles to check deletion of role: " + roleName);
             {
-                final ListRolesResult listRolesResult = iam.listRoles();
+                final ListRolesResult listRolesResult = youAre.listRoles();
                 boolean foundRole = isRolePresent(roleName, listRolesResult.getRoles());
                 assertThat(!foundRole, "Role found in listing after deletion");
             }

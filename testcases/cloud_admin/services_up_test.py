@@ -65,7 +65,7 @@ class MyTestCase(EutesterTestCase):
             try:
                 self.tester = eucaops.Eucaops(config_file=self.args.config_file, password=self.args.password)
             except Exception, e:
-                tb = eucaops.get_traceback()
+                tb = eucaops.Eucaops.get_traceback()
                 last_err = str(tb) + "\n" + str(e)
         if not self.tester:
             raise Exception(str(last_err) + 'Could not create tester object after elapsed:' + str(elapsed))

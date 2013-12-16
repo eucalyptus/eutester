@@ -9,12 +9,19 @@
     <property name="deps.dir" value="dependencies"/>
     <property name="testng.output.dir" value="eutester4j_results"/>
     <property name="eucarc" value="eucarc"/>
+    <property name="endpoints" value="endpoints.xml"/>
     <property name="tests" value="AllTestsSuite.xml"/>
+
+    <!--youare sdk location link-->
+    <property name="YouAre" value="https://github.com/tbeckham/you-are-sdk/releases/download/alpha/YouAreSDK.jar"/>
 
     <!-- download testng and AWS JAVA SDK -->
     <target name="download-deps">
         <mkdir dir="${deps.dir}"/>
         <ivy:retrieve conf="default" pattern="${deps.dir}/[artifact]-[revision].[ext]"/>
+        <echo message="fetching YouAre SDk..."/>
+        <get src="${YouAre}"
+             dest="${deps.dir}/YouAreSDK.jar"/>
     </target>
 
     <!-- set classpath to include dependencies and build output -->
@@ -57,6 +64,7 @@
         <testng outputdir="${testng.output.dir}" classpathref="classpath" haltonfailure="true">
             <xmlfileset dir="./TestSuites" includes="${tests}"/>
             <jvmarg value="-Deucarc=${eucarc}" />
+            <jvmarg value="-Dcom.amazonaws.regions.RegionUtils.fileOverride=${endpoints}"/>
         </testng>
     </target>
 

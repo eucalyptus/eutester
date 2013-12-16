@@ -607,6 +607,33 @@ class IAMops(Eutester):
         access_tuple['access_key_id'] = response['create_access_key_response']['create_access_key_result']['access_key']['access_key_id']
         access_tuple['secret_access_key'] = response['create_access_key_response']['create_access_key_result']['access_key']['secret_access_key']
         return access_tuple
-    
-        
-    
+
+    def upload_server_cert(self, cert_name, cert_body, private_key):
+        self.debug("uploading server certificate: " + cert_name)
+        self.euare.upload_server_cert(cert_name=cert_name, cert_body=cert_body, private_key=private_key)
+        if cert_name not in str(self.euare.get_server_certificate(cert_name)):
+            raise Exception("certificate " + cert_name + " not uploaded")
+
+    def update_server_cert(self, cert_name, new_cert_name=None, new_path=None):
+        self.debug("updating server certificate: " + cert_name)
+        self.euare.update_server_cert(cert_name=cert_name, new_cert_name=new_cert_name, new_path=new_path)
+        if (new_cert_name and new_path) not in str(self.euare.get_server_certificate(new_cert_name)):
+            raise Exception("certificate " + cert_name + " not updated.")
+
+    def get_server_cert(self, cert_name):
+        self.debug("getting server certificate: " + cert_name)
+        cert = self.euare.get_server_certificate(cert_name=cert_name)
+        self.debug(cert)
+        return cert
+
+    def delete_server_cert(self, cert_name):
+        self.debug("deleting server certificate: " + cert_name)
+        self.euare.delete_server_cert(cert_name)
+        if (cert_name) in str(self.euare.list_server_certs()):
+            raise Exception("certificate " + cert_name + " not deleted.")
+
+    def list_server_certs(self, path_prefix='/', marker=None, max_items=None):
+        self.debug("listing server certificates")
+        certs = self.euare.list_server_certs(path_prefix=path_prefix, marker=marker, max_items=max_items)
+        self.debug(certs)
+        return certs

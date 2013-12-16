@@ -56,6 +56,7 @@ import boto
 from eutester import Eutester
 import eutester
 from eutester.euinstance import EuInstance
+from eutester.windows_instance import WinInstance
 from eutester.euvolume import EuVolume
 from eutester.eusnapshot import EuSnapshot
 from eutester.euzone import EuZone
@@ -102,7 +103,6 @@ disable_root: false"""
         :param boto_debug:
         :param APIVersion:
         """
-        super(EC2ops, self).__init__(credpath=credpath)
         self.aws_access_key_id = aws_access_key_id
         self.aws_secret_access_key = aws_secret_access_key
         self.user_id = None
@@ -113,6 +113,7 @@ disable_root: false"""
         self.setup_ec2_resource_trackers()
         self.key_dir = "./"
         self.ec2_source_ip = None  #Source ip on local test machine used to reach instances
+        super(EC2ops, self).__init__(credpath=credpath)
         self.setup_ec2_connection(host= host,
                                   region=region,
                                   endpoint=endpoint,
@@ -1964,14 +1965,33 @@ disable_root: false"""
         :return: image id
         :raise: Exception if image is not found
         """
+
+        ret_list = []
+        if not filters:
+            filters = {}
+            if emi:
+                filters['image-id'] = emi
+            if root_device_type:
+                filters['root-device-type'] = root_device_type
+            if root_device_name:
+                filters['root-device-name'] = root_device_name
+            if state:
+                filters['state'] = state
+            if virtualization_type:
+                filters['virtualization-type'] = virtualization_type
+            if arch:
+                filters['architecture'] = arch
+            if owner_id:
+                filters['owner-id'] = owner_id
+
         if emi is None:
             emi = "mi-"
-        ret_list = []
+
         images = self.ec2.get_all_images(filters=filters)
         self.debug("Got " + str(len(images)) + " total images " + str(emi) + ", now filtering..." )
         for image in images:
-            if not re.search(emi, image.id):      
-                continue  
+            if (re.search(emi, image.id) is None) and (re.search(emi, image.name) is None):      
+                continue
             if (root_device_type is not None) and (image.root_device_type != root_device_type):
                 continue
             if (virtualization_type is not None):
@@ -2181,7 +2201,7 @@ disable_root: false"""
             elapsed = int(time.time()-start)
             self.debug("Associated IP successfully old_ip:"+str(old_ip)+' new_ip:'+str(instance.ip_address))
         if refresh_ssh:
-            if isinstance(instance, EuInstance):
+            if isinstance(instance, EuInstance) or isinstance(instance, WinInstance):
                 self.sleep(5)
                 instance.update()
                 self.debug('Refreshing EuInstance:'+str(instance.id)+' ssh connection to associated addr:'+str(instance.ip_address))
@@ -2308,7 +2328,9 @@ disable_root: false"""
                     continue
                 if (attached_dev is not None) and (volume.attach_data.device != attached_dev):
                     continue
-            if not (volume.size >= minsize) and (maxsize is None or volume.size <= maxsize):
+            if volume.size <  minsize:
+                continue
+            if maxsize is not None and volume.size > maxsize:
                 continue
             if not hasattr(volume,'md5'):
                 volume = EuVolume.make_euvol_from_vol(volume)
@@ -2369,7 +2391,7 @@ disable_root: false"""
                      password=None,
                      is_reachable=True,
                      monitoring_enabled=False,
-                     timeout=480):
+                     timeout=600):
         """
         Run instance/s and wait for them to go to the running state
 
@@ -2559,16 +2581,30 @@ disable_root: false"""
                 try:
                     self.debug(str(instance.id)+':Converting instance to euinstance type.')
                     #convert to euinstances, connect ssh later...
-                    eu_instance =  EuInstance.make_euinstance_from_instance( instance, 
-                                                                             self, 
-                                                                             keypair=keypair, 
-                                                                             username = username, 
-                                                                             password=password, 
-                                                                             reservation = reservation, 
-                                                                             private_addressing=private_addressing, 
-                                                                             timeout=timeout,
-                                                                             cmdstart=cmdstart, 
-                                                                             auto_connect=False )
+                    if image.platform == 'windows':
+                        eu_instance = WinInstance.make_euinstance_from_instance( instance,
+                                                                                 self,
+                                                                                 keypair=keypair,
+                                                                                 username='Administrator',
+                                                                                 password=password,
+                                                                                 reservation=reservation,
+                                                                                 private_addressing=private_addressing,
+                                                                                 timeout=timeout,
+                                                                                 cmdstart=cmdstart,
+                                                                                 auto_connect=False
+                                                                                 )
+
+                    else:
+                        eu_instance =  EuInstance.make_euinstance_from_instance( instance,
+                                                                                 self,
+                                                                                 keypair=keypair,
+                                                                                 username = username,
+                                                                                 password=password,
+                                                                                 reservation = reservation,
+                                                                                 private_addressing=private_addressing,
+                                                                                 timeout=timeout,
+                                                                                 cmdstart=cmdstart,
+                                                                                 auto_connect=False )
                     #set the connect flag in the euinstance object for future use
                     eu_instance.auto_connect = auto_connect
                     instances.append(eu_instance)
@@ -2582,7 +2618,7 @@ disable_root: false"""
         except Exception, e:
             trace = self.get_traceback()
             self.debug('!!! Run_instance failed, terminating reservation. Error:'+str(e)+"\n"+trace)
-            if reservation:
+            if reservation and clean_on_fail:
                 self.terminate_instances(reservation=reservation)
             raise e 
     
@@ -2667,20 +2703,31 @@ disable_root: false"""
                 self.debug('Checking instance:'+str(instance.id)+" ...")
                 if instance.auto_connect:
                     try:
-                        #First try ping
-                        self.debug('Security group rules allow ping from this test machine:'+
-                                   str(self.does_instance_sec_group_allow(instance, protocol='icmp', port=0)))
-                        self.ping(instance.ip_address, 2)
-                        #now try to connect ssh
-                        allow = "None"
-                        try:
-                            allow=str(self.does_instance_sec_group_allow(instance, protocol='tcp', port=22))
-                        except:
-                            pass
-                        self.debug('Does security group rules allow ssh from this test machine:'+str(allow))
-                        instance.connect_to_instance(timeout=15)
-                        self.debug("Connected to instance:"+str(instance.id))
-                        good.append(instance)
+                        if isinstance(instance, WinInstance):
+                            #First try checking the RDP and WINRM ports for access...
+                            self.debug('Do Security group rules allow winrm from this test machine:'+
+                                       str(self.does_instance_sec_group_allow(instance, protocol='tcp', port=instance.winrm_port)))
+                            self.debug('Do Security group rules allow winrm from this test machine:'+
+                                       str(self.does_instance_sec_group_allow(instance, protocol='tcp', port=instance.rdp_port)))
+                            instance.poll_for_ports_status(timeout=1)
+                            instance.connect_to_instance(timeout=15)
+                            self.debug("Connected to instance:"+str(instance.id))
+                            good.append(instance)
+                        else:
+                            #First try ping
+                            self.debug('Do Security group rules allow ping from this test machine:'+
+                                       str(self.does_instance_sec_group_allow(instance, protocol='icmp', port=0)))
+                            self.ping(instance.ip_address, 2)
+                            #now try to connect ssh or winrm
+                            allow = "None"
+                            try:
+                                allow=str(self.does_instance_sec_group_allow(instance, protocol='tcp', port=22))
+                            except:
+                                pass
+                            self.debug('Do Security group rules allow ssh from this test machine:'+str(allow))
+                            instance.connect_to_instance(timeout=15)
+                            self.debug("Connected to instance:"+str(instance.id))
+                            good.append(instance)
                     except :
                         self.debug(self.get_traceback())
                         pass
@@ -2807,7 +2854,7 @@ disable_root: false"""
         else:
             res = self.get_reservation_for_instance(instance)
         for group in res.groups:
-         secgroups.extend(self.ec2.get_all_security_groups(groupnames=str(group.id))) 
+         secgroups.extend(self.ec2.get_all_security_groups(groupnames=str(group.name)))
         return secgroups
     
     def get_reservation_for_instance(self, instance):
@@ -2851,7 +2898,7 @@ disable_root: false"""
         self.debug('(' + str(len(instance_list)) + ") monitor_instances_to_state: '" + str(state) + "' starting....")
         monitor = copy.copy(instance_list)
         for instance in monitor:
-            if not isinstance(instance, EuInstance):
+            if not isinstance(instance, EuInstance) and not isinstance(instance, WinInstance):
                 instance = EuInstance.make_euinstance_from_instance( instance, self, auto_connect=False)
 
         good = []
@@ -2976,14 +3023,14 @@ disable_root: false"""
             self.debug('No instances to print')
             return
         for instance in euinstance_list:
-            if not isinstance(instance,EuInstance):
-                self.debug("print_euinstance list passed non-EuInstnace type")
+            if not isinstance(instance,EuInstance) and not isinstance(instance, WinInstance):
+                self.debug("print instance list passed non-EuInstnace type")
                 instance = self.convert_instance_to_euisntance(instance, auto_connect=False)
             plist.append(instance)
         first = plist.pop(0)
-        buf = first.printself(title=True, footer=False)
+        buf = first.printself(title=True, footer=True)
         for instance in plist:
-            buf += instance.printself(title=False, footer=False)
+            buf += instance.printself(title=False, footer=True)
         self.debug("\n"+str(buf)+"\n")
 
     @Eutester.printinfo
@@ -3012,7 +3059,7 @@ disable_root: false"""
             elapsed = int(time.time()- start)
             for instance in monitoring:
                 instance.update()
-                if zeros.search(str(instance.ip_address)):
+                if zeros.search(str(instance.ip_address)) or zeros.search(str(instance.private_ip_address)):
                     self.debug(str(instance.id)+": WAITING for public ip. Current:"+str(instance.ip_address)+
                                ", elapsed:"+str(elapsed)+"/"+str(timeout))
                 else:
@@ -3028,7 +3075,7 @@ disable_root: false"""
         if monitoring:
             buf = "Instances timed out waiting for a valid IP, elapsed:"+str(elapsed)+"/"+str(timeout)+"\n"
             for instance in instances:
-                buf += "Instance: "+str(instance.id)+", public ip: "+str(instance.ip_address)+"\n"
+                buf += "Instance: "+str(instance.id)+", public ip: "+str(instance.ip_address)+", private ip: "+str(instance.private_ip_address)+"\n"
             raise Exception(buf)
         self.check_system_for_dup_ip(instances=good)
         self.debug('Wait_for_valid_ip done')
@@ -3117,7 +3164,11 @@ disable_root: false"""
         return reservation
 
     def convert_instance_to_euisntance(self, instance, keypair=None, username="root", password=None, auto_connect=True,timeout=120):
-        return EuInstance.make_euinstance_from_instance(instance, self, keypair=keypair, username = username,
+        if instance.platform == 'windows':
+            return WinInstance.make_euinstance_from_instance(instance, self, keypair=keypair, username = username,
+                                                        password=password, auto_connect=auto_connect,timeout=timeout )
+        else:
+            return EuInstance.make_euinstance_from_instance(instance, self, keypair=keypair, username = username,
                                                         password=password, auto_connect=auto_connect,timeout=timeout )
 
     def get_console_output(self, instance):
