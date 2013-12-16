@@ -34,10 +34,10 @@ __author__ = 'clarkmatthew'
 
 
 from san_volume_info import  San_Volume_Info
-from eutester.sshconnection import SshConnection
+from eutester.sshconnection import SshConnection, SshCbReturn, CommandExitCodeException, CommandTimeoutException
 from eutester.eulogger import Eulogger
 import re
-import copy
+import string
 
 
 
@@ -100,7 +100,7 @@ class San_Client():
 
 class netapp_menu():
 
-    def __init__(self, path_string,  san_client, help_string = "", dir_list_raw=None):
+    def __init__(self, path_string,  san_client, help_string = "", dir_list_raw=None, scan_all=False):
         '''
         Represent a Netapp cli menu context.
         param path_string: the relative path or context within the san client Netapp_Client cli
@@ -112,16 +112,46 @@ class netapp_menu():
         self._helpstring = help_string
         self.__doc__ = self._helpstring
         self._san_client = san_client
-        self._dir_list_raw = dir_list_raw or self._get_dir_list_raw()
+        self._dir_list_raw = dir_list_raw or self._get_dir_list_raw(scan_all=scan_all)
         self._parse_dir_list()
 
-    def _get_dir_list_raw(self, listformat=True):
+    def _get_dir_list_raw(self, listformat=True, scan_all=False):
         '''
         Will attempt to get the contents of this menu context and will present the text returned from the san Netapp_Client
         in either a single string buffer or list of lines/strings
         param listformat: boolean when true, the output will be returned as a list of strings
         '''
-        return self._san_client.sys(self._path_string + " ?", listformat=listformat)
+        ret = [] if listformat else ""
+        ret = self._san_client.sys("?")
+        if scan_all:
+            for letter in string.lowercase:
+                if listformat:
+                    try:
+                        scan_results = self._san_client.sys_send_non_exec(str(letter)+"\t", timeout=2)
+                        ret.extend(self._parse_scanned_results(scan_results))
+                    except CommandTimeoutException:
+                        pass
+                else:
+                    ret += self._san_client.sys_send_non_exec(str(letter)+"\t", listformat=False,timeout=2)
+        return ret
+
+    def _parse_scanned_results(self, scan_results, prompt='::>'):
+        #todo lookup each key and better distinguish between command and new menu item, also provide more help info
+        keywords = []
+        ret_list = []
+        for line in scan_results:
+            if re.search('Error', line, re.IGNORECASE):
+                #There's no commands for this specific menu context
+                return []
+            if line and not re.search(prompt, line):
+                split = line.strip().split()
+                keywords.extend(split)
+        for key in keywords:
+            self._san_client.debug('Scan found KEY:'+str(key))
+            out = self._san_client.sys(key + "?")
+            print "\n".join(str(x) for x in out)
+            ret_list.extend(out)
+        return ret_list
 
     def print_help(self):
         '''
@@ -163,22 +193,28 @@ class netapp_menu():
             split = line.split()
             if split:
                 keyname = split.pop(0)
+                value = str(" ".join(str(x) for x in split))
+                #is this line a help string continuation
                 if re.search(',',keyname):
                     if last_obj:
-                        last_obj.__doc__ += keyname + " ".join(str(x) for x in split)
-                elif re.search('>', keyname):
+                        last_obj.__doc__ += keyname + value
+                #is this line a new menu option
+                elif re.search('>', keyname) or re.search("Manage", value):
                     keyname = keyname.replace('>','')
                     dir = netapp_menu(self._path_string + " " + keyname, self._san_client)
-                    dir.__doc__ = " ".join(str(x) for x in split)
+                    dir.__doc__ = value
                     setattr(self, keyname, dir)
                     last_obj = dir
+                #is this line a command in this menu context
                 else:
-                    newpath = str(self._path_string) + " " + str(keyname)
-                    docstring = "Command:" + str(newpath) + ". " + " ".join(str(x) for x in split)
-                    command = self._get_new_command(newpath, docstring=docstring)
-                    setattr(self, keyname, command)
-                    #setattr(self, keyname, lambda input = '': self._exec_sys(str(copy.copy(newpath)) + " " + input, verbose=True))
-                    last_obj = command
+                    match = re.search('\w+', keyname)
+                    if match:
+                        keyname = match.group()
+                        newpath = str(self._path_string) + " " + str(keyname)
+                        docstring = "Command:" + str(newpath) + ". " + value
+                        command = self._get_new_command(newpath, docstring=docstring)
+                        setattr(self, keyname, command)
+                        last_obj = command
 
 
 class Netapp_Client(San_Client):
@@ -211,10 +247,56 @@ class Netapp_Client(San_Client):
         id = str(volumeid).replace('-','_')
         return id
 
+    def _raw_cb(self, buf, promptcount, promptstring, promptmax, debug):
+        '''
+        Call back which can be used to control and ssh command when a shell and raw
+         input needed (ie to send controlled tabs for example)
+        param buf: buffer provided by ssh.cmd session
+        param promptcount: int amount of times we've seen the prompt
+        param promptstring: string the string to match
+        param promptmax: the maximum number prompt matches before the command is signaled 'done'
+        returns SshCbReturn obj
+        '''
+        ret = SshCbReturn(buf=buf, stop=False)
+        #Count the number of occurrences of the promptstring
+        promptcount = promptcount + len(re.findall(promptstring,buf))
+        if promptcount >= promptmax:
+            ret.stop = True
+        #Return the args this call back will be called with the next time around
+        ret.nextargs=[promptcount, promptstring, promptmax, debug]
+        if debug:
+            print str(buf)+ '\npromptcount:' + str(promptcount) + ', promptstring:' + str(promptstring) + ', promptmax:'+ str(promptmax)
+        return ret
+
+    def sys_send_non_exec(self, cmd, promptstring='::>', promptmax=2, listformat=True, timeout=120, debug=False, code=0):
+        '''
+        Ssh connection command which can be used when raw input to a remote shell
+         are needed (ie to send controlled tabs for example)
+
+        param cmd: String to be send to remote ssh shell
+        param promptstring: string used to match as the 'prompt'
+        param promptmax: the maximum number prompt matches before the command is signaled 'done'
+        param code: integer representing the expected return/exit code from the command
+        returns
+        '''
+        out = self.connection.cmd(cmd,
+                                  get_pty=True,
+                                  invoke_shell=True,
+                                  timeout=timeout,
+                                  listformat=listformat,
+                                  cb=self._raw_cb,
+                                  cbargs=[0,promptstring, promptmax,debug])
+        output = out['output']
+        if code is not None:
+            if out['status'] != -1 and out['status'] != code:
+                self.debug(output)
+                raise CommandExitCodeException('Cmd:' + str(cmd) + ' failed with status code:'
+                                               + str(out['status']) + ", output:" + str(output))
+        return output
 
     def _get_volume_basic_info_by_id(self, volumeid):
-        cmd = 'volume show ' + str(self._format_volume_id(volumeid), code=0)
-        return self.get_cmd_dict(cmd)
+        cmd = 'volume show ' + str(self._format_volume_id(volumeid))
+        return self.get_cmd_dict(cmd, code=0)
 
     def get_efficiency_policy(self, policy_name):
         pdict = self.get_cmd_dict('volume efficiency policy show ' + str(policy_name))
@@ -230,7 +312,7 @@ class Netapp_Client(San_Client):
         Attempts to traverse and discover the CLI menu creating executable python methods and help strings for the
         items found in each menu context. CLI menu items will be available from self.cli
         '''
-        self.cli = netapp_menu("", self, help_string='Parent dir for netapp commands')
+        self.cli = netapp_menu("", self, help_string='Parent dir for netapp commands', scan_all=True)
 
 
     def _get_volume_efficiency_info_by_id(self, volumeid):
@@ -238,14 +320,14 @@ class Netapp_Client(San_Client):
         return self.get_cmd_dict(cmd)
 
 
-    def get_cmd_dict(self, cmd):
+    def get_cmd_dict(self, cmd, code=0):
         '''
         Execute a command via the client and attempt to parse the results into a returned dict
         param cmd: string representing the command to be run on the san client
         returns dict
         '''
         info = {}
-        out = self.sys(cmd)
+        out = self.sys(cmd, code=code)
         for line in out:
             split = line.split(':')
             clean_chars = re.compile('([\W])')
