@@ -40,6 +40,9 @@ from ec2ops import EC2ops
 from s3ops import S3ops
 from stsops import STSops
 import time
+import traceback
+import sys
+import StringIO
 from eutester.euservice import EuserviceManager
 from boto.ec2.instance import Reservation
 from boto.exception import EC2ResponseError
@@ -668,5 +671,17 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
         """
         return self.clc.sys(cmd, verbose=verbose,  listformat=listformat, timeout=timeout, code=code)
     
-
+    @classmethod
+    def get_traceback(cls):
+        '''
+        Returns a string buffer with traceback, to be used for debug/info purposes. 
+        '''
+        try:
+            out = StringIO.StringIO()
+            traceback.print_exception(*sys.exc_info(),file=out)
+            out.seek(0)
+            buf = out.read()
+        except Exception, e:
+                buf = "Could not get traceback"+str(e)
+        return str(buf) 
     
