@@ -214,9 +214,9 @@ class WindowsTests(EutesterTestCase):
             if re.search(match,image.location):
                 retlist.append(image)
         return retlist
-        
-    
-        
+
+
+
     def update_proxy_instance_data(self, win_instance=None, instance_password=None ):
         if self.proxy is None:
             return
@@ -346,6 +346,7 @@ class WindowsTests(EutesterTestCase):
                                       destpath = None, 
                                       inter_bundle_timeout = None, 
                                       upload_timeout = None,
+                                      virtualization_type = None,
                                       wget_user = None,
                                       wget_password = None,
                                       time_per_gig = None,
@@ -363,6 +364,7 @@ class WindowsTests(EutesterTestCase):
                                            interbundle_timeout = (inter_bundle_timeout or self.inter_bundle_timeout), 
                                            upload_timeout = (upload_timeout or self.upload_timeout),
                                            destpath = (destpath or self.destpath),
+                                           virtualization_type=virtualization_type,
                                            wget_user = (wget_user), 
                                            wget_password = (wget_password),   
                                            time_per_gig = (time_per_gig or self.time_per_gig) )
@@ -423,7 +425,12 @@ class WindowsTests(EutesterTestCase):
                                  group = group or self.group, 
                                  type = type, 
                                  zone=zone, 
-                                 min=min, max=max, user_data=user_data, private_addressing=private_addressing, is_reachable=False, timeout=timeout)
+                                 min=min,
+                                 max=max,
+                                 user_data=user_data,
+                                 private_addressing=private_addressing,
+                                 is_reachable=False,
+                                 timeout=timeout)
         
         
         self.instance = res.instances[0]
@@ -578,9 +585,7 @@ class WindowsTests(EutesterTestCase):
                 return dev
         raise Exception('Instance:'+str(instance.id)+", no free devs. Has "+str(count)+" devices in use by ebs already. max:"+str(max))    
         
-                
-                
-        
+
            
     def test_attach_single_volume(self, instance=None, dev=None):
         instance = instance or self.instance

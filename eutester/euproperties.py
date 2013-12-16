@@ -127,7 +127,7 @@ class Euproperty():
         header = str('NAME').ljust(name_len)
         header += "|" + str('SERVICE TYPE').center(service_len)
         header += "|" + str('PARTITION').center(part_len)
-        header += "|" + str('VALUE LEN').center(value_len)
+        header += "|" + str('VALUE').center(value_len)
         header += "\n"
 
         out = str(self.name).ljust(name_len)

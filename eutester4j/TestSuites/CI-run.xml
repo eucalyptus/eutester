@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="Continuous Integration Test Suite">
+    <test name="Auto_Scaling_Tests">
+        <classes>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingActivities"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingAvailabilityZoneRebalancing"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingDescribeGroupsInstances"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingDescribeInstances"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingDescribePolicyAlarms"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingDescribeTags"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingInstanceLifecycle"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingLaunchAndTerminate"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingMetricsManagement"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingMetricsSubmission"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingMultipleAvailabilityZones"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingSetInstanceHealth"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingSuspendAndResumeProcesses"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingTags"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingTerminateInstances"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingUnsupportedOptions"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingValidation"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingVMTypeReferenceValidation"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingEc2InstanceHealthMonitoring"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingEC2ReferenceValidation"/>
+            <class name="com.eucalyptus.tests.awssdk.TestEC2DescribeInstanceStatus"/>
+        </classes>
+    </test>
+    <test name="Cloud_Watch_Tests">
+        <classes>
+            <class name="com.eucalyptus.tests.awssdk.CloudWatchDeleteMetricAlarmTest"/>
+            <class name="com.eucalyptus.tests.awssdk.CloudWatchDescribeAlarmHistoryTest"/>
+            <class name="com.eucalyptus.tests.awssdk.CloudWatchDescribeAlarmsForMetricTest"/>
+            <class name="com.eucalyptus.tests.awssdk.CloudWatchDescribeAlarmsTest"/>
+            <class name="com.eucalyptus.tests.awssdk.CloudWatchDisableAlarmActionsTest"/>
+            <class name="com.eucalyptus.tests.awssdk.CloudWatchEnableAlarmActionsTest"/>
+            <class name="com.eucalyptus.tests.awssdk.CloudWatchGetMetricStatisticsTest"/>
+            <class name="com.eucalyptus.tests.awssdk.CloudWatchListMetricsTest"/>
+            <class name="com.eucalyptus.tests.awssdk.CloudWatchPutMetricAlarmTest"/>
+            <class name="com.eucalyptus.tests.awssdk.CloudWatchPutMetricDataTest"/>
+            <class name="com.eucalyptus.tests.awssdk.CloudWatchStateChangeTest"/>
+        </classes>
+    </test>
+    <test name="IAM_Roles_Tests">
+        <classes>
+            <class name="com.eucalyptus.tests.awssdk.TestIAMInstanceProfileManagement"/>
+            <class name="com.eucalyptus.tests.awssdk.TestIAMInstanceProfiles"/>
+            <class name="com.eucalyptus.tests.awssdk.TestIAMRoleManagement"/>
+        </classes>
+    </test>
+    <!--<test name="Walrus_Tests">-->
+        <!--<classes>-->
+            <!--<class name="com.eucalyptus.tests.awssdk.BasicWalrusTest"/>-->
+            <!--<class name="com.eucalyptus.tests.awssdk.S3ObjectTests"/>-->
+        <!--</classes>-->
+    <!--</test>-->
+</suite>

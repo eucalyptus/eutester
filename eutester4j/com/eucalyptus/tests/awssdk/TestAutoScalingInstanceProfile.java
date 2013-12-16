@@ -56,13 +56,13 @@ public class TestAutoScalingInstanceProfile {
             final String instanceProfileName = NAME_PREFIX + "IamInstanceProfileTest";
             print("Creating instance profile: " + instanceProfileName);
             final CreateInstanceProfileResult instanceProfileResult =
-                    iam.createInstanceProfile(new CreateInstanceProfileRequest()
+                    youAre.createInstanceProfile(new CreateInstanceProfileRequest()
                             .withInstanceProfileName(instanceProfileName));
             cleanupTasks.add(new Runnable() {
                 @Override
                 public void run() {
                     print("Deleting instance profile: " + instanceProfileName);
-                    iam.deleteInstanceProfile(new DeleteInstanceProfileRequest().withInstanceProfileName(instanceProfileName));
+                    youAre.deleteInstanceProfile(new DeleteInstanceProfileRequest().withInstanceProfileName(instanceProfileName));
                 }
             });
             final String instanceProfileArn = instanceProfileResult.getInstanceProfile().getArn();
@@ -115,7 +115,7 @@ public class TestAutoScalingInstanceProfile {
             String instanceId = null;
             {
                 final long startTime = System.currentTimeMillis();
-                final long launchTimeout = TimeUnit.MINUTES.toMillis(2);
+                final long launchTimeout = TimeUnit.MINUTES.toMillis(5);
                 boolean launched = false;
                 while (!launched && (System.currentTimeMillis() - startTime) < launchTimeout) {
                     Thread.sleep(5000);
@@ -168,7 +168,7 @@ public class TestAutoScalingInstanceProfile {
             instanceId = null;
             {
                 final long startTime = System.currentTimeMillis();
-                final long launchTimeout = TimeUnit.MINUTES.toMillis(2);
+                final long launchTimeout = TimeUnit.MINUTES.toMillis(5);
                 boolean launched = false;
                 while (!launched && (System.currentTimeMillis() - startTime) < launchTimeout) {
                     Thread.sleep(5000);

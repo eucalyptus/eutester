@@ -60,6 +60,11 @@ class Ebs_Persistance_Tests(EutesterTestCase):
                                  type=int,
                                  help='Time allowed for volume to transition from deleting to deleted, default:120',
                                  default=120)
+        self.parser.add_argument('--no_clean_on_exit',
+                                 help='If set will not attempt to remove created test artifacts after running',
+                                 action='store_true',
+                                 default=False)
+
         self.get_args()
         # Setup basic eutester object
         self.tester = self.do_with_args(Eucaops)
@@ -114,6 +119,9 @@ class Ebs_Persistance_Tests(EutesterTestCase):
         self.snapshots = []
         self.bfebs_volumes = []
         self.timepergig = self.args.timepergig
+        self.clean_on_exit = True
+        if self.args.no_clean_on_exit:
+            self.clean_on_exit = False
 
 
 
@@ -352,7 +360,7 @@ class Ebs_Persistance_Tests(EutesterTestCase):
                             testcolor=TestColor.get_canned_color('whiteonblue'))
                 break
         if waiting:
-            raise("SC machines were not reachable after: "+str(elapsed)+" seconds:"+str(debug_str))
+            raise Exception("SC machines were not reachable after: "+str(elapsed)+" seconds:"+str(debug_str))
         if not storage_controllers:
             raise Exception('Storage controller list was not populated after waiting for reachable')
         start = time.time()
@@ -638,5 +646,5 @@ if __name__ == "__main__":
         unit_list.append( testcase.create_testunit_by_name(test) )
 
     ### Run the EutesterUnitTest objects
-    result = testcase.run_test_case_list(unit_list,eof=True,clean_on_exit=True)
+    result = testcase.run_test_case_list(unit_list,eof=True,clean_on_exit=testcase.clean_on_exit)
     exit(result)

@@ -78,7 +78,7 @@ public class Eutester4jTest {
 //		ec2Endpoint = "http://ec2.us-west-1.amazonaws.com"; //AWS
 //		asEndpoint = "http://autoscaling.us-west-1.amazonaws.com"; //AWS
 
-		createSecurityGoup(secGroupName, secGroupDesc);
+		createSecurityGroup(secGroupName, secGroupDesc);
 		createKeyPair(keyName);
 		securityGroups.add(secGroupName);
 	}
@@ -126,7 +126,7 @@ public class Eutester4jTest {
 		try {
 			ec2Conn.describeAvailabilityZones();
 		} catch (Exception e) {
-			print("Got Expected Faiilure: " + e.getMessage());
+			print("Got Expected Failure: " + e.getMessage());
 			AssertJUnit.assertTrue(e.getMessage().length() > 0);
 		} 
 	}
@@ -153,7 +153,7 @@ public class Eutester4jTest {
 		int initialSize = secGroups.size();
 	
 		try {
-			createSecurityGoup(name, desc);
+			createSecurityGroup(name, desc);
 			secGroups = describeSecurityGroups();
 			AssertJUnit.assertTrue(secGroups.size() > initialSize);
 		} catch (Exception e) {
@@ -172,7 +172,7 @@ public class Eutester4jTest {
 		String desc = eucaUUID();
 	
 		try {
-			createSecurityGoup(name, desc);
+			createSecurityGroup(name, desc);
 			
 			List<SecurityGroup> secGroups = describeSecurityGroups();
 			int initialSize = secGroups.size();

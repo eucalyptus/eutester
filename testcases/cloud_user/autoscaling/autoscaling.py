@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 # Software License Agreement (BSD License)
 #
@@ -127,7 +127,7 @@ class AutoScalingBasics(EutesterTestCase):
         self.debug("**** Created Auto Scaling Policies: " + self.up_policy_name + " " + self.down_policy_name + " " +
                    self.exact_policy_name)
 
-        self.tester.wait_for_result(self.scaling_activities_complete, True, timeout=120)
+        self.tester.wait_for_result(self.scaling_activities_complete, True, timeout=180)
         ### Test Execute ChangeInCapacity Auto Scaling Policy
         self.tester.execute_as_policy(policy_name=self.up_policy_name,
                                       as_group=self.auto_scaling_group_name,
@@ -137,7 +137,7 @@ class AutoScalingBasics(EutesterTestCase):
         self.debug("Executed  ChangeInCapacity policy, increased desired capacity to: " +
                    str(self.tester.describe_as_group(self.auto_scaling_group_name).desired_capacity))
 
-        self.tester.wait_for_result(self.scaling_activities_complete, True, timeout=120)
+        self.tester.wait_for_result(self.scaling_activities_complete, True, timeout=180)
 
         ### Test Execute PercentChangeInCapacity Auto Scaling Policy
         self.tester.execute_as_policy(policy_name=self.down_policy_name,
@@ -148,7 +148,7 @@ class AutoScalingBasics(EutesterTestCase):
         self.debug("Executed PercentChangeInCapacity policy, decreased desired capacity to: " +
                    str(self.tester.describe_as_group(self.auto_scaling_group_name).desired_capacity))
 
-        self.tester.wait_for_result(self.scaling_activities_complete, True, timeout=120)
+        self.tester.wait_for_result(self.scaling_activities_complete, True, timeout=180)
 
         ### Test Execute ExactCapacity Auto Scaling Policy
         self.tester.execute_as_policy(policy_name=self.exact_policy_name,
@@ -159,7 +159,7 @@ class AutoScalingBasics(EutesterTestCase):
         self.debug("Executed ExactCapacity policy, exact capacity is: " +
                    str(self.tester.describe_as_group(self.auto_scaling_group_name).desired_capacity))
 
-        self.tester.wait_for_result(self.scaling_activities_complete, True, timeout=120)
+        self.tester.wait_for_result(self.scaling_activities_complete, True, timeout=180)
 
         ### Test Delete all Auto Scaling Policies
         self.tester.delete_all_policies()
@@ -323,7 +323,7 @@ if __name__ == "__main__":
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
     for test in list:
-        unit_list.append( testcase.create_testunit_by_name(test) )
+        unit_list.append( testcase.create_testunit_by_name(test))
 
     ### Run the EutesterUnitTest objects
     result = testcase.run_test_case_list(unit_list)

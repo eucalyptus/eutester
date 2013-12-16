@@ -41,6 +41,7 @@ import copy
 import os
 from eutester import machine
 from xml.dom.minidom import parse, parseString
+import dns.resolver
 
 
 class log_marker:
@@ -390,9 +391,7 @@ class Eunode:
 
 
 
-
-
-class Euservice:
+class Euservice(object):
 
     def __init__(self, service_string, tester = None):
         values = service_string.split()
@@ -457,20 +456,54 @@ class Euservice:
         if printmethod:
             printmethod(buf)
         return buf
-    
+
+    @staticmethod
+    def create_service(service_string, tester=None):
+        if service_string.split()[1] == 'dns':
+            return DnsService(service_string)
+        else:
+            return Euservice(service_string, tester)
+
+
+
+class DnsService(Euservice):
+    def __init__(self, service_string):
+        super(DnsService, self).__init__(service_string)
+        self.resolver = dns.resolver.Resolver(configure=False)
+        self.resolver.nameservers = [self.hostname]
+
+    def resolve(self, name, timeout=360, poll_count=20):
+        """Resolve hostnames against the Eucalyptus DNS service"""
+        poll_sleep = timeout/poll_count
+        for _ in range(poll_count):
+            try:
+                print("DNSQUERY: Resolving `{0}' against nameserver(s) {1}".format(name, self.resolver.nameservers))
+                ans = self.resolver.query(name)
+                return str(ans[0])
+            except dns.resolver.NXDOMAIN:
+                raise Exception("Unable to resolve hostname `{0}'".format(name))
+            except dns.resolver.NoNameservers:
+                # Note that this usually means our DNS server returned a malformed message
+                pass
+            finally:
+                time.sleep(poll_sleep)
+        raise Exception("Unable to resolve hostname `{0}'".format(name))
+
+
         
 class Partition:
-    name = ""
-    ccs = []
-    scs = []
-    vbs = []
-    ncs = []
-    volumes = []
-    instances = []
+
     
     def __init__(self, name, service_manager ):
         self.name = name
         self.service_manager = service_manager
+        name = ""
+        self.ccs = []
+        self.scs = []
+        self.vbs = []
+        self.ncs = []
+        self.volumes = []
+        self.instances = []
         
     def get_enabled(self, list):
         self.service_manager.update()
@@ -628,9 +661,8 @@ class EuserviceManager(object):
                 time.sleep(poll_interval)
         #Create euservice objects from command output and return list of euservices.
         for service_line in describe_services:
-            services.append(Euservice(service_line, self.tester))
+            services.append(Euservice.create_service(service_line, self.tester))
         return services
-
 
     def print_services_list(self, services=None):
         services = services or self.all_services
@@ -1191,9 +1223,11 @@ class EuserviceManager(object):
                 euservice.running = True
                 return
         else:
-            if not euservice.machine.get_eucalyptus_cloud_is_running_status():
-                self.modify_process(euservice, "start")
-        euservice.running = True
+            if euservice.machine.get_eucalyptus_cloud_is_running_status():
+                euservice.running = True
+                return
+        self.modify_process(euservice, "start")
+
     
     def enable(self,euservice):
         self.modify_service(euservice, "ENABLED")
@@ -1267,7 +1301,7 @@ class EuserviceManager(object):
                 if elapsed < timeout:
                     self.debug(error)
                 else:
-                    raise(error)
+                    raise Exception(error)
             time.sleep(15)
 
 
@@ -1299,6 +1333,13 @@ class EuserviceManager(object):
             raise Exception("Neither Walrus is disabled")
         else:
             return walrus
+
+    def get_enabled_dns(self):
+        dns = self.get_enabled([self.dns])
+        if dns is None:
+            raise Exception("DNS service is not available")
+        else:
+            return dns
     
     def get_enabled(self, list_of_services):
         self.update()

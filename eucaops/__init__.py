@@ -100,12 +100,12 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
             ### Private cloud with root access 
             ### Need to get credentials for the user if there arent any passed in
             ### Need to create service manager for user if we have an ssh connection and password
+            clc_array = self.get_component_machines("clc")
+            self.clc = clc_array[0]
+            walrus_array = self.get_component_machines("ws")
+            self.walrus = walrus_array[0]
+            self.sftp = self.clc.ssh.connection.open_sftp()
             if self.download_creds:
-                clc_array = self.get_component_machines("clc")
-                self.clc = clc_array[0]
-                walrus_array = self.get_component_machines("ws")
-                self.walrus = walrus_array[0]
-
                 if self.credpath is None:
                     ### TRY TO GET CREDS ON FIRST CLC if it fails try on second listed clc, if that fails weve hit a terminal condition
                     try:
@@ -169,7 +169,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
                 self.setup_elb_connection(endpoint=elb_ip, path="/services/LoadBalancing", port=8773, is_secure=False, region=region, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
             except Exception, e:
                 self.debug("Unable to create ELB connection because of: " + str(e) )
-        if self.clc:
+        if self.clc and account == 'eucalytpus':
             self.update_property_manager()
 
     def get_available_vms(self, type=None, zone=None):
@@ -234,19 +234,42 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
             raise Exception("Setting property " + property + " failed")
     
    
-    def cleanup_artifacts(self,instances=True, snapshots=True, volumes=True):
+    def cleanup_artifacts(self,instances=True, snapshots=True, volumes=True, load_balancers=True):
         """
         Description: Attempts to remove artifacts created during and through this eutester's lifespan.
         """
-
+        failmsg = ""
+        failcount = 0
         self.debug("Starting cleanup of artifacts")
         if instances:
             for res in self.test_resources["reservations"]:
-                self.terminate_instances(res)
+                try:
+                    self.terminate_instances(res)
+                except Exception, e:
+                    tb = self.get_traceback()
+                    failcount +=1
+                    failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
         if volumes:
-            self.clean_up_test_volumes()
+            try:
+                self.clean_up_test_volumes(timeout_per_vol=60)
+            except Exception, e:
+                tb = self.get_traceback()
+                failcount +=1
+                failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
         if snapshots:
-            self.cleanup_test_snapshots()
+            try:
+                self.cleanup_test_snapshots()
+            except Exception, e:
+                tb = self.get_traceback()
+                failcount +=1
+                failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
+        if load_balancers:
+            try:
+                self.cleanup_load_balancers()
+            except Exception, e:
+                tb = self.get_traceback()
+                failcount +=1
+                failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
 
         for key,array in self.test_resources.iteritems():
             for item in array:
@@ -262,11 +285,30 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
                             self.detach_volume(item)
                         except:
                             pass
-                        self.delete_volume(item)
+                        item.update()
+                        if item.status != 'deleted':
+                            self.delete_volume(item)
                     else:
                         item.delete()
                 except Exception, e:
-                    self.fail("Unable to delete item: " + str(item) + "\n" + str(e))
+                    tb = self.get_traceback()
+                    failcount += 1
+                    failmsg += str(tb) + "\nUnable to delete item: " + str(item) + "\n" + str(e)+"\n"
+        if failmsg:
+            failmsg += "\nFound " + str(failcount) + " number of errors while cleaning up. See above"
+            raise Exception(failmsg)
+
+    def cleanup_load_balancers(self, lbs=None):
+        """
+        :param lbs: optional list of load balancers, otherwise it will attempt to delete from test_resources[]
+        """
+        if lbs:
+            self.delete_load_balancers(lbs)
+        else:
+            try:
+                self.delete_load_balancers(self.test_resources['load_balancers'])
+            except KeyError:
+                self.debug("No loadbalancers to delete")
 
     def cleanup_test_snapshots(self,snaps=None, clean_images=False, add_time_per_snap=10, wait_for_valid_state=120, base_timeout=180):
         """
@@ -297,7 +339,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
 
 
 
-    def clean_up_test_volumes(self, volumes=None, min_timeout=180, timeout_per_vol=20):
+    def clean_up_test_volumes(self, volumes=None, min_timeout=180, timeout_per_vol=30):
         """
         Definition: cleaup helper method intended to clean up volumes created within a test, after the test has ran.
 
@@ -307,12 +349,14 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
         detaching = []
         not_exist = []
         line = '\n----------------------------------------------------------------------------------------------------\n'
-        vol_str = volumes or "test_resources['volumes']"
-        self.debug('clean_up_test_volumes starting, volumes:'+str(vol_str))
 
-        volumes = volumes or  self.test_resources['volumes']
+        volumes = volumes or self.test_resources['volumes']
         if not volumes:
+            self.debug('clean_up_test_volumes, no volumes passed to delete')
             return
+        self.debug('clean_up_test_volumes starting\nVolumes to be deleted:' + ",".join(str(x) for x in volumes))
+
+
 
         for vol in volumes:
             try:
@@ -367,7 +411,8 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
             self.monitor_euvolumes_to_status(detaching, status='available', attached_status=None,timeout=timeout)
         self.debug('clean_up_volumes: Deleteing volumes now...')
         self.print_euvolume_list(euvolumes)
-        self.delete_volumes(euvolumes, timeout=timeout)
+        if euvolumes:
+            self.delete_volumes(euvolumes, timeout=timeout)
 
                     
     def get_current_resources(self,verbose=False):

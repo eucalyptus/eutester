@@ -246,7 +246,7 @@ class S3ops(Eutester):
                 except Exception as e:
                     self.debug(  "Exception deleting versioning artifacts: " + e.message )
             else:
-                self.debug('Got ' + e.message + ' and status ' + e.status)
+                self.debug('Got ' + e.message + ' and status ' + str(e.status))
                     
     def clear_keys_with_prefix(self, bucket, prefix):
         try :
