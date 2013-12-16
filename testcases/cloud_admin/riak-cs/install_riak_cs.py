@@ -52,7 +52,7 @@ class InstallRiak(EutesterTestCase):
                 cs_tester.debug("Uploaded Key contents: " + key_contents + "  Original:" + response_dict["id"])
                 assert key_contents == response_dict["id"]
         except IndexError as e:
-            cs_tester.info("No RIAK component found in component specification. Skipping installation")            
+            self.tester.info("No RIAK component found in component specification. Skipping installation")            
             
 if __name__ == "__main__":
     testcase = InstallRiak()
