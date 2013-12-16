@@ -69,7 +69,6 @@ class InstallRiak(EutesterTestCase):
             self.tester.info("No RIAK component found in component specification. Skipping installation")
             self.tester.info("Configuring OSG to use walrus backend");
             self.tester.modify_property("objectstorage.providerclient", "walrus");
-                        
             
 if __name__ == "__main__":
     testcase = InstallRiak()
