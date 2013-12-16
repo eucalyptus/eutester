@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 
 #
-####################################
-#                                  #
-#   Walrus/S3 Bucket Test Cases    #
-#                                  #
-####################################
+###########################################
+#                                         #
+#   objectstorage/S3 Bucket Test Cases    #
+#                                         #
+###########################################
 
 #Author: Zach Hill <zach@eucalyptus.com>
 
@@ -442,9 +442,9 @@ class BucketTestSuite(EutesterTestCase):
         #Test the default setup after bucket creation. Should be disabled.
         if version_status != None:
             version_bucket.delete()            
-            self.fail("Expected versioning disabled, found: " + str(version_status))
+            self.fail("Expected versioning disabled (empty), found: " + str(version_status))
         elif version_status == None:
-            self.tester.info("Null version status returned, correct since it should be disabled")
+            self.tester.info("Null version status returned, may be correct since it should be disabled")
         
         #Turn on versioning, confirm that it is 'Enabled'
         version_bucket.configure_versioning(True)        
