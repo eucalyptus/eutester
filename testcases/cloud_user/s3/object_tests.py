@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 
 #
-####################################
-#                                  #
-#   Walrus/S3 Object Test Cases    #
-#                                  #
-####################################
+############################################
+#                                          #
+# objectstorage/S3 Object Test Cases       #
+#                                          #
+############################################
 
 
 #Author: Zach Hill <zach@eucalyptus.com>
