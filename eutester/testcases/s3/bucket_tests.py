@@ -9,13 +9,13 @@
 
 #Author: Zach Hill <zach@eucalyptus.com>
 
-from eucaops import Eucaops
+from eutester.euca.euca_ops import Eucaops
 import argparse
 import time
 import re
 
-from eutester.eutestcase import EutesterTestCase
-from eucaops import S3ops
+from eutester.utils.testcase import EutesterTestCase
+from eutester.euca.euca_ops import S3ops
 from boto.exception import S3ResponseError
 from boto.exception import S3CreateError
 import boto
