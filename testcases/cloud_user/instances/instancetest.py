@@ -50,7 +50,7 @@ class InstanceBasics(EutesterTestCase):
         if emi:
             self.image = emi
         else:
-            self.image = self.tester.get_emi(root_device_type="instance-store",not_location="loadbalancer")
+            self.image = self.tester.get_emi(root_device_type="instance-store",not_location=['windows', 'loadbalancer'])
         self.address = None
         self.volume = None
         self.private_addressing = False
