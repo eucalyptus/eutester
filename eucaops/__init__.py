@@ -108,8 +108,6 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
             ### Need to create service manager for user if we have an ssh connection and password
             clc_array = self.get_component_machines("clc")
             self.clc = clc_array[0]
-            walrus_array = self.get_component_machines("ws")
-            self.walrus = walrus_array[0]
             self.sftp = self.clc.ssh.connection.open_sftp()
             if self.download_creds:
                 if self.credpath is None:
@@ -131,8 +129,6 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
                         
                 self.service_manager = EuserviceManager(self)
                 self.clc = self.service_manager.get_enabled_clc().machine
-                self.walrus = self.service_manager.get_enabled_walrus().machine
-
 
         if self.credpath and not aws_access_key_id:
             aws_access_key_id = self.get_access_key()
@@ -553,12 +549,12 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
 
     def swap_walrus(self):
         all_walruses = self.get_component_machines("ws")
-        if self.walrus is all_walruses[0]: 
+        if self.object_storage is all_walruses[0]:
             self.debug("Swapping Walrus from " + all_walruses[0].hostname + " to " + all_walruses[1].hostname)
-            self.walrus = all_walruses[1]
-        elif self.walrus is all_walruses[1]:
+            self.object_storage = all_walruses[1]
+        elif self.object_storage is all_walruses[1]:
             self.debug("Swapping Walrus from " + all_walruses[1].hostname + " to " + all_walruses[0].hostname)
-            self.walrus = all_walruses[0]
+            self.object_storage = all_walruses[0]
             
     def get_network_mode(self):
         return self.config['network']

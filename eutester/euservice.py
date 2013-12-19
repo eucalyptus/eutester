@@ -540,6 +540,7 @@ class Partition:
 class EuserviceManager(object):
     cluster_type_string = "cluster"
     walrus_type_string = 'walrus'
+    osg_type_string = 'osg'
     storage_type_string = 'storage'
     clc_type_string = 'eucalyptus'
     node_type_string = 'node'
@@ -552,6 +553,7 @@ class EuserviceManager(object):
         '''
         ### Make sure i have the right connection to make first contact with euca-describe-services
         self.walruses= []
+        self.osgs = []
         self.clcs = []
         self.arbitrators = []
         self.partitions = {}
@@ -1001,6 +1003,32 @@ class EuserviceManager(object):
                                              running=running,
                                              use_cached_list=use_cached_list)
 
+    def get_all_osgs(self, partition=None,
+                                  state=None,
+                                  name=None,
+                                  hostname=None,
+                                  running=None,
+                                  use_cached_list=True):
+        """
+        Returns a list of Object Storage Gateways that match the provided filter criteria.
+
+        :param partition: partition to filter returned service list with
+        :param state: state to filter returned service list with
+        :param name: name to filter returned service list with
+        :param hostname: hostname/ip to filter returned service list with
+        :param running: running boolean to filter returned service list with
+        :param service_list: list of euservices to filter from
+        :param use_cached_list: use current list and state of self.all_services, else get_all_services()
+        :return: list of matching cc euservice objects
+        """
+        return self.get_all_services_by_filter(type=self.osg_type_string,
+                                             partition=partition,
+                                             state=state,
+                                             name=name,
+                                             hostname=hostname,
+                                             running=running,
+                                             use_cached_list=use_cached_list)
+
     def get_all_cloud_controllers(self,
                                  partition=None,
                                  state=None,
@@ -1326,6 +1354,13 @@ class EuserviceManager(object):
             raise Exception("Neither Walrus is enabled")
         else:
             return walrus
+
+    def get_enabled_osg(self):
+        osg = self.get_enabled(self.osgs)
+        if osg is None:
+            raise Exception("No Object Storage Gateways are enabled")
+        else:
+            return osg
     
     def get_disabled_walrus(self):
         walrus = self.get_enabled(self.walruses)
