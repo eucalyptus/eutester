@@ -4,6 +4,10 @@ import os
 import time
 from eucaops import Eucaops, S3ops
 from eutester.eutestcase import EutesterTestCase
+import sys
+
+# Install and configure Riak CS for Eucalyptus
+# /install_riak_cs.py --config /path/to/config --password foobar --template-path "/path/to/templates/"
 
 class InstallRiak(EutesterTestCase):
     def __init__(self):
@@ -11,6 +15,7 @@ class InstallRiak(EutesterTestCase):
         self.setup_parser()
         self.parser.add_argument("--admin-name", default="admin")
         self.parser.add_argument("--admin-email", default="admin@admin.com")
+        self.parser.add_argument("--template-path", default="/templates/")
         self.get_args()
         # Setup basic eutester object
         self.tester = Eucaops( config_file=self.args.config,password=self.args.password)
@@ -26,16 +31,19 @@ class InstallRiak(EutesterTestCase):
             for machine in self.tester.get_component_machines("riak"):
                 machine.sys("yum install -y http://yum.basho.com/gpg/basho-release-6-1.noarch.rpm")
                 machine.sys("yum install -y riak stanchion riak-cs")
-                machine.sys("ulimit -n 65536")
+                machine_ulimit = machine.sys('ulimit -n')
+                if ( machine_ulimit.pop() != '65536'):
+                    machine.sys('echo "ulimit -n 65536" >> /root/.bashrc')
                 for component in ['riak', 'stanchion', 'riak-cs']:
                     for config_file in ["app.config", "vm.args"]:
-                        local_file = os.getcwd() + "/templates/" + config_file + "." + component
+                        local_file = os.getcwd() + self.args.template_path + config_file + "." + component
                         remote_file = "/etc/" + component + "/" + config_file
                         machine.sftp.put(local_file, remote_file)
                         machine.sys("sed -i s/IPADDRESS/" + machine.hostname + "/g " + remote_file)
-                machine.sys("service riak start", code=0)
-                machine.sys("service stanchion start", code=0)
-                machine.sys("service riak-cs start", code=0)
+                machine.sys("riak start", code=0)
+                machine.sys("stanchion start", code=0)
+                machine.sys("riak-cs start", code=0)
+                self.tester.sleep(20)
                 response_json = machine.sys('curl -H \'Content-Type: application/json\' -X POST http://' + machine.hostname +
                                        ':8080/riak-cs/user --data \'{"email":"' + self.args.admin_email +'", '
                                        '"name":"' + self.args.admin_name +'"}\'', code=0)[0]
@@ -57,13 +65,13 @@ class InstallRiak(EutesterTestCase):
 
                 endpoint = machine.hostname + ":8080"
                 self.tester.info("Configuring OSG to use s3 endpoint: " + endpoint)
-                self.tester.modify_property("objectstorage.s3_endpoint", endpoint)
+                self.tester.modify_property("objectstorage.s3provider.s3endpoint", endpoint)
 
                 self.tester.info("Configuring OSG to use s3 access key: " + response_dict["key_id"])
-                self.tester.modify_property("objectstorage.s3_access_key", response_dict["key_id"])
+                self.tester.modify_property("objectstorage.s3provider.s3accesskey", response_dict["key_id"])
 
                 self.tester.info("Configuring OSG to use s3 secret key: " + response_dict["key_secret"][-4:])
-                self.tester.modify_property("objectstorage.s3_secret_key",response_dict["key_secret"])
+                self.tester.modify_property("objectstorage.s3provider.s3secretkey",response_dict["key_secret"])
 
         except IndexError as e:
             self.tester.info("No RIAK component found in component specification. Skipping installation")
@@ -83,4 +91,4 @@ if __name__ == "__main__":
 
     ### Run the EutesterUnitTest objects
     result = testcase.run_test_case_list(unit_list)
-    exit(result)
+    sys.exit(result)
