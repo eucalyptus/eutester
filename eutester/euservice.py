@@ -393,6 +393,8 @@ class Eunode:
 
 class Euservice(object):
 
+    activeactive_service_types = ["objectstorage"]
+    
     def __init__(self, service_string, tester = None):
         values = service_string.split()
         self.type = values[1]
@@ -420,6 +422,9 @@ class Euservice(object):
         else:
             return False
     
+    def isActiveActive(self):
+        return self.type in Euservice.activeactive_service_types
+        
     def disable(self):
         self.tester.service_manager.disable(self)
         
@@ -544,6 +549,7 @@ class EuserviceManager(object):
     storage_type_string = 'storage'
     clc_type_string = 'eucalyptus'
     node_type_string = 'node'
+    osg_type_string='objectstorage'
 
         
     def __init__(self, tester ):
@@ -679,6 +685,7 @@ class EuserviceManager(object):
 
     def reset(self):
         self.walruses= []
+        self.osgs = []
         self.clcs = []
         self.arbitrators = []
         self.internal_components = []
@@ -1113,6 +1120,10 @@ class EuserviceManager(object):
             all_services = all_services + self.clcs
         if len(self.walruses) > 0:
             all_services = all_services + self.walruses
+            
+        if len(self.osgs) > 0:
+            all_services = all_services + self.osgs
+            
         for partition in self.partitions.keys():
 
             ccs = self.partitions[partition].ccs
@@ -1182,6 +1193,9 @@ class EuserviceManager(object):
                 continue
             elif re.search("walrus", current_euservice.type):
                 self.walruses.append(current_euservice)
+                continue
+            elif re.search("osg", current_euservice.type):
+                self.osgs.append(current_euservice)
                 continue
             elif re.search("dns", current_euservice.type):
                 self.dns = current_euservice
@@ -1296,7 +1310,7 @@ class EuserviceManager(object):
             service = all_services_to_check.pop()
             self.debug('Checking for operational state of services type:' + str(service.type))
             for serv in all_services_to_check:
-                if serv.type == service.type and serv.partition == service.partition:
+                if not serv.isActiveActive() and serv.type == service.type and serv.partition == service.partition:
                     ha_counterpart = serv
                     break
             if ha_counterpart:
@@ -1336,24 +1350,24 @@ class EuserviceManager(object):
 
     def get_enabled_clc(self):
         clc = self.get_enabled(self.clcs)
-        if clc is None:
+        if clc is None or len(clc) == 0:
             raise Exception("Neither CLC is enabled")
         else:
-            return clc
+            return clc.pop()
     
     def get_disabled_clc(self):
         clc = self.get_disabled(self.clcs)
-        if clc is None:
+        if clc is None or len(clc) == 0:
             raise Exception("Neither CLC is disabled")
         else:
-            return clc
+            return clc.pop()
     
     def get_enabled_walrus(self):
         walrus = self.get_enabled(self.walruses)
-        if walrus is None:
+        if walrus is None or len(walrus) == 0:
             raise Exception("Neither Walrus is enabled")
         else:
-            return walrus
+            return walrus.pop()
 
     def get_enabled_osg(self):
         osg = self.get_enabled(self.osgs)
@@ -1363,32 +1377,47 @@ class EuserviceManager(object):
             return osg
     
     def get_disabled_walrus(self):
-        walrus = self.get_enabled(self.walruses)
-        if walrus is None:
+        walrus = self.get_disabled(self.walruses)
+        if walrus is None or len(walrus) == 0:
             raise Exception("Neither Walrus is disabled")
         else:
-            return walrus
+            return walrus.pop()
+
+    def get_enabled_osgs(self):
+        '''Returns list of enabled osgs'''
+        enabled_osgs = self.get_enabled(self.osgs)
+        if enabled_osgs is None:
+            raise Exception("No OSG is enabled")
+        else:
+            return enabled_osgs
 
     def get_enabled_dns(self):
         dns = self.get_enabled([self.dns])
-        if dns is None:
+        if dns is None or len(dns) == 0:
             raise Exception("DNS service is not available")
         else:
-            return dns
+            return dns.pop()
     
+    #modified by zhill to include *all* enabled services of this type, uses a list return
     def get_enabled(self, list_of_services):
+        '''Returns a list of the services of the requested type that are in ENABLED state'''
         self.update()
+        enabled_services = []
         for service in list_of_services:
             if service.isEnabled():
-                return service
-        return None
+                enabled_services.append(service)
+                
+        return enabled_services;
     
     def get_disabled(self, list_of_services):
+        '''Returns a list of the services of the requested type that are in DISABLED state'''
         self.update()
+        disabled_services = []
         for service in list_of_services:
             if service.isDisabled():
-                return service
-        return None
+                disabled_services.append(service)
+            
+        return disabled_services;
 
 
 

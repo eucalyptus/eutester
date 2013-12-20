@@ -67,6 +67,7 @@ class MyTestCase(EutesterTestCase):
             except Exception, e:
                 tb = eucaops.Eucaops.get_traceback()
                 last_err = str(tb) + "\n" + str(e)
+                print 'Services not up because of: ' + last_err + '\n'
         if not self.tester:
             raise Exception(str(last_err) + 'Could not create tester object after elapsed:' + str(elapsed))
         timeout = timeout - elapsed
