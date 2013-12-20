@@ -658,14 +658,16 @@ class EuInstance(Instance, TaggedResource):
         raise Exception("Detach Volume("+str(euvolume.id)+") not found on ("+str(self.id)+")")
         return True
     
-    def get_metadata(self, element_path, prefix='latest/meta-data/'): 
+    def get_metadata(self, element_path, prefix='latest/meta-data/', timeout=10, staticmode=False):
         """Return the lines of metadata from the element path provided"""
         ### If i can reach the metadata service ip use it to get metadata otherwise try the clc directly
         try:
-            self.sys("ping -c 1 169.254.169.254", code=0, verbose=False)
-            return self.sys("curl http://169.254.169.254/"+str(prefix)+str(element_path), code=0)
-        except:
-            return self.sys("curl http://" + self.tester.get_ec2_ip()  + ":8773/"+str(prefix) + str(element_path), code=0)
+            return self.sys("curl http://169.254.169.254/"+str(prefix)+str(element_path), code=0,timeout=timeout)
+        except sshconnection.CommandTimeoutException as se:
+            if staticmode:
+                return self.sys("curl http://" + self.tester.get_ec2_ip()  + ":8773/"+str(prefix) + str(element_path), code=0)
+            else:
+                raise(se)
           
     def set_block_device_prefix(self):
         return self.set_rootfs_device()

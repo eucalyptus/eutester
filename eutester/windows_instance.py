@@ -416,7 +416,8 @@ class WinInstance(Instance, TaggedResource):
                                       virtio_blk = True,
                                       cygwin_path = None,
                                       disk_update_interval=10,
-                                      retry=2
+                                      retry=2,
+                                      brief=False
                                       ):
         '''
         Primary constructor for this class. Note: to avoid an ssh session within this method, provide keys, username/pass later.
@@ -461,6 +462,7 @@ class WinInstance(Instance, TaggedResource):
         newins.virtio_blk  = virtio_blk
         newins.disk_update_interval = disk_update_interval
         newins.retry = retry
+        newins.brief = brief
         newins.rootfs_device =  rootfs_device
         newins.block_device_prefix = block_device_prefix
         newins.private_addressing = private_addressing
@@ -697,8 +699,11 @@ class WinInstance(Instance, TaggedResource):
         if self.winrm is None:
             raise Exception(str(self.id)+":Failed establishing management connection to instance, elapsed:"+str(elapsed)+
                             "/"+str(timeout))
-        self.update_system_and_disk_info()
-        self.init_attached_volumes()
+        if self.brief:
+            self.update_system_info()
+        else:
+            self.update_system_and_disk_info()
+            self.init_attached_volumes()
 
     def update_root_device_diskdrive(self):
         if not self.root_device_type == 'ebs':
@@ -926,12 +931,12 @@ class WinInstance(Instance, TaggedResource):
                 break
         return path
 
-    def cygwin_curl(self, url):
+    def cygwin_curl(self, url, connect_timeout=30):
         cygpath = self.get_cygwin_path()
         if cygpath is None:
             raise Exception('Could not find cygwin path on guest for curl?')
-        curl = cygpath + 'bin\curl.exe '
-        return self.sys(curl + str(url), code=0)
+        curl = cygpath + 'bin\curl.exe --connect-timeout ' + str(connect_timeout) + ' '
+        return self.sys(curl + str(url), code=0, timeout=timeout)
 
 
 
@@ -940,11 +945,10 @@ class WinInstance(Instance, TaggedResource):
         """Return the lines of metadata from the element path provided"""
         ### If i can reach the metadata service ip use it to get metadata otherwise try the clc directly
         try:
-            self.sys("ping -c 1 169.254.169.254", code=0, verbose=False)
             if use_cygwin:
-                return self.cygwin_curl("http://169.254.169.254/"+str(prefix)+str(element_path))
+                return self.cygwin_curl("http://169.254.169.254/"+str(prefix)+str(element_path), connect_timeout=10)
             else:
-                return self.sys("curl http://169.254.169.254/"+str(prefix)+str(element_path), code=0)
+                return self.sys("curl --connect-timeout 10 http://169.254.169.254/"+str(prefix)+str(element_path), code=0)
         except:
             if use_cygwin:
                 return self.cygwin_curl("http://" + self.tester.get_ec2_ip()  + ":8773/"+str(prefix) + str(element_path))
@@ -1758,8 +1762,6 @@ class WinInstance(Instance, TaggedResource):
 
 
 
-
-
     def reboot_instance_and_verify(self,
                                    waitconnect=60,
                                    timeout=600,
@@ -1829,7 +1831,18 @@ class WinInstance(Instance, TaggedResource):
         self.debug(self.id+" reboot_instance_and_verify Success")
 
 
-    def get_uptime(self, updateinterval=10):
+    def get_uptime(self):
+        if not hasattr(self, 'system_info'):
+            self.update_system_info()
+        if hasattr(self.system_info, 'system_boot_time'):
+            return self._get_uptime_from_system_boot_time()
+        elif hasattr(self.system_info, 'system_up_time'):
+            return self._get_uptime_from_system_up_time()
+        else:
+            tb = self.tester.get_traceback()
+            raise Exception(str(tb) + '\nCould not get system boot or up time from system_info')
+
+    def _get_uptime_from_system_boot_time(self):
             #11/18/2013, 3:15:39 PM
         if not hasattr(self, 'system_info'):
             self.update_system_info()
@@ -1849,8 +1862,34 @@ class WinInstance(Instance, TaggedResource):
                          str(seconds)
         dt = datetime.strptime(datetimestring, "%Y %m %d %H %M %S")
         return int(time.time() - time.mktime(dt.timetuple()))
-
-
+    
+    def _get_uptime_from_system_up_time(self):
+        #0 Days, 0 Hours, 6 Minutes, 39 Seconds
+        if not hasattr(self, 'system_info'):
+            self.update_system_info()
+        uptime_string = self.system_info.system_up_time
+        days = 0
+        hours = 0
+        minutes = 0
+        seconds = 0
+        split = uptime_string.split(',')
+        for part in split:
+            time_string = ""
+            if re.search('Days', part, re.IGNORECASE):
+                time_string = str(part.split()[0]).strip()
+                days = int(time_string or 0)
+            elif re.search('Hours', part, re.IGNORECASE):
+                time_string = str(part.split()[0]).strip()
+                hours = int(time_string or 0)
+            elif re.search('Minutes', part, re.IGNORECASE):
+                time_string = str(part.split()[0]).strip()
+                minutes = int(time_string or 0)
+            elif re.search('Seconds', part, re.IGNORECASE):
+                time_string = str(part.split()[0]).strip()
+                seconds = int(time_string or 0)
+        self.debug("Days:" +str(days)+', Hours:'+ str(hours) + ", Minutes:" + str(minutes) + ", Seconds:" + str(seconds))
+        uptime = (days * 86400) + (hours * 3600) + (minutes * 60) + seconds
+        return uptime
 
 
 

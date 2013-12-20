@@ -334,7 +334,15 @@ class SshConnection():
         return output
 
 
-    def cmd(self, cmd, verbose=None, timeout=120, listformat=False, enable_debug=False, cb=None, cbargs=[], get_pty=True):
+    def cmd(self,
+            cmd,
+            verbose=None,
+            timeout=120,
+            listformat=False,
+            enable_debug=False,
+            cb=None, cbargs=[],
+            invoke_shell=False,
+            get_pty=True):
         """ 
         Runs a command 'cmd' within an ssh connection. 
         Upon success returns dict representing outcome of the command.
@@ -378,18 +386,22 @@ class SshConnection():
             self.debug("[" + self.username + "@" + str(self.host) + "]# " + cmd)
         try:
             tran = self.connection.get_transport()
-            if tran is None:
+            if tran is None or not tran.active:
                 self.debug("SSH transport was None, attempting to restablish ssh to: "+str(self.host))
                 self.refresh_connection()
                 tran = self.connection.get_transport()
             chan = tran.open_session()
             chan.settimeout(timeout)
+            chan.setblocking(0)
             if get_pty:
                 chan.get_pty()
-            chan.exec_command(cmd)
+            if invoke_shell:
+                chan.invoke_shell()
+                chan.sendall(cmd)
+            else:
+                chan.exec_command(cmd)
             output = None
             fd = chan.fileno()
-            chan.setblocking(0)
             cmdstart = start = time.time()
             newdebug = "\n"
             while not chan.closed:
@@ -430,12 +442,12 @@ class SshConnection():
                                         else:
                                             output += cbreturn.buf
                                     cbfired = True
+                                    chan.close()
                                     #Let the callback dictate the return code, otherwise -1 for connection err may occur
                                     if cbreturn.statuscode != -1:
                                         status = cbreturn.statuscode
                                     else:
                                         status = self.lastexitcode = chan.recv_exit_status()
-                                    chan.close()
                                     break
                                 else:
 
@@ -580,8 +592,8 @@ class SshConnection():
             enable_ipv6_dns = self.enable_ipv6_dns
         proxy = proxy or self.proxy
 
-        self.debug("ssh_connect args:\nhostname:" + hostname
-                    + "\nusername:" + username
+        self.debug("ssh_connect args:\nhostname:" + str(hostname)
+                    + "\nusername:" + str(username)
                     + "\npassword:" + str(password)
                     + "\nkeypath:" + str(keypath)
                     + "\nproxy_username:" + str(proxy_username)
