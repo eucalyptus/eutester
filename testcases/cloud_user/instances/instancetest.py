@@ -52,7 +52,7 @@ class InstanceBasics(EutesterTestCase):
             self.image = emi
         else:
             self.image = self.tester.get_emi(root_device_type="instance-store",not_location="loadbalancer")
-        self.user_data = 'testcases/cloud_user/instances/user-data-tests/userdata-max-size.txt'
+        self.user_data_file = 'testcases/cloud_user/instances/user-data-tests/userdata-max-size.txt'
 
         self.address = None
         self.volume = None
@@ -64,7 +64,7 @@ class InstanceBasics(EutesterTestCase):
             self.zone = zone
         self.reservation = None
         self.reservation_lock = threading.Lock()
-        self.run_instance_params = {'image': self.image, 'user_data': self.user_data, 'username': instance_user,
+        self.run_instance_params = {'image': self.image, 'user_data_file': self.user_data_file, 'username': instance_user,
                                 'keypair': self.keypair.name, 'group': self.group.name,'zone': self.zone,
                                 'timeout': self.instance_timeout}
         self.managed_network = True
@@ -240,11 +240,10 @@ class InstanceBasics(EutesterTestCase):
             """
             For aesthetics, the user data value is a 16K file thats converted to string then compare,
             """
-            file_type = magic.from_file(self.user_data, mime=True)
-            if re.search("text", file_type):
-                with open(self.user_data) as user_data_file:
+            if self.user_data_file:
+                with open(self.user_data_file) as user_data_file:
                     user_data = user_data_file.read()
-                self.assertTrue(re.search(instance.get_userdata(), user_data), 'Incorrect User Data File')
+                self.assertTrue(re.search(instance.get_userdata(file=True), user_data), 'Incorrect User Data File')
 
     def DNSResolveCheck(self, zone=None):
         """

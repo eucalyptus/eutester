@@ -21,7 +21,7 @@ import gzip
 
 class InstanceBasics(EutesterTestCase):
     def __init__( self, name="InstanceBasics", credpath=None, region=None, config_file=None, password=None, emi=None, zone=None,
-                  user_data=None, instance_user=None, **kwargs):
+                  user_data=None, user_data_file=None, instance_user=None, **kwargs):
         """
         EC2 API tests focused on instance store instances
 
@@ -32,6 +32,7 @@ class InstanceBasics(EutesterTestCase):
         :param emi: Image id to use for test
         :param zone: Availability Zone to run test in
         :param user_data: User Data to pass to instance
+        :param user_data_file: User Data file to pass to instance
         :param instance_user: User to login to instance as
         :param kwargs: Additional arguments
         """
@@ -53,8 +54,12 @@ class InstanceBasics(EutesterTestCase):
             self.image = emi
         else:
             self.image = self.tester.get_emi(root_device_type="instance-store",not_location="loadbalancer")
-        if user_data:
-            self.user_data = user_data
+        if user_data_file:
+            self.user_data_file = user_data_file
+            self.user_data = None
+        elif user_data:
+            self.user_data = user_data  
+            self.user_data_file = None
 
         self.address = None
         self.volume = None
@@ -66,8 +71,8 @@ class InstanceBasics(EutesterTestCase):
             self.zone = zone
         self.reservation = None
         self.reservation_lock = threading.Lock()
-        self.run_instance_params = {'image': self.image, 'user_data': self.user_data, 'username': instance_user,
-                                'keypair': self.keypair.name, 'group': self.group.name,'zone': self.zone,
+        self.run_instance_params = {'image': self.image, 'user_data': self.user_data, 'user_data_file': self.user_data_file,
+                                'username': instance_user, 'keypair': self.keypair.name, 'group': self.group.name,'zone': self.zone,
                                 'timeout': self.instance_timeout}
         self.managed_network = True
 
@@ -104,16 +109,11 @@ class InstanceBasics(EutesterTestCase):
             Test to see if user data value is a file; if its a file, convert to string then compare,
             if not, do a string compare
             """
-            if os.path.isfile(self.user_data):
-                file_type = magic.from_file(self.user_data, mime=True)
-                if re.search("text", file_type):
-                    with open(self.user_data) as user_data_file:
-                        user_data = user_data_file.read()
-                elif re.search("gzip", file_type):
-                    gzip_file = gzip.GzipFile(fileobj=open(self.user_data))
-                    user_data = gzip_file.read()
-                self.assertTrue(re.search(instance.get_userdata(), user_data), 'Incorrect User Data File')
-            else:
+            if self.user_data_file:
+                with open(self.user_data_file) as user_data_file:
+                    user_data = user_data_file.read()
+                self.assertTrue(re.search(instance.get_userdata(file=True), user_data), 'Incorrect User Data File')
+            elif self.user_data:
                 self.assertTrue(re.search(instance.get_userdata(), self.user_data), 'Incorrect User Data String')
 
 

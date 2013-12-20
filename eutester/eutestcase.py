@@ -479,6 +479,9 @@ class EutesterTestCase(unittest.TestCase):
         if userdata:
             parser.add_argument('--user-data',
                                 help="User data string to provide instance run within this test", default=None)
+        if userdata:
+            parser.add_argument('--user-data-file',
+                                help="User data file to provide instance run within this test", default=None)
         if instance_user:
             parser.add_argument('--instance-user',
                                 help="Username used for ssh login. Default:'root'", default='root')

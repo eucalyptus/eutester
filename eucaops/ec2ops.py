@@ -2385,6 +2385,7 @@ disable_root: false"""
                      zone=None,
                      min=1,
                      max=1,
+                     user_data_file=None,
                      user_data=None,
                      private_addressing=False,
                      username="root",
@@ -2402,6 +2403,7 @@ disable_root: false"""
         :param zone: Availability zone to run these instances
         :param min: Minimum instnaces to launch, default 1
         :param max: Maxiumum instances to launch, default 1
+        :param user_data_file: User-data file to pass to instance
         :param user_data: User-data string to pass to instance
         :param private_addressing: Runs an instance with only private IP address
         :param username: username to use when connecting via ssh
@@ -2417,6 +2419,8 @@ disable_root: false"""
             image = self.get_emi(emi=str(image))
         if image is None:
             raise Exception("emi is None. run_instance could not auto find an emi?")
+        if user_data_file:
+           user_data = user_data_file
         if not user_data:
             user_data = self.enable_root_user_data
         if private_addressing is True:
@@ -2434,7 +2438,8 @@ disable_root: false"""
         else:
             enabled=False
         start = time.time()
-        
+       
+  
         self.debug( "Attempting to run "+ str(image.root_device_type)  +" image " + str(image) + " in group " + str(group))
         reservation = image.run(key_name=keypair,security_groups=[group],instance_type=type, placement=zone,
                                 min_count=min, max_count=max, user_data=user_data, addressing_type=addressing_type,
@@ -2509,6 +2514,7 @@ disable_root: false"""
                   max=1,
                   block_device_map=None,
                   user_data=None,
+                  user_data_file=None,
                   private_addressing=False, 
                   username="root", 
                   password=None,
@@ -2526,6 +2532,7 @@ disable_root: false"""
         :param min: minimum amount of instances to try to run
         :param max: max amount of instances to try to run
         :param user_data: user_data to run instances with
+        :param user_data_file: user_data file to run instances with
         :param private_addressing: boolean to run instances without public ips
         :param username: username for connecting ssh to instances
         :param password: password for connnecting ssh to instances
@@ -2548,6 +2555,8 @@ disable_root: false"""
                 image = self.get_emi(emi=str(image))
             if image is None:
                 raise Exception("emi is None. run_instance could not auto find an emi?")
+            if user_data_file:
+                user_data = user_data_file
             if not user_data:
                 user_data = self.enable_root_user_data
             if private_addressing is True:
