@@ -2557,7 +2557,8 @@ disable_root: false"""
             if image is None:
                 raise Exception("emi is None. run_instance could not auto find an emi?")
             if user_data_file:
-                user_data = user_data_file
+                with open(user_data_file) as userdata_file:
+                    user_data = userdata_file.read()
             if not user_data:
                 user_data = self.enable_root_user_data
             if private_addressing is True:
