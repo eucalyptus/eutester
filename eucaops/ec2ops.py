@@ -37,9 +37,6 @@ import os
 import copy
 import socket
 import types
-import hmac
-import json
-import hashlib
 import base64
 from datetime import datetime, timedelta
 import time
@@ -2388,6 +2385,7 @@ disable_root: false"""
                      zone=None,
                      min=1,
                      max=1,
+                     user_data_file=None,
                      user_data=None,
                      private_addressing=False,
                      username="root",
@@ -2405,6 +2403,7 @@ disable_root: false"""
         :param zone: Availability zone to run these instances
         :param min: Minimum instnaces to launch, default 1
         :param max: Maxiumum instances to launch, default 1
+        :param user_data_file: User-data file to pass to instance
         :param user_data: User-data string to pass to instance
         :param private_addressing: Runs an instance with only private IP address
         :param username: username to use when connecting via ssh
@@ -2420,6 +2419,9 @@ disable_root: false"""
             image = self.get_emi(emi=str(image))
         if image is None:
             raise Exception("emi is None. run_instance could not auto find an emi?")
+        if user_data_file:
+           with open(user_data_file) as userdata_file:
+                    user_data = userdata_file.read()
         if not user_data:
             user_data = self.enable_root_user_data
         if private_addressing is True:
@@ -2437,7 +2439,8 @@ disable_root: false"""
         else:
             enabled=False
         start = time.time()
-        
+       
+  
         self.debug( "Attempting to run "+ str(image.root_device_type)  +" image " + str(image) + " in group " + str(group))
         reservation = image.run(key_name=keypair,security_groups=[group],instance_type=type, placement=zone,
                                 min_count=min, max_count=max, user_data=user_data, addressing_type=addressing_type,
@@ -2512,6 +2515,7 @@ disable_root: false"""
                   max=1,
                   block_device_map=None,
                   user_data=None,
+                  user_data_file=None,
                   private_addressing=False, 
                   username="root", 
                   password=None,
@@ -2529,6 +2533,7 @@ disable_root: false"""
         :param min: minimum amount of instances to try to run
         :param max: max amount of instances to try to run
         :param user_data: user_data to run instances with
+        :param user_data_file: user_data file to run instances with
         :param private_addressing: boolean to run instances without public ips
         :param username: username for connecting ssh to instances
         :param password: password for connnecting ssh to instances
@@ -2551,6 +2556,8 @@ disable_root: false"""
                 image = self.get_emi(emi=str(image))
             if image is None:
                 raise Exception("emi is None. run_instance could not auto find an emi?")
+            if user_data_file:
+                user_data = user_data_file
             if not user_data:
                 user_data = self.enable_root_user_data
             if private_addressing is True:
@@ -3586,7 +3593,7 @@ disable_root: false"""
                                         + str(bundle_task.state) + "' in monitor")
                     if bundle_task.state == 'failed':
                         raise Exception(str(bundle_id) + ": Bundle task reporting failed state during monitor")
-                    if bundle_task.state == 'complete':
+                    if bundle_task.state == 'completed':
                         self.debug(str(bundle_id) +":  Bundle task reported state is completed during monitor")
                         monitor_list.remove(bundle_id)
                 except Exception, e:
@@ -3659,7 +3666,8 @@ disable_root: false"""
                 instance.sys("chkconfig httpd on")
         return (reservation, filename)
 
-    def generate_default_s3_upload_policy(self, bucket, prefix, expiration=24, acl='ec2-bundle-read', encode=True):
+
+    def generate_default_s3_upload_policy(self, bucket, prefix, expiration=24, acl='ec2-bundle-read'):
         """
         Generates s3 upload policy for bundle instance operation
 
@@ -3669,29 +3677,19 @@ disable_root: false"""
         :param acl: acl to be used
         :return: s3 upload encoded policy
         """
-
         delta = timedelta(hours=expiration)
         expiration_time = (datetime.utcnow() + delta).replace(microsecond=0)
         expiration_str = expiration_time.isoformat()
-        
+
         policy = '{"expiration": "%s",' % expiration_str + \
-        '"conditions": [' + \
-        '{"bucket": "%s" },' % bucket + \
-        '{"acl": "%s" },' % acl + \
-        '["starts-with", "$key", "%s"]' % prefix + \
-        ']' + \
-        '}'
-
-        if encode:
-            policy = base64.b64encode(policy)
-        return policy
-
-
-
-    def sign_policy(self, policy):
-        my_hmac = hmac.new(self.aws_secret_access_key, policy, digestmod=hashlib.sha1)
-        return base64.b64encode(my_hmac.digest())
-
+                 '"conditions": [' + \
+                 '{"bucket": "%s" },' % bucket + \
+                 '{"acl": "%s" },' % acl + \
+                 '["starts-with", "$key", "%s"]' % prefix + \
+                 ']' + \
+                 '}'
+        encoded_policy = base64.b64encode(policy)
+        return encoded_policy
 
 
     def get_euzones(self, zones=None):
