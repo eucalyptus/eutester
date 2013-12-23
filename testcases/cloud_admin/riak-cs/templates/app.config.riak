@@ -20,6 +20,7 @@
               %% Default location of ringstate
               {ring_state_dir, "/var/lib/riak/ring"},
               {default_bucket_props, [{allow_mult, true}]},
+
               %% Default ring creation size.  Make sure it is a power of 2,
               %% e.g. 16, 32, 64, 128, 256, 512 etc
               %{ring_creation_size, 64},
@@ -93,6 +94,7 @@
                 {data_root, "/var/lib/riak/bitcask"}
               ]}
             ]},
+
             %% raw_name is the first part of all URLS used by the Riak raw HTTP
             %% interface.  See riak_web.erl and raw_http_resource.erl for
             %% details.
@@ -196,6 +198,13 @@
             %% represents two potential processes, so +P in vm.args should be at 
             %% least 3X the fsm_limit.
             {fsm_limit, 50000},
+
+            %% Uncomment to make non-paginated results be sorted the
+            %% same way paginated results are: by term, then key.
+            %% In Riak 1.4.* before 1.4.4, all results were sorted this way
+            %% by default, which can adversely affect performance in some cases.
+            %% Setting this to true emulates that behavior.
+            %% {secondary_index_sort_default, true},
 
             %% object_format controls which binary representation of a riak_object 
             %% is stored on disk.
