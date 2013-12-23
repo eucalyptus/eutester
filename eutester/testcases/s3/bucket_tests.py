@@ -9,13 +9,13 @@
 
 #Author: Zach Hill <zach@eucalyptus.com>
 
-from eucaops import Eucaops
+from eutester.euca.euca_ops import Eucaops
 import argparse
 import time
 import re
 
-from eutester.eutestcase import EutesterTestCase
-from eucaops import S3ops
+from eutester.utils.testcase import EutesterTestCase
+from eutester.euca.euca_ops import S3ops
 from boto.exception import S3ResponseError
 from boto.exception import S3CreateError
 import boto
@@ -24,6 +24,7 @@ from boto.s3.bucket import Bucket
 from boto.s3.key import Key
 from boto.s3.acl import ACL, Policy, Grant
 from boto.s3.connection import Location
+import sys
 
 
 class BucketTestSuite(EutesterTestCase):
@@ -58,8 +59,8 @@ class BucketTestSuite(EutesterTestCase):
         except (S3ResponseError, S3CreateError) as e:
             self.fail(test_bucket + " create caused exception: " + e)
         
-        try :    
-            bucket = self.tester.s3.get_bucket(test_bucket)
+        try :
+            bucket = self.tester.s3.get_bucket_by_name(test_bucket)
             if bucket == None:
                 self.tester.s3.delete_bucket(test_bucket)
                 self.fail(test_bucket +" was not fetched by get_bucket call")
@@ -68,9 +69,9 @@ class BucketTestSuite(EutesterTestCase):
             self.fail("Exception getting bucket" + e)
             
         
-        self.tester.s3.delete_bucket(test_bucket)        
+        self.tester.s3.delete_bucket(bucket)
         try :
-            if self.tester.s3.get_bucket(test_bucket) != None:
+            if self.tester.s3.get_bucket_by_name(test_bucket) != None:
                 self.tester.s3.delete_bucket(test_bucket)            
                 self.fail("Delete of " + test_bucket + " failed, still exists")
         except S3ResponseError as e:
@@ -592,4 +593,4 @@ if __name__ == "__main__":
     ### Run the EutesterUnitTest objects
 
     result = testcase.run_test_case_list(unit_list,clean_on_exit=True)
-    exit(result)
+    sys.exit(result)

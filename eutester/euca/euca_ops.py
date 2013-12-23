@@ -124,7 +124,8 @@ class Eucaops(Eutester):
     def s3(self):
         """S3ops for this eucaops"""
         if 's3' not in self.__dict__:
-            ops = S3ops(endpoint=self.s3_ip, path="/services/Walrus", port=8773, is_secure=False,aws_access_key_id=self.aws_access_key_id,
+            # need to check walrus for backward compatibility if needed
+            ops = S3ops(endpoint=self.s3_ip, path="/services/objectstorage", port=8773, is_secure=False,aws_access_key_id=self.aws_access_key_id,
                          aws_secret_access_key=self.aws_secret_access_key,  boto_debug=self.boto_debug, credpath=self.credpath)
             ops.setup_s3_resource_trackers()
             return ops
@@ -182,8 +183,8 @@ class Eucaops(Eutester):
     def download_credentials_from_system(self, account, user):
         clc_array = self.get_component_machines("clc")
         self.clc = clc_array[0]
-        walrus_array = self.get_component_machines("ws")
-        self.walrus = walrus_array[0]
+        # walrus_array = self.get_component_machines("ws")
+        # self.walrus = walrus_array[0]
         if self.credpath is None:
             ### TRY TO GET CREDS ON FIRST CLC if it fails try on second listed clc, if that fails weve hit a terminal condition
             try:
@@ -202,7 +203,7 @@ class Eucaops(Eutester):
                 self.get_credentials(account, user)
         self.service_manager = ServiceManager(self)
         self.clc = self.service_manager.get_enabled_clc().machine
-        self.walrus = self.service_manager.get_enabled_walrus().machine
+        # self.walrus = self.service_manager.get_enabled_walrus().machine
 
     def get_available_vms(self, type=None, zone=None):
         """
@@ -554,12 +555,12 @@ class Eucaops(Eutester):
 
     def swap_walrus(self):
         all_walruses = self.get_component_machines("ws")
-        if self.walrus is all_walruses[0]: 
+        if self.object_storage is all_walruses[0]:
             self.debug("Swapping Walrus from " + all_walruses[0].hostname + " to " + all_walruses[1].hostname)
-            self.walrus = all_walruses[1]
-        elif self.walrus is all_walruses[1]:
+            self.object_storage = all_walruses[1]
+        elif self.object_storage is all_walruses[1]:
             self.debug("Swapping Walrus from " + all_walruses[1].hostname + " to " + all_walruses[0].hostname)
-            self.walrus = all_walruses[0]
+            self.object_storage = all_walruses[0]
             
     def get_network_mode(self):
         return self.config['network']
