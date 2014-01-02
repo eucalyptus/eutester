@@ -16,6 +16,7 @@ class InstallRiak(EutesterTestCase):
         self.parser.add_argument("--admin-name", default="admin")
         self.parser.add_argument("--admin-email", default="admin@admin.com")
         self.parser.add_argument("--template-path", default="/templates/")
+        self.parser.add_argument("--riak-cs-port", default="8080")
         self.get_args()
         # Setup basic eutester object
         self.tester = Eucaops( config_file=self.args.config,password=self.args.password)
@@ -40,16 +41,17 @@ class InstallRiak(EutesterTestCase):
                         remote_file = "/etc/" + component + "/" + config_file
                         machine.sftp.put(local_file, remote_file)
                         machine.sys("sed -i s/IPADDRESS/" + machine.hostname + "/g " + remote_file)
+                        machine.sys("sed -i s/RIAKCSPORT/" + self.args.riak_cs_port + "/g " + remote_file)
                 machine.sys("riak start", code=0)
                 machine.sys("stanchion start", code=0)
                 machine.sys("riak-cs start", code=0)
                 self.tester.sleep(20)
                 response_json = machine.sys('curl -H \'Content-Type: application/json\' -X POST http://' + machine.hostname +
-                                       ':8080/riak-cs/user --data \'{"email":"' + self.args.admin_email +'", '
+                                       ':' + self.args.riak_cs_port + '/riak-cs/user --data \'{"email":"' + self.args.admin_email +'", '
                                        '"name":"' + self.args.admin_name +'"}\'', code=0)[0]
                 response_dict = json.loads(response_json)
                 cs_tester = S3ops(endpoint=machine.hostname, aws_access_key_id=response_dict["key_id"],
-                                  aws_secret_access_key=response_dict["key_secret"], port=8080)
+                                  aws_secret_access_key=response_dict["key_secret"], port=int(self.args.riak_cs_port))
                 test_time = str(int(time.time()))
                 bucket_name = "riak-test-bucket-" + test_time
                 key_name = "riak-test-key-" + test_time
@@ -63,7 +65,7 @@ class InstallRiak(EutesterTestCase):
                 self.tester.info("Configuring OSG to use RiakCS backend")
                 self.tester.modify_property("objectstorage.providerclient","s3")
 
-                endpoint = machine.hostname + ":8080"
+                endpoint = machine.hostname + ":" + self.args.riak_cs_port
                 self.tester.info("Configuring OSG to use s3 endpoint: " + endpoint)
                 self.tester.modify_property("objectstorage.s3provider.s3endpoint", endpoint)
 
