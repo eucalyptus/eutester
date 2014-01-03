@@ -36,6 +36,7 @@ from boto.ec2.regioninfo import RegionInfo
 import boto
 from concurrent.futures import ThreadPoolExecutor
 import urllib2
+import cookielib
 from eutester import Eutester
 from boto.ec2.elb.listener import Listener
 from boto.ec2.elb.healthcheck import HealthCheck
@@ -176,6 +177,10 @@ class ELBops(Eutester):
 
     def generate_http_requests(self, url, count=100, worker_threads=20):
         self.debug("Generating {0} http requests against {1}".format(count, url))
+        jar = cookielib.FileCookieJar("cookies")
+        handler = urllib2.HTTPCookieProcessor(jar)
+        opener = urllib2.build_opener(handler)
+        urllib2.install_opener(opener)
         response_futures = []
         with ThreadPoolExecutor(max_workers=worker_threads) as executor:
             for _ in range(count):
@@ -187,8 +192,9 @@ class ELBops(Eutester):
             try:
                 http_error_code = http_response.getcode()
                 if http_error_code == 200:
-                    self.debug("Request response: {0}".format(http_response.read().rstrip()))
-                    responses.append(http_response)
+                    result = "{0}".format(http_response.read().rstrip())
+                    self.debug("Request response: " + result)
+                    responses.append(result)
                 else:
                     raise Exception("Error code " + http_error_code + " found when sending " +
                                     str(worker_threads) + " concurrent requests to " + url)
