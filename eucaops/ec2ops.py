@@ -3637,7 +3637,7 @@ disable_root: false"""
         return image_obj
 
 
-    def create_web_servers(self, keypair, group, zone, port=80, count=2, image=None, filename="test-file"):
+    def create_web_servers(self, keypair, group, zone, port=80, count=2, image=None, filename="test-file", cookiename="test-cookie"):
         if not image:
             image = self.get_emi()
         reservation = self.run_instance(image, keypair=keypair, group=group, zone=zone, min=count, max=count)
@@ -3651,10 +3651,14 @@ disable_root: false"""
                 ## Debian based Linux
                 instance.sys("apt-get install -y apache2", code=0)
                 instance.sys("echo \"" + instance.id +"\" > /var/www/" + filename)
+                instance.sys("echo \"CookieTracking on\" >> /etc/apache2/apache2.conf")
+                instance.sys("echo CookieName " + cookiename +" >> /etc/apache2/apache2.conf")
             except eutester.sshconnection.CommandExitCodeException, e:
                 ### Enterprise Linux
                 instance.sys("yum install -y httpd", code=0)
                 instance.sys("echo \"" + instance.id +"\" > /var/www/html/" + filename)
+                instance.sys("echo \"CookieTracking on\" >> /etc/httpd/conf/httpd.conf")
+                instance.sys("echo CookieName " + cookiename +" >> /etc/httpd/conf/httpd.conf")
                 instance.sys("service httpd start")
                 instance.sys("chkconfig httpd on")
         return (reservation, filename)
