@@ -3371,7 +3371,7 @@ disable_root: false"""
                else:
                     self.debug('Instance: ' + str(instance.id) + ' in terminated state:' + str(instance.state))
             except EC2ResponseError, e:
-                if e.status == 409:
+                if e.status == 400:
                     pass
                 else:
                     raise e
