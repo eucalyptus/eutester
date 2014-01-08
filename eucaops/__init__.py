@@ -152,13 +152,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
             try:
                 if self.credpath and not s3_ip:
                     s3_ip = self.get_s3_ip()
-                
-                #Eucalyptus version 4.0+ the s3 endpoint is /services/objectstorage
-                service_path = "/services/Walrus";
-                if self.service_manager.get_enabled_clc().machine.get_eucalyptus_version() >= "4.0":
-                    service_path = "/services/objectstorage"
-                    
-                self.setup_s3_connection(endpoint=s3_ip, path=service_path, port=8773, is_secure=False,aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,  boto_debug=boto_debug)
+                self.setup_s3_connection(endpoint=s3_ip, path=self.get_s3_path(), port=8773, is_secure=False,aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,  boto_debug=boto_debug)
                 self.setup_s3_resource_trackers()
             except Exception, e:
                 self.debug("Unable to create S3 connection because of: " + str(e) )
