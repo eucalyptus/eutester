@@ -155,7 +155,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
                 
                 #Eucalyptus version 4.0+ the s3 endpoint is /services/objectstorage
                 service_path = "/services/Walrus";
-                if self.service_manager.get_enabled_clc().get_eucalyptus_version() >= "4.0":
+                if self.service_manager.get_enabled_clc().machine.get_eucalyptus_version() >= "4.0":
                     service_path = "/services/objectstorage"
                     
                 self.setup_s3_connection(endpoint=s3_ip, path=service_path, port=8773, is_secure=False,aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,  boto_debug=boto_debug)
