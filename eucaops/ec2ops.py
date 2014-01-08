@@ -3365,16 +3365,16 @@ disable_root: false"""
                     self.debug( "Sending terminate for " + str(instance))
                     try:
                        instance.terminate()
+                       instance.update()
+                       if instance.state != 'terminated':
+                            monitor_list.append(instance)
+                       else:
+                            self.debug('Instance: ' + str(instance.id) + ' in terminated state:' + str(instance.state))
                     except EC2ResponseError, e:
                         if e.status == 409:
                             pass
                         else:
                             raise e
-                    instance.update()
-                    if instance.state != 'terminated':
-                        monitor_list.append(instance)
-                    else:
-                        self.debug('Instance: ' + str(instance.id) + ' in terminated state:' + str(instance.state))
 
         self.print_euinstance_list(euinstance_list=monitor_list)
         try:
