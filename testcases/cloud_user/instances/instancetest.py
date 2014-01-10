@@ -43,14 +43,15 @@ class InstanceBasics(EutesterTestCase):
         ### Add and authorize a group for the instance
         self.group = self.tester.add_group(group_name="group-" + str(time.time()))
         self.tester.authorize_group_by_name(group_name=self.group.name)
-        self.tester.authorize_group_by_name(group_name=self.group.name, port=-1, protocol="icmp" )
+        self.tester.authorize_group_by_name(group_name=self.group.name, port=-1, protocol="icmp")
         ### Generate a keypair for the instance
-        self.keypair = self.tester.add_keypair( "keypair-" + str(time.time()))
+        self.keypair = self.tester.add_keypair("keypair-" + str(time.time()))
         self.keypath = '%s/%s.pem' % (os.curdir, self.keypair.name)
         if emi:
             self.image = emi
         else:
-            self.image = self.tester.get_emi(root_device_type="instance-store",not_location="loadbalancer")
+            self.image = self.tester.get_emi(root_device_type="instance-store",
+                                             not_location=['windows', 'loadbalancer'])
         self.address = None
         self.volume = None
         self.private_addressing = False
@@ -62,13 +63,13 @@ class InstanceBasics(EutesterTestCase):
         self.reservation = None
         self.reservation_lock = threading.Lock()
         self.run_instance_params = {'image': self.image, 'user_data': user_data, 'username': instance_user,
-                                'keypair': self.keypair.name, 'group': self.group.name,'zone': self.zone,
-                                'timeout': self.instance_timeout}
+                                    'keypair': self.keypair.name, 'group': self.group.name, 'zone': self.zone,
+                                    'timeout': self.instance_timeout}
         self.managed_network = True
 
         ### If I have access to the underlying infrastructure I can look
         ### at the network mode and only run certain tests where it makes sense
-        if hasattr(self.tester,"service_manager"):
+        if hasattr(self.tester, "service_manager"):
             cc = self.tester.get_component_machines("cc")[0]
             network_mode = cc.sys("cat " + self.tester.eucapath + "/etc/eucalyptus/eucalyptus.conf | grep MODE")[0]
             if re.search("(SYSTEM|STATIC)", network_mode):
@@ -96,9 +97,10 @@ class InstanceBasics(EutesterTestCase):
         """
         reservation = self.tester.run_instance(**self.run_instance_params)
         for instance in reservation.instances:
-            self.assertTrue( self.tester.wait_for_reservation(reservation) ,'Instance did not go to running')
-            self.assertTrue( self.tester.ping(instance.ip_address), 'Could not ping instance')
-            self.assertFalse( instance.found("ls -1 /dev/" + instance.rootfs_device + "2",  "No such file or directory"),  'Did not find ephemeral storage at ' + instance.rootfs_device + "2")
+            self.assertTrue(self.tester.wait_for_reservation(reservation), 'Instance did not go to running')
+            self.assertTrue(self.tester.ping(instance.ip_address), 'Could not ping instance')
+            self.assertFalse(instance.found("ls -1 /dev/" + instance.rootfs_device + "2",  "No such file or directory"),
+                             "Did not find ephemeral storage at " + instance.rootfs_device + "2")
         self.set_reservation(reservation)
         return reservation
 
@@ -122,17 +124,17 @@ class InstanceBasics(EutesterTestCase):
                 self.tester.debug("WARNING: System or Static mode detected, skipping ElasticIps")
                 return reservation
             self.address = self.tester.allocate_address()
-            self.assertTrue(self.address,'Unable to allocate address')
+            self.assertTrue(self.address, 'Unable to allocate address')
             self.tester.associate_address(instance, self.address)
             instance.update()
-            self.assertTrue( self.tester.ping(instance.ip_address), "Could not ping instance with new IP")
+            self.assertTrue(self.tester.ping(instance.ip_address), "Could not ping instance with new IP")
             self.tester.disassociate_address_from_instance(instance)
             self.tester.release_address(self.address)
             self.address = None
             assert isinstance(instance, EuInstance)
             self.tester.sleep(5)
             instance.update()
-            self.assertTrue( self.tester.ping(instance.ip_address), "Could not ping after dissassociate")
+            self.assertTrue(self.tester.ping(instance.ip_address), "Could not ping after dissassociate")
         self.set_reservation(reservation)
         return reservation
 
@@ -148,7 +150,7 @@ class InstanceBasics(EutesterTestCase):
             self.set_reservation(None)
 
         reservation = self.tester.run_instance(min=2, max=2, **self.run_instance_params)
-        self.assertTrue(self.tester.wait_for_reservation(reservation) ,'Not all instances  went to running')
+        self.assertTrue(self.tester.wait_for_reservation(reservation), 'Not all instances  went to running')
         self.set_reservation(reservation)
         return reservation
 
@@ -163,7 +165,7 @@ class InstanceBasics(EutesterTestCase):
             self.tester.terminate_instances(self.reservation)
             self.set_reservation(None)
         reservation = self.tester.run_instance(type="c1.xlarge", **self.run_instance_params)
-        self.assertTrue( self.tester.wait_for_reservation(reservation) ,'Not all instances  went to running')
+        self.assertTrue(self.tester.wait_for_reservation(reservation), 'Not all instances  went to running')
         self.set_reservation(reservation)
         return reservation
 
@@ -197,33 +199,50 @@ class InstanceBasics(EutesterTestCase):
             reservation = self.reservation
         for instance in reservation.instances:
             ## Need to verify  the public key (could just be checking for a string of a certain length)
-            self.assertTrue(re.match(instance.get_metadata("public-keys/0/openssh-key")[0].split('eucalyptus.')[-1], self.keypair.name), 'Incorrect public key in metadata')
-            self.assertTrue(re.match(instance.get_metadata("security-groups")[0], self.group.name), 'Incorrect security group in metadata')
+            self.assertTrue(re.match(instance.get_metadata("public-keys/0/openssh-key")[0].split('eucalyptus.')[-1],
+                                     self.keypair.name), 'Incorrect public key in metadata')
+            self.assertTrue(re.match(instance.get_metadata("security-groups")[0], self.group.name),
+                            'Incorrect security group in metadata')
             # Need to validate block device mapping
             #self.assertTrue(re.search(instance_ssh.get_metadata("block-device-mapping/")[0], "")) 
-            self.assertTrue(re.match(instance.get_metadata("instance-id")[0], instance.id), 'Incorrect instance id in metadata')
-            self.assertTrue(re.match(instance.get_metadata("local-ipv4")[0] , instance.private_ip_address), 'Incorrect private ip in metadata')
-            self.assertTrue(re.match(instance.get_metadata("public-ipv4")[0] , instance.ip_address), 'Incorrect public ip in metadata')
-            self.assertTrue(re.match(instance.get_metadata("ami-id")[0], instance.image_id), 'Incorrect ami id in metadata')
-            self.assertTrue(re.match(instance.get_metadata("ami-launch-index")[0], instance.ami_launch_index), 'Incorrect launch index in metadata')
-            self.assertTrue(re.match(instance.get_metadata("reservation-id")[0], reservation.id), 'Incorrect reservation in metadata')
-            self.assertTrue(re.match(instance.get_metadata("placement/availability-zone")[0], instance.placement), 'Incorrect availability-zone in metadata')
-            self.assertTrue(re.match(instance.get_metadata("kernel-id")[0], instance.kernel),  'Incorrect kernel id in metadata')
-            self.assertTrue(re.match(instance.get_metadata("public-hostname")[0], instance.public_dns_name), 'Incorrect public host name in metadata')
-            self.assertTrue(re.match(instance.get_metadata("local-hostname")[0], instance.private_dns_name), 'Incorrect private host name in metadata')
-            self.assertTrue(re.match(instance.get_metadata("hostname")[0], instance.private_dns_name), 'Incorrect host name in metadata')
-            self.assertTrue(re.match(instance.get_metadata("ramdisk-id")[0], instance.ramdisk ), 'Incorrect ramdisk in metadata') #instance-type
-            self.assertTrue(re.match(instance.get_metadata("instance-type")[0], instance.instance_type ), 'Incorrect instance type in metadata')
-            BAD_META_DATA_KEYS = ['foobar']
-            for key in BAD_META_DATA_KEYS:
-                self.assertTrue(re.search("Not Found", "".join(instance.get_metadata(key))), 'No fail message on invalid meta-data node')
+            self.assertTrue(re.match(instance.get_metadata("instance-id")[0], instance.id),
+                            'Incorrect instance id in metadata')
+            self.assertTrue(re.match(instance.get_metadata("local-ipv4")[0], instance.private_ip_address),
+                            'Incorrect private ip in metadata')
+            self.assertTrue(re.match(instance.get_metadata("public-ipv4")[0], instance.ip_address),
+                            'Incorrect public ip in metadata')
+            self.assertTrue(re.match(instance.get_metadata("ami-id")[0], instance.image_id),
+                            'Incorrect ami id in metadata')
+            self.assertTrue(re.match(instance.get_metadata("ami-launch-index")[0], instance.ami_launch_index),
+                            'Incorrect launch index in metadata')
+            self.assertTrue(re.match(instance.get_metadata("reservation-id")[0], reservation.id),
+                            'Incorrect reservation in metadata')
+            self.assertTrue(re.match(instance.get_metadata("placement/availability-zone")[0], instance.placement),
+                            'Incorrect availability-zone in metadata')
+            self.assertTrue(re.match(instance.get_metadata("kernel-id")[0], instance.kernel),
+                            'Incorrect kernel id in metadata')
+            self.assertTrue(re.match(instance.get_metadata("public-hostname")[0], instance.public_dns_name),
+                            'Incorrect public host name in metadata')
+            self.assertTrue(re.match(instance.get_metadata("local-hostname")[0], instance.private_dns_name),
+                            'Incorrect private host name in metadata')
+            self.assertTrue(re.match(instance.get_metadata("hostname")[0], instance.private_dns_name),
+                            'Incorrect host name in metadata')
+            self.assertTrue(re.match(instance.get_metadata("ramdisk-id")[0], instance.ramdisk),
+                            'Incorrect ramdisk in metadata')
+            self.assertTrue(re.match(instance.get_metadata("instance-type")[0], instance.instance_type),
+                            'Incorrect instance type in metadata')
+            bad_meta_data_keys = ['foobar']
+            for key in bad_meta_data_keys:
+                self.assertTrue(re.search("Not Found", "".join(instance.get_metadata(key))),
+                                'No fail message on invalid meta-data node')
         self.set_reservation(reservation)
         return reservation
 
-    def DNSResolveCheck(self, zone=None):
+    def DNSResolveCheck(self):
         """
         This case was developed to test DNS resolution information for public/private DNS
         names and IP addresses.  The tested DNS resolution behavior is expected to follow
+
         AWS EC2.  The following tests are ran using the associated meta-data attributes:
            - check to see if Eucalyptus Dynamic DNS is configured
            - nslookup on hostname; checks to see if it matches local-ipv4
@@ -233,8 +252,6 @@ class InstanceBasics(EutesterTestCase):
            - nslookup on public-ipv4; check to see if it matches public-host
         If any of these tests fail, the test case will error out; logging the results.
         """
-        if zone is None:
-            zone = self.zone
         if not self.reservation:
             reservation = self.tester.run_instance(**self.run_instance_params)
         else:
@@ -252,20 +269,27 @@ class InstanceBasics(EutesterTestCase):
             # Check to see if nslookup was able to resolve
             assert isinstance(instance, EuInstance)
             # Check nslookup to resolve public DNS Name to local-ipv4 address
-            self.assertTrue(instance.found("nslookup " + instance.public_dns_name + " " + self.tester.ec2.host, instance.private_ip_address), "Incorrect DNS resolution for hostname.")
+            self.assertTrue(instance.found("nslookup " + instance.public_dns_name + " " + self.tester.ec2.host,
+                                           instance.private_ip_address), "Incorrect DNS resolution for hostname.")
             # Check nslookup to resolve public-ipv4 address to public DNS name
             if self.managed_network:
-                self.assertTrue( instance.found("nslookup " +  instance.ip_address + " " + self.tester.ec2.host, instance.public_dns_name), "Incorrect DNS resolution for public IP address")
+                self.assertTrue(instance.found("nslookup " + instance.ip_address + " " + self.tester.ec2.host,
+                                               instance.public_dns_name),
+                                "Incorrect DNS resolution for public IP address")
             # Check nslookup to resolve private DNS Name to local-ipv4 address
             if self.managed_network:
-                self.assertTrue(instance.found("nslookup " + instance.private_dns_name + " " + self.tester.ec2.host, instance.private_ip_address), "Incorrect DNS resolution for private hostname.")
+                self.assertTrue(instance.found("nslookup " + instance.private_dns_name + " " + self.tester.ec2.host,
+                                               instance.private_ip_address),
+                                "Incorrect DNS resolution for private hostname.")
             # Check nslookup to resolve local-ipv4 address to private DNS name
-            self.assertTrue(instance.found("nslookup " +  instance.private_ip_address + " " + self.tester.ec2.host, instance.private_dns_name), "Incorrect DNS resolution for private IP address")
-        self.assertTrue(self.tester.ping(instance.public_dns_name))
+            self.assertTrue(instance.found("nslookup " + instance.private_ip_address + " " + self.tester.ec2.host,
+                                           instance.private_dns_name),
+                            "Incorrect DNS resolution for private IP address")
+            self.assertTrue(self.tester.ping(instance.public_dns_name))
         self.set_reservation(reservation)
         return reservation
 
-    def Reboot(self, zone=None):
+    def Reboot(self):
         """
         This case was developed to test IP connectivity and volume attachment after
         instance reboot.  The following tests are done for this test case:
@@ -277,16 +301,14 @@ class InstanceBasics(EutesterTestCase):
                    - deletes volume
         If any of these tests fail, the test case will error out; logging the results.
         """
-        if zone is None:
-            zone = self.zone
         if not self.reservation:
             reservation = self.tester.run_instance(**self.run_instance_params)
         else:
             reservation = self.reservation
         for instance in reservation.instances:
             ### Create 1GB volume in first AZ
-            volume = self.tester.create_volume(instance.placement,size=1, timepergig=180)
-            volume_device = instance.attach_volume(volume)
+            volume = self.tester.create_volume(instance.placement, size=1, timepergig=180)
+            instance.attach_volume(volume)
             ### Reboot instance
             instance.reboot_instance_and_verify(waitconnect=20)
             instance.detach_euvolume(volume)
@@ -313,7 +335,7 @@ class InstanceBasics(EutesterTestCase):
 
         ## Run through count iterations of test
         count = 4
-        future_instances =[]
+        future_instances = []
 
         with ThreadPoolExecutor(max_workers=count) as executor:
             ## Start asynchronous activity
@@ -326,7 +348,7 @@ class InstanceBasics(EutesterTestCase):
             ## Start asynchronous activity
             ## Terminate all instances
             for future in future_instances:
-                executor.submit(self.tester.terminate_instances,future.result())
+                executor.submit(self.tester.terminate_instances, future.result())
 
         def available_after_greater():
             return self.tester.get_available_vms(zone=self.zone) >= available_instances_before
@@ -351,15 +373,16 @@ class InstanceBasics(EutesterTestCase):
         reservation = self.tester.run_instance(private_addressing=True, **self.run_instance_params)
         for instance in reservation.instances:
             address = self.tester.allocate_address()
-            self.assertTrue(address,'Unable to allocate address')
+            self.assertTrue(address, 'Unable to allocate address')
             self.tester.associate_address(instance, address)
             self.tester.sleep(30)
             instance.update()
-            self.assertTrue( self.tester.ping(instance.ip_address), "Could not ping instance with new IP")
+            self.assertTrue(self.tester.ping(instance.ip_address), "Could not ping instance with new IP")
             address.disassociate()
             self.tester.sleep(30)
             instance.update()
-            self.assertFalse(self.tester.ping(instance.ip_address), "Was able to ping instance that should have only had a private IP")
+            self.assertFalse(self.tester.ping(instance.ip_address),
+                             "Was able to ping instance that should have only had a private IP")
             address.release()
             if instance.ip_address != "0.0.0.0" and instance.ip_address != instance.private_ip_address:
                 self.fail("Instance received a new public IP: " + instance.ip_address)
@@ -382,25 +405,26 @@ class InstanceBasics(EutesterTestCase):
             reservation = self.tester.run_instance(**self.run_instance_params)
             for instance in reservation.instances:
                 if prev_address is not None:
-                    self.assertTrue(re.search(str(prev_address) ,str(instance.ip_address)), str(prev_address) +" Address did not get reused but rather  " + str(instance.public_dns_name))
+                    self.assertTrue(re.search(str(prev_address), str(instance.ip_address)),
+                                    str(prev_address) + " Address did not get reused but rather  " +
+                                    str(instance.public_dns_name))
                 prev_address = instance.ip_address
             self.tester.terminate_instances(reservation)
 
 if __name__ == "__main__":
-    testcase= EutesterTestCase(name='instancetest')
+    testcase = EutesterTestCase(name='instancetest')
     testcase.setup_parser(description="Test the Eucalyptus EC2 instance store image functionality.")
     testcase.get_args()
-    instancetestsuite= testcase.do_with_args(InstanceBasics)
+    instancetestsuite = testcase.do_with_args(InstanceBasics)
 
     ### Either use the list of tests passed from config/command line to determine what subset of tests to run
-    list = testcase.args.tests or [ "BasicInstanceChecks", "DNSResolveCheck", "Reboot", "MetaData", "ElasticIps", "MultipleInstances",
-                                    "LargestInstance", "PrivateIPAddressing", "Churn"]
+    test_list = testcase.args.tests or ["BasicInstanceChecks", "DNSResolveCheck", "Reboot", "MetaData", "ElasticIps",
+                                        "MultipleInstances", "LargestInstance", "PrivateIPAddressing", "Churn"]
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = []
-    for test in list:
-        test = getattr(instancetestsuite,test)
+    for test in test_list:
+        test = getattr(instancetestsuite, test)
         unit_list.append(testcase.create_testunit_from_method(test))
     testcase.clean_method = instancetestsuite.clean_method
     result = testcase.run_test_case_list(unit_list)
     exit(result)
-

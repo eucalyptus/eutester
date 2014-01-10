@@ -8,7 +8,7 @@
               %% Riak CS http/https port and IP address to listen at
               %% for object storage activity
               {cs_ip, "IPADDRESS"},
-              {cs_port, 8080 } ,
+              {cs_port, "RIAKCSPORT" } ,
 
               %% Riak node to which Riak CS accesses
               {riak_ip, "IPADDRESS"},

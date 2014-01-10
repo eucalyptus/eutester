@@ -37,6 +37,9 @@ import os
 import copy
 import socket
 import types
+import hmac
+import json
+import hashlib
 import base64
 from datetime import datetime, timedelta
 import time
@@ -3359,13 +3362,19 @@ disable_root: false"""
                     raise Exception('Need type instance or reservation in terminate_instances. type:' + str(type(res)))
 
         for instance in instance_list:
-                    self.debug( "Sending terminate for " + str(instance) )
-                    instance.terminate()
-                    instance.update()
-                    if instance.state != 'terminated':
-                        monitor_list.append(instance)
-                    else:
-                        self.debug('Instance: ' + str(instance.id) + ' in terminated state:' + str(instance.state))
+            self.debug( "Sending terminate for " + str(instance))
+            try:
+               instance.terminate()
+               instance.update()
+               if instance.state != 'terminated':
+                    monitor_list.append(instance)
+               else:
+                    self.debug('Instance: ' + str(instance.id) + ' in terminated state:' + str(instance.state))
+            except EC2ResponseError, e:
+                if e.status == 400:
+                    pass
+                else:
+                    raise e
 
         self.print_euinstance_list(euinstance_list=monitor_list)
         try:
@@ -3583,7 +3592,7 @@ disable_root: false"""
                                         + str(bundle_task.state) + "' in monitor")
                     if bundle_task.state == 'failed':
                         raise Exception(str(bundle_id) + ": Bundle task reporting failed state during monitor")
-                    if bundle_task.state == 'completed':
+                    if bundle_task.state == 'complete':
                         self.debug(str(bundle_id) +":  Bundle task reported state is completed during monitor")
                         monitor_list.remove(bundle_id)
                 except Exception, e:
@@ -3634,7 +3643,7 @@ disable_root: false"""
         return image_obj
 
 
-    def create_web_servers(self, keypair, group, zone, port=80, count=2, image=None, filename="test-file"):
+    def create_web_servers(self, keypair, group, zone, port=80, count=2, image=None, filename="test-file", cookiename="test-cookie"):
         if not image:
             image = self.get_emi()
         reservation = self.run_instance(image, keypair=keypair, group=group, zone=zone, min=count, max=count)
@@ -3648,16 +3657,19 @@ disable_root: false"""
                 ## Debian based Linux
                 instance.sys("apt-get install -y apache2", code=0)
                 instance.sys("echo \"" + instance.id +"\" > /var/www/" + filename)
+                instance.sys("echo \"CookieTracking on\" >> /etc/apache2/apache2.conf")
+                instance.sys("echo CookieName " + cookiename +" >> /etc/apache2/apache2.conf")
             except eutester.sshconnection.CommandExitCodeException, e:
                 ### Enterprise Linux
                 instance.sys("yum install -y httpd", code=0)
                 instance.sys("echo \"" + instance.id +"\" > /var/www/html/" + filename)
+                instance.sys("echo \"CookieTracking on\" >> /etc/httpd/conf/httpd.conf")
+                instance.sys("echo CookieName " + cookiename +" >> /etc/httpd/conf/httpd.conf")
                 instance.sys("service httpd start")
                 instance.sys("chkconfig httpd on")
         return (reservation, filename)
 
-
-    def generate_default_s3_upload_policy(self, bucket, prefix, expiration=24, acl='ec2-bundle-read'):
+    def generate_default_s3_upload_policy(self, bucket, prefix, expiration=24, acl='ec2-bundle-read', encode=True):
         """
         Generates s3 upload policy for bundle instance operation
 
@@ -3667,19 +3679,29 @@ disable_root: false"""
         :param acl: acl to be used
         :return: s3 upload encoded policy
         """
+
         delta = timedelta(hours=expiration)
         expiration_time = (datetime.utcnow() + delta).replace(microsecond=0)
         expiration_str = expiration_time.isoformat()
-
+        
         policy = '{"expiration": "%s",' % expiration_str + \
-                 '"conditions": [' + \
-                 '{"bucket": "%s" },' % bucket + \
-                 '{"acl": "%s" },' % acl + \
-                 '["starts-with", "$key", "%s"]' % prefix + \
-                 ']' + \
-                 '}'
-        encoded_policy = base64.b64encode(policy)
-        return encoded_policy
+        '"conditions": [' + \
+        '{"bucket": "%s" },' % bucket + \
+        '{"acl": "%s" },' % acl + \
+        '["starts-with", "$key", "%s"]' % prefix + \
+        ']' + \
+        '}'
+
+        if encode:
+            policy = base64.b64encode(policy)
+        return policy
+
+
+
+    def sign_policy(self, policy):
+        my_hmac = hmac.new(self.aws_secret_access_key, policy, digestmod=hashlib.sha1)
+        return base64.b64encode(my_hmac.digest())
+
 
 
     def get_euzones(self, zones=None):

@@ -12,7 +12,7 @@
 #   following disclaimer.
 #
 #   Redistributions in binary form must reproduce the above
-#   copyright notice, this list of conditions and the
+#   copyright notice, this list of conditions and the   
 #   following disclaimer in the documentation and/or other
 #   materials provided with the distribution.
 #
@@ -58,7 +58,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
     
     def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None,
                  aws_secret_access_key = None,  account="eucalyptus", user="admin", username=None, APIVersion='2011-01-01',
-                 region=None, ec2_ip=None, s3_ip=None, as_ip=None, elb_ip=None, download_creds=True,boto_debug=0,
+                 region=None, ec2_ip=None, s3_ip=None, s3_path=None, as_ip=None, elb_ip=None, download_creds=True,boto_debug=0,
                  debug_method=None):
         self.config_file = config_file 
         self.APIVersion = APIVersion
@@ -76,6 +76,8 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
         self.key_dir = "./"
         self.clc_index = 0
         self.credpath = credpath
+        self.account_name = account
+        self.aws_username = user
         self.download_creds = download_creds
         self.logger = eulogger.Eulogger(identifier="EUCAOPS")
         self.debug = debug_method or self.logger.log.debug
@@ -85,6 +87,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
         self.account_id = None
         self.aws_access_key_id = aws_access_key_id
         self.aws_secret_access_key = aws_secret_access_key
+        self.property_manager = None
 
 
         if self.config_file is not None:
@@ -105,8 +108,6 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
             ### Need to create service manager for user if we have an ssh connection and password
             clc_array = self.get_component_machines("clc")
             self.clc = clc_array[0]
-            walrus_array = self.get_component_machines("ws")
-            self.walrus = walrus_array[0]
             self.sftp = self.clc.ssh.connection.open_sftp()
             if self.download_creds:
                 if self.credpath is None:
@@ -128,9 +129,6 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
                         
                 self.service_manager = EuserviceManager(self)
                 self.clc = self.service_manager.get_enabled_clc().machine
-                self.walrus = self.service_manager.get_enabled_walrus().machine 
-
-
 
         if self.credpath and not aws_access_key_id:
             aws_access_key_id = self.get_access_key()
@@ -154,10 +152,12 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
             try:
                 if self.credpath and not s3_ip:
                     s3_ip = self.get_s3_ip()
-                self.setup_s3_connection(endpoint=s3_ip, path="/services/Walrus", port=8773, is_secure=False,aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,  boto_debug=boto_debug)
+                if self.credpath and not s3_path:
+                    s3_path = self.get_s3_path()
+                self.setup_s3_connection(endpoint=s3_ip, path=s3_path, port=8773, is_secure=False,aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,  boto_debug=boto_debug)
                 self.setup_s3_resource_trackers()
             except Exception, e:
-                raise Exception("Unable to create S3 connection because of: " + str(e) )
+                self.debug("Unable to create S3 connection because of: " + str(e) )
 
             try:
                 if self.credpath and not as_ip:
@@ -172,8 +172,13 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
                 self.setup_elb_connection(endpoint=elb_ip, path="/services/LoadBalancing", port=8773, is_secure=False, region=region, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
             except Exception, e:
                 self.debug("Unable to create ELB connection because of: " + str(e) )
-        if self.clc and account == 'eucalytpus':
-            self.update_property_manager()
+        if self.clc and self.account_name == 'eucalyptus':
+            try:
+                self.update_property_manager()
+            except:
+                tb = self.get_traceback()
+                self.debug(str(tb) + '\nError creating properties manager')
+
 
     def get_available_vms(self, type=None, zone=None):
         """
@@ -230,6 +235,14 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
         property        Property to modify
         value           Value to set it too
         """
+        if self.credpath == None or self.eucapath == None or property == None or value == None:
+            self.fail("Cannot set property value due to insufficient arguments")
+            self.fail("credpath: " + ("None" if self.credpath is None else self.credpath))
+            self.fail("eucapath: " + ("None" if self.eucapath is None else self.eucapath))
+            self.fail("property: " + ("None" if property is None else property))
+            self.fail("value: " + ("None" if value is None else value))
+            raise Exception("Cannot set property: " + (property if property is not None else "unknown"))
+        
         command = "source " + self.credpath + "/eucarc && " + self.eucapath + "/usr/sbin/euca-modify-property -p " + property + "=" + value
         if self.clc.found(command, property):
             self.debug("Properly modified property " + property)
@@ -512,9 +525,13 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
         config_hash["machines"] = machines 
         return config_hash
 
+
     def update_property_manager(self,machine=None):
         machine = machine or self.clc
-        self.property_manager = Euproperty_Manager(self,debugmethod=self.debug)
+        if not machine:
+            self.property_manager = None
+            return
+        self.property_manager = Euproperty_Manager(self, machine=machine, debugmethod=self.debug)
 
     def swap_clc(self):
         all_clcs = self.get_component_machines("clc")
@@ -528,12 +545,12 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
 
     def swap_walrus(self):
         all_walruses = self.get_component_machines("ws")
-        if self.walrus is all_walruses[0]: 
+        if self.object_storage is all_walruses[0]:
             self.debug("Swapping Walrus from " + all_walruses[0].hostname + " to " + all_walruses[1].hostname)
-            self.walrus = all_walruses[1]
-        elif self.walrus is all_walruses[1]:
+            self.object_storage = all_walruses[1]
+        elif self.object_storage is all_walruses[1]:
             self.debug("Swapping Walrus from " + all_walruses[1].hostname + " to " + all_walruses[0].hostname)
-            self.walrus = all_walruses[0]
+            self.object_storage = all_walruses[0]
             
     def get_network_mode(self):
         return self.config['network']

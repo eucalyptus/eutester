@@ -73,7 +73,7 @@ class ResourceGeneration(EutesterTestCase):
                 access_key = keys['access_key_id']
                 secret_key = keys['secret_access_key']
                 self.tester.debug("Creating Eucaops object with access key " + access_key + " and secret key " +  secret_key)
-                new_tester = Eucaops(aws_access_key_id=access_key, aws_secret_access_key=secret_key, ec2_ip=self.tester.ec2.host, s3_ip=self.tester.s3.host,username=user_name, account=user_account)
+                new_tester = Eucaops(aws_access_key_id=access_key, aws_secret_access_key=secret_key, ec2_ip=self.tester.ec2.host, s3_ip=self.tester.s3.host, s3_path=self.tester.get_s3_path()  , username=user_name, account=user_account)
                 self.testers.append(new_tester)
 
         self.tester.debug("Created a total of " + str(len(self.testers)) + " testers" )
@@ -109,7 +109,7 @@ class ResourceGeneration(EutesterTestCase):
             snapshot = resource_tester.create_snapshot(volume_id=volume.id)
             volume_from_snap = resource_tester.create_volume(snapshot=snapshot, zone=zone)
             bucket = resource_tester.create_bucket(resource_tester.id_generator(12, string.ascii_lowercase  + string.digits))
-            key = resource_tester.upload_object(bucket_name= bucket.name, key_name= resource_tester.id_generator(12, string.ascii_lowercase  + string.digits), contents= resource_tester.id_generator(200))
+            key = resource_tester.upload_object(bucket_name=bucket.name, key_name=resource_tester.id_generator(12, string.ascii_lowercase  + string.digits), contents= resource_tester.id_generator(200))
             if not self.args.no_cleanup:
                 resource_tester.terminate_instances(reservation)
 

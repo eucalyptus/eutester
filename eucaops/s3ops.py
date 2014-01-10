@@ -96,8 +96,15 @@ class S3ops(Eutester):
 
     def get_s3_ip(self):
         """Parse the eucarc for the S3_URL"""
-        walrus_url = self.parse_eucarc("S3_URL")
-        return walrus_url.split("/")[2].split(":")[0]
+        s3_url = self.parse_eucarc("S3_URL")
+        return s3_url.split("/")[2].split(":")[0]
+
+    def get_s3_path(self):
+        """Parse the eucarc for the S3_URL"""
+        s3_url = self.parse_eucarc("S3_URL")
+        s3_path = "/".join(s3_url.split("/")[3:])
+        self.debug("Print S3 PATH:"  + str(s3_path))
+        return s3_path
 
     def create_bucket(self,bucket_name):
         """

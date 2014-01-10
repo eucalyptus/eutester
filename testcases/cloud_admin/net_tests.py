@@ -198,7 +198,7 @@ class Net_Tests(EutesterTestCase):
         if self.args.emi:
             self.image = self.tester.get_emi(emi=str(self.args.emi))
         else:
-            self.image = self.tester.get_emi(root_device_type="instance-store",not_location='windows')
+            self.image = self.tester.get_emi(root_device_type="instance-store",not_location=['windows', 'loadbalancer'])
         if not self.image:
             raise Exception('couldnt find instance store image')
 
@@ -220,26 +220,36 @@ class Net_Tests(EutesterTestCase):
         else:
             self.tester.cleanup_artifacts()
 
-    def create_ssh_connection_to_instance_through_cc(self, instance, retry=10):
-        cc = self.get_active_cc_for_instance(instance)
+    def get_proxy_machine(self, instance):
+        proxy_machine = self.get_active_cc_for_instance(instance)
+        try:
+            proxy_machine.sys("grep EDGE " + self.tester.eucapath + "/etc/eucalyptus/eucalyptus.conf", code=0)
+        except:
+            self.debug("Using NC as proxy when in EDGE mode")
+            proxy_machine = self.get_active_nc_for_instance(instance)
+            self.debug("Instance is running on: " + proxy_machine.hostname)
+        return proxy_machine
+
+    def create_ssh_connection_to_instance(self, instance, retry=10):
+        proxy_machine = self.get_proxy_machine(instance)
         ssh = None
         attempts = 0
         elapsed = 0
         next_retry_time = 10
         start = time.time()
-        proxy_keypath=cc.machine.ssh.keypath or None
+        proxy_keypath=proxy_machine.machine.ssh.keypath or None
         while not ssh and attempts < retry:
             attempts += 1
             elapsed = int(time.time()-start)
             self.debug('Attempting to ssh to instances private ip:' + str(instance.private_ip_address) +
-                       'through the cc ip:' + str(cc.hostname) + ', attempts:' +str(attempts) + "/" + str(retry) +
+                       'through the cc ip:' + str(proxy_machine.hostname) + ', attempts:' +str(attempts) + "/" + str(retry) +
                        ", elapsed:" + str(elapsed))
             try:
                 ssh = SshConnection(host=instance.private_ip_address,
                                 keypath=instance.keypath,
-                                proxy=cc.hostname,
-                                proxy_username=cc.machine.ssh.username,
-                                proxy_password=cc.machine.ssh.password,
+                                proxy=proxy_machine.hostname,
+                                proxy_username=proxy_machine.machine.ssh.username,
+                                proxy_password=proxy_machine.machine.ssh.password,
                                 proxy_keypath=proxy_keypath)
             except Exception, ce:
                 tb = self.tester.get_traceback()
@@ -251,7 +261,7 @@ class Net_Tests(EutesterTestCase):
 
         if not ssh:
             raise Exception('Could not ssh to instances private ip:' + str(instance.private_ip_address) +
-                            ' through the cc ip:' + str(cc.hostname) + ', attempts:' +str(attempts) + "/" + str(retry) +
+                            ' through the cc ip:' + str(proxy_machine.hostname) + ', attempts:' +str(attempts) + "/" + str(retry) +
                             ", elapsed:" + str(elapsed))
 
         return ssh
@@ -268,11 +278,15 @@ class Net_Tests(EutesterTestCase):
                                                                      state='ENABLED')[0]
         return cc
 
-    def ping_instance_private_ip_from_active_cc(self, instance, refresh_active_cc=30):
+    def get_active_nc_for_instance(self,instance):
+        nc = self.tester.service_manager.get_all_node_controllers(instance_id=instance.id, use_cached_list=False).pop()
+        return nc
+
+    def ping_instance_private_ip_from_active_cc(self, instance):
         assert isinstance(instance, EuInstance)
-        cc = self.get_active_cc_for_instance(instance=instance, refresh_active_cc=refresh_active_cc)
+        proxy_machine = self.get_proxy_machine(instance)
         try:
-            cc.machine.ping_check(instance.private_ip_address)
+            proxy_machine.machine.ping_check(instance.private_ip_address)
             return True
         except:pass
         return False
@@ -363,7 +377,7 @@ class Net_Tests(EutesterTestCase):
                                          timeout=ping_timeout,
                                          instance=instance)
             self.status('Make sure ssh is working through CC path before trying between instances...')
-            instance.cc_ssh = self.create_ssh_connection_to_instance_through_cc(instance)
+            instance.cc_ssh = self.create_ssh_connection_to_instance(instance)
             self.status('SSH connection to instance:' + str(instance.id) +
                         ' successful to private ip:' + str(instance.private_ip_address) +
                         ', zone:' + str(instance.placement))
@@ -425,7 +439,7 @@ class Net_Tests(EutesterTestCase):
         instance1.sys("ssh -o StrictHostKeyChecking=no -i "
                       + str(os.path.basename(instance1.keypath))
                       + " root@" + str(instance2.private_ip_address)
-                      + " ' uname -a'", code=0)
+                      + " 'uname -a'", code=0)
         self.debug('Ssh between instances passed')
 
     def test4_attempt_unauthorized_ssh_from_test_machine_to_group2(self):

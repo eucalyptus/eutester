@@ -36,7 +36,6 @@ from eutester import Eutester
 from eutester import machine
 from testcases.cloud_user.images.imageutils import ImageUtils
 from testcases.cloud_user.ebs.ebstestsuite import TestZone
-from testcases.cloud_user.images.windows import windowsproxytests
 from eutester.euvolume import EuVolume
 import socket
 import os
@@ -77,10 +76,6 @@ class WindowsTests(EutesterTestCase):
                  emi_location=None,
                  image_path=None, #note this must be available on the work_component
                  instance=None,
-                 win_proxy_hostname = None, 
-                 win_proxy_username = 'Administrator',
-                 win_proxy_password = None, 
-                 win_proxy_keypath = None,
                  clean_on_exit=False,
                  authports=['tcp:3389','tcp:80','tcp:443', 'tcp:5985', 'tcp:5986']
                  ):
@@ -162,46 +157,8 @@ class WindowsTests(EutesterTestCase):
         self.run_timeout=780 
         #setup zone list
         self.setupWindowsZones()
-        #setup windows proxy 
-        self.win_proxy_hostname = win_proxy_hostname
-        self.proxy = None
-        if win_proxy_hostname is not None:
-            self.setup_proxy(win_proxy_hostname,
-                             proxy_keypath = win_proxy_keypath,
-                             proxy_username = win_proxy_username,
-                             proxy_password = win_proxy_password,
-                             debugmethod = lambda msg: self.debug(msg, traceback=2)
-                             )
+        #setup windows proxy
         self.setup_test_env()
-        if self.instance and self.proxy:
-                self.update_proxy_instance_data()
-    @Eutester.printinfo
-    def setup_proxy(self, proxy_hostname, proxy_keypath=None, proxy_username=None, proxy_password=None, debugmethod=None):
-        debugmethod = debugmethod or (lambda msg: self.debug(msg, traceback=3))
-        proxy = windowsproxytests.WindowsProxyTests(proxy_hostname, 
-                                                         proxy_keypath = proxy_keypath,
-                                                         proxy_username = proxy_username,
-                                                         proxy_password = proxy_password,
-                                                         debugmethod = debugmethod,
-                                                         )
-        self.proxy = proxy
-        self.proxy.win_instance = self.instance
-        try:
-            self.test_get_windows_instance_password()
-        except: pass
-        self.proxy.win_password = self.instance_password
-        self.proxy.win_keypath = self.instance_keypath
-        return proxy
-    
-    def update_proxy_info(self):
-        if not self.proxy:
-            raise Exception("Proxy needs to be setup before it can be updated")
-        self.proxy.win_instance = self.instance
-        try:
-            self.test_get_windows_instance_password()
-        except: pass
-        self.proxy.win_password = self.instance_password
-        self.proxy.win_keypath = self.instance_keypath
 
     def setup_test_env(self):
         self.setupWindowsKeypair()
@@ -215,22 +172,6 @@ class WindowsTests(EutesterTestCase):
                 retlist.append(image)
         return retlist
 
-
-
-    def update_proxy_instance_data(self, win_instance=None, instance_password=None ):
-        if self.proxy is None:
-            return
-        self.proxy.win_instance = win_instance or self.instance
-        try:
-            password = instance_password or self.instance_password
-            if password is None:
-                password = self.test_get_windows_instance_password()
-            self.proxy.win_password = password
-        except Exception, e:
-            raise Exception('Warning: update_proxy_instance_data: Could not get instance password, err:'+str(e))
-        
-        
-            
     def setupWindowsSecurityGroup(self, portlist=None):
         portlist = portlist or self.authports
         #Setup our security group for later use...
@@ -314,9 +255,7 @@ class WindowsTests(EutesterTestCase):
             while len(zone.volumes) < self.testvolcount:
                 volume = EuVolume.make_euvol_from_vol(self.tester.create_volume(zone,timepergig=180))
                 zone.volumes.append(volume)
-            
-        
-                
+
     def create_vols_per_zone(self, zonelist=None, volsperzone=2, size=1, snapshot=None, timepergig=300):
         testmsg =   """
                     Intention of this test is to verify creation of volume(s) per zone given.
@@ -356,7 +295,7 @@ class WindowsTests(EutesterTestCase):
         Work is done on a given machine and requires euca2ools present on that machine. 
         Returns the emi of the registered image
         '''
-        return self.iu.create_emi_from_url(url = (url or self.url), 
+        return self.iu.create_emi(url = (url or self.url),
                                            component = (component or self.component), 
                                            bucketname = (bucketname or self.bucketname), 
                                            component_credpath = (component_credpath or self.component_credpath), 
@@ -384,29 +323,28 @@ class WindowsTests(EutesterTestCase):
         Work is done on a given machine and requires euca2ools present on that machine. 
         Returns the emi of the registered image
         '''
-        return self.iu.create_emi_from_url(
-                                           url = None,
-                                           component = (component or self.component), 
-                                           bucketname = (bucketname or self.bucketname), 
-                                           component_credpath = (component_credpath or self.component_credpath), 
-                                           destination = (destpath or self.destpath),
-                                           interbundle_timeout = (inter_bundle_timeout or self.inter_bundle_timeout), 
-                                           upload_timeout = (upload_timeout or self.upload_timeout),
-                                           destpath = (destpath or self.destpath),
-                                           filepath = image_file_path,
-                                           time_per_gig = (time_per_gig or self.time_per_gig) )
+        return self.iu.create_emi( url = None,
+                                   component = (component or self.component),
+                                   bucketname = (bucketname or self.bucketname),
+                                   component_credpath = (component_credpath or self.component_credpath),
+                                   destination = (destpath or self.destpath),
+                                   interbundle_timeout = (inter_bundle_timeout or self.inter_bundle_timeout),
+                                   upload_timeout = (upload_timeout or self.upload_timeout),
+                                   destpath = (destpath or self.destpath),
+                                   filepath = image_file_path,
+                                   time_per_gig = (time_per_gig or self.time_per_gig) )
         
     def test_run_windows_emi(self,
-                      emi=None, 
-                      zone=None,
-                      keypair=None,
-                      type=None, 
-                      group=None, 
-                      min=1, 
-                      max=1,
-                      user_data=None,
-                      private_addressing=None,
-                      timeout=None):
+                              emi=None,
+                              zone=None,
+                              keypair=None,
+                              type=None,
+                              group=None,
+                              min=1,
+                              max=1,
+                              user_data=None,
+                              private_addressing=None,
+                              timeout=None):
         '''
         Description: Attempts to return a reservation of running emi instances run with the provided parameters.
         '''
@@ -607,33 +545,7 @@ class WindowsTests(EutesterTestCase):
             dev = self.get_free_ebs_devname(instance=instance)
         self.tester.attach_volume(self.instance, vol, device_path=dev)
         
-    def test_proxy_ebs_guest_attachment(self, instance=None, volume=None, wait=60):
-        self.debug('test_proxy_ebs_guest_attachment starting...')
-        fail = None
-        instance = instance or self.instance
-        if not instance:
-            raise Exception("test_proxy_ebs_guest_attachment, instance is None")
-        if volume:
-            volume.update()
-            if volume.attach_data.instance_id != instance.id:
-                raise Exception('Volume:'+str(volume.id)+" not attached to:"+str(instance.id) )
-            vols = [volume]
-        else:
-            vols = self.tester.get_volumes(attached_instance=instance.id)
-        for volume in vols:
-            #Make sure some time has passed before we test on the guest side before running guest test...
-            attached_seconds = self.tester.get_volume_time_attached(volume)
-            sleeptime =  0 if attached_seconds > wait else (wait - attached_seconds)
-            self.debug("Volume has been attached for "+str(attached_seconds)+" seconds, waiting:"+str(sleeptime)+" for guest to detect attached vol")
-            time.sleep(sleeptime)
-            self.debug("Running Proxy ebs test now...")
-            try:
-                self.proxy.ps_ebs_test(retryinterval=30)
-            except Exception, e:
-                fail = e+"test_proxy_ebs_guest_attachment, "+str(instance)+"/"+str(volume)+", failed:"+str(e)+"\n"
-        if fail:
-            raise Exception(fail)
-                
+
         
     def is_kvm(self, component=None):
         component = component or self.component or self.tester.get_component_machines("nc")[0]
@@ -645,7 +557,7 @@ class WindowsTests(EutesterTestCase):
     def setup_active_dir_dns(self,zone=None,ad_dns=None):
         ad_dns = ad_dns or self.win_proxy_hostname 
         if not ad_dns:
-            if self.proxy:
+            if hasattr(self, 'proxy') and self.proxy:
                 ad_dns = self.proxy.proxy_hostname
             else:
                 raise Exception('Need hostname/ip of AD DNS to use?')
@@ -668,87 +580,10 @@ class WindowsTests(EutesterTestCase):
             cc.start()
         zone.partition.service_manager.wait_for_service(cc, state='ENABLED',timeout=120)
         self.debug("setup_active_dir VNET_DNS done")
-    
-    
-    def basic_proxy_test_suite(self, instance=None):
-        instance = instance or self.instance
-        list = []
-        if instance is None or instance.state != 'running':
-            self.debug("basic_proxy_test_suite: No running instances found, creating instance now")
-            test = self.create_testcase_from_method(self.get_windows_emi)
-            test.eof = True
-            list.append(test)
-            test = self.create_testcase_from_method(self.get_windows_instance)
-            test.eof = True
-            list.append(test)
-        list.append(self.create_testcase_from_method(self.test_get_windows_instance_password))
-        test = self.create_testcase_from_method(self.test_poll_for_rdp_port_status)
-        test.eof=True
-        list.append(test)
-        test = self.create_testcase_from_method(self.update_proxy_instance_data)
-        test.eof=True
-        list.append(test)
-        list.append(self.create_testcase_from_method(self.test_wait_for_instance_boot))
-        test = self.create_testcase_from_method(self.proxy.ps_login_test)
-        test.eof=True
-        list.append(test)
-        list.append(self.create_testcase_from_method(self.proxy.ps_ephemeral_test))
-        list.append(self.create_testcase_from_method(self.proxy.ps_hostname_test))
-        list.append(self.create_testcase_from_method(self.setup_windows_test_volumes))
-        list.append(self.create_testcase_from_method(self.proxy.ps_hostname_test))
-        list.append(self.create_testcase_from_method(self.test_attach_single_volume))
-        #The guest test may not work on a 32bit host...
-        list.append(self.create_testcase_from_method(self.test_proxy_ebs_guest_attachment))
-        if self.is_kvm(): 
-            list.append(self.create_testcase_from_method(self.proxy.ps_virtio_test))
-        else:
-            list.append(self.create_testcase_from_method(self.proxy.ps_xenpv_test))
-        test = self.create_testcase_from_method(self.setup_active_dir_dns)
-        test.eof = True
-        list.append(test)
-        list.append(self.create_testcase_from_method(self.proxy.ps_admembership_test))
-        list.append(self.create_testcase_from_method(self.proxy.ps_eucaadkey_test))
-        list.append(self.create_testcase_from_method(self.proxy.ps_rdpermission_test))
-        #Run this test case list only exit on fail if a given test method has the flag set. 
-        self.run_test_case_list(list, eof=False)
-
-
-
-    def simple_windows_test_suite(self,instance=None, clean_on_exit=False):
-        """
-        Runs a basic subset of windows tests against either a running instance, or will try to find
-        a Windows emi by location string and create a running instance to test from that emi.
-        :param instance: boto instance object to run windows tests against.
-
-        """
-        instance = instance or self.instance
-        tests = []
-        if instance is None or instance.state != 'running':
-            self.debug("basic_proxy_test_suite: No running instances found, creating instance now")
-            test = self.create_testcase_from_method(self.get_windows_emi)
-            test.eof = True
-            tests.append(test)
-            test = self.create_testcase_from_method(self.get_windows_instance)
-            test.eof = True
-            tests.append(test)
-        tests.append(self.create_testunit_from_method(self.test_get_windows_instance_password, eof=True))
-        tests.append(self.create_testunit_from_method(self.update_proxy_info, eof=True))
-        tests.append(self.create_testunit_from_method(self.test_wait_for_instance_boot))
-        tests.append(self.create_testunit_from_method(self.test_poll_for_rdp_port_status, eof=True))
-        tests.append(self.create_testunit_from_method(self.proxy.ps_login_test, eof=True))
-        tests.append(self.create_testunit_from_method(self.proxy.ps_ephemeral_test))
-        tests.append(self.create_testunit_from_method(self.proxy.ps_hostname_test))
-        tests.append(self.create_testunit_from_method(self.proxy.ps_virtio_test))
-        self.run_test_case_list(tests, clean_on_exit=clean_on_exit, eof=False)
-
-    #def windows_bundle_test_from_emi(self, emi, timeout_minutes=35):
 
 
 
 
-    def windows_bundle_test_from_instance(self, instance, timeout_minutes=25):
-        timeout = 60 * timeout_minutes
-        cli = self.tester
     
         
     
