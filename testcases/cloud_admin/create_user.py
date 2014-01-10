@@ -11,6 +11,7 @@ class SampleTest(EutesterTestCase):
         self.parser.add_argument("--account-prefix",default="test-account-")
         self.parser.add_argument("--group-prefix",default="test-group-")
         self.parser.add_argument("--user-prefix",default="test-user-")
+        self.parser.add_argument("--password-prefix",default="mypassword")
         self.parser.add_argument("--user-number",default=1)
         self.get_args()
         # Setup basic eutester object
@@ -35,6 +36,7 @@ class SampleTest(EutesterTestCase):
         for i in xrange(self.args.account_number):
             account_name = self.args.account_prefix + str(i)
             group_name = self.args.group_prefix + str(i)
+            password = self.args.password_prefix + str(i)
             self.tester.create_account(account_name)
             self.tester.create_group(group_name, "/",account_name)
             self.tester.attach_policy_group(group_name,"allow-all", allow_all_policy, account_name)
@@ -42,6 +44,7 @@ class SampleTest(EutesterTestCase):
                 user_name = self.args.user_prefix + str(k)
                 self.tester.create_user(user_name, "/", account_name)
                 self.tester.add_user_to_group(group_name, user_name, account_name)
+                self.tester.create_login_profile(user_name, password)
 
 if __name__ == "__main__":
     testcase = SampleTest()
