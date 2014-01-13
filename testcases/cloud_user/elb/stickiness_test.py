@@ -106,7 +106,7 @@ class StickinessBasics(EutesterTestCase):
 
     def session_affinity_test(self):
         lbpolicy = "LB-Policy"
-        self.tester.create_lb_cookie_stickiness_policy(cookie_expiration_period=10,
+        self.tester.create_lb_cookie_stickiness_policy(cookie_expiration_period=300,
                                                        lb_name=self.load_balancer.name,
                                                        policy_name=lbpolicy)
         acpolicy = "AC-Policy"
