@@ -641,3 +641,7 @@ class IAMops(Eutester):
         certs = self.euare.list_server_certs(path_prefix=path_prefix, marker=marker, max_items=max_items)
         self.debug(certs)
         return certs
+
+    def create_login_profile(self, username, password):
+        self.debug("Creating login profile for: " + username + " with password: " + password)
+        self.euare.create_login_profile(username,password)

@@ -58,7 +58,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
     
     def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None,
                  aws_secret_access_key = None,  account="eucalyptus", user="admin", username=None, APIVersion='2011-01-01',
-                 region=None, ec2_ip=None, s3_ip=None, as_ip=None, elb_ip=None, download_creds=True,boto_debug=0,
+                 region=None, ec2_ip=None, s3_ip=None, s3_path=None, as_ip=None, elb_ip=None, download_creds=True,boto_debug=0,
                  debug_method=None):
         self.config_file = config_file 
         self.APIVersion = APIVersion
@@ -152,7 +152,9 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
             try:
                 if self.credpath and not s3_ip:
                     s3_ip = self.get_s3_ip()
-                self.setup_s3_connection(endpoint=s3_ip, path=self.get_s3_path(), port=8773, is_secure=False,aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,  boto_debug=boto_debug)
+                if self.credpath and not s3_path:
+                    s3_path = self.get_s3_path()
+                self.setup_s3_connection(endpoint=s3_ip, path=s3_path, port=8773, is_secure=False,aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,  boto_debug=boto_debug)
                 self.setup_s3_resource_trackers()
             except Exception, e:
                 self.debug("Unable to create S3 connection because of: " + str(e) )
