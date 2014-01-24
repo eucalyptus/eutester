@@ -56,7 +56,8 @@ class MigrationTest(EutesterTestCase):
         self.tester = Eucaops( config_file=self.args.config, password=self.args.password)
         self.numberOfNodes = self.tester.service_manager.get_all_node_controllers()
         if len(self.numberOfNodes) < 2:
-            exit("Not enough NCs to test instance migration.")
+            self.tester.debug("Not enough NCs to test instance migration.")
+            exit(0)
 
         self.group = self.tester.add_group(group_name="group-" + str(time.time()))
         self.tester.authorize_group_by_name(group_name=self.group.name )
