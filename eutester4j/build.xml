@@ -13,7 +13,7 @@
     <property name="tests" value="AllTestsSuite.xml"/>
 
     <!--youare sdk location link-->
-    <property name="YouAre" value="https://github.com/tbeckham/you-are-sdk/releases/download/alpha/YouAreSDK.jar"/>
+    <property name="YouAre" value="https://github.com/tbeckham/you-are-sdk/releases/download/alpha2/YouAreSDK.jar"/>
 
     <!-- download testng and AWS JAVA SDK -->
     <target name="download-deps">
