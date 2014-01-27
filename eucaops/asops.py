@@ -33,13 +33,11 @@ import re
 import copy
 
 import boto
-from boto.ec2 import autoscale
-from boto.ec2.autoscale import ScalingPolicy
+from boto.ec2.autoscale import ScalingPolicy, Instance
 from boto.ec2.autoscale import Tag
 from boto.ec2.autoscale import LaunchConfiguration
 from boto.ec2.autoscale import AutoScalingGroup
 from boto.ec2.regioninfo import RegionInfo
-import time
 
 from eutester import Eutester
 
@@ -388,3 +386,22 @@ class ASops(Eutester):
                          health_check_type=health_check_type,
                          health_check_period=health_check_period,
                          termination_policies=termination_policies).update()
+
+    def wait_for_instances(self, group_name, tester, number=1):
+        asg = self.describe_as_group(group_name)
+        instances = asg.instances
+        if not instances:
+            self.debug("No instances in ASG")
+            return False
+        if len(asg.instances) != number:
+            self.debug("Instances not yet allocated")
+            return False
+        for instance in instances:
+            assert isinstance(instance, Instance)
+            instance = tester.get_instances(idstring=instance.instance_id)[0]
+            if instance.state != "running":
+                self.debug("Instance: " + str(instance) + " still in " + instance.state + " state")
+                return False
+            else:
+                self.debug("Instance: " + str(instance) + " now running")
+        return True
