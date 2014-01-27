@@ -224,10 +224,11 @@ class Net_Tests(EutesterTestCase):
         proxy_machine = self.get_active_cc_for_instance(instance)
         try:
             proxy_machine.sys("grep EDGE " + self.tester.eucapath + "/etc/eucalyptus/eucalyptus.conf", code=0)
-        except:
             self.debug("Using NC as proxy when in EDGE mode")
             proxy_machine = self.get_active_nc_for_instance(instance)
-            self.debug("Instance is running on: " + proxy_machine.hostname)
+        except:
+            pass
+        self.debug("Instance is running on: " + proxy_machine.hostname)
         return proxy_machine
 
     def create_ssh_connection_to_instance(self, instance, retry=10):

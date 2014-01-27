@@ -38,7 +38,7 @@ class InstanceBasics(EutesterTestCase):
             self.tester = EC2ops(credpath=credpath, region=region)
         else:
             self.tester = Eucaops(config_file=config_file, password=password, credpath=credpath)
-        self.instance_timeout = 480
+        self.instance_timeout = 600
 
         ### Add and authorize a group for the instance
         self.group = self.tester.add_group(group_name="group-" + str(time.time()))

@@ -3362,13 +3362,19 @@ disable_root: false"""
                     raise Exception('Need type instance or reservation in terminate_instances. type:' + str(type(res)))
 
         for instance in instance_list:
-                    self.debug( "Sending terminate for " + str(instance) )
-                    instance.terminate()
-                    instance.update()
-                    if instance.state != 'terminated':
-                        monitor_list.append(instance)
-                    else:
-                        self.debug('Instance: ' + str(instance.id) + ' in terminated state:' + str(instance.state))
+            self.debug( "Sending terminate for " + str(instance))
+            try:
+               instance.terminate()
+               instance.update()
+               if instance.state != 'terminated':
+                    monitor_list.append(instance)
+               else:
+                    self.debug('Instance: ' + str(instance.id) + ' in terminated state:' + str(instance.state))
+            except EC2ResponseError, e:
+                if e.status == 400:
+                    pass
+                else:
+                    raise e
 
         self.print_euinstance_list(euinstance_list=monitor_list)
         try:

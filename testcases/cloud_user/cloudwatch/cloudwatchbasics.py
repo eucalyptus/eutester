@@ -250,13 +250,10 @@ class CloudWatchBasics(EutesterTestCase):
 
         ## Wait for the last instance to go to running state.
         state=None
-        while not (str(state).endswith('running')):
-            self.debug('Waiting for AutoScaling instance to go to running state ...')
-            self.tester.sleep(15)
-            self.instanceid = self.tester.get_last_instance_id()
-            instance_list = self.tester.get_instances(idstring=self.instanceid)
-            self.instance = instance_list.pop()
-            state = self.instance.state
+        self.instanceid = self.tester.get_last_instance_id()
+        instance_list = self.tester.get_instances(idstring=self.instanceid)
+        self.instance = instance_list.pop()
+        self.tester.wait_for_instance(self.instance)
         self.debug(self.instanceid + ' is now running.')
         ### Create and attach a volume
         self.volume = self.tester.create_volume(self.zone.pop())
