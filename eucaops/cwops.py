@@ -242,7 +242,8 @@ class CWops(Eutester):
         self.debug('Calling delete_all_alarms(' + str(self.cw.describe_alarms()) + ')')
         alarms = self.cw.describe_alarms()
         if alarms:
-            self.cw.delete_alarms(alarms)
+            alarm_names = [alarm.name for alarm in alarms]
+            self.cw.delete_alarms(alarm_names)
 
     def describe_alarms(self, action_prefix=None, alarm_name_prefix=None, alarm_names=None, max_records=None, state_value=None, next_token=None):
         self.debug('Calling describe_alarms( {p1}, {p2}, {p3}, {p4}, {p5}, {p6} )'.format(p1=action_prefix, p2=alarm_name_prefix, p3=alarm_names,

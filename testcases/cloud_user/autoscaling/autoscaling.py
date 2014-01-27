@@ -265,11 +265,11 @@ class AutoScalingBasics(EutesterTestCase):
                                     availability_zones=self.tester.get_zones(),
                                     min_size=1,
                                     max_size=4)
-        self.tester.wait_for_result(self.tester.wait_for_instances, True, timeout=360, group_name=self.asg.name, tester=self.tester)
+        self.tester.wait_for_result(self.tester.wait_for_instances, True, timeout=360, group_name=self.asg.name)
         ### Set desired capacity
         new_desired = 2
         self.asg.set_capacity(new_desired)
-        self.tester.wait_for_result(self.tester.wait_for_instances, True, timeout=360, group_name=self.asg.name, tester=self.tester, number=new_desired)
+        self.tester.wait_for_result(self.tester.wait_for_instances, True, timeout=360, group_name=self.asg.name,number=new_desired)
         last_instance = self.tester.get_instances(idstring=self.tester.get_last_instance_id())[0]
         assert last_instance.instance_type == "m1.large"
 
