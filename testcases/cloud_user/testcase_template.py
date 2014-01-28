@@ -1,58 +1,88 @@
-#!/usr/bin/env python
-#
-#
-# Description:  This script encompasses test cases/modules concerning instance specific behavior and
-#               features for Eucalyptus.  The test cases/modules that are executed can be
-#               found in the script under the "tests" list.
-
+#!/usr/bin/python
 
 import time
 from eucaops import Eucaops
+from eucaops import EC2ops
 from eutester.eutestcase import EutesterTestCase
+import os
+import random
 
-class MyTestCase(EutesterTestCase):
-    def __init__(self, credpath=None):
+class InstanceBasics(EutesterTestCase):
+    def __init__(self, extra_args= None):
         self.setuptestcase()
+        self.setup_parser()
+        if extra_args:
+            for arg in extra_args:
+                self.parser.add_argument(arg)
+        self.get_args()
         # Setup basic eutester object
-        self.tester = Eucaops( credpath=credpath)
-        self.reservation = None
+        if self.args.region:
+            self.tester = EC2ops( credpath=self.args.credpath, region=self.args.region)
+        else:
+            self.tester = Eucaops( credpath=self.args.credpath, config_file=self.args.config,password=self.args.password)
+        self.tester.poll_count = 120
+
         ### Add and authorize a group for the instance
         self.group = self.tester.add_group(group_name="group-" + str(time.time()))
         self.tester.authorize_group_by_name(group_name=self.group.name )
         self.tester.authorize_group_by_name(group_name=self.group.name, port=-1, protocol="icmp" )
-
         ### Generate a keypair for the instance
         self.keypair = self.tester.add_keypair( "keypair-" + str(time.time()))
+        self.keypath = '%s/%s.pem' % (os.curdir, self.keypair.name)
+        self.image = self.args.emi
+        if not self.image:
+            self.image = self.tester.get_emi(root_device_type="instance-store")
+        self.address = None
+        self.volume = None
+        self.snapshot = None
+        self.private_addressing = False
+        zones = self.tester.ec2.get_all_zones()
+        self.zone = random.choice(zones).name
+        self.reservation = None
 
-        ### Get an image to work with
-        self.image = self.tester.get_emi(root_device_type="instance-store")
-        self.clean_method = self.cleanup
-
-    def cleanup(self):
+    def clean_method(self):
+        ### Terminate the reservation if it is still up
         if self.reservation:
             self.assertTrue(self.tester.terminate_instances(self.reservation), "Unable to terminate instance(s)")
-        self.tester.delete_group(self.group)
-        self.tester.delete_keypair(self.keypair)
 
-    def MyTestUnit(self):
+        ### DELETE group
+        self.tester.delete_group(self.group)
+
+        ### Delete keypair in cloud and from filesystem
+        self.tester.delete_keypair(self.keypair)
+        os.remove(self.keypath)
+
+    def MyTest(self):
         """
-        A test description must go here......
-        This test will simply run an instance and check that it is reachable via ssh
+        This case was developed to run through a series of basic instance tests.
+             The tests are as follows:
+                   - execute run_instances command
+                   - make sure that public DNS name and private IP aren't the same
+                       (This is for Managed/Managed-NOVLAN networking modes)
+                   - test to see if instance is ping-able
+                   - test to make sure that instance is accessible via ssh
+                       (ssh into instance and run basic ls command)
+             If any of these tests fail, the test case will error out, logging the results.
         """
-        self.reservation = self.tester.run_instance(self.image, keypair=self.keypair.name, group=self.group.name)
+        if not self.reservation:
+            self.reservation = self.tester.run_instance(self.image, keypair=self.keypair.name, group=self.group.name)
         for instance in self.reservation.instances:
-            instance.sys("uname -r")
+            self.assertTrue( self.tester.wait_for_reservation(self.reservation) ,'Instance did not go to running')
+            self.assertNotEqual( instance.public_dns_name, instance.private_ip_address, 'Public and private IP are the same')
+            self.assertTrue( self.tester.ping(instance.public_dns_name), 'Could not ping instance')
+            self.assertFalse( instance.found("ls -1 /dev/" + instance.rootfs_device + "2",  "No such file or directory"),  'Did not find ephemeral storage at ' + instance.rootfs_device + "2")
 
 if __name__ == "__main__":
-    ### Load a generic test case object to parse
-    generic_testcase = EutesterTestCase()
-    #### Adds args from config files and command line
-    generic_testcase.compile_all_args()
+    testcase = InstanceBasics()
+    ### Use the list of tests passed from config/command line to determine what subset of tests to run
+    ### or use a predefined list
+    list = testcase.args.tests or [ "MyTest"]
 
-    ### Initialize test suite using args found from above
-    my_testcase = MyTestCase(credpath=generic_testcase.args.credpath)
-
-    ### List of test methods to run
-    list = [ "MyTestUnit"]
     ### Convert test suite methods to EutesterUnitTest objects
-    result = my_testcase.run_test_list_by_name(list)
+    unit_list = [ ]
+    for test in list:
+        unit_list.append( testcase.create_testunit_by_name(test) )
+
+    ### Run the EutesterUnitTest objects
+    result = testcase.run_test_case_list(unit_list,clean_on_exit=True)
+    exit(result)

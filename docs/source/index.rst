@@ -9,7 +9,7 @@ Welcome to Eutester's documentation!
 .. note::
     For API reference click here: :ref:`modindex` 
 
-Eutester is designed to allow a user to quickly generate automated tests for testing a Eucalyptus or Amazon cloud. In the case of testing a private cloud a configuration file can be used to create cases that require root access to the machines. The config file describes a few things about the clouds configuration including the bare metal machine configuration and IPs.
+Eutester is designed to allow a user to quickly generate automate test of a Eucalyptus or Amazon cloud. In the case of testing a private cloud a configuration file can be used to create cases that require root access to the machines. The config file describes a few things about the clouds configuration including the bare metal machine configuration and IPs.
 
 Installation
 ----------------
@@ -48,8 +48,10 @@ Required arguments: credential path::
 
 Config file example
 ----------------
-    clc.mydomain.com CENTOS 5.7 64 REPO [CC00 CLC SC00 WS]    
-    nc1.mydomain.com VMWARE ESX-4.0 64 REPO [NC00] 
+::
+
+    clc.mydomain.com CENTOS 5.7 64 REPO [CC00 CLC SC00 WS]
+    nc1.mydomain.com VMWARE ESX-4.0 64 REPO [NC00]
 
 .. toctree::
    :maxdepth: 2

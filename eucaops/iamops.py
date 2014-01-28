@@ -31,8 +31,35 @@
 # Author: vic.iglesias@eucalyptus.com
 from eutester import Eutester
 import re
+import boto
 
 class IAMops(Eutester):
+
+    def __init__(self,credpath=None, endpoint="iam.amazonaws.com", aws_access_key_id=None, aws_secret_access_key=None,
+                 is_secure=True, port=443, path='/', boto_debug=0 ):
+        self.aws_access_key_id = aws_access_key_id
+        self.aws_secret_access_key = aws_secret_access_key
+        self.user_id = None
+        self.account_id = None
+        super(IAMops, self).__init__(credpath=credpath)
+        self.setup_iam_connection(endpoint=endpoint, aws_access_key_id=self.aws_access_key_id ,
+                                  aws_secret_access_key=self.aws_secret_access_key, is_secure=is_secure, port=port,
+                                  path=path, boto_debug=boto_debug )
+
+    def setup_iam_connection(self, endpoint="iam.amazonaws.com", aws_access_key_id=None,aws_secret_access_key=None,
+                             is_secure=True, port=443, path='/', boto_debug=0 ):
+        try:
+            euare_connection_args = { 'aws_access_key_id' : aws_access_key_id,
+                                      'aws_secret_access_key': aws_secret_access_key,
+                                      'is_secure': is_secure,
+                                      'debug':boto_debug,
+                                      'port' : port,
+                                      'path' : path,
+                                      'host' : endpoint}
+            self.debug("Attempting to create IAM connection to " + endpoint + ':' + str(port) + path)
+            self.euare = boto.connect_iam(**euare_connection_args)
+        except Exception, e:
+            self.critical("Was unable to create IAM connection because of exception: " + str(e))
     
     def create_account(self,account_name):
         """
@@ -151,11 +178,11 @@ class IAMops(Eutester):
         """
         list = self.get_all_accounts(account_name=account_name, account_id=account_id, search=search)
         self.debug('-----------------------------------------------------------------------')
-        self.debug(str('ACCOUNT_NAME:').ljust(25) + str('ACCT_ID:'))
+        self.debug(str('ACCOUNT_NAME:').ljust(25) + "|" + str('ACCT_ID:'))
         self.debug('-----------------------------------------------------------------------')
         for account in list:
-            self.debug(str(account['account_name']).ljust(25)+str(account['account_id']))
-
+            self.debug(str(account['account_name']).ljust(25) + "|" +str(account['account_id']))
+            self.debug('-----------------------------------------------------------------------')
 
     def show_all_groups(self, account_name=None,  account_id=None,  path=None, group_name=None,  group_id=None,  search=False):
         """
@@ -170,11 +197,11 @@ class IAMops(Eutester):
         """
         list = self.get_all_groups(account_name=account_name, account_id=account_id, path=path, group_name=group_name, group_id=group_id, search=search)
         self.debug('-----------------------------------------------------------------------')
-        self.debug(str('ACCOUNT:').ljust(25) + str('GROUPNAME:').ljust(15) + str('GROUP_ID:').ljust(25)  )
+        self.debug(str('ACCOUNT:').ljust(25) + "|" + str('GROUPNAME:').ljust(15) + "|" + str('GROUP_ID:').ljust(25)  )
         self.debug('-----------------------------------------------------------------------')
         for group in list:
-            self.debug(str(group['account_name']).ljust(25)+str(group['group_name']).ljust(15)+str(group['group_id']))
-
+            self.debug(str(group['account_name']).ljust(25) + "|" + str(group['group_name']).ljust(15) + "|" + str(group['group_id']))
+            self.debug('-----------------------------------------------------------------------')
 
     def show_all_users(self, account_name=None, account_id=None,  path=None, user_name=None,  user_id=None, search=False ):
         """
@@ -189,11 +216,11 @@ class IAMops(Eutester):
         """
         list = self.get_all_users(account_name=account_name, account_id=account_id, path=path, user_name=user_name, user_id=user_id, search=search)
         self.debug('-----------------------------------------------------------------------')
-        self.debug(str('ACCOUNT:').ljust(25) + str('USERNAME:').ljust(15) + str('USER_ID').ljust(25) + str('ACCT_ID') )
+        self.debug(str('ACCOUNT:').ljust(25) + "|" + str('USERNAME:').ljust(15) + "|" + str('USER_ID').ljust(25) + "|" + str('ACCT_ID') )
         self.debug('-----------------------------------------------------------------------')
         for user in list:
-            self.debug(str(user['account_name']).ljust(25)+str(user['user_name']).ljust(15)+str(user['user_id']).ljust(25)+str(user['account_id']))
-
+            self.debug(str(user['account_name']).ljust(25) + "|" + str(user['user_name']).ljust(15) + "|" + str(user['user_id']).ljust(25) + "|" + str(user['account_id']))
+            self.debug('-----------------------------------------------------------------------')
     def get_euare_username(self):
         """
         Get all users in the current users account
@@ -222,7 +249,10 @@ class IAMops(Eutester):
         userlist=[]
         accounts = self.get_all_accounts(account_id=account_id, account_name=account_name, search=search)
         for account in accounts:
-            users = self.get_users_from_account(path=path, user_name=user_name, user_id=user_id, delegate_account=account['account_name'], search=search)
+            if account['account_id'] == self.account_id:
+                users =self.get_users_from_account()
+            else:
+                users = self.get_users_from_account(path=path, user_name=user_name, user_id=user_id, delegate_account=account['account_name'], search=search)
             for user in users:
                 user['account_name']=account['account_name']
                 user['account_id']=account['account_id']
@@ -298,10 +328,10 @@ class IAMops(Eutester):
         policies = self.get_user_policies(user_name, policy_name=policy_name, delegate_account=delegate_account, doc=doc, search=search)
         for policy in policies:
             self.debug('-------------------------------------')
-            self.debug("\tPOLICY NAME: "+str(policy['policy_name'])  )   
+            self.debug("\tPOLICY NAME: "+str(policy['policy_name']) +", USER_NAME: " +str(user_name))
             self.debug('-------------------------------------')
             for line in str(policy['policy_document']).splitlines():
-                self.debug(" "+line)
+                self.debug("\t"+line)
     
     def show_user_summary(self,user_name, delegate_account=None, account_id=None):
         """
@@ -418,6 +448,61 @@ class IAMops(Eutester):
             retlist.append(group)
         return retlist
         
+    def get_group_policy_names(self, group_name, policy_name=None,delegate_account=None, search=False):
+        """
+        Returns list of policy names associated with a given group, and match given criteria.
+
+        :param group_name: string - group to get policies for.
+        :param policy_name: regex - to match/filter returned policies
+        :param delegate_account: string - used for group lookup
+        :param search: specify whether to use match or search when filtering the returned list
+        :return: list of policy names
+        """
+        retlist = []
+        params = {}
+        if search:
+            re_meth = re.search
+        else:
+            re_meth = re.match
+        params = {'GroupName': group_name}
+        if delegate_account:
+            params['DelegateAccount'] = delegate_account
+        response = self.euare.get_response('ListGroupPolicies',params, list_marker='PolicyNames')
+        for name in response['list_group_policies_response']['list_group_policies_result']['policy_names']:
+            if policy_name is not None and not re_meth(policy_name, name):
+                continue
+            retlist.append(name)
+        return retlist
+
+    def get_group_policies(self, group_name, policy_name=None,delegate_account=None, doc=None, search=False):
+        """
+        Returns list of policy dicts associated with a given group, and match given criteria.
+
+        :param group_name: string - group to get policies for.
+        :param policy_name: regex - to match/filter returned policies
+        :param delegate_account: string - used for group lookup
+        :param doc: policy document to use as a filter
+        :param search: boolean - specify whether to use match or search when filtering the returned list
+        :return:
+        """
+        retlist = []
+        params = {}
+        if search:
+            re_meth = re.search
+        else:
+            re_meth = re.match
+        names = self.get_group_policy_names(group_name, policy_name=policy_name, delegate_account=delegate_account, search=search)
+
+        for p_name in names:
+            params = {'GroupName': group_name,
+                      'PolicyName': p_name}
+            if delegate_account:
+                params['DelegateAccount'] = delegate_account
+            policy = self.euare.get_response('GetGroupPolicy', params, verb='POST')['get_group_policy_response']['get_group_policy_result']
+            if doc is not None and not re_meth(doc, policy['policy_document']):
+                continue
+            retlist.append(policy)
+        return retlist
     
     def create_group(self, group_name,path="/", delegate_account=None):
         """
@@ -526,6 +611,41 @@ class IAMops(Eutester):
         access_tuple['access_key_id'] = response['create_access_key_response']['create_access_key_result']['access_key']['access_key_id']
         access_tuple['secret_access_key'] = response['create_access_key_response']['create_access_key_result']['access_key']['secret_access_key']
         return access_tuple
-    
-        
-    
+
+    def upload_server_cert(self, cert_name, cert_body, private_key):
+        self.debug("uploading server certificate: " + cert_name)
+        self.euare.upload_server_cert(cert_name=cert_name, cert_body=cert_body, private_key=private_key)
+        if cert_name not in str(self.euare.get_server_certificate(cert_name)):
+            raise Exception("certificate " + cert_name + " not uploaded")
+
+    def update_server_cert(self, cert_name, new_cert_name=None, new_path=None):
+        self.debug("updating server certificate: " + cert_name)
+        self.euare.update_server_cert(cert_name=cert_name, new_cert_name=new_cert_name, new_path=new_path)
+        if (new_cert_name and new_path) not in str(self.euare.get_server_certificate(new_cert_name)):
+            raise Exception("certificate " + cert_name + " not updated.")
+
+    def get_server_cert(self, cert_name):
+        self.debug("getting server certificate: " + cert_name)
+        cert = self.euare.get_server_certificate(cert_name=cert_name)
+        self.debug(cert)
+        return cert
+
+    def delete_server_cert(self, cert_name):
+        self.debug("deleting server certificate: " + cert_name)
+        self.euare.delete_server_cert(cert_name)
+        if (cert_name) in str(self.euare.list_server_certs()):
+            raise Exception("certificate " + cert_name + " not deleted.")
+
+    def list_server_certs(self, path_prefix='/', marker=None, max_items=None):
+        self.debug("listing server certificates")
+        certs = self.euare.list_server_certs(path_prefix=path_prefix, marker=marker, max_items=max_items)
+        self.debug(certs)
+        return certs
+
+    def create_login_profile(self, user_name, password, delegate_account=None):
+        self.debug("Creating login profile for: " + user_name + " with password: " + password)
+        params = {'UserName': user_name,
+                  'Password': password}
+        if delegate_account:
+            params['DelegateAccount'] = delegate_account
+        self.euare.get_response('CreateLoginProfile', params, verb='POST')

@@ -1,6 +1,12 @@
+.idea
 *.pyc
 /dist
 /build
 *.pyo
 .DS_Store
 /*.egg-info
+/.idea
+.project
+.pydevproject
+.settings/*
+.settings

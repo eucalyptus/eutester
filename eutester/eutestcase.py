@@ -9,6 +9,8 @@ import sys
 import os
 import types
 import traceback
+import random
+import string
 from eutester.eulogger import Eulogger
 from eutester.euconfig import EuConfig
 import StringIO
@@ -79,6 +81,7 @@ class TestColor():
     #list of canned color schemes, for now add em as you need 'em?
     canned_colors ={'reset' : '\033[0m', #self.TestColor.get_color(fg=0)
                     'whiteonblue' : '\33[1;37;44m', #get_color(fmt=bold, fg=37,bg=44)
+                    'whiteongreen' : '\33[1;37;42m',
                     'red' : '\33[31m', #TestColor.get_color(fg=31)
                     'failred' : '\033[101m', #TestColor.get_color(fg=101) 
                     'blueongrey' : '\33[1;34;47m', #TestColor.get_color(fmt=bold, fg=34, bg=47)#'\33[1;34;47m'
@@ -178,10 +181,18 @@ class EutesterTestUnit():
         self.name = str(method.__name__)
         self.result=EutesterTestResult.not_run
         self.time_to_run=0
+        if self.kwargs.get('html_anchors', False):
+            self.anchor_id = str(str(time.ctime())
+                                + self.name
+                                + "_"
+                                + str( ''.join(random.choice(string.ascii_uppercase + string.ascii_lowercase + string.digits) for x in range(3)))
+                                + "_"
+                                ).replace(" ","_")
+            self.error_anchor_id = "ERROR_" + self.anchor_id
         self.description=self.get_test_method_description()
         self.eof=False
         self.error = ""
-        print "Creating testunit:"+str(self.name)+", args:"
+        print "Creating testunit:" + str(self.name)+", args:"
         for count, thing in enumerate(args):
             print '{0}. {1}'.format(count, thing)
         for name, value in kwargs.items():
@@ -207,9 +218,14 @@ class EutesterTestUnit():
          
     def get_test_method_description(self):
         '''
-        Attempts to derive test unit description for the registered test method
+        Description:
+        Attempts to derive test unit description for the registered test method.
+        Keys off the string "Description:" preceded by any amount of white space and ending with either
+        a blank line or the string "EndDescription". This is used in debug output when providing info to the
+        user as to the method being run as a testunit's intention/description.  
         '''
-        desc = "\nMETHOD:"+str(self.name)+", TEST DESCRIPTION:\n"
+
+        desc = "\nMETHOD:"+str(self.name) + ", TEST DESCRIPTION:\n"
         ret = []
         add = False
         try:
@@ -242,10 +258,12 @@ class EutesterTestUnit():
             desc = desc+"\n".join(ret)
         return desc
     
-    def run(self):
+    def run(self, eof=None):
         '''
         Description: Wrapper which attempts to run self.method and handle failures, record time.
         '''
+        if eof is None:
+            eof = self.eof
         for count, thing in enumerate(self.args):
             print 'ARG:{0}. {1}'.format(count, thing)
         for name, value in self.kwargs.items():
@@ -259,15 +277,26 @@ class EutesterTestUnit():
                 ret = self.method(*self.args, **self.kwargs)
             self.result=EutesterTestResult.passed
             return ret
+        except SkipTestException, se:
+            print TestColor.get_canned_color('failred') + \
+                  "TESTUNIT SKIPPED:" + str(self.name) + "\n" + str(se) + TestColor.reset
+            self.error = str(se)
+            self.result = EutesterTestResult.not_run
         except Exception, e:
+            buf = '\nTESTUNIT FAILED: ' + self.name
+            if self.kwargs.get('html_anchors',False):
+                buf += "<font color=red> Error in test unit '" + self.name + "':\n"
             out = StringIO.StringIO()
             traceback.print_exception(*sys.exc_info(),file=out)
             out.seek(0)
-            buf = out.read()
-            print TestColor.get_canned_color('failred')+buf+TestColor.reset
+            buf += out.read()
+            if self.kwargs.get('html_anchors',False):
+                buf += ' </font>'
+                print '<a name="' + str(self.error_anchor_id) + '"></a>'
+            print TestColor.get_canned_color('failred') + buf + TestColor.reset
             self.error = str(e)
             self.result = EutesterTestResult.failed
-            if self.eof:
+            if eof:
                 raise e
             else:
                 pass
@@ -278,19 +307,32 @@ class EutesterTestUnit():
 class EutesterTestCase(unittest.TestCase):
     color = TestColor()
 
-    def __init__(self,name=None, debugmethod=None, use_default_file=True, default_config='eutester.conf'):
-        return self.setuptestcase(name=name, debugmethod=debugmethod, use_default_file=use_default_file, default_config=default_config)
+    def __init__(self,name=None, debugmethod=None, log_level='debug', logfile=None, logfile_level='debug'):
+        return self.setuptestcase(name=name, debugmethod=debugmethod, logfile=logfile, logfile_level=logfile_level)
         
-    def setuptestcase(self, name=None, debugmethod=None, use_default_file=True, default_config='eutester.conf' ):
-        self.name = self._testMethodName = name 
+    def setuptestcase(self,
+                      name=None,
+                      debugmethod=None,
+                      use_default_file=False,
+                      default_config='eutester.conf',
+                      log_level='debug',
+                      logfile=None,
+                      logfile_level='debug'):
+        self.name = self._testMethodName = name
+        self.log_level = log_level
+        self.logfile = logfile
+        self.logfile_level = logfile_level
         if not self.name:
             callerfilename=inspect.getouterframes(inspect.currentframe())[1][1]
             self.name = os.path.splitext(os.path.basename(callerfilename))[0]  
             self._testMethodName = self.name
             print "setuptestname:"+str(name)
+        if not hasattr(self,'args'): self.args=argparse.Namespace()
         self.debugmethod = debugmethod
         if not self.debugmethod:
-            self.setup_debugmethod()
+            self.setup_debugmethod(logfile=self.logfile, logfile_level=self.logfile_level)
+        #For QA output add preformat tag
+        self.debug('<pre>')
         if not hasattr(self,'testlist'): self.testlist = []
         self.list = None
         if not hasattr(self,'configfiles'): self.configfiles=[]
@@ -301,12 +343,13 @@ class EutesterTestCase(unittest.TestCase):
             self.default_config=self.get_default_userhome_config(fname=default_config)
             if self.default_config:
                 self.configfiles.append(self.default_config)
-        if not hasattr(self,'args'): self.args=argparse.Namespace()
         self.show_self()
                 
     def compile_all_args(self):
         self.setup_parser()
         self.get_args()
+
+
                                    
     def setup_parser(self,
                    testname=None, 
@@ -321,7 +364,14 @@ class EutesterTestCase(unittest.TestCase):
                    configblocks=True,
                    ignoreblocks=True,
                    color=True,
-                   testlist=True):
+                   testlist=True,
+                   userdata=True,
+                   instance_user=True,
+                   stdout_log_level=True,
+                   logfile_level=True,
+                   logfile=True,
+                   instance_password=True,
+                   region=True):
         '''
         Description: Convenience method to setup argparse parser and some canned default arguments, based
         upon the boolean values provided. For each item marked as 'True' this method will add pre-defined 
@@ -369,8 +419,25 @@ class EutesterTestCase(unittest.TestCase):
         :type testlist: string list
         :param testlist: Flag to present the testlist command line argument/option for providing a list of testnames to run
         
+        :type userdata: boolean
+        :param userdata: Flag to present the userdata command line argument/option for providing userdata to instance(s) within test
+        
+        :type instance_user: boolean
+        :param instance_user: Flag to present the instance_user command line argument/option for providing an ssh username for instance login via the cli
+        
+        :type instance_password: boolean
+        :param instance_password: Flag to present the instance_password command line argument/option for providing a ssh password for instance login via the cli
+        
         :type use_color: flag
-        :param use_color: Flag to enable/disable use of ascci color codes in debug output. 
+        :param use_color: Flag to enable/disable use of ascci color codes in debug output.
+
+        :param stdout_log_level: boolean flag to present the --log_leveel command line option to set stdout log level
+
+        :param logfile_level: boolean flag to present the --logfile_level command line option to set the log file log level
+
+        :param logfile: boolean flag to present the --logfile command line option to set the log file path to log to
+
+        :param region: boolean flag to present the --region command line option to set the region for the test to use
         '''
         
         testname = testname or self.name 
@@ -387,10 +454,10 @@ class EutesterTestCase(unittest.TestCase):
                                 help="path to credentials", default=None)
         if password:
             parser.add_argument('--password', 
-                                help="password to use for machine root ssh access", default='foobar')
+                                help="password to use for machine root ssh access", default=None)
         if config:
             parser.add_argument('--config',
-                                help='path to config file', default='../input/2b_tested.lst')   
+                                help='path to config file', default=None)
         if configblocks:
             parser.add_argument('--configblocks', nargs='+',
                                 help="Config sections/blocks in config file to read in", default=[])
@@ -409,8 +476,31 @@ class EutesterTestCase(unittest.TestCase):
         if vmtype:
             parser.add_argument('--vmtype',
                                 help="Virtual Machine Type to use in this test", default='c1.medium')
-        if color: 
+        if userdata:
+            parser.add_argument('--user-data',
+                                help="User data string to provide instance run within this test", default=None)
+        if instance_user:
+            parser.add_argument('--instance-user',
+                                help="Username used for ssh login. Default:'root'", default='root')
+        if instance_password:
+            parser.add_argument('--instance-passsword',
+                                help="Password used for ssh login. When value is 'None' ssh keypair will be used and not username/password, default:'None'", default=None)
+        if region:
+            parser.add_argument('--region',
+                help="Use AWS region instead of Eucalyptus", default=None)
+        if color:
             parser.add_argument('--use_color', dest='use_color', action='store_true', default=False)
+        if stdout_log_level:
+            parser.add_argument('--log_level',
+                                help="log level for stdout logging", default='debug')
+        if logfile:
+            parser.add_argument('--logfile',
+                                help="file path to log to (in addtion to stdout", default=None)
+        if logfile_level:
+            parser.add_argument('--logfile_level',
+                                help="log level for log file logging", default='debug')
+        parser.add_argument('--html-anchors', dest='html_anchors', action='store_true',
+                                help="Print HTML anchors for jumping through test results", default=False)
         self.parser = parser  
         return parser
     
@@ -422,18 +512,43 @@ class EutesterTestCase(unittest.TestCase):
         self.set_arg('use_color', True)
         self.use_color = True
         
-        
-    def setup_debugmethod(self, testcasename=None):
-        name = testcasename
-        print "Starting setup_debugmethod"+str(name)
+
+    def setup_debugmethod(self, testcasename=None, log_level=None, logfile=None, logfile_level=None):
+        print "setup_debugmethod: \ntestcasename:"+ str(testcasename) \
+                                + '\nlog_level:'+str(log_level) \
+                                + '\nlogfile:' +str(logfile) \
+                                + '\nlogfile_level:' +str(logfile_level)
+        name = testcasename or self.name
+
+        if not logfile and self.has_arg('logfile'):
+            logfile = self.args.logfile
+        logfile = logfile or self.logfile
+
+        if self.has_arg('logfile_level'):
+            logfile_level = self.args.logfile_level
+        logfile_level = logfile_level or self.logfile_level or 'debug'
+
+        if not log_level and self.has_arg('log_level'):
+            log_level = self.args.log_level
+        log_level = log_level or self.log_level or 'debug'
+
+        print "Starting setup_debugmethod, name:"+str(name)
+        print "After populating... setup_debugmethod: testcasename:"+ str(testcasename) \
+              + 'log_level:'+str(log_level) \
+              + 'logfile:' +str(logfile) \
+              + 'logfile_level:' +str(logfile_level)
         if not name:
             if hasattr(self,'name'):
                 if isinstance(self.name, types.StringType):
                     name = self.name
             else:
                 name = 'EutesterTestCase'
-        logger = Eulogger(identifier=str(name))
-        self.debugmethod = logger.log.debug
+        self.logger = Eulogger(identifier=str(name),stdout_level=log_level, logfile=logfile, logfile_level='debug')
+        self.debugmethod = self.logger.log.debug
+        if not self.has_arg('logger'):
+            self.add_arg('logger',self.logger)
+        if not self.has_arg('debug_method'):
+            self.add_arg('debug_method', self.debug)
 
     def debug(self,msg,traceback=1,color=None, linebyline=True):
         '''
@@ -488,13 +603,13 @@ class EutesterTestCase(unittest.TestCase):
         else:
             self.debugmethod("("+str(cur_method)+":"+str(lineno)+"): "+colorprefix+str(msg)+colorreset )
 
-    def run_test_list_by_name(self, list):
+    def run_test_list_by_name(self, list, eof=None):
         unit_list = []
         for test in list:
             unit_list.append( self.create_testunit_by_name(test) )
 
         ### Run the EutesterUnitTest objects
-        return self.run_test_case_list(unit_list)
+        return self.run_test_case_list(unit_list,eof=eof)
 
     def create_testunit_from_method(self,method, *args, **kwargs):
         '''
@@ -533,8 +648,11 @@ class EutesterTestCase(unittest.TestCase):
                 eof = kwargs['eof']
             else:
                 eof = kwargs.pop('eof')
-        
-        testunit = EutesterTestUnit(method, *args, **kwargs)
+        ## Only pass the arg if we need it otherwise it will print with all methods/testunits
+        if self.args.html_anchors:
+            testunit = EutesterTestUnit(method, *args, html_anchors=self.args.html_anchors ,**kwargs)
+        else:
+            testunit = EutesterTestUnit(method, *args, **kwargs)
         testunit.eof = eof
         #if autoarg, auto populate testunit arguements from local testcase.args namespace values
         if autoarg:
@@ -571,13 +689,16 @@ class EutesterTestCase(unittest.TestCase):
         self.debug(out, traceback=traceback, color=testcolor,linebyline=False)  
         
     def startmsg(self,msg=""):
-        msg = "- STARTING TESTUNIT:  - " + msg
         self.status(msg, traceback=3,testcolor=TestColor.get_canned_color('whiteonblue'))
         
     def endsuccess(self,msg=""):
-        msg = "- SUCCESS ENDED - " + msg
-        self.status(msg, traceback=2,a=1, testcolor=TestColor.get_canned_color('whiteonblue'))
-      
+        msg = "- UNIT ENDED - " + msg
+        self.status(msg, traceback=2,a=1, testcolor=TestColor.get_canned_color('whiteongreen'))
+
+    def errormsg(self,msg=""):
+        msg = "- ERROR - " + msg
+        self.status(msg, traceback=2,a=1,testcolor=TestColor.get_canned_color('failred'))
+
     def endfailure(self,msg="" ):
         msg = "- FAILED - " + msg
         self.status(msg, traceback=2,a=1,testcolor=TestColor.get_canned_color('failred'))
@@ -621,20 +742,23 @@ class EutesterTestCase(unittest.TestCase):
         :returns: formated string containing args and their values.  
         '''
         
-        buf =  "End on Failure :" +str(testunit.eof)
-        buf += "\nPassing ARGS:\n"
-        buf += "---------------------\n"
-        varnames = self.get_meth_arg_names(testunit.method)
-        if testunit.args:
-            for count,arg in enumerate(testunit.args):
-                buf += str(varnames[count+1])+" : "+str(arg)+"\n"
-        if testunit.kwargs:
-            for key in testunit.kwargs:
-                buf += str(key)+" : "+str(testunit.kwargs[key])+"\n"
+        buf =  "\nEnd on Failure:" +str(testunit.eof)
+        buf += "\nPassing ARGS:"
+        if not testunit.args and not testunit.kwargs:
+            buf += '\"\"\n'
+        else:
+            buf += "\n---------------------\n"
+            varnames = self.get_meth_arg_names(testunit.method)
+            if testunit.args:
+                for count,arg in enumerate(testunit.args):
+                    buf += str(varnames[count+1])+" : "+str(arg)+"\n"
+            if testunit.kwargs:
+                for key in testunit.kwargs:
+                    buf += str(key)+" : "+str(testunit.kwargs[key])+"\n"
             buf += "---------------------\n"
         return buf
     
-    def run_test_case_list(self, list, eof=True, clean_on_exit=True, printresults=True):
+    def run_test_case_list(self, list, eof=False, clean_on_exit=True, printresults=True):
         '''
         Desscription: wrapper to execute a list of ebsTestCase objects
         
@@ -661,14 +785,9 @@ class EutesterTestCase(unittest.TestCase):
         try:
             for test in list:
                 tests_ran += 1
-                startbuf = ""
-                argbuf =self.get_pretty_args(test)
-                startbuf += str(test.description)+str(argbuf)
-                startbuf += 'Running list method: "'+str(self.print_testunit_method_arg_values(test))+'"'
-                self.startmsg(startbuf)
+                self.print_test_unit_startmsg(test)
                 try:
-                    test.run()
-                    self.endsuccess(str(test.name))
+                    test.run(eof=eof or test.eof)
                 except Exception, e:
                     self.debug('Testcase:'+ str(test.name)+' error:'+str(e))
                     if eof or (not eof and test.eof):
@@ -676,6 +795,9 @@ class EutesterTestCase(unittest.TestCase):
                         raise e
                     else:
                         self.endfailure(str(test.name))
+                else:
+                    self.endsuccess(str(test.name))
+                self.debug(self.print_test_list_short_stats(list))
                         
         finally:
             elapsed = int(time.time()-start)
@@ -691,27 +813,51 @@ class EutesterTestCase(unittest.TestCase):
             try:
                  if clean_on_exit:
                     cleanunit = self.create_testunit_from_method(self.clean_method)
-                    self.testlist = list.append(cleanunit)
+                    list.append(cleanunit)
                     try:
+                        self.print_test_unit_startmsg(cleanunit)
                         cleanunit.run()
-                    except:
-                        pass
+                    except Exception, e:
+                        out = StringIO.StringIO()
+                        traceback.print_exception(*sys.exc_info(),file=out)
+                        out.seek(0)
+                        self.debug("Failure in cleanup: " + str(e) + "\n" + out.read())
                     if printresults:
                         msgout = self.print_test_list_results(list=list,printout=False)
                         self.status(msgout)
             except: 
                 pass
-            total = 0
+            self.testlist = copy.copy(list)
             passed = 0
+            failed = 0
+            not_run = 0
             for test in list:
-                total += 1
                 if test.result == EutesterTestResult.passed:
                     passed += 1
-            print "passed:"+str(passed)+" out of total:"+str(total)
-            if total != passed:
+                if test.result == EutesterTestResult.failed:
+                    failed += 1
+                if test.result == EutesterTestResult.not_run:
+                    not_run += 1
+            total = passed + failed + not_run
+            print "passed:"+str(passed)+" failed:" + str(failed) + " not_run:" + str(not_run) + " total:"+str(total)
+            if failed:
                 return(1)
             else:
                 return(0)
+
+    def print_test_unit_startmsg(self,test):
+        startbuf = ''
+        if self.args.html_anchors:
+            link = '<a name="' + str(test.anchor_id) + '"></a>\n'
+            startbuf += '<div id="myDiv" name="myDiv" title="Example Div Element" style="color: #0900C4; font: Helvetica 12pt;border: 1px solid black;">'
+            startbuf += str(link)
+        startbuf += "STARTING TESTUNIT: " + test.name
+        argbuf = self.get_pretty_args(test)
+        startbuf += str(test.description)+str(argbuf)
+        startbuf += 'Running list method: "'+str(self.print_testunit_method_arg_values(test))+'"'
+        if self.args.html_anchors:
+            startbuf += '\n </div>'
+        self.startmsg(startbuf)
     
     def has_arg(self,arg):
         '''
@@ -784,7 +930,7 @@ class EutesterTestCase(unittest.TestCase):
     
     
     def clean_method(self):
-        raise Exception("Clean_method needs not implemented. Was run_list using clean_on_exit?")
+        raise Exception("Clean_method was not implemented. Was run_list using clean_on_exit?")
 
     def print_test_list_results(self,list=None, printout=True, printmethod=None):
         '''
@@ -800,7 +946,8 @@ class EutesterTestCase(unittest.TestCase):
         :type printmethod: method
         :param printmethod: method to use for printing test result output. Default is self.debug
         '''
-        buf =  "TESTUNIT LIST SUMMARY FOR '"+str(self.name)+"'\n"
+
+        buf = "\nTESTUNIT LIST SUMMARY FOR " + str(self.name) + "\n"
         if list is None:
             list=self.testlist
         if not list:
@@ -811,13 +958,32 @@ class EutesterTestCase(unittest.TestCase):
 
         for testunit in list:
             buf += self.resultdefault("\n"+ self.getline(80)+"\n", printout=False)
+            #Ascii mark up errors using pmethod() so errors are in bold/red, etc...
             pmethod = self.resultfail if not testunit.result == EutesterTestResult.passed else self.resultdefault
-            buf += pmethod(str("TEST: "+str(testunit.name)).ljust(50)+str(" RESULT:"+testunit.result).ljust(10)+str(' Time:'+str(testunit.time_to_run)).ljust(0),printout=False)
-            buf += pmethod("\nRAN AS: "+str(self.print_testunit_method_arg_values(testunit)), printout=False) 
+            test_summary_line = str(" ").ljust(20) + str("| RESULT: " + str(testunit.result)).ljust(20) + "\n" +\
+                                str(" ").ljust(20) + "| TEST NAME: " + str(testunit.name) + "\n" + \
+                                str(" ").ljust(20) + str("| TIME : " + str(testunit.time_to_run))
+
+
+            buf += pmethod(str(test_summary_line),printout=False)
+            buf += pmethod("\n" + str(" ").ljust(20) + "| ARGS: "
+                           + str(self.print_testunit_method_arg_values(testunit)), printout=False)
+            #Print additional line showing error in the failed case...
             if testunit.result == EutesterTestResult.failed:
-                    buf += "\n"+str(self.resulterr('ERROR('+str(testunit.name)+'): '+str(testunit.error), printout=False))
+                    err_sum = "\n".join(str(testunit.error).splitlines()[0:3])
+                    test_error_line = 'ERROR:('+str(testunit.name)+'): '\
+                                      + str(err_sum) \
+                                      + '\n'
+                    buf += "\n"+str(self.resulterr(test_error_line, printout=False))
+            if testunit.result == EutesterTestResult.not_run:
+                err_sum = "\n".join(str(testunit.error).splitlines()[0:3])
+                test_error_line = 'NOT_RUN:('+str(testunit.name)+'): ' \
+                                  + str(err_sum) \
+                                  + '\n'
+                buf += "\n"+str(self.resulterr(test_error_line, printout=False))
         buf += self.resultdefault("\n"+ self.getline(80)+"\n", printout=False)
         buf += str(self.print_test_list_short_stats(list))
+        buf += "\n"
         if printout:
             printmethod(buf)
         else:
@@ -864,7 +1030,7 @@ class EutesterTestCase(unittest.TestCase):
             argnames = spec.args
         else:
             argnames = spec.args[1:len(spec.args)]
-        defaults = spec.defaults
+        defaults = spec.defaults or []
         #Initialize the return dict
         for argname in argnames:
             argdict[argname]='<!None!>'
@@ -939,6 +1105,10 @@ class EutesterTestCase(unittest.TestCase):
         '''
         eof=False
         autoarg=True
+        obj = obj or self
+        meth = getattr(obj,name)
+        methvars = self.get_meth_arg_names(meth)
+
 
         
         #Pull out value relative to this method, leave in any that are intended to be passed through
@@ -957,12 +1127,10 @@ class EutesterTestCase(unittest.TestCase):
                 obj = kwargs['obj']
             else:
                 obj = kwargs.pop('obj')
-                
-        obj = obj or self
-        meth = getattr(obj,name)
-        methvars = self.get_meth_arg_names(meth)       
+
         testunit = EutesterTestUnit(meth, *args, **kwargs)
         testunit.eof = eof
+
         #if autoarg, auto populate testunit arguements from local testcase.args namespace values
         if autoarg:
             self.populate_testunit_with_args(testunit)
@@ -995,7 +1163,8 @@ class EutesterTestCase(unittest.TestCase):
         cf = argparse.Namespace()
         
         
-        if self.use_default_file and self.default_config:
+        if (hasattr(self, 'use_default_file') and self.use_default_file) and \
+                (hasattr(self, 'use_default_config') and self.default_config):
             try:
                 configfiles.append(self.default_config)
             except Exception, e:
@@ -1029,7 +1198,17 @@ class EutesterTestCase(unittest.TestCase):
                 for cfile in str(cliargs.config).split(','):
                     if not cfile in configfiles:
                         configfiles.append(cfile)
-            
+            #legacy support for config, configfile config_file arg names...
+            if ('config_file' in cliargs.__dict__) and  cliargs.config:
+                for cfile in str(cliargs.config).split(','):
+                    if not cfile in configfiles:
+                        configfiles.append(cfile)
+            #legacy support for config, configfile config_file arg names...
+            if ('configfile' in cliargs.__dict__) and  cliargs.config:
+                for cfile in str(cliargs.config).split(','):
+                    if not cfile in configfiles:
+                        configfiles.append(cfile)
+
         #store config block list for debug purposes
         cf.__setattr__('configsections',copy.copy(confblocks))
         
@@ -1075,6 +1254,7 @@ class EutesterTestCase(unittest.TestCase):
             if 'config' in args:
                 args.config_file = args.config
                 args.configfile = args.config
+
         except: pass
         try:
             args.cred_path = args.credpath
@@ -1082,6 +1262,8 @@ class EutesterTestCase(unittest.TestCase):
         self.args = args
         #finally add the namespace args to args for populating other testcase objs from this one
         if not self.has_arg('args'): args.__setattr__('args',copy.copy(args))
+        #Refresh our debug method(s) in the case the args provided give instruction on logging
+        self.setup_debugmethod()
         self.show_self()
         return args
     
@@ -1133,8 +1315,6 @@ class EutesterTestCase(unittest.TestCase):
         
         :type args: namespace object
         :param args: namespace object to be printed,by default None will print local testcase's args.
-                    
-        
         '''
         args= args or self.args if hasattr(self,'args') else None
         argbuf = str("TEST ARGS:").ljust(25)+"        "+str("VALUE:")
@@ -1159,7 +1339,6 @@ class EutesterTestCase(unittest.TestCase):
         :type: namespace: namespace obj
         :param: namespace: namespace obj containing args/values to be applied to testunit. None by default will use local
                             testunit args. 
-        
         '''
         self.debug("Attempting to populate testunit:"+str(testunit.name)+", with testcase.args...")
         args_to_apply = namespace or self.args
@@ -1275,12 +1454,17 @@ class EutesterTestCase(unittest.TestCase):
         :rtype: list
         :returns: list of strings representing the varnames within argcount for this method
         '''
-        fcode = cls.get_method_fcode(meth) 
+        fcode = cls.get_method_fcode(meth)
         varnames = fcode.co_varnames[0:fcode.co_argcount]
         return varnames
-       
 
 
-        
+
+class SkipTestException(Exception):
+    def __init__(self, value):
+        self.value = value
+
+    def __str__(self):
+        return repr(self.value)
             
     

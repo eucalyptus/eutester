@@ -31,20 +31,13 @@
 # Author: matt.clark@eucalyptus.com
 
 from eucaops import Eucaops
-from eutester import euinstance, euvolume
-import logging
-from boto.ec2.snapshot import Snapshot
-from boto.ec2.image import Image
 import re
 import time
 import httplib
 import sys
-import unittest
 from eutester.eutestcase import EutesterTestCase
-from eutester.eutestcase import EutesterTestResult
-from testcases.cloud_user.ebs.ebstestsuite import TestZone
 from eutester.sshconnection import SshCbReturn
-
+from eutester.machine import Machine
 
 class ImageUtils(EutesterTestCase):
     
@@ -59,24 +52,56 @@ class ImageUtils(EutesterTestCase):
                  config_file=None, 
                  password="foobar", 
                  credpath=None, 
-                 destpath='/disk1/storage/',  
+                 destpath=None,
                  time_per_gig = 300,
                  eof=True,
-                 work_component=None):
+                 worker_hostname=None,
+                 worker_keypath=None,
+                 worker_username='root',
+                 worker_password=None,
+                 worker_machine=None):
         
         if tester is None:
             self.tester = Eucaops( config_file=config_file,password=password,credpath=credpath)
         else:
             self.tester = tester
         self.tester.exit_on_fail = eof
-        self.debugmethod = self.tester.debug    
-        
-        self.component = work_component or self.tester.clc
-        
-        self.destpath = str(destpath)
+        self.debugmethod = self.tester.debug
+
+        #Setup the work machine, this is the machine which will be used for performing the 'work' (download, bundle, etc)
+        self.worker_keypath = worker_keypath or self.tester.keypath
+        self.worker_username = worker_username
+        self.worker_password = worker_password or self.tester.password
+        self.worker_machine = self._get_worker_machine(worker_machine)
+        if destpath is not None:
+            self.destpath = str(destpath)
+        else:
+            self.destpath = "/disk1/storage"
+
         self.time_per_gig = time_per_gig
         self.credpath=credpath or self.tester.credpath
-     
+
+    def _get_worker_machine(self, worker):
+        '''
+        Attempts to verify the worker passed is a Machine() class else assume it's a host name
+        of the machine work should be performed on and attempt to return a Machine() created from the hostname
+
+        param: worker Machine() or 'hostname' to be used to perform image utils work on.
+        returns Machine obj
+        '''
+        worker = worker or self.tester.clc
+        self.debug('Verifying ')
+        if isinstance(worker, Machine):
+            return worker
+        else:
+            #Assume this is a host address, attempt to convert it to a Machine()
+            self.debug('Attempting to connect to machine: ' + str(worker) + " for image utility work...")
+            new_machine = Machine(hostname=worker,
+                                  username=self.worker_username,
+                                  password=self.worker_password,
+                                  keypath=self.worker_keypath)
+            return new_machine
+        raise Exception('Could not get a machine to perform image utility work?')
 
     def getHttpHeader(self, url):
         url = url.replace('http://','')
@@ -87,8 +112,7 @@ class ImageUtils(EutesterTestCase):
         conn.request("HEAD", path)  
         return conn.getresponse()
     
-    
-    
+
     def getHttpRemoteImageSize(self, url, unit=None): 
             '''
             Get the remote file size from the http header of the url given
@@ -118,8 +142,8 @@ class ImageUtils(EutesterTestCase):
                     conn.close()
             return rfsize
 
-    def wget_image(self,url,destpath=None, component=None, user=None, password=None, retryconn=True, time_per_gig=300):
-        machine = component or self.component
+    def wget_image(self,url,destpath=None, machine=None, user=None, password=None, retryconn=True, time_per_gig=300):
+        machine = machine or self.worker_machine
         if destpath is None and self.destpath is not None:
             destpath = self.destpath
         size = self.getHttpRemoteImageSize(url)
@@ -130,8 +154,8 @@ class ImageUtils(EutesterTestCase):
         machine.wget_remote_image(url, path=destpath, user=user, password=password, retryconn=retryconn, timeout=timeout)
         return size
     
-    def get_manifest_part_count(self, path, component=None, timeout=30):
-        machine = component or self.component
+    def get_manifest_part_count(self, path, machine=None, timeout=30):
+        machine = machine or self.worker_machine
         cmd = 'cat '+str(path)
         out = machine.cmd(cmd,timeout=timeout, verbose=False)
         if out['status'] != 0:
@@ -144,23 +168,24 @@ class ImageUtils(EutesterTestCase):
     
     def bundle_image(self,
                      path,
-                     component=None, 
-                     component_credpath=None,
+                     machine=None,
+                     machine_credpath=None,
                      prefix=None,
                      kernel=None,
                      ramdisk=None,
                      block_device_mapping=None,
                      destination='/disk1/storage',
+                     arch='x86_64',
                      debug=False,
                      interbundle_timeout=120, 
                      time_per_gig=None):
         '''
-        Bundle an image on a 'component'. 
-        where credpath to creds on component
+        Bundle an image on a 'machine'.
+        where credpath to creds on machine
         '''
         time_per_gig = time_per_gig or self.time_per_gig
-        credpath = component_credpath or self.credpath
-        machine = component or self.component
+        credpath = machine_credpath or self.credpath
+        machine = machine or self.worker_machine
         image_size = machine.get_file_size(path)/self.gig or 1
         timeout = time_per_gig * image_size
         cbargs = [timeout, interbundle_timeout, time.time(),0, True]
@@ -181,13 +206,13 @@ class ImageUtils(EutesterTestCase):
             cmdargs = cmdargs + " --block-device-mapping " + str(block_device_mapping)
         if destination:
             cmdargs = cmdargs + " --destination " + str(destination)
+        if arch:
+            cmdargs = cmdargs + " --arch " + str(arch)
         if debug:
             cmdargs = cmdargs + " --debug "
         
         cmdargs = cmdargs + " -i " + str(path)
-        
-        
-        
+
         if credpath is not None:
             cmd = 'source '+str(credpath)+'/eucarc && euca-bundle-image ' + str(cmdargs)
         else:
@@ -201,7 +226,7 @@ class ImageUtils(EutesterTestCase):
         manifest = None
         for line in out['output']:
             line = str(line)
-            if re.search('Generating manifest',line):
+            if re.search("(Generating|Wrote) manifest",line):
                 manifest = line.split()[2]
                 break
         if manifest is None:
@@ -211,20 +236,20 @@ class ImageUtils(EutesterTestCase):
     
     def upload_bundle(self, 
                       manifest, 
-                      component=None, 
+                      machine=None,
                       bucketname=None, 
-                      component_credpath=None, 
+                      machine_credpath=None,
                       debug=False, 
                       interbundle_timeout=120, 
                       timeout=0, 
                       image_check_timeout=300,
                       uniquebucket=True):
         '''
-        Bundle an image on a 'component'. 
-        where credpath to creds on component
+        Bundle an image on a 'machine'.
+        where credpath to creds on machine
         '''
-        machine = component or self.component
-        credpath = component_credpath or self.credpath
+        machine = machine or self.worker_machine
+        credpath = machine_credpath or self.credpath
         cbargs = [timeout, interbundle_timeout, time.time(),0,True]
         bname = ''
         cmdargs = ""
@@ -232,28 +257,22 @@ class ImageUtils(EutesterTestCase):
         upmanifest = None
         part_count = -1
         try:
-            part_count = self.get_manifest_part_count(manifest, component=component)
+            part_count = self.get_manifest_part_count(manifest, machine=machine)
         except:
             pass
         self.debug('Attempting to upload_bundle:'+str(manifest)+", bucketname:"+str(bucketname)+", part_count:"+str(part_count))
         if bucketname:
-            basename = bucketname
+            bname = bucketname
+            if uniquebucket:
+                bname = self._get_unique_bucket_name(bname)
         else:
             #Use the image name found in the manifest as bucketname
-            mlist = str(manifest.replace('.manifest.xml','')).split('/')
-            basename = mlist[len(mlist)-1].replace('_','').replace('.','')
-            self.debug('Using upload_bundle bucket name: '+str(basename))
-        if uniquebucket:
-            bx = 0 
-            bname = basename+"test"+str(bx)
-            while self.tester.get_bucket_by_name(bname) is not None:
-                bx += 1
-                bname = basename+"test"+str(bx)
-        cmdargs = cmdargs + " -b " +str(basename)
+            bname = self._generate_unique_bucket_name_from_manifest(manifest, unique=uniquebucket)
+        self.debug('Using upload_bundle bucket name: '+str(bname))
+        cmdargs = cmdargs + " -b " +str(bname)
         if debug:
             cmdargs = cmdargs + " --debug "
         cmdargs = cmdargs + " -b " + str(bname) + " -m " +str(manifest)
-
         if credpath is not None:
             cmd = 'source '+str(credpath)+'/eucarc && euca-upload-bundle ' + str(cmdargs)
         else:
@@ -266,15 +285,40 @@ class ImageUtils(EutesterTestCase):
             raise Exception('upload_bundle "'+str(manifest)+'" failed. Errcode:'+str(out['status']))
         for line in out['output']:
             line = str(line)
-            if re.search('Uploaded image',line):
-                upmanifest = line.split()[3]
+            if re.search('Uploaded', line) and re.search('manifest', line):
+                upmanifest = line.split().pop()
                 break
         if upmanifest is None:
             raise Exception('Failed to find upload manifest from upload_bundle command')
         self.debug('upload_image:'+str(manifest)+'. manifest:'+str(upmanifest))
         return upmanifest
-    
-    
+
+    def _generate_unique_bucket_name_from_manifest(self,manifest, unique=True):
+        mlist = str(manifest.replace('.manifest.xml','')).split('/')
+        basename = mlist[len(mlist)-1].replace('_','').replace('.','')
+        if unique:
+            return self._get_unique_bucket_name(basename)
+        return basename
+
+    def _get_unique_bucket_name(self, basename, id='test', start=0):
+        bx=start
+        bname = basename
+        while self.tester.get_bucket_by_name(bname) is not None:
+            bx += 1
+            bname = basename+str(id)+str(bx)
+        return bname
+
+
+    def create_working_dir_on_worker_machine(self, path, overwrite=False):
+        path = str(path)
+        if self.worker_machine.is_file_present(path):
+            if not overwrite:
+                raise Exception('Dir found on:'+str(self.worker_machine.hostname)+ ',"' + path + '".\n' +
+                                'Either remove conflicting files, use "filepath" option or "overwrite"')
+        else:
+            self.worker_machine.sys('mkdir -p ' + path, code=0)
+
+
     def bundle_status_cb(self,buf, cmdtimeout, parttimeout, starttime,lasttime, check_image_stage):
         #self.debug('bundle_status_cb: cmdtimeout:'+str(cmdtimeout)+", partimeout:"+str(parttimeout)+", starttime:"+str(starttime)+", lasttime:"+str(lasttime)+", check_image_stage:"+str(check_image_stage))
         ret = SshCbReturn(stop=False)
@@ -307,76 +351,106 @@ class ImageUtils(EutesterTestCase):
         
         ret.nextargs =[cmdtimeout,parttimeout,starttime,time.time(),check_image_stage]
         return ret
-    
-    def register_image(self,
-                       manifest,
-                       prefix=None,
-                       kernel=None,
-                       ramdisk=None,
-                       name=None,
-                       architecture=None,
-                       root_device_name=None,
-                       block_device_mapping=None,
-                       destination=None,
-                       debug=False):
-        '''convience method to register an s3 image manifest, calls eutester main method'''
-        return self.tester.register_image( manifest, rdn=root_device_name, description=description, bdmdev=block_device_mapping, name=name, ramdisk=ramdisk, kernel=kernel)
-    
-    
-    def create_emi_from_url(self, 
-                            url,
-                            component=None,
-                            bucketname=None, 
-                            component_credpath=None, 
-                            debug=False, 
-                            prefix=None,
-                            kernel=None,
-                            ramdisk=None,
-                            block_device_mapping=None,
-                            destination='/disk1/storage',
-                            root_device_name=None,
-                            description=None,
-                            name=None,
-                            interbundle_timeout=120, 
-                            upload_timeout=0, 
-                            uniquebucket=True,
-                            destpath=None,
-                            wget_user=None, 
-                            wget_password=None, 
-                            wget_retryconn=True, 
-                            filepath=None,
-                            bundle_manifest=None,
-                            upload_manifest=None,
-                            time_per_gig=300,
-                            ):
+
+
+    def create_emi(self,
+                    url,
+                    machine=None,
+                    bucketname=None,
+                    machine_credpath=None,
+                    debug=False,
+                    prefix=None,
+                    kernel=None,
+                    ramdisk=None,
+                    architecture=None,
+                    block_device_mapping=None,
+                    destpath=None,
+                    root_device_name=None,
+                    description=None,
+                    virtualization_type=None,
+                    name=None,
+                    interbundle_timeout=120,
+                    upload_timeout=0,
+                    uniquebucket=True,
+                    wget_user=None,
+                    wget_password=None,
+                    wget_retryconn=True,
+                    filepath=None,
+                    bundle_manifest=None,
+                    upload_manifest=None,
+                    time_per_gig=300,
+                    tagname=None,
+                    overwrite=False
+                    ):
         
-        start = time.time() 
+        start = time.time()
+        destpath = destpath or self.destpath
+        destpath = str(destpath)
+        if not destpath.endswith('/'):
+            destpath += '/'
+        if url:
+            filename = str(url).split('/')[-1]
+            destpath = destpath + str(filename.replace('.','_'))
         self.debug('create_emi_from_url:'+str(url)+", starting...")
         if filepath is None and bundle_manifest is None and upload_manifest is None:
-            filename = str(url).split('/')[-1]
-            dir = destpath or self.destpath
-            filepath = dir + '/' + str(filename)
-            filesize = self.wget_image(url, destpath=destpath, component=component, user=wget_user, 
-                                       password=wget_password, retryconn=wget_retryconn, time_per_gig=time_per_gig)
+            filepath = destpath + "/" + str(filename)
+            self.create_working_dir_on_worker_machine(path=destpath, overwrite=overwrite)
+
+            self.debug('Downloading image to ' + str(machine) + ':' + str(filepath) + ', url:' + str(url))
+            filesize = self.wget_image(url,
+                                       destpath=destpath,
+                                       machine=machine,
+                                       user=wget_user,
+                                       password=wget_password,
+                                       retryconn=wget_retryconn,
+                                       time_per_gig=time_per_gig)
             
-        self.debug('create_emi_from_url: Image downloaded to machine, now bundling image...')
+        self.status('create_emi_from_url: Image downloaded to machine, now bundling image...')
         if bundle_manifest is None and upload_manifest is None:
-            bundle_manifest = self.bundle_image(filepath, component=component, component_credpath=component_credpath, 
-                                                prefix=prefix, kernel=kernel, ramdisk=ramdisk, block_device_mapping=block_device_mapping, 
-                                                destination=destination, debug=debug, interbundle_timeout=interbundle_timeout, 
+            bundle_manifest = self.bundle_image(filepath,
+                                                machine=machine,
+                                                machine_credpath=machine_credpath,
+                                                prefix=prefix,
+                                                kernel=kernel,
+                                                ramdisk=ramdisk,
+                                                block_device_mapping=block_device_mapping,
+                                                destination=destpath,
+                                                debug=debug,
+                                                interbundle_timeout=interbundle_timeout,
                                                 time_per_gig=time_per_gig)
         
-        self.debug('create_emi_from_url: Image bundled, now uploading...')
+        self.status('create_emi_from_url: Image bundled, now uploading...')
         if upload_manifest is None:
-            upload_manifest = self.upload_bundle(bundle_manifest, component=component, bucketname=bucketname, 
-                                                 component_credpath=component_credpath, debug=debug, interbundle_timeout=interbundle_timeout, 
-                                                 timeout=upload_timeout, uniquebucket=uniquebucket)
+            upload_manifest = self.upload_bundle(bundle_manifest,
+                                                 machine=machine,
+                                                 bucketname=bucketname,
+                                                 machine_credpath=machine_credpath,
+                                                 debug=debug,
+                                                 interbundle_timeout=interbundle_timeout,
+                                                 timeout=upload_timeout,
+                                                 uniquebucket=uniquebucket)
         
-        self.debug('create_emi_from_url: Now registering...')
-        emi = self.tester.register_image(image_location=upload_manifest, rdn=root_device_name, 
-                                         description=description, bdmdev=block_device_mapping, 
-                                         name=name, ramdisk=ramdisk, kernel=kernel)
+        self.status('create_emi_from_url: Now registering...')
+        emi = self.tester.register_image(image_location=upload_manifest,
+                                         root_device_name=root_device_name,
+                                         description=description,
+                                         virtualization_type=virtualization_type,
+                                         bdmdev=block_device_mapping,
+                                         name=name,
+                                         architecture=architecture,
+                                         ramdisk=ramdisk,
+                                         kernel=kernel)
+        #get Boto image
+        emi = self.tester.get_emi(emi)
+
+        #Add tags that might have test use meaning...
+        try:
+            emi.add_tag('size', value= str(filesize))
+            emi.add_tag('source', value=(str(url)))
+            emi.add_tag(tagname or 'eutester-created')
+        except Exception, te:
+            self.debug('Could not add tags to image:' + str(emi.id) + ", err:"+ str(te))
         elapsed= int(time.time()-start)
-        self.debug('create_emi_from_url: Done, image registered as:'+str(emi)+", after "+str(elapsed)+" seconds")
+        self.status('create_emi_from_url: Done, image registered as:'+str(emi.id)+", after "+str(elapsed)+" seconds")
         return emi
     
