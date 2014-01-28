@@ -343,10 +343,9 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
             return
 
         self.debug('Attempting to release to the cloud the following IP addresses:')
-        print addresses
 
-        for ip_address in addresses:
-            self.release_address(ip_address)
+        for address in addresses:
+            self.release_address(address)
 
 
     def cleanup_test_snapshots(self,snaps=None, clean_images=False, add_time_per_snap=10, wait_for_valid_state=120, base_timeout=180):
