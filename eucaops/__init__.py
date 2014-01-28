@@ -339,15 +339,14 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
 
         """
         addresses = ips or self.test_resources['ip-addresses']
-        if not ips:
+        if not addresses:
             return
 
         self.debug('Attempting to release to the cloud the following IP addresses:')
-        print self.test_resources['ip-addresses']
+        print addresses
 
         for ip_address in addresses:
             self.release_address(ip_address)
-
 
 
     def cleanup_test_snapshots(self,snaps=None, clean_images=False, add_time_per_snap=10, wait_for_valid_state=120, base_timeout=180):
