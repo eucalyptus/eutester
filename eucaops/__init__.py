@@ -333,12 +333,12 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
             except KeyError:
                 self.debug("No loadbalancers to delete")
 
-    def cleanup_ip_addresses(self, ips=None):
+    def cleanup_addresses(self, ips=None):
         """
         :param ips: optional list of ip addresses, else will attempt to delete from test_resources[]
 
         """
-        addresses = ips or self.test_resources['ip-addresses']
+        addresses = ips or self.test_resources['addresses']
         if not addresses:
             return
 
