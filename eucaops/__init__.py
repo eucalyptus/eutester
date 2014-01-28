@@ -338,13 +338,14 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
         :param ips: optional list of ip addresses, else will attempt to delete from test_resources[]
 
         """
-        ips = ips or self.test_resources['ip-addresses']
+        addresses = ips or self.test_resources['ip-addresses']
         if not ips:
             return
+
         self.debug('Attempting to release to the cloud the following IP addresses:')
         print self.test_resources['ip-addresses']
 
-        for ip_address in ips:
+        for ip_address in addresses:
             self.release_address(ip_address)
 
 
