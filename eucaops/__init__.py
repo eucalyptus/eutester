@@ -250,7 +250,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
             raise Exception("Setting property " + property + " failed")
     
    
-    def cleanup_artifacts(self,instances=True, snapshots=True, volumes=True, load_balancers=True, ip_addresses=True):
+    def cleanup_artifacts(self,instances=True, snapshots=True, volumes=True, load_balancers=True, ip_addresses=True, auto_scaling_groups=True, launch_configurations=True ):
         """
         Description: Attempts to remove artifacts created during and through this eutester's lifespan.
         """
@@ -268,6 +268,13 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
         if ip_addresses:
             try:
                 self.cleanup_addresses()
+            except Exception, e:
+                tb = self.get_traceback()
+                failcount +=1
+                failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
+        if auto_scaling_groups:
+            try:
+                self.cleanup_autoscaling_groups()
             except Exception, e:
                 tb = self.get_traceback()
                 failcount +=1
@@ -320,6 +327,13 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
         if failmsg:
             failmsg += "\nFound " + str(failcount) + " number of errors while cleaning up. See above"
             raise Exception(failmsg)
+        if launch_configurations:
+            try:
+                self.cleanup_launch_configs()
+            except Exception, e:
+                tb = self.get_traceback()
+                failcount +=1
+                failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
 
     def cleanup_load_balancers(self, lbs=None):
         """

@@ -183,7 +183,8 @@ disable_root: false"""
         self.test_resources["security-groups"] = []
         self.test_resources["images"] = []
         self.test_resources["addresses"]=[]
-
+        self.test_resources["auto-scaling-groups"]=[]
+        self.test_resources["launch-configurations"]=[]
 
     def get_ec2_ip(self):
         """Parse the eucarc for the S3_URL"""
