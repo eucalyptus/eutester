@@ -267,7 +267,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
                     failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
         if ip_addresses:
             try:
-                self.cleanup_ip_addresses()
+                self.cleanup_addresses()
             except Exception, e:
                 tb = self.get_traceback()
                 failcount +=1
