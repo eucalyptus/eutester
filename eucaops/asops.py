@@ -300,13 +300,16 @@ class ASops(Eutester):
         This will attempt to delete auto scaling groups listed in test_resources['auto-scaling-groups']
         """
         ### clear all ASGs
-        for asg in self.test_resources['auto-scaling-groups']:
-            self.debug("Found Auto Scaling Group: " + asg.name)
-            self.delete_as_group(name=asg.name, force=True)
-        if len(self.describe_as_group()) != 0:
-            self.debug("Some AS groups remain")
-            for asg in self.describe_as_group():
+        auto_scaling_groups=self.test_resources['auto-scaling-groups']
+        if auto_scaling_groups:
+            for asg in auto_scaling_groups:
                 self.debug("Found Auto Scaling Group: " + asg.name)
+                self.delete_as_group(name=asg.name, force=True)
+            if len(self.describe_as_group()) != 0:
+                self.debug("Some AS groups remain")
+                for asg in self.describe_as_group():
+                    self.debug("Found Auto Scaling Group: " + asg.name)
+
 
     def delete_all_autoscaling_groups(self):
         """
@@ -325,13 +328,17 @@ class ASops(Eutester):
         """
         This will attempt to delete launch configs listed in test_resources['launch-configurations']
         """
-        for lc in self.test_resources['launch-configurations']:
-            self.debug("Found Launch Config:" + lc.name)
-            self.delete_launch_config(lc.name)
-        if len(self.describe_launch_config()) != 0:
-            self.debug("Some Launch Configs Remain")
-            for lc in self.describe_launch_config():
+        launch_configurations=self.test_resources['launch-configurations']
+
+        if launch_configurations:
+            for lc in launch_configurations:
                 self.debug("Found Launch Config:" + lc.name)
+                self.delete_launch_config(lc.name)
+            if len(self.describe_launch_config()) != 0:
+                self.debug("Some Launch Configs Remain")
+                for lc in self.describe_launch_config():
+                    self.debug("Found Launch Config:" + lc.name)
+
     def delete_all_launch_configs(self):
         ### clear all LCs
         """

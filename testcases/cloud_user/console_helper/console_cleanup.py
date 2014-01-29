@@ -43,6 +43,7 @@ class ConsoleCleanUp(EutesterTestCase):
 
 
 
+
 if __name__ == "__main__":
     testcase = ConsoleCleanUp()
     ### Use the list of tests passed from config/command line to determine what subset of tests to run
