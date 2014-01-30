@@ -389,7 +389,7 @@ class ASops(Eutester):
                          health_check_period=health_check_period,
                          termination_policies=termination_policies).update()
 
-    def wait_for_instances(self, group_name, tester, number=1):
+    def wait_for_instances(self, group_name, number=1):
         asg = self.describe_as_group(group_name)
         instances = asg.instances
         if not instances:
@@ -400,7 +400,7 @@ class ASops(Eutester):
             return False
         for instance in instances:
             assert isinstance(instance, Instance)
-            instance = tester.get_instances(idstring=instance.instance_id)[0]
+            instance = self.get_instances(idstring=instance.instance_id)[0]
             if instance.state != "running":
                 self.debug("Instance: " + str(instance) + " still in " + instance.state + " state")
                 return False
