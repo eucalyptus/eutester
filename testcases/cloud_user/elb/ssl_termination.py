@@ -106,10 +106,11 @@ class SSLTermination(EutesterTestCase):
         """upload server certificate"""
         self.tester.add_server_cert(cert_name=self.cert_name)
 
-        """create a new listener on HTTPS port 443"""
+        """create a new listener on HTTPS port 443 and remove listener on port 80"""
         cert_arn = self.tester.get_server_cert(self.cert_name).arn
         listener = (443, 80, "HTTPS", cert_arn)
         self.tester.add_lb_listener(lb_name=self.load_balancer.name, listener=listener)
+        self.tester.remove_lb_listener(lb_name=self.load_balancer.name, port=self.load_balancer_port)
 
         """perform https requests to LB"""
         self.tester.generate_http_requests(url=lb_url, count=10)

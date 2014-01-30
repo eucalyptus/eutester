@@ -299,7 +299,8 @@ class ELBops(Eutester):
 
     def remove_lb_listener(self, lb_name, port):
         self.debug("removing listener")
-        self.elb.delete_load_balancer_listeners(name=lb_name, ports=port)
+        self.elb.delete_load_balancer_listeners(name=lb_name, ports=[port])
+
     def add_server_cert(self, cert_name, cert_dir="./test_data", cert_file="ssl_server_certs_basics.crt",
                            key_file="ssl_server_certs_basics.pem"):
         cert_body = open(join(cert_dir, cert_file)).read()
