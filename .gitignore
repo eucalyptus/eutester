@@ -1,4 +1,5 @@
 .idea
+*.iml
 *.pyc
 /dist
 /build
@@ -10,3 +11,4 @@
 .pydevproject
 .settings/*
 .settings
+out
