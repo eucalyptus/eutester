@@ -868,7 +868,7 @@ disable_root: false"""
         self.debug('Updating volume list before monitoring...')
         for vol in euvolumes:
             try:
-                vol.update()
+                vol = self.get_volume(vol.id)
                 if not isinstance(vol, EuVolume):
                     vol = EuVolume.make_euvol_from_vol(vol,self)
                 monitor.append(vol)
@@ -1048,6 +1048,8 @@ disable_root: false"""
         else:
             raise Exception("delete_volumes: volume_list was empty")
         for volume in vollist:
+
+
             try:
                 self.debug( "Sending delete for volume: " +  str(volume.id)  )
                 volume.update()
@@ -1081,12 +1083,13 @@ disable_root: false"""
             self.debug("---Waiting for:"+str(len(vollist))+" volumes to delete. Sleeping:"+
                        str(poll_interval)+", elapsed:"+str(elapsed)+"/"+str(timeout)+"---")
         if vollist or errmsg:
-            for volume in vollist:
-                errmsg += "ERROR:"+str(volume) + " left in " +  volume.status + ',elapsed:'+str(elapsed) + "\n"
-            raise Exception(errmsg)
-        
-        
-        
+                for volume in vollist:
+
+                  errmsg += "ERROR:"+str(volume) + " left in " +  volume.status + ',elapsed:'+str(elapsed) + "\n"
+                raise Exception(errmsg)
+
+
+
     def delete_all_volumes(self):
         """
         Deletes all volumes on the cloud
@@ -1782,7 +1785,8 @@ disable_root: false"""
         :param windows: Is the image a Windows image
         :param bdmdev: Block device mapping
         :param name: Name to register the image as
-        :param ramdisk: Ramdisk ID to use
+        :param ramdisk: Ramdisk ID to usecica
+
         :param kernel: Kernel ID to use
         :param dot: Delete on terminate flag
         :param block_device_map: existing block device map to append snapshot block dev to

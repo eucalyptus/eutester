@@ -295,20 +295,19 @@ class ASops(Eutester):
         self.debug("Deleting Policy: " + policy_name + " from group: " + autoscale_group)
         self.autoscale.delete_policy(policy_name=policy_name, autoscale_group=autoscale_group)
 
-    def cleanup_autoscaling_groups(self):
+    def cleanup_autoscaling_groups(self, asg_list = None):
         """
         This will attempt to delete auto scaling groups listed in test_resources['auto-scaling-groups']
         """
         ### clear all ASGs
-        auto_scaling_groups=self.test_resources['auto-scaling-groups']
-        if auto_scaling_groups:
-            for asg in auto_scaling_groups:
-                self.debug("Found Auto Scaling Group: " + asg.name)
-                self.delete_as_group(name=asg.name, force=True)
-            if len(self.describe_as_group()) != 0:
-                self.debug("Some AS groups remain")
-                for asg in self.describe_as_group():
-                    self.debug("Found Auto Scaling Group: " + asg.name)
+        if not asg_list:
+            auto_scaling_groups=self.test_resources['auto-scaling-groups']
+        else:
+            auto_scaling_groups = asg_list
+        for asg in auto_scaling_groups:
+            self.debug("Found Auto Scaling Group: " + asg.name)
+            self.delete_as_group(name=asg.name, force=True)
+
 
 
     def delete_all_autoscaling_groups(self):
@@ -319,7 +318,7 @@ class ASops(Eutester):
         for asg in self.describe_as_group():
             self.debug("Found Auto Scaling Group: " + asg.name)
             self.delete_as_group(name=asg.name, force=True)
-        if len(self.describe_as_group()) != 0:
+        if len(self.describe_as_group(asg.name)) != 0:
             self.debug("Some AS groups remain")
             for asg in self.describe_as_group():
                 self.debug("Found Auto Scaling Group: " + asg.name)
@@ -330,14 +329,12 @@ class ASops(Eutester):
         """
         launch_configurations=self.test_resources['launch-configurations']
 
-        if launch_configurations:
+        if not launch_configurations:
+            self.debug("Launch configuration list is empty")
+        else:
             for lc in launch_configurations:
                 self.debug("Found Launch Config:" + lc.name)
                 self.delete_launch_config(lc.name)
-            if len(self.describe_launch_config()) != 0:
-                self.debug("Some Launch Configs Remain")
-                for lc in self.describe_launch_config():
-                    self.debug("Found Launch Config:" + lc.name)
 
     def delete_all_launch_configs(self):
         ### clear all LCs
