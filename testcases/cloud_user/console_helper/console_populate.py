@@ -39,13 +39,14 @@ class ConsoleCleanUp(EutesterTestCase):
         image=self.tester.get_images()[0]
         image_id=self.tester.get_images()[0].id
         instance=self.tester.run_image(image=image, keypair="test-key", group="mygroup",auto_connect=False, zone=zone)
-        instance_id=instance.id
+        instance_id=self.tester.get_instances('running')[0].id
         ip=self.tester.allocate_address().public_ip
         self.tester.allocate_address()
         self.tester.ec2.associate_address(instance_id,ip)
         self.tester.create_launch_config("LC1",image_id ,keypair ,[s_group], instance_type="m1.small")
         self.tester.create_as_group("ASG1","LC1",self.tester.get_zones(),min_size=1,max_size=8,desired_capacity=2)
-        self.tester.attach_volume(instance_id,volume,"dev/vda")
+        instance=self.tester.get_instances('running')[0]
+        self.tester.attach_volume(instance,volume,"dev/vda")
 
 if __name__ == "__main__":
     testcase = ConsoleCleanUp()
