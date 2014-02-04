@@ -250,13 +250,20 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
             raise Exception("Setting property " + property + " failed")
     
    
-    def cleanup_artifacts(self,instances=True, snapshots=True, volumes=True, load_balancers=True, ip_addresses=True):
+    def cleanup_artifacts(self,instances=True, snapshots=True, volumes=True, load_balancers=True, ip_addresses=True, auto_scaling_groups=True, launch_configurations=True, keypairs=True):
         """
         Description: Attempts to remove artifacts created during and through this eutester's lifespan.
         """
         failmsg = ""
         failcount = 0
         self.debug("Starting cleanup of artifacts")
+        if auto_scaling_groups:
+            try:
+                self.cleanup_autoscaling_groups()
+            except Exception, e:
+                tb = self.get_traceback()
+                failcount +=1
+                failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
         if instances:
             for res in self.test_resources["reservations"]:
                 try:
@@ -267,7 +274,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
                     failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
         if ip_addresses:
             try:
-                self.cleanup_ip_addresses()
+                self.cleanup_addresses()
             except Exception, e:
                 tb = self.get_traceback()
                 failcount +=1
@@ -294,6 +301,14 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
                 failcount +=1
                 failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
 
+        if launch_configurations:
+            try:
+                self.cleanup_launch_configs()
+            except Exception, e:
+                tb = self.get_traceback()
+                failcount +=1
+                failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
+
         for key,array in self.test_resources.iteritems():
             for item in array:
                 try:
@@ -301,8 +316,6 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
                     self.debug("Deleting " + str(item))
                     if isinstance(item, Image):
                         item.deregister()
-                    elif isinstance(item, Reservation):
-                        self.terminate_instances(item)
                     elif isinstance(item, Volume):
                         try:
                             self.detach_volume(item)
@@ -320,6 +333,15 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
         if failmsg:
             failmsg += "\nFound " + str(failcount) + " number of errors while cleaning up. See above"
             raise Exception(failmsg)
+        if launch_configurations:
+            try:
+                self.cleanup_launch_configs()
+            except Exception, e:
+                tb = self.get_traceback()
+                failcount +=1
+                failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
+
+
 
     def cleanup_load_balancers(self, lbs=None):
         """
@@ -333,20 +355,19 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
             except KeyError:
                 self.debug("No loadbalancers to delete")
 
-    def cleanup_ip_addresses(self, ips=None):
+    def cleanup_addresses(self, ips=None):
         """
         :param ips: optional list of ip addresses, else will attempt to delete from test_resources[]
 
         """
-        addresses = ips or self.test_resources['ip-addresses']
+        addresses = ips or self.test_resources['addresses']
         if not addresses:
             return
 
         self.debug('Attempting to release to the cloud the following IP addresses:')
-        print addresses
 
-        for ip_address in addresses:
-            self.release_address(ip_address)
+        while addresses:
+            self.release_address(addresses.pop())
 
 
     def cleanup_test_snapshots(self,snaps=None, clean_images=False, add_time_per_snap=10, wait_for_valid_state=120, base_timeout=180):
