@@ -352,7 +352,8 @@ class ASops(Eutester):
         self.debug("Number of tags: " + str(len(self.autoscale.get_all_tags())))
 
     def delete_all_policies(self):
-        for policy in self.autoscale.get_all_policies():
+        policies = self.autoscale.get_all_policies()
+        for policy in policies:
             self.delete_as_policy(policy_name=policy.name, autoscale_group=policy.as_name)
         if len(self.autoscale.get_all_policies()) != 0:
             raise Exception('Not all auto scaling policies deleted')
