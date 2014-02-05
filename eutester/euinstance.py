@@ -611,7 +611,13 @@ class EuInstance(Instance, TaggedResource):
             self.debug("List after\n"+" ".join(dev_list_after))
             raise Exception('Volume:'+str(euvolume.id)+' attached, but not found on guest'+str(self.id)+' after '+str(elapsed)+' seconds?')
         #Check to see if this volume has unique data in the head otherwise write some and md5 it
-        self.vol_write_random_data_get_md5(euvolume,overwrite=overwrite)
+        def try_to_write_to_disk():
+            try:
+                self.vol_write_random_data_get_md5(euvolume,overwrite=overwrite)
+                return True
+            except:
+                return False
+        self.tester.wait_for_result(try_to_write_to_disk, True)
         self.debug('Success attaching volume:'+str(euvolume.id)+' to instance:'+self.id+', cloud dev:'+str(euvolume.attach_data.device)+', attached dev:'+str(attached_dev))
         return attached_dev
     
