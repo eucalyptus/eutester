@@ -150,8 +150,6 @@ class ASops(Eutester):
         self.test_resources["keypairs"] = []
         self.test_resources["security-groups"] = []
         self.test_resources["images"] = []
-        self.test_resources["auto-scaling-groups"]=[]
-        self.test_resources["launch-configurations"]=[]
 
     def create_launch_config(self, name, image_id, key_name=None, security_groups=None, user_data=None,
                              instance_type=None, kernel_id=None, ramdisk_id=None, block_device_mappings=None,

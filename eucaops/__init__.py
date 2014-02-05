@@ -250,7 +250,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
             raise Exception("Setting property " + property + " failed")
     
    
-    def cleanup_artifacts(self,instances=True, snapshots=True, volumes=True, load_balancers=True, ip_addresses=True):
+    def cleanup_artifacts(self,instances=True, snapshots=True, volumes=True, load_balancers=True):
         """
         Description: Attempts to remove artifacts created during and through this eutester's lifespan.
         """
@@ -265,13 +265,6 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
                     tb = self.get_traceback()
                     failcount +=1
                     failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
-        if ip_addresses:
-            try:
-                self.cleanup_ip_addresses()
-            except Exception, e:
-                tb = self.get_traceback()
-                failcount +=1
-                failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
         if volumes:
             try:
                 self.clean_up_test_volumes(timeout_per_vol=60)
@@ -332,22 +325,6 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
                 self.delete_load_balancers(self.test_resources['load_balancers'])
             except KeyError:
                 self.debug("No loadbalancers to delete")
-
-    def cleanup_ip_addresses(self, ips=None):
-        """
-        :param ips: optional list of ip addresses, else will attempt to delete from test_resources[]
-
-        """
-        addresses = ips or self.test_resources['ip-addresses']
-        if not addresses:
-            return
-
-        self.debug('Attempting to release to the cloud the following IP addresses:')
-        print addresses
-
-        for ip_address in addresses:
-            self.release_address(ip_address)
-
 
     def cleanup_test_snapshots(self,snaps=None, clean_images=False, add_time_per_snap=10, wait_for_valid_state=120, base_timeout=180):
         """
