@@ -3642,6 +3642,57 @@ disable_root: false"""
         self.debug("Registered '" + str(manifest) + "as image:" + str(image))
         return image_obj
 
+    def create_image(self, instance, name, description=None, no_reboot=False, block_device_mapping=None, dry_run=False,
+                     timeout=600):
+        """
+        :type instance_id: string
+        :param instance_id: the ID of the instance to image.
+
+        :type name: string
+        :param name: The name of the new image
+
+        :type description: string
+        :param description: An optional human-readable string describing
+            the contents and purpose of the AMI.
+
+        :type no_reboot: bool
+        :param no_reboot: An optional flag indicating that the
+            bundling process should not attempt to shutdown the
+            instance before bundling.  If this flag is True, the
+            responsibility of maintaining file system integrity is
+            left to the owner of the instance.
+
+        :type block_device_mapping: :class:`boto.ec2.blockdevicemapping.BlockDeviceMapping`
+        :param block_device_mapping: A BlockDeviceMapping data structure
+            describing the EBS volumes associated with the Image.
+
+        :type dry_run: bool
+        :param dry_run: Set to True if the operation should not actually run.
+
+        :type timeout: int
+        :param timeout: Time to allow image to get to "available" state.
+
+        :raise Exception: On not reaching the correct state or when more than one image is returned
+        """
+        if isinstance(instance, Instance):
+            instance_id = instance.id
+        else:
+            instance_id = instance
+        image_id = self.ec2.create_image(instance_id, name=name,description=description,no_reboot=no_reboot,
+                                     block_device_mapping=block_device_mapping, dry_run=dry_run)
+        def get_emi_state():
+            images = self.ec2.get_all_images(image_ids=[image_id])
+            if len(images) == 0:
+                raise Exception("Image not found after sending create image request: " + image_id)
+            elif len(images) == 1:
+                state = images[0].state
+                self.tester.debug( image_id + " returned state: " + state)
+                return state
+            else:
+                raise Exception("More than one image returned for: " + image_id)
+        self.wait_for_result(get_emi_state, "available", timeout=timeout,poll_wait=20)
+        return image_id
+
 
     def create_web_servers(self, keypair, group, zone, port=80, count=2, image=None, filename="test-file", cookiename="test-cookie"):
         if not image:
