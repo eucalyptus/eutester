@@ -3686,7 +3686,7 @@ disable_root: false"""
                 raise Exception("Image not found after sending create image request: " + image_id)
             elif len(images) == 1:
                 state = images[0].state
-                self.tester.debug( image_id + " returned state: " + state)
+                self.debug( image_id + " returned state: " + state)
                 return state
             else:
                 raise Exception("More than one image returned for: " + image_id)
