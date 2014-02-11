@@ -1884,19 +1884,7 @@ disable_root: false"""
             else:
                 raise Exception('virtualization_type arg populated but not found in this version of ec2.register_image?')
         image_id = self.ec2.register_image(**ri_kwargs)
-
-        '''
-        image_id = self.ec2.register_image(name=name,
-                                           description=description,
-                                           kernel_id=kernel,
-                                           image_location=image_location,
-                                           ramdisk_id=ramdisk,
-                                           architecture=architecture,
-                                           virtualization_type=virtualization_type,
-                                           block_device_map=bdmdev,
-                                           root_device_name=root_device_name)
-        '''
-        self.test_resources["images"].append(image_id)
+        self.test_resources["images"].append(self.ec2.get_all_images([image_id])[0])
         return image_id
 
     def delete_image(self, image, timeout=60):
@@ -2384,6 +2372,7 @@ disable_root: false"""
                      image=None,
                      keypair=None,
                      group="default",
+                     name=None,
                      type=None,
                      zone=None,
                      min=1,
@@ -2490,6 +2479,10 @@ disable_root: false"""
 
             if is_reachable:
                 self.ping(instance.ip_address, 20)
+
+        ## Add name tag
+        if name:
+            self.create_tags([reservation.instances], {"Name:": name})
                 
         #calculate remaining time to wait for establishing an ssh session/euinstance     
         timeout -= int(time.time() - start)
@@ -3442,10 +3435,9 @@ disable_root: false"""
                 id_count = len(self.get_images(location=instance.id))
             except:
                 id_count = 0
-            bucket_name =  'win' \
-                           + str(instance.id) + "-" \
+            bucket_name =  str(instance.id) + "-" \
                            + str(id_count)
-        prefix = prefix or 'windows-bundleof-' + str(instance.id)
+        prefix = prefix or 'bundleof-' + str(instance.id)
         s3_upload_policy = self.generate_default_s3_upload_policy(bucket_name,prefix)
         bundle_task = self.ec2.bundle_instance(instance.id, bucket_name, prefix, s3_upload_policy)
         self.print_bundle_task(bundle_task)
