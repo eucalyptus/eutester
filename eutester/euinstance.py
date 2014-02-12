@@ -179,7 +179,7 @@ class EuInstance(Instance, TaggedResource):
         self.laststatetime = time.time()
         self.age_at_state = self.tester.get_instance_time_launched(self)
         #Also record age from user's perspective, ie when they issued the run instance request (if this is available)
-        if hasattr(self, "cmdstart"):
+        if hasattr(self, "cmdstart") and self.cmdstart:
             self.age_from_run_cmd = "{0:.2f}".format(time.time() - self.cmdstart)
         else:
             self.age_from_run_cmd = None
