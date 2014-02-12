@@ -120,7 +120,7 @@ class BFEBSBasics(InstanceBasics):
             instance.sys("touch " + temp_file)
             self.tester.sleep(60)
             rebooted_image = self.tester.create_image(instance, "BFEBS-test-create-image-reboot-" + current_time)
-            instance.reset_ssh_connection()
+            instance.connect_to_instance()
             ending_uptime = instance.get_uptime()
             if ending_uptime > starting_uptime:
                 raise Exception("Instance did not get stopped then started")
