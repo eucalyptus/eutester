@@ -422,7 +422,7 @@ class InstanceBasics(EutesterTestCase):
             self.tester.sleep(60)
             starting_uptime = instance.get_uptime()
             self.run_instance_params['image'] = self.tester.bundle_instance_monitor_and_register(instance)
-            instance.reset_ssh_connection()
+            instance.connect_to_instance()
             ending_uptime = instance.get_uptime()
             if ending_uptime > starting_uptime:
                 raise Exception("Instance did not get stopped then started")
