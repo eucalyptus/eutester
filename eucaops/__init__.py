@@ -248,8 +248,8 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
             self.debug("Properly modified property " + property)
         else:
             raise Exception("Setting property " + property + " failed")
-    
-   
+
+
     def cleanup_artifacts(self,instances=True, snapshots=True, volumes=True, load_balancers=True, ip_addresses=True, auto_scaling_groups=True, launch_configurations=True, keypairs=True):
         """
         Description: Attempts to remove artifacts created during and through this eutester's lifespan.
@@ -282,6 +282,8 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
         if volumes:
             try:
                 self.clean_up_test_volumes(timeout_per_vol=60)
+                self.debug("No volumes found")
+
             except Exception, e:
                 tb = self.get_traceback()
                 failcount +=1
@@ -316,14 +318,8 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
                     self.debug("Deleting " + str(item))
                     if isinstance(item, Image):
                         item.deregister()
-                    elif isinstance(item, Volume):
-                        try:
-                            self.detach_volume(item)
-                        except:
-                            pass
-                        item.update()
-                        if item.status != 'deleted':
-                            self.delete_volume(item)
+                    elif isinstance(item,Reservation):
+                        continue
                     else:
                         item.delete()
                 except Exception, e:
@@ -340,7 +336,6 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
                 tb = self.get_traceback()
                 failcount +=1
                 failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
-
 
 
     def cleanup_load_balancers(self, lbs=None):

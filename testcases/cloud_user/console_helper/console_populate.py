@@ -46,7 +46,7 @@ class ConsoleCleanUp(EutesterTestCase):
         self.tester.create_launch_config("LC1",image_id ,keypair ,[s_group], instance_type="m1.small")
         self.tester.create_as_group("ASG1","LC1",self.tester.get_zones(),min_size=1,max_size=8,desired_capacity=2)
         instance=self.tester.get_instances('running')[0]
-        self.tester.attach_volume(instance,volume,"dev/vda")
+        self.tester.attach_volume(instance,volume,"vdb")
 
 if __name__ == "__main__":
     testcase = ConsoleCleanUp()

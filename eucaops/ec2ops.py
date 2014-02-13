@@ -1048,11 +1048,16 @@ disable_root: false"""
         else:
             raise Exception("delete_volumes: volume_list was empty")
         for volume in vollist:
-
-
             try:
                 self.debug( "Sending delete for volume: " +  str(volume.id)  )
-                volume.update()
+                volumes = self.ec2.get_all_volumes([volume.id])
+                if len(volumes) == 1:
+                    volume = volumes[0]
+                    #previous_status = volume.status
+                    #self.ec2.delete_volume(volume.id)
+                elif len(volumes) == 0:
+                    vollist.remove(volume)
+                    continue
                 previous_status = volume.status
                 self.ec2.delete_volume(volume.id)
             except EC2ResponseError, be:
@@ -1071,10 +1076,15 @@ disable_root: false"""
         elapsed = 0
         while vollist and elapsed < timeout:
             for volume in vollist:
-                volume.update()
-                self.debug( str(volume) + " in " + volume.status)
-                volume.update()
-                if volume.status == "deleted":
+                volumes = self.ec2.get_all_volumes([volume.id])
+                if len(volumes) == 1:
+                    volume = volumes[0]
+                elif len(volumes) == 0:
+                    vollist.remove(volume)
+                    self.debug("Volume no longer found")
+                    continue
+                self.debug(str(volume) + " in " + volume.status)
+                if volume and volume.status == "deleted"and volume in vollist:
                     vollist.remove(volume)
                     if volume in self.test_resources['volumes']:
                         self.test_resources['volumes'].remove(volume)
@@ -2346,7 +2356,7 @@ disable_root: false"""
                 volume = EuVolume.make_euvol_from_vol(volume)
             retlist.append(volume)
         if eof and retlist == []:
-            raise Exception("Unable to find matching volume")
+            raise ResourceNotFoundException("Unable to find matching volume")
         else:
             return retlist
 
@@ -2381,6 +2391,7 @@ disable_root: false"""
             vol = self.get_volumes(volume_id=volume_id, status=status, attached_instance=attached_instance,
                                    attached_dev=attached_dev, snapid=snapid, zone=zone, minsize=minsize,
                                    maxsize=maxsize, eof=eof)[0]
+
         except Exception, e:
             if eof:
                 raise e
@@ -3812,3 +3823,9 @@ class VolumeStateException(Exception):
     def __str__(self):
         return repr(self.value)
 
+class ResourceNotFoundException(Exception):
+    def __init__(self, value):
+        self.value = value
+
+    def __str__(self):
+        return repr(self.value)
