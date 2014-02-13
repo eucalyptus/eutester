@@ -48,7 +48,7 @@ public class TestAutoScalingELBAddRemoveInstances {
         final List<Runnable> cleanupTasks = new ArrayList<Runnable>();
         try {
             // Generate a load balancer to use
-            final String loadBalancerName = NAME_PREFIX + "ELBAddRemoveTest";
+            final String loadBalancerName = NAME_PREFIX + "ELBAddRemTest";
             print("Creating a load balancer for test use: " + loadBalancerName);
             createLoadBalancer(loadBalancerName);
             cleanupTasks.add(new Runnable() {

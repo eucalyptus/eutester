@@ -45,7 +45,7 @@ public class TestAutoScalingELBReferenceValidation {
         final List<Runnable> cleanupTasks = new ArrayList<Runnable>();
 		try {
             // Generate a load balancer to use
-            final String loadBalancer = NAME_PREFIX + "ELBReferenceTest";
+            final String loadBalancer = NAME_PREFIX + "ELBReference";
             print("Creating a load balancer for test use: " + loadBalancer);
             createLoadBalancer(loadBalancer);
             cleanupTasks.add(new Runnable() {

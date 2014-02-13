@@ -1938,6 +1938,7 @@ disable_root: false"""
                 owner_id=None,
                 filters=None,
                 not_location=None,
+                not_platform=None,
                 max_count=None):
         """
         Get a list of images which match the provided criteria.
@@ -2011,6 +2012,8 @@ disable_root: false"""
                         break
                 if skip:
                     continue
+            if (not_platform is not None) and (image.platform == not_platform):
+                continue
             self.debug("Returning image:"+str(image.id))
             ret_list.append(image)
             if max_count and len(ret_list) >= max_count:
@@ -2030,6 +2033,7 @@ disable_root: false"""
                    owner_id=None,
                    filters=None,
                    not_location=None,
+                   not_platform=None
                    ):
         """
         Get an emi with name emi, or just grab any emi in the system. Additional 'optional' match criteria can be defined.
@@ -2054,6 +2058,7 @@ disable_root: false"""
                                owner_id=owner_id,
                                filters=filters,
                                not_location=not_location,
+                               not_platform=not_platform,
                                max_count=1)[0]
 
 

@@ -54,7 +54,7 @@ public class TestAutoScalingELBInstanceHealthMonitoring {
         final List<Runnable> cleanupTasks = new ArrayList<Runnable>();
         try {
             // Generate a load balancer to use
-            final String loadBalancerName = NAME_PREFIX + "ELBInstanceHealthMonitoringTest";
+            final String loadBalancerName = NAME_PREFIX + "ELBHealth";
             print("Creating a load balancer for test use: " + loadBalancerName);
             createLoadBalancer(loadBalancerName);
             cleanupTasks.add(new Runnable() {
@@ -128,11 +128,11 @@ public class TestAutoScalingELBInstanceHealthMonitoring {
             elb.configureHealthCheck(new ConfigureHealthCheckRequest()
                     .withLoadBalancerName(loadBalancerName)
                     .withHealthCheck(new HealthCheck()
-                            .withHealthyThreshold(1)
-                            .withUnhealthyThreshold(1)
+                            .withHealthyThreshold(2)
+                            .withUnhealthyThreshold(2)
                             .withInterval(5)
                             .withTimeout(4)
-                            .withTarget("HTTP:1023")
+                            .withTarget("HTTP:1023/")
                     )
             );
 
