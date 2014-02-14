@@ -30,11 +30,8 @@
 #
 # Author: Tony Beckham tony@eucalyptus.com
 #
-
 from eucaops import Eucaops
 from eutester.eutestcase import EutesterTestCase
-from os.path import join
-
 
 class SSLIAMServerCerts(EutesterTestCase):
     def __init__(self, extra_args= None):
@@ -56,21 +53,13 @@ class SSLIAMServerCerts(EutesterTestCase):
         @raise Exception:
         """
 
-        """certificate details"""
-        cert_dir="./test_data"
-        cert_file = "ssl_server_certs_basics.crt"
-        key_file = "ssl_server_certs_basics.pem"
+        """certificate details to update"""
         cert_name = "ssl-server-certs-basics"
         updated_cert_name = cert_name + "-updated"
-        new_path="/certs/"
-        cert_body = open(join(cert_dir, cert_file)).read()
-        cert_key = open(join(cert_dir, key_file)).read()
+        new_path = "/certs/"
 
-        """use CRUD operations (list and get are tested by being used in verification in implementation of these ops)"""
-        self.tester.upload_server_cert(cert_name=cert_name, cert_body=cert_body, private_key=cert_key)
-
+        self.tester.add_server_cert(cert_name=cert_name)
         self.tester.update_server_cert(cert_name=cert_name, new_cert_name=updated_cert_name, new_path=new_path)
-
         self.tester.delete_server_cert(updated_cert_name)
 
 if __name__ == "__main__":
@@ -79,7 +68,7 @@ if __name__ == "__main__":
     ### or use a predefined list
     list = testcase.args.tests or ["cert_CRUD"]
 
-    ### Convert test suite methods to EutesterUnitTest objects
+    ### Convert test suite methods to Eutester UnitTest objects
     unit_list = [ ]
     for test in list:
         unit_list.append( testcase.create_testunit_by_name(test) )
