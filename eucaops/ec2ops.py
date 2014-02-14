@@ -1795,8 +1795,7 @@ disable_root: false"""
         :param windows: Is the image a Windows image
         :param bdmdev: Block device mapping
         :param name: Name to register the image as
-        :param ramdisk: Ramdisk ID to usecica
-
+        :param ramdisk: Ramdisk ID to use
         :param kernel: Kernel ID to use
         :param dot: Delete on terminate flag
         :param block_device_map: existing block device map to append snapshot block dev to
