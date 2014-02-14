@@ -150,8 +150,6 @@ class ASops(Eutester):
         self.test_resources["keypairs"] = []
         self.test_resources["security-groups"] = []
         self.test_resources["images"] = []
-        self.test_resources["auto-scaling-groups"]=[]
-        self.test_resources["launch-configurations"]=[]
 
     def create_launch_config(self, name, image_id, key_name=None, security_groups=None, user_data=None,
                              instance_type=None, kernel_id=None, ramdisk_id=None, block_device_mappings=None,
@@ -382,7 +380,8 @@ class ASops(Eutester):
         self.debug("Number of tags: " + str(len(self.autoscale.get_all_tags())))
 
     def delete_all_policies(self):
-        for policy in self.autoscale.get_all_policies():
+        policies = self.autoscale.get_all_policies()
+        for policy in policies:
             self.delete_as_policy(policy_name=policy.name, autoscale_group=policy.as_name)
         if len(self.autoscale.get_all_policies()) != 0:
             raise Exception('Not all auto scaling policies deleted')
@@ -417,7 +416,7 @@ class ASops(Eutester):
                          health_check_period=health_check_period,
                          termination_policies=termination_policies).update()
 
-    def wait_for_instances(self, group_name, tester, number=1):
+    def wait_for_instances(self, group_name, number=1):
         asg = self.describe_as_group(group_name)
         instances = asg.instances
         if not instances:
@@ -428,7 +427,7 @@ class ASops(Eutester):
             return False
         for instance in instances:
             assert isinstance(instance, Instance)
-            instance = tester.get_instances(idstring=instance.instance_id)[0]
+            instance = self.get_instances(idstring=instance.instance_id)[0]
             if instance.state != "running":
                 self.debug("Instance: " + str(instance) + " still in " + instance.state + " state")
                 return False

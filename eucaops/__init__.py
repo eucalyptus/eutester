@@ -248,9 +248,15 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
             self.debug("Properly modified property " + property)
         else:
             raise Exception("Setting property " + property + " failed")
+<<<<<<< HEAD
 
 
     def cleanup_artifacts(self,instances=True, snapshots=True, volumes=True, load_balancers=True, ip_addresses=True, auto_scaling_groups=True, launch_configurations=True, keypairs=True):
+=======
+    
+   
+    def cleanup_artifacts(self,instances=True, snapshots=True, volumes=True, load_balancers=True):
+>>>>>>> 953fcb9a5a7f097a27ff5065c5e54f82fbd99554
         """
         Description: Attempts to remove artifacts created during and through this eutester's lifespan.
         """
@@ -272,6 +278,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
                     tb = self.get_traceback()
                     failcount +=1
                     failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
+<<<<<<< HEAD
         if ip_addresses:
             try:
                 self.cleanup_addresses()
@@ -279,6 +286,8 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
                 tb = self.get_traceback()
                 failcount +=1
                 failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
+=======
+>>>>>>> 953fcb9a5a7f097a27ff5065c5e54f82fbd99554
         if volumes:
             try:
                 self.clean_up_test_volumes(timeout_per_vol=60)
@@ -350,6 +359,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
             except KeyError:
                 self.debug("No loadbalancers to delete")
 
+<<<<<<< HEAD
     def cleanup_addresses(self, ips=None):
         """
         :param ips: optional list of ip addresses, else will attempt to delete from test_resources[]
@@ -365,6 +375,8 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
             self.release_address(addresses.pop())
 
 
+=======
+>>>>>>> 953fcb9a5a7f097a27ff5065c5e54f82fbd99554
     def cleanup_test_snapshots(self,snaps=None, clean_images=False, add_time_per_snap=10, wait_for_valid_state=120, base_timeout=180):
         """
         :param snaps: optional list of snapshots, else will attempt to delete from test_resources[]
