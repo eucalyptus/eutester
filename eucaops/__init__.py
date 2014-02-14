@@ -248,15 +248,28 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
             self.debug("Properly modified property " + property)
         else:
             raise Exception("Setting property " + property + " failed")
+<<<<<<< HEAD
+
+
+    def cleanup_artifacts(self,instances=True, snapshots=True, volumes=True, load_balancers=True, ip_addresses=True, auto_scaling_groups=True, launch_configurations=True, keypairs=True):
+=======
     
    
     def cleanup_artifacts(self,instances=True, snapshots=True, volumes=True, load_balancers=True):
+>>>>>>> 953fcb9a5a7f097a27ff5065c5e54f82fbd99554
         """
         Description: Attempts to remove artifacts created during and through this eutester's lifespan.
         """
         failmsg = ""
         failcount = 0
         self.debug("Starting cleanup of artifacts")
+        if auto_scaling_groups:
+            try:
+                self.cleanup_autoscaling_groups()
+            except Exception, e:
+                tb = self.get_traceback()
+                failcount +=1
+                failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
         if instances:
             for res in self.test_resources["reservations"]:
                 try:
@@ -265,9 +278,21 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
                     tb = self.get_traceback()
                     failcount +=1
                     failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
+<<<<<<< HEAD
+        if ip_addresses:
+            try:
+                self.cleanup_addresses()
+            except Exception, e:
+                tb = self.get_traceback()
+                failcount +=1
+                failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
+=======
+>>>>>>> 953fcb9a5a7f097a27ff5065c5e54f82fbd99554
         if volumes:
             try:
                 self.clean_up_test_volumes(timeout_per_vol=60)
+                self.debug("No volumes found")
+
             except Exception, e:
                 tb = self.get_traceback()
                 failcount +=1
@@ -287,6 +312,14 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
                 failcount +=1
                 failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
 
+        if launch_configurations:
+            try:
+                self.cleanup_launch_configs()
+            except Exception, e:
+                tb = self.get_traceback()
+                failcount +=1
+                failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
+
         for key,array in self.test_resources.iteritems():
             for item in array:
                 try:
@@ -294,16 +327,8 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
                     self.debug("Deleting " + str(item))
                     if isinstance(item, Image):
                         item.deregister()
-                    elif isinstance(item, Reservation):
-                        self.terminate_instances(item)
-                    elif isinstance(item, Volume):
-                        try:
-                            self.detach_volume(item)
-                        except:
-                            pass
-                        item.update()
-                        if item.status != 'deleted':
-                            self.delete_volume(item)
+                    elif isinstance(item,Reservation):
+                        continue
                     else:
                         item.delete()
                 except Exception, e:
@@ -313,6 +338,14 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
         if failmsg:
             failmsg += "\nFound " + str(failcount) + " number of errors while cleaning up. See above"
             raise Exception(failmsg)
+        if launch_configurations:
+            try:
+                self.cleanup_launch_configs()
+            except Exception, e:
+                tb = self.get_traceback()
+                failcount +=1
+                failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
+
 
     def cleanup_load_balancers(self, lbs=None):
         """
@@ -326,6 +359,24 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
             except KeyError:
                 self.debug("No loadbalancers to delete")
 
+<<<<<<< HEAD
+    def cleanup_addresses(self, ips=None):
+        """
+        :param ips: optional list of ip addresses, else will attempt to delete from test_resources[]
+
+        """
+        addresses = ips or self.test_resources['addresses']
+        if not addresses:
+            return
+
+        self.debug('Attempting to release to the cloud the following IP addresses:')
+
+        while addresses:
+            self.release_address(addresses.pop())
+
+
+=======
+>>>>>>> 953fcb9a5a7f097a27ff5065c5e54f82fbd99554
     def cleanup_test_snapshots(self,snaps=None, clean_images=False, add_time_per_snap=10, wait_for_valid_state=120, base_timeout=180):
         """
         :param snaps: optional list of snapshots, else will attempt to delete from test_resources[]
