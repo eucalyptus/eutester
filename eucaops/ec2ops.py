@@ -3705,20 +3705,6 @@ disable_root: false"""
             try:
                 instance.sys("which apt-get", code=0)
                 ## Debian based Linux
-
-                instance.sys("echo \"deb http://archive.ubuntu.com/ubuntu precise main \n\
-                deb-src http://archive.ubuntu.com/ubuntu precise main \n\
-                deb http://archive.ubuntu.com/ubuntu precise-updates main \n\
-                deb-src http://archive.ubuntu.com/ubuntu precise-updates main \n\
-                deb http://archive.ubuntu.com/ubuntu precise universe \n\
-                deb-src http://archive.ubuntu.com/ubuntu precise universe \n\
-                deb http://archive.ubuntu.com/ubuntu precise-updates universe \n\
-                deb-src http://archive.ubuntu.com/ubuntu precise-updates universe \n\
-                deb http://security.ubuntu.com/ubuntu precise-security main \n\
-                deb-src http://security.ubuntu.com/ubuntu precise-security main \n\
-                deb http://security.ubuntu.com/ubuntu precise-security universe \n\
-                deb-src http://security.ubuntu.com/ubuntu precise-security universe \" > /etc/apt/sources.list")
-
                 instance.sys("apt-get install -y apache2", code=0)
                 instance.sys("echo \"" + instance.id +"\" > /var/www/" + filename)
                 instance.sys("echo \"CookieTracking on\" >> /etc/apache2/apache2.conf")
