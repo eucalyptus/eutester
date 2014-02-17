@@ -249,7 +249,7 @@ class CloudWatchBasics(EutesterTestCase):
                                      cooldown=0)
 
         ## Wait for the instance to go to running state.
-        self.tester.wait_for_result(self.tester.wait_for_instances, True, timeout=480,
+        self.tester.wait_for_result(self.tester.wait_for_instances, True, timeout=600,
                                     group_name=self.auto_scaling_group_name)
         self.instanceid = self.tester.get_last_instance_id()
         instance_list = self.tester.get_instances(idstring=self.instanceid)
