@@ -63,11 +63,10 @@ class LoadBalancing(EutesterTestCase):
         ### Generate a keypair for the instance
         self.keypair = self.tester.add_keypair( "keypair-" + str(time.time()))
         self.keypath = '%s/%s.pem' % (os.curdir, self.keypair.name)
-
         ### Get an image
         self.image = self.args.emi
         if not self.image:
-            self.image = self.tester.get_emi(root_device_type="instance-store")
+            self.image = self.tester.get_emi(root_device_type="instance-store", not_location="loadbalancer", not_platform="windows")
 
         ### Populate available zones
         zones = self.tester.ec2.get_all_zones()

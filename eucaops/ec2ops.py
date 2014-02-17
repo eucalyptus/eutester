@@ -1938,6 +1938,7 @@ disable_root: false"""
                 owner_id=None,
                 filters=None,
                 not_location=None,
+                not_platform=None,
                 max_count=None):
         """
         Get a list of images which match the provided criteria.
@@ -1952,6 +1953,7 @@ disable_root: false"""
         :param owner_id: owners numeric id
         :param not_location: skip if location string matches this comma separated string or list of strings. Examples:
                             not_location='windows,centos', not_location=['loadbalancer', 'lucid']
+        :param not_platform: skip if platform string matches this string. Example: not_platform='windows'
         :param max_count: return after finding 'max_count' number of matching images
         :return: image id
         :raise: Exception if image is not found
@@ -2011,6 +2013,8 @@ disable_root: false"""
                         break
                 if skip:
                     continue
+            if (not_platform is not None) and (image.platform == not_platform):
+                continue
             self.debug("Returning image:"+str(image.id))
             ret_list.append(image)
             if max_count and len(ret_list) >= max_count:
@@ -2030,6 +2034,7 @@ disable_root: false"""
                    owner_id=None,
                    filters=None,
                    not_location=None,
+                   not_platform=None
                    ):
         """
         Get an emi with name emi, or just grab any emi in the system. Additional 'optional' match criteria can be defined.
@@ -2041,7 +2046,8 @@ disable_root: false"""
         :param state: example: 'available'
         :param arch: example: 'x86_64'
         :param owner_id: owners numeric id
-        :param not_location: skip if location string matches this string. Example: not_location='windows'
+        :param not_location: skip if location string matches this string. Example: not_location='loadbalancer'
+        :param not_platform: skip if platform string matches this string. Example: not_platform='windows'
         :return: image id
         :raise: Exception if image is not found
         """
@@ -2054,6 +2060,7 @@ disable_root: false"""
                                owner_id=owner_id,
                                filters=filters,
                                not_location=not_location,
+                               not_platform=not_platform,
                                max_count=1)[0]
 
 
@@ -3688,7 +3695,7 @@ disable_root: false"""
 
     def create_web_servers(self, keypair, group, zone, port=80, count=2, image=None, filename="test-file", cookiename="test-cookie"):
         if not image:
-            image = self.get_emi()
+            image = self.get_emi(root_device_type="instance-store", not_location="loadbalancer", not_platform="windows")
         reservation = self.run_instance(image, keypair=keypair, group=group, zone=zone, min=count, max=count)
         self.authorize_group(group=group,port=port)
 
