@@ -77,10 +77,10 @@ public class TestAutoScalingInstanceLifecycle {
 
             // Wait for instance to start
             print("Waiting for Pending instance: " + groupName);
-            waitForInstances("Pending", TimeUnit.MINUTES.toMillis(5), groupName, false);
+            waitForInstances("Pending", TimeUnit.MINUTES.toMillis(10), groupName, false);
 
             print("Waiting for InService instance: " + groupName);
-            waitForInstances("InService", TimeUnit.MINUTES.toMillis(5), groupName, false);
+            waitForInstances("InService", TimeUnit.MINUTES.toMillis(10), groupName, false);
 
             // Terminate instance
             print("Terminating instance");
@@ -91,7 +91,7 @@ public class TestAutoScalingInstanceLifecycle {
 
             // Wait for instance to terminate
             print("Waiting for Terminating instance: " + groupName);
-            waitForInstances("Terminating", TimeUnit.MINUTES.toMillis(5), groupName, true);
+            waitForInstances("Terminating", TimeUnit.MINUTES.toMillis(10), groupName, true);
 
             print("Test complete");
         } finally {
