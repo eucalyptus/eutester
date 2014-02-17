@@ -1953,6 +1953,7 @@ disable_root: false"""
         :param owner_id: owners numeric id
         :param not_location: skip if location string matches this comma separated string or list of strings. Examples:
                             not_location='windows,centos', not_location=['loadbalancer', 'lucid']
+        :param not_platform: skip if platform string matches this string. Example: not_platform='windows'
         :param max_count: return after finding 'max_count' number of matching images
         :return: image id
         :raise: Exception if image is not found
@@ -2045,7 +2046,8 @@ disable_root: false"""
         :param state: example: 'available'
         :param arch: example: 'x86_64'
         :param owner_id: owners numeric id
-        :param not_location: skip if location string matches this string. Example: not_location='windows'
+        :param not_location: skip if location string matches this string. Example: not_location='loadbalancer'
+        :param not_platform: skip if platform string matches this string. Example: not_platform='windows'
         :return: image id
         :raise: Exception if image is not found
         """
@@ -3693,7 +3695,7 @@ disable_root: false"""
 
     def create_web_servers(self, keypair, group, zone, port=80, count=2, image=None, filename="test-file", cookiename="test-cookie"):
         if not image:
-            image = self.get_emi()
+            image = self.get_emi(root_device_type="instance-store", not_location="loadbalancer", not_platform="windows")
         reservation = self.run_instance(image, keypair=keypair, group=group, zone=zone, min=count, max=count)
         self.authorize_group(group=group,port=port)
 
