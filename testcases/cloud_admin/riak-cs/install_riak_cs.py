@@ -16,7 +16,7 @@ class InstallRiak(EutesterTestCase):
         self.parser.add_argument("--admin-name", default="admin")
         self.parser.add_argument("--admin-email", default="admin@admin.com")
         self.parser.add_argument("--template-path", default="/templates/")
-        self.parser.add_argument("--riak-cs-port", default="8080")
+        self.parser.add_argument("--riak-cs-port", default="9090")
         self.get_args()
         # Setup basic eutester object
         self.tester = Eucaops( config_file=self.args.config,password=self.args.password)
@@ -32,6 +32,7 @@ class InstallRiak(EutesterTestCase):
             for machine in self.tester.get_component_machines("riak"):
                 machine.sys("yum install -y http://yum.basho.com/gpg/basho-release-6-1.noarch.rpm")
                 machine.sys("yum install -y riak stanchion riak-cs")
+                self.riak_cs_version = machine.sys("riak-cs version")
                 machine_ulimit = machine.sys('ulimit -n')
                 if ( machine_ulimit.pop() != '65536'):
                     machine.sys('echo "ulimit -n 65536" >> /root/.bashrc')
@@ -42,6 +43,7 @@ class InstallRiak(EutesterTestCase):
                         machine.sftp.put(local_file, remote_file)
                         machine.sys("sed -i s/IPADDRESS/" + machine.hostname + "/g " + remote_file)
                         machine.sys("sed -i s/RIAKCSPORT/" + self.args.riak_cs_port + "/g " + remote_file)
+                        machine.sys("sed -i s/RIAKCSVERSION/" + str(self.riak_cs_version[0]) + "/g " + remote_file)
                 machine.sys("riak start", code=0)
                 machine.sys("stanchion start", code=0)
                 machine.sys("riak-cs start", code=0)
