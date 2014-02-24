@@ -43,7 +43,7 @@ class InstallRiak(EutesterTestCase):
                         machine.sftp.put(local_file, remote_file)
                         machine.sys("sed -i s/IPADDRESS/" + machine.hostname + "/g " + remote_file)
                         machine.sys("sed -i s/RIAKCSPORT/" + self.args.riak_cs_port + "/g " + remote_file)
-                        machine.sys("sed -i s/RIAKCSVERSION/" + str(self.riak_cs_version) + "/g " + remote_file)
+                        machine.sys("sed -i s/RIAKCSVERSION/" + str(self.riak_cs_version[0]) + "/g " + remote_file)
                 machine.sys("riak start", code=0)
                 machine.sys("stanchion start", code=0)
                 machine.sys("riak-cs start", code=0)
