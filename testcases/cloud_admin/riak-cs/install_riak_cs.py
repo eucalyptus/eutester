@@ -15,7 +15,7 @@ class InstallRiak(EutesterTestCase):
         self.setup_parser()
         self.parser.add_argument("--admin-name", default="admin")
         self.parser.add_argument("--admin-email", default="admin@admin.com")
-        self.parser.add_argument("--template-path", default="/templates/")
+        self.parser.add_argument("--template-path", default="/testcases/cloud_admin/riak-cs/templates/")
         self.parser.add_argument("--riak-cs-port", default="9090")
         self.get_args()
         # Setup basic eutester object
