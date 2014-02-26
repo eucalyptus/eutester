@@ -234,7 +234,7 @@ class EbsTestSuite(EutesterTestCase):
             self.debug('Created instance: ' + str(inst.id)+" in zone:"+str(zone))
         #self.endsuccess()
     
-    def terminate_test_instances_for_zones(self, zonelist=None, timeout=360):
+    def terminate_test_instances_for_zones(self, zonelist=None, timeout=480):
         if zonelist is None:
             zonelist = self.zonelist
         for zone in zonelist:
@@ -242,7 +242,7 @@ class EbsTestSuite(EutesterTestCase):
                 self.tester.terminate_single_instance(instance, timeout)
                 zone.instances.remove(instance)
                 
-    def terminate_instances_in_zones_verify_volume_detach(self,zonelist=None,timeout=360):
+    def terminate_instances_in_zones_verify_volume_detach(self,zonelist=None,timeout=480):
         """
         Description:
                   Iterates over all instances in this testcase's zonelist attempts to terminate the instances,
@@ -257,7 +257,7 @@ class EbsTestSuite(EutesterTestCase):
                 instance.terminate_and_verify(verify_vols=True,timeout=timeout)
                 zone.instances.remove(instance)
 
-    def negative_attach_in_use_volume_in_zones(self,zonelist=None,timeout=360):
+    def negative_attach_in_use_volume_in_zones(self,zonelist=None,timeout=480):
         """
         Description:
                     Iterates though zones and attempts to attach already attached volumes to instances within each zone.  
@@ -288,7 +288,7 @@ class EbsTestSuite(EutesterTestCase):
                 raise Exception("No attached volumes found to test against")
                 
     
-    def attach_all_avail_vols_to_instances_in_zones(self, zonelist=None, timeout=360, overwrite=False):
+    def attach_all_avail_vols_to_instances_in_zones(self, zonelist=None, timeout=480, overwrite=False):
         """
         Description:
                     Iterates though zones and attempts to attach volumes to an instance within each zone.  
@@ -374,7 +374,7 @@ class EbsTestSuite(EutesterTestCase):
                             raise Exception("Was able to delete attached volume:"+str(volume.id))
                    
                         
-    def reboot_instances_in_zone_verify_volumes(self,zonelist=None,waitconnect=30, timeout=360):
+    def reboot_instances_in_zone_verify_volumes(self,zonelist=None,waitconnect=30, timeout=480):
         """
         Description:
                     Attempts to iterate through each instance in each zone and reboot the instance(s). 
@@ -391,7 +391,7 @@ class EbsTestSuite(EutesterTestCase):
                 instance.reboot_instance_and_verify(waitconnect=waitconnect, timeout=timeout, checkvolstatus=True)
         #self.endsuccess()
         
-    def detach_volumes_in_zones(self,zonelist=None, timeout=360, volcount=1, eof=False):
+    def detach_volumes_in_zones(self,zonelist=None, timeout=480, volcount=1, eof=False):
         """
         Description:
                     Attempts to detach volcount volumes from each instance in the provided zonelist. 
@@ -434,7 +434,7 @@ class EbsTestSuite(EutesterTestCase):
         if errmsg:
             raise Exception(errmsg)
         
-    def detach_all_volumes_from_stopped_instances_in_zones(self,zonelist=None, timeout=360):
+    def detach_all_volumes_from_stopped_instances_in_zones(self,zonelist=None, timeout=480):
         """
         Description:
                     Attempts to detach volumes from instances while in the stopped state and
@@ -556,7 +556,7 @@ class EbsTestSuite(EutesterTestCase):
                 retlist.append(snap)
         return retlist
         
-    def attach_new_vols_from_snap_verify_md5(self,zonelist=None, timeout=360,timepergig=360):
+    def attach_new_vols_from_snap_verify_md5(self,zonelist=None, timeout=480,timepergig=480):
         """
         Description:
                     Attempts to attach volumes which were created from snapshots and are not in use. 
@@ -635,7 +635,7 @@ class EbsTestSuite(EutesterTestCase):
                                                 tpg=300,
                                                 delete_to=120,
                                                 poll_progress=60,
-                                                attach_timeout=360):
+                                                attach_timeout=480):
         """
         Description:
                    Attempts to create a 'count' number of snapshots consecutively with a delay of 'delay'
@@ -715,7 +715,7 @@ class EbsTestSuite(EutesterTestCase):
                                                             tpg=300,
                                                             delete_to=120,
                                                             poll_progress=60,
-                                                            attach_timeout=360):
+                                                            attach_timeout=480):
         """
         Description:
                    Attempts to create a 'count' number of volumes from a given snapshot consecutively with a delay of 'delay'
@@ -935,7 +935,7 @@ class EbsTestSuite(EutesterTestCase):
             start = time.time()
             elapsed = 0
             sc = None
-            while (sc is None) and (elapsed < 360):
+            while (sc is None) and (elapsed < 480):
                 self.debug("waiting for sc in zone:"+str(zone.name)+" elapsed:"+str(elapsed))
                 elapsed = int(time.time()-start)
                 sc = zone.partition.get_enabled_sc()
@@ -983,9 +983,9 @@ class EbsTestSuite(EutesterTestCase):
         Attempts to clean up test artifacts created during this test
         """
 
-        self.clean_created_resources(zonelist=self.zonelist, timeout=360)
+        self.clean_created_resources(zonelist=self.zonelist, timeout=480)
     
-    def clean_created_resources(self, zonelist=None, timeout=360):
+    def clean_created_resources(self, zonelist=None, timeout=480):
         """
         Definition:
         Attempts to clean up test artifacts created during this test

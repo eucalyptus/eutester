@@ -54,7 +54,7 @@ public class TestAutoScalingELBInstanceHealthMonitoring {
         final List<Runnable> cleanupTasks = new ArrayList<Runnable>();
         try {
             // Generate a load balancer to use
-            final String loadBalancerName = NAME_PREFIX + "ELBInstanceHealthMonitoringTest";
+            final String loadBalancerName = NAME_PREFIX + "ELBHealth";
             print("Creating a load balancer for test use: " + loadBalancerName);
             createLoadBalancer(loadBalancerName);
             cleanupTasks.add(new Runnable() {
@@ -112,11 +112,11 @@ public class TestAutoScalingELBInstanceHealthMonitoring {
 
             // Wait for instance to launch
             print("Waiting for instance to launch");
-            final long timeout = TimeUnit.MINUTES.toMillis(5);
+            final long timeout = TimeUnit.MINUTES.toMillis(10);
             final String instanceId = (String) waitForInstances(timeout, 1, groupName,true).get(0);
 
             print("Waiting for instance to be added to ELB");
-            waitForElbInstances(loadBalancerName, TimeUnit.MINUTES.toMillis(5), Arrays.asList(instanceId));
+            waitForElbInstances(loadBalancerName, TimeUnit.MINUTES.toMillis(10), Arrays.asList(instanceId));
             print("Instance added to ELB");
 
             // Verify initial health status
@@ -128,11 +128,11 @@ public class TestAutoScalingELBInstanceHealthMonitoring {
             elb.configureHealthCheck(new ConfigureHealthCheckRequest()
                     .withLoadBalancerName(loadBalancerName)
                     .withHealthCheck(new HealthCheck()
-                            .withHealthyThreshold(1)
-                            .withUnhealthyThreshold(1)
+                            .withHealthyThreshold(2)
+                            .withUnhealthyThreshold(2)
                             .withInterval(5)
                             .withTimeout(4)
-                            .withTarget("HTTP:1023")
+                            .withTarget("HTTP:1023/")
                     )
             );
 

@@ -38,7 +38,7 @@ class InstanceBasics(EutesterTestCase):
             self.tester = EC2ops(credpath=credpath, region=region)
         else:
             self.tester = Eucaops(config_file=config_file, password=password, credpath=credpath)
-        self.instance_timeout = 480
+        self.instance_timeout = 600
 
         ### Add and authorize a group for the instance
         self.group = self.tester.add_group(group_name="group-" + str(time.time()))
@@ -50,8 +50,7 @@ class InstanceBasics(EutesterTestCase):
         if emi:
             self.image = emi
         else:
-            self.image = self.tester.get_emi(root_device_type="instance-store",
-                                             not_location=['windows', 'loadbalancer'])
+            self.image = self.tester.get_emi(root_device_type="instance-store", not_location="loadbalancer", not_platform="windows")
         self.address = None
         self.volume = None
         self.private_addressing = False
@@ -330,11 +329,13 @@ class InstanceBasics(EutesterTestCase):
         if self.reservation:
             self.tester.terminate_instances(self.reservation)
             self.set_reservation(None)
+        try:
+            available_instances_before = self.tester.get_available_vms(zone=self.zone)
+            count = available_instances_before
+        except IndexError, e:
+            self.debug("Running as non-admin, defaulting to 4 VMs")
+            available_instances_before = count = 4
 
-        available_instances_before = self.tester.get_available_vms(zone=self.zone)
-
-        ## Run through count iterations of test
-        count = 4
         future_instances = []
 
         with ThreadPoolExecutor(max_workers=count) as executor:
@@ -410,6 +411,27 @@ class InstanceBasics(EutesterTestCase):
                                     str(instance.public_dns_name))
                 prev_address = instance.ip_address
             self.tester.terminate_instances(reservation)
+
+    def BundleInstance(self):
+        if not self.reservation:
+            self.reservation = self.tester.run_instance(**self.run_instance_params)
+        original_image = self.run_instance_params['image']
+        for instance in self.reservation.instances:
+            current_time = str(int(time.time()))
+            temp_file = "/root/my-new-file-" + current_time
+            instance.sys("touch " + temp_file)
+            self.tester.sleep(60)
+            starting_uptime = instance.get_uptime()
+            self.run_instance_params['image'] = self.tester.bundle_instance_monitor_and_register(instance)
+            instance.connect_to_instance()
+            ending_uptime = instance.get_uptime()
+            if ending_uptime > starting_uptime:
+                raise Exception("Instance did not get stopped then started")
+            bundled_image_reservation = self.tester.run_instance(**self.run_instance_params)
+            for new_instance in bundled_image_reservation.instances:
+                new_instance.sys("ls " + temp_file, code=0)
+            self.tester.terminate_instances(bundled_image_reservation)
+        self.run_instance_params['image'] = original_image
 
 if __name__ == "__main__":
     testcase = EutesterTestCase(name='instancetest')

@@ -1884,19 +1884,7 @@ disable_root: false"""
             else:
                 raise Exception('virtualization_type arg populated but not found in this version of ec2.register_image?')
         image_id = self.ec2.register_image(**ri_kwargs)
-
-        '''
-        image_id = self.ec2.register_image(name=name,
-                                           description=description,
-                                           kernel_id=kernel,
-                                           image_location=image_location,
-                                           ramdisk_id=ramdisk,
-                                           architecture=architecture,
-                                           virtualization_type=virtualization_type,
-                                           block_device_map=bdmdev,
-                                           root_device_name=root_device_name)
-        '''
-        self.test_resources["images"].append(image_id)
+        self.test_resources["images"].append(self.ec2.get_all_images([image_id])[0])
         return image_id
 
     def delete_image(self, image, timeout=60):
@@ -1950,6 +1938,7 @@ disable_root: false"""
                 owner_id=None,
                 filters=None,
                 not_location=None,
+                not_platform=None,
                 max_count=None):
         """
         Get a list of images which match the provided criteria.
@@ -1964,6 +1953,7 @@ disable_root: false"""
         :param owner_id: owners numeric id
         :param not_location: skip if location string matches this comma separated string or list of strings. Examples:
                             not_location='windows,centos', not_location=['loadbalancer', 'lucid']
+        :param not_platform: skip if platform string matches this string. Example: not_platform='windows'
         :param max_count: return after finding 'max_count' number of matching images
         :return: image id
         :raise: Exception if image is not found
@@ -2023,6 +2013,8 @@ disable_root: false"""
                         break
                 if skip:
                     continue
+            if (not_platform is not None) and (image.platform == not_platform):
+                continue
             self.debug("Returning image:"+str(image.id))
             ret_list.append(image)
             if max_count and len(ret_list) >= max_count:
@@ -2042,6 +2034,7 @@ disable_root: false"""
                    owner_id=None,
                    filters=None,
                    not_location=None,
+                   not_platform=None
                    ):
         """
         Get an emi with name emi, or just grab any emi in the system. Additional 'optional' match criteria can be defined.
@@ -2053,7 +2046,8 @@ disable_root: false"""
         :param state: example: 'available'
         :param arch: example: 'x86_64'
         :param owner_id: owners numeric id
-        :param not_location: skip if location string matches this string. Example: not_location='windows'
+        :param not_location: skip if location string matches this string. Example: not_location='loadbalancer'
+        :param not_platform: skip if platform string matches this string. Example: not_platform='windows'
         :return: image id
         :raise: Exception if image is not found
         """
@@ -2066,6 +2060,7 @@ disable_root: false"""
                                owner_id=owner_id,
                                filters=filters,
                                not_location=not_location,
+                               not_platform=not_platform,
                                max_count=1)[0]
 
 
@@ -2384,6 +2379,7 @@ disable_root: false"""
                      image=None,
                      keypair=None,
                      group="default",
+                     name=None,
                      type=None,
                      zone=None,
                      min=1,
@@ -2490,6 +2486,10 @@ disable_root: false"""
 
             if is_reachable:
                 self.ping(instance.ip_address, 20)
+
+        ## Add name tag
+        if name:
+            self.create_tags([reservation.instances], {"Name:": name})
                 
         #calculate remaining time to wait for establishing an ssh session/euinstance     
         timeout -= int(time.time() - start)
@@ -3442,10 +3442,9 @@ disable_root: false"""
                 id_count = len(self.get_images(location=instance.id))
             except:
                 id_count = 0
-            bucket_name =  'win' \
-                           + str(instance.id) + "-" \
+            bucket_name =  str(instance.id) + "-" \
                            + str(id_count)
-        prefix = prefix or 'windows-bundleof-' + str(instance.id)
+        prefix = prefix or 'bundleof-' + str(instance.id)
         s3_upload_policy = self.generate_default_s3_upload_policy(bucket_name,prefix)
         bundle_task = self.ec2.bundle_instance(instance.id, bucket_name, prefix, s3_upload_policy)
         self.print_bundle_task(bundle_task)
@@ -3642,10 +3641,61 @@ disable_root: false"""
         self.debug("Registered '" + str(manifest) + "as image:" + str(image))
         return image_obj
 
+    def create_image(self, instance, name, description=None, no_reboot=False, block_device_mapping=None, dry_run=False,
+                     timeout=600):
+        """
+        :type instance_id: string
+        :param instance_id: the ID of the instance to image.
+
+        :type name: string
+        :param name: The name of the new image
+
+        :type description: string
+        :param description: An optional human-readable string describing
+            the contents and purpose of the AMI.
+
+        :type no_reboot: bool
+        :param no_reboot: An optional flag indicating that the
+            bundling process should not attempt to shutdown the
+            instance before bundling.  If this flag is True, the
+            responsibility of maintaining file system integrity is
+            left to the owner of the instance.
+
+        :type block_device_mapping: :class:`boto.ec2.blockdevicemapping.BlockDeviceMapping`
+        :param block_device_mapping: A BlockDeviceMapping data structure
+            describing the EBS volumes associated with the Image.
+
+        :type dry_run: bool
+        :param dry_run: Set to True if the operation should not actually run.
+
+        :type timeout: int
+        :param timeout: Time to allow image to get to "available" state.
+
+        :raise Exception: On not reaching the correct state or when more than one image is returned
+        """
+        if isinstance(instance, Instance):
+            instance_id = instance.id
+        else:
+            instance_id = instance
+        image_id = self.ec2.create_image(instance_id, name=name,description=description,no_reboot=no_reboot,
+                                     block_device_mapping=block_device_mapping, dry_run=dry_run)
+        def get_emi_state():
+            images = self.ec2.get_all_images(image_ids=[image_id])
+            if len(images) == 0:
+                raise Exception("Image not found after sending create image request: " + image_id)
+            elif len(images) == 1:
+                state = images[0].state
+                self.debug( image_id + " returned state: " + state)
+                return state
+            else:
+                raise Exception("More than one image returned for: " + image_id)
+        self.wait_for_result(get_emi_state, "available", timeout=timeout,poll_wait=20)
+        return image_id
+
 
     def create_web_servers(self, keypair, group, zone, port=80, count=2, image=None, filename="test-file", cookiename="test-cookie"):
         if not image:
-            image = self.get_emi()
+            image = self.get_emi(root_device_type="instance-store", not_location="loadbalancer", not_platform="windows")
         reservation = self.run_instance(image, keypair=keypair, group=group, zone=zone, min=count, max=count)
         self.authorize_group(group=group,port=port)
 

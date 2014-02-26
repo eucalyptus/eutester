@@ -642,6 +642,10 @@ class IAMops(Eutester):
         self.debug(certs)
         return certs
 
-    def create_login_profile(self, username, password):
-        self.debug("Creating login profile for: " + username + " with password: " + password)
-        self.euare.create_login_profile(username,password)
+    def create_login_profile(self, user_name, password, delegate_account=None):
+        self.debug("Creating login profile for: " + user_name + " with password: " + password)
+        params = {'UserName': user_name,
+                  'Password': password}
+        if delegate_account:
+            params['DelegateAccount'] = delegate_account
+        self.euare.get_response('CreateLoginProfile', params, verb='POST')

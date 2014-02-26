@@ -182,7 +182,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
 
     def get_available_vms(self, type=None, zone=None):
         """
-        Get available VMs of a certain type or return a dictionary with all types and their available vms
+        Get available VMs of a certain type, defaults to m1.small
         type        VM type to get available vms 
         """
         
@@ -648,7 +648,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
     def download_creds_from_clc(self, admin_cred_dir):
         self.debug("Downloading credentials from " + self.clc.hostname + ", path:" + admin_cred_dir + "/creds.zip")
         self.sftp.get(admin_cred_dir + "/creds.zip" , admin_cred_dir + "/creds.zip")
-        os.system("unzip -o " + admin_cred_dir + "/creds.zip -d " + admin_cred_dir )
+        self.local("unzip -o " + admin_cred_dir + "/creds.zip -d " + admin_cred_dir )
     
     def send_creds_to_machine(self, admin_cred_dir, machine):
         self.debug("Sending credentials to " + machine.hostname)
