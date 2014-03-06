@@ -48,6 +48,13 @@
             <class name="com.eucalyptus.tests.awssdk.TestIAMRoleManagement"/>
         </classes>
     </test>
+    <test name="ELB_Tests">
+        <classes>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingELBAddRemoveInstances"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingELBInstanceHealthMonitoring"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingELBReferenceValidation"/>
+        </classes>>
+    </test>
     <!--<test name="Walrus_Tests">-->
         <!--<classes>-->
             <!--<class name="com.eucalyptus.tests.awssdk.BasicWalrusTest"/>-->
