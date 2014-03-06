@@ -41,7 +41,8 @@ testcase.setup_parser(testname='load_hvm_image.py',
                       emi=False,
                       testlist=False)
 
-testcase.parser.add_argument('--url',help='URL containing remote windows image to create EMI from', default=None)
+testcase.parser.add_argument('--url',help='URL containing remote windows image '
+                                          'to create EMI from', default=None)
 testcase.parser.add_argument('--filepath',dest='filepath', help='File path to create windows EMI from', default=None)
 testcase.parser.add_argument('--workerip',dest='worker_machine', help='The ip/hostname of the machine that the operation will be performed on', default=None)
 testcase.parser.add_argument('--worker_username',dest='worker_username', help='The username of the machine that the operation will be performed on, default:"root"', default='root')
@@ -52,9 +53,11 @@ testcase.parser.add_argument('--urlpass', dest='wget_password',help='Password ne
 testcase.parser.add_argument('--urluser',dest='wget_user', help='Username needed to retrieve remote url', default=None)
 testcase.parser.add_argument('--gigtime',dest='time_per_gig', help='Time allowed per gig size of image to be used', default=300)
 testcase.parser.add_argument('--interbundletime',dest='inter_bundle_timeout', help='Inter-bundle timeout', default=120)
-testcase.parser.add_argument('--virtualization_type', help='virtualization type, hvm or pv', default=None)
+testcase.parser.add_argument('--virtualization_type', help='virtualization type, hvm or pv', default='hvm')
 testcase.parser.add_argument('--bucket',dest='bucketname', help='bucketname', default=None)
-testcase.parser.add_argument('--image_type', dest='image_type', help='"Linux" or "Windows", default: "windows"' , default="windows")
+testcase.parser.add_argument('--platform', dest='platform', help='"Linux" or "Windows", default: "linux"' , default=None)
+testcase.parser.add_argument('--uploaded_manifest', dest='upload_manifest', help='bucket/prefix location of manifest to register' , default=None)
+testcase.parser.add_argument('--bundle_manifest', dest='bundle_manifest', help='file path on worker to bundle manifest to upload' , default=None)
 testcase.parser.add_argument('--overwrite', help='Will overwrite files in matching work dir on worker machine if found', action='store_true', default=False)
 
 testcase.parser.add_argument('--time_per_gig', help='Time allowed per image size in GB before timing out. Default:300 seconds', default=300)
@@ -64,12 +67,13 @@ testcase.get_args()
 testcase.args.worker_password = testcase.args.worker_password or testcase.args.password
 testcase.args.worker_keypath = testcase.args.worker_keypath or testcase.args.keypair
 
-if (not testcase.args.url and not testcase.args.filepath) or (testcase.args.url and testcase.args.filepath):
-    raise Exception('Must specify either a URL or FILE path to create Windows EMI from')
+if not testcase.args.upload_manifest and not testcase.args.bundle_manifest:
+    if (not testcase.args.url and not testcase.args.filepath) or (testcase.args.url and testcase.args.filepath):
+        raise Exception('If manifest not provieded, either a URL or FILE path is required to create image ')
 
 #Set kernel to 'windows'. This result in the platform type resulting in 'windows' after registration.
-if str(testcase.args.image_type).lower() == "windows":
-    testcase.args.kernel = "windows"
+#if str(testcase.args.image_type).lower() == "windows":
+#    testcase.args.kernel = "windows"
 
 #Create an ImageUtils helper from the arguments provided in this testcase...
 image_utils = testcase.do_with_args(ImageUtils)
