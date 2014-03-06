@@ -387,8 +387,8 @@ class InstanceBasics(EutesterTestCase):
             address.release()
             if instance.ip_address != "0.0.0.0" and instance.ip_address != instance.private_ip_address:
                 self.fail("Instance received a new public IP: " + instance.ip_address)
-        self.tester.terminate_instances(self.reservation)
-        self.set_reservation(None)
+        self.tester.terminate_instances(reservation)
+        self.set_reservation(reservation)
         return reservation
 
     def ReuseAddresses(self):
