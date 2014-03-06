@@ -31,11 +31,11 @@ class BucketTestSuite(EutesterTestCase):
     def __init__(self):
         self.setuptestcase()
         self.setup_parser()
-        self.parser.add_argument("--s3endpoint", default=None)
+        self.parser.add_argument("--endpoint", default=None)
         self.get_args()
         # Setup basic eutester object
-        if self.args.s3endpoint:
-            self.tester = S3ops( credpath=self.args.credpath, endpoint=self.args.endpoint)
+        if self.args.endpoint:
+            self.tester = S3ops(credpath=self.args.credpath, endpoint=self.args.endpoint)
         else:
             self.tester = Eucaops( credpath=self.args.credpath, config_file=self.args.config, password=self.args.password)
 
