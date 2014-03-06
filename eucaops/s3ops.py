@@ -343,7 +343,7 @@ class S3ops(Eutester):
     def check_md5(self, eTag=None, data=None):
         hasher = hashlib.md5()
         hasher.update(data)
-        data_hash = "\"" + hasher.hexdigest() + "\""
+        data_hash = hasher.hexdigest()
         if data_hash != eTag:
             raise Exception( "Hash/eTag mismatch: \nhash = " + data_hash + "\neTag= " + eTag )
             
