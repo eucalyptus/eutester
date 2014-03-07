@@ -80,10 +80,10 @@ class BucketTestSuite(EutesterTestCase):
         def test_creating_bucket_invalid_names(bad_bucket):
             should_fail = False
             try:
-                self.tester.create_bucket(bad_bucket)
+                bucket = self.tester.create_bucket(bad_bucket)
                 should_fail = True            
                 try:
-                    self.tester.delete_bucket(bad_bucket)
+                    self.tester.delete_bucket(bucket)
                 except:
                     self.tester.debug( "Exception deleting bad bucket, shouldn't be here anyway. Test WILL fail" )
             except:
