@@ -91,8 +91,9 @@ public class TestAutoScalingELBAddRemoveInstances {
             as.createAutoScalingGroup(new CreateAutoScalingGroupRequest()
                     .withAutoScalingGroupName(groupName)
                     .withLaunchConfigurationName(configName)
-                    .withMinSize(1)
+                    .withMinSize(0)
                     .withMaxSize(1)
+                    .withDesiredCapacity(1)
                     .withAvailabilityZones(AVAILABILITY_ZONE)
                     .withLoadBalancerNames(loadBalancerName)
             );
