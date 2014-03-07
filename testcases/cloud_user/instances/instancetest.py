@@ -329,11 +329,13 @@ class InstanceBasics(EutesterTestCase):
         if self.reservation:
             self.tester.terminate_instances(self.reservation)
             self.set_reservation(None)
+        try:
+            available_instances_before = self.tester.get_available_vms(zone=self.zone)
+            count = available_instances_before
+        except IndexError, e:
+            self.debug("Running as non-admin, defaulting to 4 VMs")
+            available_instances_before = count = 4
 
-        available_instances_before = self.tester.get_available_vms(zone=self.zone)
-
-        ## Run through count iterations of test
-        count = 4
         future_instances = []
 
         with ThreadPoolExecutor(max_workers=count) as executor:

@@ -182,7 +182,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
 
     def get_available_vms(self, type=None, zone=None):
         """
-        Get available VMs of a certain type or return a dictionary with all types and their available vms
+        Get available VMs of a certain type, defaults to m1.small
         type        VM type to get available vms 
         """
         
