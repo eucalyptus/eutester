@@ -54,6 +54,7 @@ from boto.ec2.volume import Volume
 from boto.ec2.bundleinstance import BundleInstanceTask
 from boto.exception import EC2ResponseError
 from boto.ec2.regioninfo import RegionInfo
+from boto.resultset import ResultSet
 import boto
 
 from eutester import Eutester
@@ -1807,7 +1808,8 @@ disable_root: false"""
                                  kernel=None,
                                  size=None,
                                  dot=True,
-                                 block_device_map=None):
+                                 block_device_map=None,
+                                 custom_params=None):
         """
         Register an image snapshot
 
@@ -1823,12 +1825,13 @@ disable_root: false"""
         :param block_device_map: existing block device map to add the snapshot block dev type to
         :return: emi id of registered image
         """
+        custom_params = custom_params or {}
         if bdmdev is None:
             bdmdev=root_device_name
         if name is None:
             name="bfebs_"+ snap_id
-        if ( windows ) and (not kernel):
-            kernel="windows"     
+        if windows:
+            custom_params['Platform'] = "windows"
             
         bdmap = block_device_map or BlockDeviceMapping()
         block_dev_type = BlockDeviceType()
@@ -1840,8 +1843,8 @@ disable_root: false"""
         self.debug("Register image with: snap_id:"+str(snap_id)+", root_device_name:"+str(root_device_name)+", desc:"+str(description)+
                    ", windows:"+str(windows)+", bdname:"+str(bdmdev)+", name:"+str(name)+", ramdisk:"+
                    str(ramdisk)+", kernel:"+str(kernel))
-        image_id = self.ec2.register_image(name=name, description=description, kernel_id=kernel, ramdisk_id=ramdisk,
-                                           block_device_map=bdmap, root_device_name=root_device_name)
+        image_id = self._register_image_custom_params(name=name, description=description, kernel_id=kernel, ramdisk_id=ramdisk,
+                                           block_device_map=bdmap, root_device_name=root_device_name, **custom_params)
         self.debug("Image now registered as " + image_id)
         return image_id
 
@@ -1853,10 +1856,12 @@ disable_root: false"""
                         description=None,
                         architecture=None,
                         virtualization_type=None,
+                        platform=None,
                         bdmdev=None,
                         name=None,
                         ramdisk=None,
-                        kernel=None):
+                        kernel=None,
+                        custom_params=None):
         """
         Register an image based on the s3 stored manifest location
 
@@ -1869,21 +1874,19 @@ disable_root: false"""
         :param kernel: kernel id (note for windows this name should be "windows")
         :return: image id string
         """
-        ri_kwargs = { 'name':name,
-                   'description':description,
-                   'kernel_id':kernel,
-                   'image_location':image_location,
-                   'ramdisk_id':ramdisk,
-                   'architecture':architecture,
-                   'block_device_map':bdmdev,
-                   'root_device_name':root_device_name}
+        custom_params = custom_params or {}
+        if platform:
+             custom_params['Platform']= platform
         #Check to see if boto is recent enough to have this param...
-        if virtualization_type:
-            if 'virtualization_type' in self.ec2.register_image.im_func.func_code.co_varnames:
-                ri_kwargs['virtualization_type'] = virtualization_type
-            else:
-                raise Exception('virtualization_type arg populated but not found in this version of ec2.register_image?')
-        image_id = self.ec2.register_image(**ri_kwargs)
+        image_id = self._register_image_custom_params(name=name,
+                                                      description=description,
+                                                      kernel_id=kernel,
+                                                      image_location=image_location,
+                                                      ramdisk_id=ramdisk,
+                                                      architecture=architecture,
+                                                      block_device_map=bdmdev,
+                                                      root_device_name=root_device_name,
+                                                      **custom_params)
         self.test_resources["images"].append(self.ec2.get_all_images([image_id])[0])
         return image_id
 
@@ -1929,6 +1932,7 @@ disable_root: false"""
     @Eutester.printinfo
     def get_images(self,
                 emi=None,
+                name=None,
                 root_device_type=None,
                 root_device_name=None,
                 virtualization_type=None,
@@ -1964,6 +1968,8 @@ disable_root: false"""
             filters = {}
             if emi:
                 filters['image-id'] = emi
+            if name:
+                filters['name'] = name
             if root_device_type:
                 filters['root-device-type'] = root_device_type
             if root_device_name:
@@ -1998,7 +2004,9 @@ disable_root: false"""
             if (state is not None) and (image.state != state):
                 continue            
             if (location is not None) and (not re.search( location, image.location)):
-                continue           
+                continue
+            if (name is not None) and (image.name != name):
+                continue
             if (arch is not None) and (image.architecture != arch):
                 continue                
             if (owner_id is not None) and (image.owner_id != owner_id):
@@ -2026,6 +2034,7 @@ disable_root: false"""
 
     def get_emi(self,
                    emi=None,
+                   name=None,
                    root_device_type=None,
                    root_device_name=None,
                    location=None,
@@ -2052,6 +2061,7 @@ disable_root: false"""
         :raise: Exception if image is not found
         """
         return self.get_images(emi=emi,
+                               name=name,
                                root_device_type=root_device_type,
                                root_device_name=root_device_name,
                                location=location,
@@ -3615,6 +3625,7 @@ disable_root: false"""
                           description=None,
                           architecture=None,
                           virtualization_type=None,
+                          platform=None,
                           bdmdev=None,
                           name=None,
                           ramdisk=None,
@@ -3629,6 +3640,7 @@ disable_root: false"""
                                     description=description,
                                     architecture=architecture,
                                     virtualization_type=virtualization_type,
+                                    platform=platform,
                                     bdmdev=bdmdev,
                                     name=name,
                                     ramdisk=ramdisk,
@@ -3640,6 +3652,62 @@ disable_root: false"""
             raise Exception('Failed to retrieve image after registering. Image:' + str(image) + ", err:" + str(e))
         self.debug("Registered '" + str(manifest) + "as image:" + str(image))
         return image_obj
+
+    def _register_image_custom_params(self,
+                                     name=None,
+                                     description=None,
+                                     image_location=None,
+                                     architecture=None,
+                                     kernel_id=None,
+                                     ramdisk_id=None,
+                                     root_device_name=None,
+                                     block_device_map=None,
+                                     dry_run=False,
+                                     virtualization_type=None,
+                                     sriov_net_support=None,
+                                     snapshot_id=None,
+                                     platform=None,
+                                     **custom_params):
+        '''
+        Register method to allow testing of 'custom_params' dict if provided
+        '''
+        params = custom_params or {}
+        if name:
+            params['Name'] = name
+        if description:
+            params['Description'] = description
+        if architecture:
+            params['Architecture'] = architecture
+        if kernel_id:
+            params['KernelId'] = kernel_id
+        if ramdisk_id:
+            params['RamdiskId'] = ramdisk_id
+        if image_location:
+            params['ImageLocation'] = image_location
+        if platform:
+            params['Platform'] = platform
+        if root_device_name:
+            params['RootDeviceName'] = root_device_name
+        if snapshot_id:
+            root_vol = BlockDeviceType(snapshot_id=snapshot_id)
+            block_device_map = BlockDeviceMapping()
+            block_device_map[root_device_name] = root_vol
+        if block_device_map:
+            block_device_map.ec2_build_list_params(params)
+        if dry_run:
+            params['DryRun'] = 'true'
+        if virtualization_type:
+            params['VirtualizationType'] = virtualization_type
+        if sriov_net_support:
+            params['SriovNetSupport'] = sriov_net_support
+
+
+        rs = self.ec2.get_object('RegisterImage', params,
+                                 ResultSet, verb='POST')
+        image_id = getattr(rs, 'imageId', None)
+        return image_id
+
+
 
     def create_image(self, instance, name, description=None, no_reboot=False, block_device_mapping=None, dry_run=False,
                      timeout=600):
