@@ -1932,6 +1932,7 @@ disable_root: false"""
     @Eutester.printinfo
     def get_images(self,
                 emi=None,
+                name=None,
                 root_device_type=None,
                 root_device_name=None,
                 virtualization_type=None,
@@ -1967,6 +1968,8 @@ disable_root: false"""
             filters = {}
             if emi:
                 filters['image-id'] = emi
+            if name:
+                filters['name'] = name
             if root_device_type:
                 filters['root-device-type'] = root_device_type
             if root_device_name:
@@ -2001,7 +2004,9 @@ disable_root: false"""
             if (state is not None) and (image.state != state):
                 continue            
             if (location is not None) and (not re.search( location, image.location)):
-                continue           
+                continue
+            if (name is not None) and (image.name != name):
+                continue
             if (arch is not None) and (image.architecture != arch):
                 continue                
             if (owner_id is not None) and (image.owner_id != owner_id):
@@ -2029,6 +2034,7 @@ disable_root: false"""
 
     def get_emi(self,
                    emi=None,
+                   name=None,
                    root_device_type=None,
                    root_device_name=None,
                    location=None,
@@ -2055,6 +2061,7 @@ disable_root: false"""
         :raise: Exception if image is not found
         """
         return self.get_images(emi=emi,
+                               name=name,
                                root_device_type=root_device_type,
                                root_device_name=root_device_name,
                                location=location,

@@ -34,6 +34,7 @@ from eucaops import Eucaops
 import re
 import time
 import httplib
+import lxml.objectify
 import sys
 from eutester.eutestcase import EutesterTestCase
 from eutester.sshconnection import SshCbReturn
@@ -167,8 +168,9 @@ class ImageUtils(EutesterTestCase):
                                   retryconn=retryconn,
                                   timeout=timeout)
         return size
-    
-    def get_manifest_part_count(self, path, machine=None, timeout=30):
+
+
+    def get_manifest_obj(self, path, machine=None, timeout=30):
         machine = machine or self.worker_machine
         cmd = 'cat ' + str(path)
         out = machine.cmd(cmd, timeout=timeout, verbose=False)
@@ -176,13 +178,19 @@ class ImageUtils(EutesterTestCase):
             raise Exception('get_manifest_part_count failed, cmd status:' +
                             str(out['status']))
         output = out['output']
-        tag = re.search('<parts\s+count="\d+\">', output)
-        part_count = re.search("\d+", tag.group()).group()
+        xml = lxml.objectify.fromstring(output)
+        return xml
+
+    def get_manifest_part_count(self, path, machine=None, timeout=30):
+        manifest_xml = self.get_manifest_obj(path=path,
+                                             machine=machine,
+                                             timeout=timeout)
+        part_count = manifest_xml.image.parts.get('count')
         self.debug('get_manifest_part_count:' + str(path) +
                    ', count:' + str(part_count))
-        return part_count
+        return int(part_count)
     
-    def bundle_image(self,
+    def euca2ools_bundle_image(self,
                      path,
                      machine=None,
                      machine_credpath=None,
@@ -241,7 +249,7 @@ class ImageUtils(EutesterTestCase):
                   str(skey) + str(cmdargs)
         #execute the command  
         out = machine.cmd(cmd, timeout=timeout, listformat=True,
-                          cb = self.bundle_status_cb, cbargs=cbargs)
+                          cb = self._bundle_status_cb, cbargs=cbargs)
         if out['status'] != 0:
             raise Exception('bundle_image "' + str(path) +
                             '" failed. Errcode:' + str(out['status']))
@@ -257,7 +265,7 @@ class ImageUtils(EutesterTestCase):
         self.debug('bundle_image:'+str(path)+'. manifest:'+str(manifest))
         return manifest
     
-    def upload_bundle(self, 
+    def euca2ools_upload_bundle(self,
                       manifest, 
                       machine=None,
                       bucketname=None, 
@@ -309,7 +317,7 @@ class ImageUtils(EutesterTestCase):
                   str(skey) + str(cmdargs)
         #execute upload-bundle command...
         out = machine.cmd(cmd, timeout=image_check_timeout, listformat=True,
-                          cb=self.bundle_status_cb, cbargs=cbargs)
+                          cb=self._bundle_status_cb, cbargs=cbargs)
         if out['status'] != 0:
             raise Exception('upload_bundle "' + str(manifest) +
                             '" failed. Errcode:' + str(out['status']))
@@ -323,6 +331,59 @@ class ImageUtils(EutesterTestCase):
                             'upload_bundle command')
         self.debug('upload_image:'+str(manifest)+'. manifest:'+str(upmanifest))
         return upmanifest
+
+    def euca2ools_register(self,
+                           manifest,
+                           name,
+                           description=None,
+                           arch=None,
+                           kernel=None,
+                           ramdisk=None,
+                           root_device_name=None,
+                           snapshot_id=None,
+                           block_dev_map=[],
+                           virtualization_type=None,
+                           platform=None,
+                           machine=None,
+                           machine_credpath=None):
+        machine = machine or self.worker_machine
+        credpath = machine_credpath or self.credpath
+        cmdargs = str(manifest) + " -n " + str(name)
+        emi = None
+        if description:
+            cmdargs += ' -d ' + str(description)
+        if arch:
+            cmdargs += ' -a ' + str(arch)
+        if kernel:
+            cmdargs += ' --kernel ' + str(kernel)
+        if ramdisk:
+            cmdargs += ' --ramdisk ' + str(ramdisk)
+        if root_device_name:
+            cmdargs += ' --root-device-name ' + str(root_device_name)
+        if snapshot_id:
+            cmdargs += ' -s ' + str(snapshot_id)
+        for dev in block_dev_map:
+            cmdargs += ' -b ' + str(dev)
+        if virtualization_type:
+            cmdargs += ' --virtualization-type ' + str(virtualization_type)
+        if platform:
+            cmdargs += ' --platform ' + str(platform)
+
+        if credpath is not None:
+            cmd = 'source ' + str(credpath) + '/eucarc && euca-register '\
+                  + str(cmdargs)
+        else:
+            skey = self.tester.get_secret_key()
+            akey = self.tester.get_access_key()
+            cmd = ('euca-upload-register -a ' + str(akey) +
+                   ' -s ' + str(skey) + str(cmdargs))
+        out = machine.sys(cmd=cmd, code=0)
+        for line in out:
+            if re.search('IMAGE',line):
+                emi = line.split().pop().strip()
+        assert emi, 'Invalid emi value: "' + str(emi) + '"'
+
+
 
     def _generate_unique_bucket_name_from_manifest(self,manifest, unique=True):
         mlist = str(manifest.replace('.manifest.xml', '')).split('/')
@@ -353,7 +414,7 @@ class ImageUtils(EutesterTestCase):
             self.worker_machine.sys('mkdir -p ' + path, code=0)
 
 
-    def bundle_status_cb(self, buf, cmdtimeout, parttimeout, starttime,
+    def _bundle_status_cb(self, buf, cmdtimeout, parttimeout, starttime,
                          lasttime, check_image_stage):
         ret = SshCbReturn(stop=False)
         #if the over timeout or the callback interval has expired,
@@ -388,11 +449,9 @@ class ImageUtils(EutesterTestCase):
         #Command is still going, reset timer thread to intervaltimeout,
         # provide arguments for  next time this is called from ssh cmd.
         ret.stop = False
-        
         ret.nextargs =[cmdtimeout, parttimeout, starttime,
                        time.time(), check_image_stage]
         return ret
-
 
     def create_emi(self,
                     url,
@@ -404,7 +463,7 @@ class ImageUtils(EutesterTestCase):
                     kernel=None,
                     ramdisk=None,
                     architecture=None,
-                    block_device_mapping=None,
+                    block_device_mapping=[],
                     destpath=None,
                     root_device_name=None,
                     description=None,
@@ -424,8 +483,8 @@ class ImageUtils(EutesterTestCase):
                     tagname=None,
                     overwrite=False
                     ):
-        
         start = time.time()
+        filesize = None
         destpath = destpath or self.destpath
         destpath = str(destpath)
         if not destpath.endswith('/'):
@@ -453,7 +512,7 @@ class ImageUtils(EutesterTestCase):
         self.status('create_emi_from_url: Image downloaded to machine, '
                     'now bundling image...')
         if bundle_manifest is None and upload_manifest is None:
-            bundle_manifest = self.bundle_image(
+            bundle_manifest = self.euca2ools_bundle_image(
                 filepath,
                 machine=machine,
                 machine_credpath=machine_credpath,
@@ -468,7 +527,7 @@ class ImageUtils(EutesterTestCase):
         
         self.status('create_emi_from_url: Image bundled, now uploading...')
         if upload_manifest is None:
-            upload_manifest = self.upload_bundle(
+            upload_manifest = self.euca2ools_upload_bundle(
                 bundle_manifest,
                 machine=machine,
                 bucketname=bucketname,
@@ -479,24 +538,36 @@ class ImageUtils(EutesterTestCase):
                 uniquebucket=uniquebucket)
         
         self.status('create_emi_from_url: Now registering...')
-        emi = self.tester.register_image(
-            image_location=upload_manifest,
-            root_device_name=root_device_name,
-            description=description,
-            virtualization_type=virtualization_type,
-            platform=platform,
-            bdmdev=block_device_mapping,
+        if name is None:
+            name = upload_manifest.split('/').pop().rstrip('manifest.xml')
+            name = "".join(re.findall(r"\w", name))
+            name += '-' + str(int(time.time()))
+        try:
+            self.tester.get_emi(name='name')
+        except:
+            name += 'X'
+        emi = self.euca2ools_register(
+            manifest=upload_manifest,
             name=name,
-            architecture=architecture,
+            description=description,
+            arch=architecture,
+            kernel=kernel,
             ramdisk=ramdisk,
-            kernel=kernel)
-        #get Boto image
+            root_device_name=root_device_name,
+            block_dev_map=block_device_mapping,
+            virtualization_type=virtualization_type,
+            platform=platform)
+        self.debug('euca2ools_register returned: ' + str(emi))
+
+        #Verify emi exists on the system, and convert to boto obj...
         emi = self.tester.get_emi(emi)
 
         #Add tags that might have test use meaning...
         try:
-            emi.add_tag('size', value= str(filesize))
-            emi.add_tag('source', value=(str(url)))
+            if filesize is not None:
+                emi.add_tag('size', value= str(filesize))
+            if url:
+                emi.add_tag('source', value=(str(url)))
             emi.add_tag(tagname or 'eutester-created')
         except Exception, te:
             self.debug('Could not add tags to image:' + str(emi.id) +
