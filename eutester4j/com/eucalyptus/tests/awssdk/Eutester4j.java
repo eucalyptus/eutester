@@ -441,8 +441,9 @@ class Eutester4j {
                         new Filter().withName("image-type").withValues(
                                 "machine"),
                         new Filter().withName("root-device-type").withValues(
-                                "instance-store")));
-
+                                "instance-store"),
+                        new Filter().withName("is-public").withValues(
+                                "true")));
         assertThat(imagesResult.getImages().size() > 0, "Image not found");
 
         final String imageId = imagesResult.getImages().get(0).getImageId();

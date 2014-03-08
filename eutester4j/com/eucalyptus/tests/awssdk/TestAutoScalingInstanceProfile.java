@@ -25,9 +25,7 @@ import com.amazonaws.services.ec2.model.DescribeInstancesRequest;
 import com.amazonaws.services.ec2.model.DescribeInstancesResult;
 import com.amazonaws.services.ec2.model.IamInstanceProfile;
 import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
-import com.amazonaws.services.identitymanagement.model.CreateInstanceProfileRequest;
-import com.amazonaws.services.identitymanagement.model.CreateInstanceProfileResult;
-import com.amazonaws.services.identitymanagement.model.DeleteInstanceProfileRequest;
+import com.amazonaws.services.identitymanagement.model.*;
 import org.testng.annotations.Test;
 
 import java.util.ArrayList;
@@ -52,12 +50,38 @@ public class TestAutoScalingInstanceProfile {
         getCloudInfo();
         final List<Runnable> cleanupTasks = new ArrayList<Runnable>();
         try {
+            // Create role
+            final String roleName = NAME_PREFIX + "RoleTest";
+            print("Creating role: " + roleName);
+            youAre.createRole(new CreateRoleRequest()
+                    .withRoleName(roleName)
+                    .withPath("/path")
+                    .withAssumeRolePolicyDocument(
+                            "{\n" +
+                                    "    \"Statement\": [ {\n" +
+                                    "      \"Effect\": \"Allow\",\n" +
+                                    "      \"Principal\": {\n" +
+                                    "         \"Service\": [ \"ec2.amazonaws.com\" ]\n" +
+                                    "      },\n" +
+                                    "      \"Action\": [ \"sts:AssumeRole\" ]\n" +  // Mixed case action
+                                    "    } ]\n" +
+                                    "}"));
+            cleanupTasks.add(new Runnable() {
+                @Override
+                public void run() {
+                    print("Deleting role: " + roleName);
+                    youAre.deleteRole(new DeleteRoleRequest()
+                            .withRoleName(roleName));
+                }
+            });
+
             // Create IAM instance profile
             final String instanceProfileName = NAME_PREFIX + "IamInstanceProfileTest";
             print("Creating instance profile: " + instanceProfileName);
             final CreateInstanceProfileResult instanceProfileResult =
                     youAre.createInstanceProfile(new CreateInstanceProfileRequest()
                             .withInstanceProfileName(instanceProfileName));
+                    youAre.addRoleToInstanceProfile(new AddRoleToInstanceProfileRequest().withRoleName(roleName).withInstanceProfileName(instanceProfileName));
             cleanupTasks.add(new Runnable() {
                 @Override
                 public void run() {
