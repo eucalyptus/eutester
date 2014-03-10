@@ -91,9 +91,11 @@ class BucketTestSuite(EutesterTestCase):
             if should_fail:
                 self.fail("Should have caught exception for bad bucket name: " + bad_bucket)
         
-        for bad_bucket in ["bucket123/", "bucket..123", "bucket&123", "bucket*123", "/bucket123", "bucket.", ".bucket"]:
+        for bad_bucket in ["bucket123/", "bucket..123", "bucket&123", "bucket*123",  "bucket."]:
             test_creating_bucket_invalid_names(self.bucket_prefix + bad_bucket)
 
+        for bad_bucket in ["/bucket123", ".bucket"]:
+            test_creating_bucket_invalid_names(bad_bucket + "-" + self.bucket_prefix)
 
         """
         Test creating bucket with null name
