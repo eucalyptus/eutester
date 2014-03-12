@@ -86,7 +86,7 @@ public class TestAutoScalingMetricsSubmission {
             );
 
             // Enable single metric
-            print("Enabling GroupMinSize metric for group: " + groupName);
+            print("Enabling GroupMaxSize metric for group: " + groupName);
             as.enableMetricsCollection(new EnableMetricsCollectionRequest()
                     .withAutoScalingGroupName(groupName)
                     .withMetrics("GroupMaxSize")

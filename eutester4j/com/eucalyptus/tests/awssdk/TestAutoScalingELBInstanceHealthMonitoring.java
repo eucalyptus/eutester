@@ -19,10 +19,8 @@
  ************************************************************************/
 package com.eucalyptus.tests.awssdk;
 
-import com.amazonaws.services.autoscaling.model.CreateAutoScalingGroupRequest;
-import com.amazonaws.services.autoscaling.model.CreateLaunchConfigurationRequest;
-import com.amazonaws.services.autoscaling.model.DeleteLaunchConfigurationRequest;
-import com.amazonaws.services.autoscaling.model.SetDesiredCapacityRequest;
+import com.amazonaws.AmazonServiceException;
+import com.amazonaws.services.autoscaling.model.*;
 import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
 import com.amazonaws.services.elasticloadbalancing.model.ConfigureHealthCheckRequest;
 import com.amazonaws.services.elasticloadbalancing.model.HealthCheck;
@@ -149,6 +147,22 @@ public class TestAutoScalingELBInstanceHealthMonitoring {
             final String replacementInstanceId = (String) waitForInstances(timeout, 1, groupName,true).get(0);
             assertThat(!replacementInstanceId.equals(instanceId), "Instance not replaced");
 
+            // Set desired capacity below minimum exception expected
+            print("Setting desired capacity to 0 (below minimum should fail) for group: " + groupName);
+            try {
+                as.setDesiredCapacity(new SetDesiredCapacityRequest()
+                        .withAutoScalingGroupName(groupName)
+                        .withDesiredCapacity(0));
+                assertThat(false, "Setting Desired Capacity below min should fail");
+            } catch (AmazonServiceException e) {
+                print("Expected error returned: " + e);
+            }
+
+            // Set desired minimum size to zero
+            as.updateAutoScalingGroup(new UpdateAutoScalingGroupRequest()
+                    .withAutoScalingGroupName(groupName)
+                    .withMinSize(0));
+            print("Changed Minimum size to Zero");
             // Set desired capacity to zero
             print("Setting desired capacity to 0 for group: " + groupName);
             as.setDesiredCapacity(new SetDesiredCapacityRequest()
