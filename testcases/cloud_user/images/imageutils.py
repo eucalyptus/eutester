@@ -107,8 +107,6 @@ class ImageUtils(EutesterTestCase):
                                   password=self.worker_password,
                                   keypath=self.worker_keypath)
             return new_machine
-        raise Exception('Could not get a machine to perform image '
-                        'utility work?')
 
     def getHttpHeader(self, url):
         url = url.replace('http://', '')
@@ -149,8 +147,15 @@ class ImageUtils(EutesterTestCase):
                     conn.close()
             return rfsize
 
-    def wget_image(self, url, destpath=None, machine=None, user=None,
-                   password=None, retryconn=True, time_per_gig=300):
+    def wget_image(self,
+                   url,
+                   destpath=None,
+                   dest_file_name=None,
+                   machine=None,
+                   user=None,
+                   password=None,
+                   retryconn=True,
+                   time_per_gig=300):
         machine = machine or self.worker_machine
         if destpath is None and self.destpath is not None:
             destpath = self.destpath
@@ -163,6 +168,7 @@ class ImageUtils(EutesterTestCase):
                    str(destpath) + ' on machine:' + str(machine.hostname))
         machine.wget_remote_image(url,
                                   path=destpath,
+                                  dest_file_name=dest_file_name,
                                   user=user,
                                   password=password,
                                   retryconn=retryconn,
@@ -264,7 +270,7 @@ class ImageUtils(EutesterTestCase):
                             str(path))
         self.debug('bundle_image:'+str(path)+'. manifest:'+str(manifest))
         return manifest
-    
+
     def euca2ools_upload_bundle(self,
                       manifest, 
                       machine=None,
@@ -332,6 +338,22 @@ class ImageUtils(EutesterTestCase):
         self.debug('upload_image:'+str(manifest)+'. manifest:'+str(upmanifest))
         return upmanifest
 
+    def euca2ools_bundle_and_upload(self,
+                                    file,
+                                    arch,
+                                    bucket,
+                                    prefix=None,
+                                    directory=None,
+                                    kernel=None,
+                                    ramdisk=None,
+                                    block_device_map=[],
+                                    product_codes=None,
+                                    acl=None,
+                                    location=None,
+                                    ):
+        raise NotImplemented('euca2ools_bundle_and_upload wrapper '
+                             'not implemented yet')
+
     def euca2ools_register(self,
                            manifest,
                            name,
@@ -383,7 +405,24 @@ class ImageUtils(EutesterTestCase):
                 emi = line.split().pop().strip()
         assert emi, 'Invalid emi value: "' + str(emi) + '"'
 
+    def euca2ools_download_bundle(self,
+                                  bucket,
+                                  manifest=None,
+                                  prefix=None,
+                                  directory=None,
+                                  ):
+        raise NotImplemented('euca2ools_download_bundle wrapper '
+                             'not implemented yet')
 
+    def euca2ools_download_and_unbundle(self,
+                                        bucket,
+                                        manifest=None,
+                                        prefix=None,
+                                        directory=None,
+                                        maxbytes=None,
+                                        ):
+        raise NotImplemented('euca2ools_download_and_unbundle wrapper'
+                             ' not implemented yet')
 
     def _generate_unique_bucket_name_from_manifest(self,manifest, unique=True):
         mlist = str(manifest.replace('.manifest.xml', '')).split('/')
@@ -576,4 +615,4 @@ class ImageUtils(EutesterTestCase):
         self.status('create_emi_from_url: Done, image registered as:' +
                     str(emi.id) + ", after " + str(elapsed) + " seconds")
         return emi
-    
+
