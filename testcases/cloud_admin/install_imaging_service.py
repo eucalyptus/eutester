@@ -130,7 +130,7 @@ class ConfigureImagingService(EutesterTestCase):
         eucalyptus imaging service.
         """
         self.clc.add_repo(url=self.args.img_repo, name="EucaImagingService")
-        self.clc.install("eucalyptus-imaging-worker")
+        self.clc.install("eucalyptus-imaging-worker", nogpg=True)
         self.clc.sys("source " + self.tester.credpath  + "/eucarc && euca-install-image-worker --install-default" , code=0)
 
 if __name__ == "__main__":
