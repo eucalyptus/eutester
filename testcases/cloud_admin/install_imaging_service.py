@@ -21,14 +21,15 @@ class ConfigureImagingService(EutesterTestCase):
         self.parser.add_argument("--base-url", dest='base_url',
                                  default='http://packages.release.'
                                          'eucalyptus-systems.com/yum/builds/'
-                                         'imaging-worker/commit/',
+                                         'imaging-worker-image/commit/',
                                  help='baseurl used to find most recent commit'
                                       'from')
         self.parser.add_argument("--distro", default='centos',
                                  help='Distro name in base_url lookup if used')
         self.get_args()
         # Setup basic eutester object
-        self.tester = Eucaops( config_file=self.args.config,password=self.args.password)
+        self.tester = Eucaops(config_file=self.args.config,
+                              password=self.args.password)
         clcs = self.tester.get_component_machines("clc")
         if len(clcs) == 0:
             raise Exception("Unable to find a CLC")
@@ -130,8 +131,8 @@ class ConfigureImagingService(EutesterTestCase):
         eucalyptus imaging service.
         """
         self.clc.add_repo(url=self.args.img_repo, name="EucaImagingService")
-        self.clc.install("eucalyptus-imaging-worker", nogpg=True)
-        self.clc.sys("source " + self.tester.credpath  + "/eucarc && euca-install-image-worker --install-default" , code=0)
+        self.clc.install("eucalyptus-imaging-worker-image", nogpg=True)
+        self.clc.sys("source " + self.tester.credpath  + "/eucarc && euca-install-imaging-worker --install-default" , code=0)
 
 if __name__ == "__main__":
     testcase = ConfigureImagingService()
