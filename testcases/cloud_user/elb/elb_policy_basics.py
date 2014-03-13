@@ -58,7 +58,7 @@ class LoadBalancerPolicy(EutesterTestCase):
         zones = self.tester.ec2.get_all_zones()
         self.zone = random.choice(zones).name
         self.load_balancer_port = 80
-        self.lb_name="test-" + str(time.time())
+        self.lb_name="test-" + str(int(time.time()))
         self.load_balancer = self.tester.create_load_balancer(zones=[self.zone],
                                                               name=self.lb_name,
                                                               load_balancer_port=self.load_balancer_port)

@@ -45,8 +45,8 @@ class CloudWatchBasics(EutesterTestCase):
 
 
     def clean_method(self):
-        self.tester.cleanup_artifacts()
         self.cleanUpAutoscaling()
+        self.tester.cleanup_artifacts()
         self.tester.delete_keypair(self.keypair)
         pass
 

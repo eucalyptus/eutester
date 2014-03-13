@@ -540,11 +540,20 @@ class Machine:
                 return True
         return False   
     
-    def wget_remote_image(self, url,path=None, user=None, password=None, retryconn=True, timeout=300):
+    def wget_remote_image(self,
+                          url,
+                          path=None,
+                          dest_file_name=None,
+                          user=None,
+                          password=None,
+                          retryconn=True,
+                          timeout=300):
         self.debug('wget_remote_image, url:'+str(url)+", path:"+str(path))
         cmd = 'wget '
         if path:
             cmd = cmd + " -P " + str(path)
+        if dest_file_name:
+            cmd = cmd + " -O " + str(dest_file_name)
         if user:
             cmd = cmd + " --user " + str(user)
         if password:
