@@ -34,7 +34,7 @@ from eucaops import Eucaops
 import re
 import time
 import httplib
-import lxml.objectify
+from xml.etree import ElementTree
 import sys
 from eutester.eutestcase import EutesterTestCase
 from eutester.sshconnection import SshCbReturn
@@ -184,14 +184,17 @@ class ImageUtils(EutesterTestCase):
             raise Exception('get_manifest_part_count failed, cmd status:' +
                             str(out['status']))
         output = out['output']
-        xml = lxml.objectify.fromstring(output)
-        return xml
+        xml = ElementTree.fromstring(output)
+        root = xml.getroot()
+        return root
 
     def get_manifest_part_count(self, path, machine=None, timeout=30):
         manifest_xml = self.get_manifest_obj(path=path,
                                              machine=machine,
                                              timeout=timeout)
-        part_count = manifest_xml.image.parts.get('count')
+        image = manifest_xml.find('image')
+        parts = image.find('parts')
+        part_count = parts.get('count')
         self.debug('get_manifest_part_count:' + str(path) +
                    ', count:' + str(part_count))
         return int(part_count)
