@@ -77,6 +77,8 @@ import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 import java.io.File;
+import java.net.URI;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -89,7 +91,11 @@ import static com.eucalyptus.tests.awssdk.Eutester4j.s3;
 import static com.eucalyptus.tests.awssdk.Eutester4j.testInfo;
 import static org.testng.AssertJUnit.assertTrue;
 
-/*
+/**
+ * These tests are basic Multipart Upload tests. The documentation for the SDK and MPU are available here -
+ * http://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMPDotJavaAPI.html
+ *
+ * These tests currently leverage the Low-Level Java API only for more fine-grained control and debugging.
  *
  */
 public class S3MultiPartUploadTest {
@@ -151,7 +157,8 @@ public class S3MultiPartUploadTest {
         testInfo(this.getClass().getSimpleName() + " - basicMultiPartUpload");
         try {
             final String key = eucaUUID();
-            File fileToPut = new File("zerofile");
+            URL resPath = this.getClass().getClassLoader().getResource("zerofile");
+            File fileToPut = new File(resPath.toURI());
             print("using multi-part-upload to create file with key - " + key + " in bucket - " + bucketName);
             List<PartETag> partETags = Lists.newArrayList();
 
@@ -216,7 +223,8 @@ public class S3MultiPartUploadTest {
         boolean tryingBadId = false;
         try {
             final String key = eucaUUID();
-            File fileToPut = new File("zerofile");
+            URL resPath = this.getClass().getClassLoader().getResource("zerofile");
+            File fileToPut = new File(resPath.toURI());
             print("using multi-part-upload to create file with key - " + key + " in bucket - " + bucketName);
             List<PartETag> partETags = Lists.newArrayList();
 
