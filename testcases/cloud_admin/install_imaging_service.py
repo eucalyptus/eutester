@@ -68,9 +68,10 @@ class ConfigureImagingService(EutesterTestCase):
         first_clc = clcs[0]
         assert isinstance(first_clc, Machine)
         self.clc = first_clc
-        self.set_repo()
         if self.args.distro is None:
             self.args.distro = self.tester.clc.distro.name
+        self.set_repo()
+
 
 
 
@@ -181,6 +182,8 @@ class ConfigureImagingService(EutesterTestCase):
         self._rsyslog_write_value(machine, '$UDPServerAddress',
                                  '\$UDPServerAddress 0.0.0.0', conf)
         machine.sys('service rsyslog restart', code=0)
+        machine.sys('iptables -I INPUT -p udp --dport ' +
+                    str(self.args.log_server_port) + ' -j ACCEPT', code=0)
         time.sleep(5)
         #Log a message to the server.
         log = logging.getLogger('imaging_setup')
