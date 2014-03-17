@@ -48,6 +48,7 @@
         <mkdir dir="${classes.dir}"/>
         <javac includeantruntime="false" srcdir="${src.dir}" destdir="${classes.dir}" classpathref="classpath"/>
         <copy file="log4j.properties" todir="${classes.dir}"/>
+        <gunzip src="zerofile.gz" dest="${classes.dir}" />
     </target>
 
     <!-- compile all and run tests per AllTestsSuite.xml -->
