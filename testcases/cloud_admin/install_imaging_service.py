@@ -4,6 +4,7 @@ from eucaops import Eucaops
 from eutester.eutestcase import EutesterTestCase
 from eutester.machine import Machine
 from eutester.sshconnection import CommandExitCodeException
+import os
 import re
 import requests
 from argparse import ArgumentError
@@ -217,7 +218,8 @@ class ConfigureImagingService(EutesterTestCase):
         """
         self.clc.add_repo(url=self.args.img_repo, name="EucaImagingService")
         self.clc.install("eucalyptus-imaging-worker-image", nogpg=True)
-        self.clc.sys("export EUCALYPTUS=" + self.tester.eucapath + " && source " + self.tester.credpath  + "/eucarc && euca-install-imaging-worker --install-default" , code=0)
+        sbin_path = os.path.join(self.tester.eucapath, 'usr/sbin')
+        self.clc.sys("export PATH=$PATH:" + sbin_path + " && source " + self.tester.credpath  + "/eucarc && euca-install-imaging-worker --install-default" , code=0)
         self.tester.property_manager.show_all_imaging_properties()
 
 
