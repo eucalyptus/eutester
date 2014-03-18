@@ -103,7 +103,7 @@ class InstanceBasics(EutesterTestCase):
                 self.assertFalse(instance.found("ls -1 " + paravirtual_ephemeral,  "No such file or directory"),
                                  "Did not find ephemeral storage at " + paravirtual_ephemeral)
             elif self.image.virtualization_type == "hvm":
-                hvm_ephemeral = "/dev/" + instance.block_device_prefix
+                hvm_ephemeral = "/dev/" + instance.block_device_prefix + "b"
                 self.assertFalse(instance.found("ls -1 " + hvm_ephemeral,  "No such file or directory"),
                                  "Did not find ephemeral storage at " + hvm_ephemeral)
         self.set_reservation(reservation)
