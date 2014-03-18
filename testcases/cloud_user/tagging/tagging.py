@@ -215,11 +215,14 @@ class TaggingBasics(EutesterTestCase):
         """
         This case was developed to exercise tagging of an instance resource
         """
-        tags = { u'name': 'image-tag-test', u'location' : 'over there'}
+        nametag = u'ImageTaggingName'
+        locationtag =  u'ImageTaggingLocation'
+        tags = { nametag: 'image-tag-test', locationtag : 'over there'}
+        orig_image_tags = self.image.tags
         self.tester.create_tags([self.image.id], tags)
 
         ### Test Tag Filtering , u'tag:location' : 'over there'
-        tag_filter = { u'tag:name': 'image-tag-test'}
+        tag_filter = { u'tag:'+nametag: 'image-tag-test'}
         images = self.tester.ec2.get_all_images(filters=tag_filter)
         if len(images) != 1:
             raise Exception('Filter for instances returned too many results')
@@ -244,17 +247,18 @@ class TaggingBasics(EutesterTestCase):
         self.tester.deregister_image(filter_image)
 
         if len(description_match) != 1:
-            raise Exception("Non-tag Filtering of volumes by size: " + str(len(description_match))  + " expected: 1")
+            raise Exception("Non-tag Filtering of volumes by size: " + str(len(description_match)) + " expected: 1")
         if len(location_match) != 2:
-            raise Exception("Non-tag Filtering of volumes by zone: " + str(len(location_match))  + " expected: 2")
+            raise Exception("Non-tag Filtering of volumes by zone: " + str(len(location_match)) + " expected: 2")
 
         ### Test Deletion
         self.tester.delete_tags([self.image.id], tags)
         images = self.tester.ec2.get_all_images(filters=tag_filter)
         if len(images) != 0:
-            raise Exception('Filter returned volumes when there shouldnt be any')
-        if self.image.tags != {}:
-            raise Exception('Tags still returned after deleting them from image: ' + str(self.image.tags) )
+            raise Exception('Filter returned images when there shouldnt be any')
+        for tag in tags:
+            if tag in self.image.tags:
+                raise Exception('Tags still returned after deleting them from image: ' + str(self.image.tags))
         #self.test_restrictions(self.image)
         #self.test_in_series(self.image)
 
