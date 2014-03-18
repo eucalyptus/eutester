@@ -304,10 +304,16 @@ class Install(EutesterTestCase):
             public_ips = self.tester.config["managed_ips"]
         else:
             raise Exception("Unable to find public ips. Please provide them with --vnet-public-ips")
+        ip_list = public_ips.split()
+        if len(ip_list) > 1:
+            ### individual ips were passed
+            public_ips = ip_list
+        else:
+            public_ips = [public_ips]
 
         network_config = {"InstanceDnsDomain": "eucalyptus.internal",
                           "InstanceDnsServers": [enabled_clc.hostname],
-                          "PublicIps": [public_ips],
+                          "PublicIps": public_ips,
                           "Subnets": [],
                           "Clusters": [{"Name": "PARTI00",
                                         "MacPrefix": "d0:0d",
