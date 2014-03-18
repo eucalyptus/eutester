@@ -407,6 +407,8 @@ class ImageUtils(EutesterTestCase):
             if re.search('IMAGE',line):
                 emi = line.split().pop().strip()
         assert emi, 'Invalid emi value: "' + str(emi) + '"'
+        self.tester.test_resources["images"].append(self.tester.ec2.get_all_images([emi])[0])
+        return emi
 
     def euca2ools_download_bundle(self,
                                   bucket,

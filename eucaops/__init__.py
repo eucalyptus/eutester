@@ -515,12 +515,13 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
                 machines.append(cloud_machine)
                 
             ### LOOK for network mode in config file if not found then set it unknown
-            try:
-                if re.search("^network",line, re.IGNORECASE):
-                    config_hash["network"] = line.split()[1].lower()
-            except:
-                self.debug("Could not find network type setting to unknown")
-                config_hash["network"] = "unknown"
+            for param in ["network", "managed_ips", "subnet_ip"]:
+                try:
+                    if re.search("^" + param + ".*$", line, re.IGNORECASE):
+                        config_hash[param] = line.split()[1].lower()
+                except:
+                    self.debug("Could not find " + param + " type setting to None")
+                    config_hash[param] = None
         #f.close()   
         config_hash["machines"] = machines 
         return config_hash

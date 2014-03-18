@@ -94,7 +94,7 @@ class EbsTestSuite(EutesterTestCase):
         if emi:
             self.image = self.tester.get_emi(emi=emi)
         else:
-            self.image = self.tester.get_emi(root_device_type=root_device_type, not_location='windows')
+            self.image = self.tester.get_emi(root_device_type=root_device_type)
         self.vmtype = vmtype
         self.zone = None
         self.waitconnect=int(waitconnect)
