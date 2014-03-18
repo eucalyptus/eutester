@@ -71,21 +71,25 @@ if not testcase.args.upload_manifest and not testcase.args.bundle_manifest:
     if (not testcase.args.url and not testcase.args.filepath) or (testcase.args.url and testcase.args.filepath):
         raise Exception('If manifest not provieded, either a URL or FILE path is required to create image ')
 
-#Set kernel to 'windows'. This result in the platform type resulting in 'windows' after registration.
-#if str(testcase.args.image_type).lower() == "windows":
-#    testcase.args.kernel = "windows"
+def make_image_public():
+    emi = image_utils.tester.test_resources['images'][0]
+    emi.set_launch_permissions(group_names=['all'])
+    testcase.debug('\n---------------------------\nCreated EMI:' + str(emi) +'\n---------------------------')
+
 
 #Create an ImageUtils helper from the arguments provided in this testcase...
 image_utils = testcase.do_with_args(ImageUtils)
 
 #Create a single testcase to wrap and run the EMI creation task. Note by default all the overlapping args from
 # this testcase are fed to the testunit method when ran.
-test = testcase.create_testunit_from_method(image_utils.create_emi)
-testcase.run_test_case_list([test], eof=True, clean_on_exit=False, printresults=True)
+test1 = testcase.create_testunit_from_method(image_utils.create_emi)
+test2 = testcase.create_testunit_from_method(make_image_public)
+
+testcase.run_test_case_list([test1, test2], eof=True, clean_on_exit=False, printresults=True)
 
 #By default created resources are stored in the eucaops/tester object's test_resources dict. See if our image is
 #prsent. If so print it out...
 if image_utils.tester.test_resources['images']:
-    emi = image_utils.tester.test_resources['images'].pop()
+    emi = image_utils.tester.test_resources['images'][0]
     testcase.debug('\n---------------------------\nCreated EMI:' + str(emi) +'\n---------------------------')
 
