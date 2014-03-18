@@ -3,13 +3,19 @@
 from eucaops import Eucaops
 from eutester.eutestcase import EutesterTestCase
 from eutester.machine import Machine
+from eutester.sshconnection import CommandExitCodeException
+import os
 import re
-import lxml.objectify
 import requests
 from argparse import ArgumentError
+from BeautifulSoup import BeautifulSoup
+from logging.handlers import SysLogHandler
 from requests import HTTPError
 import time
 import datetime
+import logging
+import socket
+
 
 class ConfigureImagingService(EutesterTestCase):
     def __init__(self):
@@ -21,21 +27,54 @@ class ConfigureImagingService(EutesterTestCase):
         self.parser.add_argument("--base-url", dest='base_url',
                                  default='http://packages.release.'
                                          'eucalyptus-systems.com/yum/builds/'
-                                         'imaging-worker/commit/',
+                                         'imaging-worker-image/commit/',
                                  help='baseurl used to find most recent commit'
                                       'from')
-        self.parser.add_argument("--distro", default='centos',
+        self.parser.add_argument("--distro", default=None,
                                  help='Distro name in base_url lookup if used')
+        self.parser.add_argument("--worker-keyname", dest='worker_keyname',
+                                 default='qa_worker_key',
+                                 help='Name used for keypair property. Test '
+                                      'will attempt to create the key if it is '
+                                      'not found on the system')
+        self.parser.add_argument('--ntp-server', dest='ntp_server',
+                                 default='0.centos.pool.ntp.org',
+                                 help='Worker ntp property string')
+        self.parser.add_argument('--zones', default=None,
+                                 help='Availability zones imaging service '
+                                      'property')
+        self.parser.add_argument('--log-server-port', dest='log_server_port',
+                                 default=514,
+                                 help='log server port for imaging property')
+        self.parser.add_argument('--log-server', dest='log_server',
+                                 default=None,
+                                 help='log server host for imaging property')
+        self.parser.add_argument('--task-expiration-hours',
+                                 dest='task_expiration_hours',
+                                 default=None,
+                                 help='task expiration hours for'
+                                      ' imaging property')
+        self.parser.add_argument('--worker-vmtype', dest='worker_vmtype',
+                                 default=None,
+                                 help='worker instance type used for'
+                                      ' imaging property')
+
         self.get_args()
         # Setup basic eutester object
-        self.tester = Eucaops( config_file=self.args.config,password=self.args.password)
+        self.tester = Eucaops(config_file=self.args.config,
+                              password=self.args.password)
         clcs = self.tester.get_component_machines("clc")
         if len(clcs) == 0:
             raise Exception("Unable to find a CLC")
         first_clc = clcs[0]
-        assert isinstance(first_clc,Machine)
+        assert isinstance(first_clc, Machine)
         self.clc = first_clc
+        if self.args.distro is None:
+            self.args.distro = self.tester.clc.distro.name
         self.set_repo()
+
+
+
 
     def clean_method(self):
         pass
@@ -115,29 +154,121 @@ class ConfigureImagingService(EutesterTestCase):
                 if attempt >= retry:
                     raise HE
                 time.sleep(1)
-        xml = lxml.objectify.fromstring(r.text, lxml.etree.HTMLParser())
-        body = xml.find('body')
-        for elem in body.xpath('//tr/td/a'):
-            if re.search('/$',elem.text):
-                dirs.append(elem.text)
+        soup = BeautifulSoup(r.text)
+        table =soup.find('table')
+        rows = table.findAll('tr')
+        for row in rows:
+            a = row.find('a')
+            if a and re.search('/$', a.getText()):
+                dirs.append(a.getText())
         self.debug('Paths found at:"' + str(url) + '", paths:' + str(dirs))
         return dirs
 
-    def ConfigureService(self):
+    def configure_rsyslog_(self, machine, conf='/etc/rsyslog.conf'):
+        '''
+        $ModLoad imudp
+        $UDPServerRun 514
+        $UDPServerAddress 0.0.0.0
+        '''
+        #Make sure file is at least there
+        conf = conf.strip()
+        self.debug('checking rsyslog conf file:' + str(conf))
+        machine.get_file_stat(conf)
+        self._rsyslog_write_value(machine,'$ModLoad imudp',
+                                 '\$ModLoad imudp', conf)
+        self._rsyslog_write_value(machine, '$UDPServerRun',
+                                 '\$UDPServerRun ' +
+                                 str(self.args.log_server_port),
+                                 conf)
+        self._rsyslog_write_value(machine, '$UDPServerAddress',
+                                 '\$UDPServerAddress 0.0.0.0', conf)
+        machine.sys('service rsyslog restart', code=0)
+        machine.sys('iptables -I INPUT -p udp --dport ' +
+                    str(self.args.log_server_port) + ' -j ACCEPT', code=0)
+        time.sleep(5)
+        #Log a message to the server.
+        log = logging.getLogger('imaging_setup')
+        hdlr = SysLogHandler(address=(machine.hostname, 514),
+                             socktype=socket.SOCK_DGRAM)
+        log.addHandler(hdlr)
+        log.setLevel(logging.DEBUG)
+        log.info('EUTESTER Configuring IMAGE SERVICE')
+
+
+    def _rsyslog_write_value(self, machine, searchkey, new_value, conf):
+        try:
+            output = machine.sys('cat ' + str(conf) +
+                                 " | grep '" + searchkey + "'", code=0)
+            for orig_key in output:
+                self.debug('Using origkey:' + str(orig_key))
+                if not re.search("^#.*." + searchkey, orig_key):
+                    machine.sys('perl -p -i -e "s/^*.*' +str(orig_key) + '/\#' +
+                            str(orig_key).strip() + '#Commented out by eutester/g" ' + conf,
+                            timeout=10, code=0)
+        except CommandExitCodeException:
+           pass
+        machine.sys('echo "' + str(new_value) + '" >> ' + conf, code=0 )
+
+
+    def configure_service(self):
         """
         This test will attempt to add the repo the remote clc and
         execute the install eucalyptus imaging worker, and configure the
         eucalyptus imaging service.
         """
         self.clc.add_repo(url=self.args.img_repo, name="EucaImagingService")
-        self.clc.install("eucalyptus-imaging-worker")
-        self.clc.sys("source " + self.tester.credpath  + "/eucarc && euca-install-image-worker --install-default" , code=0)
+        self.clc.install("eucalyptus-imaging-worker-image", nogpg=True)
+        sbin_path = os.path.join(self.tester.eucapath, 'usr/sbin')
+        self.clc.sys("export PATH=$PATH:" + sbin_path + " && source " + self.tester.credpath  + "/eucarc && euca-install-imaging-worker --install-default" , code=0)
+        self.tester.property_manager.show_all_imaging_properties()
+
+
+    def configure_properties(self):
+        #Add the keypair for the imaging service/worker (used for debug)
+        try:
+            self.keypair = self.tester.get_keypair(self.args.worker_keyname)
+        except:
+            self.keypair = self.tester.add_keypair(self.args.worker_keyname)
+            self.tester.clc.sftp.put(self.args.worker_keyname + '.pem',
+                                     self.args.worker_keyname + '.pem')
+        key_property = self.tester.property_manager.get_euproperty_by_name('imaging_worker_keyname')
+        key_property.set(self.keypair.name)
+        #Set the imaging service log server host
+        if self.args.log_server:
+            log_server = self.args.log_server
+            self.logger.log.warn('Not configuring rsyslog on server, assume '
+                                 'it is already configured')
+        else:
+            log_server = self.clc.hostname
+            self.debug('Attempting to setup rsyslog on clc...')
+            self.configure_rsyslog_(self.clc)
+        log_server = self.args.log_server or self.clc.hostname
+        log_property = self.tester.property_manager.get_euproperty_by_name('imaging_worker_log_server')
+        log_property.set(log_server)
+        if self.args.log_server_port:
+            log_port_property = self.tester.property_manager.get_euproperty_by_name('imaging_worker_log_server_port')
+            log_port_property.set(self.args.log_server_port)
+        #Set the imaging service ntp server
+        if self.args.ntp_server:
+            ntp_property = self.tester.property_manager.get_euproperty_by_name('imaging_worker_ntp_server')
+            ntp_property.set(self.args.ntp_server)
+        #Set import task expiration if provided
+        if self.args.task_expiration_hours:
+            task_property = self.tester.property_manager.get_euproperty_by_name('import_task_expiration_hours')
+            task_property.set(self.args.task_expiration_hours)
+        #Set worker instance vm type if provided
+        if self.args.worker_vmtype:
+            task_property = self.tester.property_manager.get_euproperty_by_name('imaging_worker_instance_type ')
+            task_property.set(self.args.worker_vmtype)
+        self.tester.property_manager.show_all_imaging_properties()
+
+
 
 if __name__ == "__main__":
     testcase = ConfigureImagingService()
     ### Use the list of tests passed from config/command line to determine what subset of tests to run
     ### or use a predefined list
-    list = testcase.args.tests or ["ConfigureService"]
+    list = testcase.args.tests or ["configure_service"]
 
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]

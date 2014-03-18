@@ -77,7 +77,7 @@ class Yum(PackageManager):
         if nogpg:
             gpg_flag = "--nogpg"
 
-        self.machine.sys("yum install -y " + gpg_flag +  " " + package)
+        self.machine.sys("yum install -y " + gpg_flag +  " " + package, code=0)
     
     def upgrade(self, package = None, nogpg=False):
         gpg_flag = ""
