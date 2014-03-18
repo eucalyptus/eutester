@@ -1,5 +1,4 @@
 import json
-from eutester.machine import Machine
 
 __author__ = 'viglesias'
 import re
