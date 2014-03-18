@@ -273,59 +273,60 @@ class Install(EutesterTestCase):
             self.set_config_option(machine, "VNET_BRIDGE", self.args.vnet_bridge)
 
     def configure_edge_dual_subnet(self):
-        enabled_clc = self.tester.service_manager.get_enabled_clc()
-        ip_addr_add_command = "ip addr add {0}/24 dev {1}"
-        ### add private subnet GW interface on CC
-        cc = self.tester.get_component_machines("cc00")[0]
-        cc_interface = "em1"
-        base_ip = self.tester.config["subnet_ip"].strip("0")
-        private_subnet = base_ip + "0"
-        cc_gw_ip = base_ip + "1"
-        cc.sys(ip_addr_add_command.format(cc_gw_ip, cc_interface))
+        if re.search("edge", self.tester.config["network"], re.IGNORECASE):
+            enabled_clc = self.tester.service_manager.get_enabled_clc()
+            ip_addr_add_command = "ip addr add {0}/24 dev {1}"
+            ### add private subnet GW interface on CC
+            cc = self.tester.get_component_machines("cc00")[0]
+            cc_interface = "em1"
+            base_ip = self.tester.config["subnet_ip"].strip("0")
+            private_subnet = base_ip + "0"
+            cc_gw_ip = base_ip + "1"
+            cc.sys(ip_addr_add_command.format(cc_gw_ip, cc_interface))
 
-        ### Setup IP forwarding
-        cc.sys("sysctl -w net.ipv4.ip_forward=1")
+            ### Setup IP forwarding
+            cc.sys("sysctl -w net.ipv4.ip_forward=1")
 
-        ### add private interface subnet on NC bridges
-        ip_index = 2
-        for nc in self.tester.get_component_machines("nc"):
-            nc_private_ip = base_ip + str(ip_index)
-            ip_index += 1
-            nc.sys(ip_addr_add_command.format(nc_private_ip, "br0"))
+            ### add private interface subnet on NC bridges
+            ip_index = 2
+            for nc in self.tester.get_component_machines("nc"):
+                nc_private_ip = base_ip + str(ip_index)
+                ip_index += 1
+                nc.sys(ip_addr_add_command.format(nc_private_ip, "br0"))
 
-        ### Chunk out private ip pool
-        instance_private_ips = []
-        for i in xrange(64):
-            instance_private_ips.append(base_ip + str(ip_index + i))
-        if hasattr(self.args, "vnet_public_ips"):
-            public_ips = self.args.vnet_public_ips
-        elif "managed_ips" in self.tester.config:
-            public_ips = self.tester.config["managed_ips"]
-        else:
-            raise Exception("Unable to find public ips. Please provide them with --vnet-public-ips")
-        ip_list = public_ips.split()
-        if len(ip_list) > 1:
-            ### individual ips were passed
-            public_ips = ip_list
-        else:
-            public_ips = [public_ips]
+            ### Chunk out private ip pool
+            instance_private_ips = []
+            for i in xrange(64):
+                instance_private_ips.append(base_ip + str(ip_index + i))
+            if hasattr(self.args, "vnet_public_ips"):
+                public_ips = self.args.vnet_public_ips
+            elif "managed_ips" in self.tester.config:
+                public_ips = self.tester.config["managed_ips"]
+            else:
+                raise Exception("Unable to find public ips. Please provide them with --vnet-public-ips")
+            ip_list = public_ips.split()
+            if len(ip_list) > 1:
+                ### individual ips were passed
+                public_ips = ip_list
+            else:
+                public_ips = [public_ips]
 
-        network_config = {"InstanceDnsDomain": "eucalyptus.internal",
-                          "InstanceDnsServers": [enabled_clc.hostname],
-                          "PublicIps": public_ips,
-                          "Subnets": [],
-                          "Clusters": [{"Name": "PARTI00",
-                                        "MacPrefix": "d0:0d",
-                                        "Subnet": {
-                                            "Name": private_subnet,
-                                            "Subnet": private_subnet,
-                                            "Netmask": "255.255.255.0",
-                                            "Gateway": cc_gw_ip
-                                        },
-                                        "PrivateIps": instance_private_ips
-                                        }]
-                          }
-        self.tester.modify_property("cloud.network.network_configuration", "'" + json.dumps(network_config) + "'")
+            network_config = {"InstanceDnsDomain": "eucalyptus.internal",
+                              "InstanceDnsServers": [enabled_clc.hostname],
+                              "PublicIps": public_ips,
+                              "Subnets": [],
+                              "Clusters": [{"Name": "PARTI00",
+                                            "MacPrefix": "d0:0d",
+                                            "Subnet": {
+                                                "Name": private_subnet,
+                                                "Subnet": private_subnet,
+                                                "Netmask": "255.255.255.0",
+                                                "Gateway": cc_gw_ip
+                                            },
+                                            "PrivateIps": instance_private_ips
+                                            }]
+                              }
+            self.tester.modify_property("cloud.network.network_configuration", "'" + json.dumps(network_config) + "'")
 
     def setup_dns(self):
         if not hasattr(self.tester, 'service_manager'):
