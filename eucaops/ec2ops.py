@@ -1941,7 +1941,7 @@ disable_root: false"""
                 arch=None,
                 owner_id=None,
                 filters=None,
-                not_location=None,
+                basic_image=True,
                 not_platform=None,
                 max_count=None):
         """
@@ -2011,9 +2011,8 @@ disable_root: false"""
                 continue                
             if (owner_id is not None) and (image.owner_id != owner_id):
                 continue
-            if (not_location is not None):
-                if not isinstance(not_location,types.ListType):
-                    not_location = not_location.split(',')
+            if basic_image:
+                not_location = ["windows", "imaging-worker", "load-balancer"]
                 skip = False
                 for loc in not_location:
                     if (re.search( str(loc), image.location)):
@@ -2042,7 +2041,7 @@ disable_root: false"""
                    arch=None,
                    owner_id=None,
                    filters=None,
-                   not_location=None,
+                   basic_image=True,
                    not_platform=None
                    ):
         """
@@ -2069,7 +2068,7 @@ disable_root: false"""
                                arch=arch,
                                owner_id=owner_id,
                                filters=filters,
-                               not_location=not_location,
+                               basic_image=basic_image,
                                not_platform=not_platform,
                                max_count=1)[0]
 

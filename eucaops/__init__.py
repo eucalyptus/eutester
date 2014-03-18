@@ -517,7 +517,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
             ### LOOK for network mode in config file if not found then set it unknown
             for param in ["network", "managed_ips", "subnet_ip"]:
                 try:
-                    if re.search("^" + param, line, re.IGNORECASE):
+                    if re.search("^" + param + ".*$", line, re.IGNORECASE):
                         config_hash[param] = line.split()[1].lower()
                 except:
                     self.debug("Could not find " + param + " type setting to None")

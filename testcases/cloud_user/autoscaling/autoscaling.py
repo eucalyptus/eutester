@@ -64,7 +64,7 @@ class AutoScalingBasics(EutesterTestCase):
 
         self.image = self.args.emi
         if not self.image:
-            self.image = self.tester.get_emi(root_device_type="instance-store", not_location="loadbalancer")
+            self.image = self.tester.get_emi(root_device_type="instance-store")
         self.address = None
         self.asg = None
 
