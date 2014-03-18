@@ -274,7 +274,8 @@ class Install(EutesterTestCase):
 
     def configure_edge_dual_subnet(self):
         if re.search("edge", self.tester.config["network"], re.IGNORECASE):
-            self.wait_for_creds()
+            if not hasattr(self.tester, 'service_manager'):
+                self.tester = Eucaops(config_file=self.args.config_file, password=self.args.password)
             enabled_clc = self.tester.service_manager.get_enabled_clc()
             ip_addr_add_command = "ip addr add {0}/24 dev {1}"
             ### add private subnet GW interface on CC
