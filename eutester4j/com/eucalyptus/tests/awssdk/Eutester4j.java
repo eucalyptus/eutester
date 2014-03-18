@@ -106,8 +106,12 @@ class Eutester4j {
         s3 = getS3Client(ACCESS_KEY, SECRET_KEY, S3_ENDPOINT);
         youAre = getYouAreClient(ACCESS_KEY, SECRET_KEY, IAM_ENDPOINT);
         IMAGE_ID = findImage();
-        KERNEL_ID = findKernel();
-        RAMDISK_ID = findRamdisk();
+
+        if (!isHVM()) {
+            KERNEL_ID = findKernel();
+            RAMDISK_ID = findRamdisk();
+        }
+
         AVAILABILITY_ZONE = findAvailablityZone();
         NAME_PREFIX = eucaUUID() + "-";
         print("Using resource prefix for test: " + NAME_PREFIX);
@@ -449,6 +453,16 @@ class Eutester4j {
         final String imageId = imagesResult.getImages().get(0).getImageId();
         print("Using image: " + imageId);
         return imageId;
+    }
+
+    public static boolean isHVM() {
+        final DescribeImagesResult imagesResult = ec2
+                .describeImages(new DescribeImagesRequest().withFilters(
+                        new Filter().withName("image-id").withValues(
+                                findImage()),
+                        new Filter().withName("virtualization-type").withValues(
+                                "hvm")));
+        return (imagesResult.getImages().size() != 0);
     }
 
     public static String findKernel() {
