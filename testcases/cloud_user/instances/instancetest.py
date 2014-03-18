@@ -98,8 +98,14 @@ class InstanceBasics(EutesterTestCase):
         for instance in reservation.instances:
             self.assertTrue(self.tester.wait_for_reservation(reservation), 'Instance did not go to running')
             self.assertTrue(self.tester.ping(instance.ip_address), 'Could not ping instance')
-            self.assertFalse(instance.found("ls -1 /dev/" + instance.rootfs_device + "2",  "No such file or directory"),
-                             "Did not find ephemeral storage at " + instance.rootfs_device + "2")
+            if self.image.virtualization_type == "paravirtual":
+                paravirtual_ephemeral = "/dev/" + instance.rootfs_device + "2"
+                self.assertFalse(instance.found("ls -1 " + paravirtual_ephemeral,  "No such file or directory"),
+                                 "Did not find ephemeral storage at " + paravirtual_ephemeral)
+            elif self.image.virtualization_type == "hvm":
+                hvm_ephemeral = "/dev/" + instance.block_device_prefix
+                self.assertFalse(instance.found("ls -1 " + hvm_ephemeral,  "No such file or directory"),
+                                 "Did not find ephemeral storage at " + hvm_ephemeral)
         self.set_reservation(reservation)
         return reservation
 
@@ -218,16 +224,17 @@ class InstanceBasics(EutesterTestCase):
                             'Incorrect reservation in metadata')
             self.assertTrue(re.match(instance.get_metadata("placement/availability-zone")[0], instance.placement),
                             'Incorrect availability-zone in metadata')
-            self.assertTrue(re.match(instance.get_metadata("kernel-id")[0], instance.kernel),
-                            'Incorrect kernel id in metadata')
+            if self.image.virtualization_type == "paravirtual":
+                self.assertTrue(re.match(instance.get_metadata("kernel-id")[0], instance.kernel),
+                                'Incorrect kernel id in metadata')
+                self.assertTrue(re.match(instance.get_metadata("ramdisk-id")[0], instance.ramdisk),
+                                'Incorrect ramdisk in metadata')
             self.assertTrue(re.match(instance.get_metadata("public-hostname")[0], instance.public_dns_name),
                             'Incorrect public host name in metadata')
             self.assertTrue(re.match(instance.get_metadata("local-hostname")[0], instance.private_dns_name),
                             'Incorrect private host name in metadata')
             self.assertTrue(re.match(instance.get_metadata("hostname")[0], instance.private_dns_name),
                             'Incorrect host name in metadata')
-            self.assertTrue(re.match(instance.get_metadata("ramdisk-id")[0], instance.ramdisk),
-                            'Incorrect ramdisk in metadata')
             self.assertTrue(re.match(instance.get_metadata("instance-type")[0], instance.instance_type),
                             'Incorrect instance type in metadata')
             bad_meta_data_keys = ['foobar']
