@@ -48,11 +48,10 @@ class AutoScalingBasics(EutesterTestCase):
                 self.parser.add_argument(arg)
         self.get_args()
         # Setup basic eutester object
-        self.tester = Eucaops(credpath=self.args.credpath, port=80)
-        # if self.args.region:
-        #     self.tester = Eucaops(credpath=self.args.credpath, region=self.args.region)
-        # else:
-        #     self.tester = Eucaops(credpath=self.args.credpath, config_file=self.args.config, password=self.args.password)
+        if self.args.region:
+            self.tester = Eucaops(credpath=self.args.credpath, region=self.args.region)
+        else:
+            self.tester = Eucaops(credpath=self.args.credpath, config_file=self.args.config, password=self.args.password)
 
         ### Add and authorize a group for the instance
         self.group = self.tester.add_group(group_name="group-" + str(time.time()))
@@ -76,7 +75,7 @@ class AutoScalingBasics(EutesterTestCase):
         self.tester.cleanup_artifacts()
 
     def AutoScalingBasics(self):
-
+        ### create launch configuration
         self.launch_config_name = 'Test-Launch-Config-' + str(time.time())
         self.tester.create_launch_config(name=self.launch_config_name,
                                          image_id=self.image.id,
