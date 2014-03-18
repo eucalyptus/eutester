@@ -3072,7 +3072,8 @@ disable_root: false"""
             elapsed = int(time.time()- start)
             for instance in monitoring:
                 instance.update()
-                if zeros.search(str(instance.ip_address)) or zeros.search(str(instance.private_ip_address)):
+                if hasattr(instance, 'ip_address') and instance.ip_address and \
+                        (zeros.search(str(instance.ip_address)) or zeros.search(str(instance.private_ip_address))):
                     self.debug(str(instance.id)+": WAITING for public ip. Current:"+str(instance.ip_address)+
                                ", elapsed:"+str(elapsed)+"/"+str(timeout))
                 else:
