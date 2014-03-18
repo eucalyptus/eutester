@@ -198,7 +198,7 @@ class Net_Tests(EutesterTestCase):
         if self.args.emi:
             self.image = self.tester.get_emi(emi=str(self.args.emi))
         else:
-            self.image = self.tester.get_emi(root_device_type="instance-store",not_location=['windows', 'loadbalancer'])
+            self.image = self.tester.get_emi(root_device_type="instance-store")
         if not self.image:
             raise Exception('couldnt find instance store image')
 

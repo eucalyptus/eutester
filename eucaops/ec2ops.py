@@ -1941,7 +1941,7 @@ disable_root: false"""
                 arch=None,
                 owner_id=None,
                 filters=None,
-                not_location=None,
+                basic_image=True,
                 not_platform=None,
                 max_count=None):
         """
@@ -2011,9 +2011,8 @@ disable_root: false"""
                 continue                
             if (owner_id is not None) and (image.owner_id != owner_id):
                 continue
-            if (not_location is not None):
-                if not isinstance(not_location,types.ListType):
-                    not_location = not_location.split(',')
+            if basic_image:
+                not_location = ["windows", "imaging-worker", "load-balancer"]
                 skip = False
                 for loc in not_location:
                     if (re.search( str(loc), image.location)):
@@ -2042,7 +2041,7 @@ disable_root: false"""
                    arch=None,
                    owner_id=None,
                    filters=None,
-                   not_location=None,
+                   basic_image=True,
                    not_platform=None
                    ):
         """
@@ -2069,7 +2068,7 @@ disable_root: false"""
                                arch=arch,
                                owner_id=owner_id,
                                filters=filters,
-                               not_location=not_location,
+                               basic_image=basic_image,
                                not_platform=not_platform,
                                max_count=1)[0]
 
@@ -2699,9 +2698,10 @@ disable_root: false"""
         self.monitor_euinstances_to_state(instances, failstates=['terminated','shutting-down'],timeout=timeout)
         #Wait for instances in list to get valid ips, check for duplicates, etc...
         try:
-            self.wait_for_valid_ip(instances, timeout)
+            self.wait_for_valid_ip(instances, timeout=timeout)
         except Exception, e:
-            ip_err = "WARNING in wait_for_valid_ip: "+str(e)
+            tb = self.get_traceback()
+            ip_err = str(tb)  + "\nWARNING in wait_for_valid_ip: "+str(e)
             self.debug(ip_err)
         #Now attempt to connect to instances if connect flag is set in the instance...
         waiting = copy.copy(instances)
@@ -3072,7 +3072,8 @@ disable_root: false"""
             elapsed = int(time.time()- start)
             for instance in monitoring:
                 instance.update()
-                if zeros.search(str(instance.ip_address)) or zeros.search(str(instance.private_ip_address)):
+                if hasattr(instance, 'ip_address') and instance.ip_address and \
+                        (zeros.search(str(instance.ip_address)) or zeros.search(str(instance.private_ip_address))):
                     self.debug(str(instance.id)+": WAITING for public ip. Current:"+str(instance.ip_address)+
                                ", elapsed:"+str(elapsed)+"/"+str(timeout))
                 else:

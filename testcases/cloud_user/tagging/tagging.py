@@ -230,7 +230,10 @@ class TaggingBasics(EutesterTestCase):
         ### Filters can be found here, most will be tested manually, but a spot check should be added
         ### http://docs.aws.amazon.com/AWSEC2/latest/CommandLineReference/ApiReference-cmd-DescribeImages.html
         image_description = "image-filtering"
-        filter_image_id = self.tester.register_image(image_location=self.image.location,description=image_description)
+        filter_image_id = self.tester.register_image(
+            image_location=self.image.location,
+            description=image_description,
+            virtualization_type=self.image.virtualization_type)
 
         description_filter = {u'description': image_description }
         location_filter = {u'manifest-location': self.image.location}
