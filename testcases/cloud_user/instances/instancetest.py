@@ -98,8 +98,15 @@ class InstanceBasics(EutesterTestCase):
         for instance in reservation.instances:
             self.assertTrue(self.tester.wait_for_reservation(reservation), 'Instance did not go to running')
             self.assertTrue(self.tester.ping(instance.ip_address), 'Could not ping instance')
-            self.assertFalse(instance.found("ls -1 /dev/" + instance.rootfs_device + "2",  "No such file or directory"),
-                             "Did not find ephemeral storage at " + instance.rootfs_device + "2")
+            image = self.tester.ec2.get_all_images([self.image])[0]
+            if image.virtualization_type == "paravirtual":
+                paravirtual_ephemeral = "/dev/" + instance.rootfs_device + "2"
+                self.assertFalse(instance.found("ls -1 " + paravirtual_ephemeral,  "No such file or directory"),
+                                 "Did not find ephemeral storage at " + paravirtual_ephemeral)
+            elif image.virtualization_type == "hvm":
+                hvm_ephemeral = "/dev/" + instance.block_device_prefix
+                self.assertFalse(instance.found("ls -1 " + hvm_ephemeral,  "No such file or directory"),
+                                 "Did not find ephemeral storage at " + hvm_ephemeral)
         self.set_reservation(reservation)
         return reservation
 
