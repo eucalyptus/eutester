@@ -1955,8 +1955,8 @@ disable_root: false"""
         :param state: example: 'available'
         :param arch: example: 'x86_64'
         :param owner_id: owners numeric id
-        :param not_location: skip if location string matches this comma separated string or list of strings. Examples:
-                            not_location='windows,centos', not_location=['loadbalancer', 'lucid']
+        :param filters: standard filters
+        :param basic_image: boolean, avoids returning windows, load balancer and service images
         :param not_platform: skip if platform string matches this string. Example: not_platform='windows'
         :param max_count: return after finding 'max_count' number of matching images
         :return: image id
@@ -2054,11 +2054,33 @@ disable_root: false"""
         :param state: example: 'available'
         :param arch: example: 'x86_64'
         :param owner_id: owners numeric id
-        :param not_location: skip if location string matches this string. Example: not_location='loadbalancer'
+        :param filters: standard filters, dict.
+        :param basic_image: boolean, avoids returning windows, load balancer and service images
         :param not_platform: skip if platform string matches this string. Example: not_platform='windows'
         :return: image id
         :raise: Exception if image is not found
         """
+        if filters is None and emi is None and \
+                        name is None and location is None:
+            # Attempt to get a eutester created image if it happens to meet
+            # the other criteria provided. Otherwise remove filter and
+            # return the image found without the imposed filters.
+            filters={'tag-key':'eutester-created'}
+            try:
+                return self.get_images(emi=emi,
+                                   name=name,
+                                   root_device_type=root_device_type,
+                                   root_device_name=root_device_name,
+                                   location=location,
+                                   state=state,
+                                   arch=arch,
+                                   owner_id=owner_id,
+                                   filters=filters,
+                                   basic_image=basic_image,
+                                   not_platform=not_platform,
+                                   max_count=1)[0]
+            except:
+                filters = None
         return self.get_images(emi=emi,
                                name=name,
                                root_device_type=root_device_type,
