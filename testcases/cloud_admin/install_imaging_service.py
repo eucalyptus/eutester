@@ -220,9 +220,8 @@ class ConfigureImagingService(EutesterTestCase):
         self.clc.add_repo(url=self.args.img_repo, name="EucaImagingService")
         self.clc.install("eucalyptus-imaging-worker-image", nogpg=True,
                          timeout=300)
-        sbin_path = os.path.join(self.tester.eucapath, 'usr/sbin')
-        self.clc.sys("export PATH=$PATH:" + sbin_path + " && source " +
-                     self.tester.credpath  +
+        self.clc.sys("export EUCALYPTUS=" + str(self.tester.eucapath) +
+                     " && source " + self.tester.credpath  +
                      "/eucarc && euca-install-imaging-worker --install-default",
                      code=0)
         self.tester.property_manager.show_all_imaging_properties()
