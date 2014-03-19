@@ -338,7 +338,10 @@ class InstanceBasics(EutesterTestCase):
             self.set_reservation(None)
         try:
             available_instances_before = self.tester.get_available_vms(zone=self.zone)
-            count = available_instances_before
+            if available_instances_before > 4:
+                count = 4
+            else:
+                count = available_instances_before
         except IndexError, e:
             self.debug("Running as non-admin, defaulting to 4 VMs")
             available_instances_before = count = 4
