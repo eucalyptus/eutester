@@ -153,8 +153,8 @@ class TaggingBasics(EutesterTestCase):
 
         ### Test Deletion
         self.volume.delete_tags(tags)
-        instances = self.tester.ec2.get_all_instances(filters=tag_filter)
-        if len(instances) != 0:
+        volumes = self.tester.ec2.get_all_volumes(filters=tag_filter)
+        if len(volumes) != 0:
             raise Exception('Filter returned volumes when there shouldnt be any')
         if self.volume.tags != {}:
             raise Exception('Tags still returned after deleting them from volume')
@@ -201,8 +201,8 @@ class TaggingBasics(EutesterTestCase):
 
         ### Test Deletion
         self.snapshot.delete_tags(tags)
-        instances = self.tester.ec2.get_all_instances(filters=tag_filter)
-        if len(instances) != 0:
+        snapshots= self.tester.ec2.get_all_snapshots(filters=tag_filter)
+        if len(snapshots) != 0:
             raise Exception('Filter returned snapshots when there shouldnt be any')
         if self.snapshot.tags != {}:
             raise Exception('Tags still returned after deleting them from volume')
@@ -305,9 +305,10 @@ class TaggingBasics(EutesterTestCase):
         self.tester.delete_tags([self.group.id], tags)
         groups = self.tester.ec2.get_all_security_groups(filters=tag_filter)
         if len(groups) != 0:
-            raise Exception('Filter returned volumes when there shouldnt be any')
-        if self.image.tags != {}:
-            raise Exception('Tags still returned after deleting them from volume')
+            raise Exception('Filter returned security groups when there shouldnt be any')
+        if self.group.tags != {}:
+            raise Exception('Tags still returned after deleting them from '
+                            'security group:' + str(self.group.tags) )
         #self.test_restrictions(self.group)
         #self.test_in_series(self.group)
 
