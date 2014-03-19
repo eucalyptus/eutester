@@ -106,8 +106,9 @@ class Apt(PackageManager):
         self.name = "apt"
         self.apt_options = "-o Dpkg::Options::='--force-confold' -y --force-yes "
         
-    def install(self, package):
-        self.machine.sys("export DEBIAN_FRONTEND=noninteractive; apt-get install %s %s" % (self.apt_options, str(package)))
+    def install(self, package, timeout=300):
+        self.machine.sys("export DEBIAN_FRONTEND=noninteractive; apt-get install %s %s" % (self.apt_options, str(package)),
+                         timeout=timeout, code=0)
     
     def upgrade(self, package = None):
         if package is None:
