@@ -119,7 +119,7 @@ class BFEBSBasics(InstanceBasics):
             ## Drop a file so we know if we actually created an image
             current_time = str(int(time.time()))
             temp_file = "/root/my-new-file-" + current_time
-            instance.sys("touch " + temp_file)
+            instance.sys("touch " + temp_file, code=0)
             rebooted_image = self.tester.create_image(instance, "BFEBS-test-create-image-reboot-" + current_time)
             instance.connect_to_instance()
             ending_uptime = instance.get_uptime()
