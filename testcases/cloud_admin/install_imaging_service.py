@@ -203,7 +203,8 @@ class ConfigureImagingService(EutesterTestCase):
                 self.debug('Using origkey:' + str(orig_key))
                 if not re.search("^#.*." + searchkey, orig_key):
                     machine.sys('perl -p -i -e "s/^*.*' +str(orig_key) + '/\#' +
-                            str(orig_key).strip() + '#Commented out by eutester/g" ' + conf,
+                            str(orig_key).strip() +
+                                '#Commented out by eutester/g" ' + conf,
                             timeout=10, code=0)
         except CommandExitCodeException:
            pass
@@ -217,9 +218,13 @@ class ConfigureImagingService(EutesterTestCase):
         eucalyptus imaging service.
         """
         self.clc.add_repo(url=self.args.img_repo, name="EucaImagingService")
-        self.clc.install("eucalyptus-imaging-worker-image", nogpg=True)
+        self.clc.install("eucalyptus-imaging-worker-image", nogpg=True,
+                         timeout=300)
         sbin_path = os.path.join(self.tester.eucapath, 'usr/sbin')
-        self.clc.sys("export PATH=$PATH:" + sbin_path + " && source " + self.tester.credpath  + "/eucarc && euca-install-imaging-worker --install-default" , code=0)
+        self.clc.sys("export PATH=$PATH:" + sbin_path + " && source " +
+                     self.tester.credpath  +
+                     "/eucarc && euca-install-imaging-worker --install-default",
+                     code=0)
         self.tester.property_manager.show_all_imaging_properties()
 
 
@@ -231,7 +236,8 @@ class ConfigureImagingService(EutesterTestCase):
             self.keypair = self.tester.add_keypair(self.args.worker_keyname)
             self.tester.clc.sftp.put(self.args.worker_keyname + '.pem',
                                      self.args.worker_keyname + '.pem')
-        key_property = self.tester.property_manager.get_euproperty_by_name('imaging_worker_keyname')
+        key_property = self.tester.property_manager.get_euproperty_by_name(
+            'imaging_worker_keyname')
         key_property.set(self.keypair.name)
         #Set the imaging service log server host
         if self.args.log_server:
@@ -243,22 +249,30 @@ class ConfigureImagingService(EutesterTestCase):
             self.debug('Attempting to setup rsyslog on clc...')
             self.configure_rsyslog_(self.clc)
         log_server = self.args.log_server or self.clc.hostname
-        log_property = self.tester.property_manager.get_euproperty_by_name('imaging_worker_log_server')
+        log_property = self.tester.property_manager.get_euproperty_by_name(
+            'imaging_worker_log_server')
         log_property.set(log_server)
         if self.args.log_server_port:
-            log_port_property = self.tester.property_manager.get_euproperty_by_name('imaging_worker_log_server_port')
+            log_port_property = \
+                self.tester.property_manager.get_euproperty_by_name(
+                    'imaging_worker_log_server_port')
             log_port_property.set(self.args.log_server_port)
         #Set the imaging service ntp server
         if self.args.ntp_server:
-            ntp_property = self.tester.property_manager.get_euproperty_by_name('imaging_worker_ntp_server')
+            ntp_property = self.tester.property_manager.get_euproperty_by_name(
+                'imaging_worker_ntp_server')
             ntp_property.set(self.args.ntp_server)
         #Set import task expiration if provided
         if self.args.task_expiration_hours:
-            task_property = self.tester.property_manager.get_euproperty_by_name('import_task_expiration_hours')
+            task_property = \
+                self.tester.property_manager.get_euproperty_by_name(
+                    'import_task_expiration_hours')
             task_property.set(self.args.task_expiration_hours)
         #Set worker instance vm type if provided
         if self.args.worker_vmtype:
-            task_property = self.tester.property_manager.get_euproperty_by_name('imaging_worker_instance_type ')
+            task_property = \
+                self.tester.property_manager.get_euproperty_by_name(
+                    'imaging_worker_instance_type ')
             task_property.set(self.args.worker_vmtype)
         self.tester.property_manager.show_all_imaging_properties()
 
@@ -266,7 +280,8 @@ class ConfigureImagingService(EutesterTestCase):
 
 if __name__ == "__main__":
     testcase = ConfigureImagingService()
-    ### Use the list of tests passed from config/command line to determine what subset of tests to run
+    ### Use the list of tests passed from config/command line to determine
+    # what subset of tests to run
     ### or use a predefined list
     list = testcase.args.tests or ["configure_service", "configure_properties"]
 
