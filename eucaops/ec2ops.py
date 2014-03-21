@@ -3221,7 +3221,7 @@ disable_root: false"""
         if isinstance(instance, Instance):
             instance = instance.id
         output = self.ec2.get_console_output(instance_id=instance)
-        self.debug(output)
+        self.debug(output.output)
         return output
 
 
