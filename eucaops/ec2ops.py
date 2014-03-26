@@ -1955,8 +1955,8 @@ disable_root: false"""
         :param state: example: 'available'
         :param arch: example: 'x86_64'
         :param owner_id: owners numeric id
-        :param not_location: skip if location string matches this comma separated string or list of strings. Examples:
-                            not_location='windows,centos', not_location=['loadbalancer', 'lucid']
+        :param filters: standard filters
+        :param basic_image: boolean, avoids returning windows, load balancer and service images
         :param not_platform: skip if platform string matches this string. Example: not_platform='windows'
         :param max_count: return after finding 'max_count' number of matching images
         :return: image id
@@ -2054,11 +2054,33 @@ disable_root: false"""
         :param state: example: 'available'
         :param arch: example: 'x86_64'
         :param owner_id: owners numeric id
-        :param not_location: skip if location string matches this string. Example: not_location='loadbalancer'
+        :param filters: standard filters, dict.
+        :param basic_image: boolean, avoids returning windows, load balancer and service images
         :param not_platform: skip if platform string matches this string. Example: not_platform='windows'
         :return: image id
         :raise: Exception if image is not found
         """
+        if filters is None and emi is None and \
+                        name is None and location is None:
+            # Attempt to get a eutester created image if it happens to meet
+            # the other criteria provided. Otherwise remove filter and
+            # return the image found without the imposed filters.
+            filters={'tag-key':'eutester-created'}
+            try:
+                return self.get_images(emi=emi,
+                                   name=name,
+                                   root_device_type=root_device_type,
+                                   root_device_name=root_device_name,
+                                   location=location,
+                                   state=state,
+                                   arch=arch,
+                                   owner_id=owner_id,
+                                   filters=filters,
+                                   basic_image=basic_image,
+                                   not_platform=not_platform,
+                                   max_count=1)[0]
+            except:
+                filters = None
         return self.get_images(emi=emi,
                                name=name,
                                root_device_type=root_device_type,
@@ -2622,6 +2644,7 @@ disable_root: false"""
                     instances.append(eu_instance)
                 except Exception, e:
                     self.debug(self.get_traceback())
+                    self.get_console_output(instance)
                     raise Exception("Unable to create Euinstance from " + str(instance)+", err:\n"+str(e))
             if monitor_to_running:
                 return self.monitor_euinstances_to_running(instances, timeout=timeout)
@@ -2867,7 +2890,7 @@ disable_root: false"""
         else:
             res = self.get_reservation_for_instance(instance)
         for group in res.groups:
-         secgroups.extend(self.ec2.get_all_security_groups(groupnames=str(group.name)))
+         secgroups.extend(self.ec2.get_all_security_groups(groupnames=str(group.id)))
         return secgroups
     
     def get_reservation_for_instance(self, instance):
@@ -3171,6 +3194,7 @@ disable_root: false"""
                 except Exception, e:
                     self.debug(self.get_traceback())
                     euinstance_list.append(instance)
+                    self.get_console_output(instance)
                     self.fail("Unable to create Euinstance from " + str(instance)+": "+str(e))
             else:
                 euinstance_list.append(instance)
@@ -3197,7 +3221,7 @@ disable_root: false"""
         if isinstance(instance, Instance):
             instance = instance.id
         output = self.ec2.get_console_output(instance_id=instance)
-        self.debug(output)
+        self.debug(output.output)
         return output
 
 
