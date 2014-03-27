@@ -33,13 +33,11 @@ import re
 import copy
 
 import boto
-from boto.ec2 import autoscale
-from boto.ec2.autoscale import ScalingPolicy
+from boto.ec2.autoscale import ScalingPolicy, Instance
 from boto.ec2.autoscale import Tag
 from boto.ec2.autoscale import LaunchConfiguration
 from boto.ec2.autoscale import AutoScalingGroup
 from boto.ec2.regioninfo import RegionInfo
-import time
 
 from eutester import Eutester
 
@@ -295,6 +293,21 @@ class ASops(Eutester):
         self.debug("Deleting Policy: " + policy_name + " from group: " + autoscale_group)
         self.autoscale.delete_policy(policy_name=policy_name, autoscale_group=autoscale_group)
 
+    def cleanup_autoscaling_groups(self, asg_list = None):
+        """
+        This will attempt to delete auto scaling groups listed in test_resources['auto-scaling-groups']
+        """
+        ### clear all ASGs
+        if not asg_list:
+            auto_scaling_groups=self.test_resources['auto-scaling-groups']
+        else:
+            auto_scaling_groups = asg_list
+        for asg in auto_scaling_groups:
+            self.debug("Found Auto Scaling Group: " + asg.name)
+            self.delete_as_group(name=asg.name, force=True)
+
+
+
     def delete_all_autoscaling_groups(self):
         """
         This will attempt to delete all launch configs and all auto scaling groups
@@ -303,10 +316,23 @@ class ASops(Eutester):
         for asg in self.describe_as_group():
             self.debug("Found Auto Scaling Group: " + asg.name)
             self.delete_as_group(name=asg.name, force=True)
-        if len(self.describe_as_group()) != 0:
+        if len(self.describe_as_group(asg.name)) != 0:
             self.debug("Some AS groups remain")
             for asg in self.describe_as_group():
                 self.debug("Found Auto Scaling Group: " + asg.name)
+
+    def cleanup_launch_configs(self):
+        """
+        This will attempt to delete launch configs listed in test_resources['launch-configurations']
+        """
+        launch_configurations=self.test_resources['launch-configurations']
+
+        if not launch_configurations:
+            self.debug("Launch configuration list is empty")
+        else:
+            for lc in launch_configurations:
+                self.debug("Found Launch Config:" + lc.name)
+                self.delete_launch_config(lc.name)
 
     def delete_all_launch_configs(self):
         ### clear all LCs
@@ -354,7 +380,8 @@ class ASops(Eutester):
         self.debug("Number of tags: " + str(len(self.autoscale.get_all_tags())))
 
     def delete_all_policies(self):
-        for policy in self.autoscale.get_all_policies():
+        policies = self.autoscale.get_all_policies()
+        for policy in policies:
             self.delete_as_policy(policy_name=policy.name, autoscale_group=policy.as_name)
         if len(self.autoscale.get_all_policies()) != 0:
             raise Exception('Not all auto scaling policies deleted')
@@ -388,3 +415,22 @@ class ASops(Eutester):
                          health_check_type=health_check_type,
                          health_check_period=health_check_period,
                          termination_policies=termination_policies).update()
+
+    def wait_for_instances(self, group_name, number=1):
+        asg = self.describe_as_group(group_name)
+        instances = asg.instances
+        if not instances:
+            self.debug("No instances in ASG")
+            return False
+        if len(asg.instances) != number:
+            self.debug("Instances not yet allocated")
+            return False
+        for instance in instances:
+            assert isinstance(instance, Instance)
+            instance = self.get_instances(idstring=instance.instance_id)[0]
+            if instance.state != "running":
+                self.debug("Instance: " + str(instance) + " still in " + instance.state + " state")
+                return False
+            else:
+                self.debug("Instance: " + str(instance) + " now running")
+        return True

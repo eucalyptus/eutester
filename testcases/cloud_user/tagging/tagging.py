@@ -153,8 +153,8 @@ class TaggingBasics(EutesterTestCase):
 
         ### Test Deletion
         self.volume.delete_tags(tags)
-        instances = self.tester.ec2.get_all_instances(filters=tag_filter)
-        if len(instances) != 0:
+        volumes = self.tester.ec2.get_all_volumes(filters=tag_filter)
+        if len(volumes) != 0:
             raise Exception('Filter returned volumes when there shouldnt be any')
         if self.volume.tags != {}:
             raise Exception('Tags still returned after deleting them from volume')
@@ -201,8 +201,8 @@ class TaggingBasics(EutesterTestCase):
 
         ### Test Deletion
         self.snapshot.delete_tags(tags)
-        instances = self.tester.ec2.get_all_instances(filters=tag_filter)
-        if len(instances) != 0:
+        snapshots= self.tester.ec2.get_all_snapshots(filters=tag_filter)
+        if len(snapshots) != 0:
             raise Exception('Filter returned snapshots when there shouldnt be any')
         if self.snapshot.tags != {}:
             raise Exception('Tags still returned after deleting them from volume')
@@ -215,11 +215,14 @@ class TaggingBasics(EutesterTestCase):
         """
         This case was developed to exercise tagging of an instance resource
         """
-        tags = { u'name': 'image-tag-test', u'location' : 'over there'}
+        nametag = u'ImageTaggingName'
+        locationtag =  u'ImageTaggingLocation'
+        tags = { nametag: 'image-tag-test', locationtag : 'over there'}
+        orig_image_tags = self.image.tags
         self.tester.create_tags([self.image.id], tags)
 
         ### Test Tag Filtering , u'tag:location' : 'over there'
-        tag_filter = { u'tag:name': 'image-tag-test'}
+        tag_filter = { u'tag:'+nametag: 'image-tag-test'}
         images = self.tester.ec2.get_all_images(filters=tag_filter)
         if len(images) != 1:
             raise Exception('Filter for instances returned too many results')
@@ -230,7 +233,10 @@ class TaggingBasics(EutesterTestCase):
         ### Filters can be found here, most will be tested manually, but a spot check should be added
         ### http://docs.aws.amazon.com/AWSEC2/latest/CommandLineReference/ApiReference-cmd-DescribeImages.html
         image_description = "image-filtering"
-        filter_image_id = self.tester.register_image(image_location=self.image.location,description=image_description)
+        filter_image_id = self.tester.register_image(
+            image_location=self.image.location,
+            description=image_description,
+            virtualization_type=self.image.virtualization_type)
 
         description_filter = {u'description': image_description }
         location_filter = {u'manifest-location': self.image.location}
@@ -241,17 +247,18 @@ class TaggingBasics(EutesterTestCase):
         self.tester.deregister_image(filter_image)
 
         if len(description_match) != 1:
-            raise Exception("Non-tag Filtering of volumes by size: " + str(len(description_match))  + " expected: 1")
+            raise Exception("Non-tag Filtering of volumes by size: " + str(len(description_match)) + " expected: 1")
         if len(location_match) != 2:
-            raise Exception("Non-tag Filtering of volumes by zone: " + str(len(location_match))  + " expected: 2")
+            raise Exception("Non-tag Filtering of volumes by zone: " + str(len(location_match)) + " expected: 2")
 
         ### Test Deletion
         self.tester.delete_tags([self.image.id], tags)
         images = self.tester.ec2.get_all_images(filters=tag_filter)
         if len(images) != 0:
-            raise Exception('Filter returned volumes when there shouldnt be any')
-        if self.image.tags != {}:
-            raise Exception('Tags still returned after deleting them from image: ' + str(self.image.tags) )
+            raise Exception('Filter returned images when there shouldnt be any')
+        for tag in tags:
+            if tag in self.image.tags:
+                raise Exception('Tags still returned after deleting them from image: ' + str(self.image.tags))
         #self.test_restrictions(self.image)
         #self.test_in_series(self.image)
 
@@ -298,9 +305,10 @@ class TaggingBasics(EutesterTestCase):
         self.tester.delete_tags([self.group.id], tags)
         groups = self.tester.ec2.get_all_security_groups(filters=tag_filter)
         if len(groups) != 0:
-            raise Exception('Filter returned volumes when there shouldnt be any')
-        if self.image.tags != {}:
-            raise Exception('Tags still returned after deleting them from volume')
+            raise Exception('Filter returned security groups when there shouldnt be any')
+        if self.group.tags != {}:
+            raise Exception('Tags still returned after deleting them from '
+                            'security group:' + str(self.group.tags) )
         #self.test_restrictions(self.group)
         #self.test_in_series(self.group)
 

@@ -198,7 +198,7 @@ class Net_Tests(EutesterTestCase):
         if self.args.emi:
             self.image = self.tester.get_emi(emi=str(self.args.emi))
         else:
-            self.image = self.tester.get_emi(root_device_type="instance-store",not_location=['windows', 'loadbalancer'])
+            self.image = self.tester.get_emi(root_device_type="instance-store")
         if not self.image:
             raise Exception('couldnt find instance store image')
 
@@ -221,13 +221,11 @@ class Net_Tests(EutesterTestCase):
             self.tester.cleanup_artifacts()
 
     def get_proxy_machine(self, instance):
-        proxy_machine = self.get_active_cc_for_instance(instance)
-        try:
-            proxy_machine.sys("grep EDGE " + self.tester.eucapath + "/etc/eucalyptus/eucalyptus.conf", code=0)
-        except:
-            self.debug("Using NC as proxy when in EDGE mode")
+        if self.tester.config["network"].lower() == "edge":
             proxy_machine = self.get_active_nc_for_instance(instance)
-            self.debug("Instance is running on: " + proxy_machine.hostname)
+        else:
+            proxy_machine = self.get_active_cc_for_instance(instance)
+        self.debug("Instance is running on: " + proxy_machine.hostname)
         return proxy_machine
 
     def create_ssh_connection_to_instance(self, instance, retry=10):

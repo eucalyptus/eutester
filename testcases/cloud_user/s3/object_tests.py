@@ -34,11 +34,11 @@ class ObjectTestSuite(EutesterTestCase):
     def __init__(self):
         self.setuptestcase()
         self.setup_parser()
-        self.parser.add_argument("--s3endpoint", default=None)
+        self.parser.add_argument("--endpoint", default=None)
         self.get_args()
         # Setup basic eutester object
-        if self.args.s3endpoint:
-            self.tester = S3ops( credpath=self.args.credpath, endpoint=self.args.endpoint)
+        if self.args.endpoint:
+            self.tester = S3ops(credpath=self.args.credpath, endpoint=self.args.endpoint)
         else:
             self.tester = Eucaops( credpath=self.args.credpath, config_file=self.args.config, password=self.args.password)
 
@@ -49,6 +49,13 @@ class ObjectTestSuite(EutesterTestCase):
         self.test_bucket = self.tester.create_bucket(self.test_bucket_name)
         self.buckets_used.add(self.test_bucket_name)
         #Create some test data for the objects
+        def ensure_bucket_exists():
+            try:
+                self.tester.s3.get_bucket(self.test_bucket_name)
+                return True
+            except Exception:
+                return False
+        self.tester.wait_for_result(ensure_bucket_exists, True)
         self.test_object_data = ""
         for i in range(0, self.data_size):
             self.test_object_data += chr(random.randint(32,126))
@@ -70,10 +77,9 @@ class ObjectTestSuite(EutesterTestCase):
             key.set_contents_from_string(object_data)
             return key.etag
         except Exception as e:
-            self.tester.info("Exception occured during 'PUT' of object " + object_key + " into bucket " + bucket.name + ": " + e.message)
-            return None
-
-
+            self.tester.debug("Exception occured during 'PUT' of object " + object_key + " into bucket " + bucket.name + ": " + e.message)
+            raise e
+        
     def enable_versioning(self, bucket):
         """Enable versioning on the bucket, checking that it is not already enabled and that the operation succeeds."""
         vstatus = bucket.get_versioning_status()

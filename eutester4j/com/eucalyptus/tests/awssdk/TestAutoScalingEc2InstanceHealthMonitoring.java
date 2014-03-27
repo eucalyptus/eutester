@@ -91,7 +91,7 @@ public class TestAutoScalingEc2InstanceHealthMonitoring {
 
 			// Wait for instances to launch
 			print("Waiting for instance to launch");
-			final long timeout = TimeUnit.MINUTES.toMillis(5);
+			final long timeout = TimeUnit.MINUTES.toMillis(10);
 			final String instanceId = (String) waitForInstances(timeout, 1, groupName, true).get(0);
 
 			// Verify initial health status

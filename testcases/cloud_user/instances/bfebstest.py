@@ -1,6 +1,8 @@
 #!/usr/bin/python
+import time
 from eutester.eutestcase import EutesterTestCase
 from instancetest import InstanceBasics
+from eutester.euinstance import EuInstance
 
 class BFEBSBasics(InstanceBasics):
     def __init__(self, name="BFEBSBasics", credpath=None, region=None, config_file=None, password=None, emi=None, zone=None,
@@ -20,7 +22,8 @@ class BFEBSBasics(InstanceBasics):
         if not self.imgurl:
             raise Exception("No imgurl passed to run BFEBS tests")
         if not self.reservation:
-            self.run_instance_params['image'] = self.tester.get_emi(root_device_type="instance-store",not_location="loadbalancer")
+            self.run_instance_params['image'] = self.tester.get_emi(root_device_type="instance-store",
+                                                                    not_platform="windows")
             self.reservation = self.tester.run_instance(**self.run_instance_params)
         for instance in self.reservation.instances:
             self.volume = self.tester.create_volume(zone=self.zone, size=3)
@@ -96,6 +99,64 @@ class BFEBSBasics(InstanceBasics):
                 self.tester.delete_volume(self.volume)
                 self.volume = None
 
+    def CreateImage(self,zone=None):
+        if zone is None:
+            zone = self.zone
+        try:
+            self.run_instance_params['image'] = self.tester.get_emi(root_device_type="ebs")
+        except Exception, e:
+            self.RegisterImage()
+            self.run_instance_params['image'] = self.tester.get_emi(root_device_type="ebs")
+        if not self.reservation:
+            self.reservation = self.tester.run_instance(**self.run_instance_params)
+
+        ### Run with reboot
+        original_image = self.run_instance_params['image']
+        for instance in self.reservation.instances:
+            assert isinstance(instance, EuInstance)
+            self.tester.sleep(60)
+            starting_uptime = instance.get_uptime()
+            ## Drop a file so we know if we actually created an image
+            current_time = str(int(time.time()))
+            temp_file = "/root/my-new-file-" + current_time
+            instance.sys("touch " + temp_file + " && sync", code=0)
+            instance.sys('ls -la', code=0)
+            rebooted_image = self.tester.create_image(instance, "BFEBS-test-create-image-reboot-" + current_time)
+            instance.connect_to_instance()
+            ending_uptime = instance.get_uptime()
+            if ending_uptime > starting_uptime:
+                raise Exception("Instance did not get stopped then started")
+            self.run_instance_params['image'] = rebooted_image
+            new_image_reservation = self.tester.run_instance(**self.run_instance_params)
+            for new_instance in new_image_reservation.instances:
+                ## Check that our temp file exists
+                new_instance.sys("ls -la")
+                new_instance.sys("ls " + temp_file, code=0)
+            self.tester.terminate_instances(new_image_reservation)
+
+        ### Run without reboot
+        self.run_instance_params['image'] = original_image
+        for instance in self.reservation.instances:
+            assert isinstance(instance, EuInstance)
+            self.tester.sleep(60)
+            starting_uptime = instance.get_uptime()
+            ## Drop a file so we know if we actually created an image
+            current_time = str(int(time.time()))
+            temp_file = "/root/my-new-file-" + current_time
+            instance.sys("touch " + temp_file + " && sync", code=0)
+            instance.sys('ls -la', code=0)
+            not_rebooted_image = self.tester.create_image(instance, "BFEBS-test-create-image-noreboot-" + current_time, no_reboot=True)
+            ending_uptime = instance.get_uptime()
+            if ending_uptime < starting_uptime:
+                raise Exception("Instance did get stopped then started when it shouldn't have")
+            self.run_instance_params['image'] = not_rebooted_image
+            new_image_reservation = self.tester.run_instance(**self.run_instance_params)
+            for new_instance in new_image_reservation.instances:
+                ## Check that our temp file exists
+                new_instance.sys("ls -la")
+                new_instance.sys("ls " + temp_file, code=0)
+            self.tester.terminate_instances(new_image_reservation)
+
 if __name__ == "__main__":
     testcase= EutesterTestCase(name='bfebstest')
     testcase.setup_parser(description="Test the Eucalyptus EC2 BFEBS image functionality.")
@@ -105,7 +166,7 @@ if __name__ == "__main__":
     bfebstestsuite = testcase.do_with_args(BFEBSBasics)
 
     ### Either use the list of tests passed from config/command line to determine what subset of tests to run
-    list = testcase.args.tests or [ "RegisterImage",  "StopStart", "MultipleBFEBSInstances"]
+    list = testcase.args.tests or ["RegisterImage",  "StopStart", "MultipleBFEBSInstances"]
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = []
     for test in list:

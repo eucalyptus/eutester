@@ -54,6 +54,7 @@ from boto.ec2.volume import Volume
 from boto.ec2.bundleinstance import BundleInstanceTask
 from boto.exception import EC2ResponseError
 from boto.ec2.regioninfo import RegionInfo
+from boto.resultset import ResultSet
 import boto
 
 from eutester import Eutester
@@ -182,6 +183,9 @@ disable_root: false"""
         self.test_resources["keypairs"] = []
         self.test_resources["security-groups"] = []
         self.test_resources["images"] = []
+        self.test_resources["addresses"]=[]
+        self.test_resources["auto-scaling-groups"]=[]
+        self.test_resources["launch-configurations"]=[]
 
     def get_ec2_ip(self):
         """Parse the eucarc for the S3_URL"""
@@ -865,7 +869,7 @@ disable_root: false"""
         self.debug('Updating volume list before monitoring...')
         for vol in euvolumes:
             try:
-                vol.update()
+                vol = self.get_volume(vol.id)
                 if not isinstance(vol, EuVolume):
                     vol = EuVolume.make_euvol_from_vol(vol,self)
                 monitor.append(vol)
@@ -1047,7 +1051,14 @@ disable_root: false"""
         for volume in vollist:
             try:
                 self.debug( "Sending delete for volume: " +  str(volume.id)  )
-                volume.update()
+                volumes = self.ec2.get_all_volumes([volume.id])
+                if len(volumes) == 1:
+                    volume = volumes[0]
+                    #previous_status = volume.status
+                    #self.ec2.delete_volume(volume.id)
+                elif len(volumes) == 0:
+                    vollist.remove(volume)
+                    continue
                 previous_status = volume.status
                 self.ec2.delete_volume(volume.id)
             except EC2ResponseError, be:
@@ -1066,10 +1077,15 @@ disable_root: false"""
         elapsed = 0
         while vollist and elapsed < timeout:
             for volume in vollist:
-                volume.update()
-                self.debug( str(volume) + " in " + volume.status)
-                volume.update()
-                if volume.status == "deleted":
+                volumes = self.ec2.get_all_volumes([volume.id])
+                if len(volumes) == 1:
+                    volume = volumes[0]
+                elif len(volumes) == 0:
+                    vollist.remove(volume)
+                    self.debug("Volume no longer found")
+                    continue
+                self.debug(str(volume) + " in " + volume.status)
+                if volume and volume.status == "deleted"and volume in vollist:
                     vollist.remove(volume)
                     if volume in self.test_resources['volumes']:
                         self.test_resources['volumes'].remove(volume)
@@ -1078,12 +1094,13 @@ disable_root: false"""
             self.debug("---Waiting for:"+str(len(vollist))+" volumes to delete. Sleeping:"+
                        str(poll_interval)+", elapsed:"+str(elapsed)+"/"+str(timeout)+"---")
         if vollist or errmsg:
-            for volume in vollist:
-                errmsg += "ERROR:"+str(volume) + " left in " +  volume.status + ',elapsed:'+str(elapsed) + "\n"
-            raise Exception(errmsg)
-        
-        
-        
+                for volume in vollist:
+
+                  errmsg += "ERROR:"+str(volume) + " left in " +  volume.status + ',elapsed:'+str(elapsed) + "\n"
+                raise Exception(errmsg)
+
+
+
     def delete_all_volumes(self):
         """
         Deletes all volumes on the cloud
@@ -1807,7 +1824,8 @@ disable_root: false"""
                                  kernel=None,
                                  size=None,
                                  dot=True,
-                                 block_device_map=None):
+                                 block_device_map=None,
+                                 custom_params=None):
         """
         Register an image snapshot
 
@@ -1823,12 +1841,13 @@ disable_root: false"""
         :param block_device_map: existing block device map to add the snapshot block dev type to
         :return: emi id of registered image
         """
+        custom_params = custom_params or {}
         if bdmdev is None:
             bdmdev=root_device_name
         if name is None:
             name="bfebs_"+ snap_id
-        if ( windows ) and (not kernel):
-            kernel="windows"     
+        if windows:
+            custom_params['Platform'] = "windows"
             
         bdmap = block_device_map or BlockDeviceMapping()
         block_dev_type = BlockDeviceType()
@@ -1840,8 +1859,8 @@ disable_root: false"""
         self.debug("Register image with: snap_id:"+str(snap_id)+", root_device_name:"+str(root_device_name)+", desc:"+str(description)+
                    ", windows:"+str(windows)+", bdname:"+str(bdmdev)+", name:"+str(name)+", ramdisk:"+
                    str(ramdisk)+", kernel:"+str(kernel))
-        image_id = self.ec2.register_image(name=name, description=description, kernel_id=kernel, ramdisk_id=ramdisk,
-                                           block_device_map=bdmap, root_device_name=root_device_name)
+        image_id = self._register_image_custom_params(name=name, description=description, kernel_id=kernel, ramdisk_id=ramdisk,
+                                           block_device_map=bdmap, root_device_name=root_device_name, **custom_params)
         self.debug("Image now registered as " + image_id)
         return image_id
 
@@ -1853,10 +1872,12 @@ disable_root: false"""
                         description=None,
                         architecture=None,
                         virtualization_type=None,
+                        platform=None,
                         bdmdev=None,
                         name=None,
                         ramdisk=None,
-                        kernel=None):
+                        kernel=None,
+                        custom_params=None):
         """
         Register an image based on the s3 stored manifest location
 
@@ -1869,34 +1890,20 @@ disable_root: false"""
         :param kernel: kernel id (note for windows this name should be "windows")
         :return: image id string
         """
-        ri_kwargs = { 'name':name,
-                   'description':description,
-                   'kernel_id':kernel,
-                   'image_location':image_location,
-                   'ramdisk_id':ramdisk,
-                   'architecture':architecture,
-                   'block_device_map':bdmdev,
-                   'root_device_name':root_device_name}
+        custom_params = custom_params or {}
+        if platform:
+             custom_params['Platform']= platform
         #Check to see if boto is recent enough to have this param...
-        if virtualization_type:
-            if 'virtualization_type' in self.ec2.register_image.im_func.func_code.co_varnames:
-                ri_kwargs['virtualization_type'] = virtualization_type
-            else:
-                raise Exception('virtualization_type arg populated but not found in this version of ec2.register_image?')
-        image_id = self.ec2.register_image(**ri_kwargs)
-
-        '''
-        image_id = self.ec2.register_image(name=name,
-                                           description=description,
-                                           kernel_id=kernel,
-                                           image_location=image_location,
-                                           ramdisk_id=ramdisk,
-                                           architecture=architecture,
-                                           virtualization_type=virtualization_type,
-                                           block_device_map=bdmdev,
-                                           root_device_name=root_device_name)
-        '''
-        self.test_resources["images"].append(image_id)
+        image_id = self._register_image_custom_params(name=name,
+                                                      description=description,
+                                                      kernel_id=kernel,
+                                                      image_location=image_location,
+                                                      ramdisk_id=ramdisk,
+                                                      architecture=architecture,
+                                                      block_device_map=bdmdev,
+                                                      root_device_name=root_device_name,
+                                                      **custom_params)
+        self.test_resources["images"].append(self.ec2.get_all_images([image_id])[0])
         return image_id
 
     def delete_image(self, image, timeout=60):
@@ -1941,6 +1948,7 @@ disable_root: false"""
     @Eutester.printinfo
     def get_images(self,
                 emi=None,
+                name=None,
                 root_device_type=None,
                 root_device_name=None,
                 virtualization_type=None,
@@ -1949,7 +1957,8 @@ disable_root: false"""
                 arch=None,
                 owner_id=None,
                 filters=None,
-                not_location=None,
+                basic_image=True,
+                not_platform=None,
                 max_count=None):
         """
         Get a list of images which match the provided criteria.
@@ -1962,8 +1971,9 @@ disable_root: false"""
         :param state: example: 'available'
         :param arch: example: 'x86_64'
         :param owner_id: owners numeric id
-        :param not_location: skip if location string matches this comma separated string or list of strings. Examples:
-                            not_location='windows,centos', not_location=['loadbalancer', 'lucid']
+        :param filters: standard filters
+        :param basic_image: boolean, avoids returning windows, load balancer and service images
+        :param not_platform: skip if platform string matches this string. Example: not_platform='windows'
         :param max_count: return after finding 'max_count' number of matching images
         :return: image id
         :raise: Exception if image is not found
@@ -1974,6 +1984,8 @@ disable_root: false"""
             filters = {}
             if emi:
                 filters['image-id'] = emi
+            if name:
+                filters['name'] = name
             if root_device_type:
                 filters['root-device-type'] = root_device_type
             if root_device_name:
@@ -2008,14 +2020,15 @@ disable_root: false"""
             if (state is not None) and (image.state != state):
                 continue            
             if (location is not None) and (not re.search( location, image.location)):
-                continue           
+                continue
+            if (name is not None) and (image.name != name):
+                continue
             if (arch is not None) and (image.architecture != arch):
                 continue                
             if (owner_id is not None) and (image.owner_id != owner_id):
                 continue
-            if (not_location is not None):
-                if not isinstance(not_location,types.ListType):
-                    not_location = not_location.split(',')
+            if basic_image:
+                not_location = ["windows", "imaging-worker", "load-balancer"]
                 skip = False
                 for loc in not_location:
                     if (re.search( str(loc), image.location)):
@@ -2023,6 +2036,8 @@ disable_root: false"""
                         break
                 if skip:
                     continue
+            if (not_platform is not None) and (image.platform == not_platform):
+                continue
             self.debug("Returning image:"+str(image.id))
             ret_list.append(image)
             if max_count and len(ret_list) >= max_count:
@@ -2034,6 +2049,7 @@ disable_root: false"""
 
     def get_emi(self,
                    emi=None,
+                   name=None,
                    root_device_type=None,
                    root_device_name=None,
                    location=None,
@@ -2041,7 +2057,8 @@ disable_root: false"""
                    arch=None,
                    owner_id=None,
                    filters=None,
-                   not_location=None,
+                   basic_image=True,
+                   not_platform=None
                    ):
         """
         Get an emi with name emi, or just grab any emi in the system. Additional 'optional' match criteria can be defined.
@@ -2053,11 +2070,35 @@ disable_root: false"""
         :param state: example: 'available'
         :param arch: example: 'x86_64'
         :param owner_id: owners numeric id
-        :param not_location: skip if location string matches this string. Example: not_location='windows'
+        :param filters: standard filters, dict.
+        :param basic_image: boolean, avoids returning windows, load balancer and service images
+        :param not_platform: skip if platform string matches this string. Example: not_platform='windows'
         :return: image id
         :raise: Exception if image is not found
         """
+        if filters is None and emi is None and \
+                        name is None and location is None:
+            # Attempt to get a eutester created image if it happens to meet
+            # the other criteria provided. Otherwise remove filter and
+            # return the image found without the imposed filters.
+            filters={'tag-key':'eutester-created'}
+            try:
+                return self.get_images(emi=emi,
+                                   name=name,
+                                   root_device_type=root_device_type,
+                                   root_device_name=root_device_name,
+                                   location=location,
+                                   state=state,
+                                   arch=arch,
+                                   owner_id=owner_id,
+                                   filters=filters,
+                                   basic_image=basic_image,
+                                   not_platform=not_platform,
+                                   max_count=1)[0]
+            except:
+                filters = None
         return self.get_images(emi=emi,
+                               name=name,
                                root_device_type=root_device_type,
                                root_device_name=root_device_name,
                                location=location,
@@ -2065,7 +2106,8 @@ disable_root: false"""
                                arch=arch,
                                owner_id=owner_id,
                                filters=filters,
-                               not_location=not_location,
+                               basic_image=basic_image,
+                               not_platform=not_platform,
                                max_count=1)[0]
 
 
@@ -2339,7 +2381,7 @@ disable_root: false"""
                 volume = EuVolume.make_euvol_from_vol(volume)
             retlist.append(volume)
         if eof and retlist == []:
-            raise Exception("Unable to find matching volume")
+            raise ResourceNotFoundException("Unable to find matching volume")
         else:
             return retlist
 
@@ -2374,6 +2416,7 @@ disable_root: false"""
             vol = self.get_volumes(volume_id=volume_id, status=status, attached_instance=attached_instance,
                                    attached_dev=attached_dev, snapid=snapid, zone=zone, minsize=minsize,
                                    maxsize=maxsize, eof=eof)[0]
+
         except Exception, e:
             if eof:
                 raise e
@@ -2384,6 +2427,7 @@ disable_root: false"""
                      image=None,
                      keypair=None,
                      group="default",
+                     name=None,
                      type=None,
                      zone=None,
                      min=1,
@@ -2490,6 +2534,10 @@ disable_root: false"""
 
             if is_reachable:
                 self.ping(instance.ip_address, 20)
+
+        ## Add name tag
+        if name:
+            self.create_tags([reservation.instances], {"Name:": name})
                 
         #calculate remaining time to wait for establishing an ssh session/euinstance     
         timeout -= int(time.time() - start)
@@ -2613,6 +2661,7 @@ disable_root: false"""
                     instances.append(eu_instance)
                 except Exception, e:
                     self.debug(self.get_traceback())
+                    self.get_console_output(instance)
                     raise Exception("Unable to create Euinstance from " + str(instance)+", err:\n"+str(e))
             if monitor_to_running:
                 return self.monitor_euinstances_to_running(instances, timeout=timeout)
@@ -2689,9 +2738,10 @@ disable_root: false"""
         self.monitor_euinstances_to_state(instances, failstates=['terminated','shutting-down'],timeout=timeout)
         #Wait for instances in list to get valid ips, check for duplicates, etc...
         try:
-            self.wait_for_valid_ip(instances, timeout)
+            self.wait_for_valid_ip(instances, timeout=timeout)
         except Exception, e:
-            ip_err = "WARNING in wait_for_valid_ip: "+str(e)
+            tb = self.get_traceback()
+            ip_err = str(tb)  + "\nWARNING in wait_for_valid_ip: "+str(e)
             self.debug(ip_err)
         #Now attempt to connect to instances if connect flag is set in the instance...
         waiting = copy.copy(instances)
@@ -2857,7 +2907,7 @@ disable_root: false"""
         else:
             res = self.get_reservation_for_instance(instance)
         for group in res.groups:
-         secgroups.extend(self.ec2.get_all_security_groups(groupnames=str(group.name)))
+         secgroups.extend(self.ec2.get_all_security_groups(groupnames=str(group.id)))
         return secgroups
     
     def get_reservation_for_instance(self, instance):
@@ -3062,7 +3112,8 @@ disable_root: false"""
             elapsed = int(time.time()- start)
             for instance in monitoring:
                 instance.update()
-                if zeros.search(str(instance.ip_address)) or zeros.search(str(instance.private_ip_address)):
+                if hasattr(instance, 'ip_address') and instance.ip_address and \
+                        (zeros.search(str(instance.ip_address)) or zeros.search(str(instance.private_ip_address))):
                     self.debug(str(instance.id)+": WAITING for public ip. Current:"+str(instance.ip_address)+
                                ", elapsed:"+str(elapsed)+"/"+str(timeout))
                 else:
@@ -3160,6 +3211,7 @@ disable_root: false"""
                 except Exception, e:
                     self.debug(self.get_traceback())
                     euinstance_list.append(instance)
+                    self.get_console_output(instance)
                     self.fail("Unable to create Euinstance from " + str(instance)+": "+str(e))
             else:
                 euinstance_list.append(instance)
@@ -3186,7 +3238,7 @@ disable_root: false"""
         if isinstance(instance, Instance):
             instance = instance.id
         output = self.ec2.get_console_output(instance_id=instance)
-        self.debug(output)
+        self.debug(output.output)
         return output
 
 
@@ -3442,10 +3494,9 @@ disable_root: false"""
                 id_count = len(self.get_images(location=instance.id))
             except:
                 id_count = 0
-            bucket_name =  'win' \
-                           + str(instance.id) + "-" \
+            bucket_name =  str(instance.id) + "-" \
                            + str(id_count)
-        prefix = prefix or 'windows-bundleof-' + str(instance.id)
+        prefix = prefix or 'bundleof-' + str(instance.id)
         s3_upload_policy = self.generate_default_s3_upload_policy(bucket_name,prefix)
         bundle_task = self.ec2.bundle_instance(instance.id, bucket_name, prefix, s3_upload_policy)
         self.print_bundle_task(bundle_task)
@@ -3616,6 +3667,7 @@ disable_root: false"""
                           description=None,
                           architecture=None,
                           virtualization_type=None,
+                          platform=None,
                           bdmdev=None,
                           name=None,
                           ramdisk=None,
@@ -3630,6 +3682,7 @@ disable_root: false"""
                                     description=description,
                                     architecture=architecture,
                                     virtualization_type=virtualization_type,
+                                    platform=platform,
                                     bdmdev=bdmdev,
                                     name=name,
                                     ramdisk=ramdisk,
@@ -3642,10 +3695,117 @@ disable_root: false"""
         self.debug("Registered '" + str(manifest) + "as image:" + str(image))
         return image_obj
 
+    def _register_image_custom_params(self,
+                                     name=None,
+                                     description=None,
+                                     image_location=None,
+                                     architecture=None,
+                                     kernel_id=None,
+                                     ramdisk_id=None,
+                                     root_device_name=None,
+                                     block_device_map=None,
+                                     dry_run=False,
+                                     virtualization_type=None,
+                                     sriov_net_support=None,
+                                     snapshot_id=None,
+                                     platform=None,
+                                     **custom_params):
+        '''
+        Register method to allow testing of 'custom_params' dict if provided
+        '''
+        params = custom_params or {}
+        if name:
+            params['Name'] = name
+        if description:
+            params['Description'] = description
+        if architecture:
+            params['Architecture'] = architecture
+        if kernel_id:
+            params['KernelId'] = kernel_id
+        if ramdisk_id:
+            params['RamdiskId'] = ramdisk_id
+        if image_location:
+            params['ImageLocation'] = image_location
+        if platform:
+            params['Platform'] = platform
+        if root_device_name:
+            params['RootDeviceName'] = root_device_name
+        if snapshot_id:
+            root_vol = BlockDeviceType(snapshot_id=snapshot_id)
+            block_device_map = BlockDeviceMapping()
+            block_device_map[root_device_name] = root_vol
+        if block_device_map:
+            block_device_map.ec2_build_list_params(params)
+        if dry_run:
+            params['DryRun'] = 'true'
+        if virtualization_type:
+            params['VirtualizationType'] = virtualization_type
+        if sriov_net_support:
+            params['SriovNetSupport'] = sriov_net_support
+
+
+        rs = self.ec2.get_object('RegisterImage', params,
+                                 ResultSet, verb='POST')
+        image_id = getattr(rs, 'imageId', None)
+        return image_id
+
+
+
+    def create_image(self, instance, name, description=None, no_reboot=False, block_device_mapping=None, dry_run=False,
+                     timeout=600):
+        """
+        :type instance_id: string
+        :param instance_id: the ID of the instance to image.
+
+        :type name: string
+        :param name: The name of the new image
+
+        :type description: string
+        :param description: An optional human-readable string describing
+            the contents and purpose of the AMI.
+
+        :type no_reboot: bool
+        :param no_reboot: An optional flag indicating that the
+            bundling process should not attempt to shutdown the
+            instance before bundling.  If this flag is True, the
+            responsibility of maintaining file system integrity is
+            left to the owner of the instance.
+
+        :type block_device_mapping: :class:`boto.ec2.blockdevicemapping.BlockDeviceMapping`
+        :param block_device_mapping: A BlockDeviceMapping data structure
+            describing the EBS volumes associated with the Image.
+
+        :type dry_run: bool
+        :param dry_run: Set to True if the operation should not actually run.
+
+        :type timeout: int
+        :param timeout: Time to allow image to get to "available" state.
+
+        :raise Exception: On not reaching the correct state or when more than one image is returned
+        """
+        if isinstance(instance, Instance):
+            instance_id = instance.id
+        else:
+            instance_id = instance
+        image_id = self.ec2.create_image(instance_id, name=name,description=description,no_reboot=no_reboot,
+                                     block_device_mapping=block_device_mapping, dry_run=dry_run)
+        def get_emi_state():
+            images = self.ec2.get_all_images(image_ids=[image_id])
+            if len(images) == 0:
+                raise Exception("Image not found after sending create image request: " + image_id)
+            elif len(images) == 1:
+                state = images[0].state
+                self.debug( image_id + " returned state: " + state)
+                return state
+            else:
+                raise Exception("More than one image returned for: " + image_id)
+        self.wait_for_result(get_emi_state, "available", timeout=timeout,poll_wait=20)
+        return image_id
+
 
     def create_web_servers(self, keypair, group, zone, port=80, count=2, image=None, filename="test-file", cookiename="test-cookie"):
         if not image:
-            image = self.get_emi()
+            image = self.get_emi(root_device_type="instance-store", not_location="loadbalancer", not_platform="windows")
         reservation = self.run_instance(image, keypair=keypair, group=group, zone=zone, min=count, max=count)
         self.authorize_group(group=group,port=port)
 
@@ -3805,3 +3965,9 @@ class VolumeStateException(Exception):
     def __str__(self):
         return repr(self.value)
 
+class ResourceNotFoundException(Exception):
+    def __init__(self, value):
+        self.value = value
+
+    def __str__(self):
+        return repr(self.value)

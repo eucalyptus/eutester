@@ -146,10 +146,14 @@ class San_Properties_Test(EutesterTestCase):
 
 
     def test_property_storage_dedupschedule(self):
+        pass
 
     def test_property_storage_enablecompression(self):
+        pass
 
     def test_property_storage_enablededup(self):
+        pass
 
     def test_property_storage_enableinlinecompression(self):
+        pass
 

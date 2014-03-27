@@ -31,11 +31,11 @@ class BucketTestSuite(EutesterTestCase):
     def __init__(self):
         self.setuptestcase()
         self.setup_parser()
-        self.parser.add_argument("--s3endpoint", default=None)
+        self.parser.add_argument("--endpoint", default=None)
         self.get_args()
         # Setup basic eutester object
-        if self.args.s3endpoint:
-            self.tester = S3ops( credpath=self.args.credpath, endpoint=self.args.endpoint)
+        if self.args.endpoint:
+            self.tester = S3ops(credpath=self.args.credpath, endpoint=self.args.endpoint)
         else:
             self.tester = Eucaops( credpath=self.args.credpath, config_file=self.args.config, password=self.args.password)
 
@@ -157,8 +157,8 @@ class BucketTestSuite(EutesterTestCase):
             if bucket_obj:
                 self.fail("Should have caught exception for creating bucket with empty-string name.")
         except S3ResponseError as e:
-            self.assertEqual(e.status, 405, 'Expected response status code to be 405, actual status code is ' + str(e.status))
-            self.assertTrue(re.search("MethodNotAllowed", e.code), "Incorrect exception returned when creating bucket with null name.")
+            assert (e.status == 405), 'Expected response status code to be 405, actual status code is ' + str(e.status)
+            assert (re.search("MethodNotAllowed", e.code)), "Incorrect exception returned when creating bucket with null name."
         except Exception, e:
             self.tester.debug("Failed due to EUCA-7059 " + str(e))
 
