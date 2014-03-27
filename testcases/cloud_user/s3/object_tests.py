@@ -10,6 +10,7 @@
 
 #Author: Zach Hill <zach@eucalyptus.com>
 #Author: Vic Iglesias <vic@eucalyptus.com>
+import base64
 
 import time
 import random
@@ -293,7 +294,50 @@ class ObjectTestSuite(EutesterTestCase):
         
     def test_object_post(self):
         """Test the POST method for putting objects, requires a pre-signed upload policy and url"""
+        policy_string = ('{ "expiration": "2020-12-01T12:00:00.000Z",\n'
+                         '        "conditions": [\n'
+                         '        {"bucket": "postbucket00"},\n'
+                         '        ["starts-with", "$key", "posttest"],\n'
+                         '        {"acl": "public-read"},\n'
+                         '        {"success_action_redirect": "http://localhost"},\n'
+                         '        ["starts-with", "$Content-Type", "text/"],\n'
+                         '        ]\n'
+                         '        }'
+        )
+
+        html_form = ("<html>\n"
+                     "                        <head>\n"
+                     "                            <title>S3 POST Form</title> \n"
+                     "                            <meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\" />\n"
+                     "                          </head>\n"
+                     "                        \n"
+                     "                          <body> \n"
+                     "                            <form action=\"http://<ENDPOINT>\" method=\"post\" enctype=\"multipart/form-data\">\n"
+                     "                              <input type=\"hidden\" name=\"key\" value=\"posttest_${filename}\">\n"
+                     "                              <input type=\"hidden\" name=\"AWSAccessKeyId\" value=\"<ACCESSKEYID>\">\n"
+                     "                              <input type=\"hidden\" name=\"acl\" value=\"public-read\"> \n"
+                     "                              <input type=\"hidden\" name=\"success_action_redirect\" value=\"http://localhost\">\n"
+                     "                              <input type=\"hidden\" name=\"policy\" value=\"<B64ENCODEDPOLICY>\"/>\n"
+                     "                              <input type=\"hidden\" name=\"signature\" value=\"<SIGNATURE>\">\n"
+                     "                              <input type=\"hidden\" name=\"Content-Type\" value=\"text/plain\">\n"
+                     "                              <!-- Include any additional input fields here -->\n"
+                     "                        \n"
+                     "                              File to upload to S3: \n"
+                     "                              <input name=\"file\" type=\"file\"> \n"
+                     "                              <br> \n"
+                     "                              <input type=\"submit\" value=\"Upload File to Walrus Via Post\"> \n"
+                     "                            </form> \n"
+                     "                          </body>\n"
+                     "                        </html>"
+        )
+
+        #signature = None
+        #bucket = 'posttestbucket'
+        #b64_encoded_policy = base64.b64encode(policy_string.replace("<BUCKET>",bucket))
+        #policy_form = html_form.replace('<ENDPOINT>', endpoint).replace('<ACCESSKEYID', access_key).replace('<B64ENCODEDPOLICY>', b64_encoded_policy)
+
         self.fail("Test not implemented")
+
                 
     def test_object_large_objects(self):
         """Test operations on large objects (>1MB), but not so large that we must use the multi-part upload interface"""
@@ -604,14 +648,13 @@ if __name__ == "__main__":
     
     testcase = ObjectTestSuite()
     ### Either use the list of tests passed from config/command line to determine what subset of tests to run
-    list = testcase.args.tests or [#'test_object_basic_ops', \
-                                   #'test_object_byte_offset_read', \
-                                   #'test_object_large_objects', \
-                                   #'test_object_versionlisting', \
-                                   #'test_object_versioning_enabled', \
-                                   'test_object_versioning_enabled']
-                                   #'test_object_versioning_suspended', \
-                                   #'test_object_multipart']
+    list = testcase.args.tests or ['test_object_basic_ops', \
+                                   'test_object_byte_offset_read', \
+                                   'test_object_large_objects', \
+                                   'test_object_versionlisting', \
+                                   'test_object_versioning_enabled', \
+                                   'test_object_versioning_suspended', \
+                                   'test_object_multipart']
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
     for test in list:

@@ -156,17 +156,6 @@ public class S3BucketTests {
 
 		error = false;
 		try {
-			print("Fetching bucket lifecycle configuration for " + bucketName);
-			s3.getBucketLifecycleConfiguration(bucketName);
-		} catch (AmazonServiceException ase) {
-			verifyException(ase);
-			error = true;
-		} finally {
-			assertTrue("Expected to receive a 501 NotImplemented error but did not", error);
-		}
-
-		error = false;
-		try {
 			print("Fetching bucket policy for " + bucketName);
 			s3.getBucketPolicy(bucketName);
 		} catch (AmazonServiceException ase) {
@@ -209,16 +198,6 @@ public class S3BucketTests {
 			assertTrue("Expected to receive a 501 NotImplemented error but did not", error);
 		}
 
-		error = false;
-		try {
-			print("Fetching multipart uploads for " + bucketName);
-			s3.listMultipartUploads(new ListMultipartUploadsRequest(bucketName));
-		} catch (AmazonServiceException ase) {
-			verifyException(ase);
-			error = true;
-		} finally {
-			assertTrue("Expected to receive a 501 NotImplemented error but did not", error);
-		}
 	}
 
 	/**
