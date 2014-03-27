@@ -2890,7 +2890,7 @@ disable_root: false"""
         else:
             res = self.get_reservation_for_instance(instance)
         for group in res.groups:
-         secgroups.extend(self.ec2.get_all_security_groups(groupnames=str(group.name)))
+         secgroups.extend(self.ec2.get_all_security_groups(groupnames=str(group.id)))
         return secgroups
     
     def get_reservation_for_instance(self, instance):
@@ -3221,7 +3221,7 @@ disable_root: false"""
         if isinstance(instance, Instance):
             instance = instance.id
         output = self.ec2.get_console_output(instance_id=instance)
-        self.debug(output)
+        self.debug(output.output)
         return output
 
 
