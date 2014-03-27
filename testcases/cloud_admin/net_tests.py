@@ -221,13 +221,10 @@ class Net_Tests(EutesterTestCase):
             self.tester.cleanup_artifacts()
 
     def get_proxy_machine(self, instance):
-        proxy_machine = self.get_active_cc_for_instance(instance)
-        try:
-            proxy_machine.sys("grep EDGE " + self.tester.eucapath + "/etc/eucalyptus/eucalyptus.conf", code=0)
-            self.debug("Using NC as proxy when in EDGE mode")
+        if self.tester.config["network"].lower() == "edge":
             proxy_machine = self.get_active_nc_for_instance(instance)
-        except:
-            pass
+        else:
+            proxy_machine = self.get_active_cc_for_instance(instance)
         self.debug("Instance is running on: " + proxy_machine.hostname)
         return proxy_machine
 
