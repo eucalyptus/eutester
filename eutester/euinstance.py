@@ -311,6 +311,24 @@ class EuInstance(Instance, TaggedResource):
                     break
             elapsed = int(time.time()-start)
             if self.ssh is None:
+                # Add network debug/diag info here...
+                # First show arp cache from local machine
+                # todo Consider getting info from relevant euca components:
+                # - arp cache
+                # - iptables info
+                # - route info
+                # - instance console
+                # - instance xml 
+
+                try:
+                    arp_out = "\nLocal ARP cache for instance ip: " \
+                              + str(self.ip_address) + "\n"
+                    arp_fd = os.popen('arp ' + str(self.ip_address))
+                    for line in arp_fd:
+                        arp_out += line
+                    self.debug(arp_out)
+                except Exception as AE:
+                    self.log.debug('Failed to get arp info:' + str(AE))
                 raise Exception(str(self.id)+":Failed establishing ssh connection to instance, elapsed:"+str(elapsed)+
                                 "/"+str(timeout))
         else:
