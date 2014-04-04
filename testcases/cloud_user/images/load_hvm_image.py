@@ -85,7 +85,7 @@ image_utils = testcase.do_with_args(ImageUtils)
 test1 = testcase.create_testunit_from_method(image_utils.create_emi)
 test2 = testcase.create_testunit_from_method(make_image_public)
 
-testcase.run_test_case_list([test1, test2], eof=True, clean_on_exit=False, printresults=True)
+result = testcase.run_test_case_list([test1, test2], eof=True, clean_on_exit=False, printresults=True)
 
 #By default created resources are stored in the eucaops/tester object's test_resources dict. See if our image is
 #prsent. If so print it out...
@@ -93,3 +93,4 @@ if image_utils.tester.test_resources['images']:
     emi = image_utils.tester.test_resources['images'][0]
     testcase.debug('\n---------------------------\nCreated EMI:' + str(emi) +'\n---------------------------')
 
+exit(result)
