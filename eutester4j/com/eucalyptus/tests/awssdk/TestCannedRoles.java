@@ -230,17 +230,17 @@ public class TestCannedRoles {
 
             // Test Infrastructure Admin Role
             final YouServClient youServ = new YouServClient(credentialsProvider("arn:aws:iam::eucalyptus:role/eucalyptus/InfrastructureAdministrator", "session-name-here", accessKey, secretKey));
-            youServ.setEndpoint(EC2_ENDPOINT.substring(0, EC2_ENDPOINT.length() - 21) + "/services/Empyrean/");
+            youServ.setEndpoint(EC2_ENDPOINT.substring(0, EC2_ENDPOINT.length() - 17) + "/services/Empyrean/");
             List<ServiceStatus> serviceStatuses = youServ.describeServices(new DescribeServicesRequest()).getServiceStatuses();
             assertThat(!serviceStatuses.isEmpty(), "Expected Services");
 
             final YouPropClient youProp = new YouPropClient(credentialsProvider("arn:aws:iam::eucalyptus:role/eucalyptus/InfrastructureAdministrator", "session-name-here", accessKey, secretKey));
-            youProp.setEndpoint(EC2_ENDPOINT.substring(0, EC2_ENDPOINT.length() - 21) + "/services/Properties/");
+            youProp.setEndpoint(EC2_ENDPOINT.substring(0, EC2_ENDPOINT.length() - 17) + "/services/Properties/");
             List<Property> properties = youProp.describeProperties().getProperties();
             assertThat(!properties.isEmpty(), "Expected Properties");
 
             final YouConfigClient youConfig = new YouConfigClient(credentialsProvider("arn:aws:iam::eucalyptus:role/eucalyptus/InfrastructureAdministrator", "session-name-here", accessKey, secretKey));
-            youConfig.setEndpoint(EC2_ENDPOINT.substring(0, EC2_ENDPOINT.length() - 21) + "/services/Configuration/");
+            youConfig.setEndpoint(EC2_ENDPOINT.substring(0, EC2_ENDPOINT.length() - 17) + "/services/Configuration/");
             List<ComponentInfo> components = youConfig.describeComponents().getComponentInfos();
             assertThat(!components.isEmpty(), "Expected Components");
 
