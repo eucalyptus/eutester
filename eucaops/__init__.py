@@ -34,6 +34,7 @@ from boto.ec2.image import Image
 from boto.ec2.volume import Volume
 from cwops import CWops
 from asops import ASops
+from eucaops.cfnops import CFNops
 from eucaops.elbops import ELBops
 from iamops import IAMops
 from ec2ops import EC2ops
@@ -54,12 +55,12 @@ from eutester import eulogger
 import re
 import os
 
-class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
+class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
     
     def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None,
                  aws_secret_access_key = None,  account="eucalyptus", user="admin", username=None, APIVersion='2011-01-01',
-                 region=None, ec2_ip=None, s3_ip=None, s3_path=None, as_ip=None, elb_ip=None, download_creds=True,boto_debug=0,
-                 debug_method=None):
+                 region=None, ec2_ip=None, s3_ip=None, s3_path=None, as_ip=None, elb_ip=None, cfn_ip=None,
+                 download_creds=True, boto_debug=0, debug_method=None):
         self.config_file = config_file 
         self.APIVersion = APIVersion
         self.eucapath = "/opt/eucalyptus"
@@ -139,11 +140,20 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
             try:
                 if self.credpath and not ec2_ip:
                     ec2_ip = self.get_ec2_ip()
-                self.setup_ec2_connection(endpoint=ec2_ip, path="/services/Eucalyptus", port=8773, is_secure=False, region=region, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, APIVersion=APIVersion, boto_debug=boto_debug)
+                self.setup_ec2_connection(endpoint=ec2_ip, path="/services/Eucalyptus", port=8773, is_secure=False,
+                                          region=region, aws_access_key_id=aws_access_key_id,
+                                          aws_secret_access_key=aws_secret_access_key, APIVersion=APIVersion,
+                                          boto_debug=boto_debug)
                 self.setup_ec2_resource_trackers()
-                self.setup_iam_connection(endpoint=ec2_ip, path="/services/Euare", port=8773, is_secure=False, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,  boto_debug=boto_debug)
-                self.setup_sts_connection( endpoint=ec2_ip, path="/services/Eucalyptus", port=8773, is_secure=False, region=region, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
-                self.setup_cw_connection( endpoint=ec2_ip, path="/services/CloudWatch", port=8773, is_secure=False, region=region, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
+                self.setup_iam_connection(endpoint=ec2_ip, path="/services/Euare", port=8773, is_secure=False,
+                                          aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,
+                                          boto_debug=boto_debug)
+                self.setup_sts_connection(endpoint=ec2_ip, path="/services/Eucalyptus", port=8773, is_secure=False,
+                                           region=region, aws_access_key_id=aws_access_key_id,
+                                           aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
+                self.setup_cw_connection(endpoint=ec2_ip, path="/services/CloudWatch", port=8773, is_secure=False,
+                                          region=region, aws_access_key_id=aws_access_key_id,
+                                          aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
                 self.setup_cw_resource_trackers()
             except Exception, e:
                 tb = self.get_traceback()
@@ -154,7 +164,9 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
                     s3_ip = self.get_s3_ip()
                 if self.credpath and not s3_path:
                     s3_path = self.get_s3_path()
-                self.setup_s3_connection(endpoint=s3_ip, path=s3_path, port=8773, is_secure=False,aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,  boto_debug=boto_debug)
+                self.setup_s3_connection(endpoint=s3_ip, path=s3_path, port=8773, is_secure=False,
+                                         aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,
+                                         boto_debug=boto_debug)
                 self.setup_s3_resource_trackers()
             except Exception, e:
                 self.debug("Unable to create S3 connection because of: " + str(e) )
@@ -162,16 +174,29 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
             try:
                 if self.credpath and not as_ip:
                     as_ip = self.get_as_ip()
-                self.setup_as_connection(endpoint=as_ip, path="/services/AutoScaling", port=8773, is_secure=False, region=region, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
+                self.setup_as_connection(endpoint=as_ip, path="/services/AutoScaling", port=8773, is_secure=False,
+                                         region=region, aws_access_key_id=aws_access_key_id,
+                                         aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
             except Exception, e:
                 self.debug("Unable to create AS connection because of: " + str(e) )
 
             try:
                 if self.credpath and not elb_ip:
                     elb_ip = self.get_elb_ip()
-                self.setup_elb_connection(endpoint=elb_ip, path="/services/LoadBalancing", port=8773, is_secure=False, region=region, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
+                self.setup_elb_connection(endpoint=elb_ip, path="/services/LoadBalancing", port=8773, is_secure=False,
+                                          region=region, aws_access_key_id=aws_access_key_id,
+                                          aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
             except Exception, e:
                 self.debug("Unable to create ELB connection because of: " + str(e) )
+            try:
+                if self.credpath and not cfn_ip:
+                    cfn_ip = self.get_cfn_ip()
+                self.setup_cfn_connection(endpoint=cfn_ip, path="/services/CloudFormation", port=8773, is_secure=False,
+                                          region=region, aws_access_key_id=aws_access_key_id,
+                                          aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
+            except Exception, e:
+                self.debug("Unable to create CloudFormation connection because of: " + str(e) )
+
         if self.clc and self.account_name == 'eucalyptus':
             try:
                 self.update_property_manager()
