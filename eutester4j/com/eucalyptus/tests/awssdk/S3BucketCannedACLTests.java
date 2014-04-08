@@ -1,10 +1,9 @@
 package com.eucalyptus.tests.awssdk;
 
 import static com.eucalyptus.tests.awssdk.Eutester4j.assertThat;
+import static com.eucalyptus.tests.awssdk.Eutester4j.initS3ClientWithNewAccount;
 import static com.eucalyptus.tests.awssdk.Eutester4j.eucaUUID;
-import static com.eucalyptus.tests.awssdk.Eutester4j.initS3Client;
 import static com.eucalyptus.tests.awssdk.Eutester4j.print;
-import static com.eucalyptus.tests.awssdk.Eutester4j.s3;
 import static com.eucalyptus.tests.awssdk.Eutester4j.testInfo;
 import static org.testng.AssertJUnit.assertTrue;
 
@@ -13,12 +12,14 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
+import org.testng.annotations.AfterClass;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 import com.amazonaws.AmazonServiceException;
+import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.AccessControlList;
 import com.amazonaws.services.s3.model.Bucket;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
@@ -47,11 +48,29 @@ public class S3BucketCannedACLTests {
 
 	private static String bucketName = null;
 	private static List<Runnable> cleanupTasks = null;
+	private static AmazonS3 s3 = null;
+	private static String account = null;
 
 	@BeforeClass
 	public void init() throws Exception {
 		print("*** PRE SUITE SETUP ***");
-		initS3Client();
+		try {
+			account = this.getClass().getSimpleName().toLowerCase();
+			s3 = initS3ClientWithNewAccount(account, "admin");
+		} catch (Exception e) {
+			try {
+				teardown();
+			} catch (Exception ie) {
+			}
+			throw e;
+		}
+	}
+
+	@AfterClass
+	public void teardown() throws Exception {
+		print("*** POST SUITE CLEANUP ***");
+		Eutester4j.deleteAccount(account);
+		s3 = null;
 	}
 
 	@BeforeMethod

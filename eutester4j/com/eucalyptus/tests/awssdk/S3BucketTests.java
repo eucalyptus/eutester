@@ -2,9 +2,8 @@ package com.eucalyptus.tests.awssdk;
 
 import static com.eucalyptus.tests.awssdk.Eutester4j.assertThat;
 import static com.eucalyptus.tests.awssdk.Eutester4j.eucaUUID;
-import static com.eucalyptus.tests.awssdk.Eutester4j.initS3Client;
+import static com.eucalyptus.tests.awssdk.Eutester4j.initS3ClientWithNewAccount;
 import static com.eucalyptus.tests.awssdk.Eutester4j.print;
-import static com.eucalyptus.tests.awssdk.Eutester4j.s3;
 import static com.eucalyptus.tests.awssdk.Eutester4j.testInfo;
 import static org.testng.AssertJUnit.assertTrue;
 
@@ -13,12 +12,14 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
+import org.testng.annotations.AfterClass;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 import com.amazonaws.AmazonServiceException;
+import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.AccessControlList;
 import com.amazonaws.services.s3.model.AmazonS3Exception;
 import com.amazonaws.services.s3.model.Bucket;
@@ -28,7 +29,6 @@ import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.CanonicalGrantee;
 import com.amazonaws.services.s3.model.Grant;
 import com.amazonaws.services.s3.model.GroupGrantee;
-import com.amazonaws.services.s3.model.ListMultipartUploadsRequest;
 import com.amazonaws.services.s3.model.Permission;
 import com.amazonaws.services.s3.model.SetBucketLoggingConfigurationRequest;
 import com.amazonaws.services.s3.model.SetBucketVersioningConfigurationRequest;
@@ -47,11 +47,29 @@ public class S3BucketTests {
 
 	private static String bucketName = null;
 	private static List<Runnable> cleanupTasks = null;
+	private static AmazonS3 s3 = null;
+	private static String account = null;
 
 	@BeforeClass
 	public void init() throws Exception {
 		print("*** PRE SUITE SETUP ***");
-		initS3Client();
+		try {
+			account = this.getClass().getSimpleName().toLowerCase();
+			s3 = initS3ClientWithNewAccount(account, "admin");
+		} catch (Exception e) {
+			try {
+				teardown();
+			} catch (Exception ie) {
+			}
+			throw e;
+		}
+	}
+
+	@AfterClass
+	public void teardown() throws Exception {
+		print("*** POST SUITE CLEANUP ***");
+		Eutester4j.deleteAccount(account);
+		s3 = null;
 	}
 
 	@BeforeMethod
@@ -158,17 +176,6 @@ public class S3BucketTests {
 
 		error = false;
 		try {
-			print("Fetching bucket lifecycle configuration for " + bucketName);
-			s3.getBucketLifecycleConfiguration(bucketName);
-		} catch (AmazonServiceException ase) {
-			verifyException(ase);
-			error = true;
-		} finally {
-			assertTrue("Expected to receive a 501 NotImplemented error but did not", error);
-		}
-
-		error = false;
-		try {
 			print("Fetching bucket policy for " + bucketName);
 			s3.getBucketPolicy(bucketName);
 		} catch (AmazonServiceException ase) {
@@ -204,17 +211,6 @@ public class S3BucketTests {
 		try {
 			print("Fetching bucket website configuration for " + bucketName);
 			s3.getBucketWebsiteConfiguration(bucketName);
-		} catch (AmazonServiceException ase) {
-			verifyException(ase);
-			error = true;
-		} finally {
-			assertTrue("Expected to receive a 501 NotImplemented error but did not", error);
-		}
-
-		error = false;
-		try {
-			print("Fetching multipart uploads for " + bucketName);
-			s3.listMultipartUploads(new ListMultipartUploadsRequest(bucketName));
 		} catch (AmazonServiceException ase) {
 			verifyException(ase);
 			error = true;
@@ -336,7 +332,7 @@ public class S3BucketTests {
 				assertTrue("Expected error code to be 400, but got " + ex.getStatusCode(), ex.getStatusCode() == 400);
 				error = true;
 			} finally {
-				assertTrue("Expected AmazonS3Exception for setting bucking versioning configuration to OFF", error);
+				assertTrue("Expected AmazonS3Exception for setting bucket versioning configuration to OFF", error);
 			}
 
 		} catch (AmazonServiceException ase) {

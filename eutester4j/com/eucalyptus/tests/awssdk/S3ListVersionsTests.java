@@ -2,9 +2,8 @@ package com.eucalyptus.tests.awssdk;
 
 import static com.eucalyptus.tests.awssdk.Eutester4j.assertThat;
 import static com.eucalyptus.tests.awssdk.Eutester4j.eucaUUID;
-import static com.eucalyptus.tests.awssdk.Eutester4j.initS3Client;
+import static com.eucalyptus.tests.awssdk.Eutester4j.initS3ClientWithNewAccount;
 import static com.eucalyptus.tests.awssdk.Eutester4j.print;
-import static com.eucalyptus.tests.awssdk.Eutester4j.s3;
 import static com.eucalyptus.tests.awssdk.Eutester4j.testInfo;
 import static org.testng.AssertJUnit.assertTrue;
 
@@ -21,7 +20,8 @@ import java.util.Random;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
-import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang.StringUtils;
+import org.testng.annotations.AfterClass;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.BeforeMethod;
@@ -31,7 +31,6 @@ import com.amazonaws.AmazonServiceException;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.Bucket;
 import com.amazonaws.services.s3.model.BucketVersioningConfiguration;
-import com.amazonaws.services.s3.model.ListBucketsRequest;
 import com.amazonaws.services.s3.model.ListVersionsRequest;
 import com.amazonaws.services.s3.model.PutObjectResult;
 import com.amazonaws.services.s3.model.S3VersionSummary;
@@ -72,16 +71,34 @@ public class S3ListVersionsTests {
 	private static long size = 0;
 	private static String md5 = null;
 	private static String ownerID = null;
+	private static AmazonS3 s3 = null;
+	private static String account = null;
 	private static String VALID_CHARS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 	private static int DEFAULT_MAX_KEYS = 1000;
 
 	@BeforeClass
 	public void init() throws Exception {
 		print("*** PRE SUITE SETUP ***");
-		initS3Client();
+		try {
+			account = this.getClass().getSimpleName().toLowerCase();
+			s3 = initS3ClientWithNewAccount(account, "admin");
+		} catch (Exception e) {
+			try {
+				teardown();
+			} catch (Exception ie) {
+			}
+			throw e;
+		}
 		ownerID = s3.getS3AccountOwner().getId();
 		md5 = BinaryUtils.toHex(Md5Utils.computeMD5Hash(new FileInputStream(fileToPut)));
 		size = fileToPut.length();
+	}
+
+	@AfterClass
+	public void teardown() throws Exception {
+		print("*** POST SUITE CLEANUP ***");
+		Eutester4j.deleteAccount(account);
+		s3 = null;
 	}
 
 	@BeforeMethod
