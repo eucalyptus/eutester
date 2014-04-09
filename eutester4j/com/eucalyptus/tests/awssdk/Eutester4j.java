@@ -149,6 +149,49 @@ class Eutester4j {
 
         print("S3 Discovery Complete");
     }
+    
+	public static AmazonS3 initS3ClientWithNewAccount(String account, String user) throws Exception {
+
+		// Initialize everything for the first time
+		if (EC2_ENDPOINT == null || S3_ENDPOINT == null || IAM_ENDPOINT == null || ACCESS_KEY == null || SECRET_KEY == null) {
+			if (eucarc != null) {
+				CREDPATH = eucarc;
+			} else {
+				CREDPATH = "eucarc";
+			}
+
+			if (endpointFile != null) {
+				endpoints = endpointFile;
+			} else {
+				endpoints = "endpoints.xml";
+			}
+
+			print("Getting cloud information from " + CREDPATH);
+
+			EC2_ENDPOINT = parseEucarc(CREDPATH, "EC2_URL") + "/";
+			S3_ENDPOINT = parseEucarc(CREDPATH, "S3_URL") + "/";
+			IAM_ENDPOINT = parseEucarc(CREDPATH, "EUARE_URL") + "/";
+
+			ACCESS_KEY = parseEucarc(CREDPATH, "EC2_ACCESS_KEY").replace("'", "");
+			SECRET_KEY = parseEucarc(CREDPATH, "EC2_SECRET_KEY").replace("'", "");
+
+			print("Updating endpoints file");
+			updateEndpoints(endpoints, EC2_ENDPOINT, S3_ENDPOINT);
+
+			youAre = getYouAreClient(ACCESS_KEY, SECRET_KEY, IAM_ENDPOINT);
+		}
+
+		// Create a new account and the user
+		createAccount(account);
+		if(!user.equalsIgnoreCase("admin")) {
+			createUser(account, user);
+		}
+		Map<String, String> keyMap = getUserKeys(account, user);
+
+		// Initialize the s3 client and return it
+		return getS3Client(keyMap.get("ak"), keyMap.get("sk"), S3_ENDPOINT);
+	}
+    
 
     public static void testInfo(String testName) {
         print("*****TEST NAME: " + testName);
