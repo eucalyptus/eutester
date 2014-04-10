@@ -8,6 +8,7 @@
 ###########################################
 
 #Author: Zach Hill <zach@eucalyptus.com>
+from datetime import date
 
 from eucaops import Eucaops
 import argparse
@@ -24,6 +25,7 @@ from boto.s3.bucket import Bucket
 from boto.s3.key import Key
 from boto.s3.acl import ACL, Policy, Grant
 from boto.s3.connection import Location
+from boto.s3.lifecycle import Lifecycle, Rule, Expiration
 
 
 class BucketTestSuite(EutesterTestCase):
@@ -549,9 +551,68 @@ class BucketTestSuite(EutesterTestCase):
     def test_list_multipart_uploads(self):
         self.fail("Feature Not implemented")
 
-    def test_bucket_lifecycle(self):        
-        self.fail("Feature Not implemented")
-        
+    def test_bucket_lifecycle(self):
+        lifecycle_id = 'eutester lifecycle test'
+        lifecycle_prefix = 'eulifecycle'
+        lifecycle_status = 'Enabled'
+        lifecycle_expiration = 1
+        bucket_name = self.bucket_prefix + "lifecycle-test0"
+        self.buckets_used.add(bucket_name)
+        bucket = self.tester.create_bucket(bucket_name)
+
+        lifecycle = Lifecycle()
+        lifecycle.add_rule(lifecycle_id, lifecycle_prefix, lifecycle_status, lifecycle_expiration)
+        bucket.configure_lifecycle(lifecycle)
+        responses = bucket.get_lifecycle_config()
+        assert (len(responses) == 1), 'found not true'
+        lifecycle_response = responses[0]
+        assert (lifecycle_response.id == lifecycle_id), "Expected lifecycle Id to be: " + lifecycle_id + " found " + lifecycle_response.id
+        assert (lifecycle_response.prefix == lifecycle_prefix), "Expected lifecycle prefix to be: " + lifecycle_prefix + " found " + lifecycle_response.prefix
+        assert (lifecycle_response.status == lifecycle_status), "Expected lifecycle status to be: " + lifecycle_status + " found " + lifecycle_response.status
+        assert (lifecycle_response.expiration.days == lifecycle_expiration), "Expected lifecycle expiration days to be: " + str(lifecycle_expiration) + " found " + str(lifecycle_response.expiration.days)
+
+        bucket.delete_lifecycle_configuration()
+        assert (len(responses) == 1), "Expected no configuration, found " + len(responses) + " configuration"
+
+        # multiple rules
+        bucket_name = self.bucket_prefix + "lifecycle-test1"
+        bucket = self.tester.create_bucket(bucket_name)
+        self.buckets_used.add(bucket_name)
+        date = '2022-10-12T00:10:10.011Z'
+        lifecycle = Lifecycle()
+        lifecycle.add_rule("1", "1/", "Enabled", 1)
+        lifecycle.add_rule("2", "2/", "Enabled", Expiration(days=2))
+        lifecycle.add_rule("3", "3/", "Enabled", Expiration(date=date))
+        lifecycle.add_rule("4", "4/", "Disabled", Expiration(date=date))
+        bucket.configure_lifecycle(lifecycle)
+        lifecycle_responses = bucket.get_lifecycle_config()
+        if lifecycle_responses < 0:
+            self.fail("no lifecycle found!")
+
+        for response in lifecycle_responses:
+            if response.id == "1":
+                assert (response.prefix == "1/"), "Expected lifecycle prefix to be: " + "1/" + " found: " + response.prefix
+                assert (response.status == "Enabled"), "Expected lifecycle status to be: " + "Enabled" + " found " + response.status
+                assert (response.expiration.days == 1), "Expected lifecycle expiration days to be: " + str(1) + " found " + str(response.expiration.days)
+            elif response.id == "2":
+                assert (response.prefix == "2/"), "Expected lifecycle prefix to be: " + "2/" + " found: " + response.prefix
+                assert (response.status == "Enabled"), "Expected lifecycle status to be: " + "Enabled" + " found: " + response.status
+                assert (response.expiration.days == 2), "Expected lifecycle expiration days to be: " + str(2) + " found " + str(response.expiration.days)
+            elif response.id == "3":
+                assert (response.prefix == "3/"), "Expected lifecycle prefix to be: " + "3/" + " found: " + response.prefix
+                assert (response.status == "Enabled"), "Expected lifecycle status to be: " + "Enabled" + " found " + response.status
+                assert (response.expiration.date == date), "Expected lifecycle expiration days to be: " + date + " found " + str(response.expiration.date)
+            elif response.id == "4":
+                assert (response.prefix == "4/"), "Expected lifecycle prefix to be: " + "4/" + " found: " + response.prefix
+                assert (response.status == "Disabled"), "Expected lifecycle status to be: " + "Disabled" + " found " + response.status
+                assert (response.expiration.date == date), "Expected lifecycle expiration days to be: " + date + " found " + str(response.expiration.date)
+            else:
+                self.fail("no response found")
+
+        self.debug("Cleaning up used buckets")
+        for bucket in self.buckets_used:
+            self.tester.clear_bucket(bucket)
+
     def test_bucket_policy(self):
         self.fail("Feature Not implemented")
         

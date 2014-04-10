@@ -557,7 +557,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
             for param in ["network", "managed_ips", "subnet_ip"]:
                 try:
                     if re.search("^" + param + ".*$", line, re.IGNORECASE):
-                        config_hash[param] = line.split()[1].lower()
+                        config_hash[param] = " ".join(line.split()[1:])
                 except:
                     self.debug("Could not find " + param + " type setting to None")
                     config_hash[param] = None
