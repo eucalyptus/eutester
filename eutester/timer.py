@@ -37,3 +37,4 @@ class Timer:
 
     def finish(self):
         self._log.close()
+
