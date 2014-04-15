@@ -31,9 +31,9 @@ class InstallRiak(EutesterTestCase):
         try:  
             for machine in self.tester.get_component_machines("riak"):
                 machine.sys("yum install -y http://yum.basho.com/gpg/basho-release-6-1.noarch.rpm")
-                machine.sys("yum install -y riak")
-                machine.sys("yum install -y stanchion")
-                machine.sys("yum install -y riak-cs")
+                machine.sys("yum install -y riak", timeout=600)
+                machine.sys("yum install -y stanchion", timeout=600)
+                machine.sys("yum install -y riak-cs", timeout=600)
                 self.riak_cs_version = machine.sys("riak-cs version")
                 machine_ulimit = machine.sys('ulimit -n')
                 if ( machine_ulimit.pop() != '65536'):
