@@ -102,3 +102,4 @@ if __name__ == "__main__":
     ### Run the EutesterUnitTest objects
     result = testcase.run_test_case_list(unit_list)
     sys.exit(result)
+
