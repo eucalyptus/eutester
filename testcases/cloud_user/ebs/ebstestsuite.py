@@ -1005,7 +1005,13 @@ if __name__ == "__main__":
     tc.setup_parser(testname='ebstestsuite.py', description='collection of ebs related tests', testlist=False)
     tc.parser.add_argument('--inst_pass', 
                         help="Instance password for ssh session if not key enabled", default=None)
-    
+    tc.parser.add_argument('--no_clean_on_exit', dest='clean_on_exit',
+                           help="Clean up resources created in this test. Default=True",
+                           action='store_false', default=True)
+    tc.parser.add_argument('--exit_on_fail', dest='exit_on_fail',
+                           help="End test on first test unit failure Default=False",
+                           action='store_true', default=False)
+
     args = tc.get_args()
     #if file was not provided or is not found
     if not os.path.exists(args.config):
@@ -1017,7 +1023,9 @@ if __name__ == "__main__":
     kbtime=time.time()
     try:
        list = ebssuite.ebs_basic_test_suite(run=False)
-       tc.run_test_case_list(list)
+       tc.run_test_case_list(list,
+                             eof=tc.args.exit_on_failure,
+                             clean_on_exit=tc.args.clean_on_exit)
     except KeyboardInterrupt:
         ebssuite.debug("Caught keyboard interrupt...")
         if ((time.time()-kbtime) < 2):
