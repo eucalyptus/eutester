@@ -84,7 +84,7 @@ public class AwsSdkBucketTest {
      */
     @Test
     public void basicBucketOperationsTest() throws Exception {
-        getCloudInfo();
+        initS3Client();
 
         final String bucketName = eucaUUID();
 
@@ -137,7 +137,7 @@ public class AwsSdkBucketTest {
      */
     @Test
     public void duplicateBucketNameSameClientInstanceTest() throws Exception {
-        getCloudInfo();
+        initS3Client();
 
         final String bucketName = eucaUUID();
 
@@ -183,9 +183,10 @@ public class AwsSdkBucketTest {
         }
     }
 
-    @Test(expectedExceptions = AmazonS3Exception.class)
+    //@Test(expectedExceptions = AmazonS3Exception.class)
+    @Test
     public void existingBucketNameTest() throws Exception {
-        getCloudInfo();
+        initS3Client();
 
         final String bucketName = eucaUUID();
 
@@ -228,7 +229,7 @@ public class AwsSdkBucketTest {
      */
     @Test(expectedExceptions = {AmazonS3Exception.class, IllegalArgumentException.class})
     public void badNamesTest() throws Exception {
-        getCloudInfo();
+        initS3Client();
         String testBucketName = eucaUUID() + "-";
 
         String withUnderscores = testBucketName.replace("-", "_");

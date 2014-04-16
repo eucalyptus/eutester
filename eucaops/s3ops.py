@@ -216,7 +216,7 @@ class S3ops(Eutester):
         try :
             bucket = self.s3.get_bucket(bucket_name=bucket_name)      
         except S3ResponseError as e:
-            self.error('No bucket' + bucket_name + ' found: ' + e.message)
+            self.debug('No bucket' + bucket_name + ' found: ' + e.message)
             raise Exception('Not found')
         
         try:
@@ -232,7 +232,7 @@ class S3ops(Eutester):
                 bucket.delete_key(k)
             bucket.delete()
         except S3ResponseError as e:
-            self.debug(  "Exception caught doing bucket cleanup." )
+            self.debug(  "Exception caught doing bucket cleanup." + e.message )
             #Todo: need to make this work with Walrus's non-S3-compliant error codes
             if e.status == 409:
                 #Do version cleanup
@@ -345,6 +345,6 @@ class S3ops(Eutester):
         hasher.update(data)
         data_hash = "\"" + hasher.hexdigest() + "\""
         if data_hash != eTag:
-            raise Exception( "Hash/eTag mismatch: \nhash = " + data_hash + "\neTag= " + eTag )
+            raise Exception( "Hash/eTag mismatch: \nhash = " + data_hash + "\neTag= " + eTag)
             
                 
