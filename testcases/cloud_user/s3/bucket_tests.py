@@ -438,7 +438,7 @@ class BucketTestSuite(EutesterTestCase):
         test_bucket = self.bucket_prefix + "versioning_test_bucket"
         self.tester.info('Testing bucket versioning using bucket:' + test_bucket)
         version_bucket = self.tester.s3.create_bucket(test_bucket)
-        self.buckets_used.add(version_bucket)
+        self.buckets_used.add(test_bucket)
         version_status = version_bucket.get_versioning_status().get("Versioning")
         
         #Test the default setup after bucket creation. Should be disabled.
@@ -483,7 +483,7 @@ class BucketTestSuite(EutesterTestCase):
         self.tester.info("Versioning of bucket is set to: " + version_status)
         
         version_bucket.delete()
-        self.buckets_used.remove(version_bucket)
+        self.buckets_used.remove(test_bucket)
         self.tester.info("Bucket Versioning: PASSED")
                
     def test_bucket_key_listing_paging(self):
@@ -541,7 +541,7 @@ class BucketTestSuite(EutesterTestCase):
         key_list = testbucket.get_all_keys()
         
         for k in key_list:
-            self.tester.info("Deleting key: " + k.key())
+            self.tester.info("Deleting key: " + k.name)
             testbucket.delete_key(k)
 
         self.tester.info("Deleting the bucket")
@@ -633,7 +633,7 @@ class BucketTestSuite(EutesterTestCase):
                 else:
                     self.tester.info('Bucket ' + bucket + ' not found, skipping')
             except:
-                self.tester.info('Exception checking bucket ' + bucket)
+                self.tester.info('Exception checking bucket ' + str(bucket))
 
         return
           

@@ -217,6 +217,7 @@ public class S3BucketTests {
 		} finally {
 			assertTrue("Expected to receive a 501 NotImplemented error but did not", error);
 		}
+
 	}
 
 	/**
