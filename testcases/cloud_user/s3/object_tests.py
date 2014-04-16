@@ -444,16 +444,28 @@ class ObjectTestSuite(EutesterTestCase):
     def test_multipart_upload(self):
         '''Basic multipart upload'''
         self.tester.info("Testing multipart upload")
+        self.tester.info("Creating random file representing part...")
         temp_file = tempfile.NamedTemporaryFile(mode="w+b", prefix="multipart")
         temp_file.write(os.urandom(5 * 1024 * 1024))
         keyname="multi-" + str(int(time.time()))
+        self.tester.info("Initiating multipart upload...much upload")
         reply = self.initiate_multipart_upload(keyname)
+        self.tester.info("Uploading parts...Such Parts")
         for partnum in range(1, 11):
             temp_file.seek(0, os.SEEK_SET)
             reply.upload_part_from_file(temp_file, partnum)
+        self.tester.info("Listing parts...")
         self.test_bucket.get_all_multipart_uploads()
+        self.tester.info("Completing upload...So OSG")
         reply.complete_upload()
         temp_file.close()
+        self.tester.info("HEAD request...");
+        returned_key = self.test_bucket.get_key(keyname, validate=True);
+        download_temp_file = tempfile.NamedTemporaryFile(mode="w+b", prefix="mpu-download")
+        self.tester.info("Downloading object...very mpu");
+        returned_key.get_contents_to_file(download_temp_file);
+        self.tester.info("Deleting object...WOW")
+        self.test_bucket.delete_key(keyname)
 
     def test_abort_multipart_upload(self):
         '''Basic multipart upload'''
@@ -466,6 +478,7 @@ class ObjectTestSuite(EutesterTestCase):
             temp_file.seek(0, os.SEEK_SET)
             reply.upload_part_from_file(temp_file, partnum)
         self.test_bucket.get_all_multipart_uploads()
+        self.tester.info("Canceling upload")
         reply.cancel_upload()
         temp_file.close()
 
