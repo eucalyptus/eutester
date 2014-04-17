@@ -1053,7 +1053,9 @@ disable_root: false"""
             raise Exception("delete_volumes: volume_list was empty")
         for volume in vollist:
             try:
-                self.debug( "Sending delete for volume: " +  str(volume.id)  )
+                self.debug( "Sending delete for volume: " +  str(volume.id))
+                if volume in self.test_resources['volumes']:
+                    self.test_resources['volumes'].remove(volume)
                 volumes = self.ec2.get_all_volumes([volume.id])
                 if len(volumes) == 1:
                     volume = volumes[0]
@@ -1101,7 +1103,6 @@ disable_root: false"""
 
                   errmsg += "ERROR:"+str(volume) + " left in " +  volume.status + ',elapsed:'+str(elapsed) + "\n"
                 raise Exception(errmsg)
-
 
 
     def delete_all_volumes(self):
@@ -1903,6 +1904,7 @@ disable_root: false"""
                                                       image_location=image_location,
                                                       ramdisk_id=ramdisk,
                                                       architecture=architecture,
+                                                      virtualization_type=virtualization_type,
                                                       block_device_map=bdmdev,
                                                       root_device_name=root_device_name,
                                                       **custom_params)
