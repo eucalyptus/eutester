@@ -115,6 +115,10 @@ class Eutester(object):
         return ec2_url.split(':')[1].split("/")[0]
 
     def parse_eucarc(self, field):
+        if self.credpath is None:
+            raise ValueError('Credpath has not been set yet. '
+                             'Please set credpath or provide '
+                             'configuration file')
         with open( self.credpath + "/eucarc") as eucarc:
             for line in eucarc.readlines():
                 if re.search(field, line):
