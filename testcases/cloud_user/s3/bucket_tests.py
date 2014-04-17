@@ -79,75 +79,25 @@ class BucketTestSuite(EutesterTestCase):
             self.tester.debug( "Correctly got exception trying to get a deleted bucket! " )
             
         self.tester.debug( "Testing an invalid bucket names, calls should fail." )
-        try:
-            bad_bucket = self.bucket_prefix + "bucket123/"
-            self.tester.create_bucket(bad_bucket)
-            should_fail = True            
+        def test_creating_bucket_invalid_names(bad_bucket):
+            should_fail = False
             try:
-                self.tester.delete_bucket(bad_bucket)
+                bucket = self.tester.create_bucket(bad_bucket)
+                should_fail = True            
+                try:
+                    self.tester.delete_bucket(bucket)
+                except:
+                    self.tester.debug( "Exception deleting bad bucket, shouldn't be here anyway. Test WILL fail" )
             except:
-                self.tester.debug( "Exception deleting bad bucket, shouldn't be here anyway. Test WILL fail" )
-                
+                self.tester.debug( "Correctly caught the exception" )
             if should_fail:
                 self.fail("Should have caught exception for bad bucket name: " + bad_bucket)
-        except:
-            self.tester.debug( "Correctly caught the exception" )
         
-        try:
-            bad_bucket = self.bucket_prefix + "bucket.123"
-            self.tester.create_bucket(bad_bucket)
-            should_fail = True            
-            try:
-                self.tester.delete_bucket(bad_bucket)
-            except:
-                self.tester.debug( "Exception deleting bad bucket, shouldn't be here anyway. Test WILL fail" )
-                
-            if should_fail:
-                self.fail("Should have caught exception for bad bucket name: " + bad_bucket)
-        except:
-            self.tester.debug( "Correctly caught the exception" )
-        
-        try:
-            bad_bucket = self.bucket_prefix + "bucket&123"
-            self.tester.create_bucket(bad_bucket)
-            should_fail = True            
-            try:
-                self.tester.delete_bucket(bad_bucket)
-            except:
-                self.tester.debug( "Exception deleting bad bucket, shouldn't be here anyway. Test WILL fail" )
-                
-            if should_fail:
-                self.fail("Should have caught exception for bad bucket name: " + bad_bucket)
-        except:
-            self.tester.debug( "Correctly caught the exception" )
-        
-        try:
-            bad_bucket = self.bucket_prefix + "bucket*123"
-            self.tester.create_bucket(bad_bucket)
-            should_fail = True            
-            try:
-                self.tester.delete_bucket(bad_bucket)
-            except:
-                self.tester.debug( "Exception deleting bad bucket, shouldn't be here anyway. Test WILL fail" )
-                
-            if should_fail:
-                self.fail("Should have caught exception for bad bucket name: " + bad_bucket)
-        except:
-            self.tester.debug( "Correctly caught the exception" )
-        
-        try:
-            bad_bucket = self.bucket_prefix + "/bucket123"
-            self.tester.create_bucket(bad_bucket)
-            should_fail = True            
-            try:
-                self.tester.delete_bucket(bad_bucket)
-            except:
-                self.tester.debug( "Exception deleting bad bucket, shouldn't be here anyway. Test WILL fail" )
-                
-            if should_fail:
-                self.fail("Should have caught exception for bad bucket name: " + bad_bucket)
-        except:
-            self.tester.debug( "Correctly caught the exception" )
+        for bad_bucket in ["bucket123/", "bucket..123", "bucket&123", "bucket*123",  "bucket."]:
+            test_creating_bucket_invalid_names(self.bucket_prefix + bad_bucket)
+
+        for bad_bucket in ["/bucket123", ".bucket"]:
+            test_creating_bucket_invalid_names(bad_bucket + "-" + self.bucket_prefix)
 
         """
         Test creating bucket with null name
