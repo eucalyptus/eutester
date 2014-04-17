@@ -483,7 +483,7 @@ class EutesterTestCase(unittest.TestCase):
             parser.add_argument('--instance-user',
                                 help="Username used for ssh login. Default:'root'", default='root')
         if instance_password:
-            parser.add_argument('--instance-passsword',
+            parser.add_argument('--instance-password',
                                 help="Password used for ssh login. When value is 'None' ssh keypair will be used and not username/password, default:'None'", default=None)
         if region:
             parser.add_argument('--region',
