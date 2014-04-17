@@ -41,14 +41,14 @@ class BucketTestSuite(EutesterTestCase):
         else:
             self.tester = Eucaops( credpath=self.args.credpath, config_file=self.args.config, password=self.args.password)
 
-        self.bucket_prefix = "eutester-bucket-test-suite-" + str(int(time.time())) + "-"
+        self.bucket_prefix = "eutester-bucket-test-suite-" + str(int(time.time()))
         self.buckets_used = set()
         
     def test_bucket_get_put_delete(self):
         '''
         Method: Tests creating and deleting buckets as well as getting the bucket listing
         '''
-        test_bucket=self.bucket_prefix + "simple_test_bucket"
+        test_bucket=self.bucket_prefix + "-simple-test-bucket"
         self.buckets_used.add(test_bucket)
         self.tester.debug("Starting get/put/delete bucket test using bucket name: " + test_bucket)
  
@@ -88,16 +88,20 @@ class BucketTestSuite(EutesterTestCase):
                     self.tester.delete_bucket(bucket)
                 except:
                     self.tester.debug( "Exception deleting bad bucket, shouldn't be here anyway. Test WILL fail" )
-            except:
-                self.tester.debug( "Correctly caught the exception" )
+            except Exception as e:
+                self.tester.debug("Correctly caught the exception for bucket name '" + bad_bucket + "' Reason: " + e.reason)
             if should_fail:
                 self.fail("Should have caught exception for bad bucket name: " + bad_bucket)
-        
-        for bad_bucket in ["bucket123/", "bucket..123", "bucket&123", "bucket*123",  "bucket."]:
-            test_creating_bucket_invalid_names(self.bucket_prefix + bad_bucket)
 
-        for bad_bucket in ["/bucket123", ".bucket"]:
-            test_creating_bucket_invalid_names(bad_bucket + "-" + self.bucket_prefix)
+        # with the EUCA-8864 fix, a new property 'objectstorage.bucket_naming_restrictions'
+        # has been introduced, now 'bucket..123', 'bucket.' are actually valid bucket names
+        # when using 'extended' naming convention.
+        # http://docs.aws.amazon.com/AmazonS3/latest/dev/BucketRestrictions.html
+        # when DNS is not being used, for now buckets can be created with bucket
+        # names like '/bucket123', 'bucket123/', see EUCA-8863
+        # TODO check what bucket naming convention is being used for the test
+        for bad_bucket in ["bucket&123", "bucket*123"]:
+            test_creating_bucket_invalid_names(self.bucket_prefix + bad_bucket)
 
         """
         Test creating bucket with null name
