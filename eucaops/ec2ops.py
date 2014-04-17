@@ -1904,6 +1904,7 @@ disable_root: false"""
                                                       image_location=image_location,
                                                       ramdisk_id=ramdisk,
                                                       architecture=architecture,
+                                                      virtualization_type=virtualization_type,
                                                       block_device_map=bdmdev,
                                                       root_device_name=root_device_name,
                                                       **custom_params)

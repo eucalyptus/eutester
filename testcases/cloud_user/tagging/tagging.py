@@ -236,7 +236,7 @@ class TaggingBasics(EutesterTestCase):
         filter_image_id = self.tester.register_image(
             image_location=self.image.location,
             description=image_description,
-            virtualization_type=self.image.virtualization_type)
+            virtualization_type="hvm")
 
         description_filter = {u'description': image_description }
         location_filter = {u'manifest-location': self.image.location}

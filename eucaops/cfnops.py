@@ -77,7 +77,7 @@ class CFNops(Eutester):
 
     def get_cfn_ip(self):
         """Parse the eucarc for the AWS_CLOUDFORMATION_URL"""
-        cfn_url = self.parse_eucarc("AWS_CLOUDFORMATION_URL")
+        cfn_url = self.parse_eucarc("EC2_URL")
         return cfn_url.split("/")[2].split(":")[0]
 
     def create_stack(self, stack_name, template_body, template_url=None, parameters=None):
