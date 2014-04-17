@@ -250,7 +250,10 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
             raise Exception("Setting property " + property + " failed")
 
 
-    def cleanup_artifacts(self,instances=True, snapshots=True, volumes=True, load_balancers=True, ip_addresses=True, auto_scaling_groups=True, launch_configurations=True, keypairs=True):
+    def cleanup_artifacts(self,instances=True, snapshots=True, volumes=True,
+                          load_balancers=True, ip_addresses=True,
+                          auto_scaling_groups=True, launch_configurations=True,
+                          keypairs=True):
         """
         Description: Attempts to remove artifacts created during and through this eutester's lifespan.
         """
@@ -282,8 +285,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
         if volumes:
             try:
                 self.clean_up_test_volumes(timeout_per_vol=60)
-                self.debug("No volumes found")
-
+                self.test_resources['volumes']=[]
             except Exception, e:
                 tb = self.get_traceback()
                 failcount +=1
@@ -411,8 +413,6 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
             return
         self.debug('clean_up_test_volumes starting\nVolumes to be deleted:' + ",".join(str(x) for x in volumes))
 
-
-
         for vol in volumes:
             try:
                 vol = self.get_volume(volume_id=vol.id)
@@ -420,6 +420,8 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops):
                 tb = self.get_traceback()
                 self.debug("\n" + line + " Ignoring caught Exception:\n" + str(tb) + "\n"+ str(vol.id) +
                            ', Could not retrieve volume, may no longer exist?' + line)
+                if vol in self.test_resources['volumes']:
+                    self.test_resources['volumes'].remove(vol)
                 vol = None
             if vol:
                 try:
