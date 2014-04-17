@@ -19,7 +19,7 @@ public class BasicWalrusTest {
     @Test
     public void WalrusTestNG() throws Exception {
         testInfo(this.getClass().getSimpleName());
-        getCloudInfo();
+        initS3Client();
 
         File fileToPut = new File("3wolfmoon-download.jpg");
         File fileToGet = new File("3wolfmoon-download.jpg");
