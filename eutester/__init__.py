@@ -303,6 +303,7 @@ class Eutester(object):
 
         @wraps(func)
         def methdecor(*func_args, **func_kwargs):
+            _args_dict = {} # If method has this kwarg populate with args here
             try:
                 defaults = func.func_defaults
                 kw_count = len(defaults or [])
@@ -315,6 +316,19 @@ class Eutester(object):
                 for kw_name in kw_names: 
                     kw_defaults[kw_name] = defaults[kw_names.index(kw_name)]
                 arg_string=''
+                # If the underlying method is using a special kwarg named
+                # '_args_dict' then provide all the args & kwargs it was
+                # called with in that dict for inspection with that method
+                if 'self' in var_names and len(func_args) <= 1:
+                    func_args_empty = True
+                else:
+                    func_args_empty = False
+                if (not func_args_empty or func_kwargs) and \
+                                '_args_dict' in kw_names:
+                    if not '_args_dict' in func_kwargs or \
+                            not func_kwargs['_args_dict']:
+                        func_kwargs['_args_dict'] = {'args':func_args,
+                                                     'kwargs':func_kwargs}
                 #iterate on func_args instead of arg_names to make sure we pull out self object if present
                 for count, arg in enumerate(func_args):
                     if count == 0 and var_names[0] == 'self': #and if hasattr(arg, func.func_name):

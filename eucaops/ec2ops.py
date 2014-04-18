@@ -1963,8 +1963,12 @@ disable_root: false"""
                    owner_id=None,
                    filters=None,
                    basic_image=None,
+                   platform=None,
                    not_platform=None,
-                   max_count=None):
+                   tagkey=None,
+                   tagvalue=None,
+                   max_count=None,
+                   _args_dict=None):
         """
         Get a list of images which match the provided criteria.
 
@@ -1980,6 +1984,8 @@ disable_root: false"""
         :param basic_image: boolean, avoids returning windows, load balancer and service images
         :param not_platform: skip if platform string matches this string. Example: not_platform='windows'
         :param max_count: return after finding 'max_count' number of matching images
+        :param _args_dict: dict which can be populated by annotation to give
+                            insight into the args/kwargs this was called with
         :return: image id
         :raise: Exception if image is not found
         """
@@ -2003,13 +2009,21 @@ disable_root: false"""
                 filters['architecture'] = arch
             if owner_id:
                 filters['owner-id'] = owner_id
+            if platform:
+                filters['platform'] = platform
+            if tagkey:
+                filters['tag-key'] = tagkey
+            if tagvalue:
+                filters['tag-value'] = tagvalue
 
-        if emi is None:
+        # if emi is None and not platform:
+        if basic_image is None and not _args_dict:
             # If a specific EMI was not provided, set some sane defaults for
             # fetching a test image to work with...
-            if basic_image is None:
-                basic_image = True
-            emi = "mi-"
+            basic_image = True
+        else:
+        if name is None:
+             emi = "mi-"
 
         images = self.ec2.get_all_images(filters=filters)
         self.debug("Got " + str(len(images)) + " total images " + str(emi) + ", now filtering..." )
@@ -2033,7 +2047,7 @@ disable_root: false"""
             if (name is not None) and (image.name != name):
                 continue
             if (arch is not None) and (image.architecture != arch):
-                continue                
+                continue
             if (owner_id is not None) and (image.owner_id != owner_id):
                 continue
             if basic_image:
@@ -2056,6 +2070,7 @@ disable_root: false"""
         return ret_list
 
 
+    @Eutester.printinfo
     def get_emi(self,
                    emi=None,
                    name=None,
@@ -2067,7 +2082,11 @@ disable_root: false"""
                    owner_id=None,
                    filters=None,
                    basic_image=None,
-                   not_platform=None
+                   platform=None,
+                   not_platform=None,
+                   tagkey=None,
+                   tagvalue=None,
+                   _args_dict=None,
                    ):
         """
         Get an emi with name emi, or just grab any emi in the system. Additional 'optional' match criteria can be defined.
@@ -2082,9 +2101,17 @@ disable_root: false"""
         :param filters: standard filters, dict.
         :param basic_image: boolean, avoids returning windows, load balancer and service images
         :param not_platform: skip if platform string matches this string. Example: not_platform='windows'
+        :param _args_dict: dict which can be populated by annotation to give
+                            insight into the args/kwargs this was called with
         :return: image id
         :raise: Exception if image is not found
         """
+        # If no criteria was provided for filter an image, use 'basic_image'
+        # flag to provide some sane defaults
+        if basic_image is None and not _args_dict:
+            basic_image = True
+        else:
+            basic_image = False
         if filters is None and emi is None and \
                         name is None and location is None:
             # Attempt to get a eutester created image if it happens to meet
@@ -2102,7 +2129,10 @@ disable_root: false"""
                                    owner_id=owner_id,
                                    filters=filters,
                                    basic_image=basic_image,
+                                   platform=platform,
                                    not_platform=not_platform,
+                                   tagkey=tagkey,
+                                   tagvalue=tagvalue,
                                    max_count=1)[0]
             except:
                 filters = None
@@ -2116,7 +2146,10 @@ disable_root: false"""
                                owner_id=owner_id,
                                filters=filters,
                                basic_image=basic_image,
+                               platform=platform,
                                not_platform=not_platform,
+                               tagkey=tagkey,
+                               tagvalue=tagvalue,
                                max_count=1)[0]
 
 
