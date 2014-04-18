@@ -2065,7 +2065,7 @@ disable_root: false"""
             if max_count and len(ret_list) >= max_count:
                 return ret_list
         if not ret_list:
-            raise Exception("Unable to find an EMI")
+            raise ResourceNotFoundException("Unable to find an EMI")
         return ret_list
 
 
