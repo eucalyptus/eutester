@@ -2021,7 +2021,6 @@ disable_root: false"""
             # If a specific EMI was not provided, set some sane defaults for
             # fetching a test image to work with...
             basic_image = True
-        else:
         if name is None:
              emi = "mi-"
 
