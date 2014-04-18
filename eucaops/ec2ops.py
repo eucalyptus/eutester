@@ -1952,19 +1952,19 @@ disable_root: false"""
 
     @Eutester.printinfo
     def get_images(self,
-                emi=None,
-                name=None,
-                root_device_type=None,
-                root_device_name=None,
-                virtualization_type=None,
-                location=None,
-                state="available",
-                arch=None,
-                owner_id=None,
-                filters=None,
-                basic_image=True,
-                not_platform=None,
-                max_count=None):
+                   emi=None,
+                   name=None,
+                   root_device_type=None,
+                   root_device_name=None,
+                   virtualization_type=None,
+                   location=None,
+                   state="available",
+                   arch=None,
+                   owner_id=None,
+                   filters=None,
+                   basic_image=None,
+                   not_platform=None,
+                   max_count=None):
         """
         Get a list of images which match the provided criteria.
 
@@ -2005,12 +2005,16 @@ disable_root: false"""
                 filters['owner-id'] = owner_id
 
         if emi is None:
+            # If a specific EMI was not provided, set some sane defaults for
+            # fetching a test image to work with...
+            if basic_image is None:
+                basic_image = True
             emi = "mi-"
 
         images = self.ec2.get_all_images(filters=filters)
         self.debug("Got " + str(len(images)) + " total images " + str(emi) + ", now filtering..." )
         for image in images:
-            if (re.search(emi, image.id) is None) and (re.search(emi, image.name) is None):      
+            if (re.search(emi, image.id) is None) and (re.search(emi, image.name) is None):
                 continue
             if (root_device_type is not None) and (image.root_device_type != root_device_type):
                 continue
@@ -2062,7 +2066,7 @@ disable_root: false"""
                    arch=None,
                    owner_id=None,
                    filters=None,
-                   basic_image=True,
+                   basic_image=None,
                    not_platform=None
                    ):
         """

@@ -601,7 +601,8 @@ class ImageUtils(EutesterTestCase):
             block_dev_map=block_device_mapping,
             virtualization_type=virtualization_type,
             platform=platform)
-        self.debug('euca2ools_register returned: ' + str(emi))
+        self.debug('euca2ools_register returned:"' + str(emi) +
+                   '", now verify it exists on the cloud...')
 
         #Verify emi exists on the system, and convert to boto obj...
         emi = self.tester.get_emi(emi)
