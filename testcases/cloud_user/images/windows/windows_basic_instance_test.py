@@ -16,7 +16,7 @@ class Windows_Basic_Instance_Test(EutesterTestCase):
     def __init__(self, tester=None, **kwargs):
         #### Pre-conditions
         self.setuptestcase()
-        self.setup_parser(testname='Multipath_suite')
+        self.setup_parser(testname='Windows_Basic_Instance_Test')
         self.parser.add_argument('--image_id',
                                  help='Image id of an existing image to run'
                                       ' test against, default:None',
