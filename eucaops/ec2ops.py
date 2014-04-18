@@ -2906,14 +2906,19 @@ disable_root: false"""
             if rule.ip_protocol == protocol:
                 for grant in rule.grants:
                     g_buf += str(grant)+","
-                self.debug("rule#"+str(group.rules.index(rule))+": port:"+str(rule.to_port)+", grants:"+str(g_buf))
+                self.debug("rule#" + str(group.rules.index(rule)) +
+                           ": port:" + str(rule.to_port) +
+                           ", grants:"+str(g_buf))
                 to_port= int(rule.to_port)
                 if (to_port == 0 ) or (to_port == -1) or (to_port == port):
                     for grant in rule.grants:
                         if self.is_address_in_network(src, str(grant)):
-                            self.debug("does_sec_group_allow? True")
+                            self.debug('sec_group DOES allow: group:"{0}"'
+                                       ', src:"{1}", proto:"{2}", port:"{3}"'
+                                       .format(group.name, src, protocol, port))
                             return True
-        self.debug("does_sec_group_allow? False")
+        self.debug('sec_group DOES NOT allow: group:"{0}", src:"{1}", proto:'
+                   '"{2}", port:"{3}"'.format(group.name, src, protocol, port))
         return False
                     
     @classmethod
