@@ -2927,6 +2927,10 @@ disable_root: false"""
         """
         ip_addr = str(ip_addr)
         network = str(network)
+        # Check for 0.0.0.0/0 network first...
+        rem_zero = network.replace('0','')
+        if not re.search('\d', rem_zero):
+            return True
         ipaddr = int(''.join([ '%02x' % int(x) for x in ip_addr.split('.') ]), 16)
         netstr, bits = network.split('/')
         netaddr = int(''.join([ '%02x' % int(x) for x in netstr.split('.') ]), 16)
