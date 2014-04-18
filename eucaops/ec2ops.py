@@ -2901,8 +2901,8 @@ disable_root: false"""
         :param port: Network port to lookup sec group rule against
         """
         group = self.get_security_group(id=group.id, name=group.name)
-        g_buf =""
         for rule in group.rules:
+            g_buf =""
             if rule.ip_protocol == protocol:
                 for grant in rule.grants:
                     g_buf += str(grant)+","
