@@ -30,7 +30,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 #
-from eutester.eutestcase import EutesterTestCase, EutesterTestUnit, EutesterTestResult
+from eutester.eutestcase import EutesterTestCase
 from testcases.cloud_user.images.imageutils import ImageUtils
 
 machine=None
@@ -71,13 +71,19 @@ if (not testcase.args.url and not testcase.args.filepath) or (testcase.args.url 
 if str(testcase.args.image_type).lower() == "windows":
     testcase.args.kernel = "windows"
 
+def make_image_public():
+    emi = image_utils.tester.test_resources['images'][0]
+    emi.set_launch_permissions(group_names=['all'])
+    testcase.debug('\n---------------------------\nCreated EMI:' + str(emi) +'\n---------------------------')
+
 #Create an ImageUtils helper from the arguments provided in this testcase...
 image_utils = testcase.do_with_args(ImageUtils)
 
 #Create a single testcase to wrap and run the EMI creation task. Note by default all the overlapping args from
 # this testcase are fed to the testunit method when ran.
-test = testcase.create_testunit_from_method(image_utils.create_emi)
-testcase.run_test_case_list([test], eof=True, clean_on_exit=False, printresults=True)
+test1 = testcase.create_testunit_from_method(image_utils.create_emi)
+test2 = testcase.create_testunit_from_method(make_image_public)
+result = testcase.run_test_case_list([test1, test2], eof=True, clean_on_exit=False, printresults=True)
 
 #By default created resources are stored in the eucaops/tester object's test_resources dict. See if our image is
 #prsent. If so print it out...
@@ -85,3 +91,4 @@ if image_utils.tester.test_resources['images']:
     emi = image_utils.tester.test_resources['images'].pop()
     testcase.debug('\n---------------------------\nCreated EMI:' + str(emi) +'\n---------------------------')
 
+exit(result)

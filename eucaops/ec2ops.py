@@ -1952,19 +1952,23 @@ disable_root: false"""
 
     @Eutester.printinfo
     def get_images(self,
-                emi=None,
-                name=None,
-                root_device_type=None,
-                root_device_name=None,
-                virtualization_type=None,
-                location=None,
-                state="available",
-                arch=None,
-                owner_id=None,
-                filters=None,
-                basic_image=True,
-                not_platform=None,
-                max_count=None):
+                   emi=None,
+                   name=None,
+                   root_device_type=None,
+                   root_device_name=None,
+                   virtualization_type=None,
+                   location=None,
+                   state="available",
+                   arch=None,
+                   owner_id=None,
+                   filters=None,
+                   basic_image=None,
+                   platform=None,
+                   not_platform=None,
+                   tagkey=None,
+                   tagvalue=None,
+                   max_count=None,
+                   _args_dict=None):
         """
         Get a list of images which match the provided criteria.
 
@@ -1980,6 +1984,8 @@ disable_root: false"""
         :param basic_image: boolean, avoids returning windows, load balancer and service images
         :param not_platform: skip if platform string matches this string. Example: not_platform='windows'
         :param max_count: return after finding 'max_count' number of matching images
+        :param _args_dict: dict which can be populated by annotation to give
+                            insight into the args/kwargs this was called with
         :return: image id
         :raise: Exception if image is not found
         """
@@ -2003,14 +2009,25 @@ disable_root: false"""
                 filters['architecture'] = arch
             if owner_id:
                 filters['owner-id'] = owner_id
+            if platform:
+                filters['platform'] = platform
+            if tagkey:
+                filters['tag-key'] = tagkey
+            if tagvalue:
+                filters['tag-value'] = tagvalue
 
-        if emi is None:
-            emi = "mi-"
+        # if emi is None and not platform:
+        if basic_image is None and not _args_dict:
+            # If a specific EMI was not provided, set some sane defaults for
+            # fetching a test image to work with...
+            basic_image = True
+        if name is None:
+             emi = "mi-"
 
         images = self.ec2.get_all_images(filters=filters)
         self.debug("Got " + str(len(images)) + " total images " + str(emi) + ", now filtering..." )
         for image in images:
-            if (re.search(emi, image.id) is None) and (re.search(emi, image.name) is None):      
+            if (re.search(emi, image.id) is None) and (re.search(emi, image.name) is None):
                 continue
             if (root_device_type is not None) and (image.root_device_type != root_device_type):
                 continue
@@ -2029,7 +2046,7 @@ disable_root: false"""
             if (name is not None) and (image.name != name):
                 continue
             if (arch is not None) and (image.architecture != arch):
-                continue                
+                continue
             if (owner_id is not None) and (image.owner_id != owner_id):
                 continue
             if basic_image:
@@ -2048,10 +2065,11 @@ disable_root: false"""
             if max_count and len(ret_list) >= max_count:
                 return ret_list
         if not ret_list:
-            raise Exception("Unable to find an EMI")
+            raise ResourceNotFoundException("Unable to find an EMI")
         return ret_list
 
 
+    @Eutester.printinfo
     def get_emi(self,
                    emi=None,
                    name=None,
@@ -2062,8 +2080,12 @@ disable_root: false"""
                    arch=None,
                    owner_id=None,
                    filters=None,
-                   basic_image=True,
-                   not_platform=None
+                   basic_image=None,
+                   platform=None,
+                   not_platform=None,
+                   tagkey=None,
+                   tagvalue=None,
+                   _args_dict=None,
                    ):
         """
         Get an emi with name emi, or just grab any emi in the system. Additional 'optional' match criteria can be defined.
@@ -2078,9 +2100,17 @@ disable_root: false"""
         :param filters: standard filters, dict.
         :param basic_image: boolean, avoids returning windows, load balancer and service images
         :param not_platform: skip if platform string matches this string. Example: not_platform='windows'
+        :param _args_dict: dict which can be populated by annotation to give
+                            insight into the args/kwargs this was called with
         :return: image id
         :raise: Exception if image is not found
         """
+        # If no criteria was provided for filter an image, use 'basic_image'
+        # flag to provide some sane defaults
+        if basic_image is None and not _args_dict:
+            basic_image = True
+        else:
+            basic_image = False
         if filters is None and emi is None and \
                         name is None and location is None:
             # Attempt to get a eutester created image if it happens to meet
@@ -2098,7 +2128,10 @@ disable_root: false"""
                                    owner_id=owner_id,
                                    filters=filters,
                                    basic_image=basic_image,
+                                   platform=platform,
                                    not_platform=not_platform,
+                                   tagkey=tagkey,
+                                   tagvalue=tagvalue,
                                    max_count=1)[0]
             except:
                 filters = None
@@ -2112,7 +2145,10 @@ disable_root: false"""
                                owner_id=owner_id,
                                filters=filters,
                                basic_image=basic_image,
+                               platform=platform,
                                not_platform=not_platform,
+                               tagkey=tagkey,
+                               tagvalue=tagvalue,
                                max_count=1)[0]
 
 
@@ -2865,19 +2901,24 @@ disable_root: false"""
         :param port: Network port to lookup sec group rule against
         """
         group = self.get_security_group(id=group.id, name=group.name)
-        g_buf =""
         for rule in group.rules:
+            g_buf =""
             if rule.ip_protocol == protocol:
                 for grant in rule.grants:
                     g_buf += str(grant)+","
-                self.debug("rule#"+str(group.rules.index(rule))+": port:"+str(rule.to_port)+", grants:"+str(g_buf))
+                self.debug("rule#" + str(group.rules.index(rule)) +
+                           ": port:" + str(rule.to_port) +
+                           ", grants:"+str(g_buf))
                 to_port= int(rule.to_port)
                 if (to_port == 0 ) or (to_port == -1) or (to_port == port):
                     for grant in rule.grants:
                         if self.is_address_in_network(src, str(grant)):
-                            self.debug("does_sec_group_allow? True")
+                            self.debug('sec_group DOES allow: group:"{0}"'
+                                       ', src:"{1}", proto:"{2}", port:"{3}"'
+                                       .format(group.name, src, protocol, port))
                             return True
-        self.debug("does_sec_group_allow? False")
+        self.debug('sec_group DOES NOT allow: group:"{0}", src:"{1}", proto:'
+                   '"{2}", port:"{3}"'.format(group.name, src, protocol, port))
         return False
                     
     @classmethod
@@ -2891,6 +2932,10 @@ disable_root: false"""
         """
         ip_addr = str(ip_addr)
         network = str(network)
+        # Check for 0.0.0.0/0 network first...
+        rem_zero = network.replace('0','')
+        if not re.search('\d', rem_zero):
+            return True
         ipaddr = int(''.join([ '%02x' % int(x) for x in ip_addr.split('.') ]), 16)
         netstr, bits = network.split('/')
         netaddr = int(''.join([ '%02x' % int(x) for x in netstr.split('.') ]), 16)
