@@ -107,6 +107,7 @@ class Windows_Basic_Instance_Test(EutesterTestCase):
                     self.debug('Image not found for provide url:"{0}", '
                                'attempting to create one now...'
                                .format(self.args.image_url))
+                    self.create_image_from_url(self.args.image_url)
             else:
                 # Otherwise look for a eutester created windows image...
                 self.image = self.tester.get_emi(
