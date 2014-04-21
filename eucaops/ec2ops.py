@@ -1697,13 +1697,17 @@ disable_root: false"""
         Delete a list of snapshots.
 
         :param snapshots: List of snapshot IDs
-        :param valid_states: Valid status for snapshot to enter (Default: 'completed,failed')
+        :param valid_states: Valid status for snapshot to
+                             enter (Default: 'completed,failed')
         :param base_timeout: Timeout for waiting for poll interval
-        :param add_time_per_snap: Amount of time to add to base_timeout per snapshot in the list
-        :param wait_for_valid_state: How long to wait for a valid state to be reached before attempting delete,
-                                     as some states will reject a delete request.
+        :param add_time_per_snap: Amount of time to add to base_timeout
+                                  per snapshot in the list
+        :param wait_for_valid_state: How long to wait for a valid state to
+                                     be reached before attempting delete, as
+                                     some states will reject a delete request.
         :param poll_interval: Time to wait between checking the snapshot states
-        :param eof: Whether or not to call an Exception() when first failure is reached
+        :param eof: Whether or not to call an Exception() when first
+                    failure is reached
         :raise:
         """
         snaps = copy.copy(snapshots)
@@ -1712,38 +1716,65 @@ disable_root: false"""
         elapsed = 0
         valid_delete_states = str(valid_states).split(',')
         if not valid_delete_states:
-            raise Exception("delete_snapshots, error in valid_states provided:"+str(valid_states))
+            raise Exception("delete_snapshots, error in valid_states "
+                            "provided:" + str(valid_states))
 
         #Wait for snapshot to enter a state that will accept the deletion action, before attempting to delete it...
         while snaps and (elapsed < wait_for_valid_state):
             elapsed = int(time.time()-start)
-            for snap in snaps:
-                snap.update()
-                self.debug("Checking snapshot:"+str(snap.id)+" status:"+str(snap.status))
-                for v_state in valid_delete_states:
-                    v_state = str(v_state).rstrip().lstrip()
-                    if snap.status == v_state:
+            check_state_list = copy.copy(snaps)
+            for snap in check_state_list:
+                try:
+                    snap_id = self.get_snapshot(snap.id)
+                    if not snap_id:
+                        self.debug("Get Snapshot not found, assuming it's "
+                                   "already deleted:" + str(snap.id))
                         delete_me.append(snap)
-                        snap.delete()
                         break
+                except EC2ResponseError as ec2e:
+                    if ec2e.status == 400:
+                        self.debug("Get Snapshot not found, assuming it's "
+                                   "already deleted:" + str(snap.id) +
+                                   ", err:" + str(ec2e))
+                        delete_me.append(snap)
+                else:
+                    snap.update()
+                    self.debug("Checking snapshot:" + str(snap.id) +
+                               " status:"+str(snap.status))
+                    for v_state in valid_delete_states:
+                        v_state = str(v_state).rstrip().lstrip()
+                        if snap.status == v_state:
+                            delete_me.append(snap)
+                            try:
+                                snap.delete()
+                            except EC2ResponseError as ec2e:
+                                self.debug("Snapshot not found, assuming "
+                                           "it's already deleted:" +
+                                           str(snap.id))
+                                delete_me.append(snap)
+                            break
             for snap in delete_me:
                 if snap in snaps:
                     snaps.remove(snap)
             if snaps:
-                buf = "\n-------| WAITING ON "+str(len(snaps))+" SNAPSHOTS TO ENTER A DELETE-ABLE STATE:("\
-                      +str(valid_states)+"), elapsed:"+ str(elapsed)+'/'+str(wait_for_valid_state)+"|-----"
+                buf = "\n-------| WAITING ON " + str(len(snaps)) + \
+                      " SNAPSHOTS TO ENTER A DELETE-ABLE STATE:(" + \
+                      str(valid_states) + "), elapsed:" + str(elapsed) + \
+                      '/' + str(wait_for_valid_state) + "|-----"
                 for snap in snaps:
-                    buf = buf +"\nSnapshot:"+str(snap.id)+",status:"+str(snap.status)+", progress:"+str(snap.progress)
+                    buf = buf + "\nSnapshot:"+str(snap.id) + ",status:" + \
+                          str(snap.status)+", progress:"+str(snap.progress)
                 self.debug(buf)
-                self.debug('waiting poll_interval to recheck snapshots:'+str(poll_interval)+' seconds')
+                self.debug('waiting poll_interval to recheck snapshots:' +
+                           str(poll_interval) +' seconds')
                 time.sleep(poll_interval)
-            
-
+        #Now poll all the snapshots which a delete() request was made for
         if snaps:
             buf = ""
             for snap in snaps:
                 buf = buf+','+str(snap.id)
-            msg = "Following snapshots did not enter a valid state("+str(valid_states)+") for deletion:"+str(buf)
+            msg = "Following snapshots did not enter a valid state(" + \
+                  str(valid_states) + ") for deletion:" + str(buf)
             if eof:
                 raise Exception(msg)
             else:
@@ -1751,21 +1782,29 @@ disable_root: false"""
         start = time.time()
         elapsed = 0
         timeout= base_timeout + (add_time_per_snap*len(delete_me))
+        # Wait for all snapshots in delete_me list to be deleted or timeout...
         while delete_me and (elapsed < timeout):
-            self.debug('Waiting for remaining '+str(int(len(delete_me)))+' snaps to delete...' )
-            for snapshot in delete_me:
+            self.debug('Waiting for remaining ' + str(int(len(delete_me))) +
+                       ' snaps to delete...' )
+            waiting_list = copy.copy(delete_me)
+            for snapshot in waiting_list:
                 snapshot.update()
-                if not self.ec2.get_all_snapshots(snapshot_ids=[snapshot.id]) or snapshot.status == 'deleted':
+                if not self.ec2.get_all_snapshots(snapshot_ids=[snapshot.id]) \
+                        or snapshot.status == 'deleted':
                     self.debug('Snapshot:'+str(snapshot.id)+" is deleted")
                     delete_me.remove(snapshot)
-            time.sleep(poll_interval)
+            if delete_me and (elapsed < timeout):
+                time.sleep(poll_interval)
             elapsed = int(time.time()-start)
+        # Record any snapshots not yet deleted as errors...
         if delete_me:
             buf = ""
             for snap in snaps:
-                buf += "\nSnapshot:"+str(snap.id)+",status:"+str(snap.status)+", progress:"+str(snap.progress)+\
-                       ", elapsed:"+str(elapsed)+'/'+str(timeout)
-            raise Exception("Snapshots did not delete within timeout:"+str(timeout)+"\n"+str(buf))
+                buf += "\nSnapshot:" + str(snap.id)+",status:" + \
+                       str(snap.status) + ", progress:"+str(snap.progress) +\
+                       ", elapsed:" + str(elapsed) + '/' + str(timeout)
+            raise Exception("Snapshots did not delete within timeout:" +
+                            str(timeout) + "\n" + str(buf))
                 
              
         
