@@ -41,14 +41,14 @@ class BucketTestSuite(EutesterTestCase):
         else:
             self.tester = Eucaops( credpath=self.args.credpath, config_file=self.args.config, password=self.args.password)
 
-        self.bucket_prefix = "eutester-bucket-test-suite-" + str(int(time.time())) + "-"
+        self.bucket_prefix = "eutester-bucket-test-suite-" + str(int(time.time()))
         self.buckets_used = set()
         
     def test_bucket_get_put_delete(self):
         '''
         Method: Tests creating and deleting buckets as well as getting the bucket listing
         '''
-        test_bucket=self.bucket_prefix + "simple_test_bucket"
+        test_bucket=self.bucket_prefix + "-simple-test-bucket"
         self.buckets_used.add(test_bucket)
         self.tester.debug("Starting get/put/delete bucket test using bucket name: " + test_bucket)
  
@@ -79,75 +79,29 @@ class BucketTestSuite(EutesterTestCase):
             self.tester.debug( "Correctly got exception trying to get a deleted bucket! " )
             
         self.tester.debug( "Testing an invalid bucket names, calls should fail." )
-        try:
-            bad_bucket = self.bucket_prefix + "bucket123/"
-            self.tester.create_bucket(bad_bucket)
-            should_fail = True            
+        def test_creating_bucket_invalid_names(bad_bucket):
+            should_fail = False
             try:
-                self.tester.delete_bucket(bad_bucket)
-            except:
-                self.tester.debug( "Exception deleting bad bucket, shouldn't be here anyway. Test WILL fail" )
-                
+                bucket = self.tester.create_bucket(bad_bucket)
+                should_fail = True            
+                try:
+                    self.tester.delete_bucket(bucket)
+                except:
+                    self.tester.debug( "Exception deleting bad bucket, shouldn't be here anyway. Test WILL fail" )
+            except Exception as e:
+                self.tester.debug("Correctly caught the exception for bucket name '" + bad_bucket + "' Reason: " + e.reason)
             if should_fail:
                 self.fail("Should have caught exception for bad bucket name: " + bad_bucket)
-        except:
-            self.tester.debug( "Correctly caught the exception" )
-        
-        try:
-            bad_bucket = self.bucket_prefix + "bucket.123"
-            self.tester.create_bucket(bad_bucket)
-            should_fail = True            
-            try:
-                self.tester.delete_bucket(bad_bucket)
-            except:
-                self.tester.debug( "Exception deleting bad bucket, shouldn't be here anyway. Test WILL fail" )
-                
-            if should_fail:
-                self.fail("Should have caught exception for bad bucket name: " + bad_bucket)
-        except:
-            self.tester.debug( "Correctly caught the exception" )
-        
-        try:
-            bad_bucket = self.bucket_prefix + "bucket&123"
-            self.tester.create_bucket(bad_bucket)
-            should_fail = True            
-            try:
-                self.tester.delete_bucket(bad_bucket)
-            except:
-                self.tester.debug( "Exception deleting bad bucket, shouldn't be here anyway. Test WILL fail" )
-                
-            if should_fail:
-                self.fail("Should have caught exception for bad bucket name: " + bad_bucket)
-        except:
-            self.tester.debug( "Correctly caught the exception" )
-        
-        try:
-            bad_bucket = self.bucket_prefix + "bucket*123"
-            self.tester.create_bucket(bad_bucket)
-            should_fail = True            
-            try:
-                self.tester.delete_bucket(bad_bucket)
-            except:
-                self.tester.debug( "Exception deleting bad bucket, shouldn't be here anyway. Test WILL fail" )
-                
-            if should_fail:
-                self.fail("Should have caught exception for bad bucket name: " + bad_bucket)
-        except:
-            self.tester.debug( "Correctly caught the exception" )
-        
-        try:
-            bad_bucket = self.bucket_prefix + "/bucket123"
-            self.tester.create_bucket(bad_bucket)
-            should_fail = True            
-            try:
-                self.tester.delete_bucket(bad_bucket)
-            except:
-                self.tester.debug( "Exception deleting bad bucket, shouldn't be here anyway. Test WILL fail" )
-                
-            if should_fail:
-                self.fail("Should have caught exception for bad bucket name: " + bad_bucket)
-        except:
-            self.tester.debug( "Correctly caught the exception" )
+
+        # with the EUCA-8864 fix, a new property 'objectstorage.bucket_naming_restrictions'
+        # has been introduced, now 'bucket..123', 'bucket.' are actually valid bucket names
+        # when using 'extended' naming convention.
+        # http://docs.aws.amazon.com/AmazonS3/latest/dev/BucketRestrictions.html
+        # when DNS is not being used, for now buckets can be created with bucket
+        # names like '/bucket123', 'bucket123/', see EUCA-8863
+        # TODO check what bucket naming convention is being used for the test
+        for bad_bucket in ["bucket&123", "bucket*123"]:
+            test_creating_bucket_invalid_names(self.bucket_prefix + bad_bucket)
 
         """
         Test creating bucket with null name
@@ -438,7 +392,7 @@ class BucketTestSuite(EutesterTestCase):
         test_bucket = self.bucket_prefix + "versioning_test_bucket"
         self.tester.info('Testing bucket versioning using bucket:' + test_bucket)
         version_bucket = self.tester.s3.create_bucket(test_bucket)
-        self.buckets_used.add(version_bucket)
+        self.buckets_used.add(test_bucket)
         version_status = version_bucket.get_versioning_status().get("Versioning")
         
         #Test the default setup after bucket creation. Should be disabled.
@@ -483,7 +437,7 @@ class BucketTestSuite(EutesterTestCase):
         self.tester.info("Versioning of bucket is set to: " + version_status)
         
         version_bucket.delete()
-        self.buckets_used.remove(version_bucket)
+        self.buckets_used.remove(test_bucket)
         self.tester.info("Bucket Versioning: PASSED")
                
     def test_bucket_key_listing_paging(self):
@@ -541,7 +495,7 @@ class BucketTestSuite(EutesterTestCase):
         key_list = testbucket.get_all_keys()
         
         for k in key_list:
-            self.tester.info("Deleting key: " + k.key())
+            self.tester.info("Deleting key: " + k.name)
             testbucket.delete_key(k)
 
         self.tester.info("Deleting the bucket")
@@ -633,7 +587,7 @@ class BucketTestSuite(EutesterTestCase):
                 else:
                     self.tester.info('Bucket ' + bucket + ' not found, skipping')
             except:
-                self.tester.info('Exception checking bucket ' + bucket)
+                self.tester.info('Exception checking bucket ' + str(bucket))
 
         return
           

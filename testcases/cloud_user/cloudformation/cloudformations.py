@@ -61,12 +61,12 @@ class CloudFormations(EutesterTestCase):
         self.keypath = '%s/%s.pem' % (os.curdir, self.keypair.name)
 
     def InstanceVolumeTemplate(self):
-        self.stack_name = "cfn-test-{0}".format(int(time.time()))
+        self.stack_name = "volumeTest{0}".format(int(time.time()))
         template = Template()
         keyname_param = template.add_parameter(Parameter("KeyName", Description="Name of an existing EC2 KeyPair "
                                                                                 "to enable SSH access to the instance",
                                                          Type="String",))
-        template.add_mapping('RegionMap', {"": {"AMI": self.tester.get_emi()}})
+        template.add_mapping('RegionMap', {"": {"AMI": self.tester.get_emi().id}})
         for i in xrange(2):
             ec2_instance = template.add_resource(ec2.Instance("Instance{0}".format(i),
                                                               ImageId=FindInMap("RegionMap", Ref("AWS::Region"), "AMI"),
@@ -76,9 +76,9 @@ class CloudFormations(EutesterTestCase):
                                                    AvailabilityZone=GetAtt("Instance{0}".format(i), "AvailabilityZone")))
             mount = template.add_resource(ec2.VolumeAttachment("MountPt{0}".format(i), InstanceId=Ref("Instance{0}".format(i)),
                                                                VolumeId=Ref("Volume{0}".format(i)), Device="/dev/vdc"))
-        stack = self.tester.create_stack(self.stack_name, template.to_json(), parameters=[("KeyName",self.keypair)])
-        def stack_completed(stack_name):
-            return self.tester.cloudformation.describe_stacks(stack_name).status == "CREATE_COMPLETE"
+        stack = self.tester.create_stack(self.stack_name, template.to_json(), parameters=[("KeyName",self.keypair.name)])
+        def stack_completed():
+            return self.tester.cloudformation.describe_stacks(self.stack_name).status == "CREATE_COMPLETE"
         self.tester.wait_for_result(stack_completed, True, timeout=600)
         self.tester.delete_stack(self.stack_name)
 

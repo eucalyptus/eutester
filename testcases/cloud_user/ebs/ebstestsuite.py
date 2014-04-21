@@ -30,6 +30,7 @@ Cleanup:
 -remove all volumes, instance, and snapshots created during this test
 
 '''
+import copy
 import types
 import time
 import os
@@ -51,95 +52,116 @@ class TestZone():
         return self.name
 
 class EbsTestSuite(EutesterTestCase):
-    
-    tester = None
-    zonelist = []
-    snaps = []
-    keypair = None
-    group = None
-    multicluster=False
-    image = None
-    
+
     def __init__(self, 
-                 name=None,
-                 args=None,
-                 tester=None, 
-                 zone=None, 
-                 config_file='../input/2b_tested.lst', 
-                 password="foobar",
-                 user_data=None,
-                 inst_pass=None,
-                 credpath=None, 
-                 volumes=None, 
-                 keypair=None, 
-                 group=None, 
-                 emi=None,
-                 waitconnect=30,
-                 wait_on_progress=20,
-                 root_device_type='instance-store',
-                 vmtype='c1.medium',
-                 eof=1):
-        
-        self.args = args
-        self.setuptestcase(name)
-        self.wait_on_progress = wait_on_progress
-        if tester is None:
-            self.tester = Eucaops( config_file=config_file,password=password,credpath=credpath)
+                 name='ebs test suite',
+                 tester=None,
+                 **kwargs):
+
+        self.setuptestcase(name=name)
+        self.setup_parser(testname='ebs test suite',
+                    description="Attempts to test and provide info on focused areas related to Eucalyptus EBS related functionality.",
+                    testlist=False)
+        self.parser.add_argument('--reboot_timeout',dest='waitconnect',
+                                 help='Time to wait before trying to connect to '
+                                      'rebooted guests',
+                                 default=30)
+        self.parser.add_argument('--group',
+                                 dest='group',
+                                 help='Security group to use in test',
+                                 default=None)
+        self.parser.add_argument('--waitconnect',
+                                 dest='waitconnect',
+                                 help='Time to wait before attempting to '
+                                      'connect to a rebooted instance',
+                                 default=30)
+        self.parser.add_argument('--wait_on_progress',
+                                 dest='wait_on_progress',
+                                 help='Time to wait for incremental '
+                                      'progress during snapshot creation',
+                                 default=20)
+        self.parser.add_argument('--root_device_type',dest='root_device_type',
+                                 help='Root device type for instance used '
+                                      'in test. Default: isntance-store',
+                                 default='instance-store')
+        self.parser.add_argument('--instance_password',
+                                 help="Instance password for ssh session if not "
+                                      "key enabled", default=None)
+        self.parser.add_argument('--no_clean_on_exit', dest='clean_on_exit',
+                                 help="Clean up resources created in this test. "
+                                      "Default=True",
+                                 action='store_false', default=True)
+        self.parser.add_argument('--exit_on_failure', dest='exit_on_failure',
+                                 help="End test on first test unit failure "
+                                    "Default=False",
+                                 action='store_true', default=False)
+        self.parser.add_argument('--volumes', dest='volumes',
+                                 help="Comma separated list of volumes to use "
+                                      "in this test",
+                                 default="")
+        self.get_args()
+             # Allow __init__ to get args from __init__'s kwargs or through command line parser...
+        for kw in kwargs:
+            print 'Setting kwarg:'+str(kw)+" to "+str(kwargs[kw])
+            self.set_arg(kw ,kwargs[kw])
+        self.show_args()
+        for key in self.args.__dict__:
+            if key != 'args':
+                print 'Setting local value:' + str(key) + ", value:" + str(self.args.__dict__[key])
+                setattr(self,key, self.args.__dict__[key])
+
         else:
-            self.tester = tester
-        self.tester.exit_on_fail = eof
-    
-        self.testlist =[]
-        self.inst_pass=inst_pass
-        if emi:
-            self.image = self.tester.get_emi(emi=emi)
-        else:
-            self.image = self.tester.get_emi(root_device_type=root_device_type)
-        self.vmtype = vmtype
-        self.zone = None
-        self.waitconnect=int(waitconnect)
-        self.zonelist = []
-        self.user_data = user_data
-        #create some zone objects and append them to the zonelist
-        if self.zone:
-            self.zone = TestZone(zone)
-            self.zonelist.append(self.zone)
-        else: 
-            self.setup_testzones()
-    
-        #If the list of volumes passed in looks good, sort them into the zones
-        if self.volumes_list_check(volumes):
-            self.sort_volumes(volumes)
-            
-        #Setup our security group for later use
-        if (group is not None):
-            self.group = group
-        else:
-            group_name='EbsTestGroup'
-            
-            try:
-                self.group = self.tester.add_group(group_name,fail_if_exists=False)
-                self.tester.authorize_group_by_name(self.group.name)
-                self.tester.authorize_group_by_name(self.group.name,protocol="icmp",port=-1)
-            except Exception, e:  
-                self.debug(self.tester.get_traceback())  
-                raise Exception("Error when setting up group:"+str(group_name)+", Error:"+str(e))   
-        
-    
+            self.show_args()
+            self.multicluster = False
+            self.zonelist = []
+            self.snaps = []
+            if tester is None:
+                self.tester = Eucaops( config_file=self.configfile,password=self.password,credpath=self.credpath)
+            else:
+                self.tester = tester
+            if self.emi:
+                self.image = self.tester.get_emi(emi=self.emi)
+            else:
+                self.image = self.tester.get_emi(root_device_type=self.root_device_type)
+            #create some zone objects and append them to the zonelist
+            if self.zone:
+                self.zone = TestZone(self.zone)
+                self.zonelist.append(self.zone)
+            else:
+                self.setup_testzones()
+
+            #If the list of volumes passed in looks good, sort them into the zones
+            if self.volumes_list_check(self.volumes):
+                self.sort_volumes(self.volumes)
+
+            #Setup our security group for later use
+            if self.group:
+                if isinstance(self.group, types.StringType):
+                    self.group = self.tester.add_group(self.group)
+            else:
+                group_name='EbsTestGroup'
+                try:
+                    self.group = self.tester.add_group(group_name,fail_if_exists=False)
+                    self.tester.authorize_group_by_name(self.group.name)
+                    self.tester.authorize_group_by_name(self.group.name,protocol="icmp",port=-1)
+                except Exception, e:
+                    self.debug(self.tester.get_traceback())
+                    raise Exception("Error when setting up group:"+str(group_name)+", Error:"+str(e))
+
         #Setup the keypairs for later use
-        if not self.inst_pass:
+        if not self.instance_password:
             try:
-                if (keypair is not None):
-                    self.keypair = keypair
-                else:     
+                if not self.keypair:
                     keys = self.tester.get_all_current_local_keys() 
-                    if keys != []:
+                    if keys:
                         self.keypair = keys[0]
                     else:
                         self.keypair = keypair = self.tester.add_keypair('ebs_test_key-' + str(time.time()))
             except Exception, ke:
                 raise Exception("Failed to find/create a keypair, error:" + str(ke))
-        
+        print "###########################################################"
+        print "Done with EBS SUITE INIT"
+        print "###########################################################"
         
     def setup_testzones(self):
         for zone in self.tester.get_zones():
@@ -185,13 +207,15 @@ class EbsTestSuite(EutesterTestCase):
         for testzone in zonelist:
             zone = testzone.name
             vols = self.tester.create_volumes(zone, size=size, count=volsperzone, snapshot=snapshot,timepergig=timepergig)
+            for vol in vols:
+                vol.add_tag('ebstestsuite_created')
             testzone.volumes.extend(vols)
             self.debug('create_vols_per_zone created vols('+str(len(vols))+') zone:'+str(zone))
             
            
             
           
-    def create_test_instances_for_zones(self, zonelist=None, image=None, keypair=None, username='root', inst_pass=None, group=None, vmtype=None,count=1):
+    def create_test_instances_for_zones(self, zonelist=None, image=None, keypair=None, username='root', instance_password=None, group=None, vmtype=None,count=1):
         """
         Description:
                     Create an instance within each TestZone object in zonelist to help test ebs functionality.
@@ -208,7 +232,7 @@ class EbsTestSuite(EutesterTestCase):
             group = self.group
         if keypair is None:
             keypair = self.keypair
-        inst_pass = inst_pass or self.inst_pass
+        instance_password = instance_password or self.instance_password
                 
         vmtype = vmtype or self.vmtype
         if keypair:
@@ -222,7 +246,7 @@ class EbsTestSuite(EutesterTestCase):
                                                 keypair=keyname,
                                                 group=group,
                                                 username=username,
-                                                password=inst_pass,
+                                                password=instance_password,
                                                 user_data=self.user_data,
                                                 type=vmtype,
                                                 zone=zone,
@@ -520,7 +544,9 @@ class EbsTestSuite(EutesterTestCase):
             for volume in zone.volumes:
                 volume.update()
                 if volstate == "all" or volume.status == volstate:
-                    self.snaps.append(self.tester.create_snapshot_from_volume(volume, description="ebstest", wait_on_progress=wait_on_progress))
+                    new_snap = self.tester.create_snapshot_from_volume(volume, description="ebstest", wait_on_progress=wait_on_progress)
+                    new_snap.add_tag('ebstestsuite_created')
+                    self.snaps.append(new_snap)
         #self.endsuccess()
         
         
@@ -543,6 +569,7 @@ class EbsTestSuite(EutesterTestCase):
             for snap in zonesnaps:
                 self.debug("Creating volume from snap:"+str(snap.id))
                 newvol = self.tester.create_volume(zone.name, size=0, snapshot=snap,timepergig=timepergig)
+                newvol.add_tag('ebstestsuite_created')
                 zone.volumes.append(newvol)
                 snap.eutest_volumes.append(newvol)
         #self.endsuccess()
@@ -622,6 +649,7 @@ class EbsTestSuite(EutesterTestCase):
             for snap in self.snaps:
                 if snap.eutest_volume_zone != zone:
                     newvol = self.tester.create_volume(zone.name,size=0, snapshot=snap, timepergig=timepergig)
+                    newvol.add_tag('ebstestsuite_created')
                     zone.volumes.append(newvol)
                     snap.eutest_volumes.append(newvol)
         #self.endsuccess()
@@ -667,7 +695,10 @@ class EbsTestSuite(EutesterTestCase):
             self.debug('Finished creating '+str(count)+' snapshots in zone:'+str(zone.name)+', now creating vols from them')
             try:
                 for snap in snaps:
-                    createdvols.extend(self.tester.create_volumes(zone,snapshot=snap,timepergig=tpg, monitor_to_state=False))
+                    new_vols = self.tester.create_volumes(zone,snapshot=snap,timepergig=tpg, monitor_to_state=False)
+                    for vol in new_vols:
+                        vol.add_tag('ebstestsuite_created')
+                    createdvols.extend(new_vols)
                 vols.extend(self.tester.monitor_created_euvolumes_to_state(createdvols, timepergig=tpg))
                 self.tester.print_euvolume_list(vols)
                 self.status("Attempting to attach new vols from new snapshots to instance:"+str(instance.id)+" to verify md5s...")
@@ -748,7 +779,10 @@ class EbsTestSuite(EutesterTestCase):
             for zone in zonelist:
                 self.status('STARTING ZONE:'+str(zone.name))
                 #Do not set monitor flag in order to quickly request count number of consecutive vols in each zone
-                vols.extend(self.tester.create_volumes(zone,snapshot=snap, count=count, monitor_to_state=None, timepergig=tpg))
+                new_vols = self.tester.create_volumes(zone,snapshot=snap, count=count, monitor_to_state=None, timepergig=tpg)
+                for vol in new_vols:
+                    vol.add_tag('ebstestsuite_created')
+                vols.extend(new_vols)
             vols = self.tester.monitor_created_euvolumes_to_state(vols,timepergig=tpg)
             self.tester.print_euvolume_list(vols)
             for zone in zonelist:
@@ -865,13 +899,17 @@ class EbsTestSuite(EutesterTestCase):
             raise Exception("Zone list was empty")
         for testzone in zonelist:
             vols = self.tester.create_volumes(testzone, size=size, count=volsperzone)
+            for vol in vols:
+                vol.add_tag('ebstestsuite_created')
             testzone.volumes.extend(vols)
             snapshots = []
             for volume in vols:
                 snapshots.append(self.tester.create_snapshot_from_volume(volume))
             larger_volumes = []
             for snaphot in snapshots:
-                larger_volumes.append(self.tester.create_volume(testzone, snapshot=snaphot, size=size+1))
+                larger_volume = self.tester.create_volume(testzone, snapshot=snaphot, size=size+1)
+                larger_volume.add_tag('ebstestsuite_created')
+                larger_volumes.append(larger_volume)
             for volume in larger_volumes:
                 assert volume.size > size
 
@@ -977,6 +1015,7 @@ class EbsTestSuite(EutesterTestCase):
     def test_max_volume_size_property(self, volumes=None, maxsize=1, zones=None):
         if zones is None or zones == []:
             zones = self.zones
+
     def clean_method(self):
         """
         Definition:
@@ -999,43 +1038,17 @@ class EbsTestSuite(EutesterTestCase):
     
 if __name__ == "__main__":
     ## If given command line arguments, use them as test names to launch
+    testcase= EbsTestSuite()
+    testcase.clean_method = testcase.clean_created_resources
+    testlist = testcase.ebs_basic_test_suite(run=False)
 
-    tc = EutesterTestCase()
+    ret = testcase.run_test_case_list(testlist,
+                                      eof=testcase.args.exit_on_failure,
+                                      clean_on_exit=testcase.args.clean_on_exit)
+    print "ebs_basic_test exiting:("+str(ret)+")"
+    exit(ret)
 
-    tc.setup_parser(testname='ebstestsuite.py', description='collection of ebs related tests', testlist=False)
-    tc.parser.add_argument('--inst_pass', 
-                        help="Instance password for ssh session if not key enabled", default=None)
-    
-    args = tc.get_args()
-    #if file was not provided or is not found
-    if not os.path.exists(args.config):
-        print "Error: Mandatory Config File '"+str(args.config)+"' not found."
-        tc.parser.print_help()
-        exit(1)
-    #ebssuite = EbsTestSuite(zone=args.zone, config_file= args.config, password=args.password,credpath=args.credpath, keypair=args.keypair, group=args.group, image=args.emi)
-    ebssuite = tc.do_with_args(EbsTestSuite)
-    kbtime=time.time()
-    try:
-       list = ebssuite.ebs_basic_test_suite(run=False)
-       tc.run_test_case_list(list)
-    except KeyboardInterrupt:
-        ebssuite.debug("Caught keyboard interrupt...")
-        if ((time.time()-kbtime) < 2):
-            ebssuite.clean_created_resources()
-            ebssuite.debug("Caught 2 keyboard interupts within 2 seconds, exiting test")
-            ebssuite.clean_created_resources()
-            tc.print_test_list_results(list)
-            raise
-        else:          
-            tc.print_test_list_results(list)
-            kbtime=time.time()
-            pass     
-    except Exception, e:
-        raise e
-        exit(1)
-    finally:
-        tc.print_test_list_results(list)
-    exit(0)
+
         
 
 

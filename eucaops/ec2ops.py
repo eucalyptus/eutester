@@ -41,10 +41,11 @@ import hmac
 import json
 import hashlib
 import base64
-from datetime import datetime, timedelta
 import time
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
+from subprocess import Popen, PIPE
+
 
 from boto.ec2.image import Image
 from boto.ec2.instance import Reservation, Instance
@@ -332,7 +333,13 @@ disable_root: false"""
     
     
     @Eutester.printinfo
-    def get_windows_instance_password(self, instance, private_key_path=None, key=None, dir=None, exten=".pem", encoded=True):
+    def get_windows_instance_password(self,
+                                      instance,
+                                      private_key_path=None,
+                                      key=None,
+                                      dir=None,
+                                      exten=".pem",
+                                      encoded=True):
         """
         Get password for a windows instance.
 
@@ -347,24 +354,20 @@ disable_root: false"""
         """
         self.debug("get_windows_instance_password, instance:"+str(instance.id)+", keypath:"+str(private_key_path)+
                    ", dir:"+str(dir)+", exten:"+str(exten)+", encoded:"+str(encoded))
-        try:
-            from M2Crypto import RSA
-            import base64
-        except ImportError:
-            raise ImportError("Unable to load M2Crypto. Please install by using your package manager to install "
-                              "python-m2crypto or 'easy_install M2crypto'")
         key = key or self.get_keypair(instance.key_name)
         if private_key_path is None and key is not None:
             private_key_path = str(self.verify_local_keypath( key.name , dir, exten))
         if not private_key_path:
-            raise Exception('get_windows_instance_password, keypath not found?')        
+            raise Exception('get_windows_instance_password, keypath not found?')
         encrypted_string = self.ec2.get_password_data(instance.id)
-        user_priv_key = RSA.load_key(private_key_path)
         if encoded:
             string_to_decrypt = base64.b64decode(encrypted_string)
         else:
             string_to_decrypt = encrypted_string
-        return user_priv_key.private_decrypt(string_to_decrypt,RSA.pkcs1_padding)
+        popen = Popen(['openssl', 'rsautl', '-decrypt', '-inkey',
+                       private_key_path, '-pkcs'], stdin=PIPE, stdout=PIPE)
+        (stdout, _) = popen.communicate(string_to_decrypt)
+        return stdout
 
     @Eutester.printinfo
     def add_group(self, group_name=None, description=None, fail_if_exists=False ):
@@ -1050,7 +1053,9 @@ disable_root: false"""
             raise Exception("delete_volumes: volume_list was empty")
         for volume in vollist:
             try:
-                self.debug( "Sending delete for volume: " +  str(volume.id)  )
+                self.debug( "Sending delete for volume: " +  str(volume.id))
+                if volume in self.test_resources['volumes']:
+                    self.test_resources['volumes'].remove(volume)
                 volumes = self.ec2.get_all_volumes([volume.id])
                 if len(volumes) == 1:
                     volume = volumes[0]
@@ -1098,7 +1103,6 @@ disable_root: false"""
 
                   errmsg += "ERROR:"+str(volume) + " left in " +  volume.status + ',elapsed:'+str(elapsed) + "\n"
                 raise Exception(errmsg)
-
 
 
     def delete_all_volumes(self):
@@ -1900,6 +1904,7 @@ disable_root: false"""
                                                       image_location=image_location,
                                                       ramdisk_id=ramdisk,
                                                       architecture=architecture,
+                                                      virtualization_type=virtualization_type,
                                                       block_device_map=bdmdev,
                                                       root_device_name=root_device_name,
                                                       **custom_params)

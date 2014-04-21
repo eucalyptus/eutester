@@ -80,9 +80,13 @@ class InstallRiak(EutesterTestCase):
                 self.tester.modify_property("objectstorage.s3provider.s3secretkey",response_dict["key_secret"])
 
         except IndexError as e:
-            self.tester.info("No RIAK component found in component specification. Skipping installation")
-            self.tester.info("Configuring OSG to use walrus backend");
-            self.tester.modify_property("objectstorage.providerclient", "walrus");
+            try:
+                self.tester.get_component_machines("ws")
+                self.tester.info("No RIAK component found. Configuring OSG to use walrus backend");
+                self.tester.modify_property("objectstorage.providerclient", "walrus");
+            except IndexError as ex:
+                self.tester.info("No RIAK/WS component found in component specification. Skipping installation")
+
             
 if __name__ == "__main__":
     testcase = InstallRiak()
@@ -98,3 +102,4 @@ if __name__ == "__main__":
     ### Run the EutesterUnitTest objects
     result = testcase.run_test_case_list(unit_list)
     sys.exit(result)
+
