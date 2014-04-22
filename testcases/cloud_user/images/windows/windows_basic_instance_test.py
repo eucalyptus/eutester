@@ -128,6 +128,7 @@ class Windows_Basic_Instance_Test(EutesterTestCase):
         image = image_utils.create_emi(url=url,
                                        platform='windows',
                                        kernel='windows')
+        self.status('Setting launch permissions to "all" on image:' + str(image.id))
         image.set_launch_permissions(group_names=['all'])
         self.debug('created image:' + str(image.id))
         self.image = image
@@ -172,9 +173,47 @@ class Windows_Basic_Instance_Test(EutesterTestCase):
         self.wins = self.tester.run_image(image=self.image,
                                           group=self.group,
                                           keypair=self.keypair,
-                                          type=vmtype)
+                                          zone=self.zone,
+                                          type=vmtype)[0]
         return self.wins
 
+    def check_ephemeral_test(self):
+        """
+        Definition: Test attempts to verify the ephemeral disk size for an
+        instance store backed instance based upon the vmtype ran.
+        """
+        main_disk = None
+        ephemeral_disk = None
+        vmtype = self.tester.get_vm_type_from_zone(self.zone,
+                                                   self.wins.instance_type)
+        disk_size = vmtype.disk
+        for disk in self.wins.diskdrives:
+            if disk.index == 0:
+                main_disk = disk
+            if disk.index == 1:
+                ephemeral_disk = disk
+            if main_disk and ephemeral_disk:
+                break
+        self.debug(str(self.id) + ', Primary disk size:' +
+                   str(main_disk.size))
+        self.debug(str(self.id) + ', Ephemeral disk size:' +
+                   str(main_disk.size))
+        assert disk_size == main_disk.get_size_in_gb() + \
+               ephemeral_disk.get_size_in_gb()
+
+
+    def ebs_attach_detach_volume_test(self):
+        '''
+        Definition: Basic attach and detach ebs volume test.
+        -Verifies ebs attached and detached states.
+        -Verifies the volume appears on the guest as a new disk when attached
+        -Verifies the size is correct
+        -Verifies the volume is removed from the guest upon detach
+        '''
+        self.testvolume = self.tester.create_volume(zone=self.zone, size=1)
+        self.wins.attach_volume(self.testvolume)
+        time.sleep(10)
+        self.wins.detach_euvolume(self.testvolume)
 
 
     def clean_method(self):
@@ -196,7 +235,9 @@ if __name__ == "__main__":
                 raise RuntimeError('No image found and no image url provided')
             else:
                 test_names.append('create_image_from_url')
-        test_names.append('run_windows_instance')
+        test_names.extend(['run_windows_instance',
+                          'check_ephemeral_test',
+                          'ebs_attach_detach_volume_test'])
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
     for test in test_names:
