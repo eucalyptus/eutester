@@ -348,7 +348,13 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                     elif isinstance(item,Reservation):
                         continue
                     else:
-                        item.delete()
+                        try:
+                            item.delete()
+                        except EC2ResponseError as ec2re:
+                            if ec2re.status == 400:
+                                self.debug('Resource not found assuming it is'
+                                           ' already deleted, resource:'
+                                           + str(item))
                 except Exception, e:
                     tb = self.get_traceback()
                     failcount += 1

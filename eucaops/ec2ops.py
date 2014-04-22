@@ -1788,11 +1788,21 @@ disable_root: false"""
                        ' snaps to delete...' )
             waiting_list = copy.copy(delete_me)
             for snapshot in waiting_list:
-                snapshot.update()
-                if not self.ec2.get_all_snapshots(snapshot_ids=[snapshot.id]) \
-                        or snapshot.status == 'deleted':
+                try:
+                    snapshot.update()
+                    get_snapshot = self.ec2.get_all_snapshots(
+                        snapshot_ids=[snapshot.id])
+                except EC2ResponseError as ec2re:
+                    self.debug("Snapshot not found, assuming "
+                                           "it's already deleted:" +
+                                           str(snapshot.id))
+                if not get_snapshot or snapshot.status == 'deleted':
                     self.debug('Snapshot:'+str(snapshot.id)+" is deleted")
                     delete_me.remove(snapshot)
+                    #snapshot is deleted remove it from test resources list
+                    for testsnap in self.test_resources['snapshots']:
+                        if snapshot.id == testsnap.id:
+                            self.test_resources['snapshots'].remove(testsnap)
             if delete_me and (elapsed < timeout):
                 time.sleep(poll_interval)
             elapsed = int(time.time()-start)
@@ -2903,11 +2913,14 @@ disable_root: false"""
             self.debug('Using src_addr:'+str(src_addr))
             groups = self.get_instance_security_groups(instance)
             for group in groups:
-                self.debug("Is src_addr:"+str(src_addr)+" allowed in group:"+str(group.name)+"...?")
                 if self.does_sec_group_allow(group, src_addr, protocol=protocol, port=port):
-                    self.debug("Sec allows from source")
+                    self.debug("Sec allows from test source addr: " +
+                               str(src_addr + ", protocol:" + str(protocol) +
+                               ", port:" + str(port)))
                     return True
-            self.debug("Sec does NOT allow from source")
+            self.debug("Sec DOES NOT allow from test source addr: " +
+                       str(src_addr + ", protocol:" + str(protocol) +
+                       ", port:" + str(port)))
             return False
         except Exception, e:
             self.debug(self.get_traceback())
@@ -2939,6 +2952,9 @@ disable_root: false"""
         :param protocol: Protocol to lookup sec group rule against
         :param port: Network port to lookup sec group rule against
         """
+        self.debug('Security group:' + str(group.name) + ", src ip:" +
+                   str(src) + ", proto:" + str(protocol) + ", port:" +
+                   str(port))
         group = self.get_security_group(id=group.id, name=group.name)
         for rule in group.rules:
             g_buf =""
@@ -2950,12 +2966,14 @@ disable_root: false"""
                            ", grants:"+str(g_buf))
                 to_port= int(rule.to_port)
                 if (to_port == 0 ) or (to_port == -1) or (to_port == port):
+
                     for grant in rule.grants:
                         if self.is_address_in_network(src, str(grant)):
                             self.debug('sec_group DOES allow: group:"{0}"'
                                        ', src:"{1}", proto:"{2}", port:"{3}"'
                                        .format(group.name, src, protocol, port))
                             return True
+
         self.debug('sec_group DOES NOT allow: group:"{0}", src:"{1}", proto:'
                    '"{2}", port:"{3}"'.format(group.name, src, protocol, port))
         return False
