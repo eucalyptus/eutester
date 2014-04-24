@@ -1654,8 +1654,7 @@ disable_root: false"""
         :param owner_id: string owner id to use as filter
         :return: list of snapshots found
         """
-        retlist =[]
-        owner_id = owner_id or self.get_account_id()
+        retlist = []
         #Start by comparing resources the current test obj is tracking to see if they are still in sync with the system
         snapshots = copy.copy(self.test_resources['snapshots'])
         snapshot_list = []
