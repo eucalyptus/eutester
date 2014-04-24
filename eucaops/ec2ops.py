@@ -2917,10 +2917,9 @@ disable_root: false"""
                     self.debug("Sec allows from test source addr: " +
                                str(src_addr + ", protocol:" + str(protocol) +
                                ", port:" + str(port)))
+                    #Security group allows from the src/proto/port
                     return True
-            self.debug("Sec DOES NOT allow from test source addr: " +
-                       str(src_addr + ", protocol:" + str(protocol) +
-                       ", port:" + str(port)))
+            #Security group does not allow from the src/proto/port
             return False
         except Exception, e:
             self.debug(self.get_traceback())
@@ -2928,6 +2927,7 @@ disable_root: false"""
         finally:
             if s:
                 s.close()
+
     def get_security_group(self, id=None, name=None):
         #Adding this as both a convienence to the user to separate euare groups from security groups
         #Not sure if botos filter on group names and ids is reliable?
@@ -2952,13 +2952,15 @@ disable_root: false"""
         :param protocol: Protocol to lookup sec group rule against
         :param port: Network port to lookup sec group rule against
         """
+        port = int(port)
+        protocol = str(protocol).strip().lower()
         self.debug('Security group:' + str(group.name) + ", src ip:" +
                    str(src) + ", proto:" + str(protocol) + ", port:" +
                    str(port))
         group = self.get_security_group(id=group.id, name=group.name)
         for rule in group.rules:
             g_buf =""
-            if rule.ip_protocol == protocol:
+            if str(rule.ip_protocol).strip().lower() == protocol:
                 for grant in rule.grants:
                     g_buf += str(grant)+","
                 self.debug("rule#" + str(group.rules.index(rule)) +
@@ -2966,14 +2968,12 @@ disable_root: false"""
                            ", grants:"+str(g_buf))
                 to_port= int(rule.to_port)
                 if (to_port == 0 ) or (to_port == -1) or (to_port == port):
-
                     for grant in rule.grants:
                         if self.is_address_in_network(src, str(grant)):
                             self.debug('sec_group DOES allow: group:"{0}"'
                                        ', src:"{1}", proto:"{2}", port:"{3}"'
                                        .format(group.name, src, protocol, port))
                             return True
-
         self.debug('sec_group DOES NOT allow: group:"{0}", src:"{1}", proto:'
                    '"{2}", port:"{3}"'.format(group.name, src, protocol, port))
         return False
