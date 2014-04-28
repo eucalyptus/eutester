@@ -3178,7 +3178,9 @@ disable_root: false"""
                                            kernel=kernel,
                                            image_id=image_id)
             for instance in instances:
-                euinstance_list.append(self.convert_instance_to_euisntance(instance, auto_connect=False))
+                instance_res = getattr(instance, 'reservation', None)
+                euinstance_list.append(self.convert_instance_to_euisntance(
+                    instance, reservation=instance_res, auto_connect=False))
         if not euinstance_list:
             self.debug('No instances to print')
             return
@@ -3325,13 +3327,30 @@ disable_root: false"""
         reservation.instances = euinstance_list
         return reservation
 
-    def convert_instance_to_euisntance(self, instance, keypair=None, username="root", password=None, auto_connect=True,timeout=120):
+    def convert_instance_to_euisntance(self, instance, keypair=None,
+                                       username="root", password=None,
+                                       reservation=None,auto_connect=True,
+                                       timeout=120):
         if instance.platform == 'windows':
-            return WinInstance.make_euinstance_from_instance(instance, self, keypair=keypair, username = username,
-                                                        password=password, auto_connect=auto_connect,timeout=timeout )
+            return WinInstance.make_euinstance_from_instance(
+                instance,
+                self,
+                keypair=keypair,
+                username = username,
+                password=password,
+                reservation=reservation,
+                auto_connect=auto_connect,
+                timeout=timeout)
         else:
-            return EuInstance.make_euinstance_from_instance(instance, self, keypair=keypair, username = username,
-                                                        password=password, auto_connect=auto_connect,timeout=timeout )
+            return EuInstance.make_euinstance_from_instance(
+                instance,
+                self,
+                keypair=keypair,
+                username = username,
+                password=password,
+                reservation=reservation,
+                auto_connect=auto_connect,
+                timeout=timeout)
 
     def get_console_output(self, instance):
         """
@@ -3437,6 +3456,7 @@ disable_root: false"""
                         continue
                     if (image_id is not None) and (i.image_id != image_id):
                         continue
+                    i.reservation = res
                     ilist.append(i)
         return ilist
 

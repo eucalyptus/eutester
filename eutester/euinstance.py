@@ -141,7 +141,7 @@ class EuInstance(Instance, TaggedResource):
         newins.retry = retry    
         newins.private_addressing = private_addressing
         newins.reservation = reservation or newins.get_reservation()
-        if newins.reservation:
+        if newins.reservation and newins.state != 'terminated':
             newins.security_groups = newins.tester.get_instance_security_groups(newins)
         else:
             newins.security_groups = None
@@ -149,8 +149,9 @@ class EuInstance(Instance, TaggedResource):
         newins.cmdstart = cmdstart
         newins.auto_connect = auto_connect
         newins.set_last_status()
-        newins.update_vm_type_info()
-        if newins.root_device_type == 'ebs':
+        if newins.state != 'terminated':
+            newins.update_vm_type_info()
+        if newins.root_device_type == 'ebs' and newins.state != 'terminated':
             try:
                 volume = newins.tester.get_volume(volume_id = newins.block_device_mapping.get(newins.root_device_name).volume_id)
                 newins.bdm_root_vol = EuVolume.make_euvol_from_vol(volume, tester=newins.tester,cmdstart=newins.cmdstart)
