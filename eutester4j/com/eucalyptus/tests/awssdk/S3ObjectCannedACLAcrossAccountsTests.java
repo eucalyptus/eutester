@@ -2,6 +2,7 @@ package com.eucalyptus.tests.awssdk;
 
 import static com.eucalyptus.tests.awssdk.Eutester4j.assertThat;
 import static com.eucalyptus.tests.awssdk.Eutester4j.eucaUUID;
+import static com.eucalyptus.tests.awssdk.Eutester4j.initS3ClientWithNewAccount;
 import static com.eucalyptus.tests.awssdk.Eutester4j.print;
 import static com.eucalyptus.tests.awssdk.Eutester4j.testInfo;
 import static org.testng.AssertJUnit.assertTrue;
@@ -13,6 +14,7 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
+import org.testng.annotations.AfterClass;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.BeforeMethod;
@@ -53,35 +55,41 @@ public class S3ObjectCannedACLAcrossAccountsTests {
 	private static AmazonS3 s3clientB = null;
 	private static String accountNameA = null;
 	private static String accountNameB = null;
+	private static String accountA = null;
+	private static String accountB = null;
 	private static String md5_orig = null;
 
 	@BeforeClass
 	public void init() throws Exception {
 		print("*** PRE SUITE SETUP ***");
 
-		s3clientA = getS3Client("eucarc_night");
-		s3clientB = getS3Client("eucarc_s3compat");
-
-		// s3clientA = getS3Client("awsrc_personal");
-		// s3clientB = getS3Client("awsrc_euca");
+		try {
+			accountA = this.getClass().getSimpleName().toLowerCase() + "a";
+			accountB = this.getClass().getSimpleName().toLowerCase() + "b";
+			s3clientA = initS3ClientWithNewAccount(accountA, "admin");
+			s3clientB = initS3ClientWithNewAccount(accountB, "admin");
+		} catch (Exception e) {
+			try {
+				teardown();
+			} catch (Exception ie) {
+			}
+			throw e;
+		}
 
 		accountNameA = s3clientA.getS3AccountOwner().getDisplayName();
 		accountNameB = s3clientB.getS3AccountOwner().getDisplayName();
 		md5_orig = BinaryUtils.toHex(Md5Utils.computeMD5Hash(new FileInputStream(fileToPut)));
 	}
 
-	public AmazonS3 getS3Client(String credPath) throws Exception {
-		print("Getting cloud information from " + credPath);
-
-		String s3Endpoint = Eutester4j.parseEucarc(credPath, "S3_URL") + "/";
-
-		String secretKey = Eutester4j.parseEucarc(credPath, "EC2_SECRET_KEY").replace("'", "");
-		String accessKey = Eutester4j.parseEucarc(credPath, "EC2_ACCESS_KEY").replace("'", "");
-
-		print("Initializing S3 connections");
-		return Eutester4j.getS3Client(accessKey, secretKey, s3Endpoint);
+	@AfterClass
+	public void teardown() throws Exception {
+		print("*** POST SUITE CLEANUP ***");
+		Eutester4j.deleteAccount(accountA);
+		Eutester4j.deleteAccount(accountB);
+		s3clientA = null;
+		s3clientB = null;
 	}
-
+	
 	@BeforeMethod
 	public void setup() throws Exception {
 		print("*** PRE TEST SETUP ***");

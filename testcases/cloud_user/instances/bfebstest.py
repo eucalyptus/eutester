@@ -119,7 +119,8 @@ class BFEBSBasics(InstanceBasics):
             ## Drop a file so we know if we actually created an image
             current_time = str(int(time.time()))
             temp_file = "/root/my-new-file-" + current_time
-            instance.sys("touch " + temp_file)
+            instance.sys("touch " + temp_file + " && sync", code=0)
+            instance.sys('ls -la', code=0)
             rebooted_image = self.tester.create_image(instance, "BFEBS-test-create-image-reboot-" + current_time)
             instance.connect_to_instance()
             ending_uptime = instance.get_uptime()
@@ -129,6 +130,7 @@ class BFEBSBasics(InstanceBasics):
             new_image_reservation = self.tester.run_instance(**self.run_instance_params)
             for new_instance in new_image_reservation.instances:
                 ## Check that our temp file exists
+                new_instance.sys("ls -la")
                 new_instance.sys("ls " + temp_file, code=0)
             self.tester.terminate_instances(new_image_reservation)
 
@@ -141,7 +143,8 @@ class BFEBSBasics(InstanceBasics):
             ## Drop a file so we know if we actually created an image
             current_time = str(int(time.time()))
             temp_file = "/root/my-new-file-" + current_time
-            instance.sys("touch " + temp_file)
+            instance.sys("touch " + temp_file + " && sync", code=0)
+            instance.sys('ls -la', code=0)
             not_rebooted_image = self.tester.create_image(instance, "BFEBS-test-create-image-noreboot-" + current_time, no_reboot=True)
             ending_uptime = instance.get_uptime()
             if ending_uptime < starting_uptime:
@@ -150,6 +153,7 @@ class BFEBSBasics(InstanceBasics):
             new_image_reservation = self.tester.run_instance(**self.run_instance_params)
             for new_instance in new_image_reservation.instances:
                 ## Check that our temp file exists
+                new_instance.sys("ls -la")
                 new_instance.sys("ls " + temp_file, code=0)
             self.tester.terminate_instances(new_image_reservation)
 

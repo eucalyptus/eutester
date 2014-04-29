@@ -28,6 +28,7 @@ from io import FileIO
 from boto.s3.key import Key
 from boto.s3.prefix import Prefix
 from boto.exception import S3ResponseError
+from boto.sdb.db import model
 import dateutil.parser
 
 
@@ -40,7 +41,7 @@ import requests
 
 class ObjectTestSuite(EutesterTestCase):
     data_size = 1000
-    
+
     def __init__(self):
         self.setuptestcase()
         self.setup_parser()
@@ -51,8 +52,8 @@ class ObjectTestSuite(EutesterTestCase):
             self.tester = S3ops(credpath=self.args.credpath, endpoint=self.args.endpoint)
         else:
             self.tester = Eucaops( credpath=self.args.credpath, config_file=self.args.config, password=self.args.password)
-        
-        self.bucket_prefix = "eutester-bucket-test-suite-" + str(int(time.time())) + "-"
+
+        self.bucket_prefix = "eutester-" + str(int(time.time())) + "-"
         self.buckets_used = set()
         random.seed(time.time())
         self.test_bucket_name = self.bucket_prefix + str(random.randint(0,100))
@@ -68,23 +69,23 @@ class ObjectTestSuite(EutesterTestCase):
         self.tester.wait_for_result(ensure_bucket_exists, True)
         self.test_object_data = ""
         for i in range(0, self.data_size):
-            self.test_object_data += chr(random.randint(32,126))            
+            self.test_object_data += chr(random.randint(32,126))
         print "Generated data for objects: " + self.test_object_data
-        
-    
+
+
     def print_key_info(self, keys=None):
         for key in keys:
             self.tester.info("Key=" + str(key.key) + " -- version= " + str(key.version_id) + " -- eTag= " + str(key.etag)
                              + " -- ACL= " + str(key.get_xml_acl()))
-    
+
     def put_object(self, bucket=None, object_key=None, object_data=None):
         """Puts an object with the specified name and data in the specified bucket"""
         if bucket == None:
             raise Exception("Cannot put object without proper bucket reference")
-        
+
         try :
             key = Key(bucket=bucket,name=object_key)
-            key.set_contents_from_string(object_data)                        
+            key.set_contents_from_string(object_data)
             return key.etag
         except Exception as e:
             self.tester.debug("Exception occured during 'PUT' of object " + object_key + " into bucket " + bucket.name + ": " + e.message)
@@ -137,7 +138,7 @@ class ObjectTestSuite(EutesterTestCase):
             return False
         else:
             self.tester.info("Bucket versioning is Disabled")
-        
+
         #Enable versioning
         bucket.configure_versioning(True)
         if bucket.get_versioning_status()['Versioning'] == 'Enabled':
@@ -147,7 +148,7 @@ class ObjectTestSuite(EutesterTestCase):
             self.tester.info("Versioning status not enabled, should be.")
             return False
         return False
-    
+
     def suspend_versioning(self, bucket):
         """Suspend versioning on the bucket, checking that it is previously enabled and that the operation succeeds."""
         if bucket.get_versioning_status()['Versioning'] == 'Enabled':
@@ -155,7 +156,7 @@ class ObjectTestSuite(EutesterTestCase):
         else:
             self.tester.info("Versioning status not enabled, should be. Can't suspend if not enabled....")
             return False
-    
+
         #Enable versioning
         bucket.configure_versioning(False)
         if bucket.get_versioning_status()['Versioning'] == 'Suspended':
@@ -164,8 +165,8 @@ class ObjectTestSuite(EutesterTestCase):
         else:
             self.tester.info("Versioning status not suspended.")
             return False
-        return False 
-             
+        return False
+
     def check_version_listing(self, version_list, total_expected_length):
         """Checks a version listing for both completeness and ordering as well as pagination if required"""
         self.tester.info("Checking bucket version listing. Listing is " + str(len(version_list)) + " entries long")
@@ -173,12 +174,12 @@ class ObjectTestSuite(EutesterTestCase):
             assert(len(version_list) == 999)
         else:
             assert(len(version_list) == total_expected_length)
-        
+
         prev_obj = None
         should_fail = None
         for obj in version_list:
             if isinstance(obj,Key):
-                self.tester.info("Key: " + obj.name + " -- " + obj.version_id + "--" + obj.last_modified)                
+                self.tester.info("Key: " + obj.name + " -- " + obj.version_id + "--" + obj.last_modified)
                 if prev_obj != None:
                     if self.compare_versions(prev_obj, obj) > 0:
                         should_fail = obj
@@ -212,7 +213,7 @@ class ObjectTestSuite(EutesterTestCase):
                     #self.debug("Key1: " + key1.last_modified + " last modified is less than " + key2.last_modified)
                     return -1
         return None
-    
+
     def test_object_basic_ops(self):
         """
         Tests basic operations on objects: simple GET,PUT,HEAD,DELETE.
@@ -221,14 +222,14 @@ class ObjectTestSuite(EutesterTestCase):
         self.tester.info("Basic Object Operations Test (GET/PUT/HEAD)")
         if self.test_bucket == None:
             self.fail("Error: test_bucket not set, cannot run test")
-            
+
         #Test PUT & GET
         testkey="testkey1-" + str(int(time.time()))
         self.put_object(bucket=self.test_bucket, object_key=testkey, object_data=self.test_object_data)
-        
+
         ret_key = self.test_bucket.get_key(testkey)
         ret_content = ret_key.get_contents_as_string()
-        
+
         if ret_content == self.test_object_data:
             self.tester.info("Set content = get content, put passed")
         else:
@@ -238,7 +239,7 @@ class ObjectTestSuite(EutesterTestCase):
                 self.tester.info("No content returned")
             self.tester.info("Expected content: " + self.test_object_data)
             self.fail("Put content not the same as what was returned")
-        
+
         #Test HEAD
         key_meta = self.test_bucket.get_key(testkey)
         if key_meta.key != ret_key.key or key_meta.etag != ret_key.etag or key_meta.size != ret_key.size:
@@ -246,7 +247,7 @@ class ObjectTestSuite(EutesterTestCase):
             self.tester.info("Expected key " + ret_key.key + " etag: " + ret_key.etag + " Got: " + key_meta.key + " etag: " + key_meta.etag)
         else:
             self.tester.info("HEAD meta = GET meta, all is good")
-        
+
         #Test copy operation (GET w/source headers)
         self.tester.info("Testing COPY object")
 
@@ -268,12 +269,12 @@ class ObjectTestSuite(EutesterTestCase):
             self.fail("Could not get object copy")
         if ret_key == None:
             self.fail("Could not get object copy")
-            
+
         if self.test_bucket.get_key(testkey).get_contents_as_string() != ret_key.get_contents_as_string():
             self.fail("Contents of original key and copy don't match")
         else:
             self.tester.info("Copy key contents match original!")
-        
+
         #Test DELETE
         self.test_bucket.delete_key(testkey)
         ret_key = None
@@ -282,52 +283,52 @@ class ObjectTestSuite(EutesterTestCase):
             self.tester.info("Erroneously got: " + ret_key.name)
             raise S3ResponseError(404, "Should have thrown exception for getting a non-existent object")
         self.tester.info("Finishing basic ops test")
-               
+
     def test_object_byte_offset_read(self):
         """Tests fetching specific byte offsets of the object"""
         self.tester.info("Byte-range Offset GET Test")
         self.test_bucket = self.clear_and_rebuild_bucket(self.test_bucket_name)
         testkey = "rangetestkey-" + str(int(time.time()))
         source_bytes = bytearray(self.test_object_data)
-        
+
         #Put the object initially
         self.put_object(bucket=self.test_bucket, object_key=testkey, object_data=self.test_object_data)
-        
+
         #Test range for first 100 bytes of object
         print "Trying start-range object get"
         try:
             data_str = Key(bucket=self.test_bucket,name=testkey).get_contents_as_string(headers={"Range":"bytes=0-99"})
         except:
             self.fail("Failed range object get first 100 bytes")
-        
-        startrangedata = bytearray(data_str)        
+
+        startrangedata = bytearray(data_str)
         print "Got: " + startrangedata
         print "Expected: " + str(source_bytes[:100])
-        start = 0        
+        start = 0
         for i in range(0,100):
             if startrangedata[i-start] != source_bytes[i]:
                 print "Byte: " + startrangedata[i] + " differs!"
                 self.fail("Start-range Ranged-get failed")
-            
-        print "Trying mid-object range"   
-        try: 
+
+        print "Trying mid-object range"
+        try:
             data_str = Key(bucket=self.test_bucket,name=testkey).get_contents_as_string(headers={"Range":"bytes=500-599"})
         except:
-            self.fail("Failed range object get for middle 100 bytes")     
+            self.fail("Failed range object get for middle 100 bytes")
         midrangedata = bytearray(data_str)
         start = 500
         for i in range(start,start+100):
             if midrangedata[i-start] != source_bytes[i]:
                 print "Byte: " + midrangedata[i] + "differs!"
                 self.fail("Mid-range Ranged-get failed")
-        
+
         print "Trying end-range object get"
         #Test range for last 100 bytes of object
         try:
             data_str = Key(bucket=self.test_bucket,name=testkey).get_contents_as_string(headers={"Range":"bytes=800-899"})
         except:
             self.fail("Failed range object get for last 100 bytes")
-            
+
         endrangedata = bytearray(data_str)
         print "Got: " + str(endrangedata)
         start = 800
@@ -338,9 +339,9 @@ class ObjectTestSuite(EutesterTestCase):
                     self.fail("End-range Ranged-get failed")
         except Exception as e:
             print "Exception! Received: " + e
-        
+
         print "Range test complete"
-        
+
     def test_object_post(self):
         """Test the POST method for putting objects, requires a pre-signed upload policy and url"""
         self.tester.info("Testing POST form upload on bucket" + self.test_bucket_name)
@@ -424,26 +425,26 @@ class ObjectTestSuite(EutesterTestCase):
         #    test_data += chr(random.randint(32,126))
         test_data = bytearray(os.urandom(large_obj_size_bytes))
 
-        self.tester.info("Uploading object content of size: " + str(large_obj_size_bytes) + " bytes")        
+        self.tester.info("Uploading object content of size: " + str(large_obj_size_bytes) + " bytes")
         keyname = "largeobj-" + str(int(time.time()))
         self.put_object(bucket=self.test_bucket, object_key=keyname, object_data=test_data)
         self.tester.info("Done uploading object")
 
         ret_key = self.test_bucket.get_key(keyname)
         ret_data = ret_key.get_contents_as_string()
-        
+
         if ret_data != test_data:
             self.fail("Fetched data and generated data don't match")
         else:
             self.tester.info("Data matches!")
-        
+
         self.tester.info("Removing large object")
         self.test_bucket.delete_key(ret_key)
         self.tester.info("Complete large object test")
         pass
-            
+
     def test_object_multipart(self):
-        """Test the multipart upload interface"""
+        """Tests basic multipart upload functionality"""
         self.tester.info("Testing Multipart")
         self.test_bucket = self.clear_and_rebuild_bucket(self.test_bucket_name)
         self.test_multipart_upload()
@@ -481,25 +482,24 @@ class ObjectTestSuite(EutesterTestCase):
         self.tester.info("Initiating multipart upload " + keyname)
         return self.test_bucket.initiate_multipart_upload(keyname)
 
-
     def test_object_versioning_enabled(self):
         """Tests object versioning for get/put/delete on a versioned bucket"""
         self.tester.info("Testing bucket Versioning-Enabled")
         self.test_bucket = self.clear_and_rebuild_bucket(self.test_bucket_name)
         if not self.enable_versioning(self.test_bucket):
             self.fail("Could not properly enable versioning")
-             
+
         #Create some keys
         keyname = "versionkey-" + str(int(time.time()))
-        
+
         #Multiple versions of the data
         v1data = self.test_object_data + "--version1"
         v2data = self.test_object_data + "--version2"
         v3data = self.test_object_data + "--version3"
-        
+
         #Test sequence: put v1, get v1, put v2, put v3, get v3, delete v3, restore with v1 (copy), put v3 again, delete v2 explicitly
         self.put_object(bucket=self.test_bucket, object_key=keyname, object_data=v1data)
-                
+
         #Get v1
         obj_v1 = self.test_bucket.get_key(keyname)
         self.tester.check_md5(eTag=obj_v1.etag,data=v1data)
@@ -525,7 +525,7 @@ class ObjectTestSuite(EutesterTestCase):
         #Get a specific version, v1
         v1_return = self.test_bucket.get_key(key_name=keyname,version_id=obj_v1.version_id)
         self.print_key_info(keys=[v1_return])
-        
+
         #Delete current latest version (v3)
         self.test_bucket.delete_key(keyname)
 
@@ -533,7 +533,7 @@ class ObjectTestSuite(EutesterTestCase):
         if del_obj:
             self.tester.info("Erroneously got: " + del_obj.name)
             raise S3ResponseError(404, "Should have thrown this exception for getting a non-existent object")
-        
+
         #Restore v1 using copy
         self.tester.info("Restoring version")
         try:
@@ -541,12 +541,11 @@ class ObjectTestSuite(EutesterTestCase):
         except S3ResponseError as e:
             self.fail("Failed to restore key from previous version using copy got error: " + str(e.status))
 
-
         restored_obj = self.test_bucket.get_key(keyname)
         assert(restored_obj != None)
         self.tester.check_md5(eTag=restored_obj.etag,data=v1data)
         self.print_key_info(keys=[restored_obj])
-        
+
         #Put v3 again
         self.tester.info("Adding another version")
         self.put_object(bucket=self.test_bucket, object_key=keyname,object_data=v3data)
@@ -563,7 +562,7 @@ class ObjectTestSuite(EutesterTestCase):
         top_obj = self.test_bucket.get_key(keyname)
         self.print_key_info([top_obj])
         self.tester.check_md5(eTag=top_obj.etag,data=v3data)
-        
+
         self.tester.info("Finished the versioning enabled test. Success!!")
 
     def clear_and_rebuild_bucket(self, bucket_name):
@@ -580,7 +579,7 @@ class ObjectTestSuite(EutesterTestCase):
         self.test_bucket = self.clear_and_rebuild_bucket(self.test_bucket_name)
         if not self.enable_versioning(self.test_bucket):
             self.fail("Could not enable versioning properly. Failing")
-        
+
         key = "testkey-" + str(int(time.time()))
         keys = [ key + str(k) for k in range(0,keyrange)]
         contents = [ self.test_object_data + "--v" + str(v) for v in range(0,version_max)]
@@ -605,18 +604,18 @@ class ObjectTestSuite(EutesterTestCase):
                 self.test_bucket.configure_versioning(False)
                 self.tester.debug(str(listing))
                 raise Exception("Bucket version listing did not equal the number uploaded. Instead: " + str(len(listing)))
-        
+
         prev_obj = None
         for obj in listing:
             if isinstance(obj,Key):
-                self.tester.info("Key: " + obj.name + " -- " + obj.version_id + "--" + obj.last_modified)                
+                self.tester.info("Key: " + obj.name + " -- " + obj.version_id + "--" + obj.last_modified)
                 if prev_obj != None:
                     if self.compare_versions(prev_obj, obj) <= 0:
                         raise Exception("Version listing not sorted correctly, offending key: " + obj.name + " version: " + obj.version_id + " date: " + obj.last_modified)
                 prev_obj = obj
             else:
                 self.tester.info("Not a key, skipping: " + str(obj))
-    
+
     def test_object_versioning_suspended(self):
         """Tests object versioning on a suspended bucket, a more complicated test than the Enabled test"""
         self.tester.info("Testing bucket Versioning-Suspended")
@@ -630,30 +629,30 @@ class ObjectTestSuite(EutesterTestCase):
         v1data = self.test_object_data + "--version1"
         v2data = self.test_object_data + "--version2"
         v3data = self.test_object_data + "--version3"
-        
+
         vstatus = self.test_bucket.get_versioning_status()
         if vstatus:
             self.fail("Versioning status should be null/Disabled but was: " + str(vstatus))
         else:
             self.tester.info("Bucket versioning is Disabled")
-        
+
         self.put_object(bucket=self.test_bucket, object_key=keyname1, object_data=v1data)
         self.put_object(bucket=self.test_bucket, object_key=keyname2, object_data=v1data)
         self.put_object(bucket=self.test_bucket, object_key=keyname3, object_data=v1data)
         self.put_object(bucket=self.test_bucket, object_key=keyname4, object_data=v1data)
         self.put_object(bucket=self.test_bucket, object_key=keyname5, object_data=v1data)
-                    
-        key1 = self.test_bucket.get_key(keyname1)        
-        key2 = self.test_bucket.get_key(keyname2)        
-        key3 = self.test_bucket.get_key(keyname3)        
-        key4 = self.test_bucket.get_key(keyname4)        
+
+        key1 = self.test_bucket.get_key(keyname1)
+        key2 = self.test_bucket.get_key(keyname2)
+        key3 = self.test_bucket.get_key(keyname3)
+        key4 = self.test_bucket.get_key(keyname4)
         key5 = self.test_bucket.get_key(keyname5)
 
         self.tester.info("Initial bucket state after object uploads without versioning:")
         self.print_key_info(keys=[key1,key2,key3,key4,key5])
-        
-        
-        
+
+
+
         #Enable versioning
         self.test_bucket.configure_versioning(True)
         if self.test_bucket.get_versioning_status():
@@ -664,42 +663,41 @@ class ObjectTestSuite(EutesterTestCase):
         #Update a subset of the keys
         key1_etag2=self.put_object(bucket=self.test_bucket, object_key=keyname1,object_data=v2data)
         key2_etag2=self.put_object(bucket=self.test_bucket, object_key=keyname2,object_data=v2data)
-        
+
         key3_etag2=self.put_object(bucket=self.test_bucket, object_key=keyname3,object_data=v2data)
         key3_etag3=self.put_object(bucket=self.test_bucket, object_key=keyname3,object_data=v3data)
-        
+
         #Delete a key
         self.test_bucket.delete_key(keyname5)
 
         #Suspend versioning
         self.test_bucket.configure_versioning(False)
-        
+
         #Get latest of each key
         key1=self.test_bucket.get_key(keyname1)
         key2=self.test_bucket.get_key(keyname2)
         key3=self.test_bucket.get_key(keyname3)
         key4=self.test_bucket.get_key(keyname4)
         key5=self.test_bucket.get_key(keyname5)
-        
+
         #Delete a key
-        
+
         #Add a key
-        
+
         #Add same key again
-        
+
         #Fetch each key
-    
+
     def test_object_acl(self):
         """Tests object acl get/set and manipulation"""
         self.fail("Test not implemented")
-        
+
         #TODO: test custom and canned acls that are both valid an invalid
-        
+
     def test_object_torrent(self):
         """Tests object torrents"""
         self.fail("Feature not implemented yet")
 
-    
     def clean_method(self):
         '''This is the teardown method'''
         #Delete the testing bucket if it is left-over
@@ -714,11 +712,57 @@ class ObjectTestSuite(EutesterTestCase):
                     self.tester.info('Bucket ' + bucket + ' not found, skipping')
             except Exception as e:
                 self.tester.info('Exception checking bucket ' + bucket + ' Exception msg: ' + e.message)
-
         return
-          
+
+    def test_multipart_upload(self):
+        '''Basic multipart upload'''
+        self.tester.info("Testing multipart upload")
+        self.tester.info("Creating random file representing part...")
+        temp_file = tempfile.NamedTemporaryFile(mode="w+b", prefix="multipart")
+        temp_file.write(os.urandom(5 * 1024 * 1024))
+        keyname="multi-" + str(int(time.time()))
+        self.tester.info("Initiating multipart upload...much upload")
+        reply = self.initiate_multipart_upload(keyname)
+        self.tester.info("Uploading parts...Such Parts")
+        for partnum in range(1, 11):
+            temp_file.seek(0, os.SEEK_SET)
+            reply.upload_part_from_file(temp_file, partnum)
+        self.tester.info("Listing parts...")
+        self.test_bucket.get_all_multipart_uploads()
+        self.tester.info("Completing upload...So OSG")
+        reply.complete_upload()
+        temp_file.close()
+        self.tester.info("HEAD request...");
+        returned_key = self.test_bucket.get_key(keyname, validate=True);
+        download_temp_file = tempfile.NamedTemporaryFile(mode="w+b", prefix="mpu-download")
+        self.tester.info("Downloading object...very mpu");
+        returned_key.get_contents_to_file(download_temp_file);
+        self.tester.info("Deleting object...WOW")
+        self.test_bucket.delete_key(keyname)
+
+    def test_abort_multipart_upload(self):
+        '''Basic multipart upload'''
+        self.tester.info("Testing abort multipart upload")
+        temp_file = tempfile.NamedTemporaryFile(mode="w+b", prefix="multipart")
+        temp_file.write(os.urandom(5 * 1024 * 1024))
+        keyname="multi-" + str(int(time.time()))
+        reply = self.initiate_multipart_upload(keyname)
+        for partnum in range(1, 11):
+            temp_file.seek(0, os.SEEK_SET)
+            reply.upload_part_from_file(temp_file, partnum)
+        self.test_bucket.get_all_multipart_uploads()
+        self.tester.info("!!!!!!!!!!!!!!!!!!!!!!!!!!DO NOT WANT!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1")
+        self.tester.info("Canceling upload")
+        reply.cancel_upload()
+        temp_file.close()
+
+    def initiate_multipart_upload(self, keyname):
+        self.tester.info("Initiating multipart upload " + keyname)
+        return self.test_bucket.initiate_multipart_upload(keyname)
+
+
 if __name__ == "__main__":
-    
+
     testcase = ObjectTestSuite()
     ### Either use the list of tests passed from config/command line to determine what subset of tests to run
     list = testcase.args.tests or ['test_object_basic_ops',
@@ -731,15 +775,11 @@ if __name__ == "__main__":
                                    'test_object_post',
                                    'test_object_post_large']
 
-    #list = testcase.args.tests or ['test_object_post_large', 'test_object_post']
-
-
-
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
     for test in list:
         unit_list.append( testcase.create_testunit_by_name(test) )
-    ### Run the EutesterUnitTest objects
+        ### Run the EutesterUnitTest objects
 
     result = testcase.run_test_case_list(unit_list,clean_on_exit=True)
     exit(result)

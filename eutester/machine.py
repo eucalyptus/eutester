@@ -632,7 +632,7 @@ class Machine:
     def add_repo(self, url, name="test-repo"):
         self.package_manager.add_repo(url,name)
     
-    def install(self, package, nogpg=False):
+    def install(self, package, nogpg=False, timeout=300):
         self.package_manager.install(package,nogpg=nogpg)
 
     def update_repos(self):
