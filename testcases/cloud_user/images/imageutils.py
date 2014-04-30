@@ -156,6 +156,18 @@ class ImageUtils(EutesterTestCase):
                    password=None,
                    retryconn=True,
                    time_per_gig=300):
+        '''
+        Attempts to wget a url to a remote (worker) machine.
+        :param url: url to wget/download
+        :param destpath:path/dir to download to
+        :param dest_file_name: filename to download image to
+        :param machine: remote (worker) machine to wget on
+        :param user: wget user name
+        :param password: wget password
+        :param retryconn: boolean to retry connection
+        :param time_per_gig: int time to allow per gig of image wget'd
+        :returns int size of image
+        '''
         machine = machine or self.worker_machine
         if destpath is None and self.destpath is not None:
             destpath = self.destpath
@@ -176,21 +188,46 @@ class ImageUtils(EutesterTestCase):
         return size
 
 
-    def get_manifest_obj(self, path, machine=None, timeout=30):
-        machine = machine or self.worker_machine
+    def get_manifest_obj(self, path, machine=None, local=False, timeout=30):
+        '''
+        Read in a local or remote manifest xml file and convert to an
+        xml ElementTree object.
+        :param path: local or remote path to manifest file
+        :param machine: the remote machine to read manifest file from
+        :param local: boolean to determine if file is local
+        :param timeout: timeout in second for reading in file
+        :returns xml ElementTree obj
+        '''
         cmd = 'cat ' + str(path)
-        out = machine.cmd(cmd, timeout=timeout, verbose=False)
-        if out['status'] != 0:
-            raise Exception('get_manifest_part_count failed, cmd status:' +
-                            str(out['status']))
-        output = out['output']
+        if not local:
+            machine = machine or self.worker_machine
+            out = machine.cmd(cmd, timeout=timeout, verbose=False)
+            if out['status'] != 0:
+                raise Exception('get_manifest_part_count failed, cmd status:'
+                                + str(out['status']))
+            output = out['output']
+        else:
+            output = self.tester.sys(cmd, timeout=timeout,
+                                  listformat=False, code=0)
         xml = ElementTree.fromstring(output)
-        root = xml.getroot()
-        return root
+        return xml
 
-    def get_manifest_part_count(self, path, machine=None, timeout=30):
+    def get_manifest_part_count(self,
+                                path,
+                                machine=None,
+                                local=False,
+                                timeout=30):
+        '''
+        Attempt retrieve the part count value from a manifest file
+        :param path: local or remote path to manifest file
+        :param machine: the remote machine to read manifest file from
+        :param local: boolean to determine if file is local
+        :param timeout: timeout in second for reading in file
+        :returns int count
+        '''
         manifest_xml = self.get_manifest_obj(path=path,
                                              machine=machine,
+                                             local=local,
                                              timeout=timeout)
         image = manifest_xml.find('image')
         parts = image.find('parts')
@@ -198,6 +235,23 @@ class ImageUtils(EutesterTestCase):
         self.debug('get_manifest_part_count:' + str(path) +
                    ', count:' + str(part_count))
         return int(part_count)
+
+    def get_manifest_image_name(self, path, machine=None, timeout=30):
+        '''
+        Attempts to read the image name from a manifest file
+        :param path: local or remote path to manifest file
+        :param machine: the remote machine to read manifest file from
+        :param local: boolean to determine if file is local
+        :param timeout: timeout in second for reading in file
+        :returns string image name
+        '''
+        manifest_xml = self.get_manifest_obj(path=path,
+                                             machine=machine,
+                                             local=local,
+                                             timeout=timeout)
+        image = manifest_xml.find('image')
+        name_elem = image.find('name')
+        return name_elem.text
     
     def euca2ools_bundle_image(self,
                      path,
@@ -415,7 +469,31 @@ class ImageUtils(EutesterTestCase):
                                   manifest=None,
                                   prefix=None,
                                   directory=None,
+                                  image_name=None,
                                   ):
+        machine = machine or self.worker_machine
+
+        credpath = machine_credpath or self.credpath
+        cmdargs = " -b " + str(bucket)
+        if manifest:
+            cmdargs += " -m " + str(manifest)
+        if prefix:
+            cmdargs += " -p " + str(prefix)
+        if directory:
+            cmdargs += " -d " + str(directory)
+        if credpath is not None:
+            cmd = 'source ' + str(credpath) + \
+                  '/eucarc && euca-download-bundle '\
+                  + str(cmdargs)
+        else:
+            skey = self.tester.get_secret_key()
+            akey = self.tester.get_access_key()
+            cmd = ('euca-download-bundle -a ' + str(akey) +
+                   ' -s ' + str(skey) + str(cmdargs))
+        out = machine.sys(cmd=cmd, code=0)
+
+
+
         raise NotImplemented('euca2ools_download_bundle wrapper '
                              'not implemented yet')
 
