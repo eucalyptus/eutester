@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--<project name="Eutester4J" basedir="." default="clean-build">-->
+<project name="Eutester4J" basedir="." default="clean-build" xmlns:ivy="antlib:org.apache.ivy.ant">
+
+    <property name="src.dir" value="com/eucalyptus/tests/awssdk"/>
+    <property name="build.dir" value="build"/>
+    <property name="classes.dir" value="${build.dir}/classes"/>
+    <property name="deps.dir" value="dependencies"/>
+    <property name="testng.output.dir" value="eutester4j_results"/>
+    <property name="eucarc" value="eucarc"/>
+    <property name="endpoints" value="endpoints.xml"/>
+    <property name="tests" value="AllTestsSuite.xml"/>
+
+    <!--youare sdk location link-->
+    <property name="YouAre" value="https://github.com/tbeckham/you-are-sdk/releases/download/alpha2/YouAreSDK.jar"/>
+
+    <!-- download testng and AWS JAVA SDK -->
+    <target name="download-deps">
+        <mkdir dir="${deps.dir}"/>
+        <ivy:retrieve conf="default" pattern="${deps.dir}/[artifact]-[revision].[ext]"/>
+        <echo message="fetching YouAre SDk..."/>
+        <get src="${YouAre}"
+             dest="${deps.dir}/YouAreSDK.jar"/>
+        <gunzip src="zerofile.gz" dest="." />
+    </target>
+
+    <!-- set classpath to include dependencies and build output -->
+    <path id="classpath">
+        <fileset dir="${deps.dir}">
+            <include name="*.jar"/>
+        </fileset>
+        <pathelement path="${classes.dir}"/>
+    </path>
+
+    <!-- delete build and results directories -->
+    <target name="clean">
+        <delete dir="${build.dir}"/>
+        <delete dir="${deps.dir}"/>
+    </target>
+
+    <!-- delete build, results and dependencies directories -->
+    <target name="clean-all" depends="clean">
+        <delete dir="${testng.output.dir}"/>
+    </target>
+
+    <!-- compile all classes of src.dir -->
+    <target name="compile" depends="download-deps">
+        <mkdir dir="${classes.dir}"/>
+        <javac includeantruntime="false" srcdir="${src.dir}" destdir="${classes.dir}" classpathref="classpath"/>
+        <copy file="log4j.properties" todir="${classes.dir}"/>
+        <gunzip src="zerofile.gz" dest="${classes.dir}" />
+    </target>
+
+    <!-- compile all and run tests per AllTestsSuite.xml -->
+    <target name="runTestNG" depends="compile">
+        <taskdef name="testng" classname="org.testng.TestNGAntTask">
+            <classpath>
+                <fileset dir="${deps.dir}">
+                    <include name="testng-*.jar"/>
+                </fileset>
+            </classpath>
+        </taskdef>
+
+        <mkdir dir="${testng.output.dir}"/>
+        <testng outputdir="${testng.output.dir}" classpathref="classpath" haltonfailure="true">
+            <xmlfileset dir="./TestSuites" includes="${tests}"/>
+            <jvmarg value="-Deucarc=${eucarc}" />
+            <jvmarg value="-Dcom.amazonaws.regions.RegionUtils.fileOverride=${endpoints}"/>
+        </testng>
+    </target>
+
+    <!-- clean, build and run tests -->
+    <target name="clean-build" depends="clean, runTestNG"/>
+
+    <!-- clean all, build and run tests -->
+    <target name="clean-all-build" depends="clean-all, runTestNG"/>
+</project>

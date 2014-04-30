@@ -1,32 +1,55 @@
 #!/usr/bin/env python
 
 #
-##########################
-#                        #
-#       Test Cases       #
-#                        #
-##########################
+###########################################
+#                                         #
+#   objectstorage/S3 Bucket Test Cases    #
+#                                         #
+###########################################
 
+#Author: Zach Hill <zach@eucalyptus.com>
+from datetime import date
 
 from eucaops import Eucaops
 import argparse
 import time
+import re
 
 from eutester.eutestcase import EutesterTestCase
+from eucaops import S3ops
 from boto.exception import S3ResponseError
 from boto.exception import S3CreateError
 import boto
+import boto.s3
+from boto.s3.bucket import Bucket
+from boto.s3.key import Key
+from boto.s3.acl import ACL, Policy, Grant
+from boto.s3.connection import Location
+from boto.s3.lifecycle import Lifecycle, Rule, Expiration
+
 
 class BucketTestSuite(EutesterTestCase):
     
-    def __init__(self, credpath):
-        self.bucket_prefix = "buckettestsuite-" + str(int(time.time())) + "-"
-        self.tester = Eucaops(credpath=credpath)
-        self.test_user_id = self.tester.s3.get_canonical_user_id()
-    
+    def __init__(self):
+        self.setuptestcase()
+        self.setup_parser()
+        self.parser.add_argument("--endpoint", default=None)
+        self.get_args()
+        # Setup basic eutester object
+        if self.args.endpoint:
+            self.tester = S3ops(credpath=self.args.credpath, endpoint=self.args.endpoint)
+        else:
+            self.tester = Eucaops( credpath=self.args.credpath, config_file=self.args.config, password=self.args.password)
+
+        self.bucket_prefix = "eutester-bucket-test-suite-" + str(int(time.time()))
+        self.buckets_used = set()
+        
     def test_bucket_get_put_delete(self):
-        '''Tests creating and deleting buckets as well as getting the bucket listing'''
-        test_bucket=self.bucket_prefix + "simple_test_bucket"
+        '''
+        Method: Tests creating and deleting buckets as well as getting the bucket listing
+        '''
+        test_bucket=self.bucket_prefix + "-simple-test-bucket"
+        self.buckets_used.add(test_bucket)
         self.tester.debug("Starting get/put/delete bucket test using bucket name: " + test_bucket)
  
         try :
@@ -56,79 +79,55 @@ class BucketTestSuite(EutesterTestCase):
             self.tester.debug( "Correctly got exception trying to get a deleted bucket! " )
             
         self.tester.debug( "Testing an invalid bucket names, calls should fail." )
-        try:
-            bad_bucket = self.bucket_prefix + "bucket123/"
-            self.tester.create_bucket(bad_bucket)
-            should_fail = True            
+        def test_creating_bucket_invalid_names(bad_bucket):
+            should_fail = False
             try:
-                self.tester.delete_bucket(bad_bucket)
-            except:
-                self.tester.debug( "Exception deleting bad bucket, shouldn't be here anyway. Test WILL fail" )
-                
+                bucket = self.tester.create_bucket(bad_bucket)
+                should_fail = True            
+                try:
+                    self.tester.delete_bucket(bucket)
+                except:
+                    self.tester.debug( "Exception deleting bad bucket, shouldn't be here anyway. Test WILL fail" )
+            except Exception as e:
+                self.tester.debug("Correctly caught the exception for bucket name '" + bad_bucket + "' Reason: " + e.reason)
             if should_fail:
                 self.fail("Should have caught exception for bad bucket name: " + bad_bucket)
-        except:
-            self.tester.debug( "Correctly caught the exception" )
-        
+
+        # with the EUCA-8864 fix, a new property 'objectstorage.bucket_naming_restrictions'
+        # has been introduced, now 'bucket..123', 'bucket.' are actually valid bucket names
+        # when using 'extended' naming convention.
+        # http://docs.aws.amazon.com/AmazonS3/latest/dev/BucketRestrictions.html
+        # when DNS is not being used, for now buckets can be created with bucket
+        # names like '/bucket123', 'bucket123/', see EUCA-8863
+        # TODO check what bucket naming convention is being used for the test
+        for bad_bucket in ["bucket&123", "bucket*123"]:
+            test_creating_bucket_invalid_names(self.bucket_prefix + bad_bucket)
+
+        """
+        Test creating bucket with null name
+        """
         try:
-            bad_bucket = self.bucket_prefix + "bucket.123"
-            self.tester.create_bucket(bad_bucket)
-            should_fail = True            
-            try:
-                self.tester.delete_bucket(bad_bucket)
-            except:
-                self.tester.debug( "Exception deleting bad bucket, shouldn't be here anyway. Test WILL fail" )
-                
-            if should_fail:
-                self.fail("Should have caught exception for bad bucket name: " + bad_bucket)
-        except:
-            self.tester.debug( "Correctly caught the exception" )
-        
-        try:
-            bad_bucket = self.bucket_prefix + "bucket&123"
-            self.tester.create_bucket(bad_bucket)
-            should_fail = True            
-            try:
-                self.tester.delete_bucket(bad_bucket)
-            except:
-                self.tester.debug( "Exception deleting bad bucket, shouldn't be here anyway. Test WILL fail" )
-                
-            if should_fail:
-                self.fail("Should have caught exception for bad bucket name: " + bad_bucket)
-        except:
-            self.tester.debug( "Correctly caught the exception" )
-        
-        try:
-            bad_bucket = self.bucket_prefix + "bucket*123"
-            self.tester.create_bucket(bad_bucket)
-            should_fail = True            
-            try:
-                self.tester.delete_bucket(bad_bucket)
-            except:
-                self.tester.debug( "Exception deleting bad bucket, shouldn't be here anyway. Test WILL fail" )
-                
-            if should_fail:
-                self.fail("Should have caught exception for bad bucket name: " + bad_bucket)
-        except:
-            self.tester.debug( "Correctly caught the exception" )
-        
-        try:
-            bad_bucket = self.bucket_prefix + "/bucket123"
-            self.tester.create_bucket(bad_bucket)
-            should_fail = True            
-            try:
-                self.tester.delete_bucket(bad_bucket)
-            except:
-                self.tester.debug( "Exception deleting bad bucket, shouldn't be here anyway. Test WILL fail" )
-                
-            if should_fail:
-                self.fail("Should have caught exception for bad bucket name: " + bad_bucket)
-        except:
-            self.tester.debug( "Correctly caught the exception" )
+            null_bucket_name = ""
+            bucket_obj = self.tester.create_bucket(null_bucket_name)
+            self.tester.sleep(10)
+            if bucket_obj:
+                self.fail("Should have caught exception for creating bucket with empty-string name.")
+        except S3ResponseError as e:
+            assert (e.status == 405), 'Expected response status code to be 405, actual status code is ' + str(e.status)
+            assert (re.search("MethodNotAllowed", e.code)), "Incorrect exception returned when creating bucket with null name."
+        except Exception, e:
+            self.tester.debug("Failed due to EUCA-7059 " + str(e))
 
     def test_bucket_acl(self):
-        test_bucket = self.bucket_prefix + "acl_bucket_test"
-        self.tester.debug('Starting ACL test with bucket name: ' + test_bucket)        
+        '''
+        Tests bucket ACL management and adding/removing from the ACL with both valid and invalid usernames
+        '''
+        
+        test_bucket = self.bucket_prefix + 'acl_bucket_test'
+        self.buckets_used.add(test_bucket)
+        test_user_id = self.tester.s3.get_canonical_user_id()     
+        self.tester.debug('Starting ACL test with bucket name: ' + test_bucket + ' and userid ' + test_user_id)
+        
         try: 
             acl_bucket = self.tester.s3.create_bucket(test_bucket)
             self.tester.debug('Created bucket: ' + test_bucket)
@@ -144,76 +143,90 @@ class BucketTestSuite(EutesterTestCase):
         policy = acl_bucket.get_acl()
         
         if policy == None:
-            self.fail("No acl returned")
+            self.fail('No acl returned')
         
         self.tester.debug( policy )
         #Check that the acl is correct: owner full control.
         if len(policy.acl.grants) > 1:
             self.tester.s3.delete_bucket(test_bucket)
-            self.fail("Expected only 1 grant in acl. Found: " + policy.acl.grants.grants.__len__())
+            self.fail('Expected only 1 grant in acl. Found: ' + policy.acl.grants.grants.__len__())
 
-        if policy.acl.grants[0].display_name != "eucalyptus" or policy.acl.grants[0].permission != "FULL_CONTROL":
+        if policy.acl.grants[0].id != test_user_id or policy.acl.grants[0].permission != 'FULL_CONTROL':
             self.tester.s3.delete_bucket(test_bucket)
-            self.fail("Unexpected grant encountered: " + policy.acl.grants[0].display_name + "  " + policy.acl.grants[0].permission)
-                    
+            self.fail('Unexpected grant encountered: ' + policy.acl.grants[0].display_name + ' ' + policy.acl.grants[0].permission + ' ' + policy.acl.grants[0].id)
+
+        #Get the info on the owner from the ACL returned
+        owner_display_name = policy.acl.grants[0].display_name
+        owner_id = policy.acl.grants[0].id
+                                    
         #upload a new acl for the bucket
         new_acl = policy
-        new_acl.acl.add_user_grant(permission="READ", user_id=self.test_user_id, display_name="eucalyptus_test")        
-        
+        new_user_display_name = owner_display_name
+        new_user_id = owner_id
+        new_acl.acl.add_user_grant(permission="READ", user_id=new_user_id, display_name=new_user_display_name)
         try:
-            acl_bucket.set_acl(new_acl)                
+            acl_bucket.set_acl(new_acl)
             acl_check = acl_bucket.get_acl()
         except S3ResponseError:
             self.fail("Failed to set or get new acl")
         
-        self.tester.debug( "Got ACL: " + acl_check.acl.to_xml() )
+        self.tester.info( "Got ACL: " + acl_check.acl.to_xml() )
+
+        #expected_result_base='<AccessControlList>
+        #<Grant><Grantee xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="CanonicalUser">
+        #<ID>' + owner_id + '</ID><DisplayName>'+ owner_display_name + '</DisplayName></Grantee><Permission>FULL_CONTROL</Permission></Grant>
+        #<Grant><Grantee xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="CanonicalUser"><ID>EXPECTED_ID</ID><DisplayName>EXPECTED_NAME</DisplayName></Grantee><Permission>READ</Permission></Grant>
+        #</AccessControlList>'                
+            
+        if acl_check == None or not self.tester.check_acl_equivalence(acl1=acl_check.acl, acl2=new_acl.acl):
+            self.tester.s3.delete_bucket(test_bucket)
+            self.fail("Incorrect acl length or acl not found\n. Got bucket ACL:\n" + acl_check.acl.to_xml() + "\nExpected:" + new_acl.acl.to_xml())
+        else:
+            self.tester.info("Got expected basic ACL addition")
         
-        expected_result='<AccessControlList><Grant><Grantee xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="CanonicalUser"><ID>INSERT_USER_ID_HERE</ID><DisplayName>eucalyptus</DisplayName></Grantee><Permission>FULL_CONTROL</Permission></Grant><Grant><Grantee xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="CanonicalUser"><ID>INSERT_USER_ID_HERE</ID><DisplayName>eucalyptus</DisplayName></Grantee><Permission>READ</Permission></Grant></AccessControlList>'
-        
-        if acl_check == None or acl_check.acl.to_xml() != expected_result.replace("INSERT_USER_ID_HERE",self.test_user_id):
-            self.tester.s3.delete_bucket(test_bucket) 
-            self.fail("Incorrect acl length or acl not found:\n" + str(acl_check.acl.to_xml()) + "\n" + expected_result.replace("INSERT_USER_ID_HERE",self.test_user_id))
-        
-        self.tester.debug( "Grants 0 and 1: " + acl_check.acl.grants[0].to_xml() + " -- " + acl_check.acl.grants[1].to_xml() )
+        self.tester.info( "Grants 0 and 1: " + acl_check.acl.grants[0].to_xml() + " -- " + acl_check.acl.grants[1].to_xml() )
         
         #Check each canned ACL string in boto to make sure Walrus does it right
         for acl in boto.s3.acl.CannedACLStrings:
-            try: 
+            if acl == "authenticated-read":
+                continue
+            self.tester.info('Testing canned acl: ' + acl)
+            try:
                 acl_bucket.set_acl(acl)
                 acl_check = acl_bucket.get_acl()
             except Exception as e:
                 self.tester.s3.delete_bucket(test_bucket)
                 self.fail("Got exception trying to set acl to " + acl + ": " + str(e))
             
-            self.tester.debug( "Expecting a " + acl + " acl, got: " + acl_check.acl.to_xml() )
-            
-            expected_acl = self.tester.get_canned_acl(self.test_user_id,acl)
+            self.tester.info( "Set canned-ACL: " + acl + " -- Got ACL from service: " + acl_check.acl.to_xml() )            
+            expected_acl = self.tester.get_canned_acl(bucket_owner_id=owner_id,canned_acl=acl, bucket_owner_display_name=owner_display_name)
+                        
             if expected_acl == None:
                 self.tester.s3.delete_bucket(test_bucket)
                 self.fail("Got None when trying to generate expected acl for canned acl string: " + acl)
-            
-            
-            if expected_acl != acl_check.acl:
+                        
+            if not self.tester.check_acl_equivalence(acl1=expected_acl, acl2=acl_check.acl):
                 self.tester.s3.delete_bucket(test_bucket)
                 self.fail("Invalid " + acl + " acl returned from Walrus:\n" + acl_check.acl.to_xml() + "\nExpected\n" + expected_acl.to_xml())
             else:
-                self.tester.debug( "Got correct acl for: " + acl  )          
-        
+                self.tester.debug( "Got correct acl for: " + acl  )        
         
         try:
             acl_bucket.set_acl('invalid-acl')
-        except:            
-            self.tester.debug( "Caught expected exception from invalid canned-acl" )
-        
+            self.fail('Did not catch expected exception for invalid canned-acl')            
+        except:
+            self.tester.debug( "Caught expected exception from invalid canned-acl" )        
         
         
         self.tester.s3.delete_bucket(test_bucket)
+        self.buckets_used.remove(test_bucket)
         self.tester.debug( "Bucket ACL: PASSED"  )    
         pass    
     
     def test_bucket_key_list_delim_prefix(self):
         """Tests the prefix/delimiter functionality of key listings and parsing"""
         test_bucket_name = self.bucket_prefix + "testbucketdelim"
+        self.buckets_used.add(test_bucket_name)
         self.tester.debug('Testing bucket key list delimiters and prefixes using bucket: ' + test_bucket_name)        
         try: 
             testbucket = self.tester.s3.create_bucket(bucket_name=test_bucket_name)
@@ -266,47 +279,332 @@ class BucketTestSuite(EutesterTestCase):
 
         print "Deleting the bucket"
         self.tester.s3.delete_bucket(testbucket)
-                
-    def run_suite(self):  
-        self.testlist = [] 
-        testlist = self.testlist
-        testlist.append(self.create_testcase_from_method(self.test_bucket_get_put_delete))
-        testlist.append(self.create_testcase_from_method(self.test_bucket_key_list_delim_prefix))
-        #Failing due to invalid private canned acl being returned
-        #testlist.append(self.create_testcase_from_method(self.test_bucket_acl))       
-        self.run_test_case_list(testlist)  
-              
-if __name__ == "__main__":
-    ## If given command line arguments, use them as test names to launch
+        
+        
+    def test_bucket_location(self):        
+        test_bucket = self.bucket_prefix + "location_test_bucket"
+        self.tester.info('Starting bucket location test using bucket: ' + test_bucket)
+        self.tester.s3.create_bucket(test_bucket)
+        
+        bucket = self.tester.s3.get_bucket(test_bucket)
+        if bucket != None and (bucket.get_location() == Location.DEFAULT or bucket.get_location() == 'US'):
+            self.tester.s3.delete_bucket(test_bucket)
+        else:
+            bucket.delete()
+            self.fail("Bucket location test failed, could not get bucket or location is not 'US'")        
+        
+        test_bucket = self.bucket_prefix + "eu_location_test"
+        bucket = self.tester.s3.create_bucket(test_bucket,location=Location.EU)
+        self.buckets_used.add(test_bucket)
+        if bucket == None:
+            self.fail("Bucket creation at location EU failed")
+        else:
+            loc = bucket.get_location()
+            
+        if loc == Location.EU:
+            print "Got correct bucket location, EU"
+            bucket.delete()
+        else:                        
+            print "Incorrect bucket location, failing"
+            bucket.delete()
+            self.fail("Bucket location incorrect, expected: EU, got: " + loc)
+        
+        self.buckets_used.remove(test_bucket)
+        pass
+        
+    def test_bucket_logging(self):
+        """This is not a valid test at the moment, logging requires at least an hour of time between logging enabled and file delivery of events to the dest bucket"""
+        self.tester.info("\n\nStarting bucket logging test")
+        test_bucket = self.bucket_prefix + "logging_test_bucket"
+        log_dest_bucket = self.bucket_prefix + "logging_destination_test_bucket"
+        self.buckets_used.add(test_bucket)
+        self.buckets_used.add(log_dest_bucket)
+        
+        log_prefix = "log_prefix_test"
 
-    ## If given command line arguments, use them as test names to launch
-    parser = argparse.ArgumentParser(prog="bucket_tests.py",
-                                     version="Test Case [bucket_tests.py] Version 0.1",
-                                     description="Attempts to tests and provide info on focused areas related to\
-                                     Eucalyptus S3 bucket related functionality.",
-                                     usage="%(prog)s --credpath=<path to creds> [--xml] [--tests=test1,..testN]")
+        try:
+            bucket = self.tester.s3.create_bucket(test_bucket)
+        except S3CreateError:
+            self.tester.info("Bucket exists, trying to delete and re-create")
+            try:
+                self.tester.s3.delete_bucket(test_bucket)
+                bucket = self.tester.s3.create_bucket(test_bucket)
+            except:
+                self.tester.info("Couldn't delete and create new bucket...failing")
+                self.fail("Couldn't get clean bucket already existed and could not be deleted")
+        
+        try:        
+            dest_bucket = self.tester.s3.create_bucket(log_dest_bucket)
+        except S3CreateError:
+            self.tester.info("Bucket exists, trying to delete and re-create")
+            try:
+                self.tester.s3.delete_bucket(log_dest_bucket)
+                dest_bucket = self.tester.s3.create_bucket(log_dest_bucket)
+            except:
+                self.tester.info("Couldn't delete and create new bucket...failing")
+                self.fail("Couldn't get clean bucket already existed and could not be deleted")
+        
+        log_delivery_policy = dest_bucket.get_acl()
+        log_delivery_policy.acl.add_grant(Grant(type="Group",uri="http://acs.amazonaws.com/groups/s3/LogDelivery",permission="WRITE"))
+        log_delivery_policy.acl.add_grant(Grant(type="Group",uri="http://acs.amazonaws.com/groups/s3/LogDelivery",permission="READ_ACP"))        
+        dest_bucket.set_acl(log_delivery_policy)
+        bucket.enable_logging(log_dest_bucket,target_prefix=log_prefix)        
+        
+        #test the logging by doing something that will require logging
+        k = bucket.new_key('key1')
+        k.set_contents_from_string('content123')
+        
+        k = bucket.new_key('key2')
+        k.set_contents_from_string("content456")
+        
+        k = bucket.get_key('key1')
+        result1 = k.get_contents_as_string()
+        self.tester.info("Got content:\n\t " + result1)
+        
+        k = bucket.get_key('key2')
+        result2 = k.get_contents_as_string()
+        self.tester.info("Got content:\n\t " + result2)
+        
+        keylist = bucket.list()
+        self.tester.info("Listing keys...")
+        for k in keylist:
+            if isinstance(k, boto.s3.prefix.Prefix):
+                self.tester.info("Prefix found")
+            else:
+                self.tester.info('Key--' + k.name)
+                
+        #Allow some time for the op writes to be logged... this may need to be tweaked
+        time.sleep(15)
+        
+        #Now check the log to be sure something was logged
+        log_bucket = self.tester.s3.get_bucket(log_dest_bucket)
+        for k in log_bucket.list(prefix=log_prefix):
+            self.tester.info('Key -- ' + k.name)
+            log_obj = log_bucket.get_key(k)
+            self.tester.info("Log content:\n\t" + k.get_contents_as_string())
+        
+        log_data = log_obj.get_content_as_string()
+        self.tester.info('Log data is: ' + log_data)
+
+        self.tester.info('Deleting used bucket')
+                
+    def test_bucket_versioning(self):
+        test_bucket = self.bucket_prefix + "versioning_test_bucket"
+        self.tester.info('Testing bucket versioning using bucket:' + test_bucket)
+        version_bucket = self.tester.s3.create_bucket(test_bucket)
+        self.buckets_used.add(test_bucket)
+        version_status = version_bucket.get_versioning_status().get("Versioning")
+        
+        #Test the default setup after bucket creation. Should be disabled.
+        if version_status != None:
+            version_bucket.delete()            
+            self.fail("Expected versioning disabled (empty), found: " + str(version_status))
+        elif version_status == None:
+            self.tester.info("Null version status returned, may be correct since it should be disabled")
+        
+        #Turn on versioning, confirm that it is 'Enabled'
+        version_bucket.configure_versioning(True)        
+        version_status = version_bucket.get_versioning_status().get("Versioning")
+        if version_status == None or version_status != "Enabled":
+            version_bucket.delete()
+            self.fail("Expected versioning enabled, found: " + str(version_status))
+        elif version_status == None:
+            version_bucket.delete()
+            self.fail("Null version status returned")    
+        self.tester.info("Versioning of bucket is set to: " + version_status)
+        
+        #Turn off/suspend versioning, confirm.
+        version_bucket.configure_versioning(False)
+        version_status = version_bucket.get_versioning_status().get("Versioning")
+        if version_status == None or version_status != "Suspended":
+            version_bucket.delete()
+            self.fail("Expected versioning suspended, found: " + str(version_status))
+        elif version_status == None:
+            version_bucket.delete()
+            self.fail("Null version status returned")    
+        
+        self.tester.info("Versioning of bucket is set to: " + version_status)        
+        
+        version_bucket.configure_versioning(True)
+        version_status = version_bucket.get_versioning_status().get("Versioning")
+        if version_status == None or version_status != "Enabled":
+            version_bucket.delete()
+            self.fail("Expected versioning enabled, found: " + str(version_status))    
+        elif version_status == None:
+            version_bucket.delete()
+            self.fail("Null version status returned")    
+        
+        self.tester.info("Versioning of bucket is set to: " + version_status)
+        
+        version_bucket.delete()
+        self.buckets_used.remove(test_bucket)
+        self.tester.info("Bucket Versioning: PASSED")
+               
+    def test_bucket_key_listing_paging(self):
+        """Test paging of long results lists correctly and in alpha order"""        
+        test_bucket_name = self.bucket_prefix + "pagetestbucket"
+        self.buckets_used.add(test_bucket_name)
+        self.tester.info('Testing bucket key listing pagination using bucket: ' + test_bucket_name)
+        
+        try:
+            testbucket = self.tester.s3.create_bucket(bucket_name=test_bucket_name)
+        except S3CreateError:
+            self.tester.info("Bucket already exists, getting it")
+            try:
+                testbucket = self.tester.s3.get_bucket(bucket_name=test_bucket_name)
+            except S3ResponseError as err:
+                self.tester.info("Fatal error: could not get bucket or create it")
+                for b in self.tester.s3.get_all_buckets():
+                    self.tester.info('Bucket -- ' + b.name )                   
+                self.fail("Could not get bucket, " + test_bucket_name + " to start test: " + err.error_message)                       
+                        
+        key_name_prefix = "testkey"
+        
+        for i in range(100):
+            key_name = key_name_prefix + str(i)
+            self.tester.info("creating object: " + key_name)
+            testbucket.new_key(key_name).set_contents_from_string("testcontents123testtesttesttest")
+            
+        for i in range(100):
+            key_name = key_name_prefix + "/key" + str(i)
+            self.tester.info("creating object: " + key_name)
+            testbucket.new_key(key_name).set_contents_from_string("testafadsoavlsdfoaifafdslafajfaofdjasfd")
+                
+        key_list = testbucket.get_all_keys(max_keys=50)        
+        self.tester.info("Got " + str(len(key_list)) + " entries back")
+        
+        for k in key_list:
+            assert isinstance(k, Key)
+            self.tester.info('Found key -- ' + k.name)
+        
+        if len(key_list) != 50:
+            self.fail("Expected 50 keys back, got " + str(len(key_list)))
+            
+
+        
+        for i in range(100):
+            key_name = key_name_prefix + str(i)
+            self.tester.info("Deleting key: " + key_name)
+            testbucket.delete_key(key_name)
+            key_name = key_name_prefix + "/key" + str(i)
+            self.tester.info("Deleting key: " + key_name)
+            testbucket.delete_key(key_name)
+                                
+        self.tester.info("Cleaning up the bucket")
+        
+        key_list = testbucket.get_all_keys()
+        
+        for k in key_list:
+            self.tester.info("Deleting key: " + k.name)
+            testbucket.delete_key(k)
+
+        self.tester.info("Deleting the bucket")
+        self.tester.s3.delete_bucket(testbucket)
+        self.buckets_used.add(test_bucket_name)
+        
+    def test_list_multipart_uploads(self):
+        self.fail("Feature Not implemented")
+
+    def test_bucket_lifecycle(self):
+        lifecycle_id = 'eutester lifecycle test'
+        lifecycle_prefix = 'eulifecycle'
+        lifecycle_status = 'Enabled'
+        lifecycle_expiration = 1
+        bucket_name = self.bucket_prefix + "lifecycle-test0"
+        self.buckets_used.add(bucket_name)
+        bucket = self.tester.create_bucket(bucket_name)
+
+        lifecycle = Lifecycle()
+        lifecycle.add_rule(lifecycle_id, lifecycle_prefix, lifecycle_status, lifecycle_expiration)
+        bucket.configure_lifecycle(lifecycle)
+        responses = bucket.get_lifecycle_config()
+        assert (len(responses) == 1), 'found not true'
+        lifecycle_response = responses[0]
+        assert (lifecycle_response.id == lifecycle_id), "Expected lifecycle Id to be: " + lifecycle_id + " found " + lifecycle_response.id
+        assert (lifecycle_response.prefix == lifecycle_prefix), "Expected lifecycle prefix to be: " + lifecycle_prefix + " found " + lifecycle_response.prefix
+        assert (lifecycle_response.status == lifecycle_status), "Expected lifecycle status to be: " + lifecycle_status + " found " + lifecycle_response.status
+        assert (lifecycle_response.expiration.days == lifecycle_expiration), "Expected lifecycle expiration days to be: " + str(lifecycle_expiration) + " found " + str(lifecycle_response.expiration.days)
+
+        bucket.delete_lifecycle_configuration()
+        assert (len(responses) == 1), "Expected no configuration, found " + len(responses) + " configuration"
+
+        # multiple rules
+        bucket_name = self.bucket_prefix + "lifecycle-test1"
+        bucket = self.tester.create_bucket(bucket_name)
+        self.buckets_used.add(bucket_name)
+        date = '2022-10-12T00:10:10.011Z'
+        lifecycle = Lifecycle()
+        lifecycle.add_rule("1", "1/", "Enabled", 1)
+        lifecycle.add_rule("2", "2/", "Enabled", Expiration(days=2))
+        lifecycle.add_rule("3", "3/", "Enabled", Expiration(date=date))
+        lifecycle.add_rule("4", "4/", "Disabled", Expiration(date=date))
+        bucket.configure_lifecycle(lifecycle)
+        lifecycle_responses = bucket.get_lifecycle_config()
+        if lifecycle_responses < 0:
+            self.fail("no lifecycle found!")
+
+        for response in lifecycle_responses:
+            if response.id == "1":
+                assert (response.prefix == "1/"), "Expected lifecycle prefix to be: " + "1/" + " found: " + response.prefix
+                assert (response.status == "Enabled"), "Expected lifecycle status to be: " + "Enabled" + " found " + response.status
+                assert (response.expiration.days == 1), "Expected lifecycle expiration days to be: " + str(1) + " found " + str(response.expiration.days)
+            elif response.id == "2":
+                assert (response.prefix == "2/"), "Expected lifecycle prefix to be: " + "2/" + " found: " + response.prefix
+                assert (response.status == "Enabled"), "Expected lifecycle status to be: " + "Enabled" + " found: " + response.status
+                assert (response.expiration.days == 2), "Expected lifecycle expiration days to be: " + str(2) + " found " + str(response.expiration.days)
+            elif response.id == "3":
+                assert (response.prefix == "3/"), "Expected lifecycle prefix to be: " + "3/" + " found: " + response.prefix
+                assert (response.status == "Enabled"), "Expected lifecycle status to be: " + "Enabled" + " found " + response.status
+                assert (response.expiration.date == date), "Expected lifecycle expiration days to be: " + date + " found " + str(response.expiration.date)
+            elif response.id == "4":
+                assert (response.prefix == "4/"), "Expected lifecycle prefix to be: " + "4/" + " found: " + response.prefix
+                assert (response.status == "Disabled"), "Expected lifecycle status to be: " + "Disabled" + " found " + response.status
+                assert (response.expiration.date == date), "Expected lifecycle expiration days to be: " + date + " found " + str(response.expiration.date)
+            else:
+                self.fail("no response found")
+
+        self.debug("Cleaning up used buckets")
+        for bucket in self.buckets_used:
+            self.tester.clear_bucket(bucket)
+
+    def test_bucket_policy(self):
+        self.fail("Feature Not implemented")
+        
+    def test_bucket_website(self):
+        self.fail("FeatureNot implemented")
     
-    parser.add_argument('--credpath', 
-                        help="path to credentials", default=None)
-    parser.add_argument('--xml', 
-                        help="to provide JUnit style XML output", action="store_true", default=False)
-    parser.add_argument('--tests', nargs='+', 
-                        help="test cases to be executed", 
-                        default= ['test_bucket_get_put_delete'])
-    args = parser.parse_args()
-    bucketsuite = BucketTestSuite(credpath=args.credpath)
-    kbtime=time.time()
-    try:
-        bucketsuite.run_suite()
-    except KeyboardInterrupt:
-        bucketsuite.debug("Caught keyboard interrupt...")
-        if ((time.time()-kbtime) < 2):
-            ebssuite.clean_created_resources()
-            ebssuite.debug("Caught 2 keyboard interupts within 2 seconds, exiting test")
-            ebssuite.clean_created_resources()
-            raise
-        else:          
-            ebssuite.print_test_list_results()
-            kbtime=time.time()
-            pass
-    exit(0)
+    def clean_method(self):
+        '''This is the teardown method'''
+        #Delete the testing bucket if it is left-over
+        self.tester.info('Deleting the buckets used for testing')
+        for bucket in self.buckets_used:
+            try:
+                self.tester.info('Checking bucket ' + bucket + ' for possible cleaning/delete')
+                if self.tester.s3.bucket_exists(bucket):
+                    self.tester.info('Found bucket exists, cleaning it')
+                    self.tester.clear_bucket(bucket)
+                    self.buckets_used.remove(bucket)
+                else:
+                    self.tester.info('Bucket ' + bucket + ' not found, skipping')
+            except:
+                self.tester.info('Exception checking bucket ' + str(bucket))
+
+        return
+          
+if __name__ == "__main__":
+    testcase = BucketTestSuite()
+    ### Either use the list of tests passed from config/command line to determine what subset of tests to run
+    list = testcase.args.tests or [ 'test_bucket_get_put_delete', \
+                                   #'test_bucket_acl', \ FAILING AS OF 3.3.1
+                                   'test_bucket_key_list_delim_prefix', \
+                                   'test_bucket_key_listing_paging', \
+                                   'test_bucket_location', \
+                                   'test_bucket_versioning']
+    ### Convert test suite methods to EutesterUnitTest objects
+    unit_list = [ ]
+    for test in list:
+        unit_list.append( testcase.create_testunit_by_name(test) )
+    ### Run the EutesterUnitTest objects
+
+    result = testcase.run_test_case_list(unit_list,clean_on_exit=True)
+    exit(result)

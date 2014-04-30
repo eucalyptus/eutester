@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="Walrus Test Suite">
+    <test name="Walrus_Tests">
+        <classes>
+            <class name="com.eucalyptus.tests.awssdk.AwsSdkBucketTest"/>
+            <class name="com.eucalyptus.tests.awssdk.BasicWalrusTest"/>
+            <class name="com.eucalyptus.tests.awssdk.S3BucketCannedACLTests"/>
+            <class name="com.eucalyptus.tests.awssdk.S3BucketTests"/>
+            <class name="com.eucalyptus.tests.awssdk.S3MultiPartUploadTest" />
+            <class name="com.eucalyptus.tests.awssdk.S3ObjectCannedACLAcrossAccountsTests"/>
+            <class name="com.eucalyptus.tests.awssdk.S3ObjectCannedACLTests"/>
+            <class name="com.eucalyptus.tests.awssdk.S3ObjectLifecycleTests"/>
+            <class name="com.eucalyptus.tests.awssdk.S3ObjectTests"/>
+        </classes>
+    </test>
+</suite>

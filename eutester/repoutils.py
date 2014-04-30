@@ -72,11 +72,20 @@ class Yum(PackageManager):
         self.machine = machine
         self.name = "yum"
         
-    def install(self, package):
-        self.machine.sys("yum install -y " + package)
+    def install(self, package, nogpg=False):
+        gpg_flag = ""
+        if nogpg:
+            gpg_flag = "--nogpg"
+
+        self.machine.sys("yum install -y " + gpg_flag +  " " + package, code=0)
     
-    def upgrade(self, package = None):
-        self.package_manager.upgrade(package)
+    def upgrade(self, package = None, nogpg=False):
+        gpg_flag = ""
+        if nogpg:
+            gpg_flag = "--nogpg"
+        if not package:
+            package = ""
+        self.machine.sys("yum upgrade -y " + gpg_flag +  " " + package, timeout=480)
     
     def add_repo(self, url, name= None):
         if name is None:
@@ -97,8 +106,9 @@ class Apt(PackageManager):
         self.name = "apt"
         self.apt_options = "-o Dpkg::Options::='--force-confold' -y --force-yes "
         
-    def install(self, package):
-        self.machine.sys("export DEBIAN_FRONTEND=noninteractive; apt-get install %s %s" % (self.apt_options, str(package)))
+    def install(self, package, timeout=300):
+        self.machine.sys("export DEBIAN_FRONTEND=noninteractive; apt-get install %s %s" % (self.apt_options, str(package)),
+                         timeout=timeout, code=0)
     
     def upgrade(self, package = None):
         if package is None:

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="Eutester4j Test Suite">
+
+    <suite-files>
+        <suite-file path="CloudWatchSuite.xml" />
+        <suite-file path="AutoScalingSuite.xml" />
+        <suite-file path="IAMSuite.xml" />
+        <suite-file path="WalrusSuite.xml" />
+        <suite-file path="ELBSuite.xml" />
+        <suite-file path="JCloudsSuite.xml" />
+    </suite-files>
+
+    <test name="Eutester4j_Sanity_Test">
+        <classes>
+            <class name="com.eucalyptus.tests.awssdk.Eutester4jTest"/>
+        </classes>
+    </test>
+</suite>

@@ -31,19 +31,13 @@
 # Author: vic.iglesias@eucalyptus.com
 
 from eutester import Eutester
-
 import os
 import hashlib
-
-
 from boto.s3.connection import OrdinaryCallingFormat
-from boto.s3.connection import S3Connection
-from boto.s3.bucket import Bucket
 from boto.s3.key import Key
-from boto.s3.acl import ACL, Policy, Grant
+from boto.s3.acl import ACL, Grant
 from boto.exception import S3ResponseError
-from boto.exception import S3CreateError
-from boto.s3.connection import Location
+from boto.s3.deletemarker import DeleteMarker
 import boto.s3
 
 class S3opsException(Exception):
@@ -59,18 +53,59 @@ class S3opsException(Exception):
         print self.msg
 
 class S3ops(Eutester):
-    def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None,account="eucalyptus",user="admin", username="root",region=None, clc_ip=None, boto_debug=0):
-        super(S3ops, self).__init__(config_file=config_file,password=password, keypath=keypath, credpath=credpath, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,account=account, user=user, region=region,clc_ip=clc_ip, boto_debug=boto_debug)
+    s3_groups = {
+             "all_users":"http://acs.amazonaws.com/groups/global/AllUsers",
+             "authenticated_users":"http://acs.amazonaws.com/groups/global/AuthenticatedUsers",
+             "log_delivery":"http://acs.amazonaws.com/groups/s3/LogDelivery"
+             }
+
+    def __init__(self, endpoint=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, is_secure=False, path="/", port=80, boto_debug=0):
+        self.aws_access_key_id = aws_access_key_id
+        self.aws_secret_access_key = aws_secret_access_key
+        self.user_id = None
+        self.account_id = None
+        super(S3ops, self).__init__(credpath=credpath)
+        self.setup_s3_connection(endpoint=endpoint, aws_access_key_id=self.aws_access_key_id ,aws_secret_access_key=self.aws_secret_access_key, is_secure=is_secure, path=path, port=port, boto_debug=boto_debug)
         self.test_resources = {}
         self.setup_s3_resource_trackers()
-        
+
+    def setup_s3_connection(self, endpoint=None, aws_access_key_id=None, aws_secret_access_key=None, is_secure=False, path="/", port=80, boto_debug=0):
+        try:
+            if not endpoint:
+                endpoint = self.get_s3_ip()
+            s3_connection_args = { 'aws_access_key_id' :aws_access_key_id,
+                                   'aws_secret_access_key': aws_secret_access_key,
+                                   'is_secure': is_secure,
+                                   'host' : endpoint,
+                                   'path'  : path,
+                                   'port' : port,
+                                   'debug':boto_debug,
+                                   'calling_format':OrdinaryCallingFormat(),
+                                   }
+            self.debug("Attempting to create S3 connection to " + endpoint + ':' + str(port) + path)
+            self.s3 = boto.connect_s3(**s3_connection_args)
+        except Exception, e:
+            raise Exception("Was unable to create S3 connection because of exception: " + str(e))
+
     def setup_s3_resource_trackers(self):
         """
         Setup keys in the test_resources hash in order to track artifacts created
         """
         self.test_resources["keys"] = []
         self.test_resources["buckets"] = []
-        
+
+    def get_s3_ip(self):
+        """Parse the eucarc for the S3_URL"""
+        s3_url = self.parse_eucarc("S3_URL")
+        return s3_url.split("/")[2].split(":")[0]
+
+    def get_s3_path(self):
+        """Parse the eucarc for the S3_URL"""
+        s3_url = self.parse_eucarc("S3_URL")
+        s3_path = "/".join(s3_url.split("/")[3:])
+        self.debug("Print S3 PATH:"  + str(s3_path))
+        return s3_path
+
     def create_bucket(self,bucket_name):
         """
         Create a bucket.  If the bucket already exists and you have
@@ -157,8 +192,8 @@ class S3ops(Eutester):
         """
         bucket = self.get_bucket_by_name(bucket_name)
         keys = bucket.get_all_keys(prefix=prefix)
-        if len(keys) <= 1:
-            self.fail("Unable to find any keys with prefix " + prefix + " in " + bucket )
+        if len(keys) < 1:
+            self.fail("Unable to find any keys with prefix " + prefix + " in " + str(bucket) )
         if len(keys) == 2:
             return keys[0]
         return keys
@@ -173,11 +208,18 @@ class S3ops(Eutester):
         except Exception, e:
             return
         
-    def clear_bucket(bucket):
+    def clear_bucket(self, bucket_name=None):
         """Deletes the contents of the bucket specified and the bucket itself
-           bucket       boto.bucket to delete recursively
+            THIS WILL DELETE EVERYTHING!
+           bucket       bucket name to clear
         """
         try :
+            bucket = self.s3.get_bucket(bucket_name=bucket_name)      
+        except S3ResponseError as e:
+            self.debug('No bucket' + bucket_name + ' found: ' + e.message)
+            raise Exception('Not found')
+        
+        try:
             self.debug( "Getting bucket listing for " + bucket.name )     
             self.debug(  "Iterating throught the bucket" )
             key_list = bucket.list()        
@@ -190,7 +232,8 @@ class S3ops(Eutester):
                 bucket.delete_key(k)
             bucket.delete()
         except S3ResponseError as e:
-            self.debug(  "Exception caught doing bucket cleanup." )
+            self.debug(  "Exception caught doing bucket cleanup." + e.message )
+            #Todo: need to make this work with Walrus's non-S3-compliant error codes
             if e.status == 409:
                 #Do version cleanup
                 self.debug(  "Cleaning up versioning artifacts" )
@@ -209,12 +252,14 @@ class S3ops(Eutester):
                     bucket.delete()
                 except Exception as e:
                     self.debug(  "Exception deleting versioning artifacts: " + e.message )
+            else:
+                self.debug('Got ' + e.message + ' and status ' + str(e.status))
                     
     def clear_keys_with_prefix(self, bucket, prefix):
         try :
-            listing = BucketTest.walrus.get_all_buckets()        
+            listing = self.walrus.get_all_buckets()        
             for bucket in listing:
-                if bucket.name.startswith(BucketTest.bucket_prefix):
+                if bucket.name.startswith(prefix):
                     self.debug( "Getting bucket listing for " + bucket.name)
                     key_list = bucket.list()
                     for k in key_list:
@@ -230,45 +275,76 @@ class S3ops(Eutester):
             raise S3opsException( "Exception caught doing bucket cleanup." )
                     
     
-    def get_canned_acl(owner_id=None,canned_acl=None,bucket_owner_id=None):
+    def get_canned_acl(self, canned_acl=None, bucket_owner_id=None, bucket_owner_display_name=None):
         '''
-        Returns an acl object that can be applied to a bucket or key
-        owner_id         Account id of the owner of the bucket. Required
-        canned_acl       Canned acl to implement. Required. 
-                         Options: ['public-read', 'public-read-write', 'authenticated-read',  'log-delivery-write', 'bucket-owner-full-control', 'bucket-owner-full-control']
-        bucket_owner_id  Required for bucket-owner-full-control and bucket-owner-full-control acls to be created
-        '''
-        if owner_id == None or canned_acl == None:
-            raise S3opsException( "No owner_id or canned_acl passed to get_canned_acl()" )
+        Returns an acl object that can be applied to a bucket or key. It is intended to be used to verify
+        results that the service returns. To set a canned-acl you can simply set it on the bucket directly without
+        this method.
         
-        owner_fc_grant = Grant(permission="FULL_CONTROL", id=owner_id)
+        bucket_owner_id         Account id of the owner of the bucket. Required
+        canned_acl       Canned acl to implement. Required. 
+                         Options: ['private','public-read', 'public-read-write', 'authenticated-read',  'log-delivery-write', 'bucket-owner-full-control', 'bucket-owner-full-control']
+        bucket_owner_display_name  Required. The account display name for the bucket owner, so that the correct permission can be generated fully
+        '''
+        if bucket_owner_id == None or canned_acl == None or bucket_owner_display_name == None :
+            raise S3opsException( "No user_id or canned_acl passed to get_canned_acl()" )
+        
         built_acl = ACL()
-        built_acl.add_grant(owner_fc_grant)
-            
+        built_acl.add_user_grant(permission='FULL_CONTROL',user_id=bucket_owner_id, display_name=bucket_owner_display_name)
+        
         if canned_acl == "public-read":
-            built_acl.add_grant(Grant(permission="READ",uri=s3_groups["all_users"]))        
+            built_acl.add_grant(Grant(permission="READ",type='Group',uri=self.s3_groups["all_users"]))        
         elif canned_acl == "public-read-write":
-            built_acl.add_grant(Grant(permission="READ",uri=s3_groups["all_users"]))
-            built_acl.add_grant(Grant(permission="WRITE",uri=s3_groups["all_users"]))                
+            built_acl.add_grant(Grant(permission="READ",type='Group',uri=self.s3_groups["all_users"]))
+            built_acl.add_grant(Grant(permission="WRITE",type='Group',uri=self.s3_groups["all_users"]))                
         elif canned_acl == "authenticated-read":
-            built_acl.add_grant(Grant(permission="READ",uri=s3_groups["authenticated_users"]))        
+            built_acl.add_grant(Grant(permission="READ",type='Group',uri=self.s3_groups["authenticated_users"]))        
         elif canned_acl == "log-delivery-write":
-            built_acl.add_grant(Grant(permission="WRITE",uri=s3_groups["log_delivery"]))        
+            built_acl.add_grant(Grant(permission="WRITE",type='Group',uri=self.s3_groups["log_delivery"]))        
         elif canned_acl == "bucket-owner-read":
             if bucket_owner_id is None:
                 raise Exception("No bucket_owner_id passed when trying to create bucket-owner-read canned acl ")
-            built_acl.add_grant(Grant(permission="READ",user_id=bucket_owner_id))        
+            built_acl.add_grant(Grant(permission="READ",id=bucket_owner_id))
         elif canned_acl == "bucket-owner-full-control":
             if bucket_owner_id is None:
                 raise Exception("No bucket_owner_id passed when trying to create bucket-owner-full-control canned acl ")
-            built_acl.add_grant(Grant(permission="FULL_CONTROL",user_id=bucket_owner_id))        
+            built_acl.add_grant(Grant(permission="FULL_CONTROL",id=bucket_owner_id))
         return built_acl
+    
+    def check_acl_equivalence(self, acl1=None, acl2=None):
+        '''
+        Checks if acl1 = acl2 based on comparison of the set of grants irrespective of order.
+        One limitation is that each grant's xml string deserialization must be the same to be
+        considered equivalent. This has implications for the grant displayname in particular.
+        For example, an ACL with an unknown account specified will not generally have a
+        display-name associated with the account id, so the comparison may fail in that case even
+        though the ids and permissions are identical.
+        
+        Returns None if there is an input problem such as one or more inputs are None
+        
+        acl1    An ACL object from boto.s3.acl
+        acl2    An ACL object from boto.s3.acl
+        '''
+        if acl1 == None or acl2 == None:
+            return None
+        
+        acl1grants = set()
+        acl2grants = set()
+        
+        #calculate the symmetric-difference of the two sets of grants
+        for val in acl1.grants:
+            acl1grants.add(val.to_xml())
+        
+        for val in acl2.grants:
+            acl2grants.add(val.to_xml())        
+            
+        return not len(acl1grants.symmetric_difference(acl2grants)) > 0
 
-    def check_md5(eTag=None, data=None):
+    def check_md5(self, eTag=None, data=None):
         hasher = hashlib.md5()
         hasher.update(data)
-        data_hash = hasher.hexdigest()
+        data_hash = "\"" + hasher.hexdigest() + "\""
         if data_hash != eTag:
-            raise Exception( "Hash/eTag mismatch: \nhash = " + data_hash + "\neTag= " + eTag )
+            raise Exception( "Hash/eTag mismatch: \nhash = " + data_hash + "\neTag= " + eTag)
             
                 

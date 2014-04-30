@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="IAM Test Suite">
+    <test name="IAM_Roles_Tests">
+        <classes>
+            <class name="com.eucalyptus.tests.awssdk.TestAdminRoles"/>
+            <class name="com.eucalyptus.tests.awssdk.TestCannedRoles"/>
+            <class name="com.eucalyptus.tests.awssdk.TestIAMInstanceProfileManagement"/>
+            <class name="com.eucalyptus.tests.awssdk.TestIAMInstanceProfiles"/>
+            <class name="com.eucalyptus.tests.awssdk.TestIAMRoleManagement"/>
+            <class name="com.eucalyptus.tests.awssdk.TestSTSAssumeRole"/>
+        </classes>
+    </test>
+</suite>
