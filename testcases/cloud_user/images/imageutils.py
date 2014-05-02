@@ -429,6 +429,111 @@ class ImageUtils(EutesterTestCase):
         raise NotImplemented('euca2ools_download_and_unbundle wrapper'
                              ' not implemented yet')
 
+
+    def euca2ools_import_volume(self,
+                                import_file,
+                                bucket,
+                                zone,
+                                format,
+                                size=None,
+                                presigned_manifest_url=None,
+                                prefix=None,
+                                days=None,
+                                no_upload=None,
+                                description=None,
+                                s3_url=None,
+                                ec2_url=None,
+                                owner_sak=None,
+                                owner_akid=None,
+                                security_token=None,
+                                machine=None,
+                                machine_credpath=None):
+        machine = machine or self.worker_machine
+        credpath = machine_credpath or self.credpath
+        cmdargs = str(import_file) + " -b " + str(bucket) + \
+                  " -z " + str(zone) + " -f " + str(format) + \
+                  " --show-empty-fields "
+        emi = None
+        if description:
+            cmdargs += ' -d ' + str(description)
+        if size:
+            cmdargs += ' -s ' + str(size)
+        if presigned_manifest_url:
+            cmdargs += ' --manifest-url ' + str(presigned_manifest_url)
+        if prefix:
+            cmdargs += " --prefix " + str(prefix)
+        if days:
+            cmdargs += " -x " + str(days)
+        if no_upload:
+            cmdargs += " --no-upload "
+        if s3_url:
+            cmdargs += " --s3-url " + str(s3_url)
+        if ec2_url:
+            cmdargs += " -U " + str(ec2_url)
+        if owner_sak:
+            cmdargs += " -w " + str(owner_sak)
+        if owner_akid:
+            cmdargs += " -o " + str(owner_akid)
+        if security_token:
+            cmdargs += " --security-token " + str(security_token)
+        if credpath is not None:
+            cmd = ('source ' + str(credpath) +
+                   '/eucarc && euca-import-volume ' +
+                   str(cmdargs))
+        else:
+            cmd = 'euca-upload-import-volume '
+            # if keys were not already applied to args, fetch and populate
+            # them now.
+            if not owner_sak:
+                owner_sak = self.tester.get_secret_key()
+                cmdargs += " -w " + str(owner_sak)
+            if not owner_akid:
+                owner_akid = self.tester.get_access_key()
+                cmdargs += " -o " + str(owner_akid)
+            cmd += str(cmdargs)
+        out = machine.sys(cmd=cmd, code=0)
+        for line in out:
+            lre = re.search('import-vol-\w{8}', line)
+            if lre:
+                taskid = lre.group()
+        self.debug('Import taskid:' + str(taskid))
+        #check on system using describe...
+        tasks = self.get_conversion_tasks(taskid=taskid)
+        assert tasks, 'Task not found in describe conversion tasks:' + str(taskid)
+        return tasks[0]
+
+
+    def _parse_euca2ools_conversion_task_output(self, output):
+        splitlist = []
+        retlist = []
+        for line in output:
+            splitlist.extend(line.split('\t'))
+        if len(splitlist) % 2:
+            raise ValueError("Conversion task output:\n" + str(output) +
+                             '\nParsed euca2ools conversion task output does '
+                             'not have an even number of fields to parse')
+        #Build out a dict based upon the key value-ish format of the output
+        task = ConversionTask()
+        for i in xrange(0, len(splitlist)):
+            if i % 2:
+                task.endElement(name=lastkey,value=splitlist[i])
+            else:
+                lastkey = str(splitlist[i]).lower()
+                if lastkey == 'tasktype':
+                    if task:
+                        retlist.append(task)
+                    task = ConversionTask
+        return retlist
+
+    def get_conversion_tasks(self, taskid=None):
+        params = {}
+        if taskid:
+            params['ConversionTaskId'] = str(taskid)
+        return self.tester.ec2.get_list('DescribeConversionTasks',
+                                        params,
+                                        [('euca:item', ConversionTask)],
+                                        verb='POST')
+
     def _generate_unique_bucket_name_from_manifest(self,manifest, unique=True):
         mlist = str(manifest.replace('.manifest.xml', '')).split('/')
         basename = mlist[len(mlist)-1].replace('_', '').replace('.', '')
@@ -622,3 +727,21 @@ class ImageUtils(EutesterTestCase):
                     str(emi.id) + ", after " + str(elapsed) + " seconds")
         return emi
 
+
+class ConversionTask(object):
+    def __init__(self, connection=None):
+        self.connection = connection
+        self.conversiontaskid = None
+
+    def __repr__(self):
+        return 'ConversionTask:' + str(self.conversiontaskid)
+
+    def startElement(self, name, attrs, connection):
+        pass
+
+    def endElement(self, name, value, connection):
+        ename = name.lower().replace('euca:','')
+        if ename == 'conversiontaskid':
+            self.conversiontaskid = value
+        else:
+            setattr(self, ename, value)
