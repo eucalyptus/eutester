@@ -39,6 +39,7 @@ import sys
 from eutester.eutestcase import EutesterTestCase
 from eutester.sshconnection import SshCbReturn
 from eutester.machine import Machine
+from conversiontask import ConversionTask
 
 
 class ImageUtils(EutesterTestCase):
@@ -498,9 +499,10 @@ class ImageUtils(EutesterTestCase):
                 taskid = lre.group()
         self.debug('Import taskid:' + str(taskid))
         #check on system using describe...
-        tasks = self.get_conversion_tasks(taskid=taskid)
-        assert tasks, 'Task not found in describe conversion tasks:' + str(taskid)
-        return tasks[0]
+        tasks = self.tester.get_conversion_task(taskid=taskid)
+        assert tasks, 'Task not found in describe conversion tasks. "{0}"'\
+            .format(str(taskid))
+        return tasks
 
 
     def _parse_euca2ools_conversion_task_output(self, output):
@@ -524,15 +526,6 @@ class ImageUtils(EutesterTestCase):
                         retlist.append(task)
                     task = ConversionTask
         return retlist
-
-    def get_conversion_tasks(self, taskid=None):
-        params = {}
-        if taskid:
-            params['ConversionTaskId'] = str(taskid)
-        return self.tester.ec2.get_list('DescribeConversionTasks',
-                                        params,
-                                        [('euca:item', ConversionTask)],
-                                        verb='POST')
 
     def _generate_unique_bucket_name_from_manifest(self,manifest, unique=True):
         mlist = str(manifest.replace('.manifest.xml', '')).split('/')
@@ -727,21 +720,3 @@ class ImageUtils(EutesterTestCase):
                     str(emi.id) + ", after " + str(elapsed) + " seconds")
         return emi
 
-
-class ConversionTask(object):
-    def __init__(self, connection=None):
-        self.connection = connection
-        self.conversiontaskid = None
-
-    def __repr__(self):
-        return 'ConversionTask:' + str(self.conversiontaskid)
-
-    def startElement(self, name, attrs, connection):
-        pass
-
-    def endElement(self, name, value, connection):
-        ename = name.lower().replace('euca:','')
-        if ename == 'conversiontaskid':
-            self.conversiontaskid = value
-        else:
-            setattr(self, ename, value)
