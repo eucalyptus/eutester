@@ -1,6 +1,6 @@
 # Software License Agreement (BSD License)
 #
-# Copyright (c) 2009-2011, Eucalyptus Systems, Inc.
+# Copyright (c) 2009-2014, Eucalyptus Systems, Inc.
 # All rights reserved.
 #
 # Redistribution and use of this software in source and binary forms, with or
@@ -189,9 +189,15 @@ disable_root: false"""
         self.test_resources["launch-configurations"]=[]
 
     def get_ec2_ip(self):
-        """Parse the eucarc for the S3_URL"""
+        """Parse the eucarc for the EC2_URL"""
         ec2_url = self.parse_eucarc("EC2_URL")
         return ec2_url.split("/")[2].split(":")[0]
+
+    def get_ec2_path(self):
+        """Parse the eucarc for the EC2_URL"""
+        ec2_url = self.parse_eucarc("EC2_URL")
+        ec2_path = "/".join(ec2_url.split("/")[3:])
+        return ec2_path
 
     def create_tags(self, resource_ids, tags):
         """
