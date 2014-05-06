@@ -1,6 +1,6 @@
 # Software License Agreement (BSD License)
 #
-# Copyright (c) 2009-2011, Eucalyptus Systems, Inc.
+# Copyright (c) 2009-2014, Eucalyptus Systems, Inc.
 # All rights reserved.
 #
 # Redistribution and use of this software in source and binary forms, with or
@@ -154,6 +154,12 @@ class ELBops(Eutester):
         """Parse the eucarc for the AWS_ELB_URL"""
         elb_url = self.parse_eucarc("AWS_ELB_URL")
         return elb_url.split("/")[2].split(":")[0]
+
+    def get_elb_path(self):
+        """Parse the eucarc for the AWS_ELB_URL"""
+        elb_url = self.parse_eucarc("AWS_ELB_URL")
+        elb_path = "/".join(elb_url.split("/")[3:])
+        return elb_path
 
     def create_listener(self, load_balancer_port=80, protocol="HTTP", instance_port=80, load_balancer=None):
         self.debug(
