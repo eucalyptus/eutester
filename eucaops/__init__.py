@@ -155,7 +155,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                 self.setup_sts_connection(endpoint=self.get_sts_ip(), path=self.get_sts_path(), port=port, is_secure=False,
                                            region=region, aws_access_key_id=aws_access_key_id,
                                            aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
-                self.setup_cw_connection(endpoint=self.get_cw_ip(), path=self.get_ec2_path(), port=port, is_secure=False,
+                self.setup_cw_connection(endpoint=self.get_cw_ip(), path=self.get_cw_path(), port=port, is_secure=False,
                                           region=region, aws_access_key_id=aws_access_key_id,
                                           aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
                 self.setup_cw_resource_trackers()
