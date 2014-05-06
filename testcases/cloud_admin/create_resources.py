@@ -77,11 +77,11 @@ class ResourceGeneration(EutesterTestCase):
                 new_tester = Eucaops(aws_access_key_id=access_key, aws_secret_access_key=secret_key,
                                      ec2_ip=self.tester.ec2.host, ec2_path=self.tester.ec2.path,
                                      s3_ip=self.tester.s3.host, s3_path=self.tester.s3.path,
-                                     sts_ip=self.tester.get_sts_ip(), sts_path=self.tester.get_sts_path(),
+                                     sts_ip=self.tester.tokens.path, sts_path=self.tester.tokens.path,
                                      cw_ip=self.tester.cw.host, cw_path=self.tester.cw.path,
-                                     as_ip=self.tester.get_as_ip(), as_path=self.tester.get_as_path(),
+                                     as_ip=self.tester.autoscale.host, as_path=self.tester.autoscale.path,
                                      elb_ip=self.tester.elb.host, elb_path=self.tester.elb.path,
-                                     cfn_ip=self.tester.get_cfn_ip(), cfn_path=self.tester.get_cfn_path(),
+                                     cfn_ip=self.tester.cloudformation.host, cfn_path=self.tester.cloudformation.path,
                                      username=user_name, account=user_account)
                 self.testers.append(new_tester)
 
