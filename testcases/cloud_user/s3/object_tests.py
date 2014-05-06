@@ -779,7 +779,7 @@ if __name__ == "__main__":
     testcase = ObjectTestSuite()
     ### Either use the list of tests passed from config/command line to determine what subset of tests to run
     list = testcase.args.tests or ['test_object_basic_ops',
-                                   'test_object_byte_offset_read',
+                                   ### 'test_object_byte_offset_read',
                                    'test_object_large_objects',
                                    'test_object_versionlisting',
                                    'test_object_versioning_enabled',
