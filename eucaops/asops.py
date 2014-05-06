@@ -1,6 +1,6 @@
 # Software License Agreement (BSD License)
 #
-# Copyright (c) 2009-2013, Eucalyptus Systems, Inc.
+# Copyright (c) 2009-2014, Eucalyptus Systems, Inc.
 # All rights reserved.
 #
 # Redistribution and use of this software in source and binary forms, with or
@@ -348,9 +348,15 @@ class ASops(Eutester):
                 self.debug("Found Launch Config:" + lc.name)
 
     def get_as_ip(self):
-        """Parse the eucarc for the EC2_URL"""
+        """Parse the eucarc for the AWS_AUTO_SCALING_URL"""
         as_url = self.parse_eucarc("AWS_AUTO_SCALING_URL")
         return as_url.split("/")[2].split(":")[0]
+
+    def get_as_path(self):
+        """Parse the eucarc for the AWS_AUTO_SCALING_URL"""
+        as_url = self.parse_eucarc("AWS_AUTO_SCALING_URL")
+        as_path = "/".join(as_url.split("/")[3:])
+        return as_path
 
     def get_last_instance_id(self):
         reservations = self.ec2.get_all_instances()

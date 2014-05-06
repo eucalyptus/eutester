@@ -1,4 +1,4 @@
-# Copyright 2011-2012 Eucalyptus Systems, Inc.
+# Copyright 2011-2014 Eucalyptus Systems, Inc.
 #
 # Redistribution and use of this software in source and binary forms,
 # with or without modification, are permitted provided that the following
@@ -43,6 +43,17 @@ class STSops(Eutester):
         self.account_id = None
         super(STSops, self).__init__(credpath=credpath)
         self.setup_sts_connection(endpoint=endpoint, region=region, aws_access_key_id=self.aws_access_key_id, aws_secret_access_key=self.aws_secret_access_key)
+
+    def get_sts_ip(self):
+        """Parse the eucarc for the TOKEN_URL"""
+        sts_url = self.parse_eucarc("TOKEN_URL")
+        return sts_url.split("/")[2].split(":")[0]
+
+    def get_sts_path(self):
+        """Parse the eucarc for the TOKEN_URL"""
+        sts_url = self.parse_eucarc("TOKEN_URL")
+        sts_path = "/".join(sts_url.split("/")[3:])
+        return sts_path
 
     def setup_sts_connection(self, endpoint=None, region=None, aws_access_key_id=None, aws_secret_access_key=None, path="/",port=443, is_secure=True, boto_debug=0):
         sts_region = RegionInfo()
