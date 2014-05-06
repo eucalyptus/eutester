@@ -385,7 +385,7 @@ class ObjectTestSuite(EutesterTestCase):
             key = 'postkey_10mb_' + str(i)
             self.tester.info('Generating ' + str(large_obj_size_bytes) + ' bytes for upload')
             #Create some test data
-            data = bytearray(os.urandom(large_obj_size_bytes))
+            data = str(os.urandom(large_obj_size_bytes))
 
             self.tester.info("Data length: " + str(len(data)))
             computed_md5 = '"' + hashlib.md5(data).hexdigest() + '"'
