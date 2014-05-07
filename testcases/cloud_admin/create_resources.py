@@ -76,8 +76,9 @@ class ResourceGeneration(EutesterTestCase):
                                   " and secret key " + secret_key)
                 new_tester = Eucaops(aws_access_key_id=access_key, aws_secret_access_key=secret_key,
                                      ec2_ip=self.tester.ec2.host, ec2_path=self.tester.ec2.path,
+                                     iam_ip=self.tester.euare.host, iam_path=self.tester.euare.path,
                                      s3_ip=self.tester.s3.host, s3_path=self.tester.s3.path,
-                                     sts_ip=self.tester.tokens.path, sts_path=self.tester.tokens.path,
+                                     sts_ip=self.tester.tokens.host, sts_path=self.tester.tokens.path,
                                      cw_ip=self.tester.cw.host, cw_path=self.tester.cw.path,
                                      as_ip=self.tester.autoscale.host, as_path=self.tester.autoscale.path,
                                      elb_ip=self.tester.elb.host, elb_path=self.tester.elb.path,
