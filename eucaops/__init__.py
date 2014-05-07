@@ -153,7 +153,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                 self.setup_ec2_resource_trackers()
 
                 if self.credpath and not iam_ip:
-                    iam_ip = self.get_ec2_ip()
+                    iam_ip = self.get_iam_ip()
                 if self.credpath and not iam_path:
                     iam_path = self.get_iam_path()
                 self.setup_iam_connection(endpoint=iam_ip, path=iam_path,
