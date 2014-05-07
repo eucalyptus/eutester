@@ -71,7 +71,7 @@ class STSops(Eutester):
             if endpoint:
                 sts_region.endpoint = endpoint
             else:
-                sts_region.endpoint = self.get_ec2_ip()
+                sts_region.endpoint = self.get_sts_ip()
 
         try:
             sts_connection_args = { 'aws_access_key_id' : aws_access_key_id,
@@ -81,7 +81,7 @@ class STSops(Eutester):
                                     'port' : port,
                                     'path' : path,
                                     'region' : sts_region}
-            self.debug("Attempting to create STS connection to " + self.get_ec2_ip() + ':' + str(port) + path)
+            self.debug("Attempting to create STS connection to " + sts_region.endpoint + ':' + str(port) + path)
             self.tokens = boto.connect_sts(**sts_connection_args)
         except Exception, e:
             self.critical("Was unable to create STS connection because of exception: " + str(e))
