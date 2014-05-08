@@ -1,6 +1,6 @@
 # Software License Agreement (BSD License)
 #
-# Copyright (c) 2009-2011, Eucalyptus Systems, Inc.
+# Copyright (c) 2009-2014, Eucalyptus Systems, Inc.
 # All rights reserved.
 #
 # Redistribution and use of this software in source and binary forms, with or
@@ -185,6 +185,12 @@ class CWops(Eutester):
         '''Parse the eucarc for the AWS_CLOUDWATCH_URL'''
         cw_url = self.parse_eucarc('AWS_CLOUDWATCH_URL')
         return cw_url.split('/')[2].split(':')[0]
+
+    def get_cw_path(self):
+        """Parse the eucarc for the AWS_CLOUDWATCH_URL"""
+        cw_url = self.parse_eucarc("AWS_CLOUDWATCH_URL")
+        cw_path = "/".join(cw_url.split("/")[3:])
+        return cw_path
 
     def get_namespaces(self):
         '''

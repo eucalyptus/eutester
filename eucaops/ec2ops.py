@@ -1,6 +1,6 @@
 # Software License Agreement (BSD License)
 #
-# Copyright (c) 2009-2011, Eucalyptus Systems, Inc.
+# Copyright (c) 2009-2014, Eucalyptus Systems, Inc.
 # All rights reserved.
 #
 # Redistribution and use of this software in source and binary forms, with or
@@ -189,9 +189,15 @@ disable_root: false"""
         self.test_resources["launch-configurations"]=[]
 
     def get_ec2_ip(self):
-        """Parse the eucarc for the S3_URL"""
+        """Parse the eucarc for the EC2_URL"""
         ec2_url = self.parse_eucarc("EC2_URL")
         return ec2_url.split("/")[2].split(":")[0]
+
+    def get_ec2_path(self):
+        """Parse the eucarc for the EC2_URL"""
+        ec2_url = self.parse_eucarc("EC2_URL")
+        ec2_path = "/".join(ec2_url.split("/")[3:])
+        return ec2_path
 
     def create_tags(self, resource_ids, tags):
         """
@@ -1654,8 +1660,7 @@ disable_root: false"""
         :param owner_id: string owner id to use as filter
         :return: list of snapshots found
         """
-        retlist =[]
-        owner_id = owner_id or self.get_account_id()
+        retlist = []
         #Start by comparing resources the current test obj is tracking to see if they are still in sync with the system
         snapshots = copy.copy(self.test_resources['snapshots'])
         snapshot_list = []
@@ -1697,13 +1702,17 @@ disable_root: false"""
         Delete a list of snapshots.
 
         :param snapshots: List of snapshot IDs
-        :param valid_states: Valid status for snapshot to enter (Default: 'completed,failed')
+        :param valid_states: Valid status for snapshot to
+                             enter (Default: 'completed,failed')
         :param base_timeout: Timeout for waiting for poll interval
-        :param add_time_per_snap: Amount of time to add to base_timeout per snapshot in the list
-        :param wait_for_valid_state: How long to wait for a valid state to be reached before attempting delete,
-                                     as some states will reject a delete request.
+        :param add_time_per_snap: Amount of time to add to base_timeout
+                                  per snapshot in the list
+        :param wait_for_valid_state: How long to wait for a valid state to
+                                     be reached before attempting delete, as
+                                     some states will reject a delete request.
         :param poll_interval: Time to wait between checking the snapshot states
-        :param eof: Whether or not to call an Exception() when first failure is reached
+        :param eof: Whether or not to call an Exception() when first
+                    failure is reached
         :raise:
         """
         snaps = copy.copy(snapshots)
@@ -1712,38 +1721,65 @@ disable_root: false"""
         elapsed = 0
         valid_delete_states = str(valid_states).split(',')
         if not valid_delete_states:
-            raise Exception("delete_snapshots, error in valid_states provided:"+str(valid_states))
+            raise Exception("delete_snapshots, error in valid_states "
+                            "provided:" + str(valid_states))
 
         #Wait for snapshot to enter a state that will accept the deletion action, before attempting to delete it...
         while snaps and (elapsed < wait_for_valid_state):
             elapsed = int(time.time()-start)
-            for snap in snaps:
-                snap.update()
-                self.debug("Checking snapshot:"+str(snap.id)+" status:"+str(snap.status))
-                for v_state in valid_delete_states:
-                    v_state = str(v_state).rstrip().lstrip()
-                    if snap.status == v_state:
+            check_state_list = copy.copy(snaps)
+            for snap in check_state_list:
+                try:
+                    snap_id = self.get_snapshot(snap.id)
+                    if not snap_id:
+                        self.debug("Get Snapshot not found, assuming it's "
+                                   "already deleted:" + str(snap.id))
                         delete_me.append(snap)
-                        snap.delete()
                         break
+                except EC2ResponseError as ec2e:
+                    if ec2e.status == 400:
+                        self.debug("Get Snapshot not found, assuming it's "
+                                   "already deleted:" + str(snap.id) +
+                                   ", err:" + str(ec2e))
+                        delete_me.append(snap)
+                else:
+                    snap.update()
+                    self.debug("Checking snapshot:" + str(snap.id) +
+                               " status:"+str(snap.status))
+                    for v_state in valid_delete_states:
+                        v_state = str(v_state).rstrip().lstrip()
+                        if snap.status == v_state:
+                            delete_me.append(snap)
+                            try:
+                                snap.delete()
+                            except EC2ResponseError as ec2e:
+                                self.debug("Snapshot not found, assuming "
+                                           "it's already deleted:" +
+                                           str(snap.id))
+                                delete_me.append(snap)
+                            break
             for snap in delete_me:
                 if snap in snaps:
                     snaps.remove(snap)
             if snaps:
-                buf = "\n-------| WAITING ON "+str(len(snaps))+" SNAPSHOTS TO ENTER A DELETE-ABLE STATE:("\
-                      +str(valid_states)+"), elapsed:"+ str(elapsed)+'/'+str(wait_for_valid_state)+"|-----"
+                buf = "\n-------| WAITING ON " + str(len(snaps)) + \
+                      " SNAPSHOTS TO ENTER A DELETE-ABLE STATE:(" + \
+                      str(valid_states) + "), elapsed:" + str(elapsed) + \
+                      '/' + str(wait_for_valid_state) + "|-----"
                 for snap in snaps:
-                    buf = buf +"\nSnapshot:"+str(snap.id)+",status:"+str(snap.status)+", progress:"+str(snap.progress)
+                    buf = buf + "\nSnapshot:"+str(snap.id) + ",status:" + \
+                          str(snap.status)+", progress:"+str(snap.progress)
                 self.debug(buf)
-                self.debug('waiting poll_interval to recheck snapshots:'+str(poll_interval)+' seconds')
+                self.debug('waiting poll_interval to recheck snapshots:' +
+                           str(poll_interval) +' seconds')
                 time.sleep(poll_interval)
-            
-
+        #Now poll all the snapshots which a delete() request was made for
         if snaps:
             buf = ""
             for snap in snaps:
                 buf = buf+','+str(snap.id)
-            msg = "Following snapshots did not enter a valid state("+str(valid_states)+") for deletion:"+str(buf)
+            msg = "Following snapshots did not enter a valid state(" + \
+                  str(valid_states) + ") for deletion:" + str(buf)
             if eof:
                 raise Exception(msg)
             else:
@@ -1751,21 +1787,39 @@ disable_root: false"""
         start = time.time()
         elapsed = 0
         timeout= base_timeout + (add_time_per_snap*len(delete_me))
+        # Wait for all snapshots in delete_me list to be deleted or timeout...
         while delete_me and (elapsed < timeout):
-            self.debug('Waiting for remaining '+str(int(len(delete_me)))+' snaps to delete...' )
-            for snapshot in delete_me:
-                snapshot.update()
-                if not self.ec2.get_all_snapshots(snapshot_ids=[snapshot.id]) or snapshot.status == 'deleted':
+            self.debug('Waiting for remaining ' + str(int(len(delete_me))) +
+                       ' snaps to delete...' )
+            waiting_list = copy.copy(delete_me)
+            for snapshot in waiting_list:
+                try:
+                    snapshot.update()
+                    get_snapshot = self.ec2.get_all_snapshots(
+                        snapshot_ids=[snapshot.id])
+                except EC2ResponseError as ec2re:
+                    self.debug("Snapshot not found, assuming "
+                                           "it's already deleted:" +
+                                           str(snapshot.id))
+                if not get_snapshot or snapshot.status == 'deleted':
                     self.debug('Snapshot:'+str(snapshot.id)+" is deleted")
                     delete_me.remove(snapshot)
-            time.sleep(poll_interval)
+                    #snapshot is deleted remove it from test resources list
+                    for testsnap in self.test_resources['snapshots']:
+                        if snapshot.id == testsnap.id:
+                            self.test_resources['snapshots'].remove(testsnap)
+            if delete_me and (elapsed < timeout):
+                time.sleep(poll_interval)
             elapsed = int(time.time()-start)
+        # Record any snapshots not yet deleted as errors...
         if delete_me:
             buf = ""
             for snap in snaps:
-                buf += "\nSnapshot:"+str(snap.id)+",status:"+str(snap.status)+", progress:"+str(snap.progress)+\
-                       ", elapsed:"+str(elapsed)+'/'+str(timeout)
-            raise Exception("Snapshots did not delete within timeout:"+str(timeout)+"\n"+str(buf))
+                buf += "\nSnapshot:" + str(snap.id)+",status:" + \
+                       str(snap.status) + ", progress:"+str(snap.progress) +\
+                       ", elapsed:" + str(elapsed) + '/' + str(timeout)
+            raise Exception("Snapshots did not delete within timeout:" +
+                            str(timeout) + "\n" + str(buf))
                 
              
         
@@ -2864,11 +2918,13 @@ disable_root: false"""
             self.debug('Using src_addr:'+str(src_addr))
             groups = self.get_instance_security_groups(instance)
             for group in groups:
-                self.debug("Is src_addr:"+str(src_addr)+" allowed in group:"+str(group.name)+"...?")
                 if self.does_sec_group_allow(group, src_addr, protocol=protocol, port=port):
-                    self.debug("Sec allows from source")
+                    self.debug("Sec allows from test source addr: " +
+                               str(src_addr + ", protocol:" + str(protocol) +
+                               ", port:" + str(port)))
+                    #Security group allows from the src/proto/port
                     return True
-            self.debug("Sec does NOT allow from source")
+            #Security group does not allow from the src/proto/port
             return False
         except Exception, e:
             self.debug(self.get_traceback())
@@ -2876,6 +2932,7 @@ disable_root: false"""
         finally:
             if s:
                 s.close()
+
     def get_security_group(self, id=None, name=None):
         #Adding this as both a convienence to the user to separate euare groups from security groups
         #Not sure if botos filter on group names and ids is reliable?
@@ -2900,10 +2957,15 @@ disable_root: false"""
         :param protocol: Protocol to lookup sec group rule against
         :param port: Network port to lookup sec group rule against
         """
+        port = int(port)
+        protocol = str(protocol).strip().lower()
+        self.debug('Security group:' + str(group.name) + ", src ip:" +
+                   str(src) + ", proto:" + str(protocol) + ", port:" +
+                   str(port))
         group = self.get_security_group(id=group.id, name=group.name)
         for rule in group.rules:
             g_buf =""
-            if rule.ip_protocol == protocol:
+            if str(rule.ip_protocol).strip().lower() == protocol:
                 for grant in rule.grants:
                     g_buf += str(grant)+","
                 self.debug("rule#" + str(group.rules.index(rule)) +
@@ -3121,7 +3183,9 @@ disable_root: false"""
                                            kernel=kernel,
                                            image_id=image_id)
             for instance in instances:
-                euinstance_list.append(self.convert_instance_to_euisntance(instance, auto_connect=False))
+                instance_res = getattr(instance, 'reservation', None)
+                euinstance_list.append(self.convert_instance_to_euisntance(
+                    instance, reservation=instance_res, auto_connect=False))
         if not euinstance_list:
             self.debug('No instances to print')
             return
@@ -3268,13 +3332,30 @@ disable_root: false"""
         reservation.instances = euinstance_list
         return reservation
 
-    def convert_instance_to_euisntance(self, instance, keypair=None, username="root", password=None, auto_connect=True,timeout=120):
+    def convert_instance_to_euisntance(self, instance, keypair=None,
+                                       username="root", password=None,
+                                       reservation=None,auto_connect=True,
+                                       timeout=120):
         if instance.platform == 'windows':
-            return WinInstance.make_euinstance_from_instance(instance, self, keypair=keypair, username = username,
-                                                        password=password, auto_connect=auto_connect,timeout=timeout )
+            return WinInstance.make_euinstance_from_instance(
+                instance,
+                self,
+                keypair=keypair,
+                username = username,
+                password=password,
+                reservation=reservation,
+                auto_connect=auto_connect,
+                timeout=timeout)
         else:
-            return EuInstance.make_euinstance_from_instance(instance, self, keypair=keypair, username = username,
-                                                        password=password, auto_connect=auto_connect,timeout=timeout )
+            return EuInstance.make_euinstance_from_instance(
+                instance,
+                self,
+                keypair=keypair,
+                username = username,
+                password=password,
+                reservation=reservation,
+                auto_connect=auto_connect,
+                timeout=timeout)
 
     def get_console_output(self, instance):
         """
@@ -3380,6 +3461,7 @@ disable_root: false"""
                         continue
                     if (image_id is not None) and (i.image_id != image_id):
                         continue
+                    i.reservation = res
                     ilist.append(i)
         return ilist
 
