@@ -1,6 +1,6 @@
 # Software License Agreement (BSD License)
 #
-# Copyright (c) 2009-2011, Eucalyptus Systems, Inc.
+# Copyright (c) 2009-2014, Eucalyptus Systems, Inc.
 # All rights reserved.
 #
 # Redistribution and use of this software in source and binary forms, with or
@@ -30,6 +30,7 @@
 #
 # Author: vic.iglesias@eucalyptus.com
 # Author: matt.clark@eucalyptus.com
+
 from boto.ec2.image import Image
 from boto.ec2.volume import Volume
 from cwops import CWops
@@ -59,8 +60,10 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
     
     def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None,
                  aws_secret_access_key = None,  account="eucalyptus", user="admin", username=None, APIVersion='2011-01-01',
-                 region=None, ec2_ip=None, s3_ip=None, s3_path=None, as_ip=None, elb_ip=None, cfn_ip=None,
-                 port=8773, download_creds=True, boto_debug=0, debug_method=None):
+                 ec2_ip=None, ec2_path=None, iam_ip=None, iam_path=None, s3_ip=None, s3_path=None,
+                 as_ip=None, as_path=None, elb_ip=None, elb_path=None, cw_ip=None, cw_path=None,
+                 cfn_ip=None, cfn_path=None, sts_ip=None, sts_path=None,
+                 port=8773, download_creds=True, boto_debug=0, debug_method=None, region=None):
         self.config_file = config_file 
         self.APIVersion = APIVersion
         self.eucapath = "/opt/eucalyptus"
@@ -126,7 +129,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                             raise Exception(str(tb) + "\nCould not get credentials from first CLC and no other to try")
                         self.swap_clc()
                         self.sftp = self.clc.ssh.connection.open_sftp()
-                        self.get_credentials(account,user)
+                        self.get_credentials(account, user)
                         
                 self.service_manager = EuserviceManager(self)
                 self.clc = self.service_manager.get_enabled_clc().machine
@@ -140,20 +143,39 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
             try:
                 if self.credpath and not ec2_ip:
                     ec2_ip = self.get_ec2_ip()
-                self.setup_ec2_connection(endpoint=ec2_ip, path="/services/Eucalyptus", port=port, is_secure=False,
+                if self.credpath and not ec2_path:
+                    ec2_path = self.get_ec2_path()
+
+                self.setup_ec2_connection(endpoint=ec2_ip, path=ec2_path, port=port, is_secure=False,
                                           region=region, aws_access_key_id=aws_access_key_id,
                                           aws_secret_access_key=aws_secret_access_key, APIVersion=APIVersion,
                                           boto_debug=boto_debug)
                 self.setup_ec2_resource_trackers()
-                self.setup_iam_connection(endpoint=ec2_ip, path="/services/Euare", port=port, is_secure=False,
-                                          aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,
-                                          boto_debug=boto_debug)
-                self.setup_sts_connection(endpoint=ec2_ip, path="/services/Eucalyptus", port=port, is_secure=False,
-                                           region=region, aws_access_key_id=aws_access_key_id,
-                                           aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
-                self.setup_cw_connection(endpoint=ec2_ip, path="/services/CloudWatch", port=port, is_secure=False,
+
+                if self.credpath and not iam_ip:
+                    iam_ip = self.get_iam_ip()
+                if self.credpath and not iam_path:
+                    iam_path = self.get_iam_path()
+                self.setup_iam_connection(endpoint=iam_ip, path=iam_path,
+                                          port=port, is_secure=False, aws_access_key_id=aws_access_key_id,
+                                          aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
+
+                if self.credpath and not sts_ip:
+                    sts_ip = self.get_sts_ip()
+                if self.credpath and not sts_path:
+                    sts_path = self.get_sts_path()
+                self.setup_sts_connection(endpoint=sts_ip, path=sts_path, port=port, is_secure=False,
                                           region=region, aws_access_key_id=aws_access_key_id,
                                           aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
+
+                if self.credpath and not cw_ip:
+                    cw_ip = self.get_cw_ip()
+                if self.credpath and not cw_path:
+                    cw_path = self.get_cw_path()
+                self.setup_cw_connection(endpoint=cw_ip, path=cw_path, port=port, is_secure=False,
+                                         region=region, aws_access_key_id=aws_access_key_id,
+                                         aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
+
                 self.setup_cw_resource_trackers()
             except Exception, e:
                 tb = self.get_traceback()
@@ -174,7 +196,9 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
             try:
                 if self.credpath and not as_ip:
                     as_ip = self.get_as_ip()
-                self.setup_as_connection(endpoint=as_ip, path="/services/AutoScaling", port=port, is_secure=False,
+                if self.credpath and not as_path:
+                    as_path = self.get_as_path()
+                self.setup_as_connection(endpoint=as_ip, path=as_path, port=port, is_secure=False,
                                          region=region, aws_access_key_id=aws_access_key_id,
                                          aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
             except Exception, e:
@@ -183,7 +207,9 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
             try:
                 if self.credpath and not elb_ip:
                     elb_ip = self.get_elb_ip()
-                self.setup_elb_connection(endpoint=elb_ip, path="/services/LoadBalancing", port=port, is_secure=False,
+                if self.credpath and not elb_path:
+                    elb_path = self.get_elb_path()
+                self.setup_elb_connection(endpoint=elb_ip, path=elb_path, port=port, is_secure=False,
                                           region=region, aws_access_key_id=aws_access_key_id,
                                           aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
             except Exception, e:
@@ -191,7 +217,9 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
             try:
                 if self.credpath and not cfn_ip:
                     cfn_ip = self.get_cfn_ip()
-                self.setup_cfn_connection(endpoint=cfn_ip, path="/services/CloudFormation", port=port, is_secure=False,
+                if self.credpath and not cfn_path:
+                    cfn_path = self.get_cfn_path()
+                self.setup_cfn_connection(endpoint=cfn_ip, path=self.get_cfn_path(), port=port, is_secure=False,
                                           region=region, aws_access_key_id=aws_access_key_id,
                                           aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
             except Exception, e:
@@ -732,7 +760,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
             machine.sys("mkdir " + admin_cred_dir)
             machine.sftp.put( admin_cred_dir + "/creds.zip" , admin_cred_dir + "/creds.zip")
             machine.sys("unzip -o " + admin_cred_dir + "/creds.zip -d " + admin_cred_dir )
-            machine.sys("sed -i 's/" + self.get_ec2_ip() + "/" + machine.hostname  +"/g' " + admin_cred_dir + "/eucarc")
+            # machine.sys("sed -i 's/" + self.get_ec2_ip() + "/" + machine.hostname  +"/g' " + admin_cred_dir + "/eucarc")
             
         
     def setup_local_creds_dir(self, admin_cred_dir):

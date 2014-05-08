@@ -1,6 +1,6 @@
 # Software License Agreement (BSD License)
 #
-# Copyright (c) 2009-2011, Eucalyptus Systems, Inc.
+# Copyright (c) 2009-2014, Eucalyptus Systems, Inc.
 # All rights reserved.
 #
 # Redistribution and use of this software in source and binary forms, with or
@@ -103,7 +103,6 @@ class S3ops(Eutester):
         """Parse the eucarc for the S3_URL"""
         s3_url = self.parse_eucarc("S3_URL")
         s3_path = "/".join(s3_url.split("/")[3:])
-        self.debug("Print S3 PATH:"  + str(s3_path))
         return s3_path
 
     def create_bucket(self,bucket_name):

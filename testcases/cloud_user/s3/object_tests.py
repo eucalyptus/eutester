@@ -22,6 +22,8 @@ from datetime import datetime
 import hashlib
 import json
 import hmac
+from io import BytesIO
+from io import FileIO
 
 from boto.s3.key import Key
 from boto.s3.prefix import Prefix
@@ -89,31 +91,32 @@ class ObjectTestSuite(EutesterTestCase):
             self.tester.debug("Exception occured during 'PUT' of object " + object_key + " into bucket " + bucket.name + ": " + e.message)
             raise e
 
-    def post_object(self, bucket_name=None, object_key=None, object_data=None, policy=None):
+    def post_object(self, bucket_name=None, object_key=None, object_data=None, policy=None, acl=None):
         """Uploads an object using POST + form upload"""
         fields = {
             'key' : object_key,
-            'acl' : 'private',
+            'acl' : acl,
             'AWSAccessKeyId': self.tester.get_access_key(),
             'Policy' : policy,
             'Signature': self.sign_policy(sak=self.tester.get_secret_key(), b64_policy_json=policy)
         }
 
         self.tester.info('Fields: ' + str(fields))
-        url = 'http://' + self.tester.s3.host + ':' + str(self.tester.s3.port) + '/' + self.tester.s3.path + '/' + bucket_name
+        url = 'http://' + self.tester.s3.host + ':' + str(self.tester.s3.port) \
+              + '/' + self.tester.s3.path + '/' + bucket_name
 
         self.tester.debug('Sending POST request to: ' + url)
-        response = requests.post(url, data=fields, files={'file': object_data})
+        response = requests.post(url, data=fields, files={'file': BytesIO(object_data)})
         return response
         #return None
 
-    def generate_default_policy_b64(self, bucket, key):
+    def generate_default_policy_b64(self, bucket, key, acl):
         delta = timedelta(hours=1)
         expire_time = (datetime.utcnow() + delta).replace(microsecond=0)
 
-        policy = {'conditions': [{'acl': 'private'},
+        policy = {'conditions': [{'acl': acl},
                                  {'bucket': bucket},
-                                 {'key': key}
+                                 {'key': key},
                                 ],
                   'expiration': time.strftime('%Y-%m-%dT%H:%M:%SZ',
                                               expire_time.timetuple())}
@@ -343,78 +346,84 @@ class ObjectTestSuite(EutesterTestCase):
         """Test the POST method for putting objects, requires a pre-signed upload policy and url"""
         self.tester.info("Testing POST form upload on bucket" + self.test_bucket_name)
         self.test_bucket = self.clear_and_rebuild_bucket(self.test_bucket_name)
-        key = 'postkey1'
-        data = 'postdata123...postdata123...postdata123'
-        computed_md5 = '"' + hashlib.md5(data).hexdigest() + '"'
-        self.tester.info('Data md5: ' + computed_md5 + ' data length: ' + str(len(computed_md5)))
-        self.tester.info('Uploading object via POST')
-        response = self.post_object(bucket_name=self.test_bucket_name,
-                                    object_key=key,
-                                    object_data=data,
-                                    policy=self.generate_default_policy_b64(self.test_bucket_name, key))
+        itr = 1
+        self.tester.info('Doing ' + str(itr) + ' POST upload iterations')
+        acl = 'ec2-bundle-read'
+        for k in xrange(0, itr):
+            key = 'postkey1' + str(k)
+            data = os.urandom(512)
+            computed_md5 = '"' + hashlib.md5(data).hexdigest() + '"'
+            self.tester.info('Data md5: ' + computed_md5 + ' data length: ' + str(len(computed_md5)))
+            self.tester.info('Uploading object ' + self.test_bucket_name + '/' + key + ' via POST with acl : ' + acl)
+            response = self.post_object(bucket_name=self.test_bucket_name,
+                                        object_key=key,
+                                        object_data=data,
+                                        acl=acl,
+                                        policy=self.generate_default_policy_b64(self.test_bucket_name, key, acl=acl))
 
-        self.tester.info('Got response for POST: ' + str(response.status_code) + ': ' + str(response.text))
-        assert(response.status_code == 204)
-        fetched_key = self.test_bucket.get_key(key)
-        fetched_content = fetched_key.get_contents_as_string()
-        self.tester.info('Got fetched md5: ' + fetched_key.etag)
-        self.tester.info('Got fetched content: ' + fetched_content)
-        assert(fetched_content == data)
-        self.tester.info('Calculated md5: ' + computed_md5 + ' recieved md5 ' + fetched_key.etag)
-        assert(fetched_key.etag == computed_md5)
+            self.tester.info('Got response for POST: ' + str(response.status_code) + ': ' + str(response.text))
+            assert(response.status_code == 204)
+            fetched_key = self.test_bucket.get_key(key)
+            fetched_content = fetched_key.get_contents_as_string()
+            self.tester.info('Got fetched md5: ' + fetched_key.etag)
+            self.tester.info('Calculated md5: ' + computed_md5 + ' recieved md5 ' + fetched_key.etag)
+            assert(fetched_key.etag == computed_md5)
+            assert(fetched_content == data)
 
+        self.tester.info("Done with upload test")
 
     def test_object_post_large(self):
         """Test the POST method for putting objects, requires a pre-signed upload policy and url"""
         self.tester.info("Testing POST form upload on bucket" + self.test_bucket_name)
         self.test_bucket = self.clear_and_rebuild_bucket(self.test_bucket_name)
-        #Test 10mb post
         self.tester.info("Testing POST form upload of 10MB data on bucket" + self.test_bucket_name)
-        key = 'postkey_10mb'
+        itr = 1
+        large_obj_size_bytes = 10 * 1024 * 1024 #10MB content
+        self.tester.info('Doing ' + str(itr) + ' iterations of large object of size ' + str(large_obj_size_bytes) + ' with POST')
+        acl = 'ec2-bundle-read'
+        for i in xrange(0, itr):
+            key = 'postkey_10mb_' + str(i)
+            self.tester.info('Generating ' + str(large_obj_size_bytes) + ' bytes for upload')
+            #Create some test data
+            data = str(os.urandom(large_obj_size_bytes))
 
-        large_obj_size_bytes = 10*1000*1024
-        data = ''
+            self.tester.info("Data length: " + str(len(data)))
+            computed_md5 = '"' + hashlib.md5(data).hexdigest() + '"'
+            self.tester.info('Data md5 is: ' + computed_md5)
 
-        self.tester.info('Generating ' + str(large_obj_size_bytes) + ' bytes for upload')
+            self.tester.info('Uploading object via POST using acl: ' + acl)
+            response = self.post_object(bucket_name=self.test_bucket.name,
+                                        object_key=key,
+                                        object_data=data,
+                                        policy=self.generate_default_policy_b64(self.test_bucket.name, key, acl=acl),
+                                        acl=acl)
 
-        #Create some test data
-        for i in range(0, large_obj_size_bytes):
-            data += chr(random.randint(32,126))
+            self.tester.info('Got response for POST: ' + str(response.status_code) + ': ' + str(response.text))
+            assert(response.status_code == 204)
 
-        self.tester.info("Data length: " + str(len(data)))
-        computed_md5 = '"' + hashlib.md5(data).hexdigest() + '"'
-        self.tester.info('Data md5 is: ' + computed_md5)
+            self.tester.info('Fetching the content for verification')
+            fetched_key = self.test_bucket.get_key(key_name=key)
+            self.tester.info('Got fetched content length : ' + str(fetched_key.size) + ' Expected ' + str(len(data)))
+            assert(fetched_key.size == len(data))
+            self.tester.info('Got fetched md5: ' + fetched_key.etag)
+            self.tester.info('Calculated md5: ' + computed_md5 + ' recieved md5 ' + fetched_key.etag)
+            assert(fetched_key.etag == computed_md5)
+            fetched_content = fetched_key.get_contents_as_string()
+            assert(fetched_content == data)
 
-        self.tester.info('Uploading object via POST')
-        response = self.post_object(bucket_name=self.test_bucket.name,
-                                    object_key=key,
-                                    object_data=data,
-                                    policy=self.generate_default_policy_b64(self.test_bucket.name, key))
-
-        self.tester.info('Got response for POST: ' + str(response.status_code) + ': ' + str(response.text))
-        assert(response.status_code == 204)
-
-        self.tester.info('Fetching the content for verification')
-        fetched_key = self.test_bucket.get_key(key_name=key)
-        self.tester.info('Got fetched content length : ' + str(fetched_key.size) + ' Expected ' + str(len(data)))
-        assert(fetched_key.size == len(data))
-        self.tester.info('Got fetched md5: ' + fetched_key.etag)
-        self.tester.info('Calculated md5: ' + computed_md5 + ' recieved md5 ' + fetched_key.etag)
-        assert(fetched_key.etag == computed_md5)
-        fetched_content = fetched_key.get_contents_as_string()
-        assert(fetched_content == data)
 
     def test_object_large_objects(self):
         """Test operations on large objects (>1MB), but not so large that we must use the multi-part upload interface"""
         self.tester.info("Testing large-ish objects over 1MB in size on bucket" + self.test_bucket_name)
         self.test_bucket = self.clear_and_rebuild_bucket(self.test_bucket_name)
-        test_data = ""
+        test_data = None
         large_obj_size_bytes = 5 * 1024 * 1024 #5MB
         self.tester.info("Generating " + str(large_obj_size_bytes) + " bytes of data")
 
         #Create some test data
-        for i in range(0, large_obj_size_bytes):
-            test_data += chr(random.randint(32,126))
+        #for i in range(0, large_obj_size_bytes):
+        #    test_data += chr(random.randint(32,126))
+        test_data = bytearray(os.urandom(large_obj_size_bytes))
 
         self.tester.info("Uploading object content of size: " + str(large_obj_size_bytes) + " bytes")
         keyname = "largeobj-" + str(int(time.time()))
@@ -709,14 +718,13 @@ class ObjectTestSuite(EutesterTestCase):
         for bucket in self.buckets_used:
             try:
                 self.tester.info('Checking bucket ' + bucket + ' for possible cleaning/delete')
-                if self.tester.s3.bucket_exists(bucket):
+                if self.tester.s3.head_bucket(bucket) != None:
                     self.tester.info('Found bucket exists, cleaning it')
                     self.tester.clear_bucket(bucket)
-                    self.buckets_used.remove(bucket)
                 else:
                     self.tester.info('Bucket ' + bucket + ' not found, skipping')
-            except:
-                self.tester.info('Exception checking bucket ' + bucket)
+            except Exception as e:
+                self.tester.info('Exception checking bucket ' + bucket + ' Exception msg: ' + e.message)
         return
 
     def test_multipart_upload(self):
@@ -770,15 +778,15 @@ if __name__ == "__main__":
 
     testcase = ObjectTestSuite()
     ### Either use the list of tests passed from config/command line to determine what subset of tests to run
-    list = testcase.args.tests or ['test_object_basic_ops', \
-                                     'test_object_byte_offset_read', \
-                                     'test_object_large_objects', \
-                                     'test_object_versionlisting', \
-                                     'test_object_versioning_enabled', \
-                                     'test_object_versioning_suspended', \
-                                     'test_object_multipart', \
-                                     'test_object_post', \
-                                     'test_object_post_large' ]
+    list = testcase.args.tests or ['test_object_basic_ops',
+                                   ### 'test_object_byte_offset_read',
+                                   'test_object_large_objects',
+                                   'test_object_versionlisting',
+                                   'test_object_versioning_enabled',
+                                   'test_object_versioning_suspended',
+                                   'test_object_multipart',
+                                   'test_object_post',
+                                   'test_object_post_large']
 
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
