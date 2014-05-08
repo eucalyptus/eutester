@@ -2753,7 +2753,6 @@ disable_root: false"""
                     instances.append(eu_instance)
                 except Exception, e:
                     self.debug(self.get_traceback())
-                    self.get_console_output(instance)
                     raise Exception("Unable to create Euinstance from " + str(instance)+", err:\n"+str(e))
             if monitor_to_running:
                 return self.monitor_euinstances_to_running(instances, timeout=timeout)
