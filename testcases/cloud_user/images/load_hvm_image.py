@@ -43,7 +43,7 @@ testcase.setup_parser(testname='load_hvm_image.py',
 
 testcase.parser.add_argument('--url',help='URL containing remote windows image '
                                           'to create EMI from', default=None)
-testcase.parser.add_argument('--filepath',dest='filepath', help='File path to create windows EMI from', default=None)
+testcase.parser.add_argument('--filepath',dest='filepath', help='File path to create EMI from', default=None)
 testcase.parser.add_argument('--workerip',dest='worker_machine', help='The ip/hostname of the machine that the operation will be performed on', default=None)
 testcase.parser.add_argument('--worker_username',dest='worker_username', help='The username of the machine that the operation will be performed on, default:"root"', default='root')
 testcase.parser.add_argument('--worker_password',dest='worker_password', help='The password of the machine that the operation will be performed on', default=None)
