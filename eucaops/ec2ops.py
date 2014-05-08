@@ -3992,13 +3992,30 @@ disable_root: false"""
         elapsed = 0
         timeout = 0
         for task in checking_list:
-            task_timeout = int(task.size) * int(time_per_gig)
+            task_timeout = int(task.importvolumetask.volume_size) * int(time_per_gig)
             if task_timeout > timeout:
                 timeout = task_timeout
         timeout += base_timeout
         while checking_list and elapsed < timeout:
             for task in checking_list:
                 task.update()
+                self.debug(task)
+                #If the task volume is present add it to the resources list.
+                if (not task.volume and task.importvolumetask and
+                        task.importvolumetask.volume_id):
+                    volume_id = task.importvolumetask.volume_id
+                    try:
+                        self.debug('Attempting to get task volume...')
+                        task.volume = self.get_volume(volume_id=volume_id)
+                    except ResourceNotFoundException:
+                        self.debug('Volume:"{0}" for task:"{1}" could not be '
+                                   'found after elapsed:"{2}" seconds in '
+                                   'monitor loop'.format(volume_id,
+                                                         task.conversiontaskid,
+                                                         elapsed))
+                if task.volume and \
+                        not task.volume in self.test_resources['volumes']:
+                            self.test_resources['volumes'].append(task.volume)
                 #notfound flag is set if task is not found during update()
                 if task.notfound:
                     err_msg = 'Task "{0}" not found after elapsed:"{1}"'\
@@ -4015,22 +4032,29 @@ disable_root: false"""
                                    timeout))
                 task_state = task.state.lower()
                 if task_state == state:
-                    self.debug('Task:"{0}" found in desired state:"{1}"'.format(task.conversiontaskid, task.state))
+                    self.debug('Task:"{0}" found in desired state:"{1}"'.
+                               format(task.conversiontaskid, task.state))
                     done_list.append(task)
                     continue
                 # Fail fast for tasks found a final state that doesnt match
                 # the desired state provided
                 for final_state in ["completed", "cancelled", "failed"]:
                     if re.search(final_state, task_state):
-                        err_msg = ('Task "{0}" found in a final state:"{1}" after '
-                                  'elapsed:"{2}"'
+                        err_msg = ('Task "{0}" found in a final state:"{1}" '
+                                   'after elapsed:"{2}", msg:"{3}"'
                                    .format(task.conversiontaskid,
                                            task.state,
-                                           elapsed))
+                                           elapsed,
+                                           task.statusmessage))
                         err_buf += "\n" + err_msg
                         self.debug(err_msg)
                         done_list.append(task)
                         continue
+            try:
+                self.print_conversion_task_list(clist=monitor_list)
+            except Exception as PE:
+                self.debug('failed to print conversion task list, err:' +
+                    str(PE))
             if exit_on_failure and err_buf:
                 break
             for done_task in done_list:
@@ -4047,15 +4071,67 @@ disable_root: false"""
             err_buf += ('Monitor complete. Task "{0}:{1}" not in desired '
                         'state "{2}" after elapsed:"{3}"\n'
                         .format(task.conversiontaskid,
-                        task.state,
-                        state,
-                        elapsed))
+                                task.state,
+                                state,
+                                elapsed))
         if err_buf:
             err_buf = "Exit on first failure set to:" + str(exit_on_failure) \
                       + "\n" + err_buf
             raise Exception('Monitor conversion tasks failures detected:\n'
                             + str(err_buf))
 
+    def print_conversion_task_list(self,
+                                   clist=None,
+                                   doprint=True,
+                                   printmethod=None):
+        clist = clist or self.get_all_conversion_tasks()
+        printmethod = printmethod or self.debug
+        taskidlen = 19
+        bytesconvertedlen = 16
+        statusmsglen = 35
+        statelen = 10
+        availzonelen=14
+        volumelen=12
+        sizelen=20
+        header = ('TASKID'.ljust(taskidlen) + " | " +
+                  'STATE'.ljust(statelen) + " | " +
+                  'VOLUME'.ljust(volumelen) + " | " +
+                  'IMG SIZE'.ljust(sizelen) + " | " +
+                  'BYTES CONV'.ljust(bytesconvertedlen) + " | " +
+                  'STATUS MSG'.ljust(statusmsglen) + " | " +
+                  'ZONE'.ljust(availzonelen) + " |\n")
+        line = ""
+        for x in xrange(0, len(header)):
+            line += '-'
+        line += "\n"
+        buf = "\n" + line + header + line
+        for task in clist:
+            volume_id = None
+            sizestr = None
+            zone = None
+            bytesconverted = None
+            if task.importvolumetask:
+                if task.importvolumetask.image:
+                    sizegb = "%.2f" % float(
+                        long(task.importvolumetask.image.size) /
+                        float(1073741824))
+                    sizestr = ("{0}({1}gb)"
+                               .format(task.importvolumetask.image.size,
+                                       sizegb))
+                zone = task.importvolumetask.availabilityzone
+                bytesconverted = task.importvolumetask.bytesconverted
+                volume_id = task.importvolumetask.volume_id
+            buf += (str(task.conversiontaskid).ljust(taskidlen) + " | " +
+                    str(task.state).ljust(statelen) + " | " +
+                    str(volume_id).ljust(volumelen) + " | " +
+                    str(sizestr).ljust(sizelen) + " | " +
+                    str(bytesconverted).ljust(bytesconvertedlen) + " |" +
+                    str(task.statusmessage).ljust(statusmsglen) + " | " +
+                    str(zone).ljust(availzonelen) + " |\n")
+            buf += line
+        if doprint:
+            printmethod(buf)
+        return buf
 
 
 
