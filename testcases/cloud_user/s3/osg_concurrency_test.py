@@ -107,10 +107,13 @@ class OSGConcurrency(EutesterTestCase):
         ret_object_meta = self.get_object(bucket, key_name)
         local_object_hash = self.get_hash(eu_file.name)
 
+        self.debug("Matching local and remote hashes of object: " + eu_file.name)
+        self.debug("Remote object: " + ret_object_meta['hash'])
+        self.debug("Local object:  " + local_object_hash)
         if ret_object_meta['hash'] != local_object_hash:
             self.debug("return_object hash: " + ret_object_meta['hash'])
             self.debug("local_object hash: " + local_object_hash)
-            self.debug("uploaded content and downloaded content are not same.")
+            self.debug("Uploaded content and downloaded content are not same.")
             return False
         return True
 
@@ -129,10 +132,8 @@ class OSGConcurrency(EutesterTestCase):
         return temp_file.name
 
     def concurrent_upload(self):
+        self.debug("Creating object of " + str(self.args.object_size) + "KB")
         eu_file = open(self.create_file(self.args.object_size))
-        self.debug("Object information:")
-        self.debug("Object hash: " + self.get_hash(eu_file.name))
-        self.debug("Object size: " + str(int(os.path.getsize(eu_file.name) / 1024)) + "KB")
         thread_pool = []
         with ThreadPoolExecutor(max_workers=self.args.threads) as executor:
             for i in xrange(self.args.buckets):
