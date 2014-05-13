@@ -33,30 +33,78 @@
 import sys
 from boto.resultset import ResultSet
 from boto.ec2.tag import Tag
-from boto.ec2.ec2object import TaggedEC2Object
+from boto.ec2.ec2object import TaggedEC2Object, EC2Object
 from boto.ec2.connection import EC2ResponseError
 
 
 class ConversionTask(TaggedEC2Object):
+    _IMPORTINSTANCE = 'importinstance'
+    _IMPORTVOLUME  = 'importvolume'
+
     def __init__(self, connection=None):
         super(ConversionTask, self).__init__(connection)
         self.connection = connection
         self.conversiontaskid = None
         self.expirationtime = None
-        self.importvolumetask = None
-        self.volume = None
-        self._volume = None
         self.state = None
         self.statusmessage = None
+        self._importinstancetask = None
+        self._importvolumetask = None
         self.tags = None
         self.notfound = False
 
     def __repr__(self):
-        return ('ConversionTask:"{0}", state:"{1}", volume:"{2}", status:"{3}"'
+        volumes = ",".join([vol.id for vol in self.volumes])
+        return ('ConversionTask:"{0}", state:"{1}", instance:"{2}", '
+                'volumes:"{3}", status:"{4}"'
                 .format(str(self.conversiontaskid),
                         self.state,
-                        self.volume,
+                        self.instanceid,
+                           volumes,
                         self.statusmessage))
+
+    @property
+    def availabilityzone(self):
+        if self.importvolumes:
+            return self.importvolumes[0].availabilityzone
+        return None
+
+    @property
+    def importvolumes(self):
+        if self._importinstancetask:
+            return self._importinstancetask.importvolumes
+        if self._importvolumetask:
+            return [self._importvolumetask]
+        return []
+
+    @property
+    def platform(self):
+        if self._importinstancetask:
+            return self._importinstancetask.platform
+        return None
+
+    @property
+    def instanceid(self):
+        if self._importinstancetask:
+            return self._importinstancetask.instanceid
+        return None
+
+    @property
+    def volumes(self):
+        ret = []
+
+        for im in self.importvolumes:
+            ret.append(im.volume)
+        return ret
+
+    @property
+    def tasktype(self):
+        if self._importinstancetask:
+            return self._IMPORTINSTANCE
+        elif self._importvolumetask:
+            return self._IMPORTVOLUME
+        else:
+            return None
 
     @property
     def id(self):
@@ -65,28 +113,6 @@ class ConversionTask(TaggedEC2Object):
     @id.setter
     def id(self, taskid):
         self.conversiontaskid = taskid
-
-    @property
-    def volume(self):
-        if self.connection and not self._volume:
-            if (self.importvolumetask and
-                    hasattr(self.importvolumetask,'volume_id') and
-                    self.importvolumetask.volume_id):
-                try:
-                    volumes = self.connection.get_all_volumes(
-                        [self.importvolumetask.volume_id])
-                    for volume in volumes:
-                        if volume.id == self.importvolumetask.volume_id:
-                            self.volume = volume
-                            break
-                except EC2ResponseError as EE:
-                    print sys.stderr, 'Failed to fetch volume for ' \
-                                      'import task:' + str(EE)
-        return self._volume
-
-    @volume.setter
-    def volume(self, newvol):
-        self._volume = newvol
 
     def update(self):
         params = {}
@@ -110,18 +136,12 @@ class ConversionTask(TaggedEC2Object):
         if elem is not None:
             return elem
         if ename == 'importVolume':
-            self.importvolumetask = ImportVolumeTask()
-            print self.importvolumetask
-            if (self.importvolumetask and
-                    hasattr(self.importvolumetask,'volume_id') and
-                    self.importvolumetask.volume_id):
-                try:
-                    self.volume = connection.get_all_volumes(
-                        [self.importvolumetask.volume_id])
-                except EC2ResponseError as EE:
-                    print sys.stderr, 'Failed to fetch volume for ' \
-                                      'import task:' + str(EE)
-            return self.importvolumetask
+            self._importvolumetask = ImportVolume(connection=connection)
+            self.importvolumes.append(self._importvolumetask)
+            return self._importvolumetask
+        elif ename == 'importInstance':
+            self._importinstancetask = ImportInstance(connection=connection)
+            return self._importinstancetask
         elif ename == 'tagSet' or ename == 'resourceTagSet':
             self.tags = ResultSet([('item', Tag)])
             return self.tags
@@ -142,29 +162,60 @@ class ConversionTask(TaggedEC2Object):
             setattr(self, ename, value)
 
 
-class ImportVolumeTask(object):
+
+class ImportVolume(EC2Object):
     def __init__(self, connection=None):
-        self.connection = connection
+        super(ImportVolume, self).__init__(connection)
         self.bytesconverted = None
         self.availabilityzone = None
         self.image = None
-        self._volume_info = ConversionTaskVolume()
+        self.volumes = self
+        self._importvolume = None
 
     @property
     def volume_id(self):
-        return self._volume_info.id
+        if self._importvolume:
+            return self._importvolume.id
+        else:
+            return None
 
     @property
     def volume_size(self):
-        return self._volume_info.size
+        if self._importvolume:
+            return self._importvolume.size
+        else:
+            return None
 
-    def startElement(self, name, value, connection):
+    @property
+    def volume(self):
+        if self._importvolume:
+            return self._importvolume.volume
+        else:
+            return None
+
+    @volume.setter
+    def volume(self, newvol):
+        if self._importvolume:
+            if newvol.id == self._importvolume.id:
+                self._importvolume.volume = newvol
+            else:
+                raise ValueError('Can not set volume with different '
+                                 'id than original')
+
+    def startElement(self, name, attrs, connection):
+        elem = super(ImportVolume, self).startElement(name,
+                                                      attrs,
+                                                      connection)
+        self.connection = connection
+        if elem is not None:
+            return elem
         ename = name.lower().replace('euca:','')
         if ename == 'image':
-            self.image = ConversionTaskImage()
+            self.image = ConversionTaskImage(connection=connection)
             return self.image
         elif ename == 'volume':
-            return self._volume_info
+            self._importvolume = ConversionTaskVolume(connection=connection)
+            return self._importvolume
         else:
             return None
 
@@ -174,12 +225,52 @@ class ImportVolumeTask(object):
             self.bytesconverted = value
         elif ename == 'availabilityzone':
             self.availabilityzone = value
-        elif ename != self.__class__.__name__.lower():
+        elif ename != 'importvolume':
             setattr(self, ename, value)
 
 
+class ImportInstance(EC2Object):
+    def __init__(self, connection=None):
+        super(ImportInstance, self).__init__(connection)
+        self.bytesconverted = None
+        self.image = None
+        self.platform = None
+        self.instanceid = None
+        self.importvolumes = []
+
+    def startElement(self, name, attrs, connection):
+        elem = super(ImportInstance, self).startElement(name,
+                                                            attrs,
+                                                            connection)
+        if elem is not None:
+            return elem
+        ename = name.lower().replace('euca:','')
+        if ename == 'image':
+            self.image = ConversionTaskImage(connection=connection)
+            return self.image
+        elif ename == 'volumes':
+            self.importvolumes = ResultSet([('item', ImportVolume),
+                                            ('euca:item', ImportVolume)])
+            return self.importvolumes
+        else:
+            return None
+
+    def endElement(self, name, value, connection):
+        ename = name.lower().replace('euca:','')
+        if ename == 'bytesconverted':
+            self.bytesconverted = value
+        elif ename == 'availabilityzone':
+            self.availabilityzone = value
+        elif ename == 'platform':
+            self.platform = value
+        elif ename == 'instanceid':
+            self.instanceid = value
+        elif ename != 'importinstance':
+            setattr(self, ename, value)
+
 class ConversionTaskImage(object):
-    def __init__(self):
+    def __init__(self, connection=None):
+        self.connection = connection
         self.format = None
         self.importmanifesturl = None
         self.size = None
@@ -201,15 +292,42 @@ class ConversionTaskImage(object):
         elif ename != 'image':
             setattr(self, ename, value)
 
-class ConversionTaskVolume(object):
+class ConversionTaskVolume(EC2Object):
     def __init__(self, connection=None):
+        super(ConversionTaskVolume, self).__init__(connection)
         self.id = None
         self.size = None
+        self._volume = None
 
     def __repr__(self):
         return 'ConversionTaskVolume:' + str(self.id)
 
-    def startElement(self, name, value, connection):
+    @property
+    def volume(self):
+        if self.connection and not self._volume:
+            if (self.id):
+                try:
+                    volumes = self.connection.get_all_volumes([self.id])
+                    for volume in volumes:
+                        if volume.id == self.id:
+                            self.volume = volume
+                            break
+                except EC2ResponseError as EE:
+                    print sys.stderr, 'Failed to fetch volume:' + \
+                                      str(self.id) + ' for ' \
+                                      'import task:' + str(EE)
+        return self._volume
+
+    @volume.setter
+    def volume(self, newvol):
+        self._volume = newvol
+
+    def startElement(self, name, attrs, connection):
+        elem = super(ConversionTaskVolume, self).startElement(name,
+                                                              attrs,
+                                                              connection)
+        if elem is not None:
+            return elem
         pass
 
     def endElement(self, name, value, connection):

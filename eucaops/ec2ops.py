@@ -3941,9 +3941,10 @@ disable_root: false"""
         if taskid:
             params['ConversionTaskId'] = str(taskid)
         return self.ec2.get_list('DescribeConversionTasks',
-                                        params,
-                                        [('euca:item', ConversionTask)],
-                                        verb='POST')
+                                  params,
+                                  [('item', ConversionTask),
+                                   ('euca:item', ConversionTask)],
+                                  verb='POST')
 
     def get_conversion_task(self, taskid):
         params = {'ConversionTaskId':str(taskid)}
@@ -3997,30 +3998,19 @@ disable_root: false"""
         elapsed = 0
         timeout = 0
         for task in checking_list:
-            task_timeout = int(task.importvolumetask.volume_size) * int(time_per_gig)
-            if task_timeout > timeout:
-                timeout = task_timeout
+            for im in task.importvolumes:
+                task_timeout = int(im.volume_size) * int(time_per_gig)
+                if task_timeout > timeout:
+                    timeout = task_timeout
         timeout += base_timeout
         while checking_list and elapsed < timeout:
             for task in checking_list:
                 task.update()
                 self.debug(task)
                 #If the task volume is present add it to the resources list.
-                if (not task.volume and task.importvolumetask and
-                        task.importvolumetask.volume_id):
-                    volume_id = task.importvolumetask.volume_id
-                    try:
-                        self.debug('Attempting to get task volume...')
-                        task.volume = self.get_volume(volume_id=volume_id)
-                    except ResourceNotFoundException:
-                        self.debug('Volume:"{0}" for task:"{1}" could not be '
-                                   'found after elapsed:"{2}" seconds in '
-                                   'monitor loop'.format(volume_id,
-                                                         task.conversiontaskid,
-                                                         elapsed))
-                if task.volume and \
-                        not task.volume in self.test_resources['volumes']:
-                            self.test_resources['volumes'].append(task.volume)
+                for vol in task.volumes:
+                        if not vol in self.test_resources['volumes']:
+                            self.test_resources['volumes'].append(vol)
                 #notfound flag is set if task is not found during update()
                 if task.notfound:
                     err_msg = 'Task "{0}" not found after elapsed:"{1}"'\
@@ -4092,56 +4082,51 @@ disable_root: false"""
         clist = clist or self.get_all_conversion_tasks()
         printmethod = printmethod or self.debug
         taskidlen = 19
-        bytesconvertedlen = 16
         statusmsglen = 35
         statelen = 10
         availzonelen=14
-        volumelen=12
-        sizelen=20
-        header = ('TASKID'.ljust(taskidlen) + " | " +
-                  'STATE'.ljust(statelen) + " | " +
-                  'VOLUME'.ljust(volumelen) + " | " +
-                  'IMG SIZE'.ljust(sizelen) + " | " +
-                  'BYTES CONV'.ljust(bytesconvertedlen) + " | " +
-                  'STATUS MSG'.ljust(statusmsglen) + " | " +
-                  'ZONE'.ljust(availzonelen) + " |\n")
+        volumelen=50
+        header = ('TASKID'.center(taskidlen) + " | " +
+                  'STATE'.center(statelen) + " | " +
+                  'VOLUMES(BYTES CONV/TOTAL)'.center(volumelen) + " | " +
+                  'STATUS MSG'.center(statusmsglen) + " | " +
+                  'ZONE'.center(availzonelen) + " |\n")
         line = ""
         for x in xrange(0, len(header)):
             line += '-'
         line += "\n"
         buf = "\n" + line + header + line
         for task in clist:
-            volume_id = None
             sizestr = None
-            zone = None
-            bytesconverted = None
-            if task.importvolumetask:
-                if task.importvolumetask.image:
+            imagesize = None
+            vollist = []
+            for importvol in task.importvolumes:
+                bytesconverted = importvol.bytesconverted
+                volume_id = importvol.volume_id
+
+                if importvol.image:
+                    imagesize = long(importvol.image.size)
+                if imagesize is not None:
                     sizegb = "%.2f" % float(
-                        long(task.importvolumetask.image.size) /
+                        long(imagesize) /
                         float(1073741824))
                     sizestr = ("{0}({1}gb)"
-                               .format(task.importvolumetask.image.size,
+                               .format(imagesize,
                                        sizegb))
-                zone = task.importvolumetask.availabilityzone
-                bytesconverted = task.importvolumetask.bytesconverted
-                volume_id = task.importvolumetask.volume_id
-            buf += (str(task.conversiontaskid).ljust(taskidlen) + " | " +
-                    str(task.state).ljust(statelen) + " | " +
-                    str(volume_id).ljust(volumelen) + " | " +
-                    str(sizestr).ljust(sizelen) + " | " +
-                    str(bytesconverted).ljust(bytesconvertedlen) + " |" +
-                    str(task.statusmessage).ljust(statusmsglen) + " | " +
-                    str(zone).ljust(availzonelen) + " |\n")
+                vollist.append('{0}=({1}/{2})'
+                               .format(str(volume_id),
+                                       str(bytesconverted),
+                                       str(imagesize)))
+            volumes = ",".join(vollist)
+            buf += (str(task.conversiontaskid).center(taskidlen) + " | " +
+                    str(task.state).center(statelen) + " | " +
+                    str(volumes).center(volumelen) + " | " +
+                    str(task.statusmessage).center(statusmsglen) + " | " +
+                    str(task.availabilityzone).center(availzonelen) + " |\n")
             buf += line
         if doprint:
             printmethod(buf)
         return buf
-
-
-
-
-
 
     def create_web_servers(self, keypair, group, zone, port=80, count=2, image=None, filename="test-file", cookiename="test-cookie"):
         if not image:

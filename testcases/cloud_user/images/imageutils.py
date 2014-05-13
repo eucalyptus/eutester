@@ -600,11 +600,13 @@ class ImageUtils(EutesterTestCase):
                                 arch,
                                 platform,
                                 size=None,
+                                keypair=None,
                                 presigned_manifest_url=None,
                                 prefix=None,
                                 days=None,
                                 no_upload=None,
                                 description=None,
+                                group=None,
                                 s3_url=None,
                                 ec2_url=None,
                                 image_size=None,
@@ -626,6 +628,10 @@ class ImageUtils(EutesterTestCase):
         emi = None
         if description:
             cmdargs += ' -d ' + str(description)
+        if group:
+            cmdargs += ' -g ' + str(group)
+        if keypair:
+            cmdargs += ' --key ' + str(keypair)
         if size:
             cmdargs += ' -s ' + str(size)
         if presigned_manifest_url:
@@ -671,10 +677,14 @@ class ImageUtils(EutesterTestCase):
                 cmdargs += " -o " + str(owner_akid)
             cmd += str(cmdargs)
         out = machine.sys(cmd=cmd, code=0)
+        taskid = None
         for line in out:
-            lre = re.search('import-vol-\w{8}', line)
+            lre = re.search('import-i-\w{8}', line)
             if lre:
                 taskid = lre.group()
+        if not taskid:
+            raise RuntimeError('Could not find a task id in output from cmd:'
+                               + str(cmd))
         self.debug('Import taskid:' + str(taskid))
         #check on system using describe...
         task = self.tester.get_conversion_task(taskid=taskid)
