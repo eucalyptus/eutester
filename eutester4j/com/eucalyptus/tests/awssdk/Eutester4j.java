@@ -181,10 +181,14 @@ class Eutester4j {
 			youAre = getYouAreClient(ACCESS_KEY, SECRET_KEY, IAM_ENDPOINT);
 		}
 
-		// Create a new account and the user
-		createAccount(account);
-		if(!user.equalsIgnoreCase("admin")) {
-			createUser(account, user);
+		// Create a new account if one does not exist
+		try {
+			createAccount(account);
+			if (!user.equalsIgnoreCase("admin")) {
+				createUser(account, user);
+			}
+		} catch (Exception e) {
+			// Account may already exist, try getting the keys
 		}
 		Map<String, String> keyMap = getUserKeys(account, user);
 

@@ -223,7 +223,7 @@ public class S3BucketTests {
 	/**
 	 * Test for changing logging configuration of a bucket and verifying it.
 	 */
-	@Test
+	// @Test
 	public void loggingConfiguration() throws Exception {
 		testInfo(this.getClass().getSimpleName() + " - loggingConfiguration");
 
