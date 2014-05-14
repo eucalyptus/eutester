@@ -482,7 +482,7 @@ class Eutester4j {
     }
 
     public static String findImage() {
-        // Find an appropriate image to launch: instance-store not windows
+        // Find an appropriate image to launch: instance-store not windows and not load balancer or image worker images
         String imageId=null;
         final DescribeImagesResult imagesResult = ec2
                 .describeImages(new DescribeImagesRequest().withFilters(
@@ -493,7 +493,9 @@ class Eutester4j {
                         new Filter().withName("is-public").withValues(
                                 "true")));
         for (Image i : imagesResult.getImages()){
-            if (!i.getPlatform().equals("windows")) {
+            if (!i.getImageLocation().equals("imaging-worker-v1/eucalyptus-imaging-worker-image.img.manifest.xml") &&
+                    !i.getImageLocation().equals("loadbalancer-v1/eucalyptus-load-balancer-image.img.manifest.xml") &&
+                    !i.getPlatform().equals("windows")) {
                 imageId = i.getImageId();
             }
         }

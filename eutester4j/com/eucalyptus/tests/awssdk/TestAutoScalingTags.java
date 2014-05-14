@@ -44,6 +44,7 @@ public class TestAutoScalingTags {
     public void AutoScalingTagsTest() throws Exception {
         testInfo(this.getClass().getSimpleName());
         getCloudInfo();
+        Boolean hasImageWorker=false;
 
         final List<Runnable> cleanupTasks = new ArrayList<Runnable>();
         try {
@@ -117,7 +118,18 @@ public class TestAutoScalingTags {
                 final DescribeTagsResult describeTagsResult = as.describeTags();
                 assertThat(describeTagsResult.getTags() != null, "Expected tags");
                 print("Found tags: " + describeTagsResult.getTags());
-                assertThat(describeTagsResult.getTags().size() == 3, "Expected three tags but found " + describeTagsResult.getTags().size());
+
+                for (TagDescription tag : describeTagsResult.getTags()){
+                    print("tag=" + tag.getKey() + " value=" + tag.getValue());
+                    if (tag.getValue().equals("euca-internal-imaging-workers")) hasImageWorker=true;
+                }
+
+                if(hasImageWorker){
+                    assertThat(describeTagsResult.getTags().size() == 3, "Expected three tags but found " + describeTagsResult.getTags().size());
+                } else {
+                    assertThat(describeTagsResult.getTags().size() == 2, "Expected two tags but found " + describeTagsResult.getTags().size());
+                }
+
                 int tag1Index = "tag1".equals(describeTagsResult.getTags().get(0).getKey()) ? 0 : 1;
                 assertTag(describeTagsResult.getTags().get(tag1Index), "tag1", "propagate", true);
                 assertTag(describeTagsResult.getTags().get(++tag1Index % 2), "tag2", "don't propagate", false);
@@ -143,7 +155,12 @@ public class TestAutoScalingTags {
 
                 print("Verifying no tags when describing tags");
                 final DescribeTagsResult describeTagsResult = as.describeTags();
-                assertThat(describeTagsResult.getTags().size() == 1, "Expected one tag");
+                if(hasImageWorker){
+                    assertThat(describeTagsResult.getTags().size() == 1, "Expected one tag");
+                } else {
+                    assertThat(describeTagsResult.getTags() == null || describeTagsResult.getTags().isEmpty(), "Expected no tags");
+
+                }
             }
 
             // Create via API
@@ -172,7 +189,12 @@ public class TestAutoScalingTags {
                 final DescribeTagsResult describeTagsResult = as.describeTags();
                 assertThat(describeTagsResult.getTags() != null, "Expected tags");
                 print("Found tags: " + describeTagsResult.getTags());
-                assertThat(describeTagsResult.getTags().size() == 3, "Expected three tags but found " + group.getTags().size());
+                if(hasImageWorker){
+                    assertThat(describeTagsResult.getTags().size() == 3, "Expected three tags but found " + group.getTags().size());
+                } else {
+                    assertThat(describeTagsResult.getTags().size() == 2, "Expected two tags but found " + group.getTags().size());
+
+                }
                 assertTag(describeTagsResult.getTags().get(0), "tag1", "propagate", true);
                 assertTag(describeTagsResult.getTags().get(1), "tag2", "don't propagate", false);
             }
