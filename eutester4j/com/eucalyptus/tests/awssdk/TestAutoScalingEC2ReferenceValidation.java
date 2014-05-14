@@ -128,15 +128,15 @@ public class TestAutoScalingEC2ReferenceValidation {
 
 			// Create launch configuration
 			print("Creating launch configuration: " + launchConfig);
-            if (!isHVM()){
-                print("Using para-virt image specifying kernel and ramdisk for Launch Config");
-                createLaunchConfig(launchConfig,IMAGE_ID,INSTANCE_TYPE,keyName,securityGroupName,KERNEL_ID,RAMDISK_ID,null,
-                        null,null,null);
-            }
-            else
+            if (isHVM()){
                 print("Using hvm image, not specifying kernel and ramdisk for Launch Config");
                 createLaunchConfig(launchConfig,IMAGE_ID,INSTANCE_TYPE,keyName,securityGroupName,null,null,null, null,
                         null,null);
+            }
+            else
+                print("Using para-virt image specifying kernel and ramdisk for Launch Config");
+                createLaunchConfig(launchConfig,IMAGE_ID,INSTANCE_TYPE,keyName,securityGroupName,KERNEL_ID,RAMDISK_ID,
+                        null,null,null,null);
 			// Register cleanup for auto scaling group
             final String groupName = NAME_PREFIX + "EC2ReferenceTest";
 			cleanupTasks.add(new Runnable() {
