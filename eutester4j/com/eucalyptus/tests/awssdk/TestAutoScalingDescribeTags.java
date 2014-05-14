@@ -118,7 +118,7 @@ public class TestAutoScalingDescribeTags {
             {
                 final DescribeTagsResult tagsResult = as.describeTags();
                 assertThat(tagsResult.getTags() != null, "Expected tags");
-                assertThat(tagsResult.getTags().size() == 6, "Expected 6 tags");
+                assertThat(tagsResult.getTags().size() == 7, "Expected 7 tags");
                 assertTag(tagsResult.getTags().get(0), groupName1, "t1", "v1", false);
                 assertTag(tagsResult.getTags().get(1), groupName1, "t2", "v2", true);
                 assertTag(tagsResult.getTags().get(2), groupName2, "t1", "v1", false);
@@ -178,9 +178,9 @@ public class TestAutoScalingDescribeTags {
             print("Describing tags with propagate at launch filter");
             {
                 final DescribeTagsResult tagsResult = as.describeTags(new DescribeTagsRequest()
-                        .withFilters(new Filter().withName("propagate-at-launch").withValues("TruE")));
+                        .withFilters(new Filter().withName("propagate-at-launch").withValues("True")));
                 assertThat(tagsResult.getTags() != null, "Expected tags");
-                assertThat(tagsResult.getTags().size() == 3, "Expected 3 tags");
+                assertThat(tagsResult.getTags().size() == 4, "Expected 4 tags");
                 assertTag(tagsResult.getTags().get(0), groupName1, "t2", "v2", true);
                 assertTag(tagsResult.getTags().get(1), groupName2, "t2", "v2", true);
                 assertTag(tagsResult.getTags().get(2), groupName2, "t4", "v4", true);

@@ -482,7 +482,8 @@ class Eutester4j {
     }
 
     public static String findImage() {
-        // Find an appropriate image to launch
+        // Find an appropriate image to launch: instance-store not windows
+        String imageId=null;
         final DescribeImagesResult imagesResult = ec2
                 .describeImages(new DescribeImagesRequest().withFilters(
                         new Filter().withName("image-type").withValues(
@@ -491,9 +492,12 @@ class Eutester4j {
                                 "instance-store"),
                         new Filter().withName("is-public").withValues(
                                 "true")));
-        assertThat(imagesResult.getImages().size() > 0, "Image not found");
-
-        final String imageId = imagesResult.getImages().get(0).getImageId();
+        for (Image i : imagesResult.getImages()){
+            if (!i.getPlatform().equals("windows")) {
+                imageId = i.getImageId();
+            }
+        }
+        assertThat(imageId != null, "No suitable image found");
         print("Using image: " + imageId);
         return imageId;
     }

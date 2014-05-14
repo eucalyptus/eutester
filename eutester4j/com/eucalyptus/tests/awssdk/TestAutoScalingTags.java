@@ -117,7 +117,7 @@ public class TestAutoScalingTags {
                 final DescribeTagsResult describeTagsResult = as.describeTags();
                 assertThat(describeTagsResult.getTags() != null, "Expected tags");
                 print("Found tags: " + describeTagsResult.getTags());
-                assertThat(describeTagsResult.getTags().size() == 2, "Expected two tags but found " + describeTagsResult.getTags().size());
+                assertThat(describeTagsResult.getTags().size() == 3, "Expected three tags but found " + describeTagsResult.getTags().size());
                 int tag1Index = "tag1".equals(describeTagsResult.getTags().get(0).getKey()) ? 0 : 1;
                 assertTag(describeTagsResult.getTags().get(tag1Index), "tag1", "propagate", true);
                 assertTag(describeTagsResult.getTags().get(++tag1Index % 2), "tag2", "don't propagate", false);
@@ -143,7 +143,7 @@ public class TestAutoScalingTags {
 
                 print("Verifying no tags when describing tags");
                 final DescribeTagsResult describeTagsResult = as.describeTags();
-                assertThat(describeTagsResult.getTags() == null || describeTagsResult.getTags().isEmpty(), "Expected no tags");
+                assertThat(describeTagsResult.getTags().size() == 1, "Expected one tag");
             }
 
             // Create via API
@@ -172,7 +172,7 @@ public class TestAutoScalingTags {
                 final DescribeTagsResult describeTagsResult = as.describeTags();
                 assertThat(describeTagsResult.getTags() != null, "Expected tags");
                 print("Found tags: " + describeTagsResult.getTags());
-                assertThat(describeTagsResult.getTags().size() == 2, "Expected two tags but found " + group.getTags().size());
+                assertThat(describeTagsResult.getTags().size() == 3, "Expected three tags but found " + group.getTags().size());
                 assertTag(describeTagsResult.getTags().get(0), "tag1", "propagate", true);
                 assertTag(describeTagsResult.getTags().get(1), "tag2", "don't propagate", false);
             }
