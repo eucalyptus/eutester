@@ -82,7 +82,6 @@ class ResourceGeneration(EutesterTestCase):
                                      cw_ip=self.tester.cw.host, cw_path=self.tester.cw.path,
                                      as_ip=self.tester.autoscale.host, as_path=self.tester.autoscale.path,
                                      elb_ip=self.tester.elb.host, elb_path=self.tester.elb.path,
-                                     cfn_ip=self.tester.cloudformation.host, cfn_path=self.tester.cloudformation.path,
                                      username=user_name, account=user_account)
                 self.testers.append(new_tester)
 

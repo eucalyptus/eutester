@@ -315,13 +315,11 @@ class EuInstance(Instance, TaggedResource):
                 # Add network debug/diag info here...
                 # First show arp cache from local machine
                 # todo Consider getting info from relevant euca components:
-                # - arp cache
                 # - iptables info
                 # - route info
-                # - instance console
-                # - instance xml 
-
+                # - instance xml
                 try:
+                    # Show local ARP info...
                     arp_out = "\nLocal ARP cache for instance ip: " \
                               + str(self.ip_address) + "\n"
                     arp_fd = os.popen('arp ' + str(self.ip_address))
@@ -330,6 +328,10 @@ class EuInstance(Instance, TaggedResource):
                     self.debug(arp_out)
                 except Exception as AE:
                     self.log.debug('Failed to get arp info:' + str(AE))
+                try:
+                    self.tester.get_console_output(self)
+                except Exception as CE:
+                    self.log.debug('Failed to get console output:' + str(CE))
                 raise Exception(str(self.id)+":Failed establishing ssh connection to instance, elapsed:"+str(elapsed)+
                                 "/"+str(timeout))
         else:

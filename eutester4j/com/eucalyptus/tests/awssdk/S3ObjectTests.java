@@ -149,7 +149,7 @@ public class S3ObjectTests {
 
 	@Test
 	public void copyObjectTest() throws Exception {
-		testInfo(this.getClass().getSimpleName() + " - objectBasics");
+		testInfo(this.getClass().getSimpleName() + " - copyObjectTest");
 		try {
 			final String key = eucaUUID();
 			File fileToPut = new File("3wolfmoon-download.jpg");
@@ -223,7 +223,7 @@ public class S3ObjectTests {
 	// this test will fail against riakcs unless you have objectstorage.dogetputoncopyfail=true
 	@Test
 	public void copyObjectAcrossBucketsTest() throws Exception {
-		testInfo(this.getClass().getSimpleName() + " - objectBasics");
+		testInfo(this.getClass().getSimpleName() + " - copyObjectAcrossBucketsTest");
 		try {
 			final String key = eucaUUID();
 			File fileToPut = new File("3wolfmoon-download.jpg");

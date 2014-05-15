@@ -35,6 +35,12 @@ class Windows_Basic_Instance_Test(EutesterTestCase):
                                       ' to authorize for this test, '
                                       'default: tcp:3389,tcp:80,tcp:443,tcp:5985,tcp:5986',
                                  default='tcp:3389,tcp:80,tcp:443,tcp:5985,tcp:5986')
+        self.parser.add_argument('--image_run_timeout',
+                                 help='Time to wait in seconds for an image to'
+                                      ' go to running state. Default allows 60'
+                                      ' seconds per 1 gig of image size, or '
+                                      '600 seconds if size not available.',
+                                 default=None)
 
         self.tester = tester
         self.get_args()
@@ -52,9 +58,8 @@ class Windows_Basic_Instance_Test(EutesterTestCase):
             except Exception, e:
                 raise Exception('Couldnt create Eucaops tester object, make sure credpath, '
                                 'or config_file and password was provided, err:' + str(e))
-
+        self.wins = None
         self.test_tag = 'windows_basic_instance_test'
-
         ### Add and authorize a group for the instance
         if self.args.zone:
             self.zone = str(self.args.zone)
@@ -151,6 +156,7 @@ class Windows_Basic_Instance_Test(EutesterTestCase):
          and disk info for block device mapping (ebs, ephemeral, etc)
         """
         vmtype = self.args.vmtype
+        timeout = self.args.image_run_timeout
         default_vmtype = 'm2.xlarge'
         if not vmtype:
             size = None
@@ -159,10 +165,14 @@ class Windows_Basic_Instance_Test(EutesterTestCase):
                     size = int(self.image.tags['size'])
             if size:
                 vmtype = self.get_min_vm_type_for_size(size)
+                if not timeout:
+                    timeout = 60 * size
             else:
                 self.debug('No size found, using default vmtype:'
                            + str(default_vmtype))
                 vmtype=default_vmtype
+        if not timeout:
+            timeout = 600
         if not self.image:
             self.get_a_windows_test_image()
         image_info = "Running the following Windows Image:\n"
@@ -174,7 +184,8 @@ class Windows_Basic_Instance_Test(EutesterTestCase):
                                           group=self.group,
                                           keypair=self.keypair,
                                           zone=self.zone,
-                                          type=vmtype)[0]
+                                          type=vmtype,
+                                          timeout=timeout)[0]
         return self.wins
 
     def check_ephemeral_test(self):
@@ -182,6 +193,8 @@ class Windows_Basic_Instance_Test(EutesterTestCase):
         Definition: Test attempts to verify the ephemeral disk size for an
         instance store backed instance based upon the vmtype ran.
         """
+        if self.wins is None:
+            self.skipTest('No Windows instance to run test against')
         main_disk = None
         ephemeral_disk = None
         vmtype = self.tester.get_vm_type_from_zone(self.zone,
@@ -210,6 +223,8 @@ class Windows_Basic_Instance_Test(EutesterTestCase):
         -Verifies the size is correct
         -Verifies the volume is removed from the guest upon detach
         '''
+        if self.wins is None:
+            self.skipTest('No Windows instance to run test against')
         self.testvolume = self.tester.create_volume(zone=self.zone, size=1)
         self.wins.attach_volume(self.testvolume)
         time.sleep(10)
