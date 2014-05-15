@@ -4180,7 +4180,7 @@ disable_root: false"""
                     str(image_id ).center(imagelen) + " | " +
                     str(task.availabilityzone).center(availzonelen) + " | " +
                     str(volumes).center(volumelen) + " | " +
-                    str(task.statusmessage[:statusmsglen]).center(statusmsglen)
+                    str(task.statusmessage[:statusmsglen]).ljust(statusmsglen)
                     + "\n")
             buf += (str('(' + task.state + ')').center(taskidlen) + " | " +
                     str(snapstatus).center(snaplen) + " | " +
@@ -4188,7 +4188,7 @@ disable_root: false"""
                     str('').center(imagelen) + " | " +
                     str('').center(availzonelen) + " | " +
                     str(volstatus).center(volumelen) + " | " +
-                    str(task.statusmessage[statusmsglen:]).center(statusmsglen)
+                    str(task.statusmessage[statusmsglen:]).ljust(statusmsglen)
                     + "\n")
             buf += line
         if doprint:
