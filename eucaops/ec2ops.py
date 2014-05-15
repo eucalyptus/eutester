@@ -4130,7 +4130,7 @@ disable_root: false"""
 
     def create_web_servers(self, keypair, group, zone, port=80, count=2, image=None, filename="test-file", cookiename="test-cookie"):
         if not image:
-            image = self.get_emi(root_device_type="instance-store", not_location="loadbalancer", not_platform="windows")
+            image = self.get_emi()
         reservation = self.run_instance(image, keypair=keypair, group=group, zone=zone, min=count, max=count)
         self.authorize_group(group=group,port=port)
 
@@ -4140,6 +4140,7 @@ disable_root: false"""
             try:
                 instance.sys("which apt-get", code=0)
                 ## Debian based Linux
+                instance.sys("apt-get update", code=0)
                 instance.sys("apt-get install -y apache2", code=0)
                 instance.sys("echo \"" + instance.id +"\" > /var/www/" + filename)
                 instance.sys("echo \"CookieTracking on\" >> /etc/apache2/apache2.conf")

@@ -8,7 +8,7 @@
         <dependency org="org.testng" name="testng" rev="6.8.5"/>
         <dependency org="com.amazonaws" name="aws-java-sdk" rev="1.6.12"/>
         <dependency org="commons-lang" name="commons-lang" rev="2.6"/>
-<!--         <dependency org="org.codehaus.groovy" name="groovy-all" rev="1.8.9"/> -->
+         <!--<dependency org="org.codehaus.groovy" name="groovy-all" rev="1.8.9"/>-->
 
         <!-- jclouds dependencies -->
         <dependency org="org.jclouds" name="jclouds-compute" rev="1.6.0-rc.1"/>
