@@ -2109,7 +2109,7 @@ disable_root: false"""
             if (owner_id is not None) and (image.owner_id != owner_id):
                 continue
             if basic_image:
-                not_location = ["windows", "imaging-worker", "load-balancer"]
+                not_location = ["windows", "imaging-worker", "loadbalancer"]
                 skip = False
                 for loc in not_location:
                     if (re.search( str(loc), image.location)):
