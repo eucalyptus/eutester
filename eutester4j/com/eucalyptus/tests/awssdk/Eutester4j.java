@@ -135,8 +135,8 @@ class Eutester4j {
 
         print("Getting cloud information from " + CREDPATH);
 
-        EC2_ENDPOINT = parseEucarc(CREDPATH, "EC2_URL") + "/";
-        S3_ENDPOINT = parseEucarc(CREDPATH, "S3_URL") + "/";
+        EC2_ENDPOINT = parseEucarc(CREDPATH, "EC2_URL");
+        S3_ENDPOINT = parseEucarc(CREDPATH, "S3_URL");
 
         SECRET_KEY = parseEucarc(CREDPATH, "EC2_SECRET_KEY").replace("'", "");
         ACCESS_KEY = parseEucarc(CREDPATH, "EC2_ACCESS_KEY").replace("'", "");
@@ -168,9 +168,9 @@ class Eutester4j {
 
 			print("Getting cloud information from " + CREDPATH);
 
-			EC2_ENDPOINT = parseEucarc(CREDPATH, "EC2_URL") + "/";
-			S3_ENDPOINT = parseEucarc(CREDPATH, "S3_URL") + "/";
-			IAM_ENDPOINT = parseEucarc(CREDPATH, "EUARE_URL") + "/";
+			EC2_ENDPOINT = parseEucarc(CREDPATH, "EC2_URL");
+			S3_ENDPOINT = parseEucarc(CREDPATH, "S3_URL");
+			IAM_ENDPOINT = parseEucarc(CREDPATH, "EUARE_URL");
 
 			ACCESS_KEY = parseEucarc(CREDPATH, "EC2_ACCESS_KEY").replace("'", "");
 			SECRET_KEY = parseEucarc(CREDPATH, "EC2_SECRET_KEY").replace("'", "");
@@ -181,10 +181,14 @@ class Eutester4j {
 			youAre = getYouAreClient(ACCESS_KEY, SECRET_KEY, IAM_ENDPOINT);
 		}
 
-		// Create a new account and the user
-		createAccount(account);
-		if(!user.equalsIgnoreCase("admin")) {
-			createUser(account, user);
+		// Create a new account if one does not exist
+		try {
+			createAccount(account);
+			if (!user.equalsIgnoreCase("admin")) {
+				createUser(account, user);
+			}
+		} catch (Exception e) {
+			// Account may already exist, try getting the keys
 		}
 		Map<String, String> keyMap = getUserKeys(account, user);
 
