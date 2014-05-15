@@ -171,7 +171,7 @@ class ELBops(Eutester):
                            instance_port=instance_port)
         return listner
 
-    def create_healthcheck(self, target="HTTP:80/instance-name", interval=10, timeout=5, healthy_threshold=2,
+    def create_healthcheck(self, target="HTTP:80/instance-name", interval=5, timeout=2, healthy_threshold=2,
                            unhealthy_threshold=10):
         self.debug("Creating healthcheck: " + target + " interval=" + str(interval) + " timeout=" + str(timeout) +
                    " healthy threshold=" + str(healthy_threshold) + " unhealthy threshold=" + str(unhealthy_threshold))

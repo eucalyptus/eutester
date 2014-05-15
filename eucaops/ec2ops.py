@@ -4283,6 +4283,7 @@ disable_root: false"""
             try:
                 instance.sys("which apt-get", code=0)
                 ## Debian based Linux
+                instance.sys("apt-get update", code=0)
                 instance.sys("apt-get install -y apache2", code=0)
                 instance.sys("echo \"" + instance.id +"\" > /var/www/" + filename)
                 instance.sys("echo \"CookieTracking on\" >> /etc/apache2/apache2.conf")
