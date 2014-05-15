@@ -65,6 +65,7 @@ from eutester.windows_instance import WinInstance
 from eutester.euvolume import EuVolume
 from eutester.eusnapshot import EuSnapshot
 from eutester.euzone import EuZone
+from testcases.cloud_user.images.conversiontask import ConversionTask
 
 EC2RegionData = {
     'us-east-1' : 'ec2.us-east-1.amazonaws.com',
@@ -1271,7 +1272,9 @@ disable_root: false"""
         return time.mktime(datetime.utcnow().utctimetuple()) - time.mktime(launch_time.utctimetuple())
     
     @classmethod
-    def get_datetime_from_resource_string(cls,timestamp):
+    def get_datetime_from_resource_string(cls,
+                                          timestamp,
+                                          time_format="%Y %m %d %H %M %S"):
         """
         Convert a typical resource timestamp to datetime time_struct.
 
@@ -1286,7 +1289,7 @@ disable_root: false"""
         #remove milliseconds from list...
         t.pop()
         #create a time_struct out of our list
-        return datetime.strptime(" ".join(t), "%Y %m %d %H %M %S")
+        return datetime.strptime(" ".join(t), time_format)
     
     
     @Eutester.printinfo
@@ -2756,7 +2759,6 @@ disable_root: false"""
                     instances.append(eu_instance)
                 except Exception, e:
                     self.debug(self.get_traceback())
-                    self.get_console_output(instance)
                     raise Exception("Unable to create Euinstance from " + str(instance)+", err:\n"+str(e))
             if monitor_to_running:
                 return self.monitor_euinstances_to_running(instances, timeout=timeout)
@@ -3934,6 +3936,197 @@ disable_root: false"""
         self.wait_for_result(get_emi_state, "available", timeout=timeout,poll_wait=20)
         return image_id
 
+    def get_all_conversion_tasks(self, taskid=None):
+        params = {}
+        if taskid:
+            params['ConversionTaskId'] = str(taskid)
+        return self.ec2.get_list('DescribeConversionTasks',
+                                  params,
+                                  [('item', ConversionTask),
+                                   ('euca:item', ConversionTask)],
+                                  verb='POST')
+
+    def get_conversion_task(self, taskid):
+        params = {'ConversionTaskId':str(taskid)}
+        task = self.ec2.get_object('DescribeConversionTasks',
+                                   params,
+                                   ConversionTask,
+                                   verb='POST')
+        if not task:
+            raise ResourceNotFoundException('"{0}". Conversion task not found'
+                                            .format(taskid))
+        return task
+
+    def monitor_conversion_tasks(self,
+                                 tasks,
+                                 state='completed',
+                                 time_per_gig=90,
+                                 base_timeout=600,
+                                 interval=10,
+                                 exit_on_failure=False):
+        """
+        Monitors a list a task or list of tasks. Will monitor each
+        task's state to the provided 'state', or until failure, timeout.
+        Note: timeout is calculated by size of the largest task multiplied by
+              'time_per_gig' added to the 'base_timeout'.
+        :param tasks: list of tasks.
+        :param state: string representing desired state to monitor to.
+                      (pending, active, cancelled, completed, failed)
+        :param time_per_gig: time in seconds per largest task size in GB
+                             to append to base timeout
+        :param base_timeout: base timeout in seconds
+        :param interval: seconds between polling tasks
+        :param exit_on_failure: Will stop monitoring and raise an exception
+                                upon first found failure. Otherwise will
+                                continue monitoring remaining tasks in list
+                                and raise the error when all tasks are
+                                complete or timed out.
+        """
+        err_buf = ""
+        monitor_list = []
+        #Sanitize provided list...
+        if not isinstance(tasks, types.ListType):
+            tasks = [tasks]
+        for task in tasks:
+            if (not isinstance(task,ConversionTask) and
+                    isinstance(task,types.StringType)):
+                task = self.get_conversion_task(taskid=task)
+            monitor_list.append(task)
+        checking_list = copy.copy(monitor_list)
+        done_list = []
+        start = time.time()
+        elapsed = 0
+        timeout = 0
+        for task in checking_list:
+            for im in task.importvolumes:
+                task_timeout = int(im.volume_size) * int(time_per_gig)
+                if task_timeout > timeout:
+                    timeout = task_timeout
+        timeout += base_timeout
+        while checking_list and elapsed < timeout:
+            for task in checking_list:
+                task.update()
+                self.debug(task)
+                #If the task volume is present add it to the resources list.
+                for vol in task.volumes:
+                        if not vol in self.test_resources['volumes']:
+                            self.test_resources['volumes'].append(vol)
+                #notfound flag is set if task is not found during update()
+                if task.notfound:
+                    err_msg = 'Task "{0}" not found after elapsed:"{1}"'\
+                        .format(task.conversiontaskid, elapsed)
+                    err_buf += "\n" + err_msg
+                    self.debug(err_msg)
+                    done_list.append(task)
+                    continue
+                self.debug('Monitoring task:"{0}:{1}", elapsed:'
+                           '"{2}/{3}"'
+                           .format(task.conversiontaskid,
+                                   task.state,
+                                   elapsed,
+                                   timeout))
+                task_state = task.state.lower()
+                if task_state == state:
+                    self.debug('Task:"{0}" found in desired state:"{1}"'.
+                               format(task.conversiontaskid, task.state))
+                    done_list.append(task)
+                    continue
+                # Fail fast for tasks found a final state that doesnt match
+                # the desired state provided
+                for final_state in ["completed", "cancelled", "failed"]:
+                    if re.search(final_state, task_state):
+                        err_msg = ('Task "{0}" found in a final state:"{1}" '
+                                   'after elapsed:"{2}", msg:"{3}"'
+                                   .format(task.conversiontaskid,
+                                           task.state,
+                                           elapsed,
+                                           task.statusmessage))
+                        err_buf += "\n" + err_msg
+                        self.debug(err_msg)
+                        done_list.append(task)
+                        continue
+            try:
+                self.print_conversion_task_list(clist=monitor_list)
+            except Exception as PE:
+                self.debug('failed to print conversion task list, err:' +
+                    str(PE))
+            if exit_on_failure and err_buf:
+                break
+            for done_task in done_list:
+                if done_task in checking_list:
+                    checking_list.remove(done_task)
+            if checking_list:
+                self.debug('Waiting for "{0}" remaining tasks to reach '
+                           'desired state:"{1}". Sleeping:"{2}"'
+                           .format(len(checking_list), state, interval))
+                time.sleep(interval)
+            elapsed = int(time.time() - start)
+        #Any tasks still in checking_list are failures
+        for task in checking_list:
+            err_buf += ('Monitor complete. Task "{0}:{1}" not in desired '
+                        'state "{2}" after elapsed:"{3}"\n'
+                        .format(task.conversiontaskid,
+                                task.state,
+                                state,
+                                elapsed))
+        if err_buf:
+            err_buf = "Exit on first failure set to:" + str(exit_on_failure) \
+                      + "\n" + err_buf
+            raise Exception('Monitor conversion tasks failures detected:\n'
+                            + str(err_buf))
+
+    def print_conversion_task_list(self,
+                                   clist=None,
+                                   doprint=True,
+                                   printmethod=None):
+        clist = clist or self.get_all_conversion_tasks()
+        printmethod = printmethod or self.debug
+        taskidlen = 19
+        statusmsglen = 35
+        statelen = 10
+        availzonelen=14
+        volumelen=50
+        header = ('TASKID'.center(taskidlen) + " | " +
+                  'STATE'.center(statelen) + " | " +
+                  'VOLUMES(BYTES CONV/TOTAL)'.center(volumelen) + " | " +
+                  'STATUS MSG'.center(statusmsglen) + " | " +
+                  'ZONE'.center(availzonelen) + " |\n")
+        line = ""
+        for x in xrange(0, len(header)):
+            line += '-'
+        line += "\n"
+        buf = "\n" + line + header + line
+        for task in clist:
+            sizestr = None
+            imagesize = None
+            vollist = []
+            for importvol in task.importvolumes:
+                bytesconverted = importvol.bytesconverted
+                volume_id = importvol.volume_id
+
+                if importvol.image:
+                    imagesize = long(importvol.image.size)
+                if imagesize is not None:
+                    sizegb = "%.2f" % float(
+                        long(imagesize) /
+                        float(1073741824))
+                    sizestr = ("{0}({1}gb)"
+                               .format(imagesize,
+                                       sizegb))
+                vollist.append('{0}=({1}/{2})'
+                               .format(str(volume_id),
+                                       str(bytesconverted),
+                                       str(imagesize)))
+            volumes = ",".join(vollist)
+            buf += (str(task.conversiontaskid).center(taskidlen) + " | " +
+                    str(task.state).center(statelen) + " | " +
+                    str(volumes).center(volumelen) + " | " +
+                    str(task.statusmessage).center(statusmsglen) + " | " +
+                    str(task.availabilityzone).center(availzonelen) + " |\n")
+            buf += line
+        if doprint:
+            printmethod(buf)
+        return buf
 
     def create_web_servers(self, keypair, group, zone, port=80, count=2, image=None, filename="test-file", cookiename="test-cookie"):
         if not image:

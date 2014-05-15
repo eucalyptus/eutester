@@ -1034,8 +1034,6 @@ class EbsTestSuite(EutesterTestCase):
         #self.delete_volumes_in_zones(zonelist=zonelist, timeout=timeout)
         #self.delete_snapshots_in_zones(zonelist=zonelist,  timeout=timeout)
    
-            
-    
 if __name__ == "__main__":
     ## If given command line arguments, use them as test names to launch
     testcase= EbsTestSuite()
