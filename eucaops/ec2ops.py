@@ -42,6 +42,7 @@ import json
 import hashlib
 import base64
 import time
+import types
 import sys
 from datetime import datetime, timedelta
 from subprocess import Popen, PIPE
@@ -188,6 +189,7 @@ disable_root: false"""
         self.test_resources["addresses"]=[]
         self.test_resources["auto-scaling-groups"]=[]
         self.test_resources["launch-configurations"]=[]
+        self.test_resources["conversion-tasks"]=[]
 
     def get_ec2_ip(self):
         """Parse the eucarc for the EC2_URL"""
@@ -2829,6 +2831,8 @@ disable_root: false"""
 
     @Eutester.printinfo 
     def monitor_euinstances_to_running(self,instances, poll_interval=10, timeout=480):
+        if not isinstance(instances, types.ListType):
+            instances = [instances]
         self.debug("("+str(len(instances))+") Monitor_instances_to_running starting...")
         ip_err = ""
         #Wait for instances to go to running state...
@@ -3533,6 +3537,8 @@ disable_root: false"""
         if reservation and not isinstance(reservation, types.ListType):
             if isinstance(reservation, Reservation):
                 instance_list = reservation.instances or []
+            elif isinstance(reservation, Instance):
+                instance_list.append(reservation)
             else:
                 raise Exception('Unknown type:' + str(type(reservation)) + ', for reservation passed to terminate_instances')
         else:
@@ -3959,7 +3965,7 @@ disable_root: false"""
 
     def monitor_conversion_tasks(self,
                                  tasks,
-                                 state='completed',
+                                 states='completed',
                                  time_per_gig=90,
                                  base_timeout=600,
                                  interval=10,
@@ -3984,6 +3990,8 @@ disable_root: false"""
         """
         err_buf = ""
         monitor_list = []
+        if not isinstance(states, types.ListType):
+            states = [states]
         #Sanitize provided list...
         if not isinstance(tasks, types.ListType):
             tasks = [tasks]
@@ -4008,9 +4016,29 @@ disable_root: false"""
                 task.update()
                 self.debug(task)
                 #If the task volume is present add it to the resources list.
+                found = False
                 for vol in task.volumes:
-                        if not vol in self.test_resources['volumes']:
-                            self.test_resources['volumes'].append(vol)
+                    for resvol in self.test_resources['volumes']:
+                        if resvol.id == vol.id:
+                            found = True
+                            break
+                    if not found and not vol in self.test_resources['volumes']:
+                        self.test_resources['volumes'].append(vol)
+                found = False
+                if task.instanceid:
+                    for resins in self.test_resources['reservations']:
+                        if resins.id == task.instanceid:
+                            found = True
+                            break
+                        if resins.id == task.instance.reservation.id:
+                            found = True
+                            break
+                    if not found:
+                        ins = self.get_instances(idstring=task.instanceid)
+                        if ins:
+                            ins = ins[0]
+                            if not ins in self.test_resources['reservations']:
+                                self.test_resources['reservations'].append(ins)
                 #notfound flag is set if task is not found during update()
                 if task.notfound:
                     err_msg = 'Task "{0}" not found after elapsed:"{1}"'\
@@ -4026,7 +4054,13 @@ disable_root: false"""
                                    elapsed,
                                    timeout))
                 task_state = task.state.lower()
-                if task_state == state:
+                in_state = False
+                #Check state of task against all desired states provided
+                for state in states:
+                    if task_state == state:
+                        in_state = True
+                        break
+                if in_state:
                     self.debug('Task:"{0}" found in desired state:"{1}"'.
                                format(task.conversiontaskid, task.state))
                     done_list.append(task)
@@ -4082,15 +4116,19 @@ disable_root: false"""
         clist = clist or self.get_all_conversion_tasks()
         printmethod = printmethod or self.debug
         taskidlen = 19
-        statusmsglen = 35
-        statelen = 10
+        statusmsglen = 24
         availzonelen=14
-        volumelen=50
+        volumelen=32
+        snaplen=13
+        instancelen=13
+        imagelen=13
         header = ('TASKID'.center(taskidlen) + " | " +
-                  'STATE'.center(statelen) + " | " +
-                  'VOLUMES(BYTES CONV/TOTAL)'.center(volumelen) + " | " +
-                  'STATUS MSG'.center(statusmsglen) + " | " +
-                  'ZONE'.center(availzonelen) + " |\n")
+                  'SNAPSHOTS'.center(snaplen) + " | " +
+                  'INSTANCE'.center(instancelen) + " | " +
+                  'IMAGE ID'.center(imagelen) + " | " +
+                  'ZONE'.center(availzonelen) + " | " +
+                  'VOLUMES:BYTES/TOTAL'.center(volumelen) + " | " +
+                  'STATUS MSG'.center(statusmsglen) + " |\n" )
         line = ""
         for x in xrange(0, len(header)):
             line += '-'
@@ -4098,12 +4136,19 @@ disable_root: false"""
         buf = "\n" + line + header + line
         for task in clist:
             sizestr = None
+            instancestr = ""
+            instancestatus = ""
             imagesize = None
             vollist = []
             for importvol in task.importvolumes:
                 bytesconverted = importvol.bytesconverted
                 volume_id = importvol.volume_id
-
+                if volume_id:
+                    volstatus = "???"
+                else:
+                    volstatus = ""
+                if importvol.volume:
+                    volstatus = importvol.volume.status
                 if importvol.image:
                     imagesize = long(importvol.image.size)
                 if imagesize is not None:
@@ -4113,24 +4158,122 @@ disable_root: false"""
                     sizestr = ("{0}({1}gb)"
                                .format(imagesize,
                                        sizegb))
-                vollist.append('{0}=({1}/{2})'
+                vollist.append('{0}:{1}/{2}'
                                .format(str(volume_id),
                                        str(bytesconverted),
                                        str(imagesize)))
             volumes = ",".join(vollist)
+            volstatus = ",".join(
+                [str('(' + vol.status + ')') for vol in task.volumes])
+            snaps = ",".join(
+                [str(snap.id ) for snap in task.snapshots])
+            snapstatus = ",".join(
+                [str('(' + snap.status + ')') for snap in task.snapshots])
+            if task.instance:
+                instancestr = str(task.instance.id)
+                instancestatus = '(' + str(task.instance.state) + ')'
+            image_id = task.image_id or ""
             buf += (str(task.conversiontaskid).center(taskidlen) + " | " +
-                    str(task.state).center(statelen) + " | " +
+
+                    str(snaps).center(snaplen) + " | " +
+                    str(instancestr).center(instancelen) + " | " +
+                    str(image_id ).center(imagelen) + " | " +
+                    str(task.availabilityzone).center(availzonelen) + " | " +
                     str(volumes).center(volumelen) + " | " +
-                    str(task.statusmessage).center(statusmsglen) + " | " +
-                    str(task.availabilityzone).center(availzonelen) + " |\n")
+                    str(task.statusmessage[:statusmsglen]).ljust(statusmsglen)
+                    + "\n")
+            buf += (str('(' + task.state + ')').center(taskidlen) + " | " +
+                    str(snapstatus).center(snaplen) + " | " +
+                    str(instancestatus).center(instancelen) + " | " +
+                    str('').center(imagelen) + " | " +
+                    str('').center(availzonelen) + " | " +
+                    str(volstatus).center(volumelen) + " | " +
+                    str(task.statusmessage[statusmsglen:]).ljust(statusmsglen)
+                    + "\n")
             buf += line
         if doprint:
             printmethod(buf)
         return buf
 
+    def cancel_conversion_tasks(self, tasks, timeout=180):
+        tasks = tasks or self.test_resources['conversion_tasks']
+        if not isinstance(tasks, types.ListType):
+            tasks = [tasks]
+        printbuf = self.print_conversion_task_list(clist=tasks, doprint=False)
+        self.debug('Cancel Conversion task list...\n' + str(printbuf))
+        cancel_tasks = copy.copy(tasks)
+        for task in tasks:
+            task.update()
+            for state in ['canceled', 'failed', 'completed']:
+                if task.state == state:
+                    cancel_tasks.remove(task)
+                    break
+        for task in cancel_tasks:
+            task.cancel()
+        self.monitor_conversion_tasks(tasks=cancel_tasks, states=['canceled'])
+        printbuf = self.print_conversion_task_list(clist=tasks, doprint=False)
+        self.debug('Done with canceling_conversion_tasks...' + str(printbuf))
+
+
+    def cleanup_conversion_task_resources(self, tasks=None):
+        tasks = tasks or self.test_resources['conversion_tasks']
+        if not isinstance(tasks, types.ListType):
+            tasks = [tasks]
+        error_msg = ""
+        try:
+            self.cancel_conversion_tasks(tasks)
+        except Exception as CE:
+                tb = self.get_traceback()
+                self.critical('Failed to cancel some tasks:' + str(CE))
+
+        for task in tasks:
+            self.debug('Attempting to delete all resources associated '
+                       'with task: "{0}"'
+                       .format(getattr(task, 'id', 'UNKOWN_ID')))
+            try:
+                assert isinstance(task,ConversionTask)
+                task.update()
+                try:
+                    if task.instance:
+                        self.terminate_single_instance(task.instance)
+                except Exception, e:
+                    tb = self.get_traceback()
+                    error_msg += str(tb) + '\n"{0}":Cleanup_error:"{1}"\n'\
+                        .format(task.conversiontaskid, str(e))
+                try:
+                    if task.image_id:
+                        image = self.get_images(emi=task.image_id)
+                        if image:
+                            self.delete_image(image=image)
+                except Exception, e:
+                    tb = self.get_traceback()
+                    error_msg += str(tb) + '\n"{0}":Cleanup_error:"{1}"\n'\
+                        .format(task.conversiontaskid, str(e))
+                try:
+                    if task.snapshots:
+                        self.delete_snapshots(snapshots=task.snapshots)
+                except Exception, e:
+                    tb = self.get_traceback()
+                    error_msg += str(tb) + '\n"{0}":Cleanup_error:"{1}"\n'\
+                        .format(task.conversiontaskid, str(e))
+                try:
+                    if task.volumes:
+                        self.delete_volumes(volume_list=task.volumes)
+                except Exception, e:
+                    tb = self.get_traceback()
+                    error_msg += str(tb) + '\n"{0}":Cleanup_error:"{1}"\n'\
+                        .format(task.conversiontaskid, str(e))
+            except Exception as TE:
+                tb = self.get_traceback()
+                error_msg += '{0}\n"{1}" Failed to cleanup task, err:"{1}"'\
+                    .format(str(tb), getattr(task, 'id', 'UNKOWN_ID'), str(TE))
+        if error_msg:
+            raise Exception(error_msg)
+
+
     def create_web_servers(self, keypair, group, zone, port=80, count=2, image=None, filename="test-file", cookiename="test-cookie"):
         if not image:
-            image = self.get_emi()
+            image = self.get_emi(root_device_type="instance-store", not_location="loadbalancer", not_platform="windows")
         reservation = self.run_instance(image, keypair=keypair, group=group, zone=zone, min=count, max=count)
         self.authorize_group(group=group,port=port)
 
@@ -4140,7 +4283,6 @@ disable_root: false"""
             try:
                 instance.sys("which apt-get", code=0)
                 ## Debian based Linux
-                instance.sys("apt-get update", code=0)
                 instance.sys("apt-get install -y apache2", code=0)
                 instance.sys("echo \"" + instance.id +"\" > /var/www/" + filename)
                 instance.sys("echo \"CookieTracking on\" >> /etc/apache2/apache2.conf")

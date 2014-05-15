@@ -39,6 +39,7 @@ import sys
 from eutester.eutestcase import EutesterTestCase
 from eutester.sshconnection import SshCbReturn
 from eutester.machine import Machine
+from conversiontask import ConversionTask
 
 
 class ImageUtils(EutesterTestCase):
@@ -107,15 +108,6 @@ class ImageUtils(EutesterTestCase):
                                   password=self.worker_password,
                                   keypath=self.worker_keypath)
             return new_machine
-
-    def getHttpHeader(self, url):
-        url = url.replace('http://', '')
-        host = url.split('/')[0]
-        path = url.replace(host, '')
-        self.debug("get_remote_file, host(" + host + ") path(" + path + ")")
-        conn = httplib.HTTPConnection(host)
-        conn.request("HEAD", path)
-        return conn.getresponse()
 
     def getHttpRemoteImageSize(self, url, unit=None):
             '''
@@ -236,7 +228,11 @@ class ImageUtils(EutesterTestCase):
                    ', count:' + str(part_count))
         return int(part_count)
 
-    def get_manifest_image_name(self, path, machine=None, timeout=30):
+    def get_manifest_image_name(self,
+                                path,
+                                machine=None,
+                                local=False,
+                                timeout=30):
         '''
         Attempts to read the image name from a manifest file
         :param path: local or remote path to manifest file
@@ -470,6 +466,8 @@ class ImageUtils(EutesterTestCase):
                                   prefix=None,
                                   directory=None,
                                   image_name=None,
+                                  machine=None,
+                                  machine_credpath=None,
                                   ):
         machine = machine or self.worker_machine
 
@@ -525,7 +523,15 @@ class ImageUtils(EutesterTestCase):
                                 owner_akid=None,
                                 security_token=None,
                                 machine=None,
-                                machine_credpath=None):
+                                machine_credpath=None,
+                                misc=None):
+        '''
+        Note: Under normal conditions this will create a volume that may
+        not be available to the returned task object immediately. The volume
+        id will be available later by using task.update() on the returned
+        task object. For this reason the volume is not being added to
+        the tester's resources list here.
+        '''
         machine = machine or self.worker_machine
         credpath = machine_credpath or self.credpath
         cmdargs = str(import_file) + " -b " + str(bucket) + \
@@ -554,6 +560,8 @@ class ImageUtils(EutesterTestCase):
             cmdargs += " -o " + str(owner_akid)
         if security_token:
             cmdargs += " --security-token " + str(security_token)
+        if misc:
+            cmdargs += misc
         if credpath is not None:
             cmd = ('source ' + str(credpath) +
                    '/eucarc && euca-import-volume ' +
@@ -576,10 +584,113 @@ class ImageUtils(EutesterTestCase):
                 taskid = lre.group()
         self.debug('Import taskid:' + str(taskid))
         #check on system using describe...
-        tasks = self.get_conversion_tasks(taskid=taskid)
-        assert tasks, 'Task not found in describe conversion tasks:' + str(taskid)
-        return tasks[0]
+        task = self.tester.get_conversion_task(taskid=taskid)
+        assert task, 'Task not found in describe conversion tasks. "{0}"'\
+            .format(str(taskid))
+        self.tester.test_resources['volumes']
+        return task
 
+
+    def euca2ools_import_instance(self,
+                                import_file,
+                                bucket,
+                                zone,
+                                format,
+                                instance_type,
+                                arch,
+                                platform,
+                                size=None,
+                                keypair=None,
+                                presigned_manifest_url=None,
+                                prefix=None,
+                                days=None,
+                                no_upload=None,
+                                description=None,
+                                group=None,
+                                s3_url=None,
+                                ec2_url=None,
+                                image_size=None,
+                                private_addr=None,
+                                shutdown_behavior=None,
+                                owner_sak=None,
+                                owner_akid=None,
+                                security_token=None,
+                                machine=None,
+                                machine_credpath=None,
+                                misc=None):
+        machine = machine or self.worker_machine
+        credpath = machine_credpath or self.credpath
+        cmdargs = str(import_file) + " -b " + str(bucket) + \
+                  " -z " + str(zone) + " -f " + str(format) + \
+                  " -t " + str(instance_type) + " -a " + str(arch) + \
+                  " -p " + str(platform) + \
+                  " --show-empty-fields "
+        emi = None
+        if description:
+            cmdargs += ' -d ' + str(description)
+        if group:
+            cmdargs += ' -g ' + str(group)
+        if keypair:
+            cmdargs += ' --key ' + str(keypair)
+        if size:
+            cmdargs += ' -s ' + str(size)
+        if presigned_manifest_url:
+            cmdargs += ' --manifest-url ' + str(presigned_manifest_url)
+        if prefix:
+            cmdargs += " --prefix " + str(prefix)
+        if days:
+            cmdargs += " -x " + str(days)
+        if no_upload:
+            cmdargs += " --no-upload "
+        if s3_url:
+            cmdargs += " --s3-url " + str(s3_url)
+        if ec2_url:
+            cmdargs += " -U " + str(ec2_url)
+        if image_size:
+            cmdargs += " --image-size " + str(image_size)
+        if private_addr:
+            cmdargs += " --private-ip-address"
+        if shutdown_behavior:
+            cmdargs += " --instance-initiated-shutdown-behavior " + \
+                        str(shutdown_behavior)
+        if owner_sak:
+            cmdargs += " -w " + str(owner_sak)
+        if owner_akid:
+            cmdargs += " -o " + str(owner_akid)
+        if security_token:
+            cmdargs += " --security-token " + str(security_token)
+        if misc:
+            cmdargs += misc
+        if credpath is not None:
+            cmd = ('source ' + str(credpath) +
+                   '/eucarc && euca-import-instance ' +
+                   str(cmdargs))
+        else:
+            cmd = 'euca-upload-import-volume '
+            # if keys were not already applied to args, fetch and populate
+            # them now.
+            if not owner_sak:
+                owner_sak = self.tester.get_secret_key()
+                cmdargs += " -w " + str(owner_sak)
+            if not owner_akid:
+                owner_akid = self.tester.get_access_key()
+                cmdargs += " -o " + str(owner_akid)
+            cmd += str(cmdargs)
+        out = machine.sys(cmd=cmd, code=0)
+        taskid = None
+        for line in out:
+            lre = re.search('import-i-\w{8}', line)
+            if lre:
+                taskid = lre.group()
+        if not taskid:
+            raise RuntimeError('Could not find a task id in output from cmd:'
+                               + str(cmd))
+        self.debug('Import taskid:' + str(taskid))
+        #check on system using describe...
+        task = self.tester.get_conversion_task(taskid=taskid)
+        assert task, 'Task not found in describe conversion tasks. "{0}"'\
+            .format(str(taskid))
+        return task
 
     def _parse_euca2ools_conversion_task_output(self, output):
         splitlist = []
@@ -602,15 +713,6 @@ class ImageUtils(EutesterTestCase):
                         retlist.append(task)
                     task = ConversionTask
         return retlist
-
-    def get_conversion_tasks(self, taskid=None):
-        params = {}
-        if taskid:
-            params['ConversionTaskId'] = str(taskid)
-        return self.tester.ec2.get_list('DescribeConversionTasks',
-                                        params,
-                                        [('euca:item', ConversionTask)],
-                                        verb='POST')
 
     def _generate_unique_bucket_name_from_manifest(self,manifest, unique=True):
         mlist = str(manifest.replace('.manifest.xml', '')).split('/')
@@ -805,21 +907,3 @@ class ImageUtils(EutesterTestCase):
                     str(emi.id) + ", after " + str(elapsed) + " seconds")
         return emi
 
-
-class ConversionTask(object):
-    def __init__(self, connection=None):
-        self.connection = connection
-        self.conversiontaskid = None
-
-    def __repr__(self):
-        return 'ConversionTask:' + str(self.conversiontaskid)
-
-    def startElement(self, name, attrs, connection):
-        pass
-
-    def endElement(self, name, value, connection):
-        ename = name.lower().replace('euca:','')
-        if ename == 'conversiontaskid':
-            self.conversiontaskid = value
-        else:
-            setattr(self, ename, value)

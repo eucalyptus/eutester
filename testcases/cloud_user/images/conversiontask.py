@@ -50,6 +50,8 @@ class ConversionTask(TaggedEC2Object):
         self.statusmessage = None
         self._importinstancetask = None
         self._importvolumetask = None
+        self._instance = None
+        self._snapshots = None
         self.tags = None
         self.notfound = False
 
@@ -90,12 +92,39 @@ class ConversionTask(TaggedEC2Object):
         return None
 
     @property
-    def volumes(self):
-        ret = []
+    def instance(self):
+        if not self._instance and self.instanceid:
+            ins = self._instance = self.connection.get_only_instances(
+                instance_ids=[self.instanceid])
+            if ins:
+                self._instance = ins[0]
+        return self._instance
 
+    @property
+    def volumes(self):
+        '''
+        Volumes are updated during the task and there may not be a volume(s)
+        associated with a task response right away, EUCA-9337
+        '''
+        ret = []
         for im in self.importvolumes:
-            ret.append(im.volume)
+            if im and im.volume:
+                ret.append(im.volume)
         return ret
+
+    @property
+    def snapshots(self):
+        if not self._snapshots:
+            self._snapshots = []
+            for volume in self.volumes:
+                self._snapshots.extend(self.connection.get_all_snapshots(
+                    filters={'volume-id':volume.id}))
+        return self._snapshots
+
+    @property
+    def image_id(self):
+        if self.instance:
+            return self.instance.image_id
 
     @property
     def tasktype(self):
@@ -114,15 +143,26 @@ class ConversionTask(TaggedEC2Object):
     def id(self, taskid):
         self.conversiontaskid = taskid
 
-    def update(self):
-        params = {}
-        params['ConversionTaskId'] = str(self.conversiontaskid)
-        task = self.connection.get_object('DescribeConversionTasks',
+    def cancel(self):
+        params = {'ConversionTaskId':str(self.conversiontaskid)}
+        task = self.connection.get_object('CancelConversionTask',
                                           params,
                                           ConversionTask,
                                           verb='POST')
         if task:
-            self.__dict__.update(task.__dict__)
+            self.update(updatedtask=task)
+        return task
+
+    def update(self, updatedtask=None):
+        params = {}
+        params['ConversionTaskId'] = str(self.conversiontaskid)
+        if not updatedtask:
+            updatedtask = self.connection.get_object('DescribeConversionTasks',
+                                                     params,
+                                                     ConversionTask,
+                                                     verb='POST')
+        if updatedtask:
+            self.__dict__.update(updatedtask.__dict__)
         else:
             print sys.stderr, 'Update. Failed to find task:"{0}"'\
                 .format(str(self.conversiontaskid))
