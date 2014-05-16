@@ -7,6 +7,8 @@
             <class name="com.eucalyptus.tests.awssdk.BasicWalrusTest"/>
             <class name="com.eucalyptus.tests.awssdk.S3BucketCannedACLTests"/>
             <class name="com.eucalyptus.tests.awssdk.S3BucketTests"/>
+            <class name="com.eucalyptus.tests.awssdk.S3ListObjectsTests"/>
+            <class name="com.eucalyptus.tests.awssdk.S3ListVersionsTests"/>
             <class name="com.eucalyptus.tests.awssdk.S3MultiPartUploadTest" />
             <class name="com.eucalyptus.tests.awssdk.S3ObjectCannedACLAcrossAccountsTests"/>
             <class name="com.eucalyptus.tests.awssdk.S3ObjectCannedACLTests"/>

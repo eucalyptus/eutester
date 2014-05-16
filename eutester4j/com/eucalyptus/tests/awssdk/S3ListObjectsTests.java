@@ -204,7 +204,7 @@ public class S3ListObjectsTests {
 
 			// List objects and verify the results
 			objects = listObjects(bucketName, null, null, null, null, false);
-			assertTrue("Expected version summary list to be of size " + (prefixes * keys) + ", but got a list of size " + objects.getObjectSummaries().size(),
+			assertTrue("Expected object summary list to be of size " + (prefixes * keys) + ", but got a list of size " + objects.getObjectSummaries().size(),
 					objects.getObjectSummaries().size() == (prefixes * keys));
 			Iterator<S3ObjectSummary> summaryIterator = objects.getObjectSummaries().iterator();
 
@@ -252,7 +252,7 @@ public class S3ListObjectsTests {
 
 			// Starting with every key in the ascending order, list the objects using that key as the key marker and verify that the results.
 			for (String marker : keySet) {
-				// Compute what the sorted versions should look like
+				// Compute what the sorted objects should look like
 				NavigableSet<String> tailSet = keySet.tailSet(marker, false);
 
 				// List the objects and verify that they are ordered lexicographically
@@ -306,7 +306,7 @@ public class S3ListObjectsTests {
 			}
 
 			objects = listObjects(bucketName, null, null, delimiter, null, false);
-			assertTrue("Expected to not get any version summaries but got a list of size " + objects.getObjectSummaries().size(), objects.getObjectSummaries()
+			assertTrue("Expected to not get any object summaries but got a list of size " + objects.getObjectSummaries().size(), objects.getObjectSummaries()
 					.size() == 0);
 			assertTrue("Expected common prefixes list to be of size " + prefixKeyMap.size() + ", but got a list of size " + objects.getCommonPrefixes().size(),
 					objects.getCommonPrefixes().size() == prefixKeyMap.size());
@@ -372,7 +372,7 @@ public class S3ListObjectsTests {
 
 			// List objects and verify the results
 			objects = listObjects(bucketName, null, null, null, null, false);
-			assertTrue("Expected version summary list to be of size " + allKeys.size() + ", but got a list of size " + objects.getObjectSummaries().size(),
+			assertTrue("Expected object summary list to be of size " + allKeys.size() + ", but got a list of size " + objects.getObjectSummaries().size(),
 					objects.getObjectSummaries().size() == allKeys.size());
 			Iterator<S3ObjectSummary> summaryIterator = objects.getObjectSummaries().iterator();
 
@@ -385,7 +385,7 @@ public class S3ListObjectsTests {
 
 			// List objects with prefix and delimiter and verify again
 			objects = listObjects(bucketName, outerPrefix, null, delimiter, null, false);
-			assertTrue("Expected version summaries list to be of size " + keySet.size() + "but got a list of size " + objects.getObjectSummaries().size(),
+			assertTrue("Expected object summaries list to be of size " + keySet.size() + "but got a list of size " + objects.getObjectSummaries().size(),
 					objects.getObjectSummaries().size() == keySet.size());
 			assertTrue("Expected common prefixes list to be of size " + commonPrefixSet.size() + ", but got a list of size "
 					+ objects.getCommonPrefixes().size(), objects.getCommonPrefixes().size() == commonPrefixSet.size());
@@ -431,7 +431,7 @@ public class S3ListObjectsTests {
 			ObjectListing objects = null;
 
 			print("Number of keys: " + (maxKeys * multiplier));
-			print("Number of max-keys in list versions request: " + maxKeys);
+			print("Number of max-keys in list objects request: " + maxKeys);
 
 			for (int i = 0; i < (maxKeys * multiplier); i++) {
 				// Upload an object using the key
@@ -452,7 +452,7 @@ public class S3ListObjectsTests {
 					objects = listObjects(bucketName, null, nextMarker, null, maxKeys, false);
 				}
 
-				assertTrue("Expected version summaries list to be of size " + maxKeys + "but got a list of size " + objects.getObjectSummaries().size(),
+				assertTrue("Expected object summaries list to be of size " + maxKeys + "but got a list of size " + objects.getObjectSummaries().size(),
 						objects.getObjectSummaries().size() == maxKeys);
 				Iterator<S3ObjectSummary> summaryIterator = objects.getObjectSummaries().iterator();
 				S3ObjectSummary objectSummary = null;
@@ -511,7 +511,7 @@ public class S3ListObjectsTests {
 					objects = listObjects(bucketName, null, nextMarker, null, maxKeys, false);
 				}
 
-				assertTrue("Expected version summaries list to be of size " + maxKeys + "but got a list of size " + objects.getObjectSummaries().size(),
+				assertTrue("Expected object summaries list to be of size " + maxKeys + "but got a list of size " + objects.getObjectSummaries().size(),
 						objects.getObjectSummaries().size() == maxKeys);
 				Iterator<S3ObjectSummary> summaryIterator = objects.getObjectSummaries().iterator();
 				S3ObjectSummary objectSummary = null;
@@ -560,7 +560,7 @@ public class S3ListObjectsTests {
 
 			print("Number of prefixes: " + prefixes);
 			print("Number of keys per prefix: " + keys);
-			print("Number of max-keys in list versions request: " + maxKeys);
+			print("Number of max-keys in list objects request: " + maxKeys);
 
 			for (int i = 0; i < prefixes; i++) {
 				String prefix = VALID_CHARS.charAt(random.nextInt(VALID_CHARS.length())) + eucaUUID() + delimiter; // Prefix it with a char
