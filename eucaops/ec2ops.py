@@ -4176,7 +4176,7 @@ disable_root: false"""
                     str(task.availabilityzone).center(availzonelen) + " | " +
                     str(volumes).center(volumelen) + " | " +
                     str(task.statusmessage[:statusmsglen]).ljust(statusmsglen)
-                    + "\n")
+                    + " |\n")
             buf += (str('(' + task.state + ')').center(taskidlen) + " | " +
                     str(snapstatus).center(snaplen) + " | " +
                     str(instancestatus).center(instancelen) + " | " +
@@ -4185,7 +4185,7 @@ disable_root: false"""
                     str(volstatus).center(volumelen) + " | " +
                     str(task.statusmessage[
                         statusmsglen:(2*statusmsglen)]).ljust(statusmsglen)
-                    + "\n")
+                    + " |\n")
             buf += (str('').center(taskidlen) + " | " +
                     str('').center(snaplen) + " | " +
                     str('').center(instancelen) + " | " +
@@ -4194,7 +4194,7 @@ disable_root: false"""
                     str(volbytescon).center(volumelen) + " | " +
                     str(task.statusmessage[
                         (2*statusmsglen):(3*statusmsglen)]).ljust(statusmsglen)
-                    + "\n")
+                    + " |\n")
             buf += line
         if doprint:
             printmethod(buf)
