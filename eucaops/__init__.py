@@ -91,7 +91,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
         self.account_id = None
         self.aws_access_key_id = aws_access_key_id
         self.aws_secret_access_key = aws_secret_access_key
-        self.property_manager = None
+        self._property_manager = None
 
 
         if self.config_file is not None:
@@ -225,13 +225,23 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
             except Exception, e:
                 self.debug("Unable to create CloudFormation connection because of: " + str(e) )
 
-        if self.clc and self.account_name == 'eucalyptus':
-            try:
-                self.update_property_manager()
-            except:
-                tb = self.get_traceback()
-                self.debug(str(tb) + '\nError creating properties manager')
 
+
+    @property
+    def property_manager(self):
+        if not self._property_manager:
+            if self.clc and self.account_name == 'eucalyptus':
+                try:
+                    self.update_property_manager()
+                except:
+                    tb = self.get_traceback()
+                    self.debug(str(tb) + '\nError creating properties manager')
+        return self._property_manager
+
+
+    @property_manager.setter
+    def property_manager(self, new_property_mgr):
+        self._property_manager = new_property_mgr
 
     def get_available_vms(self, type=None, zone=None):
         """
@@ -324,6 +334,8 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
             for res in self.test_resources["reservations"]:
                 try:
                     self.terminate_instances(res)
+                    if res in self.test_resources["reservations"]:
+                        self.test_resources["reservations"].remove(res)
                 except Exception, e:
                     tb = self.get_traceback()
                     failcount +=1
@@ -630,9 +642,9 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
     def update_property_manager(self,machine=None):
         machine = machine or self.clc
         if not machine:
-            self.property_manager = None
+            self._property_manager = None
             return
-        self.property_manager = Euproperty_Manager(self, machine=machine, debugmethod=self.debug)
+        self._property_manager = Euproperty_Manager(self, machine=machine, debugmethod=self.debug)
 
     def swap_clc(self):
         all_clcs = self.get_component_machines("clc")
