@@ -788,9 +788,7 @@ class Machine:
                     self.debug(out)
         return config
 
-            
-        
-    
+
     def __str__(self):
         s  = "+++++++++++++++++++++++++++++++++++++++++++++++++++++\n"
         s += "+" + "Hostname:" + str(self.hostname) + "\n"
