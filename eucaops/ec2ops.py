@@ -4095,6 +4095,7 @@ disable_root: false"""
                            .format(len(checking_list), state, interval))
                 time.sleep(interval)
             elapsed = int(time.time() - start)
+        self.print_conversion_task_list(clist=tasks)
         #Any tasks still in checking_list are failures
         for task in checking_list:
             err_buf += ('Monitor complete. Task "{0}:{1}" not in desired '
@@ -4118,7 +4119,7 @@ disable_root: false"""
         taskidlen = 19
         statusmsglen = 24
         availzonelen=14
-        volumelen=32
+        volumelen=16
         snaplen=13
         instancelen=13
         imagelen=13
@@ -4127,7 +4128,7 @@ disable_root: false"""
                   'INSTANCE'.center(instancelen) + " | " +
                   'IMAGE ID'.center(imagelen) + " | " +
                   'ZONE'.center(availzonelen) + " | " +
-                  'VOLUMES:BYTES/TOTAL'.center(volumelen) + " | " +
+                  'VOLUMES'.center(volumelen) + " | " +
                   'STATUS MSG'.center(statusmsglen) + " |\n" )
         line = ""
         for x in xrange(0, len(header)):
@@ -4136,43 +4137,37 @@ disable_root: false"""
         buf = "\n" + line + header + line
         for task in clist:
             sizestr = None
-            instancestr = ""
+            instancestr = "???"
             instancestatus = ""
             imagesize = None
             vollist = []
+            volbytes = []
             for importvol in task.importvolumes:
                 bytesconverted = importvol.bytesconverted
                 volume_id = importvol.volume_id
-                if volume_id:
-                    volstatus = "???"
-                else:
-                    volstatus = ""
-                if importvol.volume:
-                    volstatus = importvol.volume.status
                 if importvol.image:
                     imagesize = long(importvol.image.size)
                 if imagesize is not None:
-                    sizegb = "%.2f" % float(
-                        long(imagesize) /
-                        float(1073741824))
-                    sizestr = ("{0}({1}gb)"
-                               .format(imagesize,
-                                       sizegb))
-                vollist.append('{0}:{1}/{2}'
-                               .format(str(volume_id),
-                                       str(bytesconverted),
-                                       str(imagesize)))
+                    sizegb = "%.3f" % float(
+                        long(imagesize) / float(1073741824))
+                    gbconverted = "%.3f" % float(
+                        long(bytesconverted) / float(1073741824))
+                    sizestr = ("{0}/{1}gb".format(gbconverted, sizegb))
+                vollist.append(str(volume_id))
+                volbytes.append(sizestr)
             volumes = ",".join(vollist)
-            volstatus = ",".join(
-                [str('(' + vol.status + ')') for vol in task.volumes])
-            snaps = ",".join(
-                [str(snap.id ) for snap in task.snapshots])
-            snapstatus = ",".join(
-                [str('(' + snap.status + ')') for snap in task.snapshots])
+            volbytescon = ",".join(volbytes)
+            volstatus = ",".join([str('(' + str(vol.status) + ':' +
+                                      str(vol.size) + ')')
+                                  for vol in task.volumes]) or "???"
+            snaps = ",".join([str(snap.id ) for snap in task.snapshots]) or \
+                    "???"
+            snapstatus = ",".join([str('(' + snap.status + ')')
+                                   for snap in task.snapshots])
             if task.instance:
                 instancestr = str(task.instance.id)
                 instancestatus = '(' + str(task.instance.state) + ')'
-            image_id = task.image_id or ""
+            image_id = task.image_id or "???"
             buf += (str(task.conversiontaskid).center(taskidlen) + " | " +
 
                     str(snaps).center(snaplen) + " | " +
@@ -4181,15 +4176,25 @@ disable_root: false"""
                     str(task.availabilityzone).center(availzonelen) + " | " +
                     str(volumes).center(volumelen) + " | " +
                     str(task.statusmessage[:statusmsglen]).ljust(statusmsglen)
-                    + "\n")
+                    + " |\n")
             buf += (str('(' + task.state + ')').center(taskidlen) + " | " +
                     str(snapstatus).center(snaplen) + " | " +
                     str(instancestatus).center(instancelen) + " | " +
                     str('').center(imagelen) + " | " +
                     str('').center(availzonelen) + " | " +
                     str(volstatus).center(volumelen) + " | " +
-                    str(task.statusmessage[statusmsglen:]).ljust(statusmsglen)
-                    + "\n")
+                    str(task.statusmessage[
+                        statusmsglen:(2*statusmsglen)]).ljust(statusmsglen)
+                    + " |\n")
+            buf += (str('').center(taskidlen) + " | " +
+                    str('').center(snaplen) + " | " +
+                    str('').center(instancelen) + " | " +
+                    str('').center(imagelen) + " | " +
+                    str('').center(availzonelen) + " | " +
+                    str(volbytescon).center(volumelen) + " | " +
+                    str(task.statusmessage[
+                        (2*statusmsglen):(3*statusmsglen)]).ljust(statusmsglen)
+                    + " |\n")
             buf += line
         if doprint:
             printmethod(buf)
