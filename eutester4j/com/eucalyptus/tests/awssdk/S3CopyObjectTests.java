@@ -9,10 +9,14 @@ import static org.testng.AssertJUnit.assertTrue;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.AfterMethod;
@@ -24,6 +28,7 @@ import com.amazonaws.AmazonServiceException;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.AccessControlList;
 import com.amazonaws.services.s3.model.Bucket;
+import com.amazonaws.services.s3.model.BucketVersioningConfiguration;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.CanonicalGrantee;
 import com.amazonaws.services.s3.model.CopyObjectRequest;
@@ -36,6 +41,7 @@ import com.amazonaws.services.s3.model.Owner;
 import com.amazonaws.services.s3.model.Permission;
 import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.s3.model.PutObjectResult;
+import com.amazonaws.services.s3.model.SetBucketVersioningConfigurationRequest;
 import com.amazonaws.util.BinaryUtils;
 import com.amazonaws.util.Md5Utils;
 
@@ -71,6 +77,9 @@ public class S3CopyObjectTests {
 			throw e;
 		}
 
+		// s3ClientB = getS3Client("awsrc_euca");
+		// s3ClientA = getS3Client("awsrc_personal");
+
 		Owner ownerA = s3ClientA.getS3AccountOwner();
 		Owner ownerB = s3ClientB.getS3AccountOwner();
 		ownerNameA = ownerA.getDisplayName();
@@ -79,6 +88,18 @@ public class S3CopyObjectTests {
 		ownerIdB = ownerB.getId();
 
 		md5 = BinaryUtils.toHex(Md5Utils.computeMD5Hash(new FileInputStream(fileToPut)));
+	}
+
+	public AmazonS3 getS3Client(String credPath) throws Exception {
+		print("Getting cloud information from " + credPath);
+
+		String s3Endpoint = Eutester4j.parseEucarc(credPath, "S3_URL");
+
+		String secretKey = Eutester4j.parseEucarc(credPath, "EC2_SECRET_KEY").replace("'", "");
+		String accessKey = Eutester4j.parseEucarc(credPath, "EC2_ACCESS_KEY").replace("'", "");
+
+		print("Initializing S3 connections");
+		return Eutester4j.getS3Client(accessKey, secretKey, s3Endpoint);
 	}
 
 	@AfterClass
@@ -120,7 +141,7 @@ public class S3CopyObjectTests {
 			createBucketWithCannedACL(ownerNameA, s3ClientA, sourceBucket, CannedAccessControlList.PublicReadWrite);
 
 			// Put object with Canned ACL Private in source bucket as account A admin
-			putObjectWithCannedACL(ownerNameA, s3ClientA, sourceBucket, sourceKey, CannedAccessControlList.Private);
+			putObject(ownerNameA, s3ClientA, new PutObjectRequest(sourceBucket, sourceKey, fileToPut).withCannedAcl(CannedAccessControlList.Private), md5);
 
 			// As account A admin
 
@@ -191,7 +212,7 @@ public class S3CopyObjectTests {
 			createBucketWithCannedACL(ownerNameA, s3ClientA, sourceBucket, CannedAccessControlList.PublicReadWrite);
 
 			// Put object with Canned ACL Private in source bucket as account A admin
-			putObjectWithCannedACL(ownerNameA, s3ClientA, sourceBucket, sourceKey, CannedAccessControlList.Private);
+			putObject(ownerNameA, s3ClientA, new PutObjectRequest(sourceBucket, sourceKey, fileToPut).withCannedAcl(CannedAccessControlList.Private), md5);
 
 			// Create bucket with Canned ACL Private as account A admin
 			String destBucket = eucaUUID();
@@ -264,7 +285,8 @@ public class S3CopyObjectTests {
 			createBucketWithCannedACL(ownerNameA, s3ClientA, sourceBucket, CannedAccessControlList.PublicReadWrite);
 
 			// Put object with Canned ACL AuthenticatedRead in source bucket as account A admin
-			putObjectWithCannedACL(ownerNameA, s3ClientA, sourceBucket, sourceKey, CannedAccessControlList.AuthenticatedRead);
+			putObject(ownerNameA, s3ClientA, new PutObjectRequest(sourceBucket, sourceKey, fileToPut).withCannedAcl(CannedAccessControlList.AuthenticatedRead),
+					md5);
 
 			// As account B admin
 
@@ -335,7 +357,8 @@ public class S3CopyObjectTests {
 			createBucketWithCannedACL(ownerNameA, s3ClientA, sourceBucket, CannedAccessControlList.Private);
 
 			// Put object with Canned ACL AuthenticatedRead in source bucket as account A admin
-			putObjectWithCannedACL(ownerNameA, s3ClientA, sourceBucket, sourceKey, CannedAccessControlList.AuthenticatedRead);
+			putObject(ownerNameA, s3ClientA, new PutObjectRequest(sourceBucket, sourceKey, fileToPut).withCannedAcl(CannedAccessControlList.AuthenticatedRead),
+					md5);
 
 			// Create bucket with Canned ACL Private as account B admin
 			String destBucket = eucaUUID();
@@ -408,7 +431,8 @@ public class S3CopyObjectTests {
 			createBucketWithCannedACL(ownerNameA, s3ClientA, sourceBucket, CannedAccessControlList.Private);
 
 			// Put object with Canned ACL AuthenticatedRead in source bucket as account A admin
-			putObjectWithCannedACL(ownerNameA, s3ClientA, sourceBucket, sourceKey, CannedAccessControlList.AuthenticatedRead);
+			putObject(ownerNameA, s3ClientA, new PutObjectRequest(sourceBucket, sourceKey, fileToPut).withCannedAcl(CannedAccessControlList.AuthenticatedRead),
+					md5);
 
 			// Create bucket with Canned ACL PublicReadWrite as account A admin
 			String destBucket = eucaUUID();
@@ -481,32 +505,31 @@ public class S3CopyObjectTests {
 			createBucketWithCannedACL(ownerNameA, s3ClientA, sourceBucket, CannedAccessControlList.Private);
 
 			// Put object with Canned ACL Private in source bucket as account A admin
-			PutObjectResult putResult = putObjectWithCannedACL(ownerNameA, s3ClientA, sourceBucket, sourceKey, CannedAccessControlList.Private);
+			PutObjectResult putResult = putObject(ownerNameA, s3ClientA,
+					new PutObjectRequest(sourceBucket, sourceKey, fileToPut).withCannedAcl(CannedAccessControlList.Private), md5);
 
 			// Copy object with matching etag
 			String destKey = eucaUUID();
-			copyObject(ownerNameA, s3ClientA, new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey).withMatchingETagConstraint(eucaUUID())
-					.withMatchingETagConstraint(putResult.getETag()), md5);
+			copyObject(ownerNameA, s3ClientA,
+					new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey).withMatchingETagConstraint(putResult.getETag()), md5);
 			verifyObjectACL(s3ClientA, sourceBucket, destKey, CannedAccessControlList.Private, ownerIdA, ownerNameA, ownerIdA);
 
 			// Try to copy object with matching etag constraint but supply with non-matching etag
 			destKey = eucaUUID();
-			CopyObjectRequest copyRequest = new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey).withMatchingETagConstraint(eucaUUID())
-					.withMatchingETagConstraint(eucaUUID());
+			CopyObjectRequest copyRequest = new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey).withMatchingETagConstraint(eucaUUID());
 			printCopyObjectRequest(ownerNameA, copyRequest);
 			CopyObjectResult copyResult = s3ClientA.copyObject(copyRequest);
 			assertTrue("Expected an invalid copy object result", copyResult == null);
 
 			// Copy object with non-matching etag constraint
 			destKey = eucaUUID();
-			copyObject(ownerNameA, s3ClientA, new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey).withNonmatchingETagConstraint(eucaUUID())
-					.withNonmatchingETagConstraint(eucaUUID()), md5);
+			copyObject(ownerNameA, s3ClientA, new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey).withNonmatchingETagConstraint(eucaUUID()),
+					md5);
 			verifyObjectACL(s3ClientA, sourceBucket, destKey, CannedAccessControlList.Private, ownerIdA, ownerNameA, ownerIdA);
 
 			// Try to copy object with non-matching etag constraint but supply with matching etag
 			destKey = eucaUUID();
-			copyRequest = new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey).withNonmatchingETagConstraint(eucaUUID())
-					.withNonmatchingETagConstraint(putResult.getETag());
+			copyRequest = new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey).withNonmatchingETagConstraint(putResult.getETag());
 			printCopyObjectRequest(ownerNameA, copyRequest);
 			copyResult = s3ClientA.copyObject(copyRequest);
 			assertTrue("Expected an invalid copy object result", copyResult == null);
@@ -516,7 +539,171 @@ public class S3CopyObjectTests {
 		}
 	}
 
-	// Modified since test
+	@Test
+	public void lastModifiedConstraint() throws Exception {
+		testInfo(this.getClass().getSimpleName() + " - lastModifiedConstraint");
+		try {
+			// Get a timestamp before the put
+			Date beforePut = new Date(new Date().getTime() - 10000000);
+
+			// Create bucket with Canned ACL Private as account B admin
+			createBucketWithCannedACL(ownerNameB, s3ClientB, sourceBucket, CannedAccessControlList.Private);
+
+			// Put object with Canned ACL Private in source bucket as account B admin
+			putObject(ownerNameB, s3ClientB, new PutObjectRequest(sourceBucket, sourceKey, fileToPut).withCannedAcl(CannedAccessControlList.Private), md5);
+
+			// Get a timestamp after the put
+			Date afterPut = new Date(new Date().getTime() + 10000000);
+
+			// Copy object with modified since date set to before the source object was created
+			String destKey = eucaUUID();
+			copyObject(ownerNameB, s3ClientB, new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey).withModifiedSinceConstraint(beforePut), md5);
+			verifyObjectACL(s3ClientB, sourceBucket, destKey, CannedAccessControlList.Private, ownerIdB, ownerNameB, ownerIdB);
+
+			// Try to copy object with modified since constraint but supply with timestamp after the source object was created
+			destKey = eucaUUID();
+			CopyObjectRequest copyRequest = new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey).withModifiedSinceConstraint(afterPut);
+			printCopyObjectRequest(ownerNameB, copyRequest);
+			CopyObjectResult copyResult = s3ClientB.copyObject(copyRequest);
+			assertTrue("Expected an invalid copy object result", copyResult == null);
+
+			// Copy object with unmodified since date set to after the source object was created
+			destKey = eucaUUID();
+			copyObject(ownerNameB, s3ClientB, new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey).withUnmodifiedSinceConstraint(afterPut),
+					md5);
+			verifyObjectACL(s3ClientB, sourceBucket, destKey, CannedAccessControlList.Private, ownerIdB, ownerNameB, ownerIdB);
+
+			// Try to copy object with unmodified since constraint but supply with timestamp before the source object was created
+			destKey = eucaUUID();
+			copyRequest = new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey).withUnmodifiedSinceConstraint(beforePut);
+			printCopyObjectRequest(ownerNameB, copyRequest);
+			copyResult = s3ClientB.copyObject(copyRequest);
+			assertTrue("Expected an invalid copy object result", copyResult == null);
+		} catch (AmazonServiceException ase) {
+			printException(ase);
+			assertThat(false, "Failed to run lastModifiedConstraint");
+		}
+	}
+
+	@Test
+	public void metadataDirective() throws Exception {
+		testInfo(this.getClass().getSimpleName() + " - metadataDirective");
+		try {
+			// Create bucket with Canned ACL Private as account A admin
+			createBucketWithCannedACL(ownerNameA, s3ClientA, sourceBucket, CannedAccessControlList.Private);
+
+			// Put object with Canned ACL Private and some metadata in source bucket as account A admin
+			ObjectMetadata om = new ObjectMetadata();
+			Map<String, String> userMetadataMap = new HashMap<String, String>();
+			userMetadataMap.put("somerandomkey", "somerandomvalue");
+			userMetadataMap.put("hello", "world");
+			om.setUserMetadata(userMetadataMap);
+			putObject(ownerNameA, s3ClientA, new PutObjectRequest(sourceBucket, sourceKey, fileToPut).withCannedAcl(CannedAccessControlList.Private)
+					.withMetadata(om), md5);
+
+			// Copy both object and metadata - default behavior
+			String destKey = eucaUUID();
+			copyObject(ownerNameA, s3ClientA, new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey), md5);
+			verifyUserMetadata(ownerNameA, s3ClientA, sourceBucket, destKey, userMetadataMap);
+
+			// Copy object and replace metadata
+			om = new ObjectMetadata();
+			userMetadataMap = new HashMap<String, String>();
+			userMetadataMap.put("foo", "bar");
+			userMetadataMap.put("more", "stuff");
+			om.setUserMetadata(userMetadataMap);
+			destKey = eucaUUID();
+			copyObject(ownerNameA, s3ClientA, new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey).withNewObjectMetadata(om), md5);
+			verifyUserMetadata(ownerNameA, s3ClientA, sourceBucket, destKey, userMetadataMap);
+		} catch (AmazonServiceException ase) {
+			printException(ase);
+			assertThat(false, "Failed to run metadataDirective");
+		}
+	}
+
+	@Test(enabled = false)
+	public void metadataDirective_SameObject() throws Exception {
+		testInfo(this.getClass().getSimpleName() + " - metadataDirective_SameObject");
+		try {
+			// Create bucket with Canned ACL Private as account B admin
+			createBucketWithCannedACL(ownerNameB, s3ClientB, sourceBucket, CannedAccessControlList.Private);
+
+			// Put object with Canned ACL Private and some metadata in source bucket as account B admin
+			ObjectMetadata om = new ObjectMetadata();
+			Map<String, String> userMetadataMap = new HashMap<String, String>();
+			userMetadataMap.put("somerandomkey", "somerandomvalue");
+			userMetadataMap.put("hello", "world");
+			om.setUserMetadata(userMetadataMap);
+			putObject(ownerNameB, s3ClientB, new PutObjectRequest(sourceBucket, sourceKey, fileToPut).withCannedAcl(CannedAccessControlList.Private)
+					.withMetadata(om), md5);
+
+			// Copy object on to itself and replace metadata
+			om = new ObjectMetadata();
+			userMetadataMap = new HashMap<String, String>();
+			userMetadataMap.put("foo", "bar");
+			userMetadataMap.put("more", "stuff");
+			om.setUserMetadata(userMetadataMap);
+			copyObject(ownerNameB, s3ClientB, new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, sourceKey).withNewObjectMetadata(om), md5);
+			verifyUserMetadata(ownerNameB, s3ClientB, sourceBucket, sourceKey, userMetadataMap);
+
+			// Copy object on to itself without replacing metadata, should throw an error
+			boolean error = false;
+			try {
+				copyObject(ownerNameB, s3ClientB, new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, sourceKey), md5);
+			} catch (AmazonServiceException ase) {
+				error = true;
+				printException(ase);
+				assertTrue("Expected 400 error but got " + ase.getStatusCode(), ase.getStatusCode() == 400);
+				assertTrue("Expected S3 error InvalidRequest but got " + ase.getErrorCode(), ase.getErrorCode().equals("InvalidRequest"));
+			} finally {
+				assertTrue("Expected 400 InvalidRequest error", error);
+			}
+		} catch (AmazonServiceException ase) {
+			printException(ase);
+			assertThat(false, "Failed to run metadataDirective_SameObject");
+		}
+	}
+
+	@Test
+	public void versionedBuckets() throws Exception {
+		try {
+			testInfo(this.getClass().getSimpleName() + " - versionedBuckets");
+			File anotherFile = new File("3wolfmoon-download.jpg");
+			String newMd5 = BinaryUtils.toHex(Md5Utils.computeMD5Hash(new FileInputStream(anotherFile)));
+
+			// Create bucket with Canned ACL PublicReadWrite as account A admin and enable versioning
+			createBucketWithCannedACL(ownerNameA, s3ClientA, sourceBucket, CannedAccessControlList.Private);
+			print(ownerNameA + ": Enabling versioning for bucket " + sourceBucket);
+			s3ClientA.setBucketVersioningConfiguration(new SetBucketVersioningConfigurationRequest(sourceBucket, new BucketVersioningConfiguration()
+					.withStatus(BucketVersioningConfiguration.ENABLED)));
+
+			// Put modified object with Canned ACL Private and some metadata in source bucket as account B admin
+			PutObjectResult putResult1 = putObject(ownerNameA, s3ClientA,
+					new PutObjectRequest(sourceBucket, sourceKey, anotherFile).withCannedAcl(CannedAccessControlList.Private), newMd5);
+
+			// Put object with Canned ACL Private and some metadata in source bucket as account B admin
+			PutObjectResult putResult2 = putObject(ownerNameA, s3ClientA,
+					new PutObjectRequest(sourceBucket, sourceKey, fileToPut).withCannedAcl(CannedAccessControlList.Private), md5);
+
+			// Copy object from first version
+			String destKey = eucaUUID();
+			copyObject(ownerNameA, s3ClientA,
+					new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey).withSourceVersionId(putResult1.getVersionId())
+							.withCannedAccessControlList(CannedAccessControlList.LogDeliveryWrite), newMd5);
+			verifyObjectACL(s3ClientA, sourceBucket, destKey, CannedAccessControlList.LogDeliveryWrite, ownerIdA, ownerNameA, ownerIdA);
+
+			// Copy object from second version
+			destKey = eucaUUID();
+			copyObject(ownerNameA, s3ClientA,
+					new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey).withSourceVersionId(putResult2.getVersionId())
+							.withCannedAccessControlList(CannedAccessControlList.PublicRead), md5);
+			verifyObjectACL(s3ClientA, sourceBucket, destKey, CannedAccessControlList.PublicRead, ownerIdA, ownerNameA, ownerIdA);
+
+		} catch (AmazonServiceException ase) {
+			printException(ase);
+			assertThat(false, "Failed to run versionedBuckets");
+		}
+	}
 
 	private void printException(AmazonServiceException ase) {
 		ase.printStackTrace();
@@ -539,33 +726,56 @@ public class S3CopyObjectTests {
 		assertTrue("Mismatch in bucket names. Expected bucket name to be " + bucketName + ", but got " + bucket.getName(), bucketName.equals(bucket.getName()));
 	}
 
-	private PutObjectResult putObjectWithCannedACL(final String accountName, final AmazonS3 s3, final String bucket, final String key,
-			CannedAccessControlList cannedACL) throws Exception {
-		print(accountName + ": Putting object " + key + " with canned ACL " + cannedACL + " in bucket " + bucket);
-		PutObjectResult putResult = s3.putObject(new PutObjectRequest(bucket, key, fileToPut).withCannedAcl(cannedACL));
+	private PutObjectResult putObject(final String accountName, final AmazonS3 s3, final PutObjectRequest putRequest, String sourceMd5) {
+		printPutObjectRequest(accountName, putRequest);
+		final PutObjectResult putResult = s3.putObject(putRequest);
 		cleanupTasks.add(new Runnable() {
 			@Override
 			public void run() {
-				print(accountName + ": Deleting object " + key + " from bucket " + bucket);
-				s3.deleteObject(bucket, key);
+				if (putResult.getVersionId() == null) {
+					print(accountName + ": Deleting object " + putRequest.getKey() + " from bucket " + putRequest.getBucketName());
+					s3.deleteObject(putRequest.getBucketName(), putRequest.getKey());
+				} else {
+					print(accountName + ": Deleting object " + putRequest.getKey() + ", version " + putResult.getVersionId() + " from bucket "
+							+ putRequest.getBucketName());
+					s3.deleteVersion(putRequest.getBucketName(), putRequest.getKey(), putResult.getVersionId());
+				}
 			}
 		});
 		assertTrue("Invalid put object result", putResult != null);
-		assertTrue("Mimatch in md5sums between original object and PUT result. Expected " + md5 + ", but got " + putResult.getETag(),
-				putResult.getETag() != null && putResult.getETag().equals(md5));
-
+		assertTrue("Mimatch in md5sums between original object and PUT result. Expected " + sourceMd5 + ", but got " + putResult.getETag(),
+				putResult.getETag() != null && putResult.getETag().equals(sourceMd5));
 		return putResult;
 	}
 
+	private void printPutObjectRequest(String accountName, PutObjectRequest putRequest) {
+		StringBuilder sb = new StringBuilder(accountName + ": Putting object with key=" + putRequest.getKey() + ", bucket=" + putRequest.getBucketName());
+
+		if (putRequest.getCannedAcl() != null) {
+			sb.append(", canned ACL=").append(putRequest.getCannedAcl());
+		}
+		if (putRequest.getMetadata() != null) {
+			if (putRequest.getMetadata().getUserMetadata() != null) {
+				sb.append(", user metadata=").append(putRequest.getMetadata().getUserMetadata());
+			}
+		}
+		print(sb.toString());
+	}
+
 	private CopyObjectResult copyObject(final String accountName, final AmazonS3 s3, final CopyObjectRequest copyRequest, String sourceMd5) throws Exception {
-		// Copy object into the same bucket
 		printCopyObjectRequest(accountName, copyRequest);
-		CopyObjectResult copyResult = s3.copyObject(copyRequest);
+		final CopyObjectResult copyResult = s3.copyObject(copyRequest);
 		cleanupTasks.add(new Runnable() {
 			@Override
 			public void run() {
-				print(accountName + ": Deleting object " + copyRequest.getDestinationKey() + " from bucket " + copyRequest.getDestinationBucketName());
-				s3.deleteObject(copyRequest.getDestinationBucketName(), copyRequest.getDestinationKey());
+				if (copyResult.getVersionId() == null) {
+					print(accountName + ": Deleting object " + copyRequest.getDestinationKey() + " from bucket " + copyRequest.getDestinationBucketName());
+					s3.deleteObject(copyRequest.getDestinationBucketName(), copyRequest.getDestinationKey());
+				} else {
+					print(accountName + ": Deleting object " + copyRequest.getDestinationKey() + ", version " + copyResult.getVersionId() + " from bucket "
+							+ copyRequest.getDestinationBucketName());
+					s3.deleteVersion(copyRequest.getDestinationBucketName(), copyRequest.getDestinationKey(), copyResult.getVersionId());
+				}
 			}
 		});
 		assertTrue("Invalid copy object result", copyResult != null);
@@ -587,7 +797,7 @@ public class S3CopyObjectTests {
 			sb.append(", matching etag constraint=").append(copyRequest.getMatchingETagConstraints());
 		}
 		if (copyRequest.getModifiedSinceConstraint() != null) {
-			sb.append(", modified constraint=").append(copyRequest.getModifiedSinceConstraint());
+			sb.append(", modified since constraint=").append(copyRequest.getModifiedSinceConstraint());
 		}
 		if (copyRequest.getNonmatchingETagConstraints() != null && !copyRequest.getNonmatchingETagConstraints().isEmpty()) {
 			sb.append(", non matching etag constraint=").append(copyRequest.getNonmatchingETagConstraints());
@@ -600,6 +810,23 @@ public class S3CopyObjectTests {
 		}
 
 		print(sb.toString());
+	}
+
+	private void verifyUserMetadata(String ownerName, AmazonS3 s3, String bucket, String key, Map<String, String> metadataMap) {
+		print(ownerName + ": Getting metadata for object key=" + key + ", bucket=" + bucket);
+		ObjectMetadata metadata = s3.getObjectMetadata(bucket, key);
+		assertTrue("Invalid object metadata", metadata != null);
+		if (metadataMap != null && !metadataMap.isEmpty()) {
+			assertTrue("No user metadata found", metadata.getUserMetadata() != null || !metadata.getUserMetadata().isEmpty());
+			assertTrue("Expected to find " + metadataMap.size() + " element(s) in the metadata but found " + metadata.getUserMetadata().size(),
+					metadataMap.size() == metadata.getUserMetadata().size());
+			for (Map.Entry<String, String> entry : metadataMap.entrySet()) {
+				assertTrue("Metadata key " + entry.getKey() + " not found in response", metadata.getUserMetadata().containsKey(entry.getKey()));
+				assertTrue(
+						"Expected metadata value for key " + entry.getKey() + " to be " + entry.getValue() + " but got "
+								+ metadata.getUserMetadata().get(entry.getKey()), metadata.getUserMetadata().get(entry.getKey()).equals(entry.getValue()));
+			}
+		}
 	}
 
 	private void verifyObjectACL(AmazonS3 s3Client, String bucket, String key, CannedAccessControlList cannedACL, String objectOwnerId, String objectOwnerName,
@@ -766,13 +993,5 @@ public class S3CopyObjectTests {
 				assertThat(false, "Unknown canned ACL");
 				break;
 		}
-	}
-
-	private void checkMetadata(AmazonS3 s3, String sourceMd5) {
-		CopyObjectRequest copyRequest = null;
-		// Check the metadata
-		ObjectMetadata metadata = s3.getObjectMetadata(copyRequest.getDestinationBucketName(), copyRequest.getDestinationKey());
-		assertTrue("Mimatch in md5sums between original object and get object on the copy. Expected " + md5 + ", but got " + metadata.getETag(),
-				metadata.getETag() != null && metadata.getETag().equals(sourceMd5));
 	}
 }
