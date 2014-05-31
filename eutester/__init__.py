@@ -32,7 +32,7 @@
 #
 # Author: vic.iglesias@eucalyptus.com
 
-__version__ = '0.0.9'
+__version__ = '0.0.10'
 
 import re
 import os
