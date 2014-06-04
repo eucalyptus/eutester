@@ -50,8 +50,7 @@ class InstanceBasics(EutesterTestCase):
         if emi:
             self.image = emi
         else:
-            self.image = self.tester.get_emi(root_device_type="instance-store",
-                                             not_location=['windows', 'loadbalancer'])
+            self.image = self.tester.get_emi(root_device_type="instance-store", not_platform="windows")
         self.address = None
         self.volume = None
         self.private_addressing = False
@@ -99,8 +98,14 @@ class InstanceBasics(EutesterTestCase):
         for instance in reservation.instances:
             self.assertTrue(self.tester.wait_for_reservation(reservation), 'Instance did not go to running')
             self.assertTrue(self.tester.ping(instance.ip_address), 'Could not ping instance')
-            self.assertFalse(instance.found("ls -1 /dev/" + instance.rootfs_device + "2",  "No such file or directory"),
-                             "Did not find ephemeral storage at " + instance.rootfs_device + "2")
+            if self.image.virtualization_type == "paravirtual":
+                paravirtual_ephemeral = "/dev/" + instance.rootfs_device + "2"
+                self.assertFalse(instance.found("ls -1 " + paravirtual_ephemeral,  "No such file or directory"),
+                                 "Did not find ephemeral storage at " + paravirtual_ephemeral)
+            elif self.image.virtualization_type == "hvm":
+                hvm_ephemeral = "/dev/" + instance.block_device_prefix + "b"
+                self.assertFalse(instance.found("ls -1 " + hvm_ephemeral,  "No such file or directory"),
+                                 "Did not find ephemeral storage at " + hvm_ephemeral)
         self.set_reservation(reservation)
         return reservation
 
@@ -219,16 +224,17 @@ class InstanceBasics(EutesterTestCase):
                             'Incorrect reservation in metadata')
             self.assertTrue(re.match(instance.get_metadata("placement/availability-zone")[0], instance.placement),
                             'Incorrect availability-zone in metadata')
-            self.assertTrue(re.match(instance.get_metadata("kernel-id")[0], instance.kernel),
-                            'Incorrect kernel id in metadata')
+            if self.image.virtualization_type == "paravirtual":
+                self.assertTrue(re.match(instance.get_metadata("kernel-id")[0], instance.kernel),
+                                'Incorrect kernel id in metadata')
+                self.assertTrue(re.match(instance.get_metadata("ramdisk-id")[0], instance.ramdisk),
+                                'Incorrect ramdisk in metadata')
             self.assertTrue(re.match(instance.get_metadata("public-hostname")[0], instance.public_dns_name),
                             'Incorrect public host name in metadata')
             self.assertTrue(re.match(instance.get_metadata("local-hostname")[0], instance.private_dns_name),
                             'Incorrect private host name in metadata')
             self.assertTrue(re.match(instance.get_metadata("hostname")[0], instance.private_dns_name),
                             'Incorrect host name in metadata')
-            self.assertTrue(re.match(instance.get_metadata("ramdisk-id")[0], instance.ramdisk),
-                            'Incorrect ramdisk in metadata')
             self.assertTrue(re.match(instance.get_metadata("instance-type")[0], instance.instance_type),
                             'Incorrect instance type in metadata')
             bad_meta_data_keys = ['foobar']
@@ -269,20 +275,20 @@ class InstanceBasics(EutesterTestCase):
             # Check to see if nslookup was able to resolve
             assert isinstance(instance, EuInstance)
             # Check nslookup to resolve public DNS Name to local-ipv4 address
-            self.assertTrue(instance.found("nslookup " + instance.public_dns_name + " " + self.tester.ec2.host,
+            self.assertTrue(instance.found("nslookup " + instance.public_dns_name,
                                            instance.private_ip_address), "Incorrect DNS resolution for hostname.")
             # Check nslookup to resolve public-ipv4 address to public DNS name
             if self.managed_network:
-                self.assertTrue(instance.found("nslookup " + instance.ip_address + " " + self.tester.ec2.host,
+                self.assertTrue(instance.found("nslookup " + instance.ip_address,
                                                instance.public_dns_name),
                                 "Incorrect DNS resolution for public IP address")
             # Check nslookup to resolve private DNS Name to local-ipv4 address
             if self.managed_network:
-                self.assertTrue(instance.found("nslookup " + instance.private_dns_name + " " + self.tester.ec2.host,
+                self.assertTrue(instance.found("nslookup " + instance.private_dns_name,
                                                instance.private_ip_address),
                                 "Incorrect DNS resolution for private hostname.")
             # Check nslookup to resolve local-ipv4 address to private DNS name
-            self.assertTrue(instance.found("nslookup " + instance.private_ip_address + " " + self.tester.ec2.host,
+            self.assertTrue(instance.found("nslookup " + instance.private_ip_address,
                                            instance.private_dns_name),
                             "Incorrect DNS resolution for private IP address")
             self.assertTrue(self.tester.ping(instance.public_dns_name))
@@ -330,11 +336,16 @@ class InstanceBasics(EutesterTestCase):
         if self.reservation:
             self.tester.terminate_instances(self.reservation)
             self.set_reservation(None)
+        try:
+            available_instances_before = self.tester.get_available_vms(zone=self.zone)
+            if available_instances_before > 4:
+                count = 4
+            else:
+                count = available_instances_before
+        except IndexError, e:
+            self.debug("Running as non-admin, defaulting to 4 VMs")
+            available_instances_before = count = 4
 
-        available_instances_before = self.tester.get_available_vms(zone=self.zone)
-
-        ## Run through count iterations of test
-        count = 4
         future_instances = []
 
         with ThreadPoolExecutor(max_workers=count) as executor:
@@ -386,8 +397,8 @@ class InstanceBasics(EutesterTestCase):
             address.release()
             if instance.ip_address != "0.0.0.0" and instance.ip_address != instance.private_ip_address:
                 self.fail("Instance received a new public IP: " + instance.ip_address)
-        self.tester.terminate_instances(self.reservation)
-        self.set_reservation(None)
+        self.tester.terminate_instances(reservation)
+        self.set_reservation(reservation)
         return reservation
 
     def ReuseAddresses(self):
@@ -410,6 +421,27 @@ class InstanceBasics(EutesterTestCase):
                                     str(instance.public_dns_name))
                 prev_address = instance.ip_address
             self.tester.terminate_instances(reservation)
+
+    def BundleInstance(self):
+        if not self.reservation:
+            self.reservation = self.tester.run_instance(**self.run_instance_params)
+        original_image = self.run_instance_params['image']
+        for instance in self.reservation.instances:
+            current_time = str(int(time.time()))
+            temp_file = "/root/my-new-file-" + current_time
+            instance.sys("touch " + temp_file)
+            self.tester.sleep(60)
+            starting_uptime = instance.get_uptime()
+            self.run_instance_params['image'] = self.tester.bundle_instance_monitor_and_register(instance)
+            instance.connect_to_instance()
+            ending_uptime = instance.get_uptime()
+            if ending_uptime > starting_uptime:
+                raise Exception("Instance did not get stopped then started")
+            bundled_image_reservation = self.tester.run_instance(**self.run_instance_params)
+            for new_instance in bundled_image_reservation.instances:
+                new_instance.sys("ls " + temp_file, code=0)
+            self.tester.terminate_instances(bundled_image_reservation)
+        self.run_instance_params['image'] = original_image
 
 if __name__ == "__main__":
     testcase = EutesterTestCase(name='instancetest')

@@ -48,10 +48,21 @@
             <class name="com.eucalyptus.tests.awssdk.TestIAMRoleManagement"/>
         </classes>
     </test>
-    <!--<test name="Walrus_Tests">-->
-        <!--<classes>-->
-            <!--<class name="com.eucalyptus.tests.awssdk.BasicWalrusTest"/>-->
-            <!--<class name="com.eucalyptus.tests.awssdk.S3ObjectTests"/>-->
-        <!--</classes>-->
-    <!--</test>-->
+    <test name="ELB_Tests">
+        <classes>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingELBAddRemoveInstances"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingELBInstanceHealthMonitoring"/>
+            <class name="com.eucalyptus.tests.awssdk.TestAutoScalingELBReferenceValidation"/>
+        </classes>>
+    </test>
+    <test name="Walrus_Tests">
+        <classes>
+            <class name="com.eucalyptus.tests.awssdk.BasicWalrusTest"/>
+            <class name="com.eucalyptus.tests.awssdk.S3BucketCannedACLTests"/>
+            <class name="com.eucalyptus.tests.awssdk.S3BucketTests"/>
+            <class name="com.eucalyptus.tests.awssdk.S3ObjectTests"/>
+            <class name="com.eucalyptus.tests.awssdk.S3ObjectCannedACLTests"/>
+            <class name="com.eucalyptus.tests.awssdk.S3ObjectLifecycleTests"/>
+        </classes>
+    </test>
 </suite>

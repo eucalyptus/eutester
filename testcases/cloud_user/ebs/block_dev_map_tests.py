@@ -53,6 +53,7 @@ and /dev/sdj to an empty EBS volume that is 100 GiB in size. The output is the I
 
 from eucaops import Eucaops
 from eutester.eutestcase import EutesterTestCase
+from argparse import ArgumentError
 
 from boto.ec2.blockdevicemapping import BlockDeviceMapping, BlockDeviceType
 import time
@@ -126,11 +127,10 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
             #replace default eutester debugger with eutestcase's for more verbosity...
             self.tester.debug = lambda msg: self.debug(msg, traceback=2, linebyline=False)
         if not self.url:
-            try:
+            if not self.args.url:
+                raise ArgumentError(None,'Required URL not provided')
+            else:
                 self.url = self.args.url
-
-            except Exception, e:
-                raise Exception('')
         self.reservation = None
         self.instance = None
         self.volumes = []
@@ -183,7 +183,7 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         if self.args.emi:
             self.image = self.tester.get_emi(emi=str(self.args.emi))
         else:
-            self.image = self.tester.get_emi(root_device_type="instance-store",not_location='windows')
+            self.image = self.tester.get_emi(root_device_type="instance-store")
         if not self.image:
             raise Exception('couldnt find instance store image')
         self.clean_method = self.cleanup

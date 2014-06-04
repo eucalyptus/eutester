@@ -1,6 +1,6 @@
 # Software License Agreement (BSD License)
 #
-# Copyright (c) 2009-2013, Eucalyptus Systems, Inc.
+# Copyright (c) 2009-2014, Eucalyptus Systems, Inc.
 # All rights reserved.
 #
 # Redistribution and use of this software in source and binary forms, with or
@@ -150,8 +150,6 @@ class ASops(Eutester):
         self.test_resources["keypairs"] = []
         self.test_resources["security-groups"] = []
         self.test_resources["images"] = []
-        self.test_resources["auto-scaling-groups"]=[]
-        self.test_resources["launch-configurations"]=[]
 
     def create_launch_config(self, name, image_id, key_name=None, security_groups=None, user_data=None,
                              instance_type=None, kernel_id=None, ramdisk_id=None, block_device_mappings=None,
@@ -295,6 +293,21 @@ class ASops(Eutester):
         self.debug("Deleting Policy: " + policy_name + " from group: " + autoscale_group)
         self.autoscale.delete_policy(policy_name=policy_name, autoscale_group=autoscale_group)
 
+    def cleanup_autoscaling_groups(self, asg_list = None):
+        """
+        This will attempt to delete auto scaling groups listed in test_resources['auto-scaling-groups']
+        """
+        ### clear all ASGs
+        if not asg_list:
+            auto_scaling_groups=self.test_resources['auto-scaling-groups']
+        else:
+            auto_scaling_groups = asg_list
+        for asg in auto_scaling_groups:
+            self.debug("Found Auto Scaling Group: " + asg.name)
+            self.delete_as_group(name=asg.name, force=True)
+
+
+
     def delete_all_autoscaling_groups(self):
         """
         This will attempt to delete all launch configs and all auto scaling groups
@@ -303,10 +316,23 @@ class ASops(Eutester):
         for asg in self.describe_as_group():
             self.debug("Found Auto Scaling Group: " + asg.name)
             self.delete_as_group(name=asg.name, force=True)
-        if len(self.describe_as_group()) != 0:
+        if len(self.describe_as_group(asg.name)) != 0:
             self.debug("Some AS groups remain")
             for asg in self.describe_as_group():
                 self.debug("Found Auto Scaling Group: " + asg.name)
+
+    def cleanup_launch_configs(self):
+        """
+        This will attempt to delete launch configs listed in test_resources['launch-configurations']
+        """
+        launch_configurations=self.test_resources['launch-configurations']
+
+        if not launch_configurations:
+            self.debug("Launch configuration list is empty")
+        else:
+            for lc in launch_configurations:
+                self.debug("Found Launch Config:" + lc.name)
+                self.delete_launch_config(lc.name)
 
     def delete_all_launch_configs(self):
         ### clear all LCs
@@ -322,9 +348,15 @@ class ASops(Eutester):
                 self.debug("Found Launch Config:" + lc.name)
 
     def get_as_ip(self):
-        """Parse the eucarc for the EC2_URL"""
+        """Parse the eucarc for the AWS_AUTO_SCALING_URL"""
         as_url = self.parse_eucarc("AWS_AUTO_SCALING_URL")
         return as_url.split("/")[2].split(":")[0]
+
+    def get_as_path(self):
+        """Parse the eucarc for the AWS_AUTO_SCALING_URL"""
+        as_url = self.parse_eucarc("AWS_AUTO_SCALING_URL")
+        as_path = "/".join(as_url.split("/")[3:])
+        return as_path
 
     def get_last_instance_id(self):
         reservations = self.ec2.get_all_instances()
@@ -354,7 +386,8 @@ class ASops(Eutester):
         self.debug("Number of tags: " + str(len(self.autoscale.get_all_tags())))
 
     def delete_all_policies(self):
-        for policy in self.autoscale.get_all_policies():
+        policies = self.autoscale.get_all_policies()
+        for policy in policies:
             self.delete_as_policy(policy_name=policy.name, autoscale_group=policy.as_name)
         if len(self.autoscale.get_all_policies()) != 0:
             raise Exception('Not all auto scaling policies deleted')

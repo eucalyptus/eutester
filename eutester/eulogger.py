@@ -168,8 +168,6 @@ class Eulogger(object):
             else:
                 print "Not adding logfile handler for this eulogger:" +str(self.identifier)
 
-        self.log.debug(str(self.identifier) + ": Eulogger init test message. Init complete")
-
     def add_muted_file_handler_to_parent_logger(self,filepath, level):
         file_handler = logging.FileHandler(filepath)
         file_handler.setLevel(level)

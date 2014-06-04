@@ -15,6 +15,8 @@ from eutester.eulogger import Eulogger
 from eutester.euconfig import EuConfig
 import StringIO
 import copy
+from eutester.timer import Timer
+import uuid
 
 '''
 This is the base class for any test case to be included in the Eutester repo. It should include any
@@ -483,7 +485,7 @@ class EutesterTestCase(unittest.TestCase):
             parser.add_argument('--instance-user',
                                 help="Username used for ssh login. Default:'root'", default='root')
         if instance_password:
-            parser.add_argument('--instance-passsword',
+            parser.add_argument('--instance-password',
                                 help="Password used for ssh login. When value is 'None' ssh keypair will be used and not username/password, default:'None'", default=None)
         if region:
             parser.add_argument('--region',
@@ -782,12 +784,15 @@ class EutesterTestCase(unittest.TestCase):
         start = time.time()
         tests_ran=0
         test_count = len(list)
+        t = Timer("/tmp/eutester_" + str(uuid.uuid4()).replace("-", ""))
         try:
             for test in list:
                 tests_ran += 1
                 self.print_test_unit_startmsg(test)
                 try:
+                    id = t.start()
                     test.run(eof=eof or test.eof)
+                    t.end(id, str(test.name))
                 except Exception, e:
                     self.debug('Testcase:'+ str(test.name)+' error:'+str(e))
                     if eof or (not eof and test.eof):
@@ -803,7 +808,8 @@ class EutesterTestCase(unittest.TestCase):
             elapsed = int(time.time()-start)
             msgout =  "RUN TEST CASE LIST DONE:\n"
             msgout += "Ran "+str(tests_ran)+"/"+str(test_count)+" tests in "+str(elapsed)+" seconds\n"
-            
+            t.finish()
+
             if printresults:
                 try:
                     self.debug("Printing pre-cleanup results:")

@@ -2,9 +2,8 @@ package com.eucalyptus.tests.awssdk;
 
 import static com.eucalyptus.tests.awssdk.Eutester4j.assertThat;
 import static com.eucalyptus.tests.awssdk.Eutester4j.eucaUUID;
-import static com.eucalyptus.tests.awssdk.Eutester4j.initS3Client;
+import static com.eucalyptus.tests.awssdk.Eutester4j.initS3ClientWithNewAccount;
 import static com.eucalyptus.tests.awssdk.Eutester4j.print;
-import static com.eucalyptus.tests.awssdk.Eutester4j.s3;
 import static com.eucalyptus.tests.awssdk.Eutester4j.testInfo;
 import static org.testng.AssertJUnit.assertTrue;
 
@@ -21,6 +20,7 @@ import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 import com.amazonaws.AmazonServiceException;
+import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.AccessControlList;
 import com.amazonaws.services.s3.model.Bucket;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
@@ -55,11 +55,22 @@ public class S3ObjectCannedACLTests {
 	private static List<Runnable> cleanupTasks = null;
 	private static File fileToPut = new File("test.dat");
 	private static String md5_orig = null;
+	private static AmazonS3 s3 = null;
+	private static String account = null;
 
 	@BeforeClass
 	public void init() throws Exception {
 		print("*** PRE SUITE SETUP ***");
-		initS3Client();
+		try {
+			account = this.getClass().getSimpleName().toLowerCase();
+			s3 = initS3ClientWithNewAccount(account, "admin");
+		} catch (Exception e) {
+			try {
+				teardown();
+			} catch (Exception ie) {
+			}
+			throw e;
+		}
 		bucketName = eucaUUID();
 		cleanupTasks = new ArrayList<Runnable>();
 		print("Creating bucket " + bucketName);
@@ -76,6 +87,13 @@ public class S3ObjectCannedACLTests {
 		assertTrue("Mismatch in bucket names. Expected bucket name to be " + bucketName + ", but got " + bucket.getName(), bucketName.equals(bucket.getName()));
 
 		md5_orig = BinaryUtils.toHex(Md5Utils.computeMD5Hash(new FileInputStream(fileToPut)));
+	}
+
+	@AfterClass
+	public void teardown() throws Exception {
+		print("*** POST SUITE CLEANUP ***");
+		Eutester4j.deleteAccount(account);
+		s3 = null;
 	}
 
 	@BeforeMethod

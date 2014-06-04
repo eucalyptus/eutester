@@ -16,7 +16,7 @@ class SOSreport(EutesterTestCase):
         self.parser.add_argument("--timeout", default=1200, type=int)
         self.parser.add_argument("--remote-dir", default="/root/")
         self.parser.add_argument("--local-dir", default=os.getcwd())
-        self.parser.add_argument("--package-url", default="http://mongo.beldurnik.com/RPMS/eucalyptus-sos-plugins-0.1.1-0.el6.noarch.rpm")
+        self.parser.add_argument("--package-url", default="http://downloads.eucalyptus.com/software/tools/centos/6/x86_64/eucalyptus-sos-plugins-0.1.5-0.el6.noarch.rpm")
         self.get_args()
         self.remote_dir = self.args.remote_dir + "/euca-sosreport-" + self.args.ticket_number + "/"
         # Setup basic eutester object

@@ -110,6 +110,7 @@ class Machine:
         self.retry = retry
         self.debugmethod = debugmethod
         self.verbose = verbose
+        self._distroname = distro
         self.log_threads = {}
         self.log_buffers = {}
         self.log_active = {}
@@ -117,24 +118,93 @@ class Machine:
         if self.debugmethod is None:
             logger = eulogger.Eulogger(identifier= str(hostname) + ":" + str(components))
             self.debugmethod = logger.log.debug
-        if self.connect:
-            self.ssh = sshconnection.SshConnection( hostname, 
-                                                    keypath=keypath,          
-                                                    password=password, 
-                                                    username=username, 
-                                                    timeout=timeout, 
-                                                    retry=retry,
-                                                    debugmethod=self.debugmethod,
-                                                    verbose=True)
-            self.sftp = self.ssh.connection.open_sftp()
-        # If we were given a conf file, and have an ssh/sftp session, attempt to populate eucalyptus_conf into
-        # a euconfig object for this machine...
-        self.distro = self._get_distro(distro_name=distro, distro_release=distro_ver)
-        if self.distro.package_manager is not None:
-            self.repo_utils = RepoUtils(self, self.distro.package_manager)
-            self.package_manager = self.repo_utils.package_manager
-        self.get_eucalyptus_conf()
+        self._ssh = None
+        self._sftp = None
+        self._distro = None
+        self._repo_utils = None
+        self._package_manager = None
+        self._config = None
 
+    @property
+    def distro(self):
+        # If we were given a conf file, and have an ssh/sftp session,
+        # attempt to populate eucalyptus_conf into
+        # a euconfig object for this machine...
+        if not self._distro:
+            self._distro = self._get_distro(distro_name=self._distroname,
+                                            distro_release=self.distro_ver)
+        return self._distro
+
+    @distro.setter
+    def distro(self, new_distro):
+        self._distro = new_distro
+
+    @property
+    def repo_utils(self):
+        if not self._repo_utils:
+            if self.distro and self.distro.package_manager is not None:
+                self._repo_utils = RepoUtils(self, self.distro.package_manager)
+        return self._repo_utils
+
+    @repo_utils.setter
+    def repo_utils(self, new_repotutils):
+        self._repo_utils = new_repotutils
+
+    @property
+    def package_manager(self):
+        if not self._package_manager:
+            if self.distro and self.distro.package_manager is not None:
+                self._package_manager = self.repo_utils.package_manager
+        return self._package_manager
+
+    @package_manager.setter
+    def package_manager(self, new_package_manager):
+        self._package_manager = new_package_manager
+
+    @property
+    def config(self):
+        if not self._config:
+            self._config = self.get_eucalyptus_conf()
+        return self._config
+
+    @config.setter
+    def config(self, new_config):
+        self._config = new_config
+
+    @property
+    def ssh(self):
+        if not self._ssh:
+            if self.connect:
+                self._ssh = sshconnection.SshConnection(
+                    self.hostname,
+                    keypath=self.keypath,
+                    password=self.password,
+                    username=self.username,
+                    timeout=self.timeout,
+                    retry=self.retry,
+                    debugmethod=self.debugmethod,
+                    verbose=True)
+        return self._ssh
+
+    @ssh.setter
+    def ssh(self, newssh):
+        self._ssh = newssh
+
+    @property
+    def sftp(self):
+        if not self._sftp:
+            self._sftp = self.ssh.connection.open_sftp()
+        return self._sftp
+
+    @sftp.setter
+    def sftp(self, newsftp):
+        self._sftp = newsftp
+
+    @property
+    def eucalyptus_conf(self):
+        if hasattr(self.config, 'eucalyptus_conf'):
+            return self.config.eucalyptus_conf
+        return None
 
     def get_distro_info_from_machine(self):
         if not self.ssh:
@@ -540,11 +610,20 @@ class Machine:
                 return True
         return False   
     
-    def wget_remote_image(self, url,path=None, user=None, password=None, retryconn=True, timeout=300):
+    def wget_remote_image(self,
+                          url,
+                          path=None,
+                          dest_file_name=None,
+                          user=None,
+                          password=None,
+                          retryconn=True,
+                          timeout=300):
         self.debug('wget_remote_image, url:'+str(url)+", path:"+str(path))
         cmd = 'wget '
         if path:
             cmd = cmd + " -P " + str(path)
+        if dest_file_name:
+            cmd = cmd + " -O " + str(dest_file_name)
         if user:
             cmd = cmd + " --user " + str(user)
         if password:
@@ -623,7 +702,7 @@ class Machine:
     def add_repo(self, url, name="test-repo"):
         self.package_manager.add_repo(url,name)
     
-    def install(self, package, nogpg=False):
+    def install(self, package, nogpg=False, timeout=300):
         self.package_manager.install(package,nogpg=nogpg)
 
     def update_repos(self):
@@ -695,15 +774,12 @@ class Machine:
         if not use_path:
             out = 'eucalyptus.conf not found on this system'
             if eof:
-                raise Exception(eof)
+                raise Exception(out)
             else:
                 self.debug(out)
         else:
             try:
                 config = EuConfig(filename=use_path, ssh=self.ssh, default_section_name='eucalyptus_conf')
-                self.config = config
-                if hasattr(config, 'eucalyptus_conf'):
-                    self.eucalyptus_conf = config.eucalyptus_conf
             except Exception, e:
                 out = 'Error while trying to create euconfig from eucalyptus_conf:' + str(e)
                 if eof:
@@ -712,9 +788,7 @@ class Machine:
                     self.debug(out)
         return config
 
-            
-        
-    
+
     def __str__(self):
         s  = "+++++++++++++++++++++++++++++++++++++++++++++++++++++\n"
         s += "+" + "Hostname:" + str(self.hostname) + "\n"

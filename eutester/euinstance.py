@@ -141,7 +141,7 @@ class EuInstance(Instance, TaggedResource):
         newins.retry = retry    
         newins.private_addressing = private_addressing
         newins.reservation = reservation or newins.get_reservation()
-        if newins.reservation:
+        if newins.reservation and newins.state != 'terminated':
             newins.security_groups = newins.tester.get_instance_security_groups(newins)
         else:
             newins.security_groups = None
@@ -149,8 +149,9 @@ class EuInstance(Instance, TaggedResource):
         newins.cmdstart = cmdstart
         newins.auto_connect = auto_connect
         newins.set_last_status()
-        newins.update_vm_type_info()
-        if newins.root_device_type == 'ebs':
+        if newins.state != 'terminated':
+            newins.update_vm_type_info()
+        if newins.root_device_type == 'ebs' and newins.state != 'terminated':
             try:
                 volume = newins.tester.get_volume(volume_id = newins.block_device_mapping.get(newins.root_device_name).volume_id)
                 newins.bdm_root_vol = EuVolume.make_euvol_from_vol(volume, tester=newins.tester,cmdstart=newins.cmdstart)
@@ -179,8 +180,8 @@ class EuInstance(Instance, TaggedResource):
         self.laststatetime = time.time()
         self.age_at_state = self.tester.get_instance_time_launched(self)
         #Also record age from user's perspective, ie when they issued the run instance request (if this is available)
-        if self.cmdstart:
-            self.age_from_run_cmd = "{0:.2f}".format(time.time() - self.cmdstart) 
+        if hasattr(self, "cmdstart") and self.cmdstart:
+            self.age_from_run_cmd = "{0:.2f}".format(time.time() - self.cmdstart)
         else:
             self.age_from_run_cmd = None
         
@@ -311,6 +312,26 @@ class EuInstance(Instance, TaggedResource):
                     break
             elapsed = int(time.time()-start)
             if self.ssh is None:
+                # Add network debug/diag info here...
+                # First show arp cache from local machine
+                # todo Consider getting info from relevant euca components:
+                # - iptables info
+                # - route info
+                # - instance xml
+                try:
+                    # Show local ARP info...
+                    arp_out = "\nLocal ARP cache for instance ip: " \
+                              + str(self.ip_address) + "\n"
+                    arp_fd = os.popen('arp ' + str(self.ip_address))
+                    for line in arp_fd:
+                        arp_out += line
+                    self.debug(arp_out)
+                except Exception as AE:
+                    self.log.debug('Failed to get arp info:' + str(AE))
+                try:
+                    self.tester.get_console_output(self)
+                except Exception as CE:
+                    self.log.debug('Failed to get console output:' + str(CE))
                 raise Exception(str(self.id)+":Failed establishing ssh connection to instance, elapsed:"+str(elapsed)+
                                 "/"+str(timeout))
         else:
@@ -611,7 +632,13 @@ class EuInstance(Instance, TaggedResource):
             self.debug("List after\n"+" ".join(dev_list_after))
             raise Exception('Volume:'+str(euvolume.id)+' attached, but not found on guest'+str(self.id)+' after '+str(elapsed)+' seconds?')
         #Check to see if this volume has unique data in the head otherwise write some and md5 it
-        self.vol_write_random_data_get_md5(euvolume,overwrite=overwrite)
+        def try_to_write_to_disk():
+            try:
+                self.vol_write_random_data_get_md5(euvolume,overwrite=overwrite)
+                return True
+            except:
+                return False
+        self.tester.wait_for_result(try_to_write_to_disk, True)
         self.debug('Success attaching volume:'+str(euvolume.id)+' to instance:'+self.id+', cloud dev:'+str(euvolume.attach_data.device)+', attached dev:'+str(attached_dev))
         return attached_dev
     

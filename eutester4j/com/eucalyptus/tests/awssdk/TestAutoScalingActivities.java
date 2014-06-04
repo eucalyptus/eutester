@@ -189,7 +189,7 @@ public class TestAutoScalingActivities {
         final long startTime = System.currentTimeMillis();
         boolean completed = false;
         Instance instance = null;
-        while (!completed && (System.currentTimeMillis() - startTime) < TimeUnit.MINUTES.toMillis(5)) {
+        while (!completed && (System.currentTimeMillis() - startTime) < TimeUnit.MINUTES.toMillis(10)) {
             instance = getInstance(as, groupName);
             completed = instance == null && allowEmpty || instance != null && state.equals(instance.getLifecycleState());
             Thread.sleep(2500);

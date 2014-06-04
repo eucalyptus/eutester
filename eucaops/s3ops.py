@@ -1,6 +1,6 @@
 # Software License Agreement (BSD License)
 #
-# Copyright (c) 2009-2011, Eucalyptus Systems, Inc.
+# Copyright (c) 2009-2014, Eucalyptus Systems, Inc.
 # All rights reserved.
 #
 # Redistribution and use of this software in source and binary forms, with or
@@ -103,7 +103,6 @@ class S3ops(Eutester):
         """Parse the eucarc for the S3_URL"""
         s3_url = self.parse_eucarc("S3_URL")
         s3_path = "/".join(s3_url.split("/")[3:])
-        self.debug("Print S3 PATH:"  + str(s3_path))
         return s3_path
 
     def create_bucket(self,bucket_name):
@@ -216,7 +215,7 @@ class S3ops(Eutester):
         try :
             bucket = self.s3.get_bucket(bucket_name=bucket_name)      
         except S3ResponseError as e:
-            self.error('No bucket' + bucket_name + ' found: ' + e.message)
+            self.debug('No bucket' + bucket_name + ' found: ' + e.message)
             raise Exception('Not found')
         
         try:
@@ -232,7 +231,7 @@ class S3ops(Eutester):
                 bucket.delete_key(k)
             bucket.delete()
         except S3ResponseError as e:
-            self.debug(  "Exception caught doing bucket cleanup." )
+            self.debug(  "Exception caught doing bucket cleanup." + e.message )
             #Todo: need to make this work with Walrus's non-S3-compliant error codes
             if e.status == 409:
                 #Do version cleanup
@@ -343,8 +342,8 @@ class S3ops(Eutester):
     def check_md5(self, eTag=None, data=None):
         hasher = hashlib.md5()
         hasher.update(data)
-        data_hash = hasher.hexdigest()
+        data_hash = "\"" + hasher.hexdigest() + "\""
         if data_hash != eTag:
-            raise Exception( "Hash/eTag mismatch: \nhash = " + data_hash + "\neTag= " + eTag )
+            raise Exception( "Hash/eTag mismatch: \nhash = " + data_hash + "\neTag= " + eTag)
             
                 
