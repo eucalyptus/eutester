@@ -621,7 +621,7 @@ public class S3CopyObjectTests {
 		}
 	}
 
-	@Test(enabled = false)
+	@Test
 	public void metadataDirective_SameObject() throws Exception {
 		testInfo(this.getClass().getSimpleName() + " - metadataDirective_SameObject");
 		try {

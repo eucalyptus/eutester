@@ -69,11 +69,18 @@ import static com.eucalyptus.tests.awssdk.Eutester4j.print;
 import static com.eucalyptus.tests.awssdk.Eutester4j.testInfo;
 import static org.testng.AssertJUnit.assertTrue;
 
+import java.io.BufferedInputStream;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.net.URL;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.AfterMethod;
@@ -86,10 +93,18 @@ import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.AbortMultipartUploadRequest;
 import com.amazonaws.services.s3.model.Bucket;
 import com.amazonaws.services.s3.model.CompleteMultipartUploadRequest;
+import com.amazonaws.services.s3.model.CompleteMultipartUploadResult;
+import com.amazonaws.services.s3.model.CopyObjectResult;
+import com.amazonaws.services.s3.model.GetObjectRequest;
 import com.amazonaws.services.s3.model.InitiateMultipartUploadRequest;
 import com.amazonaws.services.s3.model.InitiateMultipartUploadResult;
+import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PartETag;
+import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.s3.model.UploadPartRequest;
+import com.amazonaws.services.s3.model.UploadPartResult;
+import com.amazonaws.util.BinaryUtils;
+import com.amazonaws.util.Md5Utils;
 import com.google.common.collect.Lists;
 
 /**
@@ -119,6 +134,20 @@ public class S3MultiPartUploadTest {
 			}
 			throw e;
 		}
+
+		// s3 = getS3Client("awsrc_euca");
+	}
+
+	public AmazonS3 getS3Client(String credPath) throws Exception {
+		print("Getting cloud information from " + credPath);
+
+		String s3Endpoint = Eutester4j.parseEucarc(credPath, "S3_URL");
+
+		String secretKey = Eutester4j.parseEucarc(credPath, "EC2_SECRET_KEY").replace("'", "");
+		String accessKey = Eutester4j.parseEucarc(credPath, "EC2_ACCESS_KEY").replace("'", "");
+
+		print("Initializing S3 connections");
+		return Eutester4j.getS3Client(accessKey, secretKey, s3Endpoint);
 	}
 
 	@AfterClass
@@ -161,14 +190,8 @@ public class S3MultiPartUploadTest {
 	}
 
 	private void printException(AmazonServiceException ase) {
-		printPlainException(ase);
-		print("HTTP Status Code: " + ase.getStatusCode());
-		print("Amazon Error Code: " + ase.getErrorCode());
-	}
-
-	private void printPlainException(Exception e) {
-		e.printStackTrace();
-		print("Caught Exception: " + e.getMessage());
+		print("Caught Exception: " + ase.getMessage());
+		ase.printStackTrace();
 	}
 
 	@Test
@@ -213,7 +236,7 @@ public class S3MultiPartUploadTest {
 				if (e instanceof AmazonServiceException) {
 					throw e; // let outter handler handle
 				} else {
-					printPlainException(e);
+					e.printStackTrace();
 					assertThat(false, "Failed to run basicMultiPartUpload");
 				}
 			}
@@ -269,7 +292,7 @@ public class S3MultiPartUploadTest {
 					assertThat(true, "expected an exception to be thrown because a bad upload ID was specified");
 					print("an exception was received with message - " + e.getMessage());
 				} else {
-					printPlainException(e);
+					e.printStackTrace();
 					assertThat(false, "Failed to run basicMultiPartUpload");
 				}
 			}
@@ -278,4 +301,577 @@ public class S3MultiPartUploadTest {
 			assertThat(false, "Failed to run basicMultiPartUpload");
 		}
 	}
+
+	@Test
+	public void lessThanMinimumPartSize() {
+		testInfo(this.getClass().getSimpleName() + " - lessThanMinimumPartSize");
+		try {
+			File smallFile = new File("test.dat");
+			final String key = eucaUUID();
+			List<PartETag> partETags = Lists.newArrayList();
+
+			// Inititate mpu
+			print(account + ": Initiating multipart upload for object " + key + " in bucket " + bucketName);
+			final InitiateMultipartUploadResult initiateMpuResult = s3.initiateMultipartUpload(new InitiateMultipartUploadRequest(bucketName, key));
+			cleanupTasks.add(new Runnable() {
+				@Override
+				public void run() {
+					print(account + ": Aborting multipart upload for object " + key + ", upload ID " + initiateMpuResult.getUploadId() + " in bucket "
+							+ bucketName);
+					s3.abortMultipartUpload(new AbortMultipartUploadRequest(bucketName, key, initiateMpuResult.getUploadId()));
+				}
+			});
+
+			// Upload parts smaller than 5 MB
+			print(account + ": Uploading file of size " + smallFile.length() + " bytes for object " + key + ", upload ID " + initiateMpuResult.getUploadId()
+					+ ", part number 1");
+			UploadPartResult uploadPartResult = s3.uploadPart(new UploadPartRequest().withBucketName(bucketName).withKey(key)
+					.withUploadId(initiateMpuResult.getUploadId()).withPartNumber(1).withFile(smallFile));
+			partETags.add(uploadPartResult.getPartETag());
+
+			print(account + ": Uploading file of size " + smallFile.length() + " bytes for object " + key + ", upload ID " + initiateMpuResult.getUploadId()
+					+ ", part number 2");
+			uploadPartResult = s3.uploadPart(new UploadPartRequest().withBucketName(bucketName).withKey(key).withUploadId(initiateMpuResult.getUploadId())
+					.withPartNumber(2).withFile(smallFile));
+			partETags.add(uploadPartResult.getPartETag());
+
+			boolean error = false;
+			try {
+				// Try completing the upload
+				print(account + ": Completing multipart upload for object " + key + ", upload ID " + initiateMpuResult.getUploadId());
+				s3.completeMultipartUpload(new CompleteMultipartUploadRequest(bucketName, key, initiateMpuResult.getUploadId(), partETags));
+			} catch (AmazonServiceException ase) {
+				error = true;
+				printException(ase);
+				assertTrue("Expected a 400 status code but got " + ase.getStatusCode(), ase.getStatusCode() == 400);
+				assertTrue("Expected EntityTooSmall error code but got " + ase.getErrorCode(), ase.getErrorCode().equals("EntityTooSmall"));
+			} finally {
+				assertTrue("Expected multipart upload to fail with 400 EntityTooSmall error because of part size", error);
+			}
+		} catch (AmazonServiceException ase) {
+			printException(ase);
+			assertThat(false, "Failed to run lessThanMinimumPartSize");
+		}
+	}
+
+	@Test
+	public void noParts() {
+		testInfo(this.getClass().getSimpleName() + " - noParts");
+		try {
+			final String key = eucaUUID();
+
+			// Inititate mpu
+			print(account + ": Initiating multipart upload for object " + key + " in bucket " + bucketName);
+			final InitiateMultipartUploadResult initiateMpuResult = s3.initiateMultipartUpload(new InitiateMultipartUploadRequest(bucketName, key));
+			cleanupTasks.add(new Runnable() {
+				@Override
+				public void run() {
+					print(account + ": Aborting multipart upload for object " + key + ", upload ID " + initiateMpuResult.getUploadId() + " in bucket "
+							+ bucketName);
+					s3.abortMultipartUpload(new AbortMultipartUploadRequest(bucketName, key, initiateMpuResult.getUploadId()));
+				}
+			});
+
+			// Complete mpu
+			boolean error = false;
+			try {
+				print(account + ": Completing multipart upload for object " + key + ", upload ID " + initiateMpuResult.getUploadId());
+				s3.completeMultipartUpload(new CompleteMultipartUploadRequest(bucketName, key, initiateMpuResult.getUploadId(), new ArrayList<PartETag>()));
+			} catch (AmazonServiceException ase) {
+				error = true;
+				printException(ase);
+				assertTrue("Expected a 400 status code but got " + ase.getStatusCode(), ase.getStatusCode() == 400);
+				assertTrue("Expected InvalidRequest error code but got " + ase.getErrorCode(), ase.getErrorCode().equals("InvalidRequest"));
+			} finally {
+				assertTrue("Expected multipart upload to fail with 400 InvalidRequest error", error);
+			}
+		} catch (AmazonServiceException ase) {
+			printException(ase);
+			assertThat(false, "Failed to run noParts");
+		}
+	}
+
+	// This test might never pass as the s3 sdk sorts parts before sending the request
+	@Test(enabled = false)
+	public void invalidPartOrder() throws Exception {
+		testInfo(this.getClass().getSimpleName() + " - invalidPartOrder");
+		try {
+			final String key = eucaUUID();
+			List<PartETag> partETags = Lists.newArrayList();
+			File fileToPut = new File("zerofile");
+			long partSize = 5l * 1024l * 1024l; // 5mb
+			long contentLength = fileToPut.length();
+			long filePosition = 0; // position ptr
+
+			// Inititate mpu
+			print(account + ": Initiating multipart upload for object " + key + " in bucket " + bucketName);
+			final InitiateMultipartUploadResult initiateMpuResult = s3.initiateMultipartUpload(new InitiateMultipartUploadRequest(bucketName, key));
+			cleanupTasks.add(new Runnable() {
+				@Override
+				public void run() {
+					print(account + ": Aborting multipart upload for object " + key + ", upload ID " + initiateMpuResult.getUploadId() + " in bucket "
+							+ bucketName);
+					s3.abortMultipartUpload(new AbortMultipartUploadRequest(bucketName, key, initiateMpuResult.getUploadId()));
+				}
+			});
+
+			// Upload a few parts
+			for (int partNumber = 1; partNumber <= 3; partNumber++) {
+				partSize = Math.min(partSize, (contentLength - filePosition));
+				print(account + ": Uploading part of size " + partSize + " bytes for object " + key + ", upload ID " + initiateMpuResult.getUploadId()
+						+ ", part number " + partNumber);
+				partETags.add(s3.uploadPart(
+						new UploadPartRequest().withBucketName(bucketName).withKey(key).withUploadId(initiateMpuResult.getUploadId())
+								.withPartNumber(partNumber).withFileOffset(filePosition).withFile(fileToPut).withPartSize(partSize)).getPartETag());
+				filePosition += partSize;
+			}
+
+			// Reverse the list of etags
+			Collections.reverse(partETags);
+
+			boolean error = false;
+			try {
+				// Try completing the upload with reversed list of etags
+				print(account + ": Completing multipart upload for object " + key + ", upload ID " + initiateMpuResult.getUploadId());
+				s3.completeMultipartUpload(new CompleteMultipartUploadRequest(bucketName, key, initiateMpuResult.getUploadId(), partETags));
+			} catch (AmazonServiceException ase) {
+				error = true;
+				printException(ase);
+				assertTrue("Expected a 400 status code but got " + ase.getStatusCode(), ase.getStatusCode() == 400);
+				assertTrue("Expected InvalidPartOrder error code but got " + ase.getErrorCode(), ase.getErrorCode().equals("InvalidPartOrder"));
+			} finally {
+				assertTrue("Expected multipart upload to fail with 400 InvalidPartOrder error because of incorrect part ordering", error);
+			}
+		} catch (AmazonServiceException ase) {
+			printException(ase);
+			assertThat(false, "Failed to run invalidPartOrder");
+		}
+	}
+
+	@Test
+	public void invalidPartNumber() throws Exception {
+		testInfo(this.getClass().getSimpleName() + " - invalidPartNumber");
+		try {
+			File smallFile = new File("test.dat");
+			final String key = eucaUUID();
+
+			// Inititate mpu
+			print(account + ": Initiating multipart upload for object " + key + " in bucket " + bucketName);
+			final InitiateMultipartUploadResult initiateMpuResult = s3.initiateMultipartUpload(new InitiateMultipartUploadRequest(bucketName, key));
+			cleanupTasks.add(new Runnable() {
+				@Override
+				public void run() {
+					print(account + ": Aborting multipart upload for object " + key + ", upload ID " + initiateMpuResult.getUploadId() + " in bucket "
+							+ bucketName);
+					s3.abortMultipartUpload(new AbortMultipartUploadRequest(bucketName, key, initiateMpuResult.getUploadId()));
+				}
+			});
+
+			// Try uploading part with part number 0
+			boolean error = false;
+			try {
+				print(account + ": Uploading file of size " + smallFile.length() + " bytes for object " + key + ", upload ID "
+						+ initiateMpuResult.getUploadId() + ", part number 0");
+				s3.uploadPart(new UploadPartRequest().withBucketName(bucketName).withKey(key).withUploadId(initiateMpuResult.getUploadId()).withPartNumber(0)
+						.withFile(smallFile));
+			} catch (AmazonServiceException ase) {
+				error = true;
+				printException(ase);
+				assertTrue("Expected a 400 status code but got " + ase.getStatusCode(), ase.getStatusCode() == 400);
+				assertTrue("Expected InvalidArgument error code but got " + ase.getErrorCode(), ase.getErrorCode().equals("InvalidArgument"));
+			} finally {
+				assertTrue("Expected multipart upload to fail with 400 InvalidArgument error", error);
+			}
+
+			// Try uploading part with part number 0
+			error = false;
+			try {
+				print(account + ": Uploading file of size " + smallFile.length() + " bytes for object " + key + ", upload ID "
+						+ initiateMpuResult.getUploadId() + ", part number 10001");
+				s3.uploadPart(new UploadPartRequest().withBucketName(bucketName).withKey(key).withUploadId(initiateMpuResult.getUploadId())
+						.withPartNumber(10001).withFile(smallFile));
+			} catch (AmazonServiceException ase) {
+				error = true;
+				printException(ase);
+				assertTrue("Expected a 400 status code but got " + ase.getStatusCode(), ase.getStatusCode() == 400);
+				assertTrue("Expected InvalidArgument error code but got " + ase.getErrorCode(), ase.getErrorCode().equals("InvalidArgument"));
+			} finally {
+				assertTrue("Expected multipart upload to fail with 400 InvalidArgument error", error);
+			}
+
+			// Try completing upload with one of the part numbers set to 0
+			List<PartETag> partETags = Lists.newArrayList();
+			partETags.add(new PartETag(0, "blah"));
+			error = false;
+			try {
+				print(account + ": Completing multipart upload for object " + key + ", upload ID " + initiateMpuResult.getUploadId());
+				s3.completeMultipartUpload(new CompleteMultipartUploadRequest(bucketName, key, initiateMpuResult.getUploadId(), partETags));
+			} catch (AmazonServiceException ase) {
+				error = true;
+				printException(ase);
+				assertTrue("Expected a 400 status code but got " + ase.getStatusCode(), ase.getStatusCode() == 400);
+				assertTrue("Expected InvalidArgument error code but got " + ase.getErrorCode(), ase.getErrorCode().equals("InvalidArgument"));
+			} finally {
+				assertTrue("Expected multipart upload to fail with 400 InvalidArgument error", error);
+			}
+
+			// Try completing upload with one of the part numbers set to 10001
+			partETags = Lists.newArrayList();
+			partETags.add(new PartETag(10001, "blah"));
+			error = false;
+			try {
+				print(account + ": Completing multipart upload for object " + key + ", upload ID " + initiateMpuResult.getUploadId());
+				s3.completeMultipartUpload(new CompleteMultipartUploadRequest(bucketName, key, initiateMpuResult.getUploadId(), partETags));
+			} catch (AmazonServiceException ase) {
+				error = true;
+				printException(ase);
+				assertTrue("Expected a 400 status code but got " + ase.getStatusCode(), ase.getStatusCode() == 400);
+				assertTrue("Expected InvalidArgument error code but got " + ase.getErrorCode(), ase.getErrorCode().equals("InvalidArgument"));
+			} finally {
+				assertTrue("Expected multipart upload to fail with 400 InvalidArgument error", error);
+			}
+		} catch (AmazonServiceException ase) {
+			printException(ase);
+			assertThat(false, "Failed to run invalidPartNumber");
+		}
+	}
+
+	@Test
+	public void mixKeysAndUploadIds() throws Exception {
+		testInfo(this.getClass().getSimpleName() + " - mixKeysAndUploadIds");
+		try {
+			File smallFile = new File("test.dat");
+			final String key1 = eucaUUID();
+			final String key2 = eucaUUID();
+
+			// Inititate mpu
+			print(account + ": Initiating multipart upload for object " + key1 + " in bucket " + bucketName);
+			final InitiateMultipartUploadResult initiateMpuResult1 = s3.initiateMultipartUpload(new InitiateMultipartUploadRequest(bucketName, key1));
+			cleanupTasks.add(new Runnable() {
+				@Override
+				public void run() {
+					print(account + ": Aborting multipart upload for object " + key1 + ", upload ID " + initiateMpuResult1.getUploadId() + " in bucket "
+							+ bucketName);
+					s3.abortMultipartUpload(new AbortMultipartUploadRequest(bucketName, key1, initiateMpuResult1.getUploadId()));
+				}
+			});
+
+			print(account + ": Initiating multipart upload for object " + key2 + " in bucket " + bucketName);
+			final InitiateMultipartUploadResult initiateMpuResult2 = s3.initiateMultipartUpload(new InitiateMultipartUploadRequest(bucketName, key2));
+			cleanupTasks.add(new Runnable() {
+				@Override
+				public void run() {
+					print(account + ": Aborting multipart upload for object " + key2 + ", upload ID " + initiateMpuResult2.getUploadId() + " in bucket "
+							+ bucketName);
+					s3.abortMultipartUpload(new AbortMultipartUploadRequest(bucketName, key2, initiateMpuResult2.getUploadId()));
+				}
+			});
+
+			// Try to upload a part with incorrect key-uploadID combination
+			boolean error = false;
+			try {
+				print(account + ": Uploading part for object " + key1 + ", upload ID " + initiateMpuResult2.getUploadId() + ", part number 1");
+				s3.uploadPart(new UploadPartRequest().withBucketName(bucketName).withKey(key1).withUploadId(initiateMpuResult2.getUploadId()).withPartNumber(1)
+						.withFile(smallFile));
+			} catch (AmazonServiceException ase) {
+				error = true;
+				printException(ase);
+				assertTrue("Expected a 404 status code but got " + ase.getStatusCode(), ase.getStatusCode() == 404);
+				assertTrue("Expected NoSuchUpload error code but got " + ase.getErrorCode(), ase.getErrorCode().equals("NoSuchUpload"));
+			} finally {
+				assertTrue("Expected multipart upload to fail with 404 NoSuchUpload error", error);
+			}
+
+			// Try to abort upload with incorrect key-uploadID combination
+			error = false;
+			try {
+				print(account + ": Aborting multipart upload for object " + key2 + ", upload ID " + initiateMpuResult1.getUploadId() + " in bucket "
+						+ bucketName);
+				s3.abortMultipartUpload(new AbortMultipartUploadRequest(bucketName, key2, initiateMpuResult1.getUploadId()));
+			} catch (AmazonServiceException ase) {
+				error = true;
+				printException(ase);
+				assertTrue("Expected a 404 status code but got " + ase.getStatusCode(), ase.getStatusCode() == 404);
+				assertTrue("Expected NoSuchUpload error code but got " + ase.getErrorCode(), ase.getErrorCode().equals("NoSuchUpload"));
+			} finally {
+				assertTrue("Expected multipart upload to fail with 404 NoSuchUpload error", error);
+			}
+
+			// Try to complete upload with incorrect key-uploadID combination
+			error = false;
+			try {
+				print(account + ": Completing multipart upload for object " + key1 + ", upload ID " + initiateMpuResult1.getUploadId());
+				s3.completeMultipartUpload(new CompleteMultipartUploadRequest(bucketName, key1, initiateMpuResult2.getUploadId(), new ArrayList<PartETag>()));
+			} catch (AmazonServiceException ase) {
+				error = true;
+				printException(ase);
+				assertTrue("Expected a 404 status code but got " + ase.getStatusCode(), ase.getStatusCode() == 404);
+				assertTrue("Expected NoSuchUpload error code but got " + ase.getErrorCode(), ase.getErrorCode().equals("NoSuchUpload"));
+			} finally {
+				assertTrue("Expected multipart upload to fail with 404 NoSuchUpload error", error);
+			}
+		} catch (AmazonServiceException ase) {
+			printException(ase);
+			assertThat(false, "Failed to run mixKeysAndUploadIds");
+		}
+	}
+
+	@Test
+	public void getWithRange() throws Exception {
+		testInfo(this.getClass().getSimpleName() + " - getWithRange");
+		try {
+			final String key = eucaUUID();
+			List<PartETag> partETags = Lists.newArrayList();
+			File partToPut = new File("part");
+			long partSize = partToPut.length();
+
+			// Inititate mpu
+			print(account + ": Initiating multipart upload for object " + key + " in bucket " + bucketName);
+			final InitiateMultipartUploadResult initiateMpuResult = s3.initiateMultipartUpload(new InitiateMultipartUploadRequest(bucketName, key));
+
+			// Upload a few parts
+			for (int partNumber = 1; partNumber <= 4; partNumber++) {
+				print(account + ": Uploading part of size " + partSize + " bytes for object " + key + ", upload ID " + initiateMpuResult.getUploadId()
+						+ ", part number " + partNumber);
+				partETags.add(s3.uploadPart(
+						new UploadPartRequest().withBucketName(bucketName).withKey(key).withUploadId(initiateMpuResult.getUploadId())
+								.withPartNumber(partNumber).withFile(partToPut).withPartSize(partSize)).getPartETag());
+
+			}
+
+			// Complete mpu
+			print(account + ": Completing multipart upload for object " + key + ", upload ID " + initiateMpuResult.getUploadId());
+			s3.completeMultipartUpload(new CompleteMultipartUploadRequest(bucketName, key, initiateMpuResult.getUploadId(), partETags));
+			cleanupTasks.add(new Runnable() {
+				@Override
+				public void run() {
+					print(account + ": Deleting object " + key + " from bucket " + bucketName);
+					s3.deleteObject(bucketName, key);
+				}
+			});
+
+			// Get the final object to verify
+			final File fileToVerify = new File("parts");
+			s3.getObject(new GetObjectRequest(bucketName, key), fileToVerify);
+			cleanupTasks.add(new Runnable() {
+				@Override
+				public void run() {
+					try {
+						print(account + ": Deleting downloaded " + fileToVerify.getName() + " object from filesystem");
+						fileToVerify.delete();
+					} catch (Exception e) {
+					}
+				}
+			});
+			assertTrue("Expected objectsize to be " + (partSize * 4) + " bytes but got a file of size " + fileToVerify.length() + " bytes",
+					fileToVerify.length() == (partSize * 4));
+
+			// Verify get for first 100 bytes
+			verifyGetWithRange(account, s3, bucketName, key, fileToVerify, 0, 100);
+
+			// Verify get for first 100 bytes of second part
+			verifyGetWithRange(account, s3, bucketName, key, fileToVerify, (int) partSize, 100);
+
+			// Verify get for first 100 bytes of third part
+			verifyGetWithRange(account, s3, bucketName, key, fileToVerify, (int) (partSize * 2), 100);
+
+			// Verify get for first 100 bytes of third part
+			verifyGetWithRange(account, s3, bucketName, key, fileToVerify, (int) (partSize * 3), 100);
+
+			// Verify get for 100 bytes between first and second part
+			verifyGetWithRange(account, s3, bucketName, key, fileToVerify, (int) (partSize - 58), 100);
+
+			// Verify get for 100 bytes between second and third part
+			verifyGetWithRange(account, s3, bucketName, key, fileToVerify, (int) ((2 * partSize) - 47), 100);
+
+		} catch (AmazonServiceException ase) {
+			printException(ase);
+			assertThat(false, "Failed to run getWithRange");
+		}
+	}
+
+	private void verifyGetWithRange(String ownerName, AmazonS3 s3, String bucket, String key, File fileToVerify, int offset, int length) throws IOException,
+			NoSuchAlgorithmException {
+		BufferedInputStream bis = new BufferedInputStream(new FileInputStream(fileToVerify));
+		try {
+			byte[] sourceBuffer = new byte[length];
+			bis.skip(offset);
+			bis.read(sourceBuffer, 0, length);
+			String sourceMd5 = BinaryUtils.toHex(Md5Utils.computeMD5Hash(sourceBuffer));
+
+			print(ownerName + ": Getting object " + key + " with range " + offset + "-" + (offset + length - 1));
+			S3Object object = s3.getObject(new GetObjectRequest(bucket, key).withRange(offset, offset + length - 1));
+			ObjectMetadata objectMetadata = object.getObjectMetadata();
+			byte[] getBuffer = new byte[length];
+			object.getObjectContent().read(getBuffer, 0, length);
+			String getMd5 = BinaryUtils.toHex(Md5Utils.computeMD5Hash(getBuffer));
+
+			assertTrue("Expected " + length + " bytes but got " + objectMetadata.getContentLength() + " bytes", objectMetadata.getContentLength() == length);
+			assertTrue("Expected md5 to be " + sourceMd5 + " but got " + getMd5, sourceMd5.equals(getMd5));
+			assertTrue("Mismatch in source and fetched data", Arrays.equals(sourceBuffer, getBuffer));
+		} finally {
+			bis.close();
+		}
+	}
+
+	@Test
+	public void getMetadata() throws Exception {
+		testInfo(this.getClass().getSimpleName() + " - getMetadata");
+		try {
+			final String key = eucaUUID();
+			List<PartETag> partETags = Lists.newArrayList();
+			File partToPut = new File("part");
+			long partSize = partToPut.length();
+
+			ObjectMetadata objectMetadata = new ObjectMetadata();
+			Map<String, String> userMetadataMap = new HashMap<String, String>();
+			userMetadataMap.put("somerandomkey", "somerandomvalue");
+			userMetadataMap.put("hello", "world");
+			objectMetadata.setUserMetadata(userMetadataMap);
+
+			// Inititate mpu with metadata
+			print(account + ": Initiating multipart upload for object " + key + " in bucket " + bucketName);
+			final InitiateMultipartUploadResult initiateMpuResult = s3.initiateMultipartUpload(new InitiateMultipartUploadRequest(bucketName, key)
+					.withObjectMetadata(objectMetadata));
+
+			// Upload a few parts
+			for (int partNumber = 1; partNumber <= 2; partNumber++) {
+				print(account + ": Uploading part of size " + partSize + " bytes for object " + key + ", upload ID " + initiateMpuResult.getUploadId()
+						+ ", part number " + partNumber);
+				partETags.add(s3.uploadPart(
+						new UploadPartRequest().withBucketName(bucketName).withKey(key).withUploadId(initiateMpuResult.getUploadId())
+								.withPartNumber(partNumber).withFile(partToPut).withPartSize(partSize)).getPartETag());
+
+			}
+
+			// Complete mpu
+			print(account + ": Completing multipart upload for object " + key + ", upload ID " + initiateMpuResult.getUploadId());
+			s3.completeMultipartUpload(new CompleteMultipartUploadRequest(bucketName, key, initiateMpuResult.getUploadId(), partETags));
+			cleanupTasks.add(new Runnable() {
+				@Override
+				public void run() {
+					print(account + ": Deleting object " + key + " from bucket " + bucketName);
+					s3.deleteObject(bucketName, key);
+				}
+			});
+
+			// Get the metadata of the completed object and verify
+			verifyUserMetadata(account, s3, bucketName, key, userMetadataMap);
+		} catch (AmazonServiceException ase) {
+			printException(ase);
+			assertThat(false, "Failed to run getMetadata");
+		}
+	}
+
+	private void verifyUserMetadata(String ownerName, AmazonS3 s3, String bucket, String key, Map<String, String> metadataMap) {
+		print(ownerName + ": Getting metadata for object key=" + key + ", bucket=" + bucket);
+		ObjectMetadata metadata = s3.getObjectMetadata(bucket, key);
+		assertTrue("Invalid object metadata", metadata != null);
+		if (metadataMap != null && !metadataMap.isEmpty()) {
+			assertTrue("No user metadata found", metadata.getUserMetadata() != null || !metadata.getUserMetadata().isEmpty());
+			assertTrue("Expected to find " + metadataMap.size() + " element(s) in the metadata but found " + metadata.getUserMetadata().size(),
+					metadataMap.size() == metadata.getUserMetadata().size());
+			for (Map.Entry<String, String> entry : metadataMap.entrySet()) {
+				assertTrue("Metadata key " + entry.getKey() + " not found in response", metadata.getUserMetadata().containsKey(entry.getKey()));
+				assertTrue(
+						"Expected metadata value for key " + entry.getKey() + " to be " + entry.getValue() + " but got "
+								+ metadata.getUserMetadata().get(entry.getKey()), metadata.getUserMetadata().get(entry.getKey()).equals(entry.getValue()));
+			}
+		}
+	}
+
+	@Test
+	public void copyObject() throws Exception {
+		testInfo(this.getClass().getSimpleName() + " - copyObject");
+		try {
+			final String key = eucaUUID();
+			final String copyKey = eucaUUID();
+			List<PartETag> partETags = Lists.newArrayList();
+			File partToPut = new File("part");
+			long partSize = partToPut.length();
+
+			// Inititate mpu
+			print(account + ": Initiating multipart upload for object " + key + " in bucket " + bucketName);
+			final InitiateMultipartUploadResult initiateMpuResult = s3.initiateMultipartUpload(new InitiateMultipartUploadRequest(bucketName, key));
+
+			// Upload a few parts
+			for (int partNumber = 1; partNumber <= 2; partNumber++) {
+				print(account + ": Uploading part of size " + partSize + " bytes for object " + key + ", upload ID " + initiateMpuResult.getUploadId()
+						+ ", part number " + partNumber);
+				partETags.add(s3.uploadPart(
+						new UploadPartRequest().withBucketName(bucketName).withKey(key).withUploadId(initiateMpuResult.getUploadId())
+								.withPartNumber(partNumber).withFile(partToPut).withPartSize(partSize)).getPartETag());
+
+			}
+
+			// Complete mpu
+			print(account + ": Completing multipart upload for object " + key + ", upload ID " + initiateMpuResult.getUploadId());
+			CompleteMultipartUploadResult completeMpuResult = s3.completeMultipartUpload(new CompleteMultipartUploadRequest(bucketName, key, initiateMpuResult
+					.getUploadId(), partETags));
+			cleanupTasks.add(new Runnable() {
+				@Override
+				public void run() {
+					print(account + ": Deleting object " + key + " from bucket " + bucketName);
+					s3.deleteObject(bucketName, key);
+				}
+			});
+
+			// Copy object
+			print(account + ": Copying object " + copyKey + " from " + key);
+			CopyObjectResult copyResult = s3.copyObject(bucketName, key, bucketName, copyKey);
+			cleanupTasks.add(new Runnable() {
+				@Override
+				public void run() {
+					print(account + ": Deleting object " + copyKey + " from bucket " + bucketName);
+					s3.deleteObject(bucketName, copyKey);
+				}
+			});
+
+			assertTrue("Expected copied object etag to be " + completeMpuResult.getETag() + " but got " + copyResult.getETag(), completeMpuResult.getETag()
+					.equals(copyResult.getETag()));
+
+			// Get the objects to verify
+			final File originalFile = new File("parts");
+			print(account + ": Downloading original object " + key + " to file " + originalFile.getName());
+			ObjectMetadata om = s3.getObject(new GetObjectRequest(bucketName, key), originalFile);
+			cleanupTasks.add(new Runnable() {
+				@Override
+				public void run() {
+					try {
+						print(account + ": Deleting downloaded object " + originalFile.getName() + " from filesystem");
+						originalFile.delete();
+					} catch (Exception e) {
+					}
+				}
+			});
+			assertTrue("Expected original objectsize to be " + (partSize * 2) + " bytes but got a file of size " + originalFile.length() + " bytes",
+					originalFile.length() == (partSize * 2));
+
+			final File copiedFile = new File("copied_parts");
+			print(account + ": Downloading original object " + key + " to file " + copiedFile.getName());
+			ObjectMetadata copyOm = s3.getObject(new GetObjectRequest(bucketName, copyKey), copiedFile);
+			cleanupTasks.add(new Runnable() {
+				@Override
+				public void run() {
+					try {
+						print(account + ": Deleting downloaded object " + copiedFile.getName() + " from filesystem");
+						copiedFile.delete();
+					} catch (Exception e) {
+					}
+				}
+			});
+			assertTrue("Expected original objectsize to be " + (partSize * 2) + " bytes but got a file of size " + copiedFile.length() + " bytes",
+					copiedFile.length() == (partSize * 2));
+
+			assertTrue("Expected content lengths to match", om.getContentLength() == copyOm.getContentLength());
+			assertTrue(
+					"Expected content md5s to match",
+					BinaryUtils.toHex(Md5Utils.computeMD5Hash(new FileInputStream(originalFile))).equals(
+							BinaryUtils.toHex(Md5Utils.computeMD5Hash(new FileInputStream(copiedFile)))));
+		} catch (AmazonServiceException ase) {
+			printException(ase);
+			assertThat(false, "Failed to run copyObject");
+		}
+	}
+
 }
