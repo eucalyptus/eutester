@@ -635,7 +635,7 @@ class EuserviceManager(object):
                     process_uptime = self.tester.clc.get_eucalyptus_cloud_process_uptime()
                     #Store all CLC's process uptimes in list, compare for youngest later...
                     clc_process_uptimes.append(process_uptime)
-                    out = clc.sys(self.eucaprefix + "/usr/sbin/euca-describe-services " + str(type), code=0,timeout=15)
+                    out = clc.sys("/usr/sbin/euca-describe-services " + str(type), code=0,timeout=15)
                     for line in out:
                         if re.search("SERVICE.+"+str(partition), line):
                             describe_services.append(line)
