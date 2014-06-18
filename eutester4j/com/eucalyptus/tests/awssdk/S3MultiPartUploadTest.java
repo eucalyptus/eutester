@@ -70,6 +70,7 @@ import static com.eucalyptus.tests.awssdk.Eutester4j.testInfo;
 import static org.testng.AssertJUnit.assertTrue;
 
 import java.io.BufferedInputStream;
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -81,6 +82,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.AfterMethod;
@@ -120,6 +122,7 @@ public class S3MultiPartUploadTest {
 	List<Runnable> cleanupTasks = null;
 	private static AmazonS3 s3 = null;
 	private static String account = null;
+	byte[] randomBytes;
 
 	@BeforeClass
 	public void init() throws Exception {
@@ -136,6 +139,11 @@ public class S3MultiPartUploadTest {
 		}
 
 		// s3 = getS3Client("awsrc_euca");
+
+		// Generate a 6M random byte stream
+		print("Generating a 6MB random byte array");
+		randomBytes = new byte[6 * 1024 * 1024];
+		new Random().nextBytes(randomBytes);
 	}
 
 	public AmazonS3 getS3Client(String credPath) throws Exception {
@@ -398,10 +406,7 @@ public class S3MultiPartUploadTest {
 		try {
 			final String key = eucaUUID();
 			List<PartETag> partETags = Lists.newArrayList();
-			File fileToPut = new File("zerofile");
-			long partSize = 5l * 1024l * 1024l; // 5mb
-			long contentLength = fileToPut.length();
-			long filePosition = 0; // position ptr
+			long partSize = randomBytes.length;
 
 			// Inititate mpu
 			print(account + ": Initiating multipart upload for object " + key + " in bucket " + bucketName);
@@ -416,14 +421,12 @@ public class S3MultiPartUploadTest {
 			});
 
 			// Upload a few parts
-			for (int partNumber = 1; partNumber <= 3; partNumber++) {
-				partSize = Math.min(partSize, (contentLength - filePosition));
+			for (int partNumber = 1; partNumber <= 4; partNumber++) {
 				print(account + ": Uploading part of size " + partSize + " bytes for object " + key + ", upload ID " + initiateMpuResult.getUploadId()
 						+ ", part number " + partNumber);
 				partETags.add(s3.uploadPart(
 						new UploadPartRequest().withBucketName(bucketName).withKey(key).withUploadId(initiateMpuResult.getUploadId())
-								.withPartNumber(partNumber).withFileOffset(filePosition).withFile(fileToPut).withPartSize(partSize)).getPartETag());
-				filePosition += partSize;
+								.withPartNumber(partNumber).withInputStream(new ByteArrayInputStream(randomBytes)).withPartSize(partSize)).getPartETag());
 			}
 
 			// Reverse the list of etags
@@ -622,8 +625,7 @@ public class S3MultiPartUploadTest {
 		try {
 			final String key = eucaUUID();
 			List<PartETag> partETags = Lists.newArrayList();
-			File partToPut = new File("part");
-			long partSize = partToPut.length();
+			long partSize = randomBytes.length;
 
 			// Inititate mpu
 			print(account + ": Initiating multipart upload for object " + key + " in bucket " + bucketName);
@@ -635,8 +637,7 @@ public class S3MultiPartUploadTest {
 						+ ", part number " + partNumber);
 				partETags.add(s3.uploadPart(
 						new UploadPartRequest().withBucketName(bucketName).withKey(key).withUploadId(initiateMpuResult.getUploadId())
-								.withPartNumber(partNumber).withFile(partToPut).withPartSize(partSize)).getPartETag());
-
+								.withPartNumber(partNumber).withInputStream(new ByteArrayInputStream(randomBytes)).withPartSize(partSize)).getPartETag());
 			}
 
 			// Complete mpu
@@ -651,13 +652,14 @@ public class S3MultiPartUploadTest {
 			});
 
 			// Get the final object to verify
-			final File fileToVerify = new File("parts");
+			final File fileToVerify = new File(eucaUUID());
+			print(account + ": Downloading object " + key + " to file " + fileToVerify.getName());
 			s3.getObject(new GetObjectRequest(bucketName, key), fileToVerify);
 			cleanupTasks.add(new Runnable() {
 				@Override
 				public void run() {
 					try {
-						print(account + ": Deleting downloaded " + fileToVerify.getName() + " object from filesystem");
+						print(account + ": Deleting file " + fileToVerify.getName());
 						fileToVerify.delete();
 					} catch (Exception e) {
 					}
@@ -720,8 +722,7 @@ public class S3MultiPartUploadTest {
 		try {
 			final String key = eucaUUID();
 			List<PartETag> partETags = Lists.newArrayList();
-			File partToPut = new File("part");
-			long partSize = partToPut.length();
+			long partSize = randomBytes.length;
 
 			ObjectMetadata objectMetadata = new ObjectMetadata();
 			Map<String, String> userMetadataMap = new HashMap<String, String>();
@@ -740,8 +741,7 @@ public class S3MultiPartUploadTest {
 						+ ", part number " + partNumber);
 				partETags.add(s3.uploadPart(
 						new UploadPartRequest().withBucketName(bucketName).withKey(key).withUploadId(initiateMpuResult.getUploadId())
-								.withPartNumber(partNumber).withFile(partToPut).withPartSize(partSize)).getPartETag());
-
+								.withPartNumber(partNumber).withInputStream(new ByteArrayInputStream(randomBytes)).withPartSize(partSize)).getPartETag());
 			}
 
 			// Complete mpu
@@ -787,8 +787,7 @@ public class S3MultiPartUploadTest {
 			final String key = eucaUUID();
 			final String copyKey = eucaUUID();
 			List<PartETag> partETags = Lists.newArrayList();
-			File partToPut = new File("part");
-			long partSize = partToPut.length();
+			long partSize = randomBytes.length;
 
 			// Inititate mpu
 			print(account + ": Initiating multipart upload for object " + key + " in bucket " + bucketName);
@@ -800,8 +799,7 @@ public class S3MultiPartUploadTest {
 						+ ", part number " + partNumber);
 				partETags.add(s3.uploadPart(
 						new UploadPartRequest().withBucketName(bucketName).withKey(key).withUploadId(initiateMpuResult.getUploadId())
-								.withPartNumber(partNumber).withFile(partToPut).withPartSize(partSize)).getPartETag());
-
+								.withPartNumber(partNumber).withInputStream(new ByteArrayInputStream(randomBytes)).withPartSize(partSize)).getPartETag());
 			}
 
 			// Complete mpu
@@ -831,14 +829,14 @@ public class S3MultiPartUploadTest {
 					.equals(copyResult.getETag()));
 
 			// Get the objects to verify
-			final File originalFile = new File("parts");
+			final File originalFile = new File(eucaUUID());
 			print(account + ": Downloading original object " + key + " to file " + originalFile.getName());
 			ObjectMetadata om = s3.getObject(new GetObjectRequest(bucketName, key), originalFile);
 			cleanupTasks.add(new Runnable() {
 				@Override
 				public void run() {
 					try {
-						print(account + ": Deleting downloaded object " + originalFile.getName() + " from filesystem");
+						print(account + ": Deleting file " + originalFile.getName());
 						originalFile.delete();
 					} catch (Exception e) {
 					}
@@ -847,14 +845,14 @@ public class S3MultiPartUploadTest {
 			assertTrue("Expected original objectsize to be " + (partSize * 2) + " bytes but got a file of size " + originalFile.length() + " bytes",
 					originalFile.length() == (partSize * 2));
 
-			final File copiedFile = new File("copied_parts");
-			print(account + ": Downloading original object " + key + " to file " + copiedFile.getName());
+			final File copiedFile = new File(eucaUUID());
+			print(account + ": Downloading copied object " + key + " to file " + copiedFile.getName());
 			ObjectMetadata copyOm = s3.getObject(new GetObjectRequest(bucketName, copyKey), copiedFile);
 			cleanupTasks.add(new Runnable() {
 				@Override
 				public void run() {
 					try {
-						print(account + ": Deleting downloaded object " + copiedFile.getName() + " from filesystem");
+						print(account + ": Deleting file " + copiedFile.getName());
 						copiedFile.delete();
 					} catch (Exception e) {
 					}
