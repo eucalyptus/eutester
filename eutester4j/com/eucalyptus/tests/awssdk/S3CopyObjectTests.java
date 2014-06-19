@@ -9,7 +9,6 @@ import static org.testng.AssertJUnit.assertTrue;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
@@ -498,6 +497,39 @@ public class S3CopyObjectTests {
 	}
 
 	@Test
+	public void accessDeniedCheck() throws Exception {
+		testInfo(this.getClass().getSimpleName() + " - accessDeniedCheck");
+		try {
+			// Create bucket with Canned ACL Private as account A admin
+			createBucketWithCannedACL(ownerNameA, s3ClientA, sourceBucket, CannedAccessControlList.Private);
+
+			// Put object with Canned ACL PublicRead in source bucket as account A admin
+			putObject(ownerNameA, s3ClientA, new PutObjectRequest(sourceBucket, sourceKey, fileToPut).withCannedAcl(CannedAccessControlList.PublicRead), md5);
+
+			// Create bucket with Canned ACL LogDeliveryWrite as account A admin
+			String destBucket = eucaUUID();
+			createBucketWithCannedACL(ownerNameA, s3ClientA, destBucket, CannedAccessControlList.LogDeliveryWrite);
+
+			// As account B admin copy object into the same bucket and verify the error
+			boolean error = false;
+			try {
+				String destKey = eucaUUID();
+				copyObject(ownerNameB, s3ClientB, new CopyObjectRequest(sourceBucket, sourceKey, destBucket, destKey), md5);
+			} catch (AmazonServiceException ase) {
+				error = true;
+				printException(ase);
+				assertTrue("Expected 403 error but got " + ase.getStatusCode(), ase.getStatusCode() == 403);
+				assertTrue("Expected S3 error AccessDenied but got " + ase.getErrorCode(), ase.getErrorCode().equals("AccessDenied"));
+			} finally {
+				assertTrue("Expected 403 AccessDenied error", error);
+			}
+		} catch (AmazonServiceException ase) {
+			printException(ase);
+			assertThat(false, "Failed to run accessDeniedCheck");
+		}
+	}
+
+	@Test
 	public void etagConstraint() throws Exception {
 		testInfo(this.getClass().getSimpleName() + " - etagConstraint");
 		try {
@@ -621,7 +653,7 @@ public class S3CopyObjectTests {
 		}
 	}
 
-	@Test(enabled = false)
+	@Test
 	public void metadataDirective_SameObject() throws Exception {
 		testInfo(this.getClass().getSimpleName() + " - metadataDirective_SameObject");
 		try {
