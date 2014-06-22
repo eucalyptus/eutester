@@ -71,6 +71,7 @@ import static org.testng.AssertJUnit.assertTrue;
 
 import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -686,6 +687,18 @@ public class S3MultiPartUploadTest {
 			// Verify get for 100 bytes between second and third part
 			verifyGetWithRange(account, s3, bucketName, key, fileToVerify, (int) ((2 * partSize) - 47), 100);
 
+			// Verify get for last 100 bytes of first part
+			verifyGetWithRange(account, s3, bucketName, key, fileToVerify, (int) (partSize - 100), 100);
+
+			// Verify get for last 100 bytes of second part
+			verifyGetWithRange(account, s3, bucketName, key, fileToVerify, (int) ((2 * partSize) - 100), 100);
+
+			// Verify get for partSize bytes starting from the last 100 bytes of first part
+			verifyGetWithRange(account, s3, bucketName, key, fileToVerify, (int) (partSize - 100), (int) partSize);
+
+			// Verify get for two times the partSize bytes starting from the last 100 bytes of first part
+			verifyGetWithRange(account, s3, bucketName, key, fileToVerify, (int) (partSize - 100), (int) (2 * partSize));
+
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run getWithRange");
@@ -695,6 +708,8 @@ public class S3MultiPartUploadTest {
 	private void verifyGetWithRange(String ownerName, AmazonS3 s3, String bucket, String key, File fileToVerify, int offset, int length) throws IOException,
 			NoSuchAlgorithmException {
 		BufferedInputStream bis = new BufferedInputStream(new FileInputStream(fileToVerify));
+		S3Object s3Object = null;
+		ByteArrayOutputStream baos = new ByteArrayOutputStream();
 		try {
 			byte[] sourceBuffer = new byte[length];
 			bis.skip(offset);
@@ -702,17 +717,29 @@ public class S3MultiPartUploadTest {
 			String sourceMd5 = BinaryUtils.toHex(Md5Utils.computeMD5Hash(sourceBuffer));
 
 			print(ownerName + ": Getting object " + key + " with range " + offset + "-" + (offset + length - 1));
-			S3Object object = s3.getObject(new GetObjectRequest(bucket, key).withRange(offset, offset + length - 1));
-			ObjectMetadata objectMetadata = object.getObjectMetadata();
-			byte[] getBuffer = new byte[length];
-			object.getObjectContent().read(getBuffer, 0, length);
-			String getMd5 = BinaryUtils.toHex(Md5Utils.computeMD5Hash(getBuffer));
+			s3Object = s3.getObject(new GetObjectRequest(bucket, key).withRange(offset, offset + length - 1));
+			ObjectMetadata objectMetadata = s3Object.getObjectMetadata();
 
 			assertTrue("Expected " + length + " bytes but got " + objectMetadata.getContentLength() + " bytes", objectMetadata.getContentLength() == length);
+
+			byte[] readBuffer = new byte[1024 * 10];
+			int bytesRead;
+			while ((bytesRead = s3Object.getObjectContent().read(readBuffer)) > -1) {
+				baos.write(readBuffer, 0, bytesRead);
+			}
+			byte[] getBuffer = baos.toByteArray();
+			String getMd5 = BinaryUtils.toHex(Md5Utils.computeMD5Hash(getBuffer));
+
 			assertTrue("Expected md5 to be " + sourceMd5 + " but got " + getMd5, sourceMd5.equals(getMd5));
 			assertTrue("Mismatch in source and fetched data", Arrays.equals(sourceBuffer, getBuffer));
 		} finally {
 			bis.close();
+			try {
+				s3Object.getObjectContent().close();
+			} catch (Exception e) {
+			}
+			baos.close();
+			baos = null;
 		}
 	}
 
