@@ -100,7 +100,7 @@ public class TestEC2RunInstancesClientToken {
             print("Terminating instance: " + instanceId);
             sleep(10); // small buffer
             ec2.terminateInstances(new TerminateInstancesRequest().withInstanceIds(instanceId));
-            waitForInstanceToTerminate(ec2, TimeUnit.MINUTES.toMillis(10), instanceId);
+            waitForInstanceToTerminate(ec2, TimeUnit.MINUTES.toMillis(15), instanceId);
 
             // Rerun instance with client token
             final RunInstancesResult runResult3 =
