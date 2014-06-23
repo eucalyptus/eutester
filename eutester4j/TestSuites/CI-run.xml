@@ -60,7 +60,6 @@
             <class name="com.eucalyptus.tests.awssdk.S3BucketCannedACLTests"/>
             <class name="com.eucalyptus.tests.awssdk.S3BucketTests"/>
             <class name="com.eucalyptus.tests.awssdk.S3CopyObjectTests"/>
-            <class name="com.eucalyptus.tests.awssdk.S3BucketTests"/>
             <class name="com.eucalyptus.tests.awssdk.S3ListMpuTests"/>
             <class name="com.eucalyptus.tests.awssdk.S3ListObjectsTests"/>
             <class name="com.eucalyptus.tests.awssdk.S3ListVersionsTests"/>
