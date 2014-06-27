@@ -54,8 +54,7 @@ class EucaopsClient(Eucaops):
 class EucaopsLocust(Locust):
     def __init__(self):
         super(EucaopsLocust, self).__init__()
-        self.client = EucaopsClient(credpath=
-                                    "/Users/viglesias/Dropbox/creds/vic-creds")
+        self.client = EucaopsClient(credpath="creds")
 
 
 class EucaopsUser(EucaopsLocust):
