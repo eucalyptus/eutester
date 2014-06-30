@@ -722,7 +722,8 @@ class WinInstance(Instance, TaggedResource):
                     volume.guestdev = disk.deviceid
                     volume.md5len = 1024
                     volume.md5 = self.get_dev_md5(disk.cygwin_scsi_drive, volume.md5len)
-                    self.attached_vols.append(volume)
+                    if not self.get_volume_from_attached_list_by_id(volume.id):
+                        self.attached_vols.append(volume)
                     disk.update_md5_info_from_ebs()
                     return
 
@@ -865,6 +866,9 @@ class WinInstance(Instance, TaggedResource):
         cloud_volumes = self.tester.get_volumes(attached_instance=self.id)
         #Make a copy of a list of volumes this instance thinks are currenlty attached
         locallist = copy.copy(self.attached_vols)
+
+        self.debug('Cloud list:' + str(cloud_volumes))
+        self.debug('Local list:' + str(locallist))
 
         for vol in cloud_volumes:
             for local_vol in locallist:
