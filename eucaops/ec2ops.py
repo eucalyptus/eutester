@@ -44,6 +44,7 @@ import base64
 import time
 import types
 import sys
+import traceback
 from datetime import datetime, timedelta
 from subprocess import Popen, PIPE
 
@@ -3583,7 +3584,8 @@ disable_root: false"""
             self.monitor_euinstances_to_state(instance_list=monitor_list, state='terminated', timeout=timeout)
             aggregate_result = True
         except Exception, e:
-            self.debug('Caught Exception in monitoring instances to terminated state:' + str(e))
+            tb =  traceback.format_exc()
+            self.debug(str(tb) + '\nCaught Exception in monitoring instances to terminated state:' + str(e))
 
         return aggregate_result
     
