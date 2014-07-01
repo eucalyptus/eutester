@@ -64,6 +64,7 @@ import time
 import copy
 import types
 import operator
+get_line = Eutester.get_line
 
 
 class WinInstanceDiskType():
@@ -133,11 +134,6 @@ class WinInstanceDiskType():
     def get_summary(self, printheader=True, printmethod=None):
         raise Exception('Method not implemented')
 
-    def get_line(self, length):
-        line = ""
-        for x in xrange(0,int(length)):
-            line += "-"
-        return "\n" + line + "\n"
 
     def print_self_full(self, printmethod=None):
         '''
@@ -265,7 +261,7 @@ class WinInstanceDiskDrive(WinInstanceDiskType):
         length = len(header)
         if len(summary) > length:
             length = len(summary)
-        line = self.get_line(length)
+        line = get_line(length)
         if printheader:
             buf += line + header + line
         buf += summary + line
@@ -330,7 +326,7 @@ class WinInstanceDiskPartition(WinInstanceDiskType):
         length = len(header)
         if len(summary) > length:
             length = len(summary)
-        line = self.get_line(length)
+        line = get_line(length)
         if printheader:
             buf += line + header + line
         buf += summary + line
@@ -376,14 +372,13 @@ class WinInstanceLogicalDisk(WinInstanceDiskType):
         length = len(header)
         if len(summary) > length:
             length = len(summary)
-        line = self.get_line(length)
+        line = get_line(length)
         if printheader:
             buf += line + header + line
         buf += summary + line
         if printmethod:
             printmethod(buf)
         return buf
-
 
 
 class WinInstance(Instance, TaggedResource):
@@ -412,7 +407,6 @@ class WinInstance(Instance, TaggedResource):
                                       rootfs_device = "sda",
                                       block_device_prefix = "sd",
                                       bdm_root_vol = None,
-                                      attached_vols = [],
                                       virtio_blk = True,
                                       cygwin_path = None,
                                       disk_update_interval=10,
@@ -439,6 +433,7 @@ class WinInstance(Instance, TaggedResource):
         newins.tester = tester
         newins.winrm_port = winrm_port
         newins.rdp_port = rdp_port
+        newins.bdm_root_vol = None
         newins.winrm_protocol = winrm_protocol
         newins.debugmethod = debugmethod
         if newins.debugmethod is None:
@@ -453,11 +448,10 @@ class WinInstance(Instance, TaggedResource):
                 keyname = keypair.name
             newins.keypath = keypath or os.getcwd() + "/" + keyname + ".pem"
         newins.keypair = keypair
-
         newins.password = password
         newins.username = username
         newins.verbose = verbose
-        newins.attached_vols=attached_vols
+        newins.attached_vols=[]
         newins.timeout = timeout
         newins.virtio_blk  = virtio_blk
         newins.disk_update_interval = disk_update_interval
@@ -488,8 +482,6 @@ class WinInstance(Instance, TaggedResource):
                 volume = newins.tester.get_volume(volume_id = newins.block_device_mapping.get(newins.root_device_name).volume_id)
                 newins.bdm_root_vol = EuVolume.make_euvol_from_vol(volume, tester=newins.tester,cmdstart=newins.cmdstart)
             except:pass
-        else:
-            newins.bdm_root_vol = None
         newins.winrm = None
         if newins.auto_connect and newins.state == 'running':
             newins.connect_to_instance(timeout=timeout)
@@ -577,7 +569,7 @@ class WinInstance(Instance, TaggedResource):
         length = len(header)
         if len(summary) > length:
             length = len(summary)
-        line = self.get_line(length)
+        line = get_line(length)
         if title:
             buf = line + header + line
         buf += summary
@@ -587,12 +579,6 @@ class WinInstance(Instance, TaggedResource):
             printmethod(buf)
         return buf
 
-
-    def get_line(self, length):
-        line = ""
-        for x in xrange(0,int(length)):
-            line += "-"
-        return "\n" + line + "\n"
 
     def get_password(self, private_key_path=None, key=None, dir=None, exten=".pem", encoded=True):
         '''
@@ -665,6 +651,9 @@ class WinInstance(Instance, TaggedResource):
         timeout - optional - time in seconds to wait when polling port(s) status(s) before failure
 
         '''
+        self.debug("{0}connect_to_instance starting.\nwait_for_boot:{1} "
+                   "seconds\ntimeout from boot:{2}{3}"
+                   .format(get_line(), wait_for_boot, timeout, get_line()))
         try:
             self.poll_for_port_status_with_boot_delay(waitforboot=wait_for_boot, timeout=timeout)
         except Exception, e:
@@ -699,11 +688,14 @@ class WinInstance(Instance, TaggedResource):
         if self.winrm is None:
             raise Exception(str(self.id)+":Failed establishing management connection to instance, elapsed:"+str(elapsed)+
                             "/"+str(timeout))
+        self.debug('Connect_to_instance updating attached_vols: ' + str(self.attached_vols))
         if self.brief:
             self.update_system_info()
         else:
             self.update_system_and_disk_info()
             self.init_attached_volumes()
+        self.debug("{0}connect_to_instance completed{1}"
+                   .format(get_line(), get_line()))
 
     def update_root_device_diskdrive(self):
         if not self.root_device_type == 'ebs':
@@ -723,6 +715,10 @@ class WinInstance(Instance, TaggedResource):
                     volume.md5len = 1024
                     volume.md5 = self.get_dev_md5(disk.cygwin_scsi_drive, volume.md5len)
                     if not self.get_volume_from_attached_list_by_id(volume.id):
+                        self.debug("{0} updating with root vol:{1}{2}"
+                                   .format(get_line(),
+                                           volume.id,
+                                           get_line()))
                         self.attached_vols.append(volume)
                     disk.update_md5_info_from_ebs()
                     return
@@ -852,13 +848,19 @@ class WinInstance(Instance, TaggedResource):
         raise Exception('test_poll_for_ports_status:'+str(ip)+':'+str(port)+' FAILED after attempts:'+str(attempt)+', elapsed:'+str(elapsed)+' seconds')
 
     def init_attached_volumes(self):
+        self.debug('init_attahced_volumes... attached_vols: ' + str(self.attached_vols))
         syncdict = self.sync_attached_volumes_with_clouds_view()
         if syncdict['errors']:
             errmsg = 'Errors syncing guest volumes with cloud at init:' + ",".join(str(e) for e in syncdict['errors'])
             errmsg += 'Failed to sync guest volumes with cloud at init:' + ",".join(str(x) for x in syncdict['badvols'])
+            self.debug(errmsg)
+            time.sleep(60)
             raise Exception(errmsg)
 
     def sync_attached_volumes_with_clouds_view(self):
+        self.debug(get_line() +
+                   "Starting sync_attached_volumes_with_clouds_view"
+                   + get_line() )
         badvols = []
         errors = []
         ret = {'errors':errors, 'badvols':badvols}
@@ -866,7 +868,6 @@ class WinInstance(Instance, TaggedResource):
         cloud_volumes = self.tester.get_volumes(attached_instance=self.id)
         #Make a copy of a list of volumes this instance thinks are currenlty attached
         locallist = copy.copy(self.attached_vols)
-
         self.debug('Cloud list:' + str(cloud_volumes))
         self.debug('Local list:' + str(locallist))
 
@@ -884,6 +885,9 @@ class WinInstance(Instance, TaggedResource):
         for local_vol in locallist:
             badvols.append(local_vol)
             errors.append(local_vol.id + ' Error unattached volume found in guests attach list. \n')
+        self.debug(get_line() +
+                   "Finishing sync_attached_volumes_with_clouds_view"
+                   + get_line() )
         return ret
 
 
@@ -940,8 +944,7 @@ class WinInstance(Instance, TaggedResource):
         if cygpath is None:
             raise Exception('Could not find cygwin path on guest for curl?')
         curl = cygpath + 'bin\curl.exe --connect-timeout ' + str(connect_timeout) + ' '
-        return self.sys(curl + str(url), code=0, timeout=timeout)
-
+        return self.sys(curl + str(url), code=0, timeout=connect_timeout)
 
 
 
@@ -1256,7 +1259,6 @@ class WinInstance(Instance, TaggedResource):
             if re.search('vol-', disk.serialnumber):
                 use_serial = True
                 break
-
         attached_dev = None
         start= time.time()
         elapsed = 0
@@ -1294,6 +1296,7 @@ class WinInstance(Instance, TaggedResource):
                         self.debug("Volume:"+str(euvolume.id)+"found guest device by diff:"+str(euvolume.guestdev))
                     if attached_dev:
                         euvolume.guestdev = attached_dev
+                        attached_vol = self.get_volume_from_attached_list_by_id(euvolume.id)
                         self.attached_vols.append(euvolume)
                         self.debug(euvolume.id+": Requested dev:"+str(euvolume.attach_data.device)+", attached to guest device:"+str(euvolume.guestdev))
                         break
@@ -1715,13 +1718,12 @@ class WinInstance(Instance, TaggedResource):
 
 
     def update_volume_guest_info(self, volume, md5=None, md5len=None, guestdev=None):
+        self.debug("{0} update_volume_guest_info: {1} {2}"
+                   .format(get_line(), volume, get_line()))
         if not self.is_volume_attached_to_this_instance(volume):
             raise Exception('Volume not attached to this instance')
         disk = None
-        attached_volume = self.get_volume_from_attached_list_by_id(volume.id)
-        if attached_volume:
-            volume = attached_volume
-        else:
+        if not self.get_volume_from_attached_list_by_id(volume.id):
             self.attached_vols.append(volume)
         volume.guestdev = guestdev or volume.guestdev
         if md5:

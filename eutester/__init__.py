@@ -46,6 +46,9 @@ import StringIO
 import eulogger
 import types
 import operator
+import fcntl
+import struct
+import termios
 
 from functools import wraps
 
@@ -53,6 +56,9 @@ from functools import wraps
 class TimeoutFunctionException(Exception): 
     """Exception to raise on a timeout""" 
     pass 
+
+
+
 
 
 class Eutester(object):
@@ -283,7 +289,35 @@ class Eutester(object):
              chars   Array of characters to use in generation of the string
         """
         return ''.join(random.choice(chars) for x in range(size))
-    
+
+    @staticmethod
+    def get_terminal_size():
+        '''
+        Attempts to get terminal size. Currently only Linux.
+        returns (height, width)
+        '''
+        try:
+            # todo Add Windows support
+            return struct.unpack('hh', fcntl.ioctl(sys.stdout,
+                                                   termios.TIOCGWINSZ,
+                                                   '1234'))
+        except Exception as e:
+            return (30,80)
+
+    @staticmethod
+    def get_line(length=None):
+        line = ""
+        if not length:
+            try:
+                length = Eutester.get_terminal_size()[1]
+            except:
+                length = 80
+        for x in xrange(0,int(length)):
+            line += "-"
+            return "\n" + line + "\n"
+
+
+
     @classmethod
     def printinfo(cls, func):
         '''
