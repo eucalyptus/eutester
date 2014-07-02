@@ -309,7 +309,7 @@ class Eutester(object):
         line = ""
         if not length:
             try:
-                length = Eutester.get_terminal_size()[1]
+                length = Eutester.get_terminal_size()[1] or 80
             except:
                 length = 80
         for x in xrange(0,int(length)):

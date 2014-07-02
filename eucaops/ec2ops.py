@@ -2837,7 +2837,7 @@ disable_root: false"""
         self.debug("("+str(len(instances))+") Monitor_instances_to_running starting...")
         ip_err = ""
         #Wait for instances to go to running state...
-        self.monitor_euinstances_to_state(instances, failstates=['terminated','shutting-down'],timeout=timeout)
+        self.monitor_euinstances_to_state(instances, failstates=['stopped', 'terminated','shutting-down'],timeout=timeout)
         #Wait for instances in list to get valid ips, check for duplicates, etc...
         try:
             self.wait_for_valid_ip(instances, timeout=timeout)
