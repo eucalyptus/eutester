@@ -3071,7 +3071,7 @@ disable_root: false"""
         monitor = copy.copy(instance_list)
         for instance in monitor:
             if not isinstance(instance, EuInstance) and not isinstance(instance, WinInstance):
-                instance = self.convert_instance_to_euisntance(instance, self, auto_connect=False)
+                instance = self.convert_instance_to_euisntance(instance, auto_connect=False)
         good = []
         failed = []
         elapsed = 0
