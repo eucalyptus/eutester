@@ -296,13 +296,20 @@ class Eutester(object):
         Attempts to get terminal size. Currently only Linux.
         returns (height, width)
         '''
+        h=30
+        w=80
         try:
             # todo Add Windows support
-            return struct.unpack('hh', fcntl.ioctl(sys.stdout,
+            t_h,t_w = struct.unpack('hh', fcntl.ioctl(sys.stdout,
                                                    termios.TIOCGWINSZ,
                                                    '1234'))
-        except Exception as e:
-            return (30,80)
+            #Temp hack. Some env will return <= 1
+            if t_h > 1 and t_w > 1:
+                h = t_h
+                w = t_w
+        except:
+            pass
+        return (h,w)
 
     @staticmethod
     def get_line(length=None):
