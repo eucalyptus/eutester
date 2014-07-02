@@ -3189,9 +3189,10 @@ disable_root: false"""
                                            kernel=kernel,
                                            image_id=image_id)
             for instance in instances:
-                instance_res = getattr(instance, 'reservation', None)
-                euinstance_list.append(self.convert_instance_to_euisntance(
-                    instance, reservation=instance_res, auto_connect=False))
+                if instance:
+                    instance_res = getattr(instance, 'reservation', None)
+                    euinstance_list.append(self.convert_instance_to_euisntance(
+                        instance, reservation=instance_res, auto_connect=False))
         if not euinstance_list:
             self.debug('No instances to print')
             return
@@ -3368,6 +3369,7 @@ disable_root: false"""
                 ins = self.test_resources['instances'][x] == instance.id
                 if ins.id == instance.id:
                      self.test_resources['instances'][x] = instance
+        return instance
 
 
 
