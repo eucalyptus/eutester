@@ -3304,7 +3304,13 @@ disable_root: false"""
         self.debug("Done with check_system_for_dup_ip")
         
 
-    def convert_reservation_to_euinstance(self, reservation, username="root", password=None, keyname=None, private_addressing=False, timeout=60):
+    def convert_reservation_to_euinstance(self,
+                                          reservation,
+                                          username="root",
+                                          password=None,
+                                          keyname=None,
+                                          private_addressing=False,
+                                          timeout=60):
         """
         Convert all instances in an entire reservation into eutester.euinstance.Euinstance objects.
 
@@ -3324,7 +3330,6 @@ disable_root: false"""
                 try:
                     euinstance_list.append(
                         self.convert_instance_to_euisntance(instance,
-                                                            self,
                                                             keypair=keypair,
                                                             username = username,
                                                             password=password,
@@ -3342,7 +3347,7 @@ disable_root: false"""
 
     def convert_instance_to_euisntance(self, instance, keypair=None,
                                        username="root", password=None,
-                                       reservation=None,auto_connect=True,
+                                       reservation=None, auto_connect=True,
                                        timeout=120):
         if instance.platform == 'windows':
             instance = WinInstance.make_euinstance_from_instance(
