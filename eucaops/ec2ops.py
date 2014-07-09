@@ -3310,7 +3310,7 @@ disable_root: false"""
                                           password=None,
                                           keyname=None,
                                           private_addressing=False,
-                                          timeout=60):
+                                          timeout=120):
         """
         Convert all instances in an entire reservation into eutester.euinstance.Euinstance objects.
 
@@ -3323,8 +3323,11 @@ disable_root: false"""
         """
         euinstance_list = []
         keypair = None
+        auto_connect = True
         if keyname is not None:
                 keypair = self.get_keypair(keyname)
+        if private_addressing:
+            auto_connect=False
         for instance in reservation.instances:
             if keypair is not None or (password is not None and username is not None):
                 try:
@@ -3334,7 +3337,8 @@ disable_root: false"""
                                                             username = username,
                                                             password=password,
                                                             timeout=timeout,
-                                                            private_addressing=private_addressing))
+                                                            auto_connect=auto_connect,
+                                                            timeout=timeout))
                 except Exception, e:
                     self.debug(self.get_traceback())
                     euinstance_list.append(instance)
