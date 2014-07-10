@@ -3337,8 +3337,7 @@ disable_root: false"""
                                                             username = username,
                                                             password=password,
                                                             timeout=timeout,
-                                                            auto_connect=auto_connect,
-                                                            timeout=timeout))
+                                                            auto_connect=auto_connect))
                 except Exception, e:
                     self.debug(self.get_traceback())
                     euinstance_list.append(instance)
