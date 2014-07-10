@@ -40,7 +40,7 @@ import cookielib
 from eutester import Eutester
 from boto.ec2.elb.listener import Listener
 from boto.ec2.elb.healthcheck import HealthCheck
-from os.path import join
+from os.path import join, abspath
 
 ELBRegionData = {
     'us-east-1': 'elasticloadbalancing.us-east-1.amazonaws.com',
@@ -171,7 +171,7 @@ class ELBops(Eutester):
                            instance_port=instance_port)
         return listner
 
-    def create_healthcheck(self, target="HTTP:80/instance-name", interval=10, timeout=5, healthy_threshold=2,
+    def create_healthcheck(self, target="HTTP:80/instance-name", interval=5, timeout=2, healthy_threshold=2,
                            unhealthy_threshold=10):
         self.debug("Creating healthcheck: " + target + " interval=" + str(interval) + " timeout=" + str(timeout) +
                    " healthy threshold=" + str(healthy_threshold) + " unhealthy threshold=" + str(unhealthy_threshold))
@@ -307,7 +307,7 @@ class ELBops(Eutester):
         self.debug("removing listener")
         self.elb.delete_load_balancer_listeners(name=lb_name, ports=[port])
 
-    def add_server_cert(self, cert_name, cert_dir="./test_data", cert_file="ssl_server_certs_basics.crt",
+    def add_server_cert(self, cert_name, cert_dir= abspath("testcases/cloud_user/elb/test_data"), cert_file="ssl_server_certs_basics.crt",
                            key_file="ssl_server_certs_basics.pem"):
         cert_body = open(join(cert_dir, cert_file)).read()
         cert_key = open(join(cert_dir, key_file)).read()

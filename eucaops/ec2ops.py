@@ -44,6 +44,7 @@ import base64
 import time
 import types
 import sys
+import traceback
 from datetime import datetime, timedelta
 from subprocess import Popen, PIPE
 
@@ -2836,7 +2837,7 @@ disable_root: false"""
         self.debug("("+str(len(instances))+") Monitor_instances_to_running starting...")
         ip_err = ""
         #Wait for instances to go to running state...
-        self.monitor_euinstances_to_state(instances, failstates=['terminated','shutting-down'],timeout=timeout)
+        self.monitor_euinstances_to_state(instances, failstates=['stopped', 'terminated','shutting-down'],timeout=timeout)
         #Wait for instances in list to get valid ips, check for duplicates, etc...
         try:
             self.wait_for_valid_ip(instances, timeout=timeout)
@@ -3070,8 +3071,7 @@ disable_root: false"""
         monitor = copy.copy(instance_list)
         for instance in monitor:
             if not isinstance(instance, EuInstance) and not isinstance(instance, WinInstance):
-                instance = EuInstance.make_euinstance_from_instance( instance, self, auto_connect=False)
-
+                instance = self.convert_instance_to_euisntance(instance, auto_connect=False)
         good = []
         failed = []
         elapsed = 0
@@ -3189,9 +3189,10 @@ disable_root: false"""
                                            kernel=kernel,
                                            image_id=image_id)
             for instance in instances:
-                instance_res = getattr(instance, 'reservation', None)
-                euinstance_list.append(self.convert_instance_to_euisntance(
-                    instance, reservation=instance_res, auto_connect=False))
+                if instance:
+                    instance_res = getattr(instance, 'reservation', None)
+                    euinstance_list.append(self.convert_instance_to_euisntance(
+                        instance, reservation=instance_res, auto_connect=False))
         if not euinstance_list:
             self.debug('No instances to print')
             return
@@ -3303,7 +3304,13 @@ disable_root: false"""
         self.debug("Done with check_system_for_dup_ip")
         
 
-    def convert_reservation_to_euinstance(self, reservation, username="root", password=None, keyname=None, private_addressing=False, timeout=60):
+    def convert_reservation_to_euinstance(self,
+                                          reservation,
+                                          username="root",
+                                          password=None,
+                                          keyname=None,
+                                          private_addressing=False,
+                                          timeout=120):
         """
         Convert all instances in an entire reservation into eutester.euinstance.Euinstance objects.
 
@@ -3316,18 +3323,22 @@ disable_root: false"""
         """
         euinstance_list = []
         keypair = None
+        auto_connect = True
         if keyname is not None:
                 keypair = self.get_keypair(keyname)
+        if private_addressing:
+            auto_connect=False
         for instance in reservation.instances:
             if keypair is not None or (password is not None and username is not None):
                 try:
-                    euinstance_list.append( EuInstance.make_euinstance_from_instance(instance, 
-                                                                                     self, 
-                                                                                     keypair=keypair, 
-                                                                                     username = username, 
-                                                                                     password=password, 
-                                                                                     timeout=timeout,
-                                                                                     private_addressing=private_addressing))
+                    euinstance_list.append(
+                        self.convert_instance_to_euisntance(instance,
+                                                            keypair=keypair,
+                                                            username = username,
+                                                            password=password,
+                                                            timeout=timeout,
+                                                            auto_connect=auto_connect,
+                                                            timeout=timeout))
                 except Exception, e:
                     self.debug(self.get_traceback())
                     euinstance_list.append(instance)
@@ -3340,10 +3351,10 @@ disable_root: false"""
 
     def convert_instance_to_euisntance(self, instance, keypair=None,
                                        username="root", password=None,
-                                       reservation=None,auto_connect=True,
+                                       reservation=None, auto_connect=True,
                                        timeout=120):
         if instance.platform == 'windows':
-            return WinInstance.make_euinstance_from_instance(
+            instance = WinInstance.make_euinstance_from_instance(
                 instance,
                 self,
                 keypair=keypair,
@@ -3353,7 +3364,7 @@ disable_root: false"""
                 auto_connect=auto_connect,
                 timeout=timeout)
         else:
-            return EuInstance.make_euinstance_from_instance(
+            instance = EuInstance.make_euinstance_from_instance(
                 instance,
                 self,
                 keypair=keypair,
@@ -3362,6 +3373,14 @@ disable_root: false"""
                 reservation=reservation,
                 auto_connect=auto_connect,
                 timeout=timeout)
+        if 'instances' in self.test_resources:
+            for x in xrange(0, len(self.test_resources['instances'])):
+                ins = self.test_resources['instances'][x] == instance.id
+                if ins.id == instance.id:
+                     self.test_resources['instances'][x] = instance
+        return instance
+
+
 
     def get_console_output(self, instance):
         """
@@ -3495,11 +3514,12 @@ disable_root: false"""
                         keypair=None
                         euinstances.append(instance)
                     else:
-                        euinstances.append(EuInstance.make_euinstance_from_instance( instance, 
-                                                                                     self, 
-                                                                                     username=username,
-                                                                                     password=password,
-                                                                                     keypair=keypair ))
+                        euinstances.append(
+                            self.convert_instance_to_euisntance(instance,
+                                                                self,
+                                                                username=username,
+                                                                password=password,
+                                                                keypair=keypair ))
             return euinstances
         except Exception, e:
             self.debug("Failed to find a pre-existing instance we can connect to:"+str(e))
@@ -3567,13 +3587,16 @@ disable_root: false"""
                     pass
                 else:
                     raise e
-
-        self.print_euinstance_list(euinstance_list=monitor_list)
+        try:
+            self.print_euinstance_list(euinstance_list=monitor_list)
+        except:
+            pass
         try:
             self.monitor_euinstances_to_state(instance_list=monitor_list, state='terminated', timeout=timeout)
             aggregate_result = True
         except Exception, e:
-            self.debug('Caught Exception in monitoring instances to terminated state:' + str(e))
+            tb =  traceback.format_exc()
+            self.debug(str(tb) + '\nCaught Exception in monitoring instances to terminated state:' + str(e))
 
         return aggregate_result
     
@@ -4278,7 +4301,7 @@ disable_root: false"""
 
     def create_web_servers(self, keypair, group, zone, port=80, count=2, image=None, filename="test-file", cookiename="test-cookie"):
         if not image:
-            image = self.get_emi()
+            image = self.get_emi(root_device_type="instance-store", not_location="loadbalancer", not_platform="windows")
         reservation = self.run_instance(image, keypair=keypair, group=group, zone=zone, min=count, max=count)
         self.authorize_group(group=group,port=port)
 
