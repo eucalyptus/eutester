@@ -63,7 +63,9 @@ class InstanceRestore(EutesterTestCase):
         self.tester.modify_property("cloud.vmstate.instance_timeout","1")
         self.tester.modify_property("cloud.vmstate.terminated_time","1")
 
-        self.reservation = self.tester.run_instance(self.image, keypair=self.keypair.name, group=self.group.name, zone=self.zone)
+        ### desired number of instances in the reservation
+        res_count = 2
+        self.reservation = self.tester.run_instance(self.image, keypair=self.keypair.name, group=self.group.name, zone=self.zone, min=res_count, max=res_count)
 
         for nc in self.ncs:
             nc.sys("service eucalyptus-nc stop")
