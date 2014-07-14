@@ -3325,6 +3325,9 @@ disable_root: false"""
         keypair = None
         if keyname is not None:
                 keypair = self.get_keypair(keyname)
+        auto_connect = True
+        if private_addressing:
+            auto_connect = False
         for instance in reservation.instances:
             if keypair is not None or (password is not None and username is not None):
                 try:
@@ -3334,7 +3337,7 @@ disable_root: false"""
                                                             username = username,
                                                             password=password,
                                                             timeout=timeout,
-                                                            private_addressing=private_addressing))
+                                                            auto_connect=auto_connect))
                 except Exception, e:
                     self.debug(self.get_traceback())
                     euinstance_list.append(instance)
