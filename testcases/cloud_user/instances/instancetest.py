@@ -263,35 +263,41 @@ class InstanceBasics(EutesterTestCase):
         else:
             reservation = self.reservation
 
-        for instance in reservation.instances:
-            if not re.search("internal", instance.private_dns_name):
-                self.tester.debug("Did not find instance DNS enabled, skipping test")
-                self.set_reservation(reservation)
-                return reservation
-            # Test to see if Dynamic DNS has been configured #
-            # Per AWS standard, resolution should have private hostname or private IP as a valid response
-            # Perform DNS resolution against public IP and public DNS name
-            # Perform DNS resolution against private IP and private DNS name
-            # Check to see if nslookup was able to resolve
-            assert isinstance(instance, EuInstance)
-            # Check nslookup to resolve public DNS Name to local-ipv4 address
-            self.assertTrue(instance.found("nslookup " + instance.public_dns_name,
-                                           instance.private_ip_address), "Incorrect DNS resolution for hostname.")
-            # Check nslookup to resolve public-ipv4 address to public DNS name
-            if self.managed_network:
-                self.assertTrue(instance.found("nslookup " + instance.ip_address,
-                                               instance.public_dns_name),
-                                "Incorrect DNS resolution for public IP address")
-            # Check nslookup to resolve private DNS Name to local-ipv4 address
-            if self.managed_network:
-                self.assertTrue(instance.found("nslookup " + instance.private_dns_name,
-                                               instance.private_ip_address),
-                                "Incorrect DNS resolution for private hostname.")
-            # Check nslookup to resolve local-ipv4 address to private DNS name
-            self.assertTrue(instance.found("nslookup " + instance.private_ip_address,
-                                           instance.private_dns_name),
-                            "Incorrect DNS resolution for private IP address")
-            self.assertTrue(self.tester.ping(instance.public_dns_name))
+        def validate_instance_dns():
+            try:
+                for instance in reservation.instances:
+                    if not re.search("internal", instance.private_dns_name):
+                        self.tester.debug("Did not find instance DNS enabled, skipping test")
+                        self.set_reservation(reservation)
+                        return reservation
+                    # Test to see if Dynamic DNS has been configured #
+                    # Per AWS standard, resolution should have private hostname or private IP as a valid response
+                    # Perform DNS resolution against public IP and public DNS name
+                    # Perform DNS resolution against private IP and private DNS name
+                    # Check to see if nslookup was able to resolve
+                    assert isinstance(instance, EuInstance)
+                    # Check nslookup to resolve public DNS Name to local-ipv4 address
+                    self.assertTrue(instance.found("nslookup " + instance.public_dns_name,
+                                                   instance.private_ip_address), "Incorrect DNS resolution for hostname.")
+                    # Check nslookup to resolve public-ipv4 address to public DNS name
+                    if self.managed_network:
+                        self.assertTrue(instance.found("nslookup " + instance.ip_address,
+                                                       instance.public_dns_name),
+                                        "Incorrect DNS resolution for public IP address")
+                    # Check nslookup to resolve private DNS Name to local-ipv4 address
+                    if self.managed_network:
+                        self.assertTrue(instance.found("nslookup " + instance.private_dns_name,
+                                                       instance.private_ip_address),
+                                        "Incorrect DNS resolution for private hostname.")
+                    # Check nslookup to resolve local-ipv4 address to private DNS name
+                    self.assertTrue(instance.found("nslookup " + instance.private_ip_address,
+                                                   instance.private_dns_name),
+                                    "Incorrect DNS resolution for private IP address")
+                    self.assertTrue(self.tester.ping(instance.public_dns_name))
+                    return True
+            except Exception, e:
+                return False
+        self.tester.wait_for_result(validate_instance_dns, True, timeout=120)
         self.set_reservation(reservation)
         return reservation
 
