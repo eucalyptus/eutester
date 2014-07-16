@@ -28,7 +28,7 @@ class InstanceRestore(EutesterTestCase):
         ### Generate a keypair for the instance
         self.keypair = self.tester.add_keypair( "keypair-" + str(time.time()))
         self.keypath = '%s/%s.pem' % (os.curdir, self.keypair.name)
-        self.image = self.tester.get_emi()
+        self.image = self.tester.get_emi(root_device_type="instance-store")
         self.reservation = None
         self.private_addressing = False
         zones = self.tester.ec2.get_all_zones()
