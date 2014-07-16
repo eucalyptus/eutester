@@ -64,6 +64,7 @@ import time
 import copy
 import types
 import operator
+get_line = Eutester.get_line
 
 
 class WinInstanceDiskType():
@@ -133,11 +134,6 @@ class WinInstanceDiskType():
     def get_summary(self, printheader=True, printmethod=None):
         raise Exception('Method not implemented')
 
-    def get_line(self, length):
-        line = ""
-        for x in xrange(0,int(length)):
-            line += "-"
-        return "\n" + line + "\n"
 
     def print_self_full(self, printmethod=None):
         '''
@@ -265,7 +261,7 @@ class WinInstanceDiskDrive(WinInstanceDiskType):
         length = len(header)
         if len(summary) > length:
             length = len(summary)
-        line = self.get_line(length)
+        line = get_line(length)
         if printheader:
             buf += line + header + line
         buf += summary + line
@@ -330,7 +326,7 @@ class WinInstanceDiskPartition(WinInstanceDiskType):
         length = len(header)
         if len(summary) > length:
             length = len(summary)
-        line = self.get_line(length)
+        line = get_line(length)
         if printheader:
             buf += line + header + line
         buf += summary + line
@@ -376,14 +372,13 @@ class WinInstanceLogicalDisk(WinInstanceDiskType):
         length = len(header)
         if len(summary) > length:
             length = len(summary)
-        line = self.get_line(length)
+        line = get_line(length)
         if printheader:
             buf += line + header + line
         buf += summary + line
         if printmethod:
             printmethod(buf)
         return buf
-
 
 
 class WinInstance(Instance, TaggedResource):
@@ -412,7 +407,6 @@ class WinInstance(Instance, TaggedResource):
                                       rootfs_device = "sda",
                                       block_device_prefix = "sd",
                                       bdm_root_vol = None,
-                                      attached_vols = [],
                                       virtio_blk = True,
                                       cygwin_path = None,
                                       disk_update_interval=10,
@@ -439,6 +433,7 @@ class WinInstance(Instance, TaggedResource):
         newins.tester = tester
         newins.winrm_port = winrm_port
         newins.rdp_port = rdp_port
+        newins.bdm_root_vol = None
         newins.winrm_protocol = winrm_protocol
         newins.debugmethod = debugmethod
         if newins.debugmethod is None:
@@ -453,11 +448,10 @@ class WinInstance(Instance, TaggedResource):
                 keyname = keypair.name
             newins.keypath = keypath or os.getcwd() + "/" + keyname + ".pem"
         newins.keypair = keypair
-
         newins.password = password
         newins.username = username
         newins.verbose = verbose
-        newins.attached_vols=attached_vols
+        newins.attached_vols=[]
         newins.timeout = timeout
         newins.virtio_blk  = virtio_blk
         newins.disk_update_interval = disk_update_interval
@@ -488,16 +482,15 @@ class WinInstance(Instance, TaggedResource):
                 volume = newins.tester.get_volume(volume_id = newins.block_device_mapping.get(newins.root_device_name).volume_id)
                 newins.bdm_root_vol = EuVolume.make_euvol_from_vol(volume, tester=newins.tester,cmdstart=newins.cmdstart)
             except:pass
-        else:
-            newins.bdm_root_vol = None
         newins.winrm = None
         if newins.auto_connect and newins.state == 'running':
             newins.connect_to_instance(timeout=timeout)
         return newins
 
-    def update(self):
-        super(WinInstance, self).update()
+    def update(self, validate=True):
+        super(WinInstance, self).update(validate=validate)
         self.set_last_status()
+        return self.state
 
     def update_vm_type_info(self):
         self.vmtype_info =  self.tester.get_vm_type_from_zone(self.placement,self.instance_type)
@@ -577,7 +570,7 @@ class WinInstance(Instance, TaggedResource):
         length = len(header)
         if len(summary) > length:
             length = len(summary)
-        line = self.get_line(length)
+        line = get_line(length)
         if title:
             buf = line + header + line
         buf += summary
@@ -588,13 +581,13 @@ class WinInstance(Instance, TaggedResource):
         return buf
 
 
-    def get_line(self, length):
-        line = ""
-        for x in xrange(0,int(length)):
-            line += "-"
-        return "\n" + line + "\n"
-
-    def get_password(self, private_key_path=None, key=None, dir=None, exten=".pem", encoded=True):
+    def get_password(self,
+                     private_key_path=None,
+                     key=None,
+                     dir=None,
+                     exten=".pem",
+                     encoded=True,
+                     force_update=False):
         '''
         :param private_key_path: private key file used to decrypt password
         :param key: name of private key
@@ -603,7 +596,7 @@ class WinInstance(Instance, TaggedResource):
         :param encoded: boolean of whether string returned from server is Base64 encoded
         :return: decrypted password
         '''
-        if self.password is None:
+        if self.password is None or force_update:
             self.password = self.tester.get_windows_instance_password(self,
                                                                       private_key_path=private_key_path,
                                                                       key=key,
@@ -622,8 +615,7 @@ class WinInstance(Instance, TaggedResource):
         # todo:
         timeout = timeout or self.timeout
         self.debug('reset_winrm_connection for:'+str(self.id))
-        if self.password is None:
-            self.get_password()
+        self.get_password(force_update=True)
         if self.username is None or self.password is None:
             #Allow but warn here as this may be a valid negative test
             self.debug('Warning username and/or password were None in winrm connnection?')
@@ -665,6 +657,9 @@ class WinInstance(Instance, TaggedResource):
         timeout - optional - time in seconds to wait when polling port(s) status(s) before failure
 
         '''
+        self.debug("{0}connect_to_instance starting.\nwait_for_boot:{1} "
+                   "seconds\ntimeout from boot:{2}{3}"
+                   .format(get_line(), wait_for_boot, timeout, get_line()))
         try:
             self.poll_for_port_status_with_boot_delay(waitforboot=wait_for_boot, timeout=timeout)
         except Exception, e:
@@ -699,11 +694,14 @@ class WinInstance(Instance, TaggedResource):
         if self.winrm is None:
             raise Exception(str(self.id)+":Failed establishing management connection to instance, elapsed:"+str(elapsed)+
                             "/"+str(timeout))
+        self.debug('Connect_to_instance updating attached_vols: ' + str(self.attached_vols))
         if self.brief:
             self.update_system_info()
         else:
             self.update_system_and_disk_info()
             self.init_attached_volumes()
+        self.debug("{0}connect_to_instance completed{1}"
+                   .format(get_line(), get_line()))
 
     def update_root_device_diskdrive(self):
         if not self.root_device_type == 'ebs':
@@ -722,7 +720,12 @@ class WinInstance(Instance, TaggedResource):
                     volume.guestdev = disk.deviceid
                     volume.md5len = 1024
                     volume.md5 = self.get_dev_md5(disk.cygwin_scsi_drive, volume.md5len)
-                    self.attached_vols.append(volume)
+                    if not self.get_volume_from_attached_list_by_id(volume.id):
+                        self.debug("{0} updating with root vol:{1}{2}"
+                                   .format(get_line(),
+                                           volume.id,
+                                           get_line()))
+                        self.attached_vols.append(volume)
                     disk.update_md5_info_from_ebs()
                     return
 
@@ -851,13 +854,19 @@ class WinInstance(Instance, TaggedResource):
         raise Exception('test_poll_for_ports_status:'+str(ip)+':'+str(port)+' FAILED after attempts:'+str(attempt)+', elapsed:'+str(elapsed)+' seconds')
 
     def init_attached_volumes(self):
+        self.debug('init_attahced_volumes... attached_vols: ' + str(self.attached_vols))
         syncdict = self.sync_attached_volumes_with_clouds_view()
         if syncdict['errors']:
             errmsg = 'Errors syncing guest volumes with cloud at init:' + ",".join(str(e) for e in syncdict['errors'])
             errmsg += 'Failed to sync guest volumes with cloud at init:' + ",".join(str(x) for x in syncdict['badvols'])
+            self.debug(errmsg)
+            time.sleep(60)
             raise Exception(errmsg)
 
     def sync_attached_volumes_with_clouds_view(self):
+        self.debug(get_line() +
+                   "Starting sync_attached_volumes_with_clouds_view"
+                   + get_line() )
         badvols = []
         errors = []
         ret = {'errors':errors, 'badvols':badvols}
@@ -865,6 +874,8 @@ class WinInstance(Instance, TaggedResource):
         cloud_volumes = self.tester.get_volumes(attached_instance=self.id)
         #Make a copy of a list of volumes this instance thinks are currenlty attached
         locallist = copy.copy(self.attached_vols)
+        self.debug('Cloud list:' + str(cloud_volumes))
+        self.debug('Local list:' + str(locallist))
 
         for vol in cloud_volumes:
             for local_vol in locallist:
@@ -880,6 +891,9 @@ class WinInstance(Instance, TaggedResource):
         for local_vol in locallist:
             badvols.append(local_vol)
             errors.append(local_vol.id + ' Error unattached volume found in guests attach list. \n')
+        self.debug(get_line() +
+                   "Finishing sync_attached_volumes_with_clouds_view"
+                   + get_line() )
         return ret
 
 
@@ -936,8 +950,7 @@ class WinInstance(Instance, TaggedResource):
         if cygpath is None:
             raise Exception('Could not find cygwin path on guest for curl?')
         curl = cygpath + 'bin\curl.exe --connect-timeout ' + str(connect_timeout) + ' '
-        return self.sys(curl + str(url), code=0, timeout=timeout)
-
+        return self.sys(curl + str(url), code=0, timeout=connect_timeout)
 
 
 
@@ -1252,7 +1265,6 @@ class WinInstance(Instance, TaggedResource):
             if re.search('vol-', disk.serialnumber):
                 use_serial = True
                 break
-
         attached_dev = None
         start= time.time()
         elapsed = 0
@@ -1290,6 +1302,7 @@ class WinInstance(Instance, TaggedResource):
                         self.debug("Volume:"+str(euvolume.id)+"found guest device by diff:"+str(euvolume.guestdev))
                     if attached_dev:
                         euvolume.guestdev = attached_dev
+                        attached_vol = self.get_volume_from_attached_list_by_id(euvolume.id)
                         self.attached_vols.append(euvolume)
                         self.debug(euvolume.id+": Requested dev:"+str(euvolume.attach_data.device)+", attached to guest device:"+str(euvolume.guestdev))
                         break
@@ -1711,13 +1724,12 @@ class WinInstance(Instance, TaggedResource):
 
 
     def update_volume_guest_info(self, volume, md5=None, md5len=None, guestdev=None):
+        self.debug("{0} update_volume_guest_info: {1} {2}"
+                   .format(get_line(), volume, get_line()))
         if not self.is_volume_attached_to_this_instance(volume):
             raise Exception('Volume not attached to this instance')
         disk = None
-        attached_volume = self.get_volume_from_attached_list_by_id(volume.id)
-        if attached_volume:
-            volume = attached_volume
-        else:
+        if not self.get_volume_from_attached_list_by_id(volume.id):
             self.attached_vols.append(volume)
         volume.guestdev = guestdev or volume.guestdev
         if md5:
@@ -1892,7 +1904,114 @@ class WinInstance(Instance, TaggedResource):
         return uptime
 
 
+    def stop_instance_and_verify(self, timeout=200, state='stopped',
+                                 failstate='terminated', check_vols=True):
+        '''
+        Attempts to stop instance and verify the state has gone to
+        stopped state
+        :param timeout; -optional-time to wait on instance to go to state 'state' before failing
+        :param state: -optional-the expected state to signify success, default is stopped
+        :param failstate: -optional-a state transition that indicates failure, default is terminated
+        '''
+        self.debug(self.id+" Attempting to stop instance...")
+        start = time.time()
+        elapsed = 0
+        self.stop()
+        while (elapsed < timeout):
+            time.sleep(2)
+            self.update()
+            if self.state == state:
+                break
+            if self.state == failstate:
+                raise Exception(str(self.id) + " instance went to state:" +
+                                str(self.state) + " while stopping")
+            elapsed = int(time.time()- start)
+            if elapsed % 10 == 0 :
+                self.debug(str(self.id) + " wait for stop, in state:" +
+                           str(self.state) + ",time remaining:" +
+                           str(elapsed) + "/" + str(timeout) )
+        if self.state != state:
+            raise Exception(self.id + " state: " + str(self.state) +
+                            " expected:" + str(state) +
+                            ", after elapsed:" + str(elapsed))
+        if check_vols:
+            for volume in self.attached_vols:
+                volume.update
+                if volume.status != 'in-use':
+                    raise Exception(str(self.id) + ', Volume ' +
+                                    str(volume.id) + ':' + str(volume.status)
+                                    + ' state did not remain in-use '
+                                      'during stop')
+        self.debug(self.id + " stop_instance_and_verify Success")
 
+
+    def start_instance_and_verify(self, timeout=300, state = 'running',
+                                  failstates=['terminated'], failfasttime=30,
+                                  connect=True, checkvolstatus=True):
+        '''
+        Attempts to start instance and verify state, and reconnects ssh session
+        :param timeout: -optional-time to wait on instance to go to state
+                        'state' before failing
+        :param state: -optional-the expected state to signify success,
+                        default is running
+        :param failstate: -optional-a state transition that indicates failure,
+                          default is terminated
+        :param connect: -optional - boolean to indicate whether an ssh
+                        session should be established once the expected state
+                        has been reached
+        :param checkvolstatus: -optional -boolean to be used to check volume
+                               status post start up
+        '''
+        self.debug(self.id+" Attempting to start instance...")
+        if checkvolstatus:
+            for volume in self.attached_vols:
+                volume.update
+                if checkvolstatus:
+                    if volume.status != 'in-use':
+                        raise Exception(str(self.id) + ', Volume ' + str(volume.id) + ':' + str(volume.status)
+                                        + ' state did not remain in-use during stop'  )
+        self.debug("\n"+ str(self.id) + ": Printing Instance 'attached_vol' list:\n")
+        self.tester.print_euvolume_list(self.attached_vols)
+        msg=""
+        start = time.time()
+        elapsed = 0
+        self.update()
+        #Add fail fast states...
+        if self.state == 'stopped':
+            failstates.extend(['stopped','stopping'])
+        self.start()
+
+        while (elapsed < timeout):
+            elapsed = int(time.time()- start)
+            self.update()
+            self.debug(str(self.id) + " wait for start, in state:" +
+                       str(self.state) + ",time remaining:" + str(elapsed) +
+                       "/"+str(timeout) )
+            if self.state == state:
+                break
+            if elapsed >= failfasttime:
+                for failstate in failstates:
+                    if self.state == failstate:
+                        raise Exception(str(self.id) +
+                                        " instance went to state:" +
+                                        str(self.state) + " while starting")
+            time.sleep(10)
+        if self.state != state:
+            raise Exception(self.id + " not in " + str(state) +
+                            " state after elapsed:" + str(elapsed))
+        else:
+            self.debug(self.id + " went to state:" + str(state))
+            if connect:
+                self.connect_to_instance(timeout=timeout)
+            if checkvolstatus:
+                badvols= self.get_unsynced_volumes(check_md5=True)
+                if badvols != []:
+                    for vol in badvols:
+                        msg = msg + "\nVolume:" + vol.id + " Local Dev:" +\
+                              vol.guestdev
+                    raise Exception("Missing volumes post reboot:" + str(msg) +
+                                    "\n")
+        self.debug(self.id+" start_instance_and_verify Success")
 
 
 

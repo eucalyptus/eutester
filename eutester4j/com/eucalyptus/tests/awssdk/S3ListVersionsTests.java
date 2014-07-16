@@ -74,7 +74,7 @@ public class S3ListVersionsTests {
 	private static AmazonS3 s3 = null;
 	private static String account = null;
 	private static String VALID_CHARS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-	private static int DEFAULT_MAX_KEYS = 1000;
+	private static final int DEFAULT_MAX_KEYS = 1000;
 
 	@BeforeClass
 	public void init() throws Exception {

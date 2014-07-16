@@ -95,7 +95,7 @@ public class TestAutoScalingLaunchAndTerminate {
 			// Wait for instances to launch
 			print("Waiting for instances to launch");
 			final long startTime = System.currentTimeMillis();
-			final long launchTimeout = TimeUnit.MINUTES.toMillis(10);
+			final long launchTimeout = TimeUnit.MINUTES.toMillis(15);
 			boolean launched = false;
 			while (!launched
 					&& (System.currentTimeMillis() - startTime) < launchTimeout) {
@@ -116,7 +116,7 @@ public class TestAutoScalingLaunchAndTerminate {
 			// Wait for instances to launch
 			print("Waiting for instances to terminate");
 			final long terminateStartTime = System.currentTimeMillis();
-			final long terminateTimeout = TimeUnit.MINUTES.toMillis(10);
+			final long terminateTimeout = TimeUnit.MINUTES.toMillis(15);
 			boolean terminated = false;
 			while (!terminated
 					&& (System.currentTimeMillis() - terminateStartTime) < terminateTimeout) {

@@ -328,7 +328,7 @@ class Eutester4j {
     public static void waitForHealthStatus(final String instanceId, final String expectedStatus)
             throws Exception {
         final long startTime = System.currentTimeMillis();
-        final long timeout = TimeUnit.MINUTES.toMillis(5);
+        final long timeout = TimeUnit.MINUTES.toMillis(15);
         boolean completed = false;
         while (!completed && (System.currentTimeMillis() - startTime) < timeout) {
             Thread.sleep(5000);
