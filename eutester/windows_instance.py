@@ -487,9 +487,10 @@ class WinInstance(Instance, TaggedResource):
             newins.connect_to_instance(timeout=timeout)
         return newins
 
-    def update(self):
-        super(WinInstance, self).update()
+    def update(self, validate=True):
+        super(WinInstance, self).update(validate=validate)
         self.set_last_status()
+        return self.state
 
     def update_vm_type_info(self):
         self.vmtype_info =  self.tester.get_vm_type_from_zone(self.placement,self.instance_type)
@@ -580,7 +581,13 @@ class WinInstance(Instance, TaggedResource):
         return buf
 
 
-    def get_password(self, private_key_path=None, key=None, dir=None, exten=".pem", encoded=True):
+    def get_password(self,
+                     private_key_path=None,
+                     key=None,
+                     dir=None,
+                     exten=".pem",
+                     encoded=True,
+                     force_update=False):
         '''
         :param private_key_path: private key file used to decrypt password
         :param key: name of private key
@@ -589,7 +596,7 @@ class WinInstance(Instance, TaggedResource):
         :param encoded: boolean of whether string returned from server is Base64 encoded
         :return: decrypted password
         '''
-        if self.password is None:
+        if self.password is None or force_update:
             self.password = self.tester.get_windows_instance_password(self,
                                                                       private_key_path=private_key_path,
                                                                       key=key,
@@ -608,8 +615,7 @@ class WinInstance(Instance, TaggedResource):
         # todo:
         timeout = timeout or self.timeout
         self.debug('reset_winrm_connection for:'+str(self.id))
-        if self.password is None:
-            self.get_password()
+        self.get_password(force_update=True)
         if self.username is None or self.password is None:
             #Allow but warn here as this may be a valid negative test
             self.debug('Warning username and/or password were None in winrm connnection?')
@@ -1898,7 +1904,114 @@ class WinInstance(Instance, TaggedResource):
         return uptime
 
 
+    def stop_instance_and_verify(self, timeout=200, state='stopped',
+                                 failstate='terminated', check_vols=True):
+        '''
+        Attempts to stop instance and verify the state has gone to
+        stopped state
+        :param timeout; -optional-time to wait on instance to go to state 'state' before failing
+        :param state: -optional-the expected state to signify success, default is stopped
+        :param failstate: -optional-a state transition that indicates failure, default is terminated
+        '''
+        self.debug(self.id+" Attempting to stop instance...")
+        start = time.time()
+        elapsed = 0
+        self.stop()
+        while (elapsed < timeout):
+            time.sleep(2)
+            self.update()
+            if self.state == state:
+                break
+            if self.state == failstate:
+                raise Exception(str(self.id) + " instance went to state:" +
+                                str(self.state) + " while stopping")
+            elapsed = int(time.time()- start)
+            if elapsed % 10 == 0 :
+                self.debug(str(self.id) + " wait for stop, in state:" +
+                           str(self.state) + ",time remaining:" +
+                           str(elapsed) + "/" + str(timeout) )
+        if self.state != state:
+            raise Exception(self.id + " state: " + str(self.state) +
+                            " expected:" + str(state) +
+                            ", after elapsed:" + str(elapsed))
+        if check_vols:
+            for volume in self.attached_vols:
+                volume.update
+                if volume.status != 'in-use':
+                    raise Exception(str(self.id) + ', Volume ' +
+                                    str(volume.id) + ':' + str(volume.status)
+                                    + ' state did not remain in-use '
+                                      'during stop')
+        self.debug(self.id + " stop_instance_and_verify Success")
 
+
+    def start_instance_and_verify(self, timeout=300, state = 'running',
+                                  failstates=['terminated'], failfasttime=30,
+                                  connect=True, checkvolstatus=True):
+        '''
+        Attempts to start instance and verify state, and reconnects ssh session
+        :param timeout: -optional-time to wait on instance to go to state
+                        'state' before failing
+        :param state: -optional-the expected state to signify success,
+                        default is running
+        :param failstate: -optional-a state transition that indicates failure,
+                          default is terminated
+        :param connect: -optional - boolean to indicate whether an ssh
+                        session should be established once the expected state
+                        has been reached
+        :param checkvolstatus: -optional -boolean to be used to check volume
+                               status post start up
+        '''
+        self.debug(self.id+" Attempting to start instance...")
+        if checkvolstatus:
+            for volume in self.attached_vols:
+                volume.update
+                if checkvolstatus:
+                    if volume.status != 'in-use':
+                        raise Exception(str(self.id) + ', Volume ' + str(volume.id) + ':' + str(volume.status)
+                                        + ' state did not remain in-use during stop'  )
+        self.debug("\n"+ str(self.id) + ": Printing Instance 'attached_vol' list:\n")
+        self.tester.print_euvolume_list(self.attached_vols)
+        msg=""
+        start = time.time()
+        elapsed = 0
+        self.update()
+        #Add fail fast states...
+        if self.state == 'stopped':
+            failstates.extend(['stopped','stopping'])
+        self.start()
+
+        while (elapsed < timeout):
+            elapsed = int(time.time()- start)
+            self.update()
+            self.debug(str(self.id) + " wait for start, in state:" +
+                       str(self.state) + ",time remaining:" + str(elapsed) +
+                       "/"+str(timeout) )
+            if self.state == state:
+                break
+            if elapsed >= failfasttime:
+                for failstate in failstates:
+                    if self.state == failstate:
+                        raise Exception(str(self.id) +
+                                        " instance went to state:" +
+                                        str(self.state) + " while starting")
+            time.sleep(10)
+        if self.state != state:
+            raise Exception(self.id + " not in " + str(state) +
+                            " state after elapsed:" + str(elapsed))
+        else:
+            self.debug(self.id + " went to state:" + str(state))
+            if connect:
+                self.connect_to_instance(timeout=timeout)
+            if checkvolstatus:
+                badvols= self.get_unsynced_volumes(check_md5=True)
+                if badvols != []:
+                    for vol in badvols:
+                        msg = msg + "\nVolume:" + vol.id + " Local Dev:" +\
+                              vol.guestdev
+                    raise Exception("Missing volumes post reboot:" + str(msg) +
+                                    "\n")
+        self.debug(self.id+" start_instance_and_verify Success")
 
 
 

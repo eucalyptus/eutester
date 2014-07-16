@@ -3515,12 +3515,12 @@ disable_root: false"""
                     else:
                         euinstances.append(
                             self.convert_instance_to_euisntance(instance,
-                                                                self,
                                                                 username=username,
                                                                 password=password,
                                                                 keypair=keypair ))
             return euinstances
         except Exception, e:
+            traceback.print_exc()
             self.debug("Failed to find a pre-existing instance we can connect to:"+str(e))
             pass
     
