@@ -70,7 +70,7 @@ class InstanceRestore(EutesterTestCase):
         for nc in self.ncs:
             nc.sys("service eucalyptus-nc stop")
 
-        ### Wait for instance to show up as terminating
+        ### Wait for instance to show up as terminated
         self.tester.wait_for_reservation(self.reservation, state="terminated", timeout=600)
 
         instance_under_test = None
@@ -83,22 +83,19 @@ class InstanceRestore(EutesterTestCase):
         for nc in self.ncs:
             nc.sys("service eucalyptus-nc start")
 
-        found = False
-        while not found:
+        def check_for_instance():
             try:
                 if not self.tester.ec2.get_all_instances(instance_ids=[instance_under_test.id]):
                     raise Exception("Unable to find instance")
                 else:
-                    found = True
+                    return True
             except Exception, e:
-                self.tester.debug(str(instance_under_test) + " not found yet")
-            self.tester.sleep(10)
-
+                return False
+        self.tester.wait_for_result(check_for_instance, True, timeout=600)
         self.tester.wait_for_instance(instance_under_test, state="running", timeout=600)
 
         for instance in self.reservation.instances:
             instance.sys("uname -r", code=0)
-
 
 
 if __name__ == "__main__":
@@ -108,7 +105,7 @@ if __name__ == "__main__":
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
     for test in list:
-        unit_list.append( testcase.create_testunit_by_name(test) )
+        unit_list.append(testcase.create_testunit_by_name(test))
         ### Run the EutesterUnitTest objects
 
     result = testcase.run_test_case_list(unit_list,clean_on_exit=True)
