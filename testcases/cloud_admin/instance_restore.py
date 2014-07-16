@@ -57,7 +57,8 @@ class InstanceRestore(EutesterTestCase):
         except Exception,e:
             self.tester.register_image(image_location=self.image.location,
                                        ramdisk=self.image.ramdisk_id,
-                                       kernel=self.image.kernel_id)
+                                       kernel=self.image.kernel_id,
+                                       virtualization_type=self.image.virtualization_type)
 
     def RestoreLogic(self):
         self.tester.modify_property("cloud.vmstate.instance_timeout","1")
