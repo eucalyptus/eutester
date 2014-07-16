@@ -71,7 +71,7 @@ class InstanceRestore(EutesterTestCase):
             nc.sys("service eucalyptus-nc stop")
 
         ### Wait for instance to show up as terminated
-        self.tester.monitor_euinstances_to_state(self.reservation, state="terminated", timeout=600)
+        self.tester.monitor_euinstances_to_state(self.reservation.instances, state="terminated", timeout=600)
 
         instance_under_test = None
         for instance in self.reservation.instances:
@@ -92,7 +92,7 @@ class InstanceRestore(EutesterTestCase):
             except Exception, e:
                 return False
         self.tester.wait_for_result(check_for_instance, True, timeout=600)
-        self.tester.monitor_euinstances_to_state(self.reservation, state="running", timeout=600)
+        self.tester.monitor_euinstances_to_state(self.reservation.instances, state="running", timeout=600)
 
         for instance in self.reservation.instances:
             instance.sys("uname -r", code=0)
