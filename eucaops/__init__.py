@@ -59,7 +59,7 @@ import os
 class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
     
     def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None,
-                 aws_secret_access_key = None,  account="eucalyptus", user="admin", username=None, APIVersion='2011-01-01',
+                     aws_secret_access_key = None,  account="eucalyptus", user="admin", username=None, APIVersion='2013-10-15',
                  ec2_ip=None, ec2_path=None, iam_ip=None, iam_path=None, s3_ip=None, s3_path=None,
                  as_ip=None, as_path=None, elb_ip=None, elb_path=None, cw_ip=None, cw_path=None,
                  cfn_ip=None, cfn_path=None, sts_ip=None, sts_path=None,
