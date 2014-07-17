@@ -610,6 +610,8 @@ class ImageUtils(EutesterTestCase):
                                 s3_url=None,
                                 ec2_url=None,
                                 image_size=None,
+                                user_data=None,
+                                user_data_file=None,
                                 private_addr=None,
                                 shutdown_behavior=None,
                                 owner_sak=None,
@@ -648,6 +650,10 @@ class ImageUtils(EutesterTestCase):
             cmdargs += " -U " + str(ec2_url)
         if image_size:
             cmdargs += " --image-size " + str(image_size)
+        if user_data:
+            cmdargs += ' --user-data "' + str(user_data) +'"'
+        if user_data_file:
+            cmdargs += " --user-data-file " + str(user_data_file)
         if private_addr:
             cmdargs += " --private-ip-address"
         if shutdown_behavior:

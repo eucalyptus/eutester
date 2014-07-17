@@ -41,6 +41,7 @@ from testcases.cloud_user.images.conversiontask import ConversionTask
 from boto.exception import S3ResponseError
 from subprocess import CalledProcessError
 from argparse import ArgumentError
+from base64 import b64decode
 import os
 import time
 import types
@@ -135,6 +136,12 @@ class ImportInstanceTests(EutesterTestCase):
                                       'time per gig of image size. '
                                       'Default:600 seconds',
                                  default=600)
+        self.parser.add_argument('--task_user_data',
+                                 help='user data to provide to import instance'
+                                      'task request. '
+                                      'Default:"#cloud-config\ndisable_root: '
+                                      'false"',
+                                 default='#cloud-config\ndisable_root: false')
         self.parser.add_argument('--no_clean_on_exit',
                                  help='Disable cleanup method upon exit to '
                                       'leave test resources behind',
@@ -157,6 +164,7 @@ class ImportInstanceTests(EutesterTestCase):
                                 'or config_file and password was provided, err:' + str(e))
             #replace default eutester debugger with eutestcase's for more verbosity...
             self.tester.debug = lambda msg: self.debug(msg, traceback=2, linebyline=False)
+        self.set_arg('tester', self.tester)
         if not self.url:
             if not self.args.url:
                 raise ArgumentError(None,'Required URL not provided')
@@ -312,7 +320,8 @@ class ImportInstanceTests(EutesterTestCase):
                   'arch':self.args.arch,
                   'keypair':self.keyname,
                   'group':self.groupname,
-                  'platform':self.args.platform}
+                  'platform':self.args.platform,
+                  'user_data':self.args.task_user_data}
         task = img_utils.euca2ools_import_instance(**params)
         assert isinstance(task,ConversionTask)
         tester.monitor_conversion_tasks(task,
@@ -450,6 +459,24 @@ class ImportInstanceTests(EutesterTestCase):
                 if platform == 'linux':
                     platform = None
                 self.assertEquals(platform, task.instance.platform)
+        except Exception as e:
+            err_msg += str(e) + "\n"
+
+        if err_msg:
+            raise Exception("Failures in param validation detected:n\n"
+                            + str(err_msg))
+        try:
+            if hasattr(task, 'instanceid') and task.instanceid and \
+                    params.has_key('user_data'):
+                user_data = params['user_data']
+                self.debug('Checking task for user_data: ' + str(user_data))
+                ins_attr = self.tester.ec2.get_instance_attribute(
+                    task.instanceid, 'userData')
+                if 'userData' in ins_attr:
+                    ins_user_data = b64decode(ins_attr['userData'])
+                else:
+                    ins_user_data = None
+                self.assertEquals(user_data, ins_user_data)
         except Exception as e:
             err_msg += str(e) + "\n"
 

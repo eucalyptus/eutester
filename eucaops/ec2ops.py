@@ -3306,7 +3306,7 @@ disable_root: false"""
 
     def convert_reservation_to_euinstance(self,
                                           reservation,
-                                          username="root",
+                                          username=None,
                                           password=None,
                                           keyname=None,
                                           private_addressing=False,
@@ -3329,7 +3329,7 @@ disable_root: false"""
         if private_addressing:
             auto_connect = False
         for instance in reservation.instances:
-            if keypair is not None or (password is not None and username is not None):
+            if keypair is not None or password is not None:
                 try:
                     euinstance_list.append(
                         self.convert_instance_to_euisntance(instance,
@@ -3349,10 +3349,11 @@ disable_root: false"""
         return reservation
 
     def convert_instance_to_euisntance(self, instance, keypair=None,
-                                       username="root", password=None,
+                                       username=None, password=None,
                                        reservation=None, auto_connect=True,
                                        timeout=120):
         if instance.platform == 'windows':
+            username = username or 'Administrator'
             instance = WinInstance.make_euinstance_from_instance(
                 instance,
                 self,
@@ -3363,6 +3364,7 @@ disable_root: false"""
                 auto_connect=auto_connect,
                 timeout=timeout)
         else:
+            username = username or 'root'
             instance = EuInstance.make_euinstance_from_instance(
                 instance,
                 self,
@@ -3491,7 +3493,7 @@ disable_root: false"""
 
         
     
-    def get_connectable_euinstances(self,path=None,username='root', password=None, connect=True):
+    def get_connectable_euinstances(self,path=None,username=None, password=None, connect=True):
         """
         Convenience method, returns a list of all running instances, for the current creduser
         for which there are local keys at 'path'
