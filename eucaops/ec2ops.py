@@ -3721,7 +3721,7 @@ disable_root: false"""
         self.debug("bundle_instance_monitor_and_register:" + str(bundle_task.id)
                    + " monitored to completed, now get manifest and register...")
         manifest = self.get_manifest_string_from_bundle_task(bundle_task)
-        image = self.register_manifest(manifest)
+        image = self.register_manifest(manifest, virtualization_type=instance.virtualization_type)
         self.debug("bundle_instance_monitor_and_register:" + str(bundle_task.id)
                    + ", registered as image:" + str(image.id))
         self.debug("bundle_instance_monitor_and_register:" + str(bundle_task.id)
