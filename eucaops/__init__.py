@@ -355,8 +355,9 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                     tb = self.get_traceback()
                     failcount +=1
                     failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
-            if res in remove_list:
-                self.test_resources["reservations"].remove(res)
+            for res in remove_list:
+                if res in remove_list:
+                    self.test_resources["reservations"].remove(res)
         if ip_addresses:
             try:
                 self.cleanup_addresses()
