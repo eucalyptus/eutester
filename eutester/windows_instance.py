@@ -53,6 +53,7 @@ from eutester import Eutester
 from eutester.euvolume import EuVolume
 from eutester import eulogger
 from eutester.taggedresource import TaggedResource
+from boto.ec2.instance import InstanceState
 from random import randint
 from datetime import datetime
 import winrm_connection
@@ -487,10 +488,35 @@ class WinInstance(Instance, TaggedResource):
             newins.connect_to_instance(timeout=timeout)
         return newins
 
-    def update(self, validate=True):
-        super(WinInstance, self).update(validate=validate)
+    def update(self, validate=False, dry_run=False,
+               err_state='terminated', err_code=-1):
+        ret = None
+        tb = ""
+        retries = 2
+        for x in xrange(0, retries):
+            try:
+                #send with validation True, fail later...
+                ret = super(WinInstance, self).update(validate=True,
+                                                      dry_run=dry_run)
+                break
+            except ValueError:
+                if validate:
+                    raise
+                tb = self.tester.get_traceback()
+                self.debug('Failed to update instance. Attempt:{0}/{1}'
+                           .format(x, retries))
+        if not ret:
+            failmsg = 'Failed to update instance. Instance may no longer ' \
+                      'be present on system"{0}"'.format(self.id)
+            self.debug('{0}\n{1}'.format(tb, failmsg))
+            self.debug('{0} setting fake state to:"{1}"'.format(self.id,
+                                                                err_state))
+            state = InstanceState(name=err_state, code=err_code)
+            self._state = state
+            ret = self.state
         self.set_last_status()
-        return self.state
+        return ret
+
 
     def update_vm_type_info(self):
         self.vmtype_info =  self.tester.get_vm_type_from_zone(self.placement,self.instance_type)

@@ -2775,7 +2775,10 @@ disable_root: false"""
             raise e 
     
     
-    def wait_for_instances_block_dev_mapping(self, instances, poll_interval=1, timeout=60):
+    def wait_for_instances_block_dev_mapping(self,
+                                             instances,
+                                             poll_interval=1,
+                                             timeout=60):
         waiting = copy.copy(instances)
         elapsed = 0
         good = []

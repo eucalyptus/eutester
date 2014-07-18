@@ -52,6 +52,7 @@ from eutester import Eutester
 from eutester.euvolume import EuVolume
 from eutester import eulogger
 from eutester.taggedresource import TaggedResource
+from boto.ec2.instance import InstanceState
 from random import randint
 import sshconnection
 import sys
@@ -171,10 +172,36 @@ class EuInstance(Instance, TaggedResource):
 
         return newins
     
-    def update(self):
-        super(EuInstance, self).update()
+
+    def update(self, validate=False, dry_run=False,
+                err_state='terminated', err_code=-1):
+        ret = None
+        tb = ""
+        retries = 2
+        for x in xrange(0, retries):
+            try:
+                #send with validation True, fail later...
+                ret = super(EuInstance, self).update(validate=True,
+                                                      dry_run=dry_run)
+                break
+            except ValueError:
+                if validate:
+                    raise
+                tb = self.tester.get_traceback()
+                self.debug('Failed to update instance. Attempt:{0}/{1}'
+                           .format(x, retries))
+        if not ret:
+            failmsg = 'Failed to update instance. Instance may no longer ' \
+                      'be present on system"{0}"'.format(self.id)
+            self.debug('{0}\n{1}'.format(tb, failmsg))
+            self.debug('{0} setting fake state to:"{1}"'.format(self.id,
+                                                                err_state))
+            state = InstanceState(name=err_state, code=err_code)
+            self._state = state
+            ret = self.state
         self.set_last_status()
-    
+        return ret
+
     def set_last_status(self,status=None):
         self.laststate = self.state
         self.laststatetime = time.time()
