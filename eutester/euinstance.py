@@ -296,7 +296,8 @@ class EuInstance(Instance, TaggedResource):
                                                     debugmethod=self.debugmethod,
                                                     verbose=self.verbose)
         else:
-            self.debug("keypath or username/password need to be populated for ssh connection") 
+            self.debug("keypath or username/password need to be populated "
+                       "for ssh connection")
             
 
     def get_reservation(self):
@@ -305,18 +306,21 @@ class EuInstance(Instance, TaggedResource):
             res = self.tester.get_reservation_for_instance(self)
         except Exception, e:
             self.update()
-            self.debug('Could not get reservation for instance in state:' + str(self.state) + ", err:" + str(e))
+            self.debug('Could not get reservation for instance in state:' +
+                       str(self.state) + ", err:" + str(e))
         return res
 
 
     def connect_to_instance(self, timeout=60):
         '''
         Attempts to connect to an instance via ssh.
-        timeout - optional - time in seconds to wait for connection before failure
+        timeout - optional - time in seconds to wait for connection
+                  before failure
         '''
         self.debug("Attempting to reconnect_to_instance:" + self.id)
         attempts = 0
-        if ((self.keypath is not None) or ((self.username is not None)and(self.password is not None))):
+        if ((self.keypath is not None) or
+                ((self.username is not None)and(self.password is not None))):
             start = time.time()
             elapsed = 0
             if self.ssh is not None:
@@ -330,9 +334,12 @@ class EuInstance(Instance, TaggedResource):
                     self.debug('Try some sys...')
                     self.sys("")
                 except Exception, se:
-                    self.debug('Caught exception attempting to reconnect ssh:'+ str(se))
+                    self.debug('Caught exception attempting to reconnect '
+                               'ssh:' + str(se))
                     elapsed = int(time.time()-start)
-                    self.debug('connect_to_instance: Attempts:'+str(attempts)+', elapsed:'+str(elapsed)+'/'+str(timeout))
+                    self.debug('connect_to_instance: Attempts:' +
+                               str(attempts) + ', elapsed:' + str(elapsed) +
+                               '/' + str(timeout))
                     time.sleep(5)
                     pass
                 else:
@@ -359,10 +366,13 @@ class EuInstance(Instance, TaggedResource):
                     self.tester.get_console_output(self)
                 except Exception as CE:
                     self.log.debug('Failed to get console output:' + str(CE))
-                raise Exception(str(self.id)+":Failed establishing ssh connection to instance, elapsed:"+str(elapsed)+
-                                "/"+str(timeout))
+                raise RuntimeError(str(self.id) +
+                                   ":Failed establishing ssh connection to "
+                                   "instance, elapsed:" + str(elapsed) +
+                                   "/"+str(timeout))
         else:
-            self.debug("keypath or username/password need to be populated for ssh connection")
+            self.debug("keypath or username/password need to be populated "
+                       "for ssh connection")
 
     def has_sudo(self):
         try:
@@ -370,20 +380,23 @@ class EuInstance(Instance, TaggedResource):
             self.ssh.sys('which sudo', code=0)
             return True
         except sshconnection.CommandExitCodeException, se:
-            self.debug('Could not find sudo on remote machine:' + str(self.ip_address))
+            self.debug('Could not find sudo on remote machine:' +
+                       str(self.ip_address))
         return False
 
 
     
     def debug(self,msg,traceback=1,method=None,frame=False):
         '''
-        Used to print debug, defaults to print() but over ridden by self.debugmethod if not None
+        Used to print debug, defaults to print() but over ridden by
+        self.debugmethod if not None
         msg - mandatory -string, message to be printed
         '''
         if ( self.verbose is True ):
             self.debugmethod(msg)
 
-    def sys(self, cmd, verbose=True, code=None, try_non_root_exec=None, enable_debug=False, timeout=120):
+    def sys(self, cmd, verbose=True, code=None, try_non_root_exec=None,
+            enable_debug=False, timeout=120):
         '''
         Issues a command against the ssh connection to this instance
         Returns a list of the lines from stdout+stderr as a result of the command
@@ -395,28 +408,46 @@ class EuInstance(Instance, TaggedResource):
             raise Exception("Euinstance ssh connection is None")
         if self.username != 'root' and try_non_root_exec:
             if self.use_sudo:
-                results = self.sys_with_sudo(cmd, verbose=verbose, code=code, enable_debug=enable_debug, timeout=timeout)
+                results = self.sys_with_sudo(cmd,
+                                             verbose=verbose,
+                                             code=code,
+                                             enable_debug=enable_debug,
+                                             timeout=timeout)
                 for content in results:
                     if content.startswith("sudo"):
                         results.remove(content)
                         break
                 return results
             else:
-                return self.sys_with_su(cmd, verbose=verbose, code=code, enable_debug=enable_debug, timeout=timeout)
+                return self.sys_with_su(cmd,
+                                        verbose=verbose,
+                                        code=code,
+                                        enable_debug=enable_debug,
+                                        timeout=timeout)
 
         return self.ssh.sys(cmd, verbose=verbose, code=code, timeout=timeout)
 
 
-    def sys_with_su(self, cmd, verbose=True, enable_debug=False, code=None, prompt='^Password:', username='root', password=None, retry=0, timeout=120):
+    def sys_with_su(self, cmd, verbose=True, enable_debug=False, code=None,
+                    prompt='^Password:', username='root', password=None,
+                    retry=0, timeout=120):
         password = password or self.exec_password
-        out = self.cmd_with_su(cmd, username=username, password=password, prompt=prompt,
-                               verbose=verbose, enable_debug=enable_debug, timeout=timeout, retry=retry, listformat=True)
+        out = self.cmd_with_su(cmd,
+                               username=username,
+                               password=password,
+                               prompt=prompt,
+                               verbose=verbose,
+                               enable_debug=enable_debug,
+                               timeout=timeout,
+                               retry=retry,
+                               listformat=True)
         output = out['output']
         if code is not None:
             if out['status'] != code:
                 self.debug(output)
-                raise sshconnection.CommandExitCodeException('Cmd:' + str(cmd) + ' failed with status code:'
-                                               + str(out['status']) + ", output:" + str(output))
+                raise sshconnection.CommandExitCodeException(
+                    'Cmd:' + str(cmd) + ' failed with status code:' +
+                    str(out['status']) + ", output:" + str(output))
         return output
 
     def cmd_with_su(self,
@@ -447,15 +478,25 @@ class EuInstance(Instance, TaggedResource):
                                         retry=retry)
 
 
-    def sys_with_sudo(self, cmd, verbose=True, enable_debug=False, prompt='^\[sudo\] password', code=None, password=None, retry=0, timeout=120):
+    def sys_with_sudo(self, cmd, verbose=True, enable_debug=False,
+                      prompt='^\[sudo\] password', code=None,
+                      password=None, retry=0, timeout=120):
         password = password or self.exec_password
-        out = self.cmd_with_sudo(cmd, password=password, enable_debug=enable_debug, prompt=prompt, verbose=verbose, timeout=timeout, retry=retry, listformat=True)
+        out = self.cmd_with_sudo(cmd,
+                                 password=password,
+                                 enable_debug=enable_debug,
+                                 prompt=prompt,
+                                 verbose=verbose,
+                                 timeout=timeout,
+                                 retry=retry,
+                                 listformat=True)
         output = out['output']
         if code is not None:
             if out['status'] != code:
                 self.debug(output)
-                raise sshconnection.CommandExitCodeException('Cmd:' + str(cmd) + ' failed with status code:'
-                                                             + str(out['status']) + ", output:" + str(output))
+                raise sshconnection.CommandExitCodeException(
+                    'Cmd:' + str(cmd) + ' failed with status code:' +
+                    str(out['status']) + ", output:" + str(output))
         return output
 
     def cmd_with_sudo(self,
@@ -506,14 +547,27 @@ class EuInstance(Instance, TaggedResource):
         if (self.ssh is None):
             raise Exception("Euinstance ssh connection is None")
         password = password or self.exec_password
-        return self.ssh.cmd(cmd,verbose=verbose, timeout=timeout, listformat=listformat,
-                            cb=self.ssh.expect_password_cb, cbargs=[password, prompt, cb, cbargs, retry, 0, enable_debug], get_pty=get_pty)
+        return self.ssh.cmd(cmd,
+                            verbose=verbose,
+                            timeout=timeout,
+                            listformat=listformat,
+                            cb=self.ssh.expect_password_cb,
+                            cbargs=[password,
+                                    prompt,
+                                    cb,
+                                    cbargs,
+                                    retry,
+                                    0,
+                                    enable_debug],
+                            get_pty=get_pty)
 
 
     def start_interactive_ssh(self, timeout=180):
         return self.ssh.start_interactive(timeout=timeout)
 
-    def cmd(self, cmd, verbose=None, enable_debug=False, try_non_root_exec=None, timeout=120, listformat=False, cb=None, cbargs=[], get_pty=True):
+    def cmd(self, cmd, verbose=None, enable_debug=False,
+            try_non_root_exec=None, timeout=120, listformat=False,
+            cb=None, cbargs=[], get_pty=True):
         """
         Runs a command 'cmd' within an ssh connection.
         Upon success returns dict representing outcome of the command.

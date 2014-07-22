@@ -619,22 +619,26 @@ class WinInstance(Instance, TaggedResource):
         :param key: name of private key
         :param dir: Path to private key
         :param exten: extension of private key
-        :param encoded: boolean of whether string returned from server is Base64 encoded
+        :param encoded: boolean of whether string returned from server is
+                        Base64 encoded
         :return: decrypted password
         '''
         if self.password is None or force_update:
-            self.password = self.tester.get_windows_instance_password(self,
-                                                                      private_key_path=private_key_path,
-                                                                      key=key,
-                                                                      dir=dir,
-                                                                      exten=exten,
-                                                                      encoded=encoded)
+            self.password = self.tester.get_windows_instance_password(
+                self,
+                private_key_path=private_key_path,
+                key=key,
+                dir=dir,
+                exten=exten,
+                encoded=encoded)
         return self.password
 
 
     def reset_ssh_connection(self, timeout=None):
-        # todo: Remove ssh reference from this method, use something like reset_instance_connection, etc..
-        self.debug('Note ssh not implemented at this time, using winrm for shell access instead...')
+        # todo: Remove ssh reference from this method, use something like
+        # reset_instance_connection, etc..
+        self.debug('Note ssh not implemented at this time, using winrm for '
+                   'shell access instead...')
         return self.reset_winrm_connection(timeout=timeout)
 
     def reset_winrm_connection(self, timeout=None, force=False):
@@ -644,8 +648,10 @@ class WinInstance(Instance, TaggedResource):
         self.get_password(force_update=True)
         if self.username is None or self.password is None:
             #Allow but warn here as this may be a valid negative test
-            self.debug('Warning username and/or password were None in winrm connnection?')
-        #Create a new winrm interface if this is a new instance or an attribute has changed...
+            self.debug('Warning username and/or password were None in '
+                       'winrm connnection?')
+        # Create a new winrm interface if this is a new instance or
+        # an attribute has changed...
         try:
             #Check the port in order to provide debug if the connection fails
             self.test_port_status(port=self.winrm_port, ip=self.ip_address)
@@ -656,14 +662,15 @@ class WinInstance(Instance, TaggedResource):
                          self.winrm.password == self.password):
             if self.winrm:
                 self.winrm.close_shell()
-            self.winrm = winrm_connection.Winrm_Connection(hostname = self.ip_address,
-                                                           username = self.username,
-                                                           password = self.password,
-                                                           port = self.winrm_port,
-                                                           protocol = self.winrm_protocol,
-                                                           debug_method = self.debug,
-                                                           verbose=True
-                                                           )
+            self.winrm = winrm_connection.Winrm_Connection(
+                hostname = self.ip_address,
+                username = self.username,
+                password = self.password,
+                port = self.winrm_port,
+                protocol = self.winrm_protocol,
+                debug_method = self.debug,
+                verbose=True
+                )
 
 
     def get_reservation(self):
@@ -672,22 +679,26 @@ class WinInstance(Instance, TaggedResource):
             res = self.tester.get_reservation_for_instance(self)
         except Exception, e:
             self.update()
-            self.debug('Could not get reservation for instance in state:' + str(self.state) + ", err:" + str(e))
+            self.debug('Could not get reservation for instance in state:' +
+                       str(self.state) + ", err:" + str(e))
         return res
 
 
     def connect_to_instance(self, wait_for_boot=180, timeout=120):
         '''
         Attempts to connect to an instance via ssh.
-        wait_for_boot=time to wait, allowing guest to boot before attempting to poll for ports active status
-        timeout - optional - time in seconds to wait when polling port(s) status(s) before failure
+        :params wait_for_boot: time to wait, allowing guest to boot before
+                               attempting to poll for ports active status
+        :params timeout: -optional - time in seconds to wait when polling
+                         port(s) status(s) before failure
 
         '''
         self.debug("{0}connect_to_instance starting.\nwait_for_boot:{1} "
                    "seconds\ntimeout from boot:{2}{3}"
                    .format(get_line(), wait_for_boot, timeout, get_line()))
         try:
-            self.poll_for_port_status_with_boot_delay(waitforboot=wait_for_boot, timeout=timeout)
+            self.poll_for_port_status_with_boot_delay(waitforboot=wait_for_boot,
+                                                      timeout=timeout)
         except Exception, e:
             self.debug('Warning failed to poll port status:' + str(e))
         self.debug("Attempting to create connection to instance:" + self.id)
@@ -706,9 +717,11 @@ class WinInstance(Instance, TaggedResource):
                 self.sys("whoami")
             except Exception, se:
                 tb = self.tester.get_traceback()
-                self.debug('Caught exception attempting to connect winrm shell:\n'+ str(tb) + str(se))
+                self.debug('Caught exception attempting to connect '
+                           'winrm shell:\n'+ str(tb) + str(se))
                 elapsed = int(time.time()-start)
-                self.debug('connect_to_instance: Attempts:'+str(attempts)+', elapsed:'+str(elapsed)+'/'+str(timeout))
+                self.debug('connect_to_instance: Attempts:' + str(attempts) +
+                           ', elapsed:'+str(elapsed)+'/'+str(timeout))
                 if self.winrm is not None:
                     self.winrm.close_shell()
                     self.winrm = None
@@ -718,9 +731,32 @@ class WinInstance(Instance, TaggedResource):
                 break
         elapsed = int(time.time()-start)
         if self.winrm is None:
-            raise Exception(str(self.id)+":Failed establishing management connection to instance, elapsed:"+str(elapsed)+
-                            "/"+str(timeout))
-        self.debug('Connect_to_instance updating attached_vols: ' + str(self.attached_vols))
+            # Add network debug/diag info here...
+            # First show arp cache from local machine
+            # todo Consider getting info from relevant euca components:
+            # - iptables info
+            # - route info
+            # - instance xml
+            try:
+                # Show local ARP info...
+                arp_out = "\nLocal ARP cache for instance ip: " \
+                          + str(self.ip_address) + "\n"
+                arp_fd = os.popen('arp ' + str(self.ip_address))
+                for line in arp_fd:
+                    arp_out += line
+                self.debug(arp_out)
+            except Exception as AE:
+                self.log.debug('Failed to get arp info:' + str(AE))
+            try:
+                self.tester.get_console_output(self)
+            except Exception as CE:
+                self.log.debug('Failed to get console output:' + str(CE))
+            raise RuntimeError(str(self.id) +
+                               ":Failed establishing management connection to "
+                               "instance, elapsed:" + str(elapsed) +
+                               "/" + str(timeout))
+        self.debug('Connect_to_instance updating attached volumes/disk '
+                   'info for vols: ' + str(self.attached_vols))
         if self.brief:
             self.update_system_info()
         else:

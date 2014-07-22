@@ -3238,6 +3238,7 @@ disable_root: false"""
                 instance.update()
                 if hasattr(instance, 'ip_address') and instance.ip_address and \
                         (zeros.search(str(instance.ip_address)) or zeros.search(str(instance.private_ip_address))):
+                    # Either public or private ip was still not populated
                     self.debug(str(instance.id)+": WAITING for public ip. Current:"+str(instance.ip_address)+
                                ", elapsed:"+str(elapsed)+"/"+str(timeout))
                 else:
