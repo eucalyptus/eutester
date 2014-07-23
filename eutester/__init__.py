@@ -171,16 +171,15 @@ class Eutester(object):
             self.critical("Address is all 0s and will not be able to ping it") 
             return False
         self.debug("Attempting to ping " + address)
-        while poll_count > 0:
-            poll_count -= 1
+        for x in xrange(0, poll_count):
             try:
                 self.local("ping -c 1 " + address)
                 self.debug("Was able to ping address")
                 return True
-            except:
-                pass
-            self.debug("Ping unsuccessful retrying in 2 seconds " + str(poll_count) + " more times")
-            self.sleep(2)
+            except Exception as PE:
+                self.debug('Ping attempt {0}/{1} failed, err:{2}'
+                           .format(x, poll_count, str(PE)))
+                self.sleep(2)
         self.critical("Was unable to ping address")
         return False
 
