@@ -731,26 +731,7 @@ class WinInstance(Instance, TaggedResource):
                 break
         elapsed = int(time.time()-start)
         if self.winrm is None:
-            # Add network debug/diag info here...
-            # First show arp cache from local machine
-            # todo Consider getting info from relevant euca components:
-            # - iptables info
-            # - route info
-            # - instance xml
-            try:
-                # Show local ARP info...
-                arp_out = "\nLocal ARP cache for instance ip: " \
-                          + str(self.ip_address) + "\n"
-                arp_fd = os.popen('arp ' + str(self.ip_address))
-                for line in arp_fd:
-                    arp_out += line
-                self.debug(arp_out)
-            except Exception as AE:
-                self.log.debug('Failed to get arp info:' + str(AE))
-            try:
-                self.tester.get_console_output(self)
-            except Exception as CE:
-                self.log.debug('Failed to get console output:' + str(CE))
+            self.get_connection_debug()
             raise RuntimeError(str(self.id) +
                                ":Failed establishing management connection to "
                                "instance, elapsed:" + str(elapsed) +
@@ -764,6 +745,28 @@ class WinInstance(Instance, TaggedResource):
             self.init_attached_volumes()
         self.debug("{0}connect_to_instance completed{1}"
                    .format(get_line(), get_line()))
+
+    def get_connection_debug(self):
+        # Add network debug/diag info here...
+        # First show arp cache from local machine
+        # todo Consider getting info from relevant euca components:
+        # - iptables info
+        # - route info
+        # - instance xml
+        try:
+            # Show local ARP info...
+            arp_out = "\nLocal ARP cache for instance ip: " \
+                      + str(self.ip_address) + "\n"
+            arp_fd = os.popen('arp ' + str(self.ip_address))
+            for line in arp_fd:
+                arp_out += line
+            self.debug(arp_out)
+        except Exception as AE:
+            self.log.debug('Failed to get arp info:' + str(AE))
+        try:
+            self.tester.get_console_output(self)
+        except Exception as CE:
+            self.log.debug('Failed to get console output:' + str(CE))
 
     def update_root_device_diskdrive(self):
         if not self.root_device_type == 'ebs':
