@@ -48,17 +48,14 @@ import types
 import operator
 import fcntl
 import struct
+import subprocess
 import termios
-
 from functools import wraps
 
 
 class TimeoutFunctionException(Exception): 
     """Exception to raise on a timeout""" 
-    pass 
-
-
-
+    pass
 
 
 class Eutester(object):
@@ -140,7 +137,6 @@ class Eutester(object):
         :param cmd: str representing the command to be run
         :return: :raise: CalledProcessError on non-zero return code
         """
-        import subprocess
         args = cmd.split()
         process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=4096)
         output, unused_err = process.communicate()
@@ -176,9 +172,10 @@ class Eutester(object):
                 self.local("ping -c 1 " + address)
                 self.debug("Was able to ping address")
                 return True
-            except Exception as PE:
+            except subprocess.CalledProcessError as CPE:
+                self.debug('Output:' + str(CPE.output))
                 self.debug('Ping attempt {0}/{1} failed, err:{2}'
-                           .format(x, poll_count, str(PE)))
+                           .format(x, poll_count, str(CPE)))
                 self.sleep(2)
         self.critical("Was unable to ping address")
         return False
@@ -408,7 +405,14 @@ class Eutester(object):
             return func(*func_args, **func_kwargs)
         return methdecor
 
-    def wait_for_result(self, callback, result, timeout=60, poll_wait=10, oper=operator.eq,  **callback_kwargs):
+    def wait_for_result(self,
+                        callback,
+                        result,
+                        timeout=60,
+                        poll_wait=10,
+                        oper=operator.eq,
+                        allowed_exception_types=None,
+                        **callback_kwargs):
         """
         Wait for the instance to enter the state
 
@@ -420,6 +424,7 @@ class Eutester(object):
         :return: result upon success
         :raise: Exception when instance does not enter proper state
         """
+        allowed_exception_types = allowed_exception_types or []
         self.debug( "Beginning poll loop for result " + str(callback.func_name) + " to go to " + str(result) )
         start = time.time()
         elapsed = 0
@@ -429,7 +434,11 @@ class Eutester(object):
             self.debug(  str(callback.func_name) + ' returned: "' + str(current_state) + '" after '
                        + str(elapsed/60) + " minutes " + str(elapsed%60) + " seconds.")
             self.sleep(poll_wait)
-            current_state = callback(**callback_kwargs)
+            try:
+                current_state = callback(**callback_kwargs)
+            except allowed_exception_types as AE:
+                self.debug('Caught allowed exception:' + str(AE))
+                pass
             elapsed = int(time.time()- start)
         self.debug(  str(callback.func_name) + ' returned: "' + str(current_state) + '" after '
                     + str(elapsed/60) + " minutes " + str(elapsed%60) + " seconds.")
@@ -455,6 +464,8 @@ class Eutester(object):
     
     def __str__(self):
         return 'got self'
+
+
 
     
 
