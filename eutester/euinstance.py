@@ -1377,9 +1377,23 @@ class EuInstance(Instance, TaggedResource):
         self.debug(self.id+" reboot_instance_and_verify Success")
         
 
-    def get_uptime(self):
-        return int(self.sys('cat /proc/uptime', code=0)[0].split()[0].split('.')[0])
-
+    def get_uptime(self, retries=10, interval=10):
+        start = time.time()
+        for x in xrange(0, retries):
+            try:
+                uptime = int(self.sys('cat /proc/uptime',code=0)[0].split()[0]
+                    .split('.')[0])
+                return uptime
+                break
+            except Exception, E:
+                self.debug('Error getting uptime attempt:{0}/{1}, err:{2}'
+                           .format(x, retries, E))
+                self.debug('Waiting {0} seconds before checking uptime...'
+                           .format(interval))
+                time.sleep(interval)
+        raise RuntimeError('{0}: Could not get uptime from instance after '
+                           'elapsed:{1}'
+                           .format(self.id, int(time.time() - start)))
 
     def attach_euvolume_list(self,list,intervoldelay=0, timepervol=90, md5len=32):
         '''
