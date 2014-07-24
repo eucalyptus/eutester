@@ -108,7 +108,7 @@ from eucaops import Eucaops
 from eutester.eutestcase import EutesterTestCase
 from eutester.eutestcase import SkipTestException
 from eutester.euinstance import EuInstance
-from eutester.sshconnection import SshConnection
+from eutester.sshconnection import SshConnection, CommandExitCodeException
 import time
 import os
 import sys
@@ -290,6 +290,23 @@ class Net_Tests(EutesterTestCase):
         return False
 
 
+    def is_port_in_use_on_instance(self, instance, port, tcp=True, ipv4=True):
+        args = '-l'
+        if tcp:
+            args += 't'
+        else:
+            args += 'u'
+        if ipv4:
+            args += '4'
+        else:
+            args += '6'
+        use = instance.sys("netstat " + str(args) + " | awk '$6 ==" +
+                           ' "LISTEN" && $4 ~ ".' + str(port) +
+                           '"' + "' | grep LISTEN")
+        if use:
+            return True
+        else:
+            False
 
 
     ################################################################
@@ -606,7 +623,47 @@ class Net_Tests(EutesterTestCase):
 
 
 
+    def test8_add_revoke_port_range(self, start=None, end=None, tcp=True):
+        '''
+        Definition:
+        Attempts to add a range of ports to a security group and test
+        the ports from the local machine to make sure they are available.
+        Next the test revokes the ports and verifies they are no longer
+        available.
+        :param start: starting port of range to scan
+        :param end: ending port of range to scan
+        :param tcp: boolean tcp if true, udp if false
+        '''
 
+
+        try:
+            instance1 = self.group1_instances[0]
+        except IndexError:
+            self.debug('Could not find instance in group1')
+            raise
+        self.tester.authorize_group(self.group1,
+                                    cidr_ip=None,
+                                    port=None,
+                                    src_security_group_name=self.group1.name)
+
+
+
+
+        self.debug('Attempting to run ssh command "uname -a" between instances across security groups:\n'
+                   + str(instance1.id) + '/sec grps(' + str(instance1.security_groups)+") --> "
+                   + str(instance2.id) + '/sec grps(' + str(instance2.security_groups)+")\n"
+                   + "Current test run in zone: " + str(zone), linebyline=False )
+        self.debug('Check some debug information re this data connection in this security group first...')
+        self.tester.does_instance_sec_group_allow(instance=instance2,
+                                                  src_addr=instance1.private_ip_address,
+                                                  protocol='tcp',
+                                                  port=22)
+        self.debug('Now Running the ssh command...')
+        instance1.sys("ssh -o StrictHostKeyChecking=no -i "
+                      + str(os.path.basename(instance1.keypath))
+                      + " root@" + str(instance2.private_ip_address)
+                      + " 'uname -a'", code=0)
+        self.debug('Ssh between instances passed')
 
 
 if __name__ == "__main__":
