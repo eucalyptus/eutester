@@ -619,8 +619,15 @@ class ImageUtils(EutesterTestCase):
                                 security_token=None,
                                 machine=None,
                                 machine_credpath=None,
-                                misc=None):
+                                misc=None,
+                                time_per_gig=90):
         machine = machine or self.worker_machine
+        try:
+            file_size = machine.get_file_size(import_file)
+            gb = file_size/self.gig or 1
+            timeout = gb * time_per_gig
+        except:
+            timeout = 300
         credpath = machine_credpath or self.credpath
         cmdargs = str(import_file) + " -b " + str(bucket) + \
                   " -z " + str(zone) + " -f " + str(format) + \
@@ -682,7 +689,7 @@ class ImageUtils(EutesterTestCase):
                 owner_akid = self.tester.get_access_key()
                 cmdargs += " -o " + str(owner_akid)
             cmd += str(cmdargs)
-        out = machine.sys(cmd=cmd, code=0)
+        out = machine.sys(cmd=cmd, timeout=timeout, code=0)
         taskid = None
         for line in out:
             lre = re.search('import-i-\w{8}', line)
