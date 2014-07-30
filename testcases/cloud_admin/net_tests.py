@@ -122,10 +122,6 @@ class Net_Tests(EutesterTestCase):
     def __init__(self,  tester=None, **kwargs):
         self.setuptestcase()
         self.setup_parser()
-        self.parser.add_argument("--no_cidr",
-                                 action='store_false',
-                                 help="Boolean to authorize sec group with cidr notation or by group ",
-                                 default=True)
         self.parser.add_argument("--freeze_on_fail",
                                  action='store_true',
                                  help="Boolean flag to avoid cleaning test resources upon failure, default: True ",
@@ -202,6 +198,11 @@ class Net_Tests(EutesterTestCase):
         for instance in instances:
             assert isinstance(instance, EuInstance)
             self.tester.authorize_group(group, cidr_ip=instance.private_ip_address + "/32")
+
+    def revoke_group_for_instance_list(self, group, instances):
+        for instance in instances:
+            assert isinstance(instance, EuInstance)
+            self.tester.revoke(group, cidr_ip=instance.private_ip_address + "/32")
 
     def clean_method(self):
         if self.args.freeze_on_fail:
@@ -375,7 +376,7 @@ class Net_Tests(EutesterTestCase):
             self.status('Done with create instance security group2:' + str(instance.id))
 
 
-    def test3_test_ssh_between_instances_in_diff_sec_groups_same_zone(self, no_cidr=None):
+    def test3_test_ssh_between_instances_in_diff_sec_groups_same_zone(self):
         '''
         Definition:
         This test attempts to set up security group rules between group1 and group2 to authorize group2 access
@@ -386,48 +387,48 @@ class Net_Tests(EutesterTestCase):
             -Authorize security groups for inter group private ip access.
             -Iterate through each zone and attempt to ssh from an instance in group1 to an instance in group2 over their
                 private ips.
+            - Run same 2 tests from above by authorizing a SecurityGroup
         '''
+        def check_instance_connectivity():
+            for zone in self.zones:
+                instance1 = None
+                instance2 = None
+                for instance in self.group1_instances:
+                    if instance.placement == zone:
+                        assert isinstance(instance, EuInstance)
+                        instance1 = instance
+                        break
+                if not instance1:
+                    raise Exception('Could not find instance in group1 for zone:' + str(zone))
 
-        if no_cidr is None:
-            no_cidr = self.args.no_cidr
-        if no_cidr:
-            self.authorize_group_for_instance_list(self.group2, self.group1_instances)
-        else:
-            self.tester.authorize_group(self.group2, cidr_ip=None, port=None, src_security_group_name=self.group1.name )
+                for instance in self.group2_instances:
+                    if instance.placement == zone:
+                        assert isinstance(instance, EuInstance)
+                        instance2 = instance
+                        break
+                if not instance2:
+                    raise Exception('Could not find instance in group2 for zone:' + str(zone))
+            self.debug('Attempting to run ssh command "uname -a" between instances across security groups:\n'
+                       + str(instance1.id) + '/sec grps(' + str(instance1.security_groups)+") --> "
+                       + str(instance2.id) + '/sec grps(' + str(instance2.security_groups)+")\n"
+                       + "Current test run in zone: " + str(zone), linebyline=False )
+            self.debug('Check some debug information re this data connection in this security group first...')
+            self.tester.does_instance_sec_group_allow(instance=instance2,
+                                                      src_addr=instance1.private_ip_address,
+                                                      protocol='tcp',
+                                                      port=22)
+            self.debug('Now Running the ssh command...')
+            instance1.sys("ssh -o StrictHostKeyChecking=no -i "
+                          + str(os.path.basename(instance1.keypath))
+                          + " root@" + str(instance2.private_ip_address)
+                          + " 'uname -a'", code=0)
+            self.debug('Ssh between instances passed')
 
-        for zone in self.zones:
-            instance1 = None
-            instance2 = None
-            for instance in self.group1_instances:
-                if instance.placement == zone:
-                    assert isinstance(instance, EuInstance)
-                    instance1 = instance
-                    break
-            if not instance1:
-                raise Exception('Could not find instance in group1 for zone:' + str(zone))
-
-            for instance in self.group2_instances:
-                if instance.placement == zone:
-                    assert isinstance(instance, EuInstance)
-                    instance2 = instance
-                    break
-            if not instance2:
-                raise Exception('Could not find instance in group2 for zone:' + str(zone))
-        self.debug('Attempting to run ssh command "uname -a" between instances across security groups:\n'
-                   + str(instance1.id) + '/sec grps(' + str(instance1.security_groups)+") --> "
-                   + str(instance2.id) + '/sec grps(' + str(instance2.security_groups)+")\n"
-                   + "Current test run in zone: " + str(zone), linebyline=False )
-        self.debug('Check some debug information re this data connection in this security group first...')
-        self.tester.does_instance_sec_group_allow(instance=instance2,
-                                                  src_addr=instance1.private_ip_address,
-                                                  protocol='tcp',
-                                                  port=22)
-        self.debug('Now Running the ssh command...')
-        instance1.sys("ssh -o StrictHostKeyChecking=no -i "
-                      + str(os.path.basename(instance1.keypath))
-                      + " root@" + str(instance2.private_ip_address)
-                      + " 'uname -a'", code=0)
-        self.debug('Ssh between instances passed')
+        self.authorize_group_for_instance_list(self.group2, self.group1_instances)
+        check_instance_connectivity()
+        self.revoke_group_for_instance_list(self.group2, self.group1_instances)
+        self.tester.authorize_group(self.group2, cidr_ip=None, port=None, src_security_group_name=self.group1.name )
+        check_instance_connectivity()
 
     def test4_attempt_unauthorized_ssh_from_test_machine_to_group2(self):
         '''
