@@ -106,6 +106,10 @@ class InstanceBasics(EutesterTestCase):
                 hvm_ephemeral = "/dev/" + instance.block_device_prefix + "b"
                 self.assertFalse(instance.found("ls -1 " + hvm_ephemeral,  "No such file or directory"),
                                  "Did not find ephemeral storage at " + hvm_ephemeral)
+            self.debug("Pinging instance public IP from inside instance")
+            instance.sys('ping -c 1 ' + instance.ip_address, code=0)
+            self.debug("Pinging instance private IP from inside instance")
+            instance.sys('ping -c 1 ' + instance.private_ip_address, code=0)
         self.set_reservation(reservation)
         return reservation
 
