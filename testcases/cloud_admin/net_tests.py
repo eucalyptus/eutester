@@ -30,6 +30,8 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 # Author:
+from paramiko import SSHException
+
 __author__ =  'matt.clark@eucalyptus.com'
 '''
 Test case class to test points of network security groups
@@ -128,14 +130,6 @@ class Net_Tests(EutesterTestCase):
                                  action='store_true',
                                  help="Boolean flag to avoid cleaning test resources upon failure, default: True ",
                                  default=False)
-        '''
-        self.parser.add_argument('--user',
-                                 default='Admin',
-                                 help='User to run this test as')
-        self.parser.add_argument("--account",
-                                 help="Account to run this as",
-                                 default=None)
-        '''
         self.tester = tester
         self.get_args()
         # Allow __init__ to get args from __init__'s kwargs or through command line parser...
@@ -150,13 +144,8 @@ class Net_Tests(EutesterTestCase):
             sys.exit(1)
         # Setup basic eutester object
         if not self.tester:
-            try:
-                self.debug('Creating Eucaops tester object from args provided...')
-                self.tester = self.do_with_args(Eucaops)
-            except Exception, e:
-                raise Exception('Couldnt create Eucaops tester object, make sure credpath, '
-                                'or config_file and password was provided, err:' + str(e))
-                #replace default eutester debugger with eutestcase's for more verbosity...
+            self.debug('Creating Eucaops tester object from args provided...')
+            self.tester = self.do_with_args(Eucaops)
             self.tester.debug = lambda msg: self.debug(msg, traceback=2, linebyline=False)
         assert isinstance(self.tester, Eucaops)
         self.cc_last_checked = time.time()
@@ -604,10 +593,27 @@ class Net_Tests(EutesterTestCase):
                                   + " ' uname -a'", code=0)
                     self.debug('Ssh between instances passed')
 
-
-
-
-
+    def test7_revoke_rules(self):
+        assert isinstance(self.tester, Eucaops)
+        revoke_group = self.tester.add_group("revoke-group-" + str(int(time.time())))
+        self.tester.authorize_group(revoke_group, port=22)
+        for zone in self.zones:
+            instance = self.tester.run_image(image=self.image,
+                                                 keypair=self.keypair,
+                                                 group=revoke_group,
+                                                 zone=zone)[0]
+            self.tester.revoke(revoke_group, port=22)
+            self.tester.sleep(60)
+            try:
+                instance.reset_ssh_connection(timeout=30)
+                self.tester.delete_group(revoke_group)
+                raise Exception("Was able to SSH without authorized rule")
+            except SSHException, e:
+                self.tester.debug("SSH was properly blocked to the instance")
+            self.tester.authorize_group(revoke_group, port=22)
+            instance.reset_ssh_connection()
+            self.tester.terminate_instances(instance)
+        self.tester.delete_group(revoke_group)
 
 if __name__ == "__main__":
     testcase = Net_Tests()

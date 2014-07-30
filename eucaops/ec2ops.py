@@ -46,12 +46,13 @@ import types
 import sys
 from datetime import datetime, timedelta
 from subprocess import Popen, PIPE
-
+from boto.ec2.group import Group
 
 from boto.ec2.image import Image
 from boto.ec2.instance import Reservation, Instance
 from boto.ec2.keypair import KeyPair
 from boto.ec2.blockdevicemapping import BlockDeviceMapping, BlockDeviceType
+from boto.ec2.securitygroup import SecurityGroup
 from boto.ec2.volume import Volume
 from boto.ec2.bundleinstance import BundleInstanceTask
 from boto.exception import EC2ResponseError
@@ -527,7 +528,30 @@ disable_root: false"""
                                             src_security_group_name=src_security_group_name,
                                             src_security_group_owner_id=src_security_group_owner_id,
                                             force_args=force_args)
-    
+
+    def revoke(self, group,
+                     port=22,
+                     protocol="tcp",
+                     cidr_ip="0.0.0.0/0",
+                     src_security_group_name=None,
+                     src_security_group_owner_id=None):
+        if isinstance(group, SecurityGroup):
+            group_name = group.name
+        else:
+            group_name = group
+        if src_security_group_name:
+            self.debug( "Attempting revoke of " + group_name + " from " + str(src_security_group_name) +
+                        " on port " + str(port) + " " + str(protocol) )
+        else:
+            self.debug( "Attempting revoke of " + group_name + " on port " + str(port) + " " + str(protocol) )
+        self.ec2.revoke_security_group(group_name,
+                                       ip_protocol=protocol,
+                                       from_port=port,
+                                       to_port=port,
+                                       cidr_ip=cidr_ip,
+                                       src_security_group_name=src_security_group_name,
+                                       src_security_group_owner_id=src_security_group_owner_id)
+
     def terminate_single_instance(self, instance, timeout=300 ):
         """
         Terminate an instance
