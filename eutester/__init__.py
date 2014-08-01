@@ -196,10 +196,18 @@ class Eutester(object):
                 pass
         return ret
     
-    def test_port_status(self, ip, port, timeout=5, tcp=True, verbose=True):
+    def test_port_status(self,
+                         ip,
+                         port,
+                         timeout=5,
+                         tcp=True,
+                         recv_size=0,
+                         send_buf=None,
+                         verbose=True):
         '''
         Attempts to connect to tcp port at ip:port within timeout seconds
         '''
+        ret_buf = ""
         if verbose:
             debug = self.debug
         else:
@@ -215,8 +223,13 @@ class Eutester(object):
             if tcp:
                 s.connect((ip, port))
             else:
-                s.sendto("--TEST LINE--", (ip, port))
-                recv, svr = s.recvfrom(255)
+                #for UDP always try send
+                if send_buf is None:
+                    send_buf = "--TEST LINE--"
+            if send_buf is not None:
+                s.sendto(send_buf, (ip, port))
+            if recv_size:
+                ret_buf = s.recv(recv_size)
         except socket.error, se:
             debug('test_port_status failed socket error:'+str(se[0]))
             #handle specific errors here, for now just for debug...
@@ -235,7 +248,8 @@ class Eutester(object):
             s.settimeout(None)
             s.close()
         debug('test_port_status, success')
-    
+        return ret_buf
+
     def grep(self, string,list):
         """ Remove the strings from the list that do not match the regex string"""
         expr = re.compile(string)

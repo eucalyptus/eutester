@@ -443,6 +443,7 @@ disable_root: false"""
     def authorize_group_by_name(self,
                                 group_name="default",
                                 port=22,
+                                end_port=None,
                                 protocol="tcp",
                                 cidr_ip="0.0.0.0/0",
                                 src_security_group=None,
@@ -454,6 +455,7 @@ disable_root: false"""
 
         :param group_name: Name of the group to authorize, default="default"
         :param port: Port to open, default=22
+        :param end_port: End of port range to open, defaults to 'port' arg.
         :param protocol: Protocol to authorize, default=tcp
         :param cidr_ip: CIDR subnet to authorize, default="0.0.0.0/0" everything
         :param src_security_group_name: Grant access to 'group' from src_security_group_name, default=None
@@ -472,19 +474,26 @@ disable_root: false"""
             if src_security_group_name and not src_security_group_owner_id:
                     group = self.get_security_group(name=src_security_group_name)
                     src_security_group_owner_id = group.owner_id
+            if end_port is None:
+                end_port = port
 
         old_api_version = self.ec2.APIVersion
         try:
             #self.ec2.APIVersion = "2009-10-31"
             if src_security_group_name:
-                self.debug( "Attempting authorization of " + group_name + " from " + str(src_security_group_name) +
-                            " on port " + str(port) + " " + str(protocol) )
+                self.debug( "Attempting authorization of: {0}, from group:{1},"
+                            " on port range: {2} to {3}, proto:{4}"
+                            .format(group_name, src_security_group, port,
+                                    end_port, protocol))
             else:
-                self.debug( "Attempting authorization of " + group_name + " on port " + str(port) + " " + str(protocol) )
+                self.debug( "Attempting authorization of:{0}, on port "
+                            "range: {1} to {2}, proto:{3} from {4}"
+                            .format(group_name, port, end_port,
+                                    protocol, cidr_ip))
             self.ec2.authorize_security_group_deprecated(group_name,
                                                          ip_protocol=protocol,
                                                          from_port=port,
-                                                         to_port=port,
+                                                         to_port=end_port,
                                                          cidr_ip=cidr_ip,
                                                          src_security_group_name=src_security_group_name,
                                                          src_security_group_owner_id=src_security_group_owner_id,
@@ -502,6 +511,7 @@ disable_root: false"""
     def authorize_group(self,
                         group,
                         port=22,
+                        end_port=None,
                         protocol="tcp",
                         cidr_ip="0.0.0.0/0",
                         src_security_group=None,
@@ -513,6 +523,7 @@ disable_root: false"""
 
         :param group: boto.group object
         :param port: Port to open, default=22
+        :param end_port: End of port range to open, defaults to 'port' arg.
         :param protocol: Protocol to authorize, default=tcp
         :param cidr_ip: CIDR subnet to authorize, default="0.0.0.0/0" everything
         :param src_security_group_name: Grant access to 'group' from src_security_group_name, default=None
@@ -522,6 +533,7 @@ disable_root: false"""
         """
         return self.authorize_group_by_name(group.name,
                                             port=port,
+                                            end_port=end_port,
                                             protocol=protocol,
                                             cidr_ip=cidr_ip,
                                             src_security_group=src_security_group,
@@ -2907,7 +2919,9 @@ disable_root: false"""
         self.print_euinstance_list(good)
         return good
     
-    
+
+
+
     @Eutester.printinfo
     def does_instance_sec_group_allow(self, instance, src_addr=None, protocol='tcp',port=22):
         s = None
@@ -2981,8 +2995,10 @@ disable_root: false"""
                 self.debug("rule#" + str(group.rules.index(rule)) +
                            ": port:" + str(rule.to_port) +
                            ", grants:"+str(g_buf))
+                from_port = int(rule.from_port)
                 to_port= int(rule.to_port)
-                if (to_port == 0 ) or (to_port == -1) or (to_port == port):
+                if (to_port == 0 ) or (to_port == -1) or \
+                        (port >= from_port and port <= to_port):
                     for grant in rule.grants:
                         if self.is_address_in_network(src, str(grant)):
                             self.debug('sec_group DOES allow: group:"{0}"'
@@ -4380,6 +4396,7 @@ disable_root: false"""
 
 
     def get_vm_type_list_from_zone(self, zone):
+        self.debug('Looking up zone:' + str(zone))
         euzone = self.get_euzones(zone)[0]
         return euzone.vm_types
 

@@ -108,7 +108,8 @@ from eucaops import Eucaops
 from eutester.eutestcase import EutesterTestCase
 from eutester.eutestcase import SkipTestException
 from eutester.euinstance import EuInstance
-from eutester.sshconnection import SshConnection, CommandExitCodeException
+from eutester.sshconnection import CommandExitCodeException, SshConnection
+import socket
 import time
 import os
 import sys
@@ -163,7 +164,8 @@ class Net_Tests(EutesterTestCase):
 
         ### Create local zone list to run tests in
         if self.args.zone:
-            self.zones = [str(self.args.zone)]
+            self.zones = str(self.args.zone).replace(',',' ')
+            self.zones = self.zones.split()
         else:
             self.zones = self.tester.get_zones()
         if not self.zones:
@@ -291,7 +293,7 @@ class Net_Tests(EutesterTestCase):
 
 
     def is_port_in_use_on_instance(self, instance, port, tcp=True, ipv4=True):
-        args = '-l'
+        args = '-ln'
         if tcp:
             args += 't'
         else:
@@ -304,9 +306,23 @@ class Net_Tests(EutesterTestCase):
                            ' "LISTEN" && $4 ~ ".' + str(port) +
                            '"' + "' | grep LISTEN")
         if use:
+            self.debug('Port {0} IS in use on instance:'
+                       .format(port, instance.id))
             return True
         else:
+            self.debug('Port {0} IS NOT in use on instance:'
+                       .format(port, instance.id))
             False
+
+    def is_port_range_in_use_on_instance(self, instance, start, end,
+                                         tcp=True, ipv4=True):
+        for x in xrange(start, end):
+            if self.is_port_in_use_on_instance(instance=instance,
+                                               port=x,
+                                               tcp=tcp,
+                                               ipv4=ipv4):
+                return True
+        return False
 
 
     ################################################################
@@ -623,7 +639,10 @@ class Net_Tests(EutesterTestCase):
 
 
 
-    def test8_add_revoke_port_range(self, start=None, end=None, tcp=True):
+    def test8_add_and_revoke_tcp_port_range(self,
+                                            start=None,
+                                            count=10,
+                                            instances=None):
         '''
         Definition:
         Attempts to add a range of ports to a security group and test
@@ -631,39 +650,160 @@ class Net_Tests(EutesterTestCase):
         Next the test revokes the ports and verifies they are no longer
         available.
         :param start: starting port of range to scan
-        :param end: ending port of range to scan
+        :param count: number of consecutive ports from 'start' to test
         :param tcp: boolean tcp if true, udp if false
         '''
+        tester = self.tester
+        assert isinstance(tester, Eucaops)
+
+        if instances:
+            if not isinstance(instances, list):
+                instances = [instances]
+            for instance in instances:
+                assert isinstance(instance, EuInstance)
+        else:
+            instances = self.group1_instances
+        if not instances:
+            raise ValueError('Could not find instance in group1')
 
 
-        try:
-            instance1 = self.group1_instances[0]
-        except IndexError:
-            self.debug('Could not find instance in group1')
-            raise
-        self.tester.authorize_group(self.group1,
-                                    cidr_ip=None,
-                                    port=None,
-                                    src_security_group_name=self.group1.name)
+        # Iterate through all instances and test...
+        for instance1 in instances:
+            # Make sure we can ssh to this instance (note this may need to be
+            # adjusted for windows access
+            # 'does_instance_sec_group_allow' will set tester.ec2_source_ip to the
+            # ip the local machine uses to communicate with the instance.
+            if not tester.does_instance_sec_group_allow(instance=instance1,
+                                                        protocol='tcp',
+                                                        port=22):
+                tester.authorize_group(self.group1,
+                                       cidr_ip=str(tester.ec2_source_ip) + '/32',
+                                       port=22)
+            try:
+                instance1.sys('which netcat', code=0)
+            except CommandExitCodeException:
+                try:
+                    instance1.sys('apt-get install netcat -y', code=0)
+                except CommandExitCodeException:
+                    try:
+                        instance1.sys('yum install netcat -y', code=0)
+                    except:
+                        self.debug('could install netcat on this instance')
+                        raise
+
+            #make sure we have an open port range to play with...
+            if start is None:
+                for x in xrange(2000,65000):
+                    if self.is_port_range_in_use_on_instance(instance=instance1,
+                                                             start=x,
+                                                             end=x+count,
+                                                             tcp=True):
+                        x=x+count
+                    else:
+                        start=x
+                        break
+                if not start:
+                    raise RuntimeError('Free consecutive port range of count:{0} '
+                                       'not found on instance:{1}'
+                                       .format(count, instance1.id))
+            # authorize entire port range...
+            self.tester.authorize_group(self.group1,
+                                        cidr_ip=str(tester.ec2_source_ip) + '/32',
+                                        port=start,
+                                        end_port=start+count)
+            # test entire port range is accessible from this machine
+            test_file = 'eutester_port_test.txt'
+            #Allow some delay for the rule to be applied in the network...
+            time.sleep(10)
+            for x in xrange(start, start+count):
+                # Set up socket listener with netcat, to make sure we're not
+                # connecting to the CC or other device write port to file and
+                # verify file contents as well.
+                test_string = '{0} last port tested[{1}]'.format(time.time(), x)
+                self.debug("Gathering debug information as to whether the "
+                           "tester's src ip is authorized for this port test...")
+                if not tester.does_instance_sec_group_allow(
+                        instance=instance1,
+                        src_addr=tester.ec2_source_ip,
+                        protocol='tcp',
+                        port=x):
+                    raise ValueError('Group:{0} did not have {1}:{2} authorized'
+                                     .format(self.group1.name,
+                                             tester.ec2_source_ip,
+                                             x))
+                # start up netcat, sleep to allow nohup to work before quiting
+                # the shell...
+                instance1.sys('killall -9 netcat 2> /dev/null', timeout=5)
+                instance1.sys('{' + ' ( nohup netcat -k -l {0} > {1} ) &  sleep 1; '
+                              .format(x, test_file) + '}', code=0, timeout=5)
+                # attempt to connect socket at instance/port and send the
+                # test_string...
+                tester.test_port_status(ip=instance1.ip_address,
+                                        port=x,
+                                        tcp=True,
+                                        send_buf=test_string,
+                                        verbose=True)
+                # Since no socket errors were encountered assume we connected,
+                # check file on instance to make sure we didn't connect somewhere
+                # else like the CC...
+                instance1.sys('grep {0} {1}; echo "" > {1}'
+                              .format(test_string, test_file),
+                              code=0)
+                self.status('Port "{0}" successfully tested on instance:{1}/{2}'
+                           .format(x, instance1.id, instance1.ip_address))
+            self.status('Authorizing port range {0}-{1} passed')
+
+            self.status('Now testing revoking by removing a portion of that '
+                       'range...')
+            time.sleep(3)
+            new_count = (count / 2) or 1
+            tester.ec2.revoke_security_group(group_name=self.group1.name,
+                                             ip_protocol='tcp',
+                                             from_port=start,
+                                             to_port=start+new_count,
+                                             cidr_ip=tester.ec2_source_ip + '/32')
+            #Allow some delay for the rule to be applied in the network...
+            time.sleep(10)
+            for x in xrange(start, start+new_count):
+                # Set up socket listener with netcat, to make sure we're not
+                # connecting to the CC or other device write port to file and
+                # verify file contents as well.
+                # This portion of the test expects that the connection will fail.
+                test_string = '{0} last port tested[{1}]'.format(time.time(), x)
+                self.debug("Gathering debug information as to whether the "
+                           "tester's src ip is authorized for this port test...")
+                if tester.does_instance_sec_group_allow(
+                        instance=instance1,
+                        src_addr=tester.ec2_source_ip,
+                        protocol='tcp',
+                        port=x):
+                    raise ValueError('Group:{0} has {1}:{2} authorized after revoke'
+                                     .format(self.group1.name,
+                                             tester.ec2_source_ip + '/32',
+                                             x))
+                try:
+                    instance1.sys('killall -9 netcat 2> /dev/null', timeout=5)
+                    instance1.sys('{' + ' ( nohup netcat -k -l {0} > {1} ) &  sleep 1; '
+                              .format(x, test_file) + '}', code=0, timeout=5)
+                    tester.test_port_status(ip=instance1.ip_address,
+                                            port=x,
+                                            tcp=True,
+                                            send_buf=test_string,
+                                            verbose=True)
+                    #We may still need to test the file content for the UDP case...
+                    # Since no socket errors were encountered assume we connected,
+                    # check file on instance to make sure we didn't connect somewhere
+                    # else like the CC. Dont' error here cuz it's already a bug...
+                    instance1.sys('grep {0} {1}; echo "" > {1}'
+                              .format(test_string, test_file))
+                except socket.error, CommandExitCodeException:
+                    self.status('Port "{0}" successfully revoked on instance:{1}/{2}'
+                                .format(x, instance1.id, instance1.ip_address))
+        self.status('Add and revoke ports test passed')
 
 
 
 
-        self.debug('Attempting to run ssh command "uname -a" between instances across security groups:\n'
-                   + str(instance1.id) + '/sec grps(' + str(instance1.security_groups)+") --> "
-                   + str(instance2.id) + '/sec grps(' + str(instance2.security_groups)+")\n"
-                   + "Current test run in zone: " + str(zone), linebyline=False )
-        self.debug('Check some debug information re this data connection in this security group first...')
-        self.tester.does_instance_sec_group_allow(instance=instance2,
-                                                  src_addr=instance1.private_ip_address,
-                                                  protocol='tcp',
-                                                  port=22)
-        self.debug('Now Running the ssh command...')
-        instance1.sys("ssh -o StrictHostKeyChecking=no -i "
-                      + str(os.path.basename(instance1.keypath))
-                      + " root@" + str(instance2.private_ip_address)
-                      + " 'uname -a'", code=0)
-        self.debug('Ssh between instances passed')
 
 
 if __name__ == "__main__":
@@ -673,17 +813,22 @@ if __name__ == "__main__":
     ### or use a predefined list
 
     if testcase.args.tests:
-        list = testcase.args.tests
+        testlist = testcase.args.tests
+        if not isinstance(testlist, list):
+            testlist.replace(',',' ')
+            testlist = testlist.split()
     else:
-        list =['test1_create_instance_in_zones_for_security_group1',
+        testlist =['test1_create_instance_in_zones_for_security_group1',
                'test2_create_instance_in_zones_for_security_group2',
                'test3_test_ssh_between_instances_in_diff_sec_groups_same_zone',
                'test4_attempt_unauthorized_ssh_from_test_machine_to_group2',
                'test5_test_ssh_between_instances_in_same_sec_groups_different_zone',
-               'test6_test_ssh_between_instances_in_diff_sec_groups_different_zone']
+               'test6_test_ssh_between_instances_in_diff_sec_groups_different_zone',
+               'test8_add_and_revoke_tcp_port_range']
         ### Convert test suite methods to EutesterUnitTest objects
+    print 'Got test list:' + str(testlist)
     unit_list = [ ]
-    for test in list:
+    for test in testlist:
         unit_list.append( testcase.create_testunit_by_name(test) )
 
     ### Run the EutesterUnitTest objects
