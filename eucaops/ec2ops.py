@@ -47,6 +47,7 @@ import sys
 import traceback
 from datetime import datetime, timedelta
 from subprocess import Popen, PIPE
+from prettytable import PrettyTable, ALL
 
 
 from boto.ec2.image import Image
@@ -58,6 +59,7 @@ from boto.ec2.bundleinstance import BundleInstanceTask
 from boto.exception import EC2ResponseError
 from boto.ec2.regioninfo import RegionInfo
 from boto.resultset import ResultSet
+from boto.ec2.securitygroup import SecurityGroup, IPPermissions
 import boto
 
 from eutester import Eutester
@@ -540,6 +542,69 @@ disable_root: false"""
                                             src_security_group_name=src_security_group_name,
                                             src_security_group_owner_id=src_security_group_owner_id,
                                             force_args=force_args)
+
+
+    def revoke_all_rules(self, group):
+
+        if not isinstance(group, SecurityGroup):
+            group = self.get_security_group(name=group)
+        else:
+            # group obj does not have update() yet...
+            group = self.get_security_group(id=group.id)
+        if not group:
+            raise ValueError('Security group "{0}" not found'.format(group))
+        self.show_security_group(group)
+        assert isinstance(group, SecurityGroup)
+        rules = copy.copy(group.rules)
+        for r in rules:
+            self.debug('Attempting to revoke rule:{0}, grants:{1}'
+                       .format(r, r.grants))
+            assert isinstance(r, IPPermissions)
+            for grant in r.grants:
+                if grant.cidr_ip:
+                    self.debug('{0}.revoke(ip_protocol:{1}, from_port:{2}, '
+                               'to_port{3}, cidr_ip:{4})'.format(group.name,
+                                                                 r.ip_protocol,
+                                                                 r.from_port,
+                                                                 r.to_port,
+                                                                 grant))
+                    group.revoke(ip_protocol=r.ip_protocol, from_port=r.from_port,
+                                 to_port=r.to_port, cidr_ip=grant.cidr_ip)
+                if grant.name or grant.group_id:
+                    group.revoke(ip_protocol=r.ip_protocol,
+                                 from_port=r.from_port,
+                                 to_port=r.to_port,
+                                 src_group=grant,
+                                 cidr_ip=None )
+                    self.debug('{0}.revoke(ip_protocol:{1}, from_port:{2}, '
+                               'to_port:{3}, src_group:{4})'.format(group.name,
+                                                                   r.ip_protocol,
+                                                                   r.from_port,
+                                                                   r.to_port,
+                                                                   grant))
+        group = self.get_security_group(id=group.id)
+        self.debug('AFTER removing all rules...')
+        self.show_security_group(group)
+        return group
+
+    def show_security_group(self, group):
+        table = PrettyTable([group.name, "CIDR_IP", "SRC_GRP_NAME",
+                             "SRC_GRP_ID", "OWNER_ID", "PORT",
+                             "END_PORT", "PROTO"])
+        table.align["CIDR_IP"] = 'l'
+        table.padding_width = 1
+        for rule in group.rules:
+            port = rule.from_port
+            end_port = rule.to_port
+            proto = rule.ip_protocol
+            for grant in rule.grants:
+                table.add_row(["", grant.cidr_ip, grant.name,
+                               grant.group_id, grant.owner_id, port,
+                               end_port, proto])
+        table.hrules = ALL
+        self.debug("\n" + str(table))
+
+
     
     def terminate_single_instance(self, instance, timeout=300 ):
         """
@@ -2923,11 +2988,19 @@ disable_root: false"""
 
 
     @Eutester.printinfo
-    def does_instance_sec_group_allow(self, instance, src_addr=None, protocol='tcp',port=22):
+    def does_instance_sec_group_allow(self,
+                                      instance,
+                                      src_addr=None,
+                                      src_group=None,
+                                      protocol='tcp',
+                                      port=22):
+        if src_group:
+            assert isinstance(src_group,SecurityGroup) , \
+                'src_group({0}) not of type SecurityGroup obj'.format(src_group)
         s = None
         #self.debug("does_instance_sec_group_allow:"+str(instance.id)+" src_addr:"+str(src_addr))
         try:
-            if not src_addr:
+            if not src_group and not src_addr:
                 #Use the local test machine's addr
                 if not self.ec2_source_ip:
                     #Try to get the outgoing addr used to connect to this instance
@@ -2942,10 +3015,15 @@ disable_root: false"""
             self.debug('Using src_addr:'+str(src_addr))
             groups = self.get_instance_security_groups(instance)
             for group in groups:
-                if self.does_sec_group_allow(group, src_addr, protocol=protocol, port=port):
+                if self.does_sec_group_allow(group,
+                                             src_addr,
+                                             src_group=src_group,
+                                             protocol=protocol,
+                                             port=port):
                     self.debug("Sec allows from test source addr: " +
-                               str(src_addr + ", protocol:" + str(protocol) +
-                               ", port:" + str(port)))
+                               str(src_addr) + ", src_group:" +
+                               str(src_group) + ", protocol:" +
+                               str(protocol) + ", port:" + str(port))
                     #Security group allows from the src/proto/port
                     return True
             #Security group does not allow from the src/proto/port
@@ -2972,20 +3050,24 @@ disable_root: false"""
         return None
         
     @Eutester.printinfo                    
-    def does_sec_group_allow(self, group, src, protocol='tcp', port=22):
+    def does_sec_group_allow(self, group, src_addr=None, src_group=None,
+                             protocol='tcp', port=22):
         """
         Test whether a security group will allow traffic from a specific 'src' ip address to
         a specific 'port' using a specific 'protocol'
         :param group: Security group obj to use in lookup
-        :param src: Source address to lookup against sec group rule(s)
+        :param src_addr: Source address to lookup against sec group rule(s)
+        :param src_group: Boto sec group to use in auth check
         :param protocol: Protocol to lookup sec group rule against
         :param port: Network port to lookup sec group rule against
         """
+        if src_group:
+            assert isinstance(src_group, SecurityGroup)
         port = int(port)
         protocol = str(protocol).strip().lower()
         self.debug('Security group:' + str(group.name) + ", src ip:" +
-                   str(src) + ", proto:" + str(protocol) + ", port:" +
-                   str(port))
+                   str(src_addr) + ", src_group:" + str(src_group) +
+                   ", proto:" + str(protocol) + ", port:" + str(port))
         group = self.get_security_group(id=group.id, name=group.name)
         for rule in group.rules:
             g_buf =""
@@ -3000,13 +3082,33 @@ disable_root: false"""
                 if (to_port == 0 ) or (to_port == -1) or \
                         (port >= from_port and port <= to_port):
                     for grant in rule.grants:
-                        if self.is_address_in_network(src, str(grant)):
-                            self.debug('sec_group DOES allow: group:"{0}"'
-                                       ', src:"{1}", proto:"{2}", port:"{3}"'
-                                       .format(group.name, src, protocol, port))
-                            return True
-        self.debug('sec_group DOES NOT allow: group:"{0}", src:"{1}", proto:'
-                   '"{2}", port:"{3}"'.format(group.name, src, protocol, port))
+                        if src_addr and grant.cidr_ip:
+                            if self.is_address_in_network(src_addr, str(grant)):
+                                self.debug('sec_group DOES allow: group:"{0}"'
+                                           ', src:"{1}", proto:"{2}", port:"{3}"'
+                                           .format(group.name,
+                                                   src_addr,
+                                                   protocol,
+                                                   port))
+                                return True
+                        if src_group:
+                            src_group_id = str(src_group.name) + \
+                                           "-" + (src_group.owner_id)
+                            if ( src_group.id == grant.groupId ) or \
+                                    ( grant.group_id == src_group_id ):
+                                self.debug('sec_group DOES allow: group:"{0}"'
+                                           ', src_group:"{1}"/"{2}", '
+                                           'proto:"{3}", ''port:"{4}"'
+                                           .format(group.name,
+                                                   src_group.id,
+                                                   src_group.name,
+                                                   protocol,
+                                                   port))
+                                return True
+
+        self.debug('sec_group:"{0}" DOES NOT allow from: src_ip:"{1}", '
+                   'src_group:"{2}", proto:"{3}", port:"{3}"'
+                   .format(group.name, src_addr, src_group, protocol, port))
         return False
                     
     @classmethod
