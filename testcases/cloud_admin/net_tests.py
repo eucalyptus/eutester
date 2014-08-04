@@ -219,7 +219,10 @@ class Net_Tests(EutesterTestCase):
             self.tester.cleanup_artifacts()
 
     def get_proxy_machine(self, instance):
-        if self.tester.config["network"].lower() == "edge":
+        property = self.tester.property_manager.get_property('networkmode',
+                                                             instance.placement,
+                                                             'PARTI00')
+        if property.value.lower() == "edge":
             proxy_machine = self.get_active_nc_for_instance(instance)
         else:
             proxy_machine = self.get_active_cc_for_instance(instance)
