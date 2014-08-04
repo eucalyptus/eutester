@@ -47,7 +47,6 @@ import sys
 import traceback
 from datetime import datetime, timedelta
 from subprocess import Popen, PIPE
-from prettytable import PrettyTable, ALL
 
 
 from boto.ec2.image import Image
@@ -588,6 +587,11 @@ disable_root: false"""
         return group
 
     def show_security_group(self, group):
+        try:
+            from prettytable import PrettyTable, ALL
+        except ImportError as IE:
+            self.debug('No pretty table import failed:' + str(IE))
+            return
         table = PrettyTable([group.name, "CIDR_IP", "SRC_GRP_NAME",
                              "SRC_GRP_ID", "OWNER_ID", "PORT",
                              "END_PORT", "PROTO"])
