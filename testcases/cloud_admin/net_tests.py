@@ -801,7 +801,7 @@ class Net_Tests(EutesterTestCase):
                     # else like the CC. Dont' error here cuz it's already a bug...
                     instance1.sys('grep {0} {1}; echo "" > {1}'
                               .format(test_string, test_file))
-                except socket.error, CommandExitCodeException:
+                except (socket.error, CommandExitCodeException) as OK:
                     self.status('Port "{0}" successfully revoked on '
                                 'instance:{1}/{2}'
                                 .format(x, instance1.id, instance1.ip_address))
