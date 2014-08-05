@@ -407,14 +407,14 @@ class Net_Tests(EutesterTestCase):
                                          timeout=ping_timeout,
                                          instance=instance)
             self.status('Make sure ssh is working through CC path before trying between instances...')
-            instance.cc_ssh = self.create_ssh_connection_to_instance(instance)
+            instance.proxy_ssh = self.create_ssh_connection_to_instance(instance)
             self.status('SSH connection to instance:' + str(instance.id) +
                         ' successful to private ip:' + str(instance.private_ip_address) +
                         ', zone:' + str(instance.placement))
-            instance.cc_ssh.sys('uname -a', code=0)
+            instance.proxy_ssh.sys('uname -a', code=0)
             self.status('Uploading keypair to instance in group2...')
-            instance.cc_ssh.sftp_put(instance.keypath, os.path.basename(instance.keypath))
-            instance.cc_ssh.sys('chmod 0600 ' + os.path.basename(instance.keypath), code=0 )
+            instance.proxy_ssh.sftp_put(instance.keypath, os.path.basename(instance.keypath))
+            instance.proxy_ssh.sys('chmod 0600 ' + os.path.basename(instance.keypath), code=0 )
             self.status('Done with create instance security group2:' + str(instance.id))
 
 
@@ -885,8 +885,8 @@ class Net_Tests(EutesterTestCase):
             self.status('Attempting to ping group1 instance from group2 '
                         'instance using their private IPs')
             try:
-                zone.test_instance_group2.cc_ssh.verbose = True
-                zone.test_instance_group2.cc_ssh.sys(
+                zone.test_instance_group2.proxy_ssh.verbose = True
+                zone.test_instance_group2.proxy_ssh.sys(
                     'ping -c 1 {0}'
                     .format(zone.test_instance_group1.private_ip_address),
                     code=0,verbose=True)
