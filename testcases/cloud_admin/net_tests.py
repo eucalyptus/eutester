@@ -746,11 +746,23 @@ class Net_Tests(EutesterTestCase):
                               .format(x, test_file) + '}', code=0, timeout=5)
                 # attempt to connect socket at instance/port and send the
                 # test_string...
-                tester.test_port_status(ip=instance1.ip_address,
-                                        port=x,
-                                        tcp=True,
-                                        send_buf=test_string,
-                                        verbose=True)
+                try:
+                    tester.test_port_status(ip=instance1.ip_address,
+                                            port=x,
+                                            tcp=True,
+                                            send_buf=test_string,
+                                            verbose=True)
+                except socket.error as SE:
+                    try:
+                        self.debug('Failed to connect to "{0}":IP:"{1}":'
+                                   'PORT:"{2}"'.format(instance1.id,
+                                                       instance1.ip_address,
+                                                       x))
+                        tester.show_security_group(self.group1)
+                        instance1.sys('ps aux | grep netcat', timeout=10)
+                    except:
+                        pass
+                    raise SE
                 # Since no socket errors were encountered assume we connected,
                 # check file on instance to make sure we didn't connect somewhere
                 # else like the CC...
