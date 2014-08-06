@@ -866,16 +866,15 @@ class Net_Tests(EutesterTestCase):
         assert isinstance(zone.test_instance_group1, EuInstance)
         assert isinstance(zone.test_instance_group2, EuInstance)
         for zone in zones:
-            ins_sec_groups = tester.get_instance_security_groups(
-                zone.test_instance_group2)
+            #Get the group2 instance from this zone
             allowed = False
-            for group in ins_sec_groups:
-                if self.tester.does_instance_sec_group_allow(
-                        instance=zone.test_instance_group1,
-                        src_group=group,
-                        protocol='icmp'):
-                    allowed = True
-                    break
+
+            if self.tester.does_instance_sec_group_allow(
+                    instance=zone.test_instance_group1,
+                    src_group=self.group2,
+                    protocol='icmp'):
+                allowed = True
+                break
             if not allowed:
                 raise ValueError('Group2 instance not allowed in group1'
                                  ' after authorizing group2')

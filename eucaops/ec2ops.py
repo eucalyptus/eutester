@@ -592,7 +592,12 @@ disable_root: false"""
         except ImportError as IE:
             self.debug('No pretty table import failed:' + str(IE))
             return
-        table = PrettyTable([group.name, "CIDR_IP", "SRC_GRP_NAME",
+        group = self.get_security_group(id=group.id)
+        if not group:
+            raise ValueError('Show sec group failed. Could not fetch group:'
+                             + str(group))
+        header = PrettyTable(["Security Group:" + group.name + "/" + group.id])
+        table = PrettyTable(["CIDR_IP", "SRC_GRP_NAME",
                              "SRC_GRP_ID", "OWNER_ID", "PORT",
                              "END_PORT", "PROTO"])
         table.align["CIDR_IP"] = 'l'
@@ -602,11 +607,12 @@ disable_root: false"""
             end_port = rule.to_port
             proto = rule.ip_protocol
             for grant in rule.grants:
-                table.add_row(["", grant.cidr_ip, grant.name,
+                table.add_row([grant.cidr_ip, grant.name,
                                grant.group_id, grant.owner_id, port,
                                end_port, proto])
         table.hrules = ALL
-        self.debug("\n" + str(table))
+        header.add_row([str(table)])
+        self.debug("\n{0}".format(str(header)))
 
     def revoke(self, group,
                      port=22,
@@ -3036,12 +3042,16 @@ disable_root: false"""
                 if self.ec2_source_ip == "0.0.0.0":
                     raise Exception('Test machine source ip detected:'+str(self.ec2_source_ip)+', tester may need ec2_source_ip set manually')
                 src_addr = self.ec2_source_ip
-            
-            self.debug('Using src_addr:'+str(src_addr))
+            if src_addr:
+                self.debug('Using src_addr:'+str(src_addr))
+            elif src_group:
+                self.debug('Using src_addr:'+str(src_addr))
+            else:
+                raise ValueError('Was not able to find local src ip')
             groups = self.get_instance_security_groups(instance)
             for group in groups:
                 if self.does_sec_group_allow(group,
-                                             src_addr,
+                                             src_addr=src_addr,
                                              src_group=src_group,
                                              protocol=protocol,
                                              port=port):
@@ -3054,7 +3064,7 @@ disable_root: false"""
             #Security group does not allow from the src/proto/port
             return False
         except Exception, e:
-            self.debug(self.get_traceback())
+            self.debug(self.get_traceback() + "\nError in sec group check")
             raise e
         finally:
             if s:
@@ -3165,14 +3175,21 @@ disable_root: false"""
         :return:
         """
         secgroups = []
+        groups = []
         if hasattr(instance, 'security_groups') and instance.security_groups:
             return instance.security_groups
-        if hasattr(instance, 'reservation') and instance.reservation:
-            res = instance.reservation
+
+        if hasattr(instance, 'groups') and instance.groups:
+            groups = instance.groups
         else:
-            res = self.get_reservation_for_instance(instance)
-        for group in res.groups:
-         secgroups.extend(self.ec2.get_all_security_groups(groupnames=str(group.id)))
+            if hasattr(instance, 'reservation') and instance.reservation:
+                res = instance.reservation
+            else:
+                res = self.get_reservation_for_instance(instance)
+            groups = res.groups
+        for group in groups:
+            secgroups.extend(self.ec2.get_all_security_groups(
+                groupnames=[str(group.name)]))
         return secgroups
     
     def get_reservation_for_instance(self, instance):
