@@ -768,10 +768,12 @@ class Net_Tests(EutesterTestCase):
                                    'responsible for this instance/security '
                                    'group...')
                         proxy_machine = self.get_proxy_machine(instance1)
-                        proxy_machine.sys('iptables-save', timeout=10)
+                        proxy_machine.machine.sys('iptables-save', timeout=10)
 
                     except:
-                        pass
+                        self.debug('Error when fetching debug output for '
+                                   'failure, ignoring:' +
+                                   str(tester.get_traceback()))
                     raise SE
                 # Since no socket errors were encountered assume we connected,
                 # check file on instance to make sure we didn't connect somewhere
