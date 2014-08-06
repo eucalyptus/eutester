@@ -759,7 +759,17 @@ class Net_Tests(EutesterTestCase):
                                                        instance1.ip_address,
                                                        x))
                         tester.show_security_group(self.group1)
-                        instance1.sys('ps aux | grep netcat', timeout=10)
+                        try:
+                            self.debug('Getting netcat info from instance...')
+                            instance1.sys('ps aux | grep netcat', timeout=10)
+                        except CommandExitCodeException:
+                            pass
+                        self.debug('Iptables info from Euca network component '
+                                   'responsible for this instance/security '
+                                   'group...')
+                        proxy_machine = self.get_proxy_machine(instance1)
+                        proxy_machine.sys('iptables-save', timeout=10)
+
                     except:
                         pass
                     raise SE
