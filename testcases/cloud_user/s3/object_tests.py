@@ -28,7 +28,6 @@ from io import FileIO
 from boto.s3.key import Key
 from boto.s3.prefix import Prefix
 from boto.exception import S3ResponseError
-from boto.sdb.db import model
 import dateutil.parser
 
 
