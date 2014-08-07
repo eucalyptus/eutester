@@ -625,30 +625,11 @@ class Net_Tests(EutesterTestCase):
                                   + " ' uname -a'", code=0)
                     self.debug('Ssh between instances passed')
 
-    def test7_revoke_rules(self):
-        assert isinstance(self.tester, Eucaops)
-        revoke_group = self.tester.add_group("revoke-group-" + str(int(time.time())))
-        self.tester.authorize_group(revoke_group, port=22)
-        for zone in self.zones:
-            instance = self.tester.run_image(image=self.image,
-                                                 keypair=self.keypair,
-                                                 group=revoke_group,
-                                                 zone=zone)[0]
-            self.tester.revoke(revoke_group, port=22)
-            self.tester.sleep(60)
-            try:
-                instance.reset_ssh_connection(timeout=30)
-                self.tester.delete_group(revoke_group)
-                raise Exception("Was able to SSH without authorized rule")
-            except SSHException, e:
-                self.tester.debug("SSH was properly blocked to the instance")
-            self.tester.authorize_group(revoke_group, port=22)
-            instance.reset_ssh_connection()
-            self.tester.terminate_instances(instance)
-        self.tester.delete_group(revoke_group)
 
-    def test8_add_and_revoke_tcp_port_range(self,
+
+    def test7_add_and_revoke_tcp_port_range(self,
                                             start=None,
+                                            src_cidr_ip='0.0.0.0/0',
                                             count=10,
                                             instances=None):
         '''
@@ -658,6 +639,9 @@ class Net_Tests(EutesterTestCase):
         Next the test revokes the ports and verifies they are no longer
         available.
         :param start: starting port of range to scan
+        :param src_cidr_ip: cidr ip for src authorization. If None the test
+                            will attempt to discovery the cidr ip of the
+                            machine running this test to use for src auth ip.
         :param count: number of consecutive ports from 'start' to test
         :param tcp: boolean tcp if true, udp if false
         '''
@@ -681,12 +665,18 @@ class Net_Tests(EutesterTestCase):
             # adjusted for windows access
             # 'does_instance_sec_group_allow' will set tester.ec2_source_ip to the
             # ip the local machine uses to communicate with the instance.
-            if not tester.does_instance_sec_group_allow(instance=instance1,
-                                                        protocol='tcp',
-                                                        port=22):
+            if src_cidr_ip is None:
+                if not tester.does_instance_sec_group_allow(instance=instance1,
+                                                            protocol='tcp',
+                                                            port=22):
+                    src_cidr_ip = str(tester.ec2_source_ip) + '/32'
+                    tester.authorize_group(self.group1,
+                                           cidr_ip=src_cidr_ip,
+                                           port=22)
+            else:
                 tester.authorize_group(self.group1,
-                                       cidr_ip=str(tester.ec2_source_ip) + '/32',
-                                       port=22)
+                                            cidr_ip=src_cidr_ip,
+                                            port=22)
             try:
                 instance1.sys('which netcat', code=0)
             except CommandExitCodeException:
@@ -716,7 +706,7 @@ class Net_Tests(EutesterTestCase):
                                        .format(count, instance1.id))
             # authorize entire port range...
             self.tester.authorize_group(self.group1,
-                                        cidr_ip=str(tester.ec2_source_ip) + '/32',
+                                        cidr_ip=src_cidr_ip,
                                         port=start,
                                         end_port=start+count)
             # test entire port range is accessible from this machine
@@ -732,12 +722,12 @@ class Net_Tests(EutesterTestCase):
                            "tester's src ip is authorized for this port test...")
                 if not tester.does_instance_sec_group_allow(
                         instance=instance1,
-                        src_addr=tester.ec2_source_ip,
+                        src_addr=src_cidr_ip.split('/')[0],
                         protocol='tcp',
                         port=x):
                     raise ValueError('Group:{0} did not have {1}:{2} authorized'
                                      .format(self.group1.name,
-                                             tester.ec2_source_ip,
+                                             src_cidr_ip.split('/')[0],
                                              x))
                 # start up netcat, sleep to allow nohup to work before quiting
                 # the shell...
@@ -746,35 +736,44 @@ class Net_Tests(EutesterTestCase):
                               .format(x, test_file) + '}', code=0, timeout=5)
                 # attempt to connect socket at instance/port and send the
                 # test_string...
-                try:
-                    tester.test_port_status(ip=instance1.ip_address,
-                                            port=x,
-                                            tcp=True,
-                                            send_buf=test_string,
-                                            verbose=True)
-                except socket.error as SE:
+                time.sleep(2) #Allow listener to setup...
+                done = False
+                attempt =0
+                while not done:
                     try:
-                        self.debug('Failed to connect to "{0}":IP:"{1}":'
-                                   'PORT:"{2}"'.format(instance1.id,
-                                                       instance1.ip_address,
-                                                       x))
-                        tester.show_security_group(self.group1)
+                        attempt += 1
+                        tester.test_port_status(ip=instance1.ip_address,
+                                                port=x,
+                                                tcp=True,
+                                                send_buf=test_string,
+                                                verbose=True)
+                        done = True
+                    except socket.error as SE:
+                        self.debug('Failed to poll port status on attempt {0}/{2}'
+                                   .format(attempt))
                         try:
-                            self.debug('Getting netcat info from instance...')
-                            instance1.sys('ps aux | grep netcat', timeout=10)
-                        except CommandExitCodeException:
-                            pass
-                        self.debug('Iptables info from Euca network component '
-                                   'responsible for this instance/security '
-                                   'group...')
-                        proxy_machine = self.get_proxy_machine(instance1)
-                        proxy_machine.machine.sys('iptables-save', timeout=10)
+                            self.debug('Failed to connect to "{0}":IP:"{1}":'
+                                       'PORT:"{2}"'.format(instance1.id,
+                                                           instance1.ip_address,
+                                                           x))
+                            tester.show_security_group(self.group1)
+                            try:
+                                self.debug('Getting netcat info from instance...')
+                                instance1.sys('ps aux | grep netcat', timeout=10)
+                            except CommandExitCodeException:
+                                pass
+                            self.debug('Iptables info from Euca network component '
+                                       'responsible for this instance/security '
+                                       'group...')
+                            proxy_machine = self.get_proxy_machine(instance1)
+                            proxy_machine.machine.sys('iptables-save', timeout=10)
 
-                    except:
-                        self.debug('Error when fetching debug output for '
-                                   'failure, ignoring:' +
-                                   str(tester.get_traceback()))
-                    raise SE
+                        except:
+                            self.debug('Error when fetching debug output for '
+                                       'failure, ignoring:' +
+                                       str(tester.get_traceback()))
+                        if attempt >= 2:
+                            raise SE
                 # Since no socket errors were encountered assume we connected,
                 # check file on instance to make sure we didn't connect somewhere
                 # else like the CC...
@@ -793,7 +792,7 @@ class Net_Tests(EutesterTestCase):
                                              ip_protocol='tcp',
                                              from_port=start,
                                              to_port=start+count,
-                                             cidr_ip=tester.ec2_source_ip + '/32')
+                                             cidr_ip=src_cidr_ip)
             #Allow some delay for the rule to be applied in the network...
             time.sleep(10)
             for x in xrange(start, start+count):
@@ -806,12 +805,12 @@ class Net_Tests(EutesterTestCase):
                            "tester's src ip is authorized for this port test...")
                 if tester.does_instance_sec_group_allow(
                         instance=instance1,
-                        src_addr=tester.ec2_source_ip,
+                        src_addr=src_cidr_ip.split('/')[0],
                         protocol='tcp',
                         port=x):
                     raise ValueError('Group:{0} has {1}:{2} authorized after revoke'
                                      .format(self.group1.name,
-                                             tester.ec2_source_ip + '/32',
+                                             src_cidr_ip,
                                              x))
                 try:
                     instance1.sys('killall -9 netcat 2> /dev/null', timeout=5)
@@ -836,7 +835,7 @@ class Net_Tests(EutesterTestCase):
 
 
 
-    def test9_verify_deleting_of_auth_source_group2(self):
+    def test8_verify_deleting_of_auth_source_group2(self):
         zones = []
         for zone in self.zones:
             zones.append(TestZone(zone))
@@ -929,6 +928,28 @@ class Net_Tests(EutesterTestCase):
         self.status('Passed. Group1 ssh working after deleting src group which '
                     'was authorized to group1')
 
+    # add revoke may be covered above...?
+    def test_revoke_rules(self):
+        assert isinstance(self.tester, Eucaops)
+        revoke_group = self.tester.add_group("revoke-group-" + str(int(time.time())))
+        self.tester.authorize_group(revoke_group, port=22)
+        for zone in self.zones:
+            instance = self.tester.run_image(image=self.image,
+                                                 keypair=self.keypair,
+                                                 group=revoke_group,
+                                                 zone=zone)[0]
+            self.tester.revoke(revoke_group, port=22)
+            self.tester.sleep(60)
+            try:
+                instance.reset_ssh_connection(timeout=30)
+                self.tester.delete_group(revoke_group)
+                raise Exception("Was able to SSH without authorized rule")
+            except SSHException, e:
+                self.tester.debug("SSH was properly blocked to the instance")
+            self.tester.authorize_group(revoke_group, port=22)
+            instance.reset_ssh_connection()
+            self.tester.terminate_instances(instance)
+        self.tester.delete_group(revoke_group)
 
 if __name__ == "__main__":
     testcase = Net_Tests()
@@ -942,15 +963,14 @@ if __name__ == "__main__":
             testlist.replace(',',' ')
             testlist = testlist.split()
     else:
-        testlist =['test1_create_instance_in_zones_for_security_group1',
-               'test2_create_instance_in_zones_for_security_group2',
-               'test3_test_ssh_between_instances_in_diff_sec_groups_same_zone',
-               'test4_attempt_unauthorized_ssh_from_test_machine_to_group2',
-               'test5_test_ssh_between_instances_in_same_sec_groups_different_zone',
-               'test6_test_ssh_between_instances_in_diff_sec_groups_different_zone',
-               'test7_revoke_rules',
-               'test8_add_and_revoke_tcp_port_range',
-               'test9_verify_deleting_of_auth_source_group2']
+        testlist =[
+            'test1_create_instance_in_zones_for_security_group1',
+            'test2_create_instance_in_zones_for_security_group2',
+            'test3_test_ssh_between_instances_in_diff_sec_groups_same_zone',
+            'test4_attempt_unauthorized_ssh_from_test_machine_to_group2',
+            'test5_test_ssh_between_instances_in_same_sec_groups_different_zone',
+            'test7_add_and_revoke_tcp_port_range',
+            'test8_verify_deleting_of_auth_source_group2']
         ### Convert test suite methods to EutesterUnitTest objects
     print 'Got test list:' + str(testlist)
     unit_list = [ ]
