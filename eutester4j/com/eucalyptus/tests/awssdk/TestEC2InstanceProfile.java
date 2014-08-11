@@ -185,7 +185,7 @@ public class TestEC2InstanceProfile {
         String az = null;
         final long startTime = System.currentTimeMillis();
         boolean completed = false;
-        while (!completed && (System.currentTimeMillis() - startTime) < TimeUnit.MINUTES.toMillis(10)) {
+        while (!completed && (System.currentTimeMillis() - startTime) < TimeUnit.MINUTES.toMillis(15)) {
             final DescribeInstanceStatusResult instanceStatusResult =
                     ec2.describeInstanceStatus(new DescribeInstanceStatusRequest()
                             .withInstanceIds(expectedId)

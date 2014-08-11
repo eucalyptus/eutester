@@ -115,6 +115,7 @@ class StickinessBasics(EutesterTestCase):
                                                         policy_name=acpolicy)
         """test lb stickiness"""
         self.tester.sleep(2)
+        self.debug("Testing LB cookie stickiness")
         self.tester.set_lb_policy(lb_name=self.load_balancer.name, lb_port=80, policy_name=lbpolicy)
         responses = self.GenerateRequests()
         host = responses[0]
@@ -126,6 +127,7 @@ class StickinessBasics(EutesterTestCase):
 
         """test app cookie stickiness"""
         self.tester.set_lb_policy(lb_name=self.load_balancer.name, lb_port=80, policy_name=acpolicy)
+        self.debug("Testing App Cookie stickiness")
         responses = self.GenerateRequests()
         host = responses[0]
         for response in responses:

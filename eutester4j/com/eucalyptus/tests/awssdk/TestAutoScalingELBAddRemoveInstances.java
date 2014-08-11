@@ -100,12 +100,12 @@ public class TestAutoScalingELBAddRemoveInstances {
 
             // Wait for instance to launch
             print("Waiting for instance to launch");
-            String instanceId = waitForInstance(as, "InService", TimeUnit.MINUTES.toMillis(10), groupName, false);
+            String instanceId = waitForInstance(as, "InService", TimeUnit.MINUTES.toMillis(15), groupName, false);
             print("Instance launched: " + instanceId);
 
             // Verify added to load balancer
             print("Waiting for instance to be added to ELB");
-            waitForElbInstances(loadBalancerName, TimeUnit.MINUTES.toMillis(10), Arrays.asList(instanceId));
+            waitForElbInstances(loadBalancerName, TimeUnit.MINUTES.toMillis(15), Arrays.asList(instanceId));
             print("Instance added to ELB");
 
             // Terminate instance manually
@@ -116,12 +116,12 @@ public class TestAutoScalingELBAddRemoveInstances {
 
             // Wait for instance to terminate
             print("Waiting for termination of instance: " + instanceId);
-            waitForInstance(as, "Terminated", TimeUnit.MINUTES.toMillis(10), groupName, true);
+            waitForInstance(as, "Terminated", TimeUnit.MINUTES.toMillis(15), groupName, true);
             print("Instance terminated: " + instanceId);
 
             // Verify removed from load balancer
             print("Waiting for instance to be removed from load balancer");
-            waitForElbInstances(loadBalancerName, TimeUnit.MINUTES.toMillis(10), Collections.<String>emptyList());
+            waitForElbInstances(loadBalancerName, TimeUnit.MINUTES.toMillis(15), Collections.<String>emptyList());
 
             // Set desired capacity back to one
             print("Setting desired capacity to 1 for group: " + groupName);
@@ -131,12 +131,12 @@ public class TestAutoScalingELBAddRemoveInstances {
 
             // Wait for instance to launch
             print("Waiting for instance to launch");
-            instanceId = waitForInstance(as, "InService", TimeUnit.MINUTES.toMillis(10), groupName, false);
+            instanceId = waitForInstance(as, "InService", TimeUnit.MINUTES.toMillis(15), groupName, false);
             print("Instance launched: " + instanceId);
 
             // Verify added to load balancer
             print("Waiting for instance to be added to ELB");
-            waitForElbInstances(loadBalancerName, TimeUnit.MINUTES.toMillis(10), Arrays.asList(instanceId));
+            waitForElbInstances(loadBalancerName, TimeUnit.MINUTES.toMillis(15), Arrays.asList(instanceId));
             print("Instance added to ELB");
 
             // Manually set instance to unhealthy
@@ -148,16 +148,16 @@ public class TestAutoScalingELBAddRemoveInstances {
 
             // Verify removed from load balancer
             print("Waiting for instance to be removed from load balancer");
-            waitForElbInstances(loadBalancerName, TimeUnit.MINUTES.toMillis(10), Collections.<String>emptyList());
+            waitForElbInstances(loadBalancerName, TimeUnit.MINUTES.toMillis(15), Collections.<String>emptyList());
 
             // Wait for instance to launch
             print("Waiting for replacement instance to launch");
-            instanceId = waitForInstance(as, "InService", TimeUnit.MINUTES.toMillis(10), groupName, false);
+            instanceId = waitForInstance(as, "InService", TimeUnit.MINUTES.toMillis(15), groupName, false);
             print("Instance launched: " + instanceId);
 
             // Verify added to load balancer
             print("Waiting for instance to be added to ELB");
-            waitForElbInstances(loadBalancerName, TimeUnit.MINUTES.toMillis(10), Arrays.asList(instanceId));
+            waitForElbInstances(loadBalancerName, TimeUnit.MINUTES.toMillis(15), Arrays.asList(instanceId));
             print("Instance added to ELB");
 
             // Set desired capacity to zero
@@ -168,11 +168,11 @@ public class TestAutoScalingELBAddRemoveInstances {
 
             // Verify removed from load balancer
             print("Waiting for instance to be removed from load balancer");
-            waitForElbInstances(loadBalancerName, TimeUnit.MINUTES.toMillis(10), Collections.<String>emptyList());
+            waitForElbInstances(loadBalancerName, TimeUnit.MINUTES.toMillis(15), Collections.<String>emptyList());
 
             // Wait for instance to terminate
             print("Waiting for instance to terminate");
-            waitForInstances("Terminated", TimeUnit.MINUTES.toMillis(10), groupName, true);
+            waitForInstances("Terminated", TimeUnit.MINUTES.toMillis(15), groupName, true);
 
             print("Test complete");
         } finally {
