@@ -4,7 +4,7 @@ Author = 'mmunn'
 
 Unit test          : EUCA-9729 euscale-create-auto-scaling-group does not always honor ec2:quota-vminstancenumber
 setUp              : Install Credentials,
-test               : Create Account, upload Quota policy where ec2:quota-vminstancenumber":"3, try and launch 4
+test               : Create Account,upload Quota policy where ec2:quota-vminstancenumber":"3, try and launch 4
                      autoscaling instances, the quota should only allow 3 instsances to be started.
 tearDown           : Cleanup artifacts
 
