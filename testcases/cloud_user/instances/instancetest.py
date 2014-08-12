@@ -362,7 +362,11 @@ class InstanceBasics(EutesterTestCase):
                 executor.submit(self.tester.terminate_instances, future.result())
 
         def available_after_greater():
-            return self.tester.get_available_vms(zone=self.zone) >= available_instances_before
+            try:
+                return self.tester.get_available_vms(zone=self.zone) >= available_instances_before
+            except IndexError, e:
+                self.debug("Running as non-admin, skipping validation of available VMs.")
+                return True
         self.tester.wait_for_result(available_after_greater, result=True, timeout=360)
 
     def PrivateIPAddressing(self):
