@@ -48,7 +48,7 @@ class InstanceBasics(EutesterTestCase):
         self.keypair = self.tester.add_keypair("keypair-" + str(time.time()))
         self.keypath = '%s/%s.pem' % (os.curdir, self.keypair.name)
         if emi:
-            self.image = emi
+            self.image = self.tester.get_emi(emi=emi)
         else:
             self.image = self.tester.get_emi(root_device_type="instance-store", not_platform="windows")
         self.address = None
