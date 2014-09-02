@@ -5,8 +5,8 @@ Library         Collections
 
 *** Variables ***
 ${credpath}     /Users/viglesias/Dropbox/creds/test-creds/
-${password}     ${EMPTY}
-${config_file}  ${EMPTY}
+${password}     ${None}
+${config_file}  ${None}
 ${image_id}     mi-
 
 *** Keywords ***
