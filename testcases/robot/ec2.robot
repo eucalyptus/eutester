@@ -6,16 +6,20 @@ Resource        shared_keywords.robot
 
 *** Test Cases ***
 Check Ephemeral
+  [Tags]  EC2  BDM
   Should Not Be True  ${instance.found("ls -1 /dev/vdb", "No such file or directory")}
 
 Ping public IP
+  [Tags]  EC2  Network
   Ping From Instance  ${instance}  ${instance.ip_address}
 
 Ping private IP
+  [Tags]  EC2  Network
   Ping From Instance  ${instance}  ${instance.private_ip_address}
 
 Metadata
   [Template]  Check Metadata
+  [Tags]  EC2  MetaData
   security-groups  ${group.name}
   instance-id  ${instance.id}
   local-ipv4  ${instance.private_ip_address}
@@ -30,12 +34,14 @@ Metadata
 
 DNS Resolution
   [Template]  Check DNS
+  [Tags]  EC2  DNS
   ${instance.public_dns_name}  ${instance.private_ip_address}
   ${instance.ip_address}  ${instance.public_dns_name}
   ${instance.private_dns_name}  ${instance.private_ip_address}
   ${instance.private_ip_address}  ${instance.private_dns_name}
 
 Elastic IPs
+  [Tags]  EC2  Network
   ${address}=  Allocate address
   Associate address  ${instance}  ${address}
   Should Be Equal  ${instance.ip_address}  ${address.public_ip}  msg=Instance address is not allocated IP
@@ -45,6 +51,7 @@ Elastic IPs
   Ping  ${instance.ip_address}
 
 Multiple Instances
+  [Tags]  EC2  RunInstance
   ${multi_instances}=  Run image  ${image}  min=${2}  max=${2}
   Length Should Be  ${multi_instances}  ${2}  msg=Exact number of instances was not not run
   Terminate instances  ${multi_instances}
@@ -52,6 +59,7 @@ Multiple Instances
 Invalid Attachments
   [Documentation]  Attach volumes with invalid device strings
   [Template]  Attachment Fails
+  [Tags]  EC2  Volumes
   /dev/sda
   2323fwqefsdf
   ${volume}
@@ -62,6 +70,7 @@ Invalid Attachments
 Valid Attachments
   [Documentation]  Attach with valid device strings
   [Template]  Attachment Works
+  [Tags]  EC2  Volumes
   /dev/vdc
   /dev/sdc
   vdc
@@ -70,6 +79,7 @@ Valid Attachments
 
 Snapshots
   [Documentation]  Basic snapshot operations
+  [Tags]  EC2  Snapshots
   ${snapshot}=  Create Snapshot From Volume  volume=${volume}  description=${test_id}
   ${volume}=  Create Volume  @{zones}[0]  snapshot=${snapshot}
   @{resource_ids}=  Create List  ${snapshot.id}  ${volume.id}
