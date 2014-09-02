@@ -6,11 +6,13 @@ Library	Collections
 *** Variables ***
 ${credpath}  /Users/viglesias/Dropbox/creds/test-creds/
 ${password}  foobar
+${image_id}  mi-
 
 *** Keywords ***
 Prepare EC2 Resources
+  Set Log Level  TRACE
   ${test_id}=  ID generator  ${12}
-  ${image}=  get_emi  root_device_type=instance-store
+  ${image}=  get_emi  root_device_type=instance-store  emi=${image_id}
   ${keypair}=  Add Keypair  key_name=${test_id}
   ${group}=	Add Group  group_name=${test_id}
   Authorize Group	 ${group}  port=22
