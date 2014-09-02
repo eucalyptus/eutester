@@ -2,7 +2,7 @@
 Documentation   EC2 API Tests
 Suite Setup     Prepare EC2 Resources
 Suite Teardown  Cleanup Artifacts
-Resource        shared_keywords.txt
+Resource        shared_keywords.robot
 
 *** Test Cases ***
 Check Ephemeral
