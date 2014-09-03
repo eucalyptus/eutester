@@ -47,12 +47,13 @@ import sys
 import traceback
 from datetime import datetime, timedelta
 from subprocess import Popen, PIPE
-
+from boto.ec2.group import Group
 
 from boto.ec2.image import Image
 from boto.ec2.instance import Reservation, Instance
 from boto.ec2.keypair import KeyPair
 from boto.ec2.blockdevicemapping import BlockDeviceMapping, BlockDeviceType
+from boto.ec2.securitygroup import SecurityGroup
 from boto.ec2.volume import Volume
 from boto.ec2.bundleinstance import BundleInstanceTask
 from boto.exception import EC2ResponseError
@@ -528,7 +529,30 @@ disable_root: false"""
                                             src_security_group_name=src_security_group_name,
                                             src_security_group_owner_id=src_security_group_owner_id,
                                             force_args=force_args)
-    
+
+    def revoke(self, group,
+                     port=22,
+                     protocol="tcp",
+                     cidr_ip="0.0.0.0/0",
+                     src_security_group_name=None,
+                     src_security_group_owner_id=None):
+        if isinstance(group, SecurityGroup):
+            group_name = group.name
+        else:
+            group_name = group
+        if src_security_group_name:
+            self.debug( "Attempting revoke of " + group_name + " from " + str(src_security_group_name) +
+                        " on port " + str(port) + " " + str(protocol) )
+        else:
+            self.debug( "Attempting revoke of " + group_name + " on port " + str(port) + " " + str(protocol) )
+        self.ec2.revoke_security_group(group_name,
+                                       ip_protocol=protocol,
+                                       from_port=port,
+                                       to_port=port,
+                                       cidr_ip=cidr_ip,
+                                       src_security_group_name=src_security_group_name,
+                                       src_security_group_owner_id=src_security_group_owner_id)
+
     def terminate_single_instance(self, instance, timeout=300 ):
         """
         Terminate an instance
@@ -2140,7 +2164,7 @@ disable_root: false"""
                    arch=None,
                    owner_id=None,
                    filters=None,
-                   basic_image=None,
+                   basic_image=True,
                    platform=None,
                    not_platform=None,
                    tagkey=None,
@@ -2167,10 +2191,6 @@ disable_root: false"""
         """
         # If no criteria was provided for filter an image, use 'basic_image'
         # flag to provide some sane defaults
-        if basic_image is None and not _args_dict:
-            basic_image = True
-        else:
-            basic_image = False
         if filters is None and emi is None and \
                         name is None and location is None:
             # Attempt to get a eutester created image if it happens to meet
@@ -3743,7 +3763,7 @@ disable_root: false"""
         self.debug("bundle_instance_monitor_and_register:" + str(bundle_task.id)
                    + " monitored to completed, now get manifest and register...")
         manifest = self.get_manifest_string_from_bundle_task(bundle_task)
-        image = self.register_manifest(manifest)
+        image = self.register_manifest(manifest, virtualization_type=instance.virtualization_type)
         self.debug("bundle_instance_monitor_and_register:" + str(bundle_task.id)
                    + ", registered as image:" + str(image.id))
         self.debug("bundle_instance_monitor_and_register:" + str(bundle_task.id)
