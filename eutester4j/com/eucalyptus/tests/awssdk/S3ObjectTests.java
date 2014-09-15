@@ -15,7 +15,10 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.AfterMethod;
@@ -25,6 +28,7 @@ import org.testng.annotations.Test;
 
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.Headers;
 import com.amazonaws.services.s3.model.Bucket;
 import com.amazonaws.services.s3.model.CopyObjectResult;
 import com.amazonaws.services.s3.model.GetObjectRequest;
@@ -314,26 +318,8 @@ public class S3ObjectTests {
 			cleanupTasks.add(new Runnable() {
 				@Override
 				public void run() {
-					int counter = 0;
-					do {
-						print("Deleting object " + key + " from bucket " + bucketName);
-						counter++;
-						try {
-							s3.deleteObject(bucketName, key);
-							break;
-						} catch (AmazonServiceException ase) {
-							// TODO File a bug
-							print("Error deleting object " + key + " from bucket " + bucketName);
-							ase.printStackTrace();
-							if (counter < 5) {
-								try {
-									Thread.sleep(2000);
-								} catch (InterruptedException e) {
-									e.printStackTrace();
-								}
-							}
-						}
-					} while (counter < 5);
+					print("Deleting object " + key);
+					s3.deleteObject(bucketName, key);
 				}
 			});
 			assertTrue("Invalid put object result", putObj != null);
@@ -399,6 +385,56 @@ public class S3ObjectTests {
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run getObjectWithRange");
+		}
+	}
+
+	@Test
+	public void headObject() throws Exception {
+		testInfo(this.getClass().getSimpleName() + " - headObject");
+		try {
+			final String key = eucaUUID();
+			File fileToPut = new File("test.dat");
+			String md5_orig = BinaryUtils.toHex(Md5Utils.computeMD5Hash(new FileInputStream(fileToPut)));
+
+			ObjectMetadata setMd = new ObjectMetadata();
+			Map<String, String> userMetadataMap = new HashMap<String, String>();
+			userMetadataMap.put("somerandomkey", "somerandomvalue");
+			userMetadataMap.put("hello", "world");
+			setMd.setUserMetadata(userMetadataMap);
+
+			print("Putting object " + key + " in bucket " + bucketName);
+			PutObjectResult putObj = s3.putObject(new PutObjectRequest(bucketName, key, fileToPut).withMetadata(setMd));
+			cleanupTasks.add(new Runnable() {
+				@Override
+				public void run() {
+					print("Deleting object " + key);
+					s3.deleteObject(bucketName, key);
+				}
+			});
+			assertTrue("Invalid put object result", putObj != null);
+			assertTrue("Mimatch in md5sums between original object and PUT result. Expected " + md5_orig + ", but got " + putObj.getETag(),
+					putObj.getETag() != null && putObj.getETag().equals(md5_orig));
+
+			ObjectMetadata getMd = s3.getObjectMetadata(bucketName, key);
+			assertTrue("Invalid object metadata result", getMd != null);
+			assertTrue("Mismatch in object length. Expected " + fileToPut.length() + ", but got " + getMd.getContentLength(),
+					getMd.getContentLength() == fileToPut.length());
+			assertTrue("Invalid content type", getMd.getContentType() != null);
+			assertTrue("Mismatch in Etags between original object and metadata results. Expected " + md5_orig + ", but got " + getMd.getETag(), getMd.getETag()
+					.equals(md5_orig));
+			assertTrue("Invalid last modified date", getMd.getLastModified() != null);
+			assertTrue("No user metadata found", getMd.getUserMetadata() != null || !getMd.getUserMetadata().isEmpty());
+			assertTrue("Expected to find " + userMetadataMap.size() + " element(s) in the metadata but found " + getMd.getUserMetadata().size(),
+					userMetadataMap.size() == getMd.getUserMetadata().size());
+			for (Map.Entry<String, String> entry : userMetadataMap.entrySet()) {
+				assertTrue("Metadata key " + entry.getKey() + " not found in response", getMd.getUserMetadata().containsKey(entry.getKey()));
+				assertTrue(
+						"Expected metadata value for key " + entry.getKey() + " to be " + entry.getValue() + " but got "
+								+ getMd.getUserMetadata().get(entry.getKey()), getMd.getUserMetadata().get(entry.getKey()).equals(entry.getValue()));
+			}
+		} catch (AmazonServiceException ase) {
+			printException(ase);
+			assertThat(false, "Failed to run headObject");
 		}
 	}
 

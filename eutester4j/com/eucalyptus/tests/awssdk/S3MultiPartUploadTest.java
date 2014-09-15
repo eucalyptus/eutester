@@ -794,6 +794,10 @@ public class S3MultiPartUploadTest {
 		print(ownerName + ": Getting metadata for object key=" + key + ", bucket=" + bucket);
 		ObjectMetadata metadata = s3.getObjectMetadata(bucket, key);
 		assertTrue("Invalid object metadata", metadata != null);
+		assertTrue("Invalid content length. Expected non-zero length but got 0", metadata.getContentLength() != 0);
+		assertTrue("Invalid content type", metadata.getContentType() != null);
+		assertTrue("Invalid ETag value", metadata.getETag() != null);
+		assertTrue("Invalid last modified date", metadata.getLastModified() != null);
 		if (metadataMap != null && !metadataMap.isEmpty()) {
 			assertTrue("No user metadata found", metadata.getUserMetadata() != null || !metadata.getUserMetadata().isEmpty());
 			assertTrue("Expected to find " + metadataMap.size() + " element(s) in the metadata but found " + metadata.getUserMetadata().size(),
