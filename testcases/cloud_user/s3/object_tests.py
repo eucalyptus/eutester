@@ -109,7 +109,29 @@ class ObjectTestSuite(EutesterTestCase):
         return response
         #return None
 
-    def generate_default_policy_b64(self, bucket, key, acl):
+    def post_object_sts(self, bucket_name=None, object_key=None, object_data=None, policy=None, acl=None, credentials=None):
+        """Uploads an object using POST + form upload using an STS token"""
+        self.assertIsNotNone(credentials, msg='Credentials missing')
+
+        fields = {
+            'key': object_key,
+            'acl': acl,
+            'AWSAccessKeyId': credentials.access_key,
+            'Policy': policy,
+            'x-amz-security-token': credentials.session_token,
+            'Signature': self.sign_policy(sak=str(credentials.secret_key), b64_policy_json=policy)
+        }
+
+        self.tester.info('Fields: ' + str(fields))
+        url = 'http://' + self.tester.s3.host + ':' + str(self.tester.s3.port) \
+              + '/' + self.tester.s3.path + '/' + bucket_name
+
+        self.tester.debug('Sending POST request to: ' + url)
+        response = requests.post(url, data=fields, files={'file': BytesIO(object_data)})
+        return response
+        #return None
+
+    def generate_default_policy_b64(self, bucket, key, acl, token=None):
         delta = timedelta(hours=1)
         expire_time = (datetime.utcnow() + delta).replace(microsecond=0)
 
@@ -119,6 +141,9 @@ class ObjectTestSuite(EutesterTestCase):
                                 ],
                   'expiration': time.strftime('%Y-%m-%dT%H:%M:%SZ',
                                               expire_time.timetuple())}
+        if token is not None:
+            policy['conditions'][0]['x-amz-security-token'] = token
+
         policy_json = json.dumps(policy)
         self.tester.info('generated default policy: %s', policy_json)
         return base64.b64encode(policy_json)
@@ -370,6 +395,44 @@ class ObjectTestSuite(EutesterTestCase):
             assert(fetched_content == data)
 
         self.tester.info("Done with upload test")
+
+    def test_object_post_sts(self):
+        """Test the POST method for putting objects using STS tokens, requires a pre-signed upload policy and url"""
+        self.tester.info("Testing POST form upload on bucket with STS token" + self.test_bucket_name)
+        self.tester.info("Getting STS credential for test")
+        credentials = self.tester.issue_session_token()
+        self.assertIsNotNone(credentials, msg='Could not get credentials')
+        self.assertIsNotNone(credentials.access_key, msg='Credentials missing access_key')
+        self.assertIsNotNone(credentials.secret_key, msg='Credentials missing secret_key')
+        self.assertIsNotNone(credentials.session_token, msg='Credentials missing session_token')
+        self.assertIsNotNone(credentials.expiration, msg='Credentials missing expiration')
+
+        self.test_bucket = self.clear_and_rebuild_bucket(self.test_bucket_name)
+        itr = 1
+        self.tester.info('Doing ' + str(itr) + ' POST upload iterations')
+        acl = 'ec2-bundle-read'
+        for k in xrange(0, itr):
+            key = 'postkey1' + str(k)
+            data = os.urandom(512)
+            computed_md5 = '"' + hashlib.md5(data).hexdigest() + '"'
+            self.tester.info('Data md5: ' + computed_md5 + ' data length: ' + str(len(computed_md5)))
+            self.tester.info('Uploading object ' + self.test_bucket_name + '/' + key + ' via POST with acl : ' + acl)
+            response = self.post_object_sts(bucket_name=self.test_bucket_name,
+                                        object_key=key,
+                                        object_data=data,
+                                        acl=acl,
+                                        policy=self.generate_default_policy_b64(self.test_bucket_name, key, acl=acl,token=credentials.session_token), credentials=credentials)
+
+            self.tester.info('Got response for POST: ' + str(response.status_code) + ': ' + str(response.text))
+            assert(response.status_code == 204)
+            fetched_key = self.test_bucket.get_key(key)
+            fetched_content = fetched_key.get_contents_as_string()
+            self.tester.info('Got fetched md5: ' + fetched_key.etag)
+            self.tester.info('Calculated md5: ' + computed_md5 + ' recieved md5 ' + fetched_key.etag)
+            assert(fetched_key.etag == computed_md5)
+            assert(fetched_content == data)
+
+        self.tester.info("Done with POST w/sts upload test")
 
     def test_object_post_large(self):
         """Test the POST method for putting objects, requires a pre-signed upload policy and url"""
@@ -785,7 +848,8 @@ if __name__ == "__main__":
                                    'test_object_versioning_suspended',
                                    'test_object_multipart',
                                    'test_object_post',
-                                   'test_object_post_large']
+                                   'test_object_post_large',
+                                   'test_object_post_sts']
 
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
