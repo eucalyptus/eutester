@@ -2534,6 +2534,7 @@ disable_root: false"""
                      min=1,
                      max=1,
                      user_data=None,
+                     user_data_file=None,
                      private_addressing=False,
                      username="root",
                      password=None,
@@ -2551,6 +2552,7 @@ disable_root: false"""
         :param min: Minimum instnaces to launch, default 1
         :param max: Maxiumum instances to launch, default 1
         :param user_data: User-data string to pass to instance
+        :param user_data_file: User-data file to pass to instance
         :param private_addressing: Runs an instance with only private IP address
         :param username: username to use when connecting via ssh
         :param password: password to use when connecting via ssh
@@ -2565,6 +2567,9 @@ disable_root: false"""
             image = self.get_emi(emi=str(image))
         if image is None:
             raise Exception("emi is None. run_instance could not auto find an emi?")
+        if user_data_file:
+            with open(user_data_file) as userdata_file:
+                user_data = userdata_file.read()
         if not user_data:
             user_data = self.enable_root_user_data
         if private_addressing is True:
@@ -2661,6 +2666,7 @@ disable_root: false"""
                   max=1,
                   block_device_map=None,
                   user_data=None,
+                  user_data_file=None,
                   private_addressing=False, 
                   username="root", 
                   password=None,
@@ -2678,6 +2684,7 @@ disable_root: false"""
         :param min: minimum amount of instances to try to run
         :param max: max amount of instances to try to run
         :param user_data: user_data to run instances with
+        :param user_data_file: user_data file to run instances with
         :param private_addressing: boolean to run instances without public ips
         :param username: username for connecting ssh to instances
         :param password: password for connnecting ssh to instances
@@ -2700,6 +2707,9 @@ disable_root: false"""
                 image = self.get_emi(emi=str(image))
             if image is None:
                 raise Exception("emi is None. run_instance could not auto find an emi?")
+            if user_data_file:
+                with open(user_data_file) as userdata_file:
+                    user_data = userdata_file.read()
             if not user_data:
                 user_data = self.enable_root_user_data
             if private_addressing is True:
