@@ -46,7 +46,7 @@ import traceback
 import sys
 import StringIO
 from eutester.euservice import EuserviceManager
-from boto.ec2.instance import Reservation
+from boto.ec2.instance import Reservation, Instance
 from boto.exception import EC2ResponseError
 from eutester.euconfig import EuConfig
 from eutester.euproperties import Euproperty_Manager
@@ -59,7 +59,7 @@ import os
 class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
     
     def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None,
-                 aws_secret_access_key = None,  account="eucalyptus", user="admin", username=None, APIVersion='2011-01-01',
+                     aws_secret_access_key = None,  account="eucalyptus", user="admin", username=None, APIVersion='2013-10-15',
                  ec2_ip=None, ec2_path=None, iam_ip=None, iam_path=None, s3_ip=None, s3_path=None,
                  as_ip=None, as_path=None, elb_ip=None, elb_path=None, cw_ip=None, cw_path=None,
                  cfn_ip=None, cfn_path=None, sts_ip=None, sts_path=None,
@@ -331,15 +331,32 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                 failcount +=1
                 failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
         if instances:
+            remove_list = []
+            instances = []
+            # To speed up termination, send terminate to all instances
+            # before sending them to the monitor methods
+            for res in self.test_resources["reservations"]:
+                try:
+                    if isinstance(res, Instance):
+                        res.terminate()
+                    if isinstance(res, Reservation):
+                        for ins in res.instances:
+                            ins.terminate()
+                except:
+                    traceback.print_exc()
+                    self.debug('ignoring error in instance cleanup '
+                               'during termination')
+            # Now monitor to terminated state...
             for res in self.test_resources["reservations"]:
                 try:
                     self.terminate_instances(res)
-                    if res in self.test_resources["reservations"]:
-                        self.test_resources["reservations"].remove(res)
+                    remove_list.append(res)
                 except Exception, e:
                     tb = self.get_traceback()
                     failcount +=1
                     failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
+                if res in remove_list:
+                    self.test_resources["reservations"].remove(res)
         if ip_addresses:
             try:
                 self.cleanup_addresses()

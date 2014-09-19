@@ -28,7 +28,6 @@ from io import FileIO
 from boto.s3.key import Key
 from boto.s3.prefix import Prefix
 from boto.exception import S3ResponseError
-from boto.sdb.db import model
 import dateutil.parser
 
 
@@ -83,8 +82,8 @@ class ObjectTestSuite(EutesterTestCase):
         if bucket == None:
             raise Exception("Cannot put object without proper bucket reference")
 
-        try :
-            key = Key(bucket=bucket,name=object_key)
+        try:
+            key = Key(bucket=bucket, name=object_key)
             key.set_contents_from_string(object_data)
             return key.etag
         except Exception as e:
@@ -129,7 +128,7 @@ class ObjectTestSuite(EutesterTestCase):
         my_hmac.update(b64_policy_json)
         return base64.b64encode(my_hmac.digest())
 
-     
+
     def enable_versioning(self, bucket):
         """Enable versioning on the bucket, checking that it is not already enabled and that the operation succeeds."""
         vstatus = bucket.get_versioning_status()
@@ -191,7 +190,7 @@ class ObjectTestSuite(EutesterTestCase):
     def compare_versions(self, key1, key2):
         """
         Returns -1 if key1 < key2, 0 if equal, and 1 if key1 > key2. 
-        Compares names lexicographically, if equal, compares date_modified if versions are different. 
+        Compares names lexicographically, if equal, compares date_modified if versions are different.
         If version_id and name are equal then key1 = key2
         If an error occurs or something is wrong, returns None
         """
@@ -217,7 +216,7 @@ class ObjectTestSuite(EutesterTestCase):
     def test_object_basic_ops(self):
         """
         Tests basic operations on objects: simple GET,PUT,HEAD,DELETE.
-        
+
         """
         self.tester.info("Basic Object Operations Test (GET/PUT/HEAD)")
         if self.test_bucket == None:
@@ -423,7 +422,7 @@ class ObjectTestSuite(EutesterTestCase):
         #Create some test data
         #for i in range(0, large_obj_size_bytes):
         #    test_data += chr(random.randint(32,126))
-        test_data = bytearray(os.urandom(large_obj_size_bytes))
+        test_data = os.urandom(large_obj_size_bytes)
 
         self.tester.info("Uploading object content of size: " + str(large_obj_size_bytes) + " bytes")
         keyname = "largeobj-" + str(int(time.time()))
