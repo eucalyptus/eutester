@@ -644,7 +644,7 @@ class IAMops(Eutester):
     def delete_server_cert(self, cert_name):
         self.debug("deleting server certificate: " + cert_name)
         self.euare.delete_server_cert(cert_name)
-        if (cert_name) in str(self.euare.list_server_certs()):
+        if (cert_name) in str(self.euare.get_all_server_certs()):
             raise Exception("certificate " + cert_name + " not deleted.")
 
     def list_server_certs(self, path_prefix='/', marker=None, max_items=None):

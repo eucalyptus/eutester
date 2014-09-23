@@ -67,7 +67,7 @@ class SSLTermination(EutesterTestCase):
         ### Get an image
         self.image = self.args.emi
         if not self.image:
-            self.image = self.tester.get_emi(root_device_type="instance-store")
+            self.image = self.tester.get_emi()
 
         ### Populate available zones
         zones = self.tester.ec2.get_all_zones()
