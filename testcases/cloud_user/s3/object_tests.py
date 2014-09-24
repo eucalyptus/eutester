@@ -17,18 +17,16 @@ import random
 import os
 import tempfile
 from datetime import timedelta
-import datetime
 from datetime import datetime
 import hashlib
 import json
 import hmac
 from io import BytesIO
-from io import FileIO
 
 from boto.s3.key import Key
 from boto.s3.prefix import Prefix
 from boto.exception import S3ResponseError
-from boto.sdb.db import model
+import boto.s3, boto.s3.connection
 import dateutil.parser
 
 
@@ -531,8 +529,8 @@ class ObjectTestSuite(EutesterTestCase):
         self.tester.info("Completing upload...So OSG")
         reply.complete_upload()
         temp_file.close()
-        self.tester.info("HEAD request...");
-        returned_key = self.test_bucket.get_key(keyname, validate=True);
+        self.tester.info("HEAD request...")
+        returned_key = self.test_bucket.get_key(keyname)
         download_temp_file = tempfile.NamedTemporaryFile(mode="w+b", prefix="mpu-download")
         self.tester.info("Downloading object...very mpu");
         returned_key.get_contents_to_file(download_temp_file);
@@ -770,6 +768,11 @@ class ObjectTestSuite(EutesterTestCase):
 
         #TODO: test custom and canned acls that are both valid an invalid
 
+    def test_object_acl_negative_test(self):
+        """Tests error conditions and response for acl issues."""
+        self.fail("Test not implemented")
+
+
     def test_object_torrent(self):
         """Tests object torrents"""
         self.fail("Feature not implemented yet")
@@ -809,7 +812,7 @@ class ObjectTestSuite(EutesterTestCase):
         reply.complete_upload()
         temp_file.close()
         self.tester.info("HEAD request...");
-        returned_key = self.test_bucket.get_key(keyname, validate=True);
+        returned_key = self.test_bucket.get_key(keyname)
         download_temp_file = tempfile.NamedTemporaryFile(mode="w+b", prefix="mpu-download")
         self.tester.info("Downloading object...very mpu");
         returned_key.get_contents_to_file(download_temp_file);
@@ -836,6 +839,144 @@ class ObjectTestSuite(EutesterTestCase):
         self.tester.info("Initiating multipart upload " + keyname)
         return self.test_bucket.initiate_multipart_upload(keyname)
 
+    def test_presigned_url(self):
+        """Tests presigned url operations on the service using regular access/secret keys"""
+        self.tester.info("Testing presigned url usage with regular access/secret keys")
+        self.test_bucket = self.clear_and_rebuild_bucket(self.test_bucket_name)
+        oneMinute = 1 * 60
+        objectKey1 = 'presignedurltestobject'
+        test_headers = {'x-amz-acl': 'public-read', 'x-amz-meta-key1': 'my blah value'}
+        #Test PUT
+        httpMethod = 'PUT'
+        presigned_url = ''
+        try:
+            self.tester.info('Port = ' + str(self.tester.s3.port))
+            presigned_url = self.tester.s3.generate_url(expires_in=oneMinute, method=httpMethod, bucket=self.test_bucket_name, key=objectKey1, query_auth=True, headers=test_headers, response_headers=None, expires_in_absolute=False)
+            self.tester.info('Using presigned url for PUT: ' + presigned_url)
+            response = requests.put(url=presigned_url, data='testingcontent123')
+            self.tester.info('Response: ' + str(response.status_code) + ' - ' + response.text)
+            if response.status_code != 200:
+                raise Exception('Error response from server: ' + str(response.status_code))
+        except Exception as e:
+            self.fail("Failed on pre-signed put with url: " + presigned_url + ' with: ' + e.message)
+
+        #Test GET
+        httpMethod = 'GET'
+        presigned_url = ''
+        try:
+            presigned_url = self.tester.s3.generate_url(expires_in=oneMinute, method=httpMethod, bucket=self.test_bucket_name, key=objectKey1, query_auth=True, headers=test_headers, response_headers=None, expires_in_absolute=False)
+            self.tester.info('Using GET presigned_url: ' + presigned_url)
+            response = requests.get(url=presigned_url)
+            self.tester.info('Got response on GET: ' + str(response.status_code) + ' Body: ' + response.text)
+            if response.status_code != 200:
+                raise Exception('Error response from server: ' + str(response.status_code))
+        except Exception as e:
+            self.fail("Failed on pre-signed put with url: " + presigned_url + ' with exception: ' + e.message)
+
+        #Test HEAD
+        httpMethod = 'HEAD'
+        presigned_url = ''
+        try:
+            presigned_url = self.tester.s3.generate_url(expires_in=oneMinute, method=httpMethod, bucket=self.test_bucket_name, key=objectKey1, query_auth=True, headers=test_headers, response_headers=None, expires_in_absolute=False)
+            self.tester.info('Using HEAD presigned_url: ' + presigned_url)
+            response = requests.head(url=presigned_url)
+            self.tester.info('Got response on HEAD: ' + str(response.status_code) + ' Body: ' + response.text)
+            if response.status_code != 200:
+                raise Exception('Error response from server: ' + str(response.status_code))
+        except Exception as e:
+            self.fail("Failed on pre-signed put with url: " + presigned_url + ' with exception: ' + e.message)
+
+        #Test DELETE
+        httpMethod = 'DELETE'
+        presigned_url = ''
+        try:
+            presigned_url = self.tester.s3.generate_url(expires_in=oneMinute, method=httpMethod, bucket=self.test_bucket_name, key=objectKey1, query_auth=True, headers=None, response_headers=None, expires_in_absolute=False)
+            self.tester.info('Using DELETE presigned_url: ' + presigned_url)
+            response = requests.delete(url=presigned_url)
+            self.tester.info('Got response on DELETE: ' + str(response.status_code) + ' Body: ' + response.text)
+            if response.status_code != 204:
+                raise Exception('Error response from server: ' + str(response.status_code))
+        except Exception as e:
+            self.fail("Failed on pre-signed put with url: " + presigned_url + ' with exception: ' + e.message)
+
+
+    def test_presigned_url_sts(self):
+        """Tests presigned urls using STS session tokens"""
+        self.tester.info("Testing presigned url usage with sts session tokens")
+        self.test_bucket = self.clear_and_rebuild_bucket(self.test_bucket_name)
+        oneMinute = 1 * 60
+        objectKey1 = 'presignedurltestobject'
+        credentials = self.tester.get_session_token()
+        calling_format = boto.s3.connection.OrdinaryCallingFormat()
+        s3connection = boto.connect_s3(
+            aws_access_key_id=credentials.access_key,
+            aws_secret_access_key=credentials.secret_key,
+            security_token=credentials.session_token,
+            host=self.tester.s3.host,
+            port=self.tester.s3.port,
+            path=self.tester.s3.path,
+            is_secure=self.tester.s3.is_secure,
+            calling_format=calling_format)
+
+        #Test PUT
+        httpMethod = 'PUT'
+        presigned_url = ''
+        try:
+            self.tester.info('Port = ' + str(self.tester.s3.port))
+            presigned_url = s3connection.generate_url(expires_in=oneMinute, method=httpMethod, bucket=self.test_bucket_name, key=objectKey1, query_auth=True, headers=None, response_headers=None, expires_in_absolute=False)
+            self.tester.info('Using presigned url for PUT: ' + presigned_url)
+            response = requests.put(url=presigned_url, data='testingcontent123')
+            self.tester.info('Response: ' + str(response.status_code) + ' - ' + response.text)
+            if response.status_code != 200:
+                raise Exception('Error response from server: ' + str(response.status_code))
+        except Exception as e:
+            self.fail("Failed on pre-signed put with url: " + presigned_url + ' with: ' + e.message)
+
+        #Test GET
+        httpMethod = 'GET'
+        presigned_url = ''
+        try:
+            presigned_url = s3connection.generate_url(expires_in=oneMinute, method=httpMethod, bucket=self.test_bucket_name, key=objectKey1, query_auth=True, headers=None, response_headers=None, expires_in_absolute=False)
+            self.tester.info('Using GET presigned_url: ' + presigned_url)
+            response = requests.get(url=presigned_url)
+            self.tester.info('Got response on GET: ' + str(response.status_code) + ' Body: ' + response.text)
+            if response.status_code != 200:
+                raise Exception('Error response from server: ' + str(response.status_code))
+        except Exception as e:
+            s3connection.close()
+            self.fail("Failed on pre-signed put with url: " + presigned_url + ' with exception: ' + e.message)
+
+
+        #Test HEAD
+        httpMethod = 'HEAD'
+        presigned_url = ''
+        try:
+            presigned_url = s3connection.generate_url(expires_in=oneMinute, method=httpMethod, bucket=self.test_bucket_name, key=objectKey1, query_auth=True, headers=None, response_headers=None, expires_in_absolute=False)
+            self.tester.info('Using HEAD presigned_url: ' + presigned_url)
+            response = requests.head(url=presigned_url)
+            self.tester.info('Got response on HEAD: ' + str(response.status_code) + ' Body: ' + response.text)
+            if response.status_code != 200:
+                raise Exception('Error response from server: ' + str(response.status_code))
+        except Exception as e:
+            s3connection.close()
+            self.fail("Failed on pre-signed put with url: " + presigned_url + ' with exception: ' + e.message)
+
+
+        #Test DELETE
+        httpMethod = 'DELETE'
+        presigned_url = ''
+        try:
+            presigned_url = s3connection.generate_url(expires_in=oneMinute, method=httpMethod, bucket=self.test_bucket_name, key=objectKey1, query_auth=True, headers=None, response_headers=None, expires_in_absolute=False)
+            self.tester.info('Using DELETE presigned_url: ' + presigned_url)
+            response = requests.delete(url=presigned_url)
+            self.tester.info('Got response on DELETE: ' + str(response.status_code) + ' Body: ' + response.text)
+            if response.status_code != 204:
+                raise Exception('Error response from server: ' + str(response.status_code))
+        except Exception as e:
+            s3connection.close()
+            self.fail("Failed on pre-signed put with url: " + presigned_url + ' with exception: ' + e.message)
+
+        s3connection.close()
 
 if __name__ == "__main__":
 
@@ -850,7 +991,9 @@ if __name__ == "__main__":
                                    'test_object_multipart',
                                    'test_object_post',
                                    'test_object_post_large',
-                                   'test_object_post_sts']
+                                   'test_object_post_sts',
+                                   'test_presigned_url',
+                                   'test_presigned_url_sts']
 
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
