@@ -113,6 +113,7 @@ class SSLTermination(EutesterTestCase):
         self.tester.remove_lb_listener(lb_name=self.load_balancer.name, port=self.load_balancer_port)
 
         """perform https requests to LB"""
+        self.tester.sleep(5)
         self.tester.generate_http_requests(url=lb_url, count=10)
 
     def clean_method(self):
