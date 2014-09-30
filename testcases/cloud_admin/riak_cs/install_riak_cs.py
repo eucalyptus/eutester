@@ -80,7 +80,7 @@ class InstallRiak(EutesterTestCase):
     def clean_method(self):
         pass
 
-    def InstallRiakCs(self):
+    def InstallRiakCS(self):
         try:
             self.status('Install riak, riak-cs and stanchion on machines...')
             self.InstallRiakMachines()
