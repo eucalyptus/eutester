@@ -30,7 +30,7 @@ class InstallRiak(EutesterTestCase):
         self.parser.add_argument("--machine-password", dest='machine_password', default=None,
                                  help='password used to log into remote machines when '
                                       'installing riak')
-        self.parser.add_argument("--walrus-fallback", dest='walrus_fallback', default=False,
+        self.parser.add_argument("--walrus-fallback", dest='walrus_fallback', default=True,
                                  help='Allow test to configure system for Walrus in the case'
                                       'Riak fails to install or a riak component(s) is not listed')
         self.parser.add_argument("--basho-url", dest='basho_url',
