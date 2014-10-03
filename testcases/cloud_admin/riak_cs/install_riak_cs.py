@@ -62,8 +62,8 @@ class InstallRiak(EutesterTestCase):
             try:
                 self.machines = self.tester.get_component_machines("riak")
             except IndexError as ex:
-                self.tester.info("No Riak component found in component specification. "
-                                 "Skipping riak installation")
+                self.tester.info("No Riak component found in component specification. ")
+
                 if self.args.walrus_fallback:
                     self.tester.info('walrus_fallback set to True, attempting to configure for'
                                      'walrus...')
@@ -81,6 +81,17 @@ class InstallRiak(EutesterTestCase):
         pass
 
     def InstallRiakCS(self):
+        if not self.machines:
+            try:
+                self.machines = self.tester.get_component_machines("riak")
+            except IndexError as ex:
+                self.tester.info("No Riak component found in component specification. ")
+                if self.args.walrus_fallback:
+                    self.tester.info('walrus_fallback set to True, attempting to configure for'
+                                     'walrus...')
+                    return self.configure_eucalyptus_for_walrus()
+                else:
+                    raise
         try:
             self.status('Install riak, riak-cs and stanchion on machines...')
             self.InstallRiakMachines()
@@ -91,10 +102,8 @@ class InstallRiak(EutesterTestCase):
             self.status('Configuring Eucalyptus for Riak...')
             self.configure_eucalyptus_for_riak()
         except:
-            if self.args.walrus_fallback:
-                    self.configure_eucalyptus_for_walrus()
-            else:
-                raise
+            self.debug('Error during Riak installation...')
+            raise
 
     def InstallRiakMachines(self, machines=None):
         """
@@ -147,7 +156,7 @@ class InstallRiak(EutesterTestCase):
                     machine.sys('riak-admin member-status | grep ' + sync_host, code=0)
                 except CommandExitCodeException:
                     machine.sys('riak-admin cluster join {0}'.format(sync_host), code=0)
-                    machine.sys('riak-admin cluster commit')
+                    machine.sys('riak-admin cluster plan && riak-admin cluster commit')
 
 
     def riak_is_running(self, machine):
