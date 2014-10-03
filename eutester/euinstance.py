@@ -896,13 +896,14 @@ class EuInstance(Instance, TaggedResource):
         return retlist
     
     
-    def get_free_scsi_dev(self, prefix=None,maxdevs=16):
+    def get_free_scsi_dev(self, prefix=None, maxdevs=100):
         '''
         The volume attach command requires a cloud level device name that is not currently associated with a volume 
         Note: This is the device name from the clouds perspective, not necessarily the guest's 
         This method attempts to find a free device name to use in the command
         optional - prefix - string, pre-pended to the the device search string
-        optional - maxdevs - number use to specify the max device names to iterate over.Some virt envs have a limit of 16 devs. 
+        optional - maxdevs - number use to specify the max device names to iterate over.
+                   Some virt envs have a limit of 16 devs.
         '''
         d='e'
         in_use_cloud = ""
