@@ -54,7 +54,8 @@ from eutester import eulogger
 from eutester.taggedresource import TaggedResource
 from boto.ec2.instance import InstanceState
 from random import randint
-import sshconnection
+import eutester.sshconnection as sshconnection
+from eutester.sshconnection import CommandExitCodeException
 import sys
 import os
 import re
@@ -721,6 +722,8 @@ class EuInstance(Instance, TaggedResource):
                 self.vol_write_random_data_get_md5(euvolume,overwrite=overwrite)
                 return True
             except:
+                self.debug("\n" + str(self.tester.get_traceback()) +
+                           "\nError caught in try_to_write_to_disk")
                 return False
         self.tester.wait_for_result(try_to_write_to_disk, True)
         self.debug('Success attaching volume:'+str(euvolume.id)+' to instance:'+self.id+', cloud dev:'+str(euvolume.attach_data.device)+', attached dev:'+str(attached_dev))
@@ -912,7 +915,7 @@ class EuInstance(Instance, TaggedResource):
         if prefix is None:
             prefix = self.block_device_prefix
         cloudlist=self.tester.get_volumes(attached_instance=self.id)
-        
+
         for x in xrange(0,maxdevs):
             inuse=False
             #double up the letter identifier to avoid exceeding z
@@ -1157,7 +1160,7 @@ class EuInstance(Instance, TaggedResource):
         buf += linediv
         sys.stdout.write(buf)
         sys.stdout.flush()
-        
+        dd_exit_code = -1
         #Keep getting and printing dd status until done...
         while not done and (elapsed < timeout):
             #send sig usr1 to have dd process dump status to stderr redirected to tmpfile
@@ -1165,6 +1168,9 @@ class EuInstance(Instance, TaggedResource):
             cmdstatus = int(output['status'])
             if cmdstatus != 0:
                 done = True
+                cmdout = self.sys('wait {0}; echo $?'.format(dd_pid), verbose=True)
+                if cmdout:
+                    dd_exit_code = int(cmdout[0])
                 #if the command returned error, process is done
                 out = self.sys('cat '+str(tmpfile)+"; rm -f "+str(tmpfile),code=0, verbose=False)
             else:
@@ -1230,12 +1236,25 @@ class EuInstance(Instance, TaggedResource):
         #if we have any info from exceptions caught during parsing, print that here...
         if infobuf:
             print infobuf
+        #format last output for debug in case of errors
+        if out:
+            outbuf = "\n".join(out)
+        # Check for exit code of dd command, 127 may indicate dd process ended before wait pid,
+        # use additional checks below to determine a failure when 127 is returned.
+        if dd_exit_code != 127 and dd_exit_code != 0:
+            raise CommandExitCodeException('dd cmd failed with exit code:' + str(dd_exit_code))
         #if we didn't transfer any bytes of data, assume the cmd failed and wrote to stderr now in outbuf...
-        if not ret['dd_bytes']:
-            if out:
-                outbuf = "\n".join(out)
-            raise Exception('Did not transfer any data using dd cmd:'+str(ddcmd)+"\nstderr: "+str(outbuf))
-        self.debug('Done with dd, copied '+str(ret['dd_bytes'])+' over elapsed:'+str(elapsed))
+        if not ret['dd_full_rec_out'] and not ret['dd_partial_rec_out']:
+            raise CommandExitCodeException('Did not transfer any data using dd cmd:' +
+                            str(ddcmd) + "\nstderr: " + str(outbuf))
+        if ((ret['dd_full_rec_in'] != ret['dd_full_rec_out']) or
+                (ret['dd_partial_rec_out'] != ret['dd_partial_rec_in'])):
+            raise CommandExitCodeException('dd in records do not match out records in transfer')
+        self.debug('Done with dd, copied:{0} bytes, {1} fullrecords, {2} partrecords - '
+                   'over elapsed:{3}'.format(ret['dd_bytes'],
+                                             ret['dd_full_rec_out'],
+                                             ret['dd_partial_rec_out'],
+                                             elapsed))
         self.sys('rm -f ' + str(tmpfile))
         self.sys('rm -f ' + str(tmppidfile))
         return ret
