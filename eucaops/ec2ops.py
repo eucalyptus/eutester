@@ -2775,6 +2775,7 @@ disable_root: false"""
                   auto_connect=True,
                   clean_on_fail=True,
                   monitor_to_running = True,
+                  return_reservation=False,
                   timeout=480):
         """
 
@@ -2872,9 +2873,11 @@ disable_root: false"""
                     self.debug(self.get_traceback())
                     raise Exception("Unable to create Euinstance from " + str(instance)+", err:\n"+str(e))
             if monitor_to_running:
-                return self.monitor_euinstances_to_running(instances, timeout=timeout)
-            else:
-                return instances
+                instances = self.monitor_euinstances_to_running(instances, timeout=timeout)
+            if return_reservation:
+                reservation.instances = instances
+                return reservation
+            return instances
         except Exception, e:
             trace = self.get_traceback()
             self.debug('!!! Run_instance failed, terminating reservation. Error:'+str(e)+"\n"+trace)
