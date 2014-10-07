@@ -1168,9 +1168,8 @@ class EuInstance(Instance, TaggedResource):
             cmdstatus = int(output['status'])
             if cmdstatus != 0:
                 done = True
-                cmdout = self.sys('wait {0}; echo $?'.format(dd_pid), verbose=True)
-                if cmdout:
-                    dd_exit_code = int(cmdout[0])
+                cmdout = self.cmd('wait {0}'.format(dd_pid), verbose=False)
+                dd_exit_code = int(cmdout['status'])
                 #if the command returned error, process is done
                 out = self.sys('cat '+str(tmpfile)+"; rm -f "+str(tmpfile),code=0, verbose=False)
             else:
