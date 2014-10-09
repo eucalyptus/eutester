@@ -2459,7 +2459,7 @@ disable_root: false"""
                 self.sleep(5)
                 instance.update()
                 self.debug('Refreshing EuInstance:'+str(instance.id)+' ssh connection to associated addr:'+str(instance.ip_address))
-                instance.reset_ssh_connection()
+                instance.connect_to_instance()
             else:
                 self.debug('WARNING: associate_address called with refresh_ssh set to true, but instance is not EuInstance type:'+str(instance.id))
 

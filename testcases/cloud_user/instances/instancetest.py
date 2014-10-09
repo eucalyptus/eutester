@@ -404,12 +404,16 @@ class InstanceBasics(EutesterTestCase):
             self.tester.associate_address(instance, address)
             self.tester.sleep(30)
             instance.update()
+            self.debug('Attempting to ping associated IP:"{0}"'.format(address.public_ip))
             self.assertTrue(self.tester.ping(instance.ip_address), "Could not ping instance with new IP")
             address.disassociate()
             self.tester.sleep(30)
             instance.update()
-            self.assertFalse(self.tester.ping(instance.ip_address),
-                             "Was able to ping instance that should have only had a private IP")
+            self.debug('Confirming disassociated IP:"{0}" is no longer in use'
+                       .format(address.public_ip))
+            self.assertFalse(self.tester.ping(address.public_ip, poll_count=3),
+                             "Was able to ping address that should no long be associated with an "
+                             "instance")
             address.release()
             if instance.ip_address != "0.0.0.0" and instance.ip_address != instance.private_ip_address:
                 self.fail("Instance received a new public IP: " + instance.ip_address)

@@ -161,7 +161,6 @@ class EuInstance(Instance, TaggedResource):
                 
         if newins.auto_connect and newins.state == 'running':
             newins.connect_to_instance(timeout=timeout)
-            newins.set_rootfs_device()
         #Allow non-root users to try sudo if available else su -c to execute privileged commands
         newins.try_non_root_exec = try_non_root_exec
         if newins.try_non_root_exec:
@@ -352,6 +351,7 @@ class EuInstance(Instance, TaggedResource):
                                    ":Failed establishing ssh connection to "
                                    "instance, elapsed:" + str(elapsed) +
                                    "/"+str(timeout))
+            self.set_rootfs_device()
         else:
             self.debug("keypath or username/password need to be populated "
                        "for ssh connection")
@@ -791,24 +791,27 @@ class EuInstance(Instance, TaggedResource):
         self.block_device_prefix = "sd"
         self.virtio_blk = False
         try:
-            self.sys("dmesg | grep vda",code=0)
+            self.sys("ls /dev/vda",code=0)
             self.rootfs_device = "vda"
             self.block_device_prefix = "vd"
             self.virtio_blk = True
+            return
         except:
             pass
         try:
-            self.sys("dmesg | grep xvda",code=0)
+            self.sys("ls /dev/xvda",code=0)
             self.rootfs_device = "xvda"
             self.block_device_prefix = "xvd"
             self.virtio_blk = False
+            return
         except:
             pass
         try:
-            self.sys("dmesg | grep sda",code=0)
+            self.sys("ls /dev/sda",code=0)
             self.rootfs_device = "sda"
             self.block_device_prefix = "sd"
             self.virtio_blk = False
+            return
         except:
             pass
 
