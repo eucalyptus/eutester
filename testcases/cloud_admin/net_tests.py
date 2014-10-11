@@ -30,7 +30,6 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 # Author:
-from paramiko import SSHException
 
 __author__ =  'matt.clark@eucalyptus.com'
 '''
@@ -105,7 +104,7 @@ test 6 (Multi-zone/cluster env):
 #todo: Allow test to run with an admin and non-admin account, so debug can be provided through admin and test can
 # be run under non-admin if desired.
 
-
+from paramiko import SSHException
 from eucaops import Eucaops
 from eutester.eutestcase import EutesterTestCase
 from eutester.eutestcase import SkipTestException
@@ -329,7 +328,7 @@ class Net_Tests(EutesterTestCase):
     ################################################################
 
 
-    def test1_create_instance_in_zones_for_security_group1(self, ping_timeout=180):
+    def test1_create_instance_in_zones_for_security_group1(self, ping_timeout=180, zones=None):
         '''
         Definition:
         Create test instances within each zone within security group1. This security group is authorized for
@@ -341,7 +340,10 @@ class Net_Tests(EutesterTestCase):
             -Place ssh key on instance for later use
             -Add instance to global 'group1_instances'
         '''
-        for zone in self.zones:
+        if zones and not isinstance(zones, list):
+            zones = [zones]
+        zones = zones or self.zones
+        for zone in zones:
             #Create an instance, monitor it's state but disable the auto network/connect checks till afterward
             instance = self.tester.run_image(image=self.image,
                                              keypair=self.keypair,
@@ -374,7 +376,6 @@ class Net_Tests(EutesterTestCase):
             instance.sys('uname -a', code=0)
             instance.ssh.sftp_put(instance.keypath, os.path.basename(instance.keypath))
             instance.sys('chmod 0600 ' + os.path.basename(instance.keypath), code=0 )
-
 
 
     def test2_create_instance_in_zones_for_security_group2(self, ping_timeout=180):
@@ -836,6 +837,13 @@ class Net_Tests(EutesterTestCase):
 
 
     def test8_verify_deleting_of_auth_source_group2(self):
+        """
+        Definition:
+        Attempts to delete a security group which has been authorized by another security group.
+        -Authorizes group1 access from group2
+        -Validates connectivity for instances in group1 can be accessed from group2
+        -Deletes group2, validates group1 still allows traffic from other authorized sources
+        """
         zones = []
         for zone in self.zones:
             zones.append(TestZone(zone))
@@ -928,6 +936,167 @@ class Net_Tests(EutesterTestCase):
         self.status('Passed. Group1 ssh working after deleting src group which '
                     'was authorized to group1')
 
+    def test9_ssh_between_instances_same_group_same_zone_public(self):
+        """
+        Definition:
+        For each zone this test will attempt to test ssh between two instances in the same
+        security group using the public ips of the instances.
+        -Authorize group for ssh access
+        -Re-use or create 2 instances within the same security group, same zone
+        -For each zone, attempt to ssh to a vm in the same security group same zone
+        """
+        self.tester.authorize_group(self.group1, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
+        for zone in self.zones:
+            instances =[]
+            for instance in self.group1_instances:
+                if instance.placement == zone:
+                    assert isinstance(instance, EuInstance)
+                    instances.append(instance)
+            if len(instances) < 2:
+                for x in xrange(len(instances), 2):
+                    self.test1_create_instance_in_zones_for_security_group1(zones=[zone])
+        for zone in self.zones:
+            zone_instances = []
+            for instance in self.group1_instances:
+                if instance.placement == zone:
+                    zone_instances.append(instance)
+            instance1 = zone_instances[0]
+            instance2 = zone_instances[1]
+            instance1.ssh.sftp_put(instance1.keypath, 'testkey.pem')
+            instance1.sys('chmod 0600 testkey.pem')
+            testphrase = "pubsamezone_test_from_instance1_{0}".format(instance1.id)
+            testfile = 'testfile.txt'
+            instance1.sys("ssh -o StrictHostKeyChecking=no -i testkey.pem root@{0} "
+                          "\'echo {1} > {2}; hostname; ifconfig; pwd; ls\'"
+                          .format(instance2.ip_address, testphrase, testfile), code=0, timeout=10)
+            instance2.sys('hostname; ifconfig; pwd; ls; cat {0} | grep {1}'.format(testfile, testphrase), code=0)
+
+    def test10_ssh_between_instances_same_group_public_different_zone(self):
+        """
+        Definition:
+        If multiple zones are detected, this test will attempt to test ssh between
+        two instances in the same security group and accross each zone using the public ips
+        of the instances
+        -Authorize group for ssh access
+        -Re-use or create 2 instances within the same security group, different zone(s)
+        -For each zone, attempt to ssh to a vm in the same security group different zone(s)
+        """
+        if len(self.zones) < 2:
+            raise SkipTestException('Skipping multi-zone test, '
+                                    'only a single zone found or provided')
+        self.tester.authorize_group(self.group1, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
+        zone_instances = {}
+        for zone in self.zones:
+            instances =[]
+            for instance in self.group1_instances:
+                if instance.placement == zone:
+                    assert isinstance(instance, EuInstance)
+                    instances.append(instance)
+            if len(instances) < 1:
+                for x in xrange(len(instances), 1):
+                    self.test1_create_instance_in_zones_for_security_group1(zones=[zone])
+            zone_instances[zone] = instances
+        for zone1 in self.zones:
+            instance1 = zone_instances[zone1][0]
+            instance1.ssh.sftp_put(instance1.keypath, 'testkey.pem')
+            instance1.sys('chmod 0600 testkey.pem')
+            for zone2 in self.zones:
+                if zone != zone2:
+                    instance2 = zone_instances[zone2][0]
+                    testphrase = "diffpubzone_test_from_instance1_{0}".format(instance1.id)
+                    testfile = 'testfile.txt'
+                    instance1.sys("ssh -o StrictHostKeyChecking=no -i testkey.pem root@{0} "
+                                  "\'echo {1} > {2}; hostname; ifconfig; pwd; ls\'"
+                                  .format(instance2.ip_address, testphrase, testfile),
+                                  code=0,
+                                  timeout=10)
+                    instance2.sys('cat {0} | grep {1}'.format(testfile, testphrase), code=0)
+
+    def test11_ssh_between_instances_same_group_same_zone_private(self):
+        """
+        Definition:
+        For each zone this test will attempt to test ssh between two instances in the same
+        security group using the private ips of the instances.
+        -Authorize group for ssh access
+        -Re-use or create 2 instances within the same security group, same zone
+        -For each zone, attempt to ssh to a vm in the same security group same zone
+        """
+        self.tester.authorize_group(self.group1, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
+        for zone in self.zones:
+            instances =[]
+            for instance in self.group1_instances:
+                if instance.placement == zone:
+                    assert isinstance(instance, EuInstance)
+                    instances.append(instance)
+            if len(instances) < 2:
+                for x in xrange(len(instances), 2):
+                    self.test1_create_instance_in_zones_for_security_group1(zones=[zone])
+        for zone in self.zones:
+            zone_instances = []
+            for instance in self.group1_instances:
+                if instance.placement == zone:
+                    zone_instances.append(instance)
+            instance1 = zone_instances[0]
+            instance2 = zone_instances[1]
+            instance1.ssh.sftp_put(instance1.keypath, 'testkey.pem')
+            instance1.sys('chmod 0600 testkey.pem')
+            testphrase = "hello_from_instance1_{0}".format(instance1.id)
+            testfile = 'testfile.txt'
+            instance1.sys("ssh -o StrictHostKeyChecking=no -i testkey.pem root@{0} "
+                          "\'echo {1} > {2}; hostname; ifconfig; pwd; ls\'"
+                          .format(instance2.private_ip_address, testphrase, testfile),
+                          code=0,
+                          timeout=10)
+            instance2.sys('cat {0} | grep {1}'.format(testfile, testphrase), code=0)
+
+    def test12_ssh_between_instances_same_group_private_different_zone(self):
+        """
+        Definition:
+        If multiple zones are detected, this test will attempt to test ssh between
+        two instances in the same security group and across each zone using the instances'
+        private ip addresses.
+        -Authorize group for ssh access
+        -Re-use or create 2 instances within the same security group, different zone(s)
+        -For each zone, attempt to ssh to a vm in the same security group different zone(s)
+        """
+        if len(self.zones) < 2:
+            raise SkipTestException('Skipping multi-zone test, '
+                                    'only a single zone found or provided')
+        self.tester.authorize_group(self.group1, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
+        for zone in self.zones:
+            instances =[]
+            for instance in self.group1_instances:
+                if instance.placement == zone:
+                    assert isinstance(instance, EuInstance)
+                    instances.append(instance)
+            if len(instances) < 1:
+                for x in xrange(len(instances), 1):
+                    self.test1_create_instance_in_zones_for_security_group1(zones=[zone])
+        for zone1 in self.zones:
+            zone_instances = []
+            for instance in self.group1_instances:
+                if instance.placement == zone1:
+                    zone_instances.append(instance)
+            instance1 = zone_instances[0]
+            instance1.ssh.sftp_put(instance1.keypath, 'testkey.pem')
+            instance1.sys('chmod 0600 testkey.pem')
+            for zone2 in self.zones:
+                if zone1 != zone2:
+                    zone2_instances = []
+                    for instance in self.group1_instances:
+                        if instance.placement == zone2:
+                            zone2_instances.append(instance)
+                    instance2 = zone_instances[0]
+                    testphrase = "diffprivzone_test_from_instance1_{0}".format(instance1.id)
+                    testfile = 'testfile.txt'
+                    instance1.sys("ssh -o StrictHostKeyChecking=no -i testkey.pem root@{0} "
+                                  "\'echo {1} > {2}; hostname; ifconfig; pwd; ls\'"
+                                  .format(instance2.ip_address, testphrase, testfile),
+                                  code=0,
+                                  timeout=10)
+                    instance2.sys('cat {0} | grep {1}'.format(testfile, testphrase), code=0)
+
+
     # add revoke may be covered above...?
     def test_revoke_rules(self):
         assert isinstance(self.tester, Eucaops)
@@ -970,7 +1139,11 @@ if __name__ == "__main__":
             'test4_attempt_unauthorized_ssh_from_test_machine_to_group2',
             'test5_test_ssh_between_instances_in_same_sec_groups_different_zone',
             'test7_add_and_revoke_tcp_port_range',
-            'test8_verify_deleting_of_auth_source_group2']
+            'test8_verify_deleting_of_auth_source_group2',
+            'test9_ssh_between_instances_same_group_same_zone_public',
+            'test10_ssh_between_instances_same_group_public_different_zone',
+            'test11_ssh_between_instances_same_group_same_zone_private',
+            'test12_ssh_between_instances_same_group_private_different_zone']
         ### Convert test suite methods to EutesterUnitTest objects
     print 'Got test list:' + str(testlist)
     unit_list = [ ]
