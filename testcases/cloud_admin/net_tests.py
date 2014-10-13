@@ -750,8 +750,7 @@ class Net_Tests(EutesterTestCase):
                                                 verbose=True)
                         done = True
                     except socket.error as SE:
-                        self.debug('Failed to poll port status on attempt {0}/{2}'
-                                   .format(attempt))
+                        self.debug('Failed to poll port status on attempt {0}'.format(attempt))
                         try:
                             self.debug('Failed to connect to "{0}":IP:"{1}":'
                                        'PORT:"{2}"'.format(instance1.id,
