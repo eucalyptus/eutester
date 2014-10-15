@@ -272,7 +272,7 @@ class InstallRiak(EutesterTestCase):
         assert isinstance(tester, Eucaops), 'Non eucaops tester obj provided, type:"{0}"'\
             .format(type, tester)
         self.tester.info("Configuring OSG to use RiakCS backend")
-        self.tester.modify_property("objectstorage.providerclient","s3")
+        self.tester.modify_property("objectstorage.providerclient","riakcs")
 
         endpoint = machine.hostname + ":" + self.args.riak_cs_port
         self.tester.info("Configuring OSG to use s3 endpoint: " + endpoint)
