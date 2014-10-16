@@ -3112,9 +3112,11 @@ disable_root: false"""
             if str(rule.ip_protocol).strip().lower() == protocol:
                 for grant in rule.grants:
                     g_buf += str(grant)+","
-                self.debug("rule#" + str(group.rules.index(rule)) +
-                           ": port:" + str(rule.to_port) +
-                           ", grants:"+str(g_buf))
+                self.debug("rule#{0}: ports:{1}-{2}, grants:{3}"
+                           .format(str(group.rules.index(rule)),
+                                   str(rule.from_port),
+                                   str(rule.to_port),
+                                   str(g_buf)))
                 from_port = int(rule.from_port)
                 to_port= int(rule.to_port)
                 if (to_port == 0 ) or (to_port == -1) or \
@@ -3145,7 +3147,7 @@ disable_root: false"""
                                 return True
 
         self.debug('sec_group:"{0}" DOES NOT allow from: src_ip:"{1}", '
-                   'src_group:"{2}", proto:"{3}", port:"{3}"'
+                   'src_group:"{2}", proto:"{3}", port:"{4}"'
                    .format(group.name, src_addr, src_group, protocol, port))
         return False
                     

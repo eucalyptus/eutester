@@ -788,7 +788,7 @@ class Net_Tests(EutesterTestCase):
                 # Since no socket errors were encountered assume we connected,
                 # check file on instance to make sure we didn't connect somewhere
                 # else like the CC...
-                instance1.sys('grep {0} {1}; echo "" > {1}'
+                instance1.sys('grep "{0}" {1}; echo "" > {1}'
                               .format(test_string, test_file),
                               code=0)
                 self.status('Port "{0}" successfully tested on instance:{1}/{2}'
@@ -836,7 +836,7 @@ class Net_Tests(EutesterTestCase):
                     # Since no socket errors were encountered assume we connected,
                     # check file on instance to make sure we didn't connect somewhere
                     # else like the CC. Dont' error here cuz it's already a bug...
-                    instance1.sys('grep {0} {1}; echo "" > {1}'
+                    instance1.sys('grep "{0}" {1}; echo "" > {1}'
                               .format(test_string, test_file))
                 except (socket.error, CommandExitCodeException) as OK:
                     self.status('Port "{0}" successfully revoked on '
@@ -937,6 +937,7 @@ class Net_Tests(EutesterTestCase):
         self.status('Terminating all instances in group2 in order to delete '
                     'security group2')
         tester.terminate_instances(self.group2_instances)
+        self.group2_instances = []
         tester.delete_group(self.group2)
         self.status('Now confirm that ssh still works for all instances in group1')
         for instance in self.group1_instances:
@@ -1120,6 +1121,8 @@ class Net_Tests(EutesterTestCase):
             raise SkipTestException('Skipping multi-zone test, '
                                     'only a single zone found or provided')
         self.tester.authorize_group(self.group1, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
+        # In case a previous test has deleted group2...
+        self.group2 = self.tester.add_group(self.group2.name)
         self.tester.authorize_group(self.group2, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
         for zone in self.zones:
             instance1 = None
@@ -1171,6 +1174,8 @@ class Net_Tests(EutesterTestCase):
             raise SkipTestException('Skipping multi-zone test, '
                                     'only a single zone found or provided')
         self.tester.authorize_group(self.group1, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
+        # In case a previous test has deleted group2...
+        self.group2 = self.tester.add_group(self.group2.name)
         self.tester.authorize_group(self.group2, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
         for zone in self.zones:
             instance1 = None
