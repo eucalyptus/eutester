@@ -355,8 +355,8 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                     tb = self.get_traceback()
                     failcount +=1
                     failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
-                if res in remove_list:
-                    self.test_resources["reservations"].remove(res)
+            for res in remove_list:
+                self.test_resources["reservations"].remove(res)
         if ip_addresses:
             try:
                 self.cleanup_addresses()
@@ -630,7 +630,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                 machine_dict["components"] = map(str.lower, machine_details[5].strip('[]').split())
 
                 ### ADD the machine to the array of machine
-                cloud_machine = Machine(   machine_dict["hostname"], 
+                cloud_machine = Machine(machine_dict["hostname"],
                                         distro = machine_dict["distro"], 
                                         distro_ver = machine_dict["distro_ver"], 
                                         arch = machine_dict["arch"], 

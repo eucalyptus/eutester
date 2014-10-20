@@ -342,7 +342,9 @@ class SshConnection():
             enable_debug=False,
             cb=None, cbargs=[],
             invoke_shell=False,
-            get_pty=True):
+            get_pty=True,
+            shell_delay=2,
+            shell_return='\r'):
         """ 
         Runs a command 'cmd' within an ssh connection. 
         Upon success returns dict representing outcome of the command.
@@ -390,18 +392,27 @@ class SshConnection():
                 self.debug("SSH transport was None, attempting to restablish ssh to: "+str(self.host))
                 self.refresh_connection()
                 tran = self.connection.get_transport()
+
             chan = tran.open_session()
-            chan.settimeout(timeout)
-            chan.setblocking(0)
-            if get_pty:
-                chan.get_pty()
-            if invoke_shell:
-                chan.invoke_shell()
-                chan.sendall(cmd)
-            else:
-                chan.exec_command(cmd)
-            output = None
-            fd = chan.fileno()
+            try:
+                chan.settimeout(timeout)
+                if get_pty or invoke_shell:
+                    chan.get_pty()
+                chan.setblocking(0)
+                if invoke_shell:
+                    self.debug('Invoking shell...')
+                    chan.invoke_shell()
+                    time.sleep(shell_delay)
+                    cmd = cmd.rstrip() + shell_return
+                    chan.send(cmd)
+                else:
+                    chan.exec_command(cmd)
+                output = None
+                fd = chan.fileno()
+            except:
+                if chan:
+                    chan.close()
+                raise
             cmdstart = start = time.time()
             newdebug = "\n"
             while not chan.closed:
@@ -411,7 +422,7 @@ class SshConnection():
                 except select.error:
                     break
                 elapsed = int(time.time() - start)
-                if elapsed >= timeout:
+                if elapsed >= timeout and len(rl) < 1:
                     raise CommandTimeoutException(
                         "SSH Command timer fired after " + str(int(elapsed)) + " seconds. Cmd:'" + str(cmd) + "'")
                 if len(rl) > 0:
@@ -824,6 +835,53 @@ class SshConnection():
         ret.nextargs = [password, prompt, nextcb, cbargs, retry, password_attempts, verbose]
         debug('Ending buf:"' + str(ret.buf) + '"')
         return ret
+
+    def expect_prompt_cb(self,
+                         buf,
+                         command=None,
+                         prompt_match="^\w+(>|#|\$)",
+                         verbose=None):
+        prompt = prompt_match + "\s*$"
+        start_match = None
+        if command is not None:
+            start_match = prompt + "\s*" + command + "\s*$"
+        if verbose is None:
+            verbose = self.verbose
+        ret = SshCbReturn(stop=False)
+        ret.buf = buf
+        #newbuf = None
+        def debug(msg, ssh=self):
+            if verbose:
+                ssh.debug(msg)
+        debug('Starting expect_prompt_cb, prompt:' + str(prompt))
+        debug('Starting buf:"' + str(buf) + '"')
+        #Create a callback return obj for the cmd() loop to consume...
+
+        lines = buf.splitlines()
+
+        #See if we have a prompt for password, assume we only have one match and were blocking waiting on password input
+        for line in lines:
+            self.debug('line:' + str(line))
+            if re.search(prompt, line):
+                debug('Got prompt match in buffer. start_match:{0}, Line:"{1}"'.format(start_match, line))
+                if start_match:
+                    if re.search(start_match, line):
+                        self.debug('Found match for start_match:{0}, line:{1}'.format(start_match, line))
+                        command = None
+                        start_match = None
+                else:
+                    ret.removecb = True
+                    ret.stop = True
+                    debug('Ending buf:"' + str(ret.buf) + '"')
+                    return ret
+            else:
+                debug('\nPrompt not found, continuing...')
+        ret.removecb = False
+        ret.nextargs = [command, prompt_match, verbose]
+        #debug('Ending buf:"' + str(ret.buf) + '"')
+        return ret
+
+
 
 
     def start_interactive(self, timeout=180):

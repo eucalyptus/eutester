@@ -30,7 +30,6 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 # Author:
-from paramiko import SSHException
 
 __author__ =  'matt.clark@eucalyptus.com'
 '''
@@ -105,17 +104,24 @@ test 6 (Multi-zone/cluster env):
 #todo: Allow test to run with an admin and non-admin account, so debug can be provided through admin and test can
 # be run under non-admin if desired.
 
-
+from paramiko import SSHException
 from eucaops import Eucaops
 from eutester.eutestcase import EutesterTestCase
 from eutester.eutestcase import SkipTestException
 from eutester.euinstance import EuInstance
-from eutester.sshconnection import SshConnection
+from eutester.sshconnection import CommandExitCodeException, SshConnection
+import socket
 import time
 import os
 import sys
 import copy
 
+class TestZone():
+    def __init__(self, zonename):
+        self.name = zonename
+        self.zone = zonename
+        self.test_instance_group1 = None
+        self.test_instance_group2 = None
 
 class Net_Tests(EutesterTestCase):
 
@@ -148,7 +154,8 @@ class Net_Tests(EutesterTestCase):
 
         ### Create local zone list to run tests in
         if self.args.zone:
-            self.zones = [str(self.args.zone)]
+            self.zones = str(self.args.zone).replace(',',' ')
+            self.zones = self.zones.split()
         else:
             self.zones = self.tester.get_zones()
         if not self.zones:
@@ -183,7 +190,7 @@ class Net_Tests(EutesterTestCase):
         if self.args.emi:
             self.image = self.tester.get_emi(emi=str(self.args.emi))
         else:
-            self.image = self.tester.get_emi(root_device_type="instance-store")
+            self.image = self.tester.get_emi(root_device_type="instance-store", basic_image=True)
         if not self.image:
             raise Exception('couldnt find instance store image')
 
@@ -211,7 +218,10 @@ class Net_Tests(EutesterTestCase):
             self.tester.cleanup_artifacts()
 
     def get_proxy_machine(self, instance):
-        if self.tester.config["network"].lower() == "edge":
+        prop = self.tester.property_manager.get_property('networkmode',
+                                                         'cluster',
+                                                         instance.placement)
+        if prop.value.lower() == "edge":
             proxy_machine = self.get_active_nc_for_instance(instance)
         else:
             proxy_machine = self.get_active_cc_for_instance(instance)
@@ -280,6 +290,37 @@ class Net_Tests(EutesterTestCase):
         return False
 
 
+    def is_port_in_use_on_instance(self, instance, port, tcp=True, ipv4=True):
+        args = '-ln'
+        if tcp:
+            args += 't'
+        else:
+            args += 'u'
+        if ipv4:
+            args += '4'
+        else:
+            args += '6'
+        use = instance.sys("netstat " + str(args) + " | awk '$6 ==" +
+                           ' "LISTEN" && $4 ~ ".' + str(port) +
+                           '"' + "' | grep LISTEN")
+        if use:
+            self.debug('Port {0} IS in use on instance:'
+                       .format(port, instance.id))
+            return True
+        else:
+            self.debug('Port {0} IS NOT in use on instance:'
+                       .format(port, instance.id))
+            False
+
+    def is_port_range_in_use_on_instance(self, instance, start, end,
+                                         tcp=True, ipv4=True):
+        for x in xrange(start, end):
+            if self.is_port_in_use_on_instance(instance=instance,
+                                               port=x,
+                                               tcp=tcp,
+                                               ipv4=ipv4):
+                return True
+        return False
 
 
     ################################################################
@@ -287,7 +328,7 @@ class Net_Tests(EutesterTestCase):
     ################################################################
 
 
-    def test1_create_instance_in_zones_for_security_group1(self, ping_timeout=180):
+    def test1_create_instance_in_zones_for_security_group1(self, ping_timeout=180, zones=None):
         '''
         Definition:
         Create test instances within each zone within security group1. This security group is authorized for
@@ -299,7 +340,10 @@ class Net_Tests(EutesterTestCase):
             -Place ssh key on instance for later use
             -Add instance to global 'group1_instances'
         '''
-        for zone in self.zones:
+        if zones and not isinstance(zones, list):
+            zones = [zones]
+        zones = zones or self.zones
+        for zone in zones:
             #Create an instance, monitor it's state but disable the auto network/connect checks till afterward
             instance = self.tester.run_image(image=self.image,
                                              keypair=self.keypair,
@@ -334,8 +378,8 @@ class Net_Tests(EutesterTestCase):
             instance.sys('chmod 0600 ' + os.path.basename(instance.keypath), code=0 )
 
 
-
-    def test2_create_instance_in_zones_for_security_group2(self, ping_timeout=180):
+    def test2_create_instance_in_zones_for_security_group2(self, ping_timeout=180,
+                                                           auto_connect=False, zones=None):
         '''
         Definition:
         This test attempts to create an instance in each zone within security group2 which should not
@@ -346,13 +390,20 @@ class Net_Tests(EutesterTestCase):
             -Establish and verify an ssh session using the cc as a proxy.
             -Place ssh key on instance for later use
             -Add instance to global 'group2_instances'
+        :params ping_timeout: Int Time to wait for ping for successful ping to instance(s)
+        :params auto_connect: Boolean. If True will auto ssh to instance(s), if False will
+                              use cc/nc as ssh proxy
+        :params zones: List of names of Availability zone(s) to create instances in
         '''
+        if zones and not isinstance(zones, list):
+            zones = [zones]
+        zones = zones or self.zones
         for zone in self.zones:
             instance = self.tester.run_image(image=self.image,
                                              keypair=self.keypair,
                                              group=self.group2,
                                              zone=zone,
-                                             auto_connect=False,
+                                             auto_connect=auto_connect,
                                              monitor_to_running=False)[0]
             self.group2_instances.append(instance)
         self.tester.monitor_euinstances_to_running(self.group2_instances)
@@ -364,15 +415,18 @@ class Net_Tests(EutesterTestCase):
                                          result=True,
                                          timeout=ping_timeout,
                                          instance=instance)
-            self.status('Make sure ssh is working through CC path before trying between instances...')
-            instance.cc_ssh = self.create_ssh_connection_to_instance(instance)
-            self.status('SSH connection to instance:' + str(instance.id) +
-                        ' successful to private ip:' + str(instance.private_ip_address) +
-                        ', zone:' + str(instance.placement))
-            instance.cc_ssh.sys('uname -a', code=0)
+            if not auto_connect:
+                self.status('Make sure ssh is working through CC path before trying between instances...')
+                instance.proxy_ssh = self.create_ssh_connection_to_instance(instance)
+                self.status('SSH connection to instance:' + str(instance.id) +
+                            ' successful to private ip:' + str(instance.private_ip_address) +
+                            ', zone:' + str(instance.placement))
+            else:
+                instance.proxy_ssh = instance.ssh
+            instance.proxy_ssh.sys('uname -a', code=0)
             self.status('Uploading keypair to instance in group2...')
-            instance.cc_ssh.sftp_put(instance.keypath, os.path.basename(instance.keypath))
-            instance.cc_ssh.sys('chmod 0600 ' + os.path.basename(instance.keypath), code=0 )
+            instance.proxy_ssh.sftp_put(instance.keypath, os.path.basename(instance.keypath))
+            instance.proxy_ssh.sys('chmod 0600 ' + os.path.basename(instance.keypath), code=0 )
             self.status('Done with create instance security group2:' + str(instance.id))
 
 
@@ -462,12 +516,6 @@ class Net_Tests(EutesterTestCase):
         if len(self.zones) < 2:
             raise SkipTestException('Skipping test5, only a single zone found or provided')
 
-        class TestZone():
-            def __init__(self, zone):
-                self.zone = zone
-                self.test_instance_group1 = None
-                self.test_instance_group2 = None
-
         for zone in self.zones:
             zones.append(TestZone(zone))
             #Grab a single instance from each zone within security group1
@@ -534,11 +582,6 @@ class Net_Tests(EutesterTestCase):
         self.status('Authorizing group2:' + str(self.group2.name) + ' for access from group1:' + str(self.group1.name))
         self.tester.authorize_group(self.group2, cidr_ip=None, port=None, src_security_group_name=self.group1.name)
 
-        class TestZone():
-            def __init__(self, zone):
-                self.zone = zone
-                self.test_instance_group1 = None
-                self.test_instance_group2 = None
 
         for zone in self.zones:
             zones.append(TestZone(zone))
@@ -594,7 +637,585 @@ class Net_Tests(EutesterTestCase):
                                   + " ' uname -a'", code=0)
                     self.debug('Ssh between instances passed')
 
-    def test7_revoke_rules(self):
+
+
+    def test7_add_and_revoke_tcp_port_range(self,
+                                            start=None,
+                                            src_cidr_ip='0.0.0.0/0',
+                                            count=10,
+                                            instances=None):
+        '''
+        Definition:
+        Attempts to add a range of ports to a security group and test
+        the ports from the local machine to make sure they are available.
+        Next the test revokes the ports and verifies they are no longer
+        available.
+        :param start: starting port of range to scan
+        :param src_cidr_ip: cidr ip for src authorization. If None the test
+                            will attempt to discovery the cidr ip of the
+                            machine running this test to use for src auth ip.
+        :param count: number of consecutive ports from 'start' to test
+        :param tcp: boolean tcp if true, udp if false
+        '''
+        tester = self.tester
+        assert isinstance(tester, Eucaops)
+
+        if instances:
+            if not isinstance(instances, list):
+                instances = [instances]
+            for instance in instances:
+                assert isinstance(instance, EuInstance)
+        else:
+            instances = self.group1_instances
+        if not instances:
+            raise ValueError('Could not find instance in group1')
+
+
+        # Iterate through all instances and test...
+        for instance1 in instances:
+            # Make sure we can ssh to this instance (note this may need to be
+            # adjusted for windows access
+            # 'does_instance_sec_group_allow' will set tester.ec2_source_ip to the
+            # ip the local machine uses to communicate with the instance.
+            if src_cidr_ip is None:
+                if not tester.does_instance_sec_group_allow(instance=instance1,
+                                                            protocol='tcp',
+                                                            port=22):
+                    src_cidr_ip = str(tester.ec2_source_ip) + '/32'
+                    tester.authorize_group(self.group1,
+                                           cidr_ip=src_cidr_ip,
+                                           port=22)
+            else:
+                tester.authorize_group(self.group1,
+                                            cidr_ip=src_cidr_ip,
+                                            port=22)
+            try:
+                instance1.sys('which netcat', code=0)
+            except CommandExitCodeException:
+                try:
+                    instance1.sys('apt-get install netcat -y', code=0)
+                except CommandExitCodeException:
+                    try:
+                        instance1.sys('yum install netcat -y', code=0)
+                    except:
+                        self.debug('could install netcat on this instance')
+                        raise
+
+            #make sure we have an open port range to play with...
+            if start is None:
+                for x in xrange(2000,65000):
+                    if self.is_port_range_in_use_on_instance(instance=instance1,
+                                                             start=x,
+                                                             end=x+count,
+                                                             tcp=True):
+                        x=x+count
+                    else:
+                        start=x
+                        break
+                if not start:
+                    raise RuntimeError('Free consecutive port range of count:{0} '
+                                       'not found on instance:{1}'
+                                       .format(count, instance1.id))
+            # authorize entire port range...
+            self.tester.authorize_group(self.group1,
+                                        cidr_ip=src_cidr_ip,
+                                        port=start,
+                                        end_port=start+count)
+            # test entire port range is accessible from this machine
+            test_file = 'eutester_port_test.txt'
+            #Allow some delay for the rule to be applied in the network...
+            time.sleep(10)
+            for x in xrange(start, start+count):
+                # Set up socket listener with netcat, to make sure we're not
+                # connecting to the CC or other device write port to file and
+                # verify file contents as well.
+                test_string = '{0} last port tested[{1}]'.format(time.time(), x)
+                self.debug("Gathering debug information as to whether the "
+                           "tester's src ip is authorized for this port test...")
+                if not tester.does_instance_sec_group_allow(
+                        instance=instance1,
+                        src_addr=src_cidr_ip.split('/')[0],
+                        protocol='tcp',
+                        port=x):
+                    raise ValueError('Group:{0} did not have {1}:{2} authorized'
+                                     .format(self.group1.name,
+                                             src_cidr_ip.split('/')[0],
+                                             x))
+                # start up netcat, sleep to allow nohup to work before quiting
+                # the shell...
+                instance1.sys('killall -9 netcat 2> /dev/null', timeout=5)
+                instance1.sys('{' + ' ( nohup netcat -k -l {0} > {1} ) &  sleep 1; '
+                              .format(x, test_file) + '}', code=0, timeout=5)
+                # attempt to connect socket at instance/port and send the
+                # test_string...
+                time.sleep(2) #Allow listener to setup...
+                done = False
+                attempt =0
+                while not done:
+                    try:
+                        attempt += 1
+                        tester.test_port_status(ip=instance1.ip_address,
+                                                port=x,
+                                                tcp=True,
+                                                send_buf=test_string,
+                                                verbose=True)
+                        done = True
+                    except socket.error as SE:
+                        self.debug('Failed to poll port status on attempt {0}'.format(attempt))
+                        try:
+                            self.debug('Failed to connect to "{0}":IP:"{1}":'
+                                       'PORT:"{2}"'.format(instance1.id,
+                                                           instance1.ip_address,
+                                                           x))
+                            tester.show_security_group(self.group1)
+                            try:
+                                self.debug('Getting netcat info from instance...')
+                                instance1.sys('ps aux | grep netcat', timeout=10)
+                            except CommandExitCodeException:
+                                pass
+                            self.debug('Iptables info from Euca network component '
+                                       'responsible for this instance/security '
+                                       'group...')
+                            proxy_machine = self.get_proxy_machine(instance1)
+                            proxy_machine.machine.sys('iptables-save', timeout=10)
+
+                        except:
+                            self.debug('Error when fetching debug output for '
+                                       'failure, ignoring:' +
+                                       str(tester.get_traceback()))
+                        if attempt >= 2:
+                            raise SE
+                # Since no socket errors were encountered assume we connected,
+                # check file on instance to make sure we didn't connect somewhere
+                # else like the CC...
+                instance1.sys('grep "{0}" {1}; echo "" > {1}'
+                              .format(test_string, test_file),
+                              code=0)
+                self.status('Port "{0}" successfully tested on instance:{1}/{2}'
+                           .format(x, instance1.id, instance1.ip_address))
+            self.status('Authorizing port range {0}-{1} passed'
+                        .format(start, start+count))
+
+            self.status('Now testing revoking by removing the same port'
+                        'range...')
+            time.sleep(3)
+            tester.ec2.revoke_security_group(group_name=self.group1.name,
+                                             ip_protocol='tcp',
+                                             from_port=start,
+                                             to_port=start+count,
+                                             cidr_ip=src_cidr_ip)
+            #Allow some delay for the rule to be applied in the network...
+            time.sleep(10)
+            for x in xrange(start, start+count):
+                # Set up socket listener with netcat, to make sure we're not
+                # connecting to the CC or other device write port to file and
+                # verify file contents as well.
+                # This portion of the test expects that the connection will fail.
+                test_string = '{0} last port tested[{1}]'.format(time.time(), x)
+                self.debug("Gathering debug information as to whether the "
+                           "tester's src ip is authorized for this port test...")
+                if tester.does_instance_sec_group_allow(
+                        instance=instance1,
+                        src_addr=src_cidr_ip.split('/')[0],
+                        protocol='tcp',
+                        port=x):
+                    raise ValueError('Group:{0} has {1}:{2} authorized after revoke'
+                                     .format(self.group1.name,
+                                             src_cidr_ip,
+                                             x))
+                try:
+                    instance1.sys('killall -9 netcat 2> /dev/null', timeout=5)
+                    instance1.sys('{' + ' ( nohup netcat -k -l {0} > {1} ) &  sleep 1; '
+                              .format(x, test_file) + '}', code=0, timeout=5)
+                    tester.test_port_status(ip=instance1.ip_address,
+                                            port=x,
+                                            tcp=True,
+                                            send_buf=test_string,
+                                            verbose=True)
+                    #We may still need to test the file content for the UDP case...
+                    # Since no socket errors were encountered assume we connected,
+                    # check file on instance to make sure we didn't connect somewhere
+                    # else like the CC. Dont' error here cuz it's already a bug...
+                    instance1.sys('grep "{0}" {1}; echo "" > {1}'
+                              .format(test_string, test_file))
+                except (socket.error, CommandExitCodeException) as OK:
+                    self.status('Port "{0}" successfully revoked on '
+                                'instance:{1}/{2}'
+                                .format(x, instance1.id, instance1.ip_address))
+        self.status('Add and revoke ports test passed')
+
+
+
+    def test8_verify_deleting_of_auth_source_group2(self):
+        """
+        Definition:
+        Attempts to delete a security group which has been authorized by another security group.
+        -Authorizes group1 access from group2
+        -Validates connectivity for instances in group1 can be accessed from group2
+        -Deletes group2, validates group1 still allows traffic from other authorized sources
+        """
+        zones = []
+        for zone in self.zones:
+            zones.append(TestZone(zone))
+        tester = self.tester
+        assert isinstance(tester, Eucaops)
+        if not self.group1:
+            raise ValueError('Group1 not found for this test')
+        if not self.group1_instances:
+            raise ValueError('No instances found from group1')
+        #Clean out any existing rules in group1
+        self.tester.revoke_all_rules(self.group1)
+        instance1 = self.group1_instances[0]
+        #Add back ssh
+        assert not tester.does_instance_sec_group_allow(instance=instance1,
+                                                         protocol='tcp',
+                                                         port=22), \
+            'Instance: {0}, security group still allows access after ' \
+            'revoking all rules'
+
+        tester.authorize_group(self.group1,
+                               cidr_ip=str(tester.ec2_source_ip) + '/32',
+                               port=22)
+        for instance in self.group1_instances:
+            instance.reset_ssh_connection()
+            instance.sys('echo "reset ssh worked"', code=0)
+        self.status('Authorizing group2 access to group1...')
+        tester.authorize_group(self.group1,
+                               cidr_ip=None,
+                               port=None,
+                               src_security_group_name=self.group2.name)
+        tester.show_security_group(self.group1)
+        for zone in zones:
+            for instance in self.group1_instances:
+                if instance.placement == zone.name:
+                    zone.test_instance_group1 = instance
+                    break
+            for instance in self.group2_instances:
+                if instance.placement == zone.name:
+                    zone.test_instance_group2 = instance
+                    break
+            if not zone.test_instance_group1:
+                raise ValueError('Could not find instances in sec group1'
+                                 'group for zone:' + str(zone.name))
+            if not zone.test_instance_group2:
+                raise ValueError('Could not find instances in sec group2'
+                                 'group for zone:' + str(zone.name))
+
+        self.status('Checking auth from group2 to group1 instances...')
+        self.debug('Check some debug information re this data '
+                   'connection in this security group first...')
+        assert isinstance(zone.test_instance_group1, EuInstance)
+        assert isinstance(zone.test_instance_group2, EuInstance)
+        for zone in zones:
+            #Get the group2 instance from this zone
+            allowed = False
+
+            if self.tester.does_instance_sec_group_allow(
+                    instance=zone.test_instance_group1,
+                    src_group=self.group2,
+                    protocol='icmp'):
+                allowed = True
+                break
+            if not allowed:
+                raise ValueError('Group2 instance not allowed in group1'
+                                 ' after authorizing group2')
+            self.status('Sleeping for 10 seconds to allow rule/network'
+                        ' to set...')
+            time.sleep(10)
+            self.status('Attempting to ping group1 instance from group2 '
+                        'instance using their private IPs')
+            try:
+                zone.test_instance_group2.proxy_ssh.verbose = True
+                zone.test_instance_group2.proxy_ssh.sys(
+                    'ping -c 1 {0}'
+                    .format(zone.test_instance_group1.private_ip_address),
+                    code=0,verbose=True)
+            except:
+                self.errormsg('Failed to ping from group2 to group1 instance '
+                              'after authorizing the source group2')
+                raise
+        self.status('Terminating all instances in group2 in order to delete '
+                    'security group2')
+        tester.terminate_instances(self.group2_instances)
+        self.group2_instances = []
+        tester.delete_group(self.group2)
+        self.status('Now confirm that ssh still works for all instances in group1')
+        for instance in self.group1_instances:
+
+            instance.sys('echo "Getting hostname from {0}"; hostname'
+                         .format(instance.id), code=0)
+        self.status('Passed. Group1 ssh working after deleting src group which '
+                    'was authorized to group1')
+
+    def test9_ssh_between_instances_same_group_same_zone_public(self):
+        """
+        Definition:
+        For each zone this test will attempt to test ssh between two instances in the same
+        security group using the public ips of the instances.
+        -Authorize group for ssh access
+        -Re-use or create 2 instances within the same security group, same zone
+        -For each zone, attempt to ssh to a vm in the same security group same zone
+        """
+        self.tester.authorize_group(self.group1, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
+        for zone in self.zones:
+            instances =[]
+            for instance in self.group1_instances:
+                if instance.placement == zone:
+                    assert isinstance(instance, EuInstance)
+                    instances.append(instance)
+            if len(instances) < 2:
+                for x in xrange(len(instances), 2):
+                    self.test1_create_instance_in_zones_for_security_group1(zones=[zone])
+        for zone in self.zones:
+            zone_instances = []
+            for instance in self.group1_instances:
+                if instance.placement == zone:
+                    zone_instances.append(instance)
+            instance1 = zone_instances[0]
+            instance2 = zone_instances[1]
+            instance1.ssh.sftp_put(instance1.keypath, 'testkey.pem')
+            instance1.sys('chmod 0600 testkey.pem')
+            testphrase = "pubsamezone_test_from_instance1_{0}".format(instance1.id)
+            testfile = 'testfile.txt'
+            instance1.sys("ssh -o StrictHostKeyChecking=no -i testkey.pem root@{0} "
+                          "\'echo {1} > {2}; hostname; ifconfig; pwd; ls\'"
+                          .format(instance2.ip_address, testphrase, testfile), code=0, timeout=10)
+            instance2.sys('hostname; ifconfig; pwd; ls; cat {0} | grep {1}'.format(testfile, testphrase), code=0)
+
+    def test10_ssh_between_instances_same_group_public_different_zone(self):
+        """
+        Definition:
+        If multiple zones are detected, this test will attempt to test ssh between
+        two instances in the same security group and accross each zone using the public ips
+        of the instances
+        -Authorize group for ssh access
+        -Re-use or create 2 instances within the same security group, different zone(s)
+        -For each zone, attempt to ssh to a vm in the same security group different zone(s)
+        """
+        if len(self.zones) < 2:
+            raise SkipTestException('Skipping multi-zone test, '
+                                    'only a single zone found or provided')
+        self.tester.authorize_group(self.group1, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
+        zone_instances = {}
+        for zone in self.zones:
+            instances =[]
+            for instance in self.group1_instances:
+                if instance.placement == zone:
+                    assert isinstance(instance, EuInstance)
+                    instances.append(instance)
+            if len(instances) < 1:
+                for x in xrange(len(instances), 1):
+                    self.test1_create_instance_in_zones_for_security_group1(zones=[zone])
+            zone_instances[zone] = instances
+        for zone1 in self.zones:
+            instance1 = zone_instances[zone1][0]
+            instance1.ssh.sftp_put(instance1.keypath, 'testkey.pem')
+            instance1.sys('chmod 0600 testkey.pem')
+            for zone2 in self.zones:
+                if zone != zone2:
+                    instance2 = zone_instances[zone2][0]
+                    testphrase = "diffpubzone_test_from_instance1_{0}".format(instance1.id)
+                    testfile = 'testfile.txt'
+                    instance1.sys("ssh -o StrictHostKeyChecking=no -i testkey.pem root@{0} "
+                                  "\'echo {1} > {2}; hostname; ifconfig; pwd; ls\'"
+                                  .format(instance2.ip_address, testphrase, testfile),
+                                  code=0,
+                                  timeout=10)
+                    instance2.sys('cat {0} | grep {1}'.format(testfile, testphrase), code=0)
+
+    def test11_ssh_between_instances_same_group_same_zone_private(self):
+        """
+        Definition:
+        For each zone this test will attempt to test ssh between two instances in the same
+        security group using the private ips of the instances.
+        -Authorize group for ssh access
+        -Re-use or create 2 instances within the same security group, same zone
+        -For each zone, attempt to ssh to a vm in the same security group same zone
+        """
+        self.tester.authorize_group(self.group1, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
+        for zone in self.zones:
+            instances =[]
+            for instance in self.group1_instances:
+                if instance.placement == zone:
+                    assert isinstance(instance, EuInstance)
+                    instances.append(instance)
+            if len(instances) < 2:
+                for x in xrange(len(instances), 2):
+                    self.test1_create_instance_in_zones_for_security_group1(zones=[zone])
+        for zone in self.zones:
+            zone_instances = []
+            for instance in self.group1_instances:
+                if instance.placement == zone:
+                    zone_instances.append(instance)
+            instance1 = zone_instances[0]
+            instance2 = zone_instances[1]
+            instance1.ssh.sftp_put(instance1.keypath, 'testkey.pem')
+            instance1.sys('chmod 0600 testkey.pem')
+            testphrase = "hello_from_instance1_{0}".format(instance1.id)
+            testfile = 'testfile.txt'
+            instance1.sys("ssh -o StrictHostKeyChecking=no -i testkey.pem root@{0} "
+                          "\'echo {1} > {2}; hostname; ifconfig; pwd; ls\'"
+                          .format(instance2.private_ip_address, testphrase, testfile),
+                          code=0,
+                          timeout=10)
+            instance2.sys('cat {0} | grep {1}'.format(testfile, testphrase), code=0)
+
+    def test12_ssh_between_instances_same_group_private_different_zone(self):
+        """
+        Definition:
+        If multiple zones are detected, this test will attempt to test ssh between
+        two instances in the same security group and across each zone using the instances'
+        private ip addresses.
+        -Authorize group for ssh access
+        -Re-use or create 2 instances within the same security group, different zone(s)
+        -For each zone, attempt to ssh to a vm in the same security group different zone(s)
+        """
+        if len(self.zones) < 2:
+            raise SkipTestException('Skipping multi-zone test, '
+                                    'only a single zone found or provided')
+        self.tester.authorize_group(self.group1, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
+        for zone in self.zones:
+            instances =[]
+            for instance in self.group1_instances:
+                if instance.placement == zone:
+                    assert isinstance(instance, EuInstance)
+                    instances.append(instance)
+            if len(instances) < 1:
+                for x in xrange(len(instances), 1):
+                    self.test1_create_instance_in_zones_for_security_group1(zones=[zone])
+        for zone1 in self.zones:
+            zone_instances = []
+            for instance in self.group1_instances:
+                if instance.placement == zone1:
+                    zone_instances.append(instance)
+            instance1 = zone_instances[0]
+            instance1.ssh.sftp_put(instance1.keypath, 'testkey.pem')
+            instance1.sys('chmod 0600 testkey.pem')
+            for zone2 in self.zones:
+                if zone1 != zone2:
+                    zone2_instances = []
+                    for instance in self.group1_instances:
+                        if instance.placement == zone2:
+                            zone2_instances.append(instance)
+                    instance2 = zone_instances[0]
+                    testphrase = "diffprivzone_test_from_instance1_{0}".format(instance1.id)
+                    testfile = 'testfile.txt'
+                    instance1.sys("ssh -o StrictHostKeyChecking=no -i testkey.pem root@{0} "
+                                  "\'echo {1} > {2}; hostname; ifconfig; pwd; ls\'"
+                                  .format(instance2.ip_address, testphrase, testfile),
+                                  code=0,
+                                  timeout=10)
+                    instance2.sys('cat {0} | grep {1}'.format(testfile, testphrase), code=0)
+
+    def test13_ssh_between_instances_diff_group_private_different_zone(self):
+        """
+        Definition:
+        If multiple zones are detected, this test will attempt to test ssh between
+        two instances in the same security group and across each zone using the instances'
+        private ip addresses.
+        -Authorize group for ssh access
+        -Re-use or create 2 instances within the same security group, different zone(s)
+        -For each zone, attempt to ssh to a vm in the same security group different zone(s)
+        """
+        if len(self.zones) < 2:
+            raise SkipTestException('Skipping multi-zone test, '
+                                    'only a single zone found or provided')
+        self.tester.authorize_group(self.group1, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
+        # In case a previous test has deleted group2...
+        self.group2 = self.tester.add_group(self.group2.name)
+        self.tester.authorize_group(self.group2, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
+        for zone in self.zones:
+            instance1 = None
+            instances =[]
+            for instance in self.group1_instances:
+                if instance.placement == zone:
+                    instance1 = instance
+            if not instance1:
+                self.test1_create_instance_in_zones_for_security_group1(zones=[zone])
+                for instance in self.group1_instances:
+                    if instance.placement == zone:
+                        instance1 = instance
+            instance1.ssh.sftp_put(instance1.keypath, 'testkey.pem')
+            instance1.sys('chmod 0600 testkey.pem')
+            for zone2 in self.zones:
+                instance2 = None
+                if zone2 != zone:
+                    for instance in self.group2_instances:
+                        if instance.placement == zone2:
+                            instance2 = instance
+                    if not instance2:
+                        self.test2_create_instance_in_zones_for_security_group2(zones=[zone2],
+                                                                                auto_connect=True)
+                        for instance in self.group2_instances:
+                            if instance.placement == zone2:
+                                instance2 = instance
+                    testphrase = "diffprivzone_test_from_instance1_{0}".format(instance1.id)
+                    testfile = 'testfile.txt'
+                    self.status('Testing instance:{0} zone:{1} --ssh--> instance:{2} zone:{3} '
+                                '-- private ip'.format(instance1.id, zone,instance2.id, zone2))
+                    instance1.sys("ssh -o StrictHostKeyChecking=no -i testkey.pem root@{0} "
+                                  "\'echo {1} > {2}; hostname; ifconfig; pwd; ls\'"
+                                  .format(instance2.private_ip_address, testphrase, testfile),
+                                  code=0,
+                                  timeout=10)
+                    instance2.sys('cat {0} | grep {1}'.format(testfile, testphrase), code=0)
+
+    def test14_ssh_between_instances_diff_group_public_different_zone(self):
+        """
+        Definition:
+        If multiple zones are detected, this test will attempt to test ssh between
+        two instances in the same security group and across each zone using the instances'
+        private ip addresses.
+        -Authorize group for ssh access
+        -Re-use or create 2 instances within the same security group, different zone(s)
+        -For each zone, attempt to ssh to a vm in the same security group different zone(s)
+        """
+        if len(self.zones) < 2:
+            raise SkipTestException('Skipping multi-zone test, '
+                                    'only a single zone found or provided')
+        self.tester.authorize_group(self.group1, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
+        # In case a previous test has deleted group2...
+        self.group2 = self.tester.add_group(self.group2.name)
+        self.tester.authorize_group(self.group2, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
+        for zone in self.zones:
+            instance1 = None
+            instances =[]
+            for instance in self.group1_instances:
+                if instance.placement == zone:
+                    instance1 = instance
+            if not instance1:
+                self.test1_create_instance_in_zones_for_security_group1(zones=[zone])
+                for instance in self.group1_instances:
+                    if instance.placement == zone:
+                        instance1 = instance
+            instance1.ssh.sftp_put(instance1.keypath, 'testkey.pem')
+            instance1.sys('chmod 0600 testkey.pem')
+            for zone2 in self.zones:
+                instance2 = None
+                if zone2 != zone:
+                    for instance in self.group2_instances:
+                        if instance.placement == zone2:
+                            instance2 = instance
+                    if not instance2:
+                        self.test2_create_instance_in_zones_for_security_group2(zones=[zone2],
+                                                                                auto_connect=True)
+                        for instance in self.group2_instances:
+                            if instance.placement == zone2:
+                                instance2 = instance
+                    testphrase = "diffprivzone_test_from_instance1_{0}".format(instance1.id)
+                    testfile = 'testfile.txt'
+                    self.status('Testing instance:{0} zone:{1} --ssh--> instance:{2} zone:{3} '
+                                '-- private ip'.format(instance1.id, zone,instance2.id, zone2))
+                    instance1.sys("ssh -o StrictHostKeyChecking=no -i testkey.pem root@{0} "
+                                  "\'echo {1} > {2}; hostname; ifconfig; pwd; ls\'"
+                                  .format(instance2.ip_address, testphrase, testfile),
+                                  code=0,
+                                  timeout=10)
+                    instance2.sys('cat {0} | grep {1}'.format(testfile, testphrase), code=0)
+
+
+    # add revoke may be covered above...?
+    def test_revoke_rules(self):
         assert isinstance(self.tester, Eucaops)
         revoke_group = self.tester.add_group("revoke-group-" + str(int(time.time())))
         self.tester.authorize_group(revoke_group, port=22)
@@ -623,17 +1244,29 @@ if __name__ == "__main__":
     ### or use a predefined list
 
     if testcase.args.tests:
-        list = testcase.args.tests
+        testlist = testcase.args.tests
+        if not isinstance(testlist, list):
+            testlist.replace(',',' ')
+            testlist = testlist.split()
     else:
-        list =['test1_create_instance_in_zones_for_security_group1',
-               'test2_create_instance_in_zones_for_security_group2',
-               'test3_test_ssh_between_instances_in_diff_sec_groups_same_zone',
-               'test4_attempt_unauthorized_ssh_from_test_machine_to_group2',
-               'test5_test_ssh_between_instances_in_same_sec_groups_different_zone',
-               'test6_test_ssh_between_instances_in_diff_sec_groups_different_zone']
+        testlist =[
+            'test1_create_instance_in_zones_for_security_group1',
+            'test2_create_instance_in_zones_for_security_group2',
+            'test3_test_ssh_between_instances_in_diff_sec_groups_same_zone',
+            'test4_attempt_unauthorized_ssh_from_test_machine_to_group2',
+            'test5_test_ssh_between_instances_in_same_sec_groups_different_zone',
+            'test7_add_and_revoke_tcp_port_range',
+            'test8_verify_deleting_of_auth_source_group2',
+            'test9_ssh_between_instances_same_group_same_zone_public',
+            'test10_ssh_between_instances_same_group_public_different_zone',
+            'test11_ssh_between_instances_same_group_same_zone_private',
+            'test12_ssh_between_instances_same_group_private_different_zone',
+            'test13_ssh_between_instances_diff_group_private_different_zone',
+            'test14_ssh_between_instances_diff_group_public_different_zone']
         ### Convert test suite methods to EutesterUnitTest objects
+    print 'Got test list:' + str(testlist)
     unit_list = [ ]
-    for test in list:
+    for test in testlist:
         unit_list.append( testcase.create_testunit_by_name(test) )
 
     ### Run the EutesterUnitTest objects
