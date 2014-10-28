@@ -48,7 +48,7 @@ class BFEBSBasics(InstanceBasics):
         if zone is None:
             zone = self.zone
         self.RunStop(zone)
-        self.AttachDetachRoot(zone)
+        self.DetachAttachRoot(zone)
         self.StartTerminate(zone)
 
 
@@ -102,7 +102,7 @@ class BFEBSBasics(InstanceBasics):
                 raise Exception("Volume id does not match")
         self.reservation = None
 
-    def AttachDetachRoot(self, zone = None):
+    def DetachAttachRoot(self, zone = None):
         """Detach and attach root for stopped instances"""
         root_path = '/dev/sda'
         instances = self.tester.get_instances(state="stopped",zone=zone)
