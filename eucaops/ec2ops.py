@@ -2248,7 +2248,7 @@ disable_root: false"""
                    arch=None,
                    owner_id=None,
                    filters=None,
-                   basic_image=None,
+                   basic_image=True,
                    platform=None,
                    not_platform=None,
                    tagkey=None,

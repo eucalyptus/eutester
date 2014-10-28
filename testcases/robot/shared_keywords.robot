@@ -4,7 +4,7 @@ Library         eucaops.Eucaops  credpath=${credpath}  config_file=${config_file
 Library         Collections
 
 *** Variables ***
-${credpath}     /Users/viglesias/Dropbox/creds/test-creds/
+${credpath}     ${None}
 ${password}     ${None}
 ${config_file}  ${None}
 ${image_id}     mi-
