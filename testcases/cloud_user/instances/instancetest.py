@@ -34,10 +34,18 @@ class InstanceBasics(EutesterTestCase):
         :param kwargs: Additional arguments
         """
         super(InstanceBasics, self).__init__(name=name)
-        if region:
-            self.tester = EC2ops(credpath=credpath, region=region)
+        self.get_args()
+        self.show_args()
+        for kw in kwargs:
+            print 'Setting kwarg:'+str(kw)+" to "+str(kwargs[kw])
+            self.set_arg(kw ,kwargs[kw])
+        self.show_args()
+        if self.args.region:
+            self.tester = EC2ops(credpath=self.args.redpath, region=self.args.region)
         else:
-            self.tester = Eucaops(config_file=config_file, password=password, credpath=credpath)
+            self.tester = Eucaops(config_file=self.args.config_file,
+                                  password=self.args.password,
+                                  credpath=self.args.credpath)
         self.instance_timeout = 600
 
         ### Add and authorize a group for the instance
@@ -48,23 +56,27 @@ class InstanceBasics(EutesterTestCase):
         self.keypair = self.tester.add_keypair("keypair-" + str(time.time()))
         self.keypath = '%s/%s.pem' % (os.curdir, self.keypair.name)
         if emi:
-            self.image = self.tester.get_emi(emi=emi)
+            self.image = self.tester.get_emi(emi=self.args.emi)
         else:
-            self.image = self.tester.get_emi(root_device_type="instance-store", not_platform="windows")
+            self.image = self.tester.get_emi(root_device_type="instance-store", basic_image=True)
         self.address = None
         self.volume = None
         self.private_addressing = False
-        if not zone:
+        if not self.args.zone:
             zones = self.tester.ec2.get_all_zones()
             self.zone = random.choice(zones).name
         else:
-            self.zone = zone
+            self.zone = self.args.zone
         self.reservation = None
         self.reservation_lock = threading.Lock()
-        self.run_instance_params = {'image': self.image, 'user_data': user_data,
-                                    'username': instance_user, 'keypair': self.keypair.name,
-                                    'group': self.group.name, 'zone': self.zone,
-                                    'return_reservation': True, 'timeout': self.instance_timeout}
+        self.run_instance_params = {'image': self.image,
+                                    'user_data': self.args.user_data,
+                                    'username': self.args.instance_user,
+                                    'keypair': self.keypair.name,
+                                    'group': self.group.name,
+                                    'zone': self.zone,
+                                    'return_reservation': True,
+                                    'timeout': self.instance_timeout}
         self.managed_network = True
 
         ### If I have access to the underlying infrastructure I can look

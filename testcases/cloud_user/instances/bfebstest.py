@@ -5,11 +5,19 @@ from instancetest import InstanceBasics
 from eutester.euinstance import EuInstance
 
 class BFEBSBasics(InstanceBasics):
-    def __init__(self, name="BFEBSBasics", credpath=None, region=None, config_file=None, password=None, emi=None, zone=None,
-                  user_data=None, instance_user=None, imgurl=None ):
+    def __init__(self, name="BFEBSBasics", credpath=None, region=None, config_file=None,
+                 password=None, emi=None, zone=None, user_data=None, instance_user=None,
+                 imgurl=None, **kwargs ):
+        self.name = name
         self.imgurl = imgurl
-        super(BFEBSBasics, self).__init__(name=name, credpath=credpath, region=region, config_file=config_file, password=password,
-                                          emi=emi, zone=zone, user_data=user_data, instance_user=instance_user)
+        self.setup_parser(description="Test the Eucalyptus EC2 BFEBS image functionality.")
+        self.parser.add_argument('--imgurl',
+                                 help="BFEBS Image to splat down", default=None)
+
+        super(BFEBSBasics, self).__init__(name=name, credpath=credpath, region=region,
+                                          config_file=config_file, password=password,
+                                          emi=emi, zone=zone, user_data=user_data,
+                                          instance_user=instance_user, **kwargs)
 
     def clean_method(self):
         if self.reservation:
@@ -23,8 +31,8 @@ class BFEBSBasics(InstanceBasics):
             raise Exception("No imgurl passed to run BFEBS tests")
         if not self.reservation:
             self.run_instance_params['image'] = self.tester.get_emi(root_device_type="instance-store",
-                                                                    not_platform="windows")
-            self.reservation = self.tester.run_instance(**self.run_instance_params)
+                                                                    basic_image=True)
+            self.reservation = self.tester.run_image(**self.run_instance_params)
         for instance in self.reservation.instances:
             self.volume = self.tester.create_volume(zone=self.zone, size=3)
             self.volume_device = instance.attach_volume(self.volume)
@@ -47,14 +55,18 @@ class BFEBSBasics(InstanceBasics):
         """Run half of the available m1.small instances with a BFEBS image"""
         if self.reservation:
             self.tester.terminate_instances(self.reservation)
-        self.image = self.tester.get_emi(root_device_type="ebs")
+        self.image = self.tester.get_emi(emi=self.args.emi,
+                                         root_device_type="ebs",
+                                         basic_image=True)
         self.MultipleInstances()
 
     def ChurnBFEBS(self):
         """Start instances and stop them before they are running, increase time to terminate on each iteration"""
         if self.reservation:
             self.tester.terminate_instances(self.reservation)
-        self.image = self.tester.get_emi(root_device_type="ebs")
+        self.image = self.tester.get_emi(emi=self.args.emi,
+                                         root_device_type="ebs",
+                                         basic_image=True)
         self.Churn()
 
     def RunStop(self, zone=None):
@@ -62,15 +74,19 @@ class BFEBSBasics(InstanceBasics):
         if zone is None:
             zone = self.zone
         try:
-            self.run_instance_params['image'] = self.tester.get_emi(root_device_type="ebs")
-        except Exception,e:
+            self.run_instance_params['image'] = self.tester.get_emi(emi=self.args.emi,
+                                                                    root_device_type="ebs",
+                                                                    basic_image=True)
+        except Exception, e:
             self.RegisterImage()
-            self.run_instance_params['image'] = self.tester.get_emi(root_device_type="ebs")
+            self.run_instance_params['image'] = self.tester.get_emi(emi=self.args.emi,
+                                                                    root_device_type="ebs",
+                                                                    basic_image=True)
         if not self.volume:
             self.volume = self.tester.create_volume(zone=self.zone, size=2)
         if self.reservation:
             self.tester.terminate_instances(self.reservation)
-        self.reservation = self.tester.run_instance(**self.run_instance_params)
+        self.reservation = self.tester.run_image(**self.run_instance_params)
         ## Ensure that we can attach and use a volume
         for instance in self.reservation.instances:
             vol_dev = instance.attach_volume(self.volume)
@@ -103,12 +119,16 @@ class BFEBSBasics(InstanceBasics):
         if zone is None:
             zone = self.zone
         try:
-            self.run_instance_params['image'] = self.tester.get_emi(root_device_type="ebs")
+            self.run_instance_params['image'] = self.tester.get_emi(emi=self.args.emi,
+                                                                    root_device_type="ebs",
+                                                                    basic_image=True)
         except Exception, e:
             self.RegisterImage()
-            self.run_instance_params['image'] = self.tester.get_emi(root_device_type="ebs")
+            self.run_instance_params['image'] = self.tester.get_emi(emi=self.args.emi,
+                                                                    root_device_type="ebs",
+                                                                    basic_image=True)
         if not self.reservation:
-            self.reservation = self.tester.run_instance(**self.run_instance_params)
+            self.reservation = self.tester.run_image(**self.run_instance_params)
 
         ### Run with reboot
         original_image = self.run_instance_params['image']
@@ -127,7 +147,7 @@ class BFEBSBasics(InstanceBasics):
             if ending_uptime > starting_uptime:
                 raise Exception("Instance did not get stopped then started")
             self.run_instance_params['image'] = rebooted_image
-            new_image_reservation = self.tester.run_instance(**self.run_instance_params)
+            new_image_reservation = self.tester.run_image(**self.run_instance_params)
             for new_instance in new_image_reservation.instances:
                 ## Check that our temp file exists
                 new_instance.sys("ls -la")
@@ -150,7 +170,7 @@ class BFEBSBasics(InstanceBasics):
             if ending_uptime < starting_uptime:
                 raise Exception("Instance did get stopped then started when it shouldn't have")
             self.run_instance_params['image'] = not_rebooted_image
-            new_image_reservation = self.tester.run_instance(**self.run_instance_params)
+            new_image_reservation = self.tester.run_image(**self.run_instance_params)
             for new_instance in new_image_reservation.instances:
                 ## Check that our temp file exists
                 new_instance.sys("ls -la")
@@ -158,11 +178,7 @@ class BFEBSBasics(InstanceBasics):
             self.tester.terminate_instances(new_image_reservation)
 
 if __name__ == "__main__":
-    testcase= EutesterTestCase(name='bfebstest')
-    testcase.setup_parser(description="Test the Eucalyptus EC2 BFEBS image functionality.")
-    testcase.parser.add_argument('--imgurl',
-                        help="BFEBS Image to splat down", default=None)
-    testcase.get_args()
+    testcase = BFEBSBasics()
     bfebstestsuite = testcase.do_with_args(BFEBSBasics)
 
     ### Either use the list of tests passed from config/command line to determine what subset of tests to run
