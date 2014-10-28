@@ -48,6 +48,7 @@ class BFEBSBasics(InstanceBasics):
         if zone is None:
             zone = self.zone
         self.RunStop(zone)
+        self.AttachDetachRoot(zone)
         self.StartTerminate(zone)
 
 
@@ -88,13 +89,41 @@ class BFEBSBasics(InstanceBasics):
             self.tester.terminate_instances(self.reservation)
         self.reservation = self.tester.run_image(**self.run_instance_params)
         ## Ensure that we can attach and use a volume
+        vol_path = '/dev/sde'
         for instance in self.reservation.instances:
-            vol_dev = instance.attach_volume(self.volume)
+            vol_dev = instance.attach_volume(self.volume, vol_path)
         self.tester.stop_instances(self.reservation)
         for instance in self.reservation.instances:
             if instance.ip_address or instance.private_ip_address:
                 raise Exception("Instance had a public " + str(instance.ip_address) + " private " + str(instance.private_ip_address) )
+            if instance.block_device_mapping[vol_path] is None:
+                raise Exception("DBM path is invalid")
+            if self.volume.id != instance.block_device_mapping[vol_path].volume_id:
+                raise Exception("Volume id does not match")
         self.reservation = None
+
+    def AttachDetachRoot(self, zone = None):
+        """Detach and attach root for stopped instances"""
+        root_path = '/dev/sda'
+        instances = self.tester.get_instances(state="stopped",zone=zone)
+        if len(instances) == 0:
+            raise Exception("Did not find any stopped instances"
+                            " to detach/attach root")
+        for instance in instances:
+            self.assertEqual(2, len(instance.block_device_mapping),
+                             "Did not find two BDM for the instance")
+            root_vol_id = instance.block_device_mapping[root_path].volume_id
+            for dbm in instance.block_device_mapping.values():
+                detach_volume = self.tester.get_volumes(volume_id=dbm.volume_id)[0]
+                self.tester.detach_volume(detach_volume)
+            instances = self.tester.get_instances(idstring=instance.id)
+            if len(instances) != 1:
+                raise Exception("Could not find the instance")
+            instance = instances[0]
+            self.assertEqual(0, len(instance.block_device_mapping),
+                             "Instance still reports BDM")
+            root_volume = self.tester.get_volumes(volume_id=root_vol_id)[0]
+            self.tester.attach_volume(instance, root_volume, root_path)
 
     def StartTerminate(self, zone = None):
         instances = self.tester.get_instances(state="stopped",zone=zone)
