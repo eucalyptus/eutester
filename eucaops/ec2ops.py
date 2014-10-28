@@ -2275,10 +2275,11 @@ disable_root: false"""
         """
         # If no criteria was provided for filter an image, use 'basic_image'
         # flag to provide some sane defaults
-        if basic_image is None and not _args_dict:
-            basic_image = True
-        else:
-            basic_image = False
+        if basic_image is None:
+            if not _args_dict:
+                basic_image = True
+            else:
+                basic_image = False
         if filters is None and emi is None and \
                         name is None and location is None:
             # Attempt to get a eutester created image if it happens to meet
