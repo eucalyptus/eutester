@@ -484,7 +484,7 @@ class ObjectTestSuite(EutesterTestCase):
         #Create some test data
         #for i in range(0, large_obj_size_bytes):
         #    test_data += chr(random.randint(32,126))
-        test_data = bytearray(os.urandom(large_obj_size_bytes))
+        test_data = str(os.urandom(large_obj_size_bytes))
 
         self.tester.info("Uploading object content of size: " + str(large_obj_size_bytes) + " bytes")
         keyname = "largeobj-" + str(int(time.time()))
