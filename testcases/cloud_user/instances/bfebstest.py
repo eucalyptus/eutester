@@ -110,7 +110,7 @@ class BFEBSBasics(InstanceBasics):
             raise Exception("Did not find any stopped instances"
                             " to detach/attach root")
         for instance in instances:
-            self.assertEqual(2, len(instance.block_device_mapping),
+            self.assertTrue(2 == len(instance.block_device_mapping),
                              "Did not find two BDM for the instance")
             root_vol_id = instance.block_device_mapping[root_path].volume_id
             for dbm in instance.block_device_mapping.values():
@@ -120,8 +120,8 @@ class BFEBSBasics(InstanceBasics):
             if len(instances) != 1:
                 raise Exception("Could not find the instance")
             instance = instances[0]
-            self.assertEqual(0, len(instance.block_device_mapping),
-                             "Instance still reports BDM")
+            self.assertTrue(0 == len(instance.block_device_mapping),
+                             "Instance still reports BDM(s)")
             root_volume = self.tester.get_volumes(volume_id=root_vol_id)[0]
             self.tester.attach_volume(instance, root_volume, root_path)
 
