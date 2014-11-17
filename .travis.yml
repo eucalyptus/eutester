@@ -4,7 +4,6 @@ python:
   - "2.7"
 # command to install dependencies
 env:
-  - BOTO_VERSION=2.5.2
   - BOTO_VERSION=2.9.2
   - BOTO_VERSION=2.9.9
 before_install:
