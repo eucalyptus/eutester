@@ -289,6 +289,11 @@ class Install(EutesterTestCase):
             ### Setup IP forwarding
             cc.sys("sysctl -w net.ipv4.ip_forward=1")
 
+            ### Make sure conflicting dhcpd server is not running on Nodes by deleting
+            ### hypervisor's default network
+            for node in self.tester.service_manager.get_all_node_controllers():
+                node.sys('virsh net-destroy default')
+
             ### add private interface subnet on NC bridges
             ip_index = 2
             for nc in self.tester.get_component_machines("nc"):

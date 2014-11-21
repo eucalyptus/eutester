@@ -40,16 +40,25 @@ import requests
 class ObjectTestSuite(EutesterTestCase):
     data_size = 1000
 
-    def __init__(self):
+    def __init__(self, tester=None, **kwargs):
         self.setuptestcase()
         self.setup_parser()
         self.parser.add_argument("--endpoint", default=None)
+        self.tester = tester
         self.get_args()
+        # Allow __init__ to get args from __init__'s kwargs or through command line parser...
+        for kw in kwargs:
+            print 'Setting kwarg:'+str(kw)+" to "+str(kwargs[kw])
+            self.set_arg(kw ,kwargs[kw])
+        self.show_args()
         # Setup basic eutester object
-        if self.args.endpoint:
-            self.tester = S3ops(credpath=self.args.credpath, endpoint=self.args.endpoint)
-        else:
-            self.tester = Eucaops( credpath=self.args.credpath, config_file=self.args.config, password=self.args.password)
+        if not self.tester:
+            if self.args.endpoint:
+                self.tester = S3ops(credpath=self.args.credpath, endpoint=self.args.endpoint)
+            else:
+                self.tester = Eucaops(credpath=self.args.credpath,
+                                      config_file=self.args.config,
+                                      password=self.args.password)
 
         self.bucket_prefix = "eutester-" + str(int(time.time())) + "-"
         self.buckets_used = set()
