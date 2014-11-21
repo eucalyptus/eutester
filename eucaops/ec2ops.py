@@ -2644,6 +2644,8 @@ disable_root: false"""
                      max=1,
                      user_data=None,
                      private_addressing=False,
+                     instance_profile_name=None,
+                     instance_profile_arn=None,
                      username="root",
                      password=None,
                      is_reachable=True,
@@ -2661,6 +2663,8 @@ disable_root: false"""
         :param max: Maxiumum instances to launch, default 1
         :param user_data: User-data string to pass to instance
         :param private_addressing: Runs an instance with only private IP address
+        :param instance_profile_name: name of the IAM (Euare) profile to associate with the instances
+        :param instance_profile_arn: ARN of the IAM (Euare) instance profile to associate with the instances
         :param username: username to use when connecting via ssh
         :param password: password to use when connecting via ssh
         :param is_reachable: Instance can be reached on its public IP (Default=True)
@@ -2695,6 +2699,7 @@ disable_root: false"""
         self.debug( "Attempting to run "+ str(image.root_device_type)  +" image " + str(image) + " in group " + str(group))
         reservation = image.run(key_name=keypair,security_groups=[group],instance_type=type, placement=zone,
                                 min_count=min, max_count=max, user_data=user_data, addressing_type=addressing_type,
+                                instance_profile_name=instance_profile_name, instance_profile_arn=instance_profile_arn,
                                 monitoring_enabled=enabled)
         self.test_resources["reservations"].append(reservation)
         
@@ -2771,6 +2776,8 @@ disable_root: false"""
                   block_device_map=None,
                   user_data=None,
                   private_addressing=False, 
+                  instance_profile_name=None,
+                  instance_profile_arn=None,
                   username="root", 
                   password=None,
                   auto_connect=True,
@@ -2789,6 +2796,8 @@ disable_root: false"""
         :param max: max amount of instances to try to run
         :param user_data: user_data to run instances with
         :param private_addressing: boolean to run instances without public ips
+        :param instance_profile_name: name of the IAM (Euare) profile to associate with the instances
+        :param instance_profile_arn: ARN of the IAM (Euare) instance profile to associate with the instances
         :param username: username for connecting ssh to instances
         :param password: password for connnecting ssh to instances
         :param auto_connect: boolean flag whether or not ssh connections should be automatically attempted
@@ -2830,6 +2839,7 @@ disable_root: false"""
             cmdstart=time.time()
             reservation = image.run(key_name=keypair,security_groups=[group],instance_type=type, placement=zone,
                                     min_count=min, max_count=max, user_data=user_data, addressing_type=addressing_type,
+                                    instance_profile_name=instance_profile_name, instance_profile_arn=instance_profile_arn,
                                     block_device_map=block_device_map)
             self.test_resources["reservations"].append(reservation)
             
@@ -2851,6 +2861,8 @@ disable_root: false"""
                                                                                  password=password,
                                                                                  reservation=reservation,
                                                                                  private_addressing=private_addressing,
+                                                                                 instance_profile_name=instance_profile_name,
+                                                                                 instance_profile_arn=instance_profile_arn,
                                                                                  timeout=timeout,
                                                                                  cmdstart=cmdstart,
                                                                                  auto_connect=False
@@ -2863,6 +2875,8 @@ disable_root: false"""
                                                                                  username = username,
                                                                                  password=password,
                                                                                  reservation = reservation,
+                                                                                 instance_profile_name=instance_profile_name,
+                                                                                 instance_profile_arn=instance_profile_arn,
                                                                                  private_addressing=private_addressing,
                                                                                  timeout=timeout,
                                                                                  cmdstart=cmdstart,

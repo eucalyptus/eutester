@@ -368,6 +368,8 @@ class EutesterTestCase(unittest.TestCase):
                    color=True,
                    testlist=True,
                    userdata=True,
+                   instance_profile_name=True,
+                   instance_profile_arn=True,
                    instance_user=True,
                    stdout_log_level=True,
                    logfile_level=True,
@@ -481,6 +483,12 @@ class EutesterTestCase(unittest.TestCase):
         if userdata:
             parser.add_argument('--user-data',
                                 help="User data string to provide instance run within this test", default=None)
+        if instance_profile_name:
+            parser.add_argument('--instance-profile-name',
+                                help="The name of the IAM Instance Profile (IIP) to associate with the instances.", default=None)
+        if instance_profile_arn:
+            parser.add_argument('--instance-profile-arn',
+                                help="The Amazon Resource Name (ARN) of the IAM instance profile to associate with the instances", default=None)
         if instance_user:
             parser.add_argument('--instance-user',
                                 help="Username used for ssh login. Default:'root'", default='root')
