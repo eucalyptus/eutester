@@ -764,14 +764,22 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
    
     def create_credentials(self, admin_cred_dir, account, user):
        
-        cred_dir =  admin_cred_dir + "/creds.zip"
-        self.sys('rm -f '+cred_dir)
-        cmd_download_creds = self.eucapath + "/usr/sbin/euca_conf --get-credentials " + admin_cred_dir + "/creds.zip " + "--cred-user "+ user +" --cred-account " + account 
-       
-        if self.clc.found( cmd_download_creds, "The MySQL server is not responding"):
-            raise IOError("Error downloading credentials, looks like CLC was not running")
-        if self.clc.found( "unzip -o " + admin_cred_dir + "/creds.zip " + "-d " + admin_cred_dir, "cannot find zipfile directory"):
-            raise IOError("Empty ZIP file returned by CLC")
+        cred_dir = admin_cred_dir + "/creds.zip"
+        self.debug(cred_dir)
+        output = self.credential_exists(cred_dir)
+        if output['status'] == 0:
+            self.debug("Found creds file, skipping download.")
+        else:
+            self.debug("Could not find credentials on CLC, creating certs and downloading admin credentials")
+            cmd_download_creds = self.eucapath + "/usr/sbin/euca_conf --get-credentials " + admin_cred_dir + "/creds.zip " + "--cred-user "+ user + " --cred-account " + account
+            if self.clc.found(cmd_download_creds, "The MySQL server is not responding"):
+                raise IOError("Error downloading credentials, looks like CLC was not running")
+            if self.clc.found("unzip -o " + admin_cred_dir + "/creds.zip " + "-d " + admin_cred_dir,
+                              "cannot find zipfile directory"):
+                raise IOError("Empty ZIP file returned by CLC")
+
+    def credential_exists(self, cred_path):
+        return self.clc.ssh.cmd("test -e " + cred_path)
        
         
     
