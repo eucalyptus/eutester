@@ -145,7 +145,7 @@ class InstanceBasics(EutesterTestCase):
             if instance.ip_address == instance.private_ip_address:
                 self.tester.debug("WARNING: System or Static mode detected, skipping ElasticIps")
                 return reservation
-            self.address = self.tester.allocate_address()
+            self.address = self.tester.allocate_address(domain=instance.vpc_id)
             self.assertTrue(self.address, 'Unable to allocate address')
             self.tester.associate_address(instance, self.address)
             instance.update()

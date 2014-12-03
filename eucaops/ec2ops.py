@@ -2398,7 +2398,7 @@ disable_root: false"""
         self.debug(buf)
 
 
-    def allocate_address(self):
+    def allocate_address(self, domain=None):
         """
         Allocate an address for the current user
 
@@ -2406,7 +2406,7 @@ disable_root: false"""
         """
         try:
             self.debug("Allocating an address")
-            address = self.ec2.allocate_address()
+            address = self.ec2.allocate_address(domain=domain)
         except Exception, e:
             tb = self.get_traceback()
             err_msg = 'Unable to allocate address'
@@ -2777,7 +2777,8 @@ disable_root: false"""
                   clean_on_fail=True,
                   monitor_to_running = True,
                   return_reservation=False,
-                  timeout=480):
+                  timeout=480,
+                  **boto_run_args):
         """
 
         :param image: image object or string image_id to create instances with
@@ -2829,8 +2830,8 @@ disable_root: false"""
             #self.debug( "Attempting to run "+ str(image.root_device_type)  +" image " + str(image) + " in group " + str(group))
             cmdstart=time.time()
             reservation = image.run(key_name=keypair,security_groups=[group],instance_type=type, placement=zone,
-                                    min_count=min, max_count=max, user_data=user_data, addressing_type=addressing_type,
-                                    block_device_map=block_device_map)
+                                    min_count8=min, max_count=max, user_data=user_data, addressing_type=addressing_type,
+                                    block_device_map=block_device_map, **boto_run_args)
             self.test_resources["reservations"].append(reservation)
             
             if (len(reservation.instances) < min) or (len(reservation.instances) > max):
