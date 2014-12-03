@@ -1,6 +1,6 @@
 # Software License Agreement (BSD License)
 #
-# Copyright (c) 2009-2013, Eucalyptus Systems, Inc.
+# Copyright (c) 2009-2014, Eucalyptus Systems, Inc.
 # All rights reserved.
 #
 # Redistribution and use of this software in source and binary forms, with or
@@ -70,10 +70,10 @@ class CloudFormationTemplateURLTests(EutesterTestCase):
                 stack_status = False
                 if len(self.tester.cloudformation.describe_stack_events(self.stack_name)) > 0:
                     stack_info = self.tester.cloudformation.describe_stack_events(self.stack_name)
-                    for x in stack_info:
-                        if (x.logical_resource_id == self.stack_name) and (x.resource_status == "CREATE_COMPLETE"):
-                            self.debug("Stack Logical Resource: " + x.logical_resource_id)
-                            self.debug("Stack Resource Status: " + x.resource_status)
+                    for info in stack_info:
+                        if (info.logical_resource_id == self.stack_name) and (info.resource_status == "CREATE_COMPLETE"):
+                            self.debug("Stack Logical Resource: " + info.logical_resource_id)
+                            self.debug("Stack Resource Status: " + info.resource_status)
                             stack_status = True
                 return stack_status
             self.tester.wait_for_result(stack_completed, True, timeout=600)
