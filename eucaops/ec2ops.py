@@ -2830,7 +2830,7 @@ disable_root: false"""
             #self.debug( "Attempting to run "+ str(image.root_device_type)  +" image " + str(image) + " in group " + str(group))
             cmdstart=time.time()
             reservation = image.run(key_name=keypair,security_groups=[group],instance_type=type, placement=zone,
-                                    min_count8=min, max_count=max, user_data=user_data, addressing_type=addressing_type,
+                                    min_count=min, max_count=max, user_data=user_data, addressing_type=addressing_type,
                                     block_device_map=block_device_map, **boto_run_args)
             self.test_resources["reservations"].append(reservation)
             
