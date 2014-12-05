@@ -47,17 +47,19 @@ import sys
 import traceback
 from datetime import datetime, timedelta
 from subprocess import Popen, PIPE
-
+from boto.ec2.group import Group
 
 from boto.ec2.image import Image
 from boto.ec2.instance import Reservation, Instance
 from boto.ec2.keypair import KeyPair
 from boto.ec2.blockdevicemapping import BlockDeviceMapping, BlockDeviceType
+from boto.ec2.securitygroup import SecurityGroup
 from boto.ec2.volume import Volume
 from boto.ec2.bundleinstance import BundleInstanceTask
 from boto.exception import EC2ResponseError
 from boto.ec2.regioninfo import RegionInfo
 from boto.resultset import ResultSet
+from boto.ec2.securitygroup import SecurityGroup, IPPermissions
 import boto
 
 from eutester import Eutester
@@ -443,6 +445,7 @@ disable_root: false"""
     def authorize_group_by_name(self,
                                 group_name="default",
                                 port=22,
+                                end_port=None,
                                 protocol="tcp",
                                 cidr_ip="0.0.0.0/0",
                                 src_security_group=None,
@@ -454,6 +457,7 @@ disable_root: false"""
 
         :param group_name: Name of the group to authorize, default="default"
         :param port: Port to open, default=22
+        :param end_port: End of port range to open, defaults to 'port' arg.
         :param protocol: Protocol to authorize, default=tcp
         :param cidr_ip: CIDR subnet to authorize, default="0.0.0.0/0" everything
         :param src_security_group_name: Grant access to 'group' from src_security_group_name, default=None
@@ -472,19 +476,26 @@ disable_root: false"""
             if src_security_group_name and not src_security_group_owner_id:
                     group = self.get_security_group(name=src_security_group_name)
                     src_security_group_owner_id = group.owner_id
+            if end_port is None:
+                end_port = port
 
         old_api_version = self.ec2.APIVersion
         try:
             #self.ec2.APIVersion = "2009-10-31"
             if src_security_group_name:
-                self.debug( "Attempting authorization of " + group_name + " from " + str(src_security_group_name) +
-                            " on port " + str(port) + " " + str(protocol) )
+                self.debug( "Attempting authorization of: {0}, from group:{1},"
+                            " on port range: {2} to {3}, proto:{4}"
+                            .format(group_name, src_security_group, port,
+                                    end_port, protocol))
             else:
-                self.debug( "Attempting authorization of " + group_name + " on port " + str(port) + " " + str(protocol) )
+                self.debug( "Attempting authorization of:{0}, on port "
+                            "range: {1} to {2}, proto:{3} from {4}"
+                            .format(group_name, port, end_port,
+                                    protocol, cidr_ip))
             self.ec2.authorize_security_group_deprecated(group_name,
                                                          ip_protocol=protocol,
                                                          from_port=port,
-                                                         to_port=port,
+                                                         to_port=end_port,
                                                          cidr_ip=cidr_ip,
                                                          src_security_group_name=src_security_group_name,
                                                          src_security_group_owner_id=src_security_group_owner_id,
@@ -502,6 +513,7 @@ disable_root: false"""
     def authorize_group(self,
                         group,
                         port=22,
+                        end_port=None,
                         protocol="tcp",
                         cidr_ip="0.0.0.0/0",
                         src_security_group=None,
@@ -513,6 +525,7 @@ disable_root: false"""
 
         :param group: boto.group object
         :param port: Port to open, default=22
+        :param end_port: End of port range to open, defaults to 'port' arg.
         :param protocol: Protocol to authorize, default=tcp
         :param cidr_ip: CIDR subnet to authorize, default="0.0.0.0/0" everything
         :param src_security_group_name: Grant access to 'group' from src_security_group_name, default=None
@@ -522,13 +535,108 @@ disable_root: false"""
         """
         return self.authorize_group_by_name(group.name,
                                             port=port,
+                                            end_port=end_port,
                                             protocol=protocol,
                                             cidr_ip=cidr_ip,
                                             src_security_group=src_security_group,
                                             src_security_group_name=src_security_group_name,
                                             src_security_group_owner_id=src_security_group_owner_id,
                                             force_args=force_args)
-    
+
+    def revoke_all_rules(self, group):
+
+        if not isinstance(group, SecurityGroup):
+            group = self.get_security_group(name=group)
+        else:
+            # group obj does not have update() yet...
+            group = self.get_security_group(id=group.id)
+        if not group:
+            raise ValueError('Security group "{0}" not found'.format(group))
+        self.show_security_group(group)
+        assert isinstance(group, SecurityGroup)
+        rules = copy.copy(group.rules)
+        for r in rules:
+            self.debug('Attempting to revoke rule:{0}, grants:{1}'
+                       .format(r, r.grants))
+            assert isinstance(r, IPPermissions)
+            for grant in r.grants:
+                if grant.cidr_ip:
+                    self.debug('{0}.revoke(ip_protocol:{1}, from_port:{2}, '
+                               'to_port{3}, cidr_ip:{4})'.format(group.name,
+                                                                 r.ip_protocol,
+                                                                 r.from_port,
+                                                                 r.to_port,
+                                                                 grant))
+                    group.revoke(ip_protocol=r.ip_protocol, from_port=r.from_port,
+                                 to_port=r.to_port, cidr_ip=grant.cidr_ip)
+                if grant.name or grant.group_id:
+                    group.revoke(ip_protocol=r.ip_protocol,
+                                 from_port=r.from_port,
+                                 to_port=r.to_port,
+                                 src_group=grant,
+                                 cidr_ip=None )
+                    self.debug('{0}.revoke(ip_protocol:{1}, from_port:{2}, '
+                               'to_port:{3}, src_group:{4})'.format(group.name,
+                                                                   r.ip_protocol,
+                                                                   r.from_port,
+                                                                   r.to_port,
+                                                                   grant))
+        group = self.get_security_group(id=group.id)
+        self.debug('AFTER removing all rules...')
+        self.show_security_group(group)
+        return group
+
+    def show_security_group(self, group):
+        try:
+            from prettytable import PrettyTable, ALL
+        except ImportError as IE:
+            self.debug('No pretty table import failed:' + str(IE))
+            return
+        group = self.get_security_group(id=group.id)
+        if not group:
+            raise ValueError('Show sec group failed. Could not fetch group:'
+                             + str(group))
+        header = PrettyTable(["Security Group:" + group.name + "/" + group.id])
+        table = PrettyTable(["CIDR_IP", "SRC_GRP_NAME",
+                             "SRC_GRP_ID", "OWNER_ID", "PORT",
+                             "END_PORT", "PROTO"])
+        table.align["CIDR_IP"] = 'l'
+        table.padding_width = 1
+        for rule in group.rules:
+            port = rule.from_port
+            end_port = rule.to_port
+            proto = rule.ip_protocol
+            for grant in rule.grants:
+                table.add_row([grant.cidr_ip, grant.name,
+                               grant.group_id, grant.owner_id, port,
+                               end_port, proto])
+        table.hrules = ALL
+        header.add_row([str(table)])
+        self.debug("\n{0}".format(str(header)))
+
+    def revoke(self, group,
+                     port=22,
+                     protocol="tcp",
+                     cidr_ip="0.0.0.0/0",
+                     src_security_group_name=None,
+                     src_security_group_owner_id=None):
+        if isinstance(group, SecurityGroup):
+            group_name = group.name
+        else:
+            group_name = group
+        if src_security_group_name:
+            self.debug( "Attempting revoke of " + group_name + " from " + str(src_security_group_name) +
+                        " on port " + str(port) + " " + str(protocol) )
+        else:
+            self.debug( "Attempting revoke of " + group_name + " on port " + str(port) + " " + str(protocol) )
+        self.ec2.revoke_security_group(group_name,
+                                       ip_protocol=protocol,
+                                       from_port=port,
+                                       to_port=port,
+                                       cidr_ip=cidr_ip,
+                                       src_security_group_name=src_security_group_name,
+                                       src_security_group_owner_id=src_security_group_owner_id)
+
     def terminate_single_instance(self, instance, timeout=300 ):
         """
         Terminate an instance
@@ -2140,7 +2248,7 @@ disable_root: false"""
                    arch=None,
                    owner_id=None,
                    filters=None,
-                   basic_image=None,
+                   basic_image=True,
                    platform=None,
                    not_platform=None,
                    tagkey=None,
@@ -2167,10 +2275,11 @@ disable_root: false"""
         """
         # If no criteria was provided for filter an image, use 'basic_image'
         # flag to provide some sane defaults
-        if basic_image is None and not _args_dict:
-            basic_image = True
-        else:
-            basic_image = False
+        if basic_image is None:
+            if not _args_dict:
+                basic_image = True
+            else:
+                basic_image = False
         if filters is None and emi is None and \
                         name is None and location is None:
             # Attempt to get a eutester created image if it happens to meet
@@ -2289,7 +2398,7 @@ disable_root: false"""
         self.debug(buf)
 
 
-    def allocate_address(self):
+    def allocate_address(self, domain=None):
         """
         Allocate an address for the current user
 
@@ -2297,7 +2406,7 @@ disable_root: false"""
         """
         try:
             self.debug("Allocating an address")
-            address = self.ec2.allocate_address()
+            address = self.ec2.allocate_address(domain=domain)
         except Exception, e:
             tb = self.get_traceback()
             err_msg = 'Unable to allocate address'
@@ -2351,7 +2460,7 @@ disable_root: false"""
                 self.sleep(5)
                 instance.update()
                 self.debug('Refreshing EuInstance:'+str(instance.id)+' ssh connection to associated addr:'+str(instance.ip_address))
-                instance.reset_ssh_connection()
+                instance.connect_to_instance()
             else:
                 self.debug('WARNING: associate_address called with refresh_ssh set to true, but instance is not EuInstance type:'+str(instance.id))
 
@@ -2667,7 +2776,9 @@ disable_root: false"""
                   auto_connect=True,
                   clean_on_fail=True,
                   monitor_to_running = True,
-                  timeout=480):
+                  return_reservation=False,
+                  timeout=480,
+                  **boto_run_args):
         """
 
         :param image: image object or string image_id to create instances with
@@ -2720,7 +2831,7 @@ disable_root: false"""
             cmdstart=time.time()
             reservation = image.run(key_name=keypair,security_groups=[group],instance_type=type, placement=zone,
                                     min_count=min, max_count=max, user_data=user_data, addressing_type=addressing_type,
-                                    block_device_map=block_device_map)
+                                    block_device_map=block_device_map, **boto_run_args)
             self.test_resources["reservations"].append(reservation)
             
             if (len(reservation.instances) < min) or (len(reservation.instances) > max):
@@ -2764,9 +2875,11 @@ disable_root: false"""
                     self.debug(self.get_traceback())
                     raise Exception("Unable to create Euinstance from " + str(instance)+", err:\n"+str(e))
             if monitor_to_running:
-                return self.monitor_euinstances_to_running(instances, timeout=timeout)
-            else:
-                return instances
+                instances = self.monitor_euinstances_to_running(instances, timeout=timeout)
+            if return_reservation:
+                reservation.instances = instances
+                return reservation
+            return instances
         except Exception, e:
             trace = self.get_traceback()
             self.debug('!!! Run_instance failed, terminating reservation. Error:'+str(e)+"\n"+trace)
@@ -2775,7 +2888,10 @@ disable_root: false"""
             raise e 
     
     
-    def wait_for_instances_block_dev_mapping(self, instances, poll_interval=1, timeout=60):
+    def wait_for_instances_block_dev_mapping(self,
+                                             instances,
+                                             poll_interval=1,
+                                             timeout=60):
         waiting = copy.copy(instances)
         elapsed = 0
         good = []
@@ -2904,13 +3020,23 @@ disable_root: false"""
         self.print_euinstance_list(good)
         return good
     
-    
+
+
+
     @Eutester.printinfo
-    def does_instance_sec_group_allow(self, instance, src_addr=None, protocol='tcp',port=22):
+    def does_instance_sec_group_allow(self,
+                                      instance,
+                                      src_addr=None,
+                                      src_group=None,
+                                      protocol='tcp',
+                                      port=22):
+        if src_group:
+            assert isinstance(src_group,SecurityGroup) , \
+                'src_group({0}) not of type SecurityGroup obj'.format(src_group)
         s = None
         #self.debug("does_instance_sec_group_allow:"+str(instance.id)+" src_addr:"+str(src_addr))
         try:
-            if not src_addr:
+            if not src_group and not src_addr:
                 #Use the local test machine's addr
                 if not self.ec2_source_ip:
                     #Try to get the outgoing addr used to connect to this instance
@@ -2921,20 +3047,29 @@ disable_root: false"""
                 if self.ec2_source_ip == "0.0.0.0":
                     raise Exception('Test machine source ip detected:'+str(self.ec2_source_ip)+', tester may need ec2_source_ip set manually')
                 src_addr = self.ec2_source_ip
-            
-            self.debug('Using src_addr:'+str(src_addr))
+            if src_addr:
+                self.debug('Using src_addr:'+str(src_addr))
+            elif src_group:
+                self.debug('Using src_addr:'+str(src_addr))
+            else:
+                raise ValueError('Was not able to find local src ip')
             groups = self.get_instance_security_groups(instance)
             for group in groups:
-                if self.does_sec_group_allow(group, src_addr, protocol=protocol, port=port):
+                if self.does_sec_group_allow(group,
+                                             src_addr=src_addr,
+                                             src_group=src_group,
+                                             protocol=protocol,
+                                             port=port):
                     self.debug("Sec allows from test source addr: " +
-                               str(src_addr + ", protocol:" + str(protocol) +
-                               ", port:" + str(port)))
+                               str(src_addr) + ", src_group:" +
+                               str(src_group) + ", protocol:" +
+                               str(protocol) + ", port:" + str(port))
                     #Security group allows from the src/proto/port
                     return True
             #Security group does not allow from the src/proto/port
             return False
         except Exception, e:
-            self.debug(self.get_traceback())
+            self.debug(self.get_traceback() + "\nError in sec group check")
             raise e
         finally:
             if s:
@@ -2955,39 +3090,67 @@ disable_root: false"""
         return None
         
     @Eutester.printinfo                    
-    def does_sec_group_allow(self, group, src, protocol='tcp', port=22):
+    def does_sec_group_allow(self, group, src_addr=None, src_group=None,
+                             protocol='tcp', port=22):
         """
         Test whether a security group will allow traffic from a specific 'src' ip address to
         a specific 'port' using a specific 'protocol'
         :param group: Security group obj to use in lookup
-        :param src: Source address to lookup against sec group rule(s)
+        :param src_addr: Source address to lookup against sec group rule(s)
+        :param src_group: Boto sec group to use in auth check
         :param protocol: Protocol to lookup sec group rule against
         :param port: Network port to lookup sec group rule against
         """
+        if src_group:
+            assert isinstance(src_group, SecurityGroup)
         port = int(port)
         protocol = str(protocol).strip().lower()
         self.debug('Security group:' + str(group.name) + ", src ip:" +
-                   str(src) + ", proto:" + str(protocol) + ", port:" +
-                   str(port))
+                   str(src_addr) + ", src_group:" + str(src_group) +
+                   ", proto:" + str(protocol) + ", port:" + str(port))
         group = self.get_security_group(id=group.id, name=group.name)
         for rule in group.rules:
             g_buf =""
             if str(rule.ip_protocol).strip().lower() == protocol:
                 for grant in rule.grants:
                     g_buf += str(grant)+","
-                self.debug("rule#" + str(group.rules.index(rule)) +
-                           ": port:" + str(rule.to_port) +
-                           ", grants:"+str(g_buf))
+                self.debug("rule#{0}: ports:{1}-{2}, grants:{3}"
+                           .format(str(group.rules.index(rule)),
+                                   str(rule.from_port),
+                                   str(rule.to_port),
+                                   str(g_buf)))
+                from_port = int(rule.from_port)
                 to_port= int(rule.to_port)
-                if (to_port == 0 ) or (to_port == -1) or (to_port == port):
+                if (to_port == 0 ) or (to_port == -1) or \
+                        (port >= from_port and port <= to_port):
                     for grant in rule.grants:
-                        if self.is_address_in_network(src, str(grant)):
-                            self.debug('sec_group DOES allow: group:"{0}"'
-                                       ', src:"{1}", proto:"{2}", port:"{3}"'
-                                       .format(group.name, src, protocol, port))
-                            return True
-        self.debug('sec_group DOES NOT allow: group:"{0}", src:"{1}", proto:'
-                   '"{2}", port:"{3}"'.format(group.name, src, protocol, port))
+                        if src_addr and grant.cidr_ip:
+                            if self.is_address_in_network(src_addr, str(grant)):
+                                self.debug('sec_group DOES allow: group:"{0}"'
+                                           ', src:"{1}", proto:"{2}", port:"{3}"'
+                                           .format(group.name,
+                                                   src_addr,
+                                                   protocol,
+                                                   port))
+                                return True
+                        if src_group:
+                            src_group_id = str(src_group.name) + \
+                                           "-" + (src_group.owner_id)
+                            if ( src_group.id == grant.groupId ) or \
+                                    ( grant.group_id == src_group_id ):
+                                self.debug('sec_group DOES allow: group:"{0}"'
+                                           ', src_group:"{1}"/"{2}", '
+                                           'proto:"{3}", ''port:"{4}"'
+                                           .format(group.name,
+                                                   src_group.id,
+                                                   src_group.name,
+                                                   protocol,
+                                                   port))
+                                return True
+
+        self.debug('sec_group:"{0}" DOES NOT allow from: src_ip:"{1}", '
+                   'src_group:"{2}", proto:"{3}", port:"{4}"'
+                   .format(group.name, src_addr, src_group, protocol, port))
         return False
                     
     @classmethod
@@ -3019,14 +3182,21 @@ disable_root: false"""
         :return:
         """
         secgroups = []
+        groups = []
         if hasattr(instance, 'security_groups') and instance.security_groups:
             return instance.security_groups
-        if hasattr(instance, 'reservation') and instance.reservation:
-            res = instance.reservation
+
+        if hasattr(instance, 'groups') and instance.groups:
+            groups = instance.groups
         else:
-            res = self.get_reservation_for_instance(instance)
-        for group in res.groups:
-         secgroups.extend(self.ec2.get_all_security_groups(groupnames=str(group.id)))
+            if hasattr(instance, 'reservation') and instance.reservation:
+                res = instance.reservation
+            else:
+                res = self.get_reservation_for_instance(instance)
+            groups = res.groups
+        for group in groups:
+            secgroups.extend(self.ec2.get_all_security_groups(
+                groupnames=[str(group.name)]))
         return secgroups
     
     def get_reservation_for_instance(self, instance):
@@ -3235,6 +3405,7 @@ disable_root: false"""
                 instance.update()
                 if hasattr(instance, 'ip_address') and instance.ip_address and \
                         (zeros.search(str(instance.ip_address)) or zeros.search(str(instance.private_ip_address))):
+                    # Either public or private ip was still not populated
                     self.debug(str(instance.id)+": WAITING for public ip. Current:"+str(instance.ip_address)+
                                ", elapsed:"+str(elapsed)+"/"+str(timeout))
                 else:
@@ -3306,7 +3477,7 @@ disable_root: false"""
 
     def convert_reservation_to_euinstance(self,
                                           reservation,
-                                          username="root",
+                                          username=None,
                                           password=None,
                                           keyname=None,
                                           private_addressing=False,
@@ -3329,7 +3500,7 @@ disable_root: false"""
         if private_addressing:
             auto_connect = False
         for instance in reservation.instances:
-            if keypair is not None or (password is not None and username is not None):
+            if keypair is not None or password is not None:
                 try:
                     euinstance_list.append(
                         self.convert_instance_to_euisntance(instance,
@@ -3349,10 +3520,11 @@ disable_root: false"""
         return reservation
 
     def convert_instance_to_euisntance(self, instance, keypair=None,
-                                       username="root", password=None,
+                                       username=None, password=None,
                                        reservation=None, auto_connect=True,
                                        timeout=120):
         if instance.platform == 'windows':
+            username = username or 'Administrator'
             instance = WinInstance.make_euinstance_from_instance(
                 instance,
                 self,
@@ -3363,6 +3535,7 @@ disable_root: false"""
                 auto_connect=auto_connect,
                 timeout=timeout)
         else:
+            username = username or 'root'
             instance = EuInstance.make_euinstance_from_instance(
                 instance,
                 self,
@@ -3491,7 +3664,7 @@ disable_root: false"""
 
         
     
-    def get_connectable_euinstances(self,path=None,username='root', password=None, connect=True):
+    def get_connectable_euinstances(self,path=None,username=None, password=None, connect=True):
         """
         Convenience method, returns a list of all running instances, for the current creduser
         for which there are local keys at 'path'
@@ -3515,12 +3688,12 @@ disable_root: false"""
                     else:
                         euinstances.append(
                             self.convert_instance_to_euisntance(instance,
-                                                                self,
                                                                 username=username,
                                                                 password=password,
                                                                 keypair=keypair ))
             return euinstances
         except Exception, e:
+            traceback.print_exc()
             self.debug("Failed to find a pre-existing instance we can connect to:"+str(e))
             pass
     
@@ -3743,7 +3916,7 @@ disable_root: false"""
         self.debug("bundle_instance_monitor_and_register:" + str(bundle_task.id)
                    + " monitored to completed, now get manifest and register...")
         manifest = self.get_manifest_string_from_bundle_task(bundle_task)
-        image = self.register_manifest(manifest)
+        image = self.register_manifest(manifest, virtualization_type=instance.virtualization_type)
         self.debug("bundle_instance_monitor_and_register:" + str(bundle_task.id)
                    + ", registered as image:" + str(image.id))
         self.debug("bundle_instance_monitor_and_register:" + str(bundle_task.id)
@@ -4374,6 +4547,7 @@ disable_root: false"""
 
 
     def get_vm_type_list_from_zone(self, zone):
+        self.debug('Looking up zone:' + str(zone))
         euzone = self.get_euzones(zone)[0]
         return euzone.vm_types
 
