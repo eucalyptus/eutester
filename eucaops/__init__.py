@@ -764,24 +764,27 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
    
     def create_credentials(self, admin_cred_dir, account, user):
         cred_dir = admin_cred_dir + "/creds.zip"
-        self.sys("rm -f " + cred_dir)
 
-        cmd_download_creds = self.eucapath + "/usr/sbin/euca_conf --get-credentials " + admin_cred_dir + "/creds.zip " + "--cred-user "+ user + " --cred-account " + account
-        if self.clc.found(cmd_download_creds, "The MySQL server is not responding"):
-            raise IOError("Error downloading credentials, looks like CLC was not running")
-        if self.clc.found("unzip -o " + admin_cred_dir + "/creds.zip " + "-d " + admin_cred_dir,
-                          "cannot find zipfile directory"):
-            raise IOError("Empty ZIP file returned by CLC")
-
-        # backward compatibility
-        cert_exists_in_eucarc = self.clc.found("cat " + admin_cred_dir + "/eucarc", "export EC2_CERT")
-        if cert_exists_in_eucarc:
-            self.debug("Cert/pk already exist in '" + admin_cred_dir + "/eucarc' file.")
+        output = self.credential_exists(cred_dir)
+        if output['status'] == 0:
+            self.debug("Found creds file, skipping download.")
         else:
-            self.setup_user_certs(admin_cred_dir, account, user)
-            self.debug("Setting cert/pk in '" + admin_cred_dir + "/eucarc'")
-            self.sys("echo 'export EC2_CERT=${EUCA_KEY_DIR}/euca2-cert.pem' >> " + admin_cred_dir + "/eucarc")
-            self.sys("echo 'export EC2_PRIVATE_KEY=${EUCA_KEY_DIR}/euca2-pk.pem' >> " + admin_cred_dir + "/eucarc")
+            cmd_download_creds = self.eucapath + "/usr/sbin/euca_conf --get-credentials " + admin_cred_dir + "/creds.zip " + "--cred-user "+ user + " --cred-account " + account
+            if self.clc.found(cmd_download_creds, "The MySQL server is not responding"):
+                raise IOError("Error downloading credentials, looks like CLC was not running")
+            if self.clc.found("unzip -o " + admin_cred_dir + "/creds.zip " + "-d " + admin_cred_dir,
+                              "cannot find zipfile directory"):
+                raise IOError("Empty ZIP file returned by CLC")
+
+            # backward compatibility
+            cert_exists_in_eucarc = self.clc.found("cat " + admin_cred_dir + "/eucarc", "export EC2_CERT")
+            if cert_exists_in_eucarc:
+                self.debug("Cert/pk already exist in '" + admin_cred_dir + "/eucarc' file.")
+            else:
+                self.setup_user_certs(admin_cred_dir, account, user)
+                self.debug("Setting cert/pk in '" + admin_cred_dir + "/eucarc'")
+                self.sys("echo 'export EC2_CERT=${EUCA_KEY_DIR}/euca2-cert.pem' >> " + admin_cred_dir + "/eucarc")
+                self.sys("echo 'export EC2_PRIVATE_KEY=${EUCA_KEY_DIR}/euca2-pk.pem' >> " + admin_cred_dir + "/eucarc")
 
     def setup_user_certs(self, admin_cred_dir, account, user):
         admin_certs = self.sys("source " + admin_cred_dir + "/eucarc" + " && " + "/usr/bin/euare-userlistcerts | grep -v Active")
@@ -794,7 +797,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
 
     def credential_exists(self, cred_path):
         return self.clc.ssh.cmd("test -e " + cred_path)
-    
+
     def download_creds_from_clc(self, admin_cred_dir):
         self.debug("Downloading credentials from " + self.clc.hostname + ", path:" + admin_cred_dir + "/creds.zip")
         self.sftp.get(admin_cred_dir + "/creds.zip", admin_cred_dir + "/creds.zip")
