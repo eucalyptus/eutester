@@ -41,39 +41,44 @@ class CloudFormationTemplateURLTests(EutesterTestCase):
     def __init__(self, extra_args=None):
         self.setuptestcase()
         self.setup_parser()
+        self.parser.add_argument('--template_urls', dest='template_urls',
+                                 help='comma separated list of template_urls',
+                                 default=None)
         if extra_args:
             for arg in extra_args:
                 self.parser.add_argument(arg)
         self.get_args()
+        self.show_args()
+        self.template_urls = self.args.template_urls.split(',')
         # Setup basic eutester object
         if self.args.region:
             self.tester = CFNops(credpath=self.args.credpath, region=self.args.region)
         else:
             self.tester = Eucaops(credpath=self.args.credpath, config_file=self.args.config,
                                   password=self.args.password)
-        self.template_urls = [
-            "http://git.qa1.eucalyptus-systems.com/tony/eucalele/raw/cloudformation/cloudformation_templates/buckets.json",
-            "http://git.qa1.eucalyptus-systems.com/tony/eucalele/raw/cloudformation/cloudformation_templates/instance-vpc.json"]
         # Generate a keypair for the instance
         self.keypair = self.tester.add_keypair("keypair-" + str(time.time()))
         self.keypath = '%s/%s.pem' % (os.curdir, self.keypair.name)
 
     def Stack_Template_URL_Test(self):
         for url in self.template_urls:
-            self.stack_name = "TemplateURLTest" + str(int(time.time()))
+            # get template name from URL, remove file extension and any "-"
+            template = os.path.splitext(url.rsplit('/', 1)[1])[0].replace("-", "")
+            self.stack_name = template + str(int(time.time()))
             self.template_parameters = [('KeyName', self.keypair.name), ('ImageId', self.tester.get_emi().id)]
-            self.tester.cloudformation.create_stack(stack_name=self.stack_name,
-                                                    template_url=url,
-                                                    parameters=self.template_parameters)
+            self.tester.create_stack(stack_name=self.stack_name,
+                                     template_body=None,
+                                     template_url=url,
+                                     parameters=self.template_parameters)
 
             def stack_completed():
                 stack_status = False
                 if len(self.tester.cloudformation.describe_stack_events(self.stack_name)) > 0:
                     stack_info = self.tester.cloudformation.describe_stack_events(self.stack_name)
-                    for info in stack_info:
-                        if (info.logical_resource_id == self.stack_name) and (info.resource_status == "CREATE_COMPLETE"):
-                            self.debug("Stack Logical Resource: " + info.logical_resource_id)
-                            self.debug("Stack Resource Status: " + info.resource_status)
+                    for inf in stack_info:
+                        if (inf.logical_resource_id == self.stack_name) and (inf.resource_status == "CREATE_COMPLETE"):
+                            self.debug("Stack Logical Resource: " + inf.logical_resource_id)
+                            self.debug("Stack Resource Status: " + inf.resource_status)
                             stack_status = True
                 return stack_status
             self.tester.wait_for_result(stack_completed, True, timeout=600)
