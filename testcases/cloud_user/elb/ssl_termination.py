@@ -58,10 +58,10 @@ class SSLTermination(EutesterTestCase):
 
         ### Add and authorize a group for the instance
         self.group = self.tester.add_group(group_name="group-" + str(int(time.time())))
-        self.tester.authorize_group_by_name(group_name=self.group.name )
+        self.tester.authorize_group_by_name(group_name=self.group.name)
         self.tester.authorize_group_by_name(group_name=self.group.name, port=-1, protocol="icmp" )
         ### Generate a keypair for the instance
-        self.keypair = self.tester.add_keypair( "keypair-" + str(int(time.time())))
+        self.keypair = self.tester.add_keypair("keypair-" + str(int(time.time())))
         self.keypath = '%s/%s.pem' % (os.curdir, self.keypair.name)
 
         ### Get an image
@@ -113,7 +113,7 @@ class SSLTermination(EutesterTestCase):
         self.tester.remove_lb_listener(lb_name=self.load_balancer.name, port=self.load_balancer_port)
 
         """perform https requests to LB"""
-        self.tester.sleep(5)
+        self.tester.sleep(10)
         self.tester.generate_http_requests(url=lb_url, count=10)
 
     def clean_method(self):
