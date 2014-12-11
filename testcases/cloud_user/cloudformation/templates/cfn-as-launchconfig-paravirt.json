@@ -1,0 +1,94 @@
+{
+
+    "AWSTemplateFormatVersion":"2010-09-09",
+
+    "Description":"Test Creation of AutoScaling Launch Configuration",
+
+    "Parameters": {
+        "EucaImageId": {
+            "Description":"Eucalyptus Machine Image Id",
+            "Type":"String",
+            "NoEcho":"True"
+        },
+
+        "EucaKernelId": {
+            "Description":"Eucalyptus Kernel Image Id",
+            "Type":"String",
+            "NoEcho":"True"
+        },
+
+        "EucaRamdiskId": {
+            "Description":"Eucalyptus Ramdisk Image Id",
+            "Type":"String",
+            "NoEcho":"True"
+        },
+
+        "EucaMonitor": {
+            "Description":"Enable/Disable Instance Monitoring",
+            "Type":"String",
+            "NoEcho":"True",
+            "Default":"True"
+        },
+
+        "UserKeyPair": {
+            "Description":"User Key Pair",
+            "Type":"String",
+            "NoEcho":"True"
+        },
+
+        "VmType": {
+            "Description":"Desired VM Type for Instances",
+            "Type":"String",
+            "NoEcho":"True"
+        }
+
+    },
+
+    "Resources" : {
+
+        "EucaLaunchConfig" : {
+            "Type" : "AWS::AutoScaling::LaunchConfiguration",
+            "Properties": {
+                "ImageId" : { "Ref":"EucaImageId" },
+                "KernelId" : { "Ref":"EucaKernelId" },
+                "RamDiskId" : { "Ref":"EucaRamdiskId" },
+                "InstanceType" : { "Ref" : "VmType" },
+                "InstanceMonitoring" : { "Ref" : "EucaMonitor" },
+                "UserData" : { "Fn::Base64" : "#include https://get.docker.io" },
+                "SecurityGroups" : [
+                    { "Ref" : "EucaSecurityGroup" }
+                ],
+                "BlockDeviceMappings" : [
+                    {
+                      "DeviceName": "/dev/sdm",
+                      "Ebs" : { "VolumeSize" : "5", "DeleteOnTermination" : "true" }
+                    }
+                ],
+                "KeyName" : { "Ref" : "UserKeyPair" }
+            }
+        },
+
+        "EucaSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+                "Properties": {
+                    "GroupDescription" : "Security Group for AutoScaling Launch Configuration",
+                    "SecurityGroupIngress" : [
+                        {
+                            "IpProtocol" : "tcp",
+                            "FromPort" : "22",
+                            "ToPort" : "22",
+                            "CidrIp" : "0.0.0.0/0"
+                        }
+                    ]
+                }
+        }
+
+    },
+
+    "Outputs" : {
+        "AutoScalingLaunchConfiguration" : {
+            "Description" : "AutoScaling Launch Configuration Name",
+            "Value" : { "Ref" : "EucaLaunchConfig" }
+        }
+    }
+}
