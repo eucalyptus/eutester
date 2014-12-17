@@ -1,0 +1,63 @@
+i{
+  "Parameters" : {
+    "KeyName" : {
+      "Type" : "String"
+    },
+    "ImageId" : {
+      "Type" : "String"
+    }
+  },
+
+  "Resources":{
+    "LaunchConfig":{
+      "Type" : "AWS::AutoScaling::LaunchConfiguration",
+      "Properties" : {
+        "ImageId" : { "Ref" : "ImageId" },
+        "InstanceMonitoring" : true,
+        "InstanceType" : "t1.micro",
+        "KeyName" : { "Ref" : "KeyName" },
+        "UserData" : {
+          "Fn::Base64" : {
+            "Fn::Join" : [ "",
+              [ "#!/bin/bash", "\n",
+                "apt-get update", "\n",
+                "apt-get install -y apache2", "\n"
+              ]
+            ]
+          }
+        }
+      }
+    },
+    "ScalingGroup":{
+      "Type" : "AWS::AutoScaling::AutoScalingGroup",
+      "Properties" : {
+        "AvailabilityZones" : ["one"],
+        "Cooldown" : "90",
+        "DesiredCapacity" : "2",
+        "HealthCheckGracePeriod" : 90,
+        "HealthCheckType" : "ec2",
+        "LaunchConfigurationName" : { "Ref" : "LaunchConfig" },
+        "MaxSize" : "5",
+        "MetricsCollection" : [{
+          "Granularity" : "1Minute",
+          "Metrics" : [
+            "GroupMinSize",
+            "GroupMaxSize",
+            "GroupDesiredCapacity",
+            "GroupInServiceInstances",
+            "GroupPendingInstances",
+            "GroupStandbyInstances",
+            "GroupTerminatingInstances",
+            "GroupTotalInstances"]
+            }],
+            "MinSize" : "0",
+            "Tags" : [{
+              "Key" : "CFN-LAUNCH-CONFIG",
+              "Value" : "cloudformation launch config",
+              "PropagateAtLaunch" : true
+              }]
+            }
+          }
+        }
+      }
+      
