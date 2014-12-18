@@ -81,7 +81,7 @@ class CloudFormationTemplateURLTests(EutesterTestCase):
                             self.debug("Stack Resource Status: " + inf.resource_status)
                             stack_status = True
                 return stack_status
-            self.tester.wait_for_result(stack_completed, True, timeout=600)
+            self.tester.wait_for_result(stack_completed, True, timeout=300)
             self.tester.delete_stack(self.stack_name)
 
     def clean_method(self):
