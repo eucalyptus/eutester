@@ -64,7 +64,7 @@ class CloudFormationTemplateURLTests(EutesterTestCase):
         for url in self.template_urls:
             # get template name from URL, remove file extension and any "-"
             template = os.path.splitext(url.rsplit('/', 1)[1])[0].replace("-", "")
-            self.stack_name = template + "-" + str(os.urandom(8).encode('hex'))
+            self.stack_name = template + str(os.urandom(8).encode('hex'))
             self.template_parameters = [('KeyName', self.keypair.name), ('ImageId', self.tester.get_emi().id)]
             self.tester.create_stack(stack_name=self.stack_name,
                                      template_body=None,
