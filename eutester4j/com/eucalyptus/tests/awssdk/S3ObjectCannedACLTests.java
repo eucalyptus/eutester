@@ -27,6 +27,7 @@ import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.CanonicalGrantee;
 import com.amazonaws.services.s3.model.Grant;
 import com.amazonaws.services.s3.model.GroupGrantee;
+import com.amazonaws.services.s3.model.Owner;
 import com.amazonaws.services.s3.model.Permission;
 import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.s3.model.PutObjectResult;
@@ -57,6 +58,9 @@ public class S3ObjectCannedACLTests {
 	private static String md5_orig = null;
 	private static AmazonS3 s3 = null;
 	private static String account = null;
+	private static Owner owner = null;
+	private static String ownerName = null;
+	private static String ownerId = null;
 
 	@BeforeClass
 	public void init() throws Exception {
@@ -85,6 +89,10 @@ public class S3ObjectCannedACLTests {
 
 		assertTrue("Invalid reference to bucket", bucket != null);
 		assertTrue("Mismatch in bucket names. Expected bucket name to be " + bucketName + ", but got " + bucket.getName(), bucketName.equals(bucket.getName()));
+
+		owner = s3.getS3AccountOwner();
+		ownerName = owner.getDisplayName();
+		ownerId = owner.getId();
 
 		md5_orig = BinaryUtils.toHex(Md5Utils.computeMD5Hash(new FileInputStream(fileToPut)));
 	}
@@ -444,7 +452,6 @@ public class S3ObjectCannedACLTests {
 		testInfo(this.getClass().getSimpleName() + " - setObject_CannedACLs");
 
 		try {
-			final String key = eucaUUID();
 			putObject(key);
 
 			/* Put object and set Canned ACL AuthenticatedRead */
@@ -491,6 +498,67 @@ public class S3ObjectCannedACLTests {
 		}
 	}
 
+	@Test
+	public void setObject_nonCannedACL() throws Exception {
+		testInfo(this.getClass().getSimpleName() + " - setObject_nonCannedACL");
+		try {
+			putObject(key);
+
+			Grant ownerGrant = new Grant(new CanonicalGrantee(ownerId), Permission.FullControl);
+
+			AccessControlList acl = new AccessControlList();
+			acl.setOwner(owner);
+			acl.getGrants().add(new Grant(GroupGrantee.AuthenticatedUsers, Permission.FullControl));
+			print("Setting ACL for " + key + " to " + acl);
+			s3.setObjectAcl(bucketName, key, acl);
+			acl.getGrants().add(ownerGrant);
+			verifyObjectACL(key, acl);
+
+			acl = new AccessControlList();
+			acl.setOwner(owner);
+			acl.getGrants().add(new Grant(GroupGrantee.AllUsers, Permission.WriteAcp));
+			print("Setting ACL for " + key + " to " + acl);
+			s3.setObjectAcl(bucketName, key, acl);
+			acl.getGrants().add(ownerGrant);
+			verifyObjectACL(key, acl);
+
+			acl = new AccessControlList();
+			acl.setOwner(owner);
+			acl.getGrants().add(new Grant(GroupGrantee.LogDelivery, Permission.ReadAcp));
+			print("Setting ACL for " + key + " to " + acl);
+			s3.setObjectAcl(bucketName, key, acl);
+			acl.getGrants().add(ownerGrant);
+			verifyObjectACL(key, acl);
+		} catch (AmazonServiceException ase) {
+			printException(ase);
+			assertThat(false, "Failed to run setObject_nonCannedACL");
+		}
+	}
+
+	@Test
+	public void putObject_nonCannedACL() throws Exception {
+		testInfo(this.getClass().getSimpleName() + " - putObject_nonCannedACL");
+		try {
+			Grant ownerGrant = new Grant(new CanonicalGrantee(ownerId), Permission.FullControl);
+			
+			AccessControlList acl = new AccessControlList();
+			acl.getGrants().add(new Grant(GroupGrantee.AuthenticatedUsers, Permission.Write));
+			putObjectWithCannedACL(bucketName, key, acl);
+			acl.getGrants().add(ownerGrant);
+			verifyObjectACL(key, acl);
+			
+			acl = new AccessControlList();
+			acl.getGrants().add(new Grant(GroupGrantee.LogDelivery, Permission.FullControl));
+			acl.getGrants().add(new Grant(GroupGrantee.AllUsers, Permission.ReadAcp));
+			putObjectWithCannedACL(bucketName, key, acl);
+			acl.getGrants().add(ownerGrant);
+			verifyObjectACL(key, acl);
+		} catch (AmazonServiceException ase) {
+			printException(ase);
+			assertThat(false, "Failed to run putObject_nonCannedACL");
+		}
+	}
+
 	private void printException(AmazonServiceException ase) {
 		ase.printStackTrace();
 		print("Caught Exception: " + ase.getMessage());
@@ -530,134 +598,160 @@ public class S3ObjectCannedACLTests {
 				putObj.getETag() != null && putObj.getETag().equals(md5_orig));
 	}
 
+	private void putObjectWithCannedACL(final String bucketName, final String key, AccessControlList acl) throws Exception {
+		print("Putting object " + key + " with canned ACL " + acl + " in bucket " + bucketName);
+		PutObjectResult putObj = s3.putObject(new PutObjectRequest(bucketName, key, fileToPut).withAccessControlList(acl));
+		cleanupTasks.add(new Runnable() {
+			@Override
+			public void run() {
+				print("Deleting object " + key + " from bucket " + bucketName);
+				s3.deleteObject(bucketName, key);
+			}
+		});
+		assertTrue("Invalid put object result", putObj != null);
+		assertTrue("Mimatch in md5sums between original object and PUT result. Expected " + md5_orig + ", but got " + putObj.getETag(),
+				putObj.getETag() != null && putObj.getETag().equals(md5_orig));
+	}
+
 	private void verifyObjectACL(String key, CannedAccessControlList cannedACL) {
 		print("Getting ACL for object " + key);
 		AccessControlList acl = s3.getObjectAcl(bucketName, key);
-		assertTrue("Expected owner of the ACL to be " + s3.getS3AccountOwner().getId() + ", but found " + acl.getOwner().getId(), s3.getS3AccountOwner()
-				.getId().equals(acl.getOwner().getId()));
+		assertTrue("Expected owner of the ACL to be " + ownerId + ", but found " + acl.getOwner().getId(), acl.getOwner().getId().equals(ownerId));
 		Iterator<Grant> iterator = acl.getGrants().iterator();
 
 		switch (cannedACL) {
-			case AuthenticatedRead:
-				assertTrue("Mismatch in number of ACLs associated with the object. Expected 2 but got " + acl.getGrants().size(), acl.getGrants().size() == 2);
-				while (iterator.hasNext()) {
-					Grant grant = iterator.next();
-					if (grant.getGrantee() instanceof CanonicalGrantee) {
-						assertTrue("Expected grantee to be object owner " + acl.getOwner().getId() + ", but found " + grant.getGrantee().getIdentifier(), grant
-								.getGrantee().getIdentifier().equals(acl.getOwner().getId()));
-						assertTrue("Expected object owner to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(), grant
-								.getPermission().equals(Permission.FullControl));
-					} else {
-						assertTrue("Grantee of type GroupGrantee not found", grant.getGrantee() instanceof GroupGrantee);
-						assertTrue("Expected grantee to be " + GroupGrantee.AuthenticatedUsers + ", but found " + ((GroupGrantee) grant.getGrantee()),
-								((GroupGrantee) grant.getGrantee()).equals(GroupGrantee.AuthenticatedUsers));
-						assertTrue(
-								"Expected " + GroupGrantee.AuthenticatedUsers + " to have " + Permission.Read.toString() + " privilege, but found "
-										+ grant.getPermission(), grant.getPermission().equals(Permission.Read));
-					}
-				}
-				break;
-
-			case BucketOwnerFullControl:
-				assertTrue("Mismatch in number of ACLs associated with the object. Expected 1 but got " + acl.getGrants().size(), acl.getGrants().size() == 1);
-				while (iterator.hasNext()) {
-					Grant grant = iterator.next();
-					assertTrue("Grantee is not of type CanonicalGrantee", grant.getGrantee() instanceof CanonicalGrantee);
+		case AuthenticatedRead:
+			assertTrue("Mismatch in number of ACLs associated with the object. Expected 2 but got " + acl.getGrants().size(), acl.getGrants().size() == 2);
+			while (iterator.hasNext()) {
+				Grant grant = iterator.next();
+				if (grant.getGrantee() instanceof CanonicalGrantee) {
 					assertTrue("Expected grantee to be object owner " + acl.getOwner().getId() + ", but found " + grant.getGrantee().getIdentifier(), grant
 							.getGrantee().getIdentifier().equals(acl.getOwner().getId()));
 					assertTrue("Expected object owner to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(), grant
 							.getPermission().equals(Permission.FullControl));
+				} else {
+					assertTrue("Grantee of type GroupGrantee not found", grant.getGrantee() instanceof GroupGrantee);
+					assertTrue("Expected grantee to be " + GroupGrantee.AuthenticatedUsers + ", but found " + ((GroupGrantee) grant.getGrantee()),
+							((GroupGrantee) grant.getGrantee()).equals(GroupGrantee.AuthenticatedUsers));
+					assertTrue(
+							"Expected " + GroupGrantee.AuthenticatedUsers + " to have " + Permission.Read.toString() + " privilege, but found "
+									+ grant.getPermission(), grant.getPermission().equals(Permission.Read));
 				}
-				break;
+			}
+			break;
 
-			case BucketOwnerRead:
-				assertTrue("Mismatch in number of ACLs associated with the object. Expected 1 but got " + acl.getGrants().size(), acl.getGrants().size() == 1);
-				while (iterator.hasNext()) {
-					Grant grant = iterator.next();
-					assertTrue("Grantee is not of type CanonicalGrantee", grant.getGrantee() instanceof CanonicalGrantee);
+		case BucketOwnerFullControl:
+			assertTrue("Mismatch in number of ACLs associated with the object. Expected 1 but got " + acl.getGrants().size(), acl.getGrants().size() == 1);
+			while (iterator.hasNext()) {
+				Grant grant = iterator.next();
+				assertTrue("Grantee is not of type CanonicalGrantee", grant.getGrantee() instanceof CanonicalGrantee);
+				assertTrue("Expected grantee to be object owner " + acl.getOwner().getId() + ", but found " + grant.getGrantee().getIdentifier(), grant
+						.getGrantee().getIdentifier().equals(acl.getOwner().getId()));
+				assertTrue("Expected object owner to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(), grant.getPermission()
+						.equals(Permission.FullControl));
+			}
+			break;
+
+		case BucketOwnerRead:
+			assertTrue("Mismatch in number of ACLs associated with the object. Expected 1 but got " + acl.getGrants().size(), acl.getGrants().size() == 1);
+			while (iterator.hasNext()) {
+				Grant grant = iterator.next();
+				assertTrue("Grantee is not of type CanonicalGrantee", grant.getGrantee() instanceof CanonicalGrantee);
+				assertTrue("Expected grantee to be object owner " + acl.getOwner().getId() + ", but found " + grant.getGrantee().getIdentifier(), grant
+						.getGrantee().getIdentifier().equals(acl.getOwner().getId()));
+				assertTrue("Expected object owner to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(), grant.getPermission()
+						.equals(Permission.FullControl));
+			}
+			break;
+
+		case LogDeliveryWrite:
+			assertTrue("Mismatch in number of ACLs associated with the object. Expected 3 but got " + acl.getGrants().size(), acl.getGrants().size() == 3);
+			while (iterator.hasNext()) {
+				Grant grant = iterator.next();
+				if (grant.getGrantee() instanceof CanonicalGrantee) {
 					assertTrue("Expected grantee to be object owner " + acl.getOwner().getId() + ", but found " + grant.getGrantee().getIdentifier(), grant
 							.getGrantee().getIdentifier().equals(acl.getOwner().getId()));
 					assertTrue("Expected object owner to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(), grant
 							.getPermission().equals(Permission.FullControl));
+				} else {
+					assertTrue("Grantee of type GroupGrantee not found", grant.getGrantee() instanceof GroupGrantee);
+					assertTrue("Expected grantee to be " + GroupGrantee.LogDelivery + ", but found " + ((GroupGrantee) grant.getGrantee()),
+							((GroupGrantee) grant.getGrantee()).equals(GroupGrantee.LogDelivery));
+					assertTrue(
+							"Expected " + GroupGrantee.LogDelivery + " to have " + Permission.Write.toString() + " or "
+									+ grant.getPermission().equals(Permission.ReadAcp) + " privileges, but found " + grant.getPermission(), grant
+									.getPermission().equals(Permission.Write) || grant.getPermission().equals(Permission.ReadAcp));
 				}
-				break;
+			}
+			break;
 
-			case LogDeliveryWrite:
-				assertTrue("Mismatch in number of ACLs associated with the object. Expected 3 but got " + acl.getGrants().size(), acl.getGrants().size() == 3);
-				while (iterator.hasNext()) {
-					Grant grant = iterator.next();
-					if (grant.getGrantee() instanceof CanonicalGrantee) {
-						assertTrue("Expected grantee to be object owner " + acl.getOwner().getId() + ", but found " + grant.getGrantee().getIdentifier(), grant
-								.getGrantee().getIdentifier().equals(acl.getOwner().getId()));
-						assertTrue("Expected object owner to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(), grant
-								.getPermission().equals(Permission.FullControl));
-					} else {
-						assertTrue("Grantee of type GroupGrantee not found", grant.getGrantee() instanceof GroupGrantee);
-						assertTrue("Expected grantee to be " + GroupGrantee.LogDelivery + ", but found " + ((GroupGrantee) grant.getGrantee()),
-								((GroupGrantee) grant.getGrantee()).equals(GroupGrantee.LogDelivery));
-						assertTrue(
-								"Expected " + GroupGrantee.LogDelivery + " to have " + Permission.Write.toString() + " or "
-										+ grant.getPermission().equals(Permission.ReadAcp) + " privileges, but found " + grant.getPermission(), grant
-										.getPermission().equals(Permission.Write) || grant.getPermission().equals(Permission.ReadAcp));
-					}
-				}
-				break;
+		case Private:
+			assertTrue("Mismatch in number of ACLs associated with the object. Expected 1 but got " + acl.getGrants().size(), acl.getGrants().size() == 1);
+			while (iterator.hasNext()) {
+				Grant grant = iterator.next();
+				assertTrue("Grantee is not of type CanonicalGrantee", grant.getGrantee() instanceof CanonicalGrantee);
+				assertTrue("Expected grantee to be object owner " + acl.getOwner().getId() + ", but found " + grant.getGrantee().getIdentifier(), grant
+						.getGrantee().getIdentifier().equals(acl.getOwner().getId()));
+				assertTrue("Expected object owner to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(), grant.getPermission()
+						.equals(Permission.FullControl));
+			}
+			break;
 
-			case Private:
-				assertTrue("Mismatch in number of ACLs associated with the object. Expected 1 but got " + acl.getGrants().size(), acl.getGrants().size() == 1);
-				while (iterator.hasNext()) {
-					Grant grant = iterator.next();
-					assertTrue("Grantee is not of type CanonicalGrantee", grant.getGrantee() instanceof CanonicalGrantee);
+		case PublicRead:
+			assertTrue("Mismatch in number of ACLs associated with the object. Expected 2 but got " + acl.getGrants().size(), acl.getGrants().size() == 2);
+			while (iterator.hasNext()) {
+				Grant grant = iterator.next();
+				if (grant.getGrantee() instanceof CanonicalGrantee) {
 					assertTrue("Expected grantee to be object owner " + acl.getOwner().getId() + ", but found " + grant.getGrantee().getIdentifier(), grant
 							.getGrantee().getIdentifier().equals(acl.getOwner().getId()));
 					assertTrue("Expected object owner to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(), grant
 							.getPermission().equals(Permission.FullControl));
+				} else {
+					assertTrue("Grantee of type GroupGrantee not found", grant.getGrantee() instanceof GroupGrantee);
+					assertTrue("Expected grantee to be " + GroupGrantee.AllUsers + ", but found " + ((GroupGrantee) grant.getGrantee()),
+							((GroupGrantee) grant.getGrantee()).equals(GroupGrantee.AllUsers));
+					assertTrue(
+							"Expected " + GroupGrantee.AllUsers + " to have " + Permission.Read.toString() + " privilege, but found " + grant.getPermission(),
+							grant.getPermission().equals(Permission.Read));
 				}
-				break;
+			}
+			break;
 
-			case PublicRead:
-				assertTrue("Mismatch in number of ACLs associated with the object. Expected 2 but got " + acl.getGrants().size(), acl.getGrants().size() == 2);
-				while (iterator.hasNext()) {
-					Grant grant = iterator.next();
-					if (grant.getGrantee() instanceof CanonicalGrantee) {
-						assertTrue("Expected grantee to be object owner " + acl.getOwner().getId() + ", but found " + grant.getGrantee().getIdentifier(), grant
-								.getGrantee().getIdentifier().equals(acl.getOwner().getId()));
-						assertTrue("Expected object owner to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(), grant
-								.getPermission().equals(Permission.FullControl));
-					} else {
-						assertTrue("Grantee of type GroupGrantee not found", grant.getGrantee() instanceof GroupGrantee);
-						assertTrue("Expected grantee to be " + GroupGrantee.AllUsers + ", but found " + ((GroupGrantee) grant.getGrantee()),
-								((GroupGrantee) grant.getGrantee()).equals(GroupGrantee.AllUsers));
-						assertTrue(
-								"Expected " + GroupGrantee.AllUsers + " to have " + Permission.Read.toString() + " privilege, but found "
-										+ grant.getPermission(), grant.getPermission().equals(Permission.Read));
-					}
+		case PublicReadWrite:
+			assertTrue("Mismatch in number of ACLs associated with the object. Expected 3 but got " + acl.getGrants().size(), acl.getGrants().size() == 3);
+			while (iterator.hasNext()) {
+				Grant grant = iterator.next();
+				if (grant.getGrantee() instanceof CanonicalGrantee) {
+					assertTrue("Expected grantee to be object owner " + acl.getOwner().getId() + ", but found " + grant.getGrantee().getIdentifier(), grant
+							.getGrantee().getIdentifier().equals(acl.getOwner().getId()));
+					assertTrue("Expected object owner to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(), grant
+							.getPermission().equals(Permission.FullControl));
+				} else {
+					assertTrue("Grantee of type GroupGrantee not found", grant.getGrantee() instanceof GroupGrantee);
+					assertTrue("Expected grantee to be " + GroupGrantee.AllUsers + ", but found " + ((GroupGrantee) grant.getGrantee()),
+							((GroupGrantee) grant.getGrantee()).equals(GroupGrantee.AllUsers));
+					assertTrue("Expected " + GroupGrantee.AllUsers + " to have " + Permission.Read.toString() + " or " + Permission.Write.toString()
+							+ " privileges, but found " + grant.getPermission(),
+							grant.getPermission().equals(Permission.Read) || grant.getPermission().equals(Permission.Write));
 				}
-				break;
+			}
+			break;
 
-			case PublicReadWrite:
-				assertTrue("Mismatch in number of ACLs associated with the object. Expected 3 but got " + acl.getGrants().size(), acl.getGrants().size() == 3);
-				while (iterator.hasNext()) {
-					Grant grant = iterator.next();
-					if (grant.getGrantee() instanceof CanonicalGrantee) {
-						assertTrue("Expected grantee to be object owner " + acl.getOwner().getId() + ", but found " + grant.getGrantee().getIdentifier(), grant
-								.getGrantee().getIdentifier().equals(acl.getOwner().getId()));
-						assertTrue("Expected object owner to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(), grant
-								.getPermission().equals(Permission.FullControl));
-					} else {
-						assertTrue("Grantee of type GroupGrantee not found", grant.getGrantee() instanceof GroupGrantee);
-						assertTrue("Expected grantee to be " + GroupGrantee.AllUsers + ", but found " + ((GroupGrantee) grant.getGrantee()),
-								((GroupGrantee) grant.getGrantee()).equals(GroupGrantee.AllUsers));
-						assertTrue("Expected " + GroupGrantee.AllUsers + " to have " + Permission.Read.toString() + " or " + Permission.Write.toString()
-								+ " privileges, but found " + grant.getPermission(), grant.getPermission().equals(Permission.Read)
-								|| grant.getPermission().equals(Permission.Write));
-					}
-				}
-				break;
+		default:
+			assertThat(false, "Unknown canned ACL");
+			break;
+		}
+	}
 
-			default:
-				assertThat(false, "Unknown canned ACL");
-				break;
+	private void verifyObjectACL(String key, AccessControlList inputAcl) throws Exception {
+		print("Getting ACL for object " + key);
+		AccessControlList acl = s3.getObjectAcl(bucketName, key);
+		assertTrue("Expected owner of the ACL to be " + ownerId + ", but found " + acl.getOwner().getId(), acl.getOwner().getId().equals(ownerId));
+		assertTrue("Mismatch in number of ACLs associated with the object. Expected " + inputAcl.getGrants().size() + " but got " + acl.getGrants().size(), acl
+				.getGrants().size() == inputAcl.getGrants().size());
+
+		for (Grant grant : inputAcl.getGrants()) {
+			assertTrue("Mismatch between grants, result set does not contain " + grant, acl.getGrants().contains(grant));
 		}
 	}
 }
