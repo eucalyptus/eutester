@@ -11,7 +11,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
 
 import org.testng.annotations.AfterClass;
@@ -49,7 +48,7 @@ import com.amazonaws.util.Md5Utils;
  * @author Swathi Gangisetty
  * 
  */
-public class S3ObjectCannedACLTests {
+public class S3ObjectACLTests {
 
 	private static String bucketName = null;
 	private static String key = null;
@@ -138,7 +137,7 @@ public class S3ObjectCannedACLTests {
 		/* Put object with Canned ACL AuthenticatedRead */
 		try {
 			putObjectWithCannedACL(bucketName, key, CannedAccessControlList.AuthenticatedRead);
-			verifyObjectACL(key, CannedAccessControlList.AuthenticatedRead);
+			S3Utils.verifyObjectACL(s3, ownerName, bucketName, key, CannedAccessControlList.AuthenticatedRead, ownerId, ownerId);
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run putObject_CannedACL_AuthenticatedRead");
@@ -161,7 +160,7 @@ public class S3ObjectCannedACLTests {
 			putObject(key);
 			print("Setting canned ACL " + CannedAccessControlList.AuthenticatedRead + " for object " + key);
 			s3.setObjectAcl(bucketName, key, CannedAccessControlList.AuthenticatedRead);
-			verifyObjectACL(key, CannedAccessControlList.AuthenticatedRead);
+			S3Utils.verifyObjectACL(s3, ownerName, bucketName, key, CannedAccessControlList.AuthenticatedRead, ownerId, ownerId);
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run setObject_CannedACL_AuthenticatedRead");
@@ -183,7 +182,7 @@ public class S3ObjectCannedACLTests {
 		/* Put object with Canned ACL BucketOwnerFullControl */
 		try {
 			putObjectWithCannedACL(bucketName, key, CannedAccessControlList.BucketOwnerFullControl);
-			verifyObjectACL(key, CannedAccessControlList.BucketOwnerFullControl);
+			S3Utils.verifyObjectACL(s3, ownerName, bucketName, key, CannedAccessControlList.BucketOwnerFullControl, ownerId, ownerId);
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run putObject_CannedACL_BucketOwnerFullControl");
@@ -207,7 +206,7 @@ public class S3ObjectCannedACLTests {
 			putObject(key);
 			print("Setting canned ACL " + CannedAccessControlList.BucketOwnerFullControl + " for object " + key);
 			s3.setObjectAcl(bucketName, key, CannedAccessControlList.BucketOwnerFullControl);
-			verifyObjectACL(key, CannedAccessControlList.BucketOwnerFullControl);
+			S3Utils.verifyObjectACL(s3, ownerName, bucketName, key, CannedAccessControlList.BucketOwnerFullControl, ownerId, ownerId);
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run setObject_CannedACL_BucketOwnerFullControl");
@@ -232,7 +231,7 @@ public class S3ObjectCannedACLTests {
 		/* Put object with Canned ACL BucketOwnerRead */
 		try {
 			putObjectWithCannedACL(bucketName, key, CannedAccessControlList.BucketOwnerRead);
-			verifyObjectACL(key, CannedAccessControlList.BucketOwnerRead);
+			S3Utils.verifyObjectACL(s3, ownerName, bucketName, key, CannedAccessControlList.BucketOwnerRead, ownerId, ownerId);
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run putObject_CannedACL_BucketOwnerRead");
@@ -258,7 +257,7 @@ public class S3ObjectCannedACLTests {
 			putObject(key);
 			print("Setting canned ACL " + CannedAccessControlList.BucketOwnerRead + " for object " + key);
 			s3.setObjectAcl(bucketName, key, CannedAccessControlList.BucketOwnerRead);
-			verifyObjectACL(key, CannedAccessControlList.BucketOwnerRead);
+			S3Utils.verifyObjectACL(s3, ownerName, bucketName, key, CannedAccessControlList.BucketOwnerRead, ownerId, ownerId);
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run setObject_CannedACL_BucketOwnerRead");
@@ -279,7 +278,7 @@ public class S3ObjectCannedACLTests {
 		/* Put object with Canned ACL LogDeliveryWrite */
 		try {
 			putObjectWithCannedACL(bucketName, key, CannedAccessControlList.LogDeliveryWrite);
-			verifyObjectACL(key, CannedAccessControlList.LogDeliveryWrite);
+			S3Utils.verifyObjectACL(s3, ownerName, bucketName, key, CannedAccessControlList.LogDeliveryWrite, ownerId, ownerId);
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run putObject_CannedACL_LogDeliveryWrite");
@@ -302,7 +301,7 @@ public class S3ObjectCannedACLTests {
 			putObject(key);
 			print("Setting canned ACL " + CannedAccessControlList.LogDeliveryWrite + " for object " + key);
 			s3.setObjectAcl(bucketName, key, CannedAccessControlList.LogDeliveryWrite);
-			verifyObjectACL(key, CannedAccessControlList.LogDeliveryWrite);
+			S3Utils.verifyObjectACL(s3, ownerName, bucketName, key, CannedAccessControlList.LogDeliveryWrite, ownerId, ownerId);
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run setObject_CannedACL_LogDeliveryWrite");
@@ -323,7 +322,7 @@ public class S3ObjectCannedACLTests {
 		/* Put object with Canned ACL Private */
 		try {
 			putObjectWithCannedACL(bucketName, key, CannedAccessControlList.Private);
-			verifyObjectACL(key, CannedAccessControlList.Private);
+			S3Utils.verifyObjectACL(s3, ownerName, bucketName, key, CannedAccessControlList.Private, ownerId, ownerId);
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run putObject_CannedACL_Private");
@@ -346,7 +345,7 @@ public class S3ObjectCannedACLTests {
 			putObject(key);
 			print("Setting canned ACL " + CannedAccessControlList.Private + " for object " + key);
 			s3.setObjectAcl(bucketName, key, CannedAccessControlList.Private);
-			verifyObjectACL(key, CannedAccessControlList.Private);
+			S3Utils.verifyObjectACL(s3, ownerName, bucketName, key, CannedAccessControlList.Private, ownerId, ownerId);
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run setObject_CannedACL_Private");
@@ -367,7 +366,7 @@ public class S3ObjectCannedACLTests {
 		/* Put object with Canned ACL PublicRead */
 		try {
 			putObjectWithCannedACL(bucketName, key, CannedAccessControlList.PublicRead);
-			verifyObjectACL(key, CannedAccessControlList.PublicRead);
+			S3Utils.verifyObjectACL(s3, ownerName, bucketName, key, CannedAccessControlList.PublicRead, ownerId, ownerId);
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run putObject_CannedACL_PublicRead");
@@ -390,7 +389,7 @@ public class S3ObjectCannedACLTests {
 			putObject(key);
 			print("Setting canned ACL " + CannedAccessControlList.PublicRead + " for object " + key);
 			s3.setObjectAcl(bucketName, key, CannedAccessControlList.PublicRead);
-			verifyObjectACL(key, CannedAccessControlList.PublicRead);
+			S3Utils.verifyObjectACL(s3, ownerName, bucketName, key, CannedAccessControlList.PublicRead, ownerId, ownerId);
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run setObject_CannedACL_PublicRead");
@@ -411,7 +410,7 @@ public class S3ObjectCannedACLTests {
 		/* Put object with Canned ACL PublicReadWrite */
 		try {
 			putObjectWithCannedACL(bucketName, key, CannedAccessControlList.PublicReadWrite);
-			verifyObjectACL(key, CannedAccessControlList.PublicReadWrite);
+			S3Utils.verifyObjectACL(s3, ownerName, bucketName, key, CannedAccessControlList.PublicReadWrite, ownerId, ownerId);
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run putObject_CannedACL_PublicReadWrite");
@@ -434,7 +433,7 @@ public class S3ObjectCannedACLTests {
 			putObject(key);
 			print("Setting canned ACL " + CannedAccessControlList.PublicReadWrite + " for object " + key);
 			s3.setObjectAcl(bucketName, key, CannedAccessControlList.PublicReadWrite);
-			verifyObjectACL(key, CannedAccessControlList.PublicReadWrite);
+			S3Utils.verifyObjectACL(s3, ownerName, bucketName, key, CannedAccessControlList.PublicReadWrite, ownerId, ownerId);
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run setObject_CannedACL_PublicReadWrite");
@@ -457,37 +456,37 @@ public class S3ObjectCannedACLTests {
 			/* Put object and set Canned ACL AuthenticatedRead */
 			print("Setting canned ACL " + CannedAccessControlList.AuthenticatedRead + " for object " + key);
 			s3.setObjectAcl(bucketName, key, CannedAccessControlList.AuthenticatedRead);
-			verifyObjectACL(key, CannedAccessControlList.AuthenticatedRead);
+			S3Utils.verifyObjectACL(s3, ownerName, bucketName, key, CannedAccessControlList.AuthenticatedRead, ownerId, ownerId);
 
 			/* Put object and set Canned ACL BucketOwnerFullControl */
 			print("Setting canned ACL " + CannedAccessControlList.BucketOwnerFullControl + " for object " + key);
 			s3.setObjectAcl(bucketName, key, CannedAccessControlList.BucketOwnerFullControl);
-			verifyObjectACL(key, CannedAccessControlList.BucketOwnerFullControl);
+			S3Utils.verifyObjectACL(s3, ownerName, bucketName, key, CannedAccessControlList.BucketOwnerFullControl, ownerId, ownerId);
 
 			/* Put object and set Canned ACL BucketOwnerRead */
 			print("Setting canned ACL " + CannedAccessControlList.BucketOwnerRead + " for object " + key);
 			s3.setObjectAcl(bucketName, key, CannedAccessControlList.BucketOwnerRead);
-			verifyObjectACL(key, CannedAccessControlList.BucketOwnerRead);
+			S3Utils.verifyObjectACL(s3, ownerName, bucketName, key, CannedAccessControlList.BucketOwnerRead, ownerId, ownerId);
 
 			/* Put object and set Canned ACL LogDeliveryWrite */
 			print("Setting canned ACL " + CannedAccessControlList.LogDeliveryWrite + " for object " + key);
 			s3.setObjectAcl(bucketName, key, CannedAccessControlList.LogDeliveryWrite);
-			verifyObjectACL(key, CannedAccessControlList.LogDeliveryWrite);
+			S3Utils.verifyObjectACL(s3, ownerName, bucketName, key, CannedAccessControlList.LogDeliveryWrite, ownerId, ownerId);
 
 			/* Put object and set Canned ACL Private */
 			print("Setting canned ACL " + CannedAccessControlList.Private + " for object " + key);
 			s3.setObjectAcl(bucketName, key, CannedAccessControlList.Private);
-			verifyObjectACL(key, CannedAccessControlList.Private);
+			S3Utils.verifyObjectACL(s3, ownerName, bucketName, key, CannedAccessControlList.Private, ownerId, ownerId);
 
 			/* Put object and set Canned ACL PublicRead */
 			print("Setting canned ACL " + CannedAccessControlList.PublicRead + " for object " + key);
 			s3.setObjectAcl(bucketName, key, CannedAccessControlList.PublicRead);
-			verifyObjectACL(key, CannedAccessControlList.PublicRead);
+			S3Utils.verifyObjectACL(s3, ownerName, bucketName, key, CannedAccessControlList.PublicRead, ownerId, ownerId);
 
 			/* Put object and set Canned ACL PublicReadWrite */
 			print("Setting canned ACL " + CannedAccessControlList.PublicReadWrite + " for object " + key);
 			s3.setObjectAcl(bucketName, key, CannedAccessControlList.PublicReadWrite);
-			verifyObjectACL(key, CannedAccessControlList.PublicReadWrite);
+			S3Utils.verifyObjectACL(s3, ownerName, bucketName, key, CannedAccessControlList.PublicReadWrite, ownerId, ownerId);
 		} catch (AmazonServiceException ase) {
 			ase.printStackTrace();
 			print("Caught Exception: " + ase.getMessage());
@@ -497,10 +496,34 @@ public class S3ObjectCannedACLTests {
 			assertThat(false, "Failed to run setObject_CannedACLs");
 		}
 	}
+	
+	@Test
+	public void putObject_ACL_Headers() throws Exception {
+		testInfo(this.getClass().getSimpleName() + " - putObject_ACL_Headers");
+		try {
+			Grant ownerGrant = new Grant(new CanonicalGrantee(ownerId), Permission.FullControl);
+			
+			AccessControlList acl = new AccessControlList();
+			acl.getGrants().add(new Grant(GroupGrantee.AuthenticatedUsers, Permission.Write));
+			putObjectWithACL(bucketName, key, acl);
+			acl.getGrants().add(ownerGrant);
+			S3Utils.verifyObjectACL(s3, ownerName, bucketName, key, acl, ownerId);
+			
+			acl = new AccessControlList();
+			acl.getGrants().add(new Grant(GroupGrantee.LogDelivery, Permission.FullControl));
+			acl.getGrants().add(new Grant(GroupGrantee.AllUsers, Permission.ReadAcp));
+			putObjectWithACL(bucketName, key, acl);
+			acl.getGrants().add(ownerGrant);
+			S3Utils.verifyObjectACL(s3, ownerName, bucketName, key, acl, ownerId);
+		} catch (AmazonServiceException ase) {
+			printException(ase);
+			assertThat(false, "Failed to run putObject_ACL_Headers");
+		}
+	}
 
 	@Test
-	public void setObject_nonCannedACL() throws Exception {
-		testInfo(this.getClass().getSimpleName() + " - setObject_nonCannedACL");
+	public void setObject_ACL_XMLBody() throws Exception {
+		testInfo(this.getClass().getSimpleName() + " - setObject_ACL_XMLBody");
 		try {
 			putObject(key);
 
@@ -512,7 +535,7 @@ public class S3ObjectCannedACLTests {
 			print("Setting ACL for " + key + " to " + acl);
 			s3.setObjectAcl(bucketName, key, acl);
 			acl.getGrants().add(ownerGrant);
-			verifyObjectACL(key, acl);
+			S3Utils.verifyObjectACL(s3, ownerName, bucketName, key, acl, ownerId);
 
 			acl = new AccessControlList();
 			acl.setOwner(owner);
@@ -520,7 +543,7 @@ public class S3ObjectCannedACLTests {
 			print("Setting ACL for " + key + " to " + acl);
 			s3.setObjectAcl(bucketName, key, acl);
 			acl.getGrants().add(ownerGrant);
-			verifyObjectACL(key, acl);
+			S3Utils.verifyObjectACL(s3, ownerName, bucketName, key, acl, ownerId);
 
 			acl = new AccessControlList();
 			acl.setOwner(owner);
@@ -528,34 +551,10 @@ public class S3ObjectCannedACLTests {
 			print("Setting ACL for " + key + " to " + acl);
 			s3.setObjectAcl(bucketName, key, acl);
 			acl.getGrants().add(ownerGrant);
-			verifyObjectACL(key, acl);
+			S3Utils.verifyObjectACL(s3, ownerName, bucketName, key, acl, ownerId);
 		} catch (AmazonServiceException ase) {
 			printException(ase);
-			assertThat(false, "Failed to run setObject_nonCannedACL");
-		}
-	}
-
-	@Test
-	public void putObject_nonCannedACL() throws Exception {
-		testInfo(this.getClass().getSimpleName() + " - putObject_nonCannedACL");
-		try {
-			Grant ownerGrant = new Grant(new CanonicalGrantee(ownerId), Permission.FullControl);
-			
-			AccessControlList acl = new AccessControlList();
-			acl.getGrants().add(new Grant(GroupGrantee.AuthenticatedUsers, Permission.Write));
-			putObjectWithCannedACL(bucketName, key, acl);
-			acl.getGrants().add(ownerGrant);
-			verifyObjectACL(key, acl);
-			
-			acl = new AccessControlList();
-			acl.getGrants().add(new Grant(GroupGrantee.LogDelivery, Permission.FullControl));
-			acl.getGrants().add(new Grant(GroupGrantee.AllUsers, Permission.ReadAcp));
-			putObjectWithCannedACL(bucketName, key, acl);
-			acl.getGrants().add(ownerGrant);
-			verifyObjectACL(key, acl);
-		} catch (AmazonServiceException ase) {
-			printException(ase);
-			assertThat(false, "Failed to run putObject_nonCannedACL");
+			assertThat(false, "Failed to run setObject_ACL_XMLBody");
 		}
 	}
 
@@ -580,7 +579,7 @@ public class S3ObjectCannedACLTests {
 		assertTrue("Mimatch in md5sums between original object and PUT result. Expected " + md5_orig + ", but got " + putObj.getETag(),
 				putObj.getETag() != null && putObj.getETag().equals(md5_orig));
 
-		verifyObjectACL(key, CannedAccessControlList.Private);
+		S3Utils.verifyObjectACL(s3, ownerName, bucketName, key, CannedAccessControlList.Private, ownerId, ownerId);
 	}
 
 	private void putObjectWithCannedACL(final String bucketName, final String key, CannedAccessControlList cannedACL) throws Exception {
@@ -598,8 +597,8 @@ public class S3ObjectCannedACLTests {
 				putObj.getETag() != null && putObj.getETag().equals(md5_orig));
 	}
 
-	private void putObjectWithCannedACL(final String bucketName, final String key, AccessControlList acl) throws Exception {
-		print("Putting object " + key + " with canned ACL " + acl + " in bucket " + bucketName);
+	private void putObjectWithACL(final String bucketName, final String key, AccessControlList acl) throws Exception {
+		print("Putting object " + key + " with ACL " + acl + " in bucket " + bucketName);
 		PutObjectResult putObj = s3.putObject(new PutObjectRequest(bucketName, key, fileToPut).withAccessControlList(acl));
 		cleanupTasks.add(new Runnable() {
 			@Override
@@ -611,147 +610,5 @@ public class S3ObjectCannedACLTests {
 		assertTrue("Invalid put object result", putObj != null);
 		assertTrue("Mimatch in md5sums between original object and PUT result. Expected " + md5_orig + ", but got " + putObj.getETag(),
 				putObj.getETag() != null && putObj.getETag().equals(md5_orig));
-	}
-
-	private void verifyObjectACL(String key, CannedAccessControlList cannedACL) {
-		print("Getting ACL for object " + key);
-		AccessControlList acl = s3.getObjectAcl(bucketName, key);
-		assertTrue("Expected owner of the ACL to be " + ownerId + ", but found " + acl.getOwner().getId(), acl.getOwner().getId().equals(ownerId));
-		Iterator<Grant> iterator = acl.getGrants().iterator();
-
-		switch (cannedACL) {
-		case AuthenticatedRead:
-			assertTrue("Mismatch in number of ACLs associated with the object. Expected 2 but got " + acl.getGrants().size(), acl.getGrants().size() == 2);
-			while (iterator.hasNext()) {
-				Grant grant = iterator.next();
-				if (grant.getGrantee() instanceof CanonicalGrantee) {
-					assertTrue("Expected grantee to be object owner " + acl.getOwner().getId() + ", but found " + grant.getGrantee().getIdentifier(), grant
-							.getGrantee().getIdentifier().equals(acl.getOwner().getId()));
-					assertTrue("Expected object owner to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(), grant
-							.getPermission().equals(Permission.FullControl));
-				} else {
-					assertTrue("Grantee of type GroupGrantee not found", grant.getGrantee() instanceof GroupGrantee);
-					assertTrue("Expected grantee to be " + GroupGrantee.AuthenticatedUsers + ", but found " + ((GroupGrantee) grant.getGrantee()),
-							((GroupGrantee) grant.getGrantee()).equals(GroupGrantee.AuthenticatedUsers));
-					assertTrue(
-							"Expected " + GroupGrantee.AuthenticatedUsers + " to have " + Permission.Read.toString() + " privilege, but found "
-									+ grant.getPermission(), grant.getPermission().equals(Permission.Read));
-				}
-			}
-			break;
-
-		case BucketOwnerFullControl:
-			assertTrue("Mismatch in number of ACLs associated with the object. Expected 1 but got " + acl.getGrants().size(), acl.getGrants().size() == 1);
-			while (iterator.hasNext()) {
-				Grant grant = iterator.next();
-				assertTrue("Grantee is not of type CanonicalGrantee", grant.getGrantee() instanceof CanonicalGrantee);
-				assertTrue("Expected grantee to be object owner " + acl.getOwner().getId() + ", but found " + grant.getGrantee().getIdentifier(), grant
-						.getGrantee().getIdentifier().equals(acl.getOwner().getId()));
-				assertTrue("Expected object owner to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(), grant.getPermission()
-						.equals(Permission.FullControl));
-			}
-			break;
-
-		case BucketOwnerRead:
-			assertTrue("Mismatch in number of ACLs associated with the object. Expected 1 but got " + acl.getGrants().size(), acl.getGrants().size() == 1);
-			while (iterator.hasNext()) {
-				Grant grant = iterator.next();
-				assertTrue("Grantee is not of type CanonicalGrantee", grant.getGrantee() instanceof CanonicalGrantee);
-				assertTrue("Expected grantee to be object owner " + acl.getOwner().getId() + ", but found " + grant.getGrantee().getIdentifier(), grant
-						.getGrantee().getIdentifier().equals(acl.getOwner().getId()));
-				assertTrue("Expected object owner to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(), grant.getPermission()
-						.equals(Permission.FullControl));
-			}
-			break;
-
-		case LogDeliveryWrite:
-			assertTrue("Mismatch in number of ACLs associated with the object. Expected 3 but got " + acl.getGrants().size(), acl.getGrants().size() == 3);
-			while (iterator.hasNext()) {
-				Grant grant = iterator.next();
-				if (grant.getGrantee() instanceof CanonicalGrantee) {
-					assertTrue("Expected grantee to be object owner " + acl.getOwner().getId() + ", but found " + grant.getGrantee().getIdentifier(), grant
-							.getGrantee().getIdentifier().equals(acl.getOwner().getId()));
-					assertTrue("Expected object owner to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(), grant
-							.getPermission().equals(Permission.FullControl));
-				} else {
-					assertTrue("Grantee of type GroupGrantee not found", grant.getGrantee() instanceof GroupGrantee);
-					assertTrue("Expected grantee to be " + GroupGrantee.LogDelivery + ", but found " + ((GroupGrantee) grant.getGrantee()),
-							((GroupGrantee) grant.getGrantee()).equals(GroupGrantee.LogDelivery));
-					assertTrue(
-							"Expected " + GroupGrantee.LogDelivery + " to have " + Permission.Write.toString() + " or "
-									+ grant.getPermission().equals(Permission.ReadAcp) + " privileges, but found " + grant.getPermission(), grant
-									.getPermission().equals(Permission.Write) || grant.getPermission().equals(Permission.ReadAcp));
-				}
-			}
-			break;
-
-		case Private:
-			assertTrue("Mismatch in number of ACLs associated with the object. Expected 1 but got " + acl.getGrants().size(), acl.getGrants().size() == 1);
-			while (iterator.hasNext()) {
-				Grant grant = iterator.next();
-				assertTrue("Grantee is not of type CanonicalGrantee", grant.getGrantee() instanceof CanonicalGrantee);
-				assertTrue("Expected grantee to be object owner " + acl.getOwner().getId() + ", but found " + grant.getGrantee().getIdentifier(), grant
-						.getGrantee().getIdentifier().equals(acl.getOwner().getId()));
-				assertTrue("Expected object owner to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(), grant.getPermission()
-						.equals(Permission.FullControl));
-			}
-			break;
-
-		case PublicRead:
-			assertTrue("Mismatch in number of ACLs associated with the object. Expected 2 but got " + acl.getGrants().size(), acl.getGrants().size() == 2);
-			while (iterator.hasNext()) {
-				Grant grant = iterator.next();
-				if (grant.getGrantee() instanceof CanonicalGrantee) {
-					assertTrue("Expected grantee to be object owner " + acl.getOwner().getId() + ", but found " + grant.getGrantee().getIdentifier(), grant
-							.getGrantee().getIdentifier().equals(acl.getOwner().getId()));
-					assertTrue("Expected object owner to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(), grant
-							.getPermission().equals(Permission.FullControl));
-				} else {
-					assertTrue("Grantee of type GroupGrantee not found", grant.getGrantee() instanceof GroupGrantee);
-					assertTrue("Expected grantee to be " + GroupGrantee.AllUsers + ", but found " + ((GroupGrantee) grant.getGrantee()),
-							((GroupGrantee) grant.getGrantee()).equals(GroupGrantee.AllUsers));
-					assertTrue(
-							"Expected " + GroupGrantee.AllUsers + " to have " + Permission.Read.toString() + " privilege, but found " + grant.getPermission(),
-							grant.getPermission().equals(Permission.Read));
-				}
-			}
-			break;
-
-		case PublicReadWrite:
-			assertTrue("Mismatch in number of ACLs associated with the object. Expected 3 but got " + acl.getGrants().size(), acl.getGrants().size() == 3);
-			while (iterator.hasNext()) {
-				Grant grant = iterator.next();
-				if (grant.getGrantee() instanceof CanonicalGrantee) {
-					assertTrue("Expected grantee to be object owner " + acl.getOwner().getId() + ", but found " + grant.getGrantee().getIdentifier(), grant
-							.getGrantee().getIdentifier().equals(acl.getOwner().getId()));
-					assertTrue("Expected object owner to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(), grant
-							.getPermission().equals(Permission.FullControl));
-				} else {
-					assertTrue("Grantee of type GroupGrantee not found", grant.getGrantee() instanceof GroupGrantee);
-					assertTrue("Expected grantee to be " + GroupGrantee.AllUsers + ", but found " + ((GroupGrantee) grant.getGrantee()),
-							((GroupGrantee) grant.getGrantee()).equals(GroupGrantee.AllUsers));
-					assertTrue("Expected " + GroupGrantee.AllUsers + " to have " + Permission.Read.toString() + " or " + Permission.Write.toString()
-							+ " privileges, but found " + grant.getPermission(),
-							grant.getPermission().equals(Permission.Read) || grant.getPermission().equals(Permission.Write));
-				}
-			}
-			break;
-
-		default:
-			assertThat(false, "Unknown canned ACL");
-			break;
-		}
-	}
-
-	private void verifyObjectACL(String key, AccessControlList inputAcl) throws Exception {
-		print("Getting ACL for object " + key);
-		AccessControlList acl = s3.getObjectAcl(bucketName, key);
-		assertTrue("Expected owner of the ACL to be " + ownerId + ", but found " + acl.getOwner().getId(), acl.getOwner().getId().equals(ownerId));
-		assertTrue("Mismatch in number of ACLs associated with the object. Expected " + inputAcl.getGrants().size() + " but got " + acl.getGrants().size(), acl
-				.getGrants().size() == inputAcl.getGrants().size());
-
-		for (Grant grant : inputAcl.getGrants()) {
-			assertTrue("Mismatch between grants, result set does not contain " + grant, acl.getGrants().contains(grant));
-		}
 	}
 }
