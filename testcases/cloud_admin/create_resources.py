@@ -110,7 +110,7 @@ class ResourceGeneration(EutesterTestCase):
                 resource_tester.disassociate_address_from_instance(instance)
                 if not self.args.no_cleanup:
                     resource_tester.release_address(address)
-            self.tester.sleep(5)
+            self.tester.sleep(20)
             instance.update()
             instance.reset_ssh_connection()
             volume = resource_tester.create_volume(size=1, zone=zone)

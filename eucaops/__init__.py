@@ -46,7 +46,7 @@ import traceback
 import sys
 import StringIO
 from eutester.euservice import EuserviceManager
-from boto.ec2.instance import Reservation
+from boto.ec2.instance import Reservation, Instance
 from boto.exception import EC2ResponseError
 from eutester.euconfig import EuConfig
 from eutester.euproperties import Euproperty_Manager
@@ -59,7 +59,7 @@ import os
 class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
     
     def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None,
-                 aws_secret_access_key = None,  account="eucalyptus", user="admin", username=None, APIVersion='2011-01-01',
+                     aws_secret_access_key = None,  account="eucalyptus", user="admin", username=None, APIVersion='2013-10-15',
                  ec2_ip=None, ec2_path=None, iam_ip=None, iam_path=None, s3_ip=None, s3_path=None,
                  as_ip=None, as_path=None, elb_ip=None, elb_path=None, cw_ip=None, cw_path=None,
                  cfn_ip=None, cfn_path=None, sts_ip=None, sts_path=None,
@@ -331,15 +331,32 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                 failcount +=1
                 failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
         if instances:
+            remove_list = []
+            instances = []
+            # To speed up termination, send terminate to all instances
+            # before sending them to the monitor methods
+            for res in self.test_resources["reservations"]:
+                try:
+                    if isinstance(res, Instance):
+                        res.terminate()
+                    if isinstance(res, Reservation):
+                        for ins in res.instances:
+                            ins.terminate()
+                except:
+                    traceback.print_exc()
+                    self.debug('ignoring error in instance cleanup '
+                               'during termination')
+            # Now monitor to terminated state...
             for res in self.test_resources["reservations"]:
                 try:
                     self.terminate_instances(res)
-                    if res in self.test_resources["reservations"]:
-                        self.test_resources["reservations"].remove(res)
+                    remove_list.append(res)
                 except Exception, e:
                     tb = self.get_traceback()
                     failcount +=1
                     failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
+            for res in remove_list:
+                self.test_resources["reservations"].remove(res)
         if ip_addresses:
             try:
                 self.cleanup_addresses()
@@ -613,7 +630,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                 machine_dict["components"] = map(str.lower, machine_details[5].strip('[]').split())
 
                 ### ADD the machine to the array of machine
-                cloud_machine = Machine(   machine_dict["hostname"], 
+                cloud_machine = Machine(machine_dict["hostname"],
                                         distro = machine_dict["distro"], 
                                         distro_ver = machine_dict["distro_ver"], 
                                         arch = machine_dict["arch"], 
@@ -746,23 +763,60 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
         return admin_cred_dir
    
     def create_credentials(self, admin_cred_dir, account, user):
-       
-        cred_dir =  admin_cred_dir + "/creds.zip"
-        self.sys('rm -f '+cred_dir)
-        cmd_download_creds = self.eucapath + "/usr/sbin/euca_conf --get-credentials " + admin_cred_dir + "/creds.zip " + "--cred-user "+ user +" --cred-account " + account 
-       
-        if self.clc.found( cmd_download_creds, "The MySQL server is not responding"):
-            raise IOError("Error downloading credentials, looks like CLC was not running")
-        if self.clc.found( "unzip -o " + admin_cred_dir + "/creds.zip " + "-d " + admin_cred_dir, "cannot find zipfile directory"):
-            raise IOError("Empty ZIP file returned by CLC")
-       
-        
-    
+        cred_dir = admin_cred_dir + "/creds.zip"
+
+        output = self.credential_exists(cred_dir)
+        if output['status'] == 0:
+            self.debug("Found creds file, skipping download.")
+        else:
+            cmd_download_creds = self.eucapath + "/usr/sbin/euca_conf --get-credentials " + admin_cred_dir + "/creds.zip " + "--cred-user "+ user + " --cred-account " + account
+            if self.clc.found(cmd_download_creds, "The MySQL server is not responding"):
+                raise IOError("Error downloading credentials, looks like CLC was not running")
+            if self.clc.found("unzip -o " + admin_cred_dir + "/creds.zip " + "-d " + admin_cred_dir,
+                              "cannot find zipfile directory"):
+                raise IOError("Empty ZIP file returned by CLC")
+
+            # backward compatibility
+            cert_exists_in_eucarc = self.clc.found("cat " + admin_cred_dir + "/eucarc", "export EC2_CERT")
+            if cert_exists_in_eucarc:
+                self.debug("Cert/pk already exist in '" + admin_cred_dir + "/eucarc' file.")
+            else:
+                self.setup_user_certs(admin_cred_dir, account, user)
+                self.debug("Setting cert/pk in '" + admin_cred_dir + "/eucarc'")
+                self.sys("echo 'export EC2_CERT=${EUCA_KEY_DIR}/euca2-cert.pem' >> " + admin_cred_dir + "/eucarc")
+                self.sys("echo 'export EC2_PRIVATE_KEY=${EUCA_KEY_DIR}/euca2-pk.pem' >> " + admin_cred_dir + "/eucarc")
+
+    def setup_user_certs(self, admin_cred_dir, account, user):
+        admin_certs = self.sys("source " + admin_cred_dir + "/eucarc" + " && " + "/usr/bin/euare-userlistcerts | grep -v Active")
+        if len(admin_certs) > 1:
+            self.debug("Found more than one certs, deleting last cert")
+            self.sys("source " + admin_cred_dir + "/eucarc" + " && " + "/usr/bin/euare-userdelcert -c " + admin_certs[len(admin_certs)-1] + " --user-name " + user)
+
+        self.debug("Creating a new signing certificate for user '" + user + "' in account '" + account + "'.")
+        self.sys("source " + admin_cred_dir + "/eucarc" + " && " + "/usr/bin/euare-usercreatecert --user-name " + user + " --out " + admin_cred_dir + "/euca2-cert.pem --keyout " + admin_cred_dir + "/euca2-pk.pem")
+
+    def credential_exists(self, cred_path):
+        return self.clc.ssh.cmd("test -e " + cred_path)
+
     def download_creds_from_clc(self, admin_cred_dir):
         self.debug("Downloading credentials from " + self.clc.hostname + ", path:" + admin_cred_dir + "/creds.zip")
-        self.sftp.get(admin_cred_dir + "/creds.zip" , admin_cred_dir + "/creds.zip")
-        self.local("unzip -o " + admin_cred_dir + "/creds.zip -d " + admin_cred_dir )
-    
+        self.sftp.get(admin_cred_dir + "/creds.zip", admin_cred_dir + "/creds.zip")
+        self.local("unzip -o " + admin_cred_dir + "/creds.zip -d " + admin_cred_dir)
+        # backward compatibility
+        cert_exists_in_eucarc = self.found("cat " + admin_cred_dir + "/eucarc", "export EC2_CERT")
+        if cert_exists_in_eucarc:
+            self.debug("Cert/pk already exist in '" + admin_cred_dir + "/eucarc' file.")
+        else:
+            self.download_certs_from_clc(admin_cred_dir)
+            self.debug("Setting cert/pk in '" + admin_cred_dir + "/eucarc'")
+            self.local("echo 'export EC2_CERT=${EUCA_KEY_DIR}/euca2-cert.pem' >> " + admin_cred_dir + "/eucarc")
+            self.local("echo 'export EC2_PRIVATE_KEY=${EUCA_KEY_DIR}/euca2-pk.pem' >> " + admin_cred_dir + "/eucarc")
+
+    def download_certs_from_clc(self, admin_cred_dir):
+        self.debug("Downloading certs from " + self.clc.hostname + ", path:" + admin_cred_dir + "/")
+        self.sftp.get(admin_cred_dir + "/euca2-cert.pem", admin_cred_dir + "/euca2-cert.pem")
+        self.sftp.get(admin_cred_dir + "/euca2-pk.pem", admin_cred_dir + "/euca2-pk.pem")
+
     def send_creds_to_machine(self, admin_cred_dir, machine):
         self.debug("Sending credentials to " + machine.hostname)
         try:
@@ -772,9 +826,20 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
             machine.sys("mkdir " + admin_cred_dir)
             machine.sftp.put( admin_cred_dir + "/creds.zip" , admin_cred_dir + "/creds.zip")
             machine.sys("unzip -o " + admin_cred_dir + "/creds.zip -d " + admin_cred_dir )
+
+            # backward compatibility
+            cert_exists_in_eucarc = machine.found("cat " + admin_cred_dir + "/eucarc", "export EC2_CERT")
+            if cert_exists_in_eucarc:
+                self.debug("Cert/pk already exist in '" + admin_cred_dir + "/eucarc' file.")
+            else:
+                self.debug("Sending cert/pk to " + machine.hostname)
+                machine.sftp.put(admin_cred_dir + "/euca2-cert.pem", admin_cred_dir + "/euca2-cert.pem")
+                machine.sftp.put(admin_cred_dir + "/euca2-pk.pem", admin_cred_dir + "/euca2-pk.pem")
+                self.debug("Setting cert/pk in '" + admin_cred_dir + "/eucarc'")
+                machine.sys("echo 'export EC2_CERT=${EUCA_KEY_DIR}/euca2-cert.pem' >> " + admin_cred_dir + "/eucarc")
+                machine.sys("echo 'export EC2_PRIVATE_KEY=${EUCA_KEY_DIR}/euca2-pk.pem' >> " + admin_cred_dir + "/eucarc")
             # machine.sys("sed -i 's/" + self.get_ec2_ip() + "/" + machine.hostname  +"/g' " + admin_cred_dir + "/eucarc")
-            
-        
+
     def setup_local_creds_dir(self, admin_cred_dir):
         if not os.path.exists(admin_cred_dir):
             os.mkdir(admin_cred_dir)

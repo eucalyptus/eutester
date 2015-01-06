@@ -64,7 +64,7 @@ class AutoScalingBasics(EutesterTestCase):
 
         self.image = self.args.emi
         if not self.image:
-            self.image = self.tester.get_emi(root_device_type="instance-store")
+            self.image = self.tester.get_emi()
         self.address = None
         self.asg = None
 
@@ -260,12 +260,13 @@ class AutoScalingBasics(EutesterTestCase):
                                     desired_capacity=1)
 
         assert isinstance(self.asg, AutoScalingGroup)
+        self.tester.wait_for_result(self.tester.wait_for_instances, True, timeout=360, group_name=self.asg.name)
+
         self.tester.update_as_group(group_name=self.asg.name,
                                     launch_config=second_launch_config,
                                     availability_zones=self.tester.get_zones(),
                                     min_size=1,
                                     max_size=4)
-        self.tester.wait_for_result(self.tester.wait_for_instances, True, timeout=360, group_name=self.asg.name)
         ### Set desired capacity
         new_desired = 2
         self.asg.set_capacity(new_desired)

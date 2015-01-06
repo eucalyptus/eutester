@@ -183,7 +183,9 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         if self.args.emi:
             self.image = self.tester.get_emi(emi=str(self.args.emi))
         else:
-            self.image = self.tester.get_emi(root_device_type="instance-store")
+            images = self.tester.get_images(basic_image=True)
+            if images:
+                self.image = images[0]
         if not self.image:
             raise Exception('couldnt find instance store image')
         self.clean_method = self.cleanup
@@ -250,9 +252,6 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         except:
             return None
 
-
-
-
     def setup_bfebs_instance_volume_and_snapshots_from_url(self, url=None, create_test_vol=True, time_per_gig=100):
 
         url = url or self.url
@@ -304,7 +303,6 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
             self.base_test_snapshot.add_tag('md5len', self.base_test_volume.md5len)
         instance.terminate_and_verify()
         return self.build_image_snapshot
-
 
     def add_block_device_types_to_mapping(self,
                                         device_name,

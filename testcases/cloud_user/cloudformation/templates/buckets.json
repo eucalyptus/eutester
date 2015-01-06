@@ -1,0 +1,22 @@
+{
+  "Resources":{
+
+    "Bucket1" : {
+      "Type":"AWS::S3::Bucket",
+      "Properties" : {
+        "BucketName" : "my-named-bucket",
+        "AccessControl" : "PublicRead",
+        "VersioningConfiguration" : {"Status" : "Enabled"}
+      }
+    },
+    "Bucket2" : {
+      "Type":"AWS::S3::Bucket",
+      "Properties" : {
+        "AccessControl" : "PublicReadWrite",
+        "LifecycleConfiguration": {
+          "Rules" : [{"Prefix" : "myPrefix", "Id" : "myId", "ExpirationInDays" : "5", "Status" : "Enabled"}]
+        }
+      }
+    }
+  }
+}

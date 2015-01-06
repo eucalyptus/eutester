@@ -12,6 +12,8 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
+import com.amazonaws.services.s3.model.BucketTaggingConfiguration;
+import com.amazonaws.services.s3.model.TagSet;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeClass;
@@ -198,17 +200,6 @@ public class S3BucketTests {
 
 		error = false;
 		try {
-			print("Fetching bucket tagging configuration for " + bucketName);
-			s3.getBucketTaggingConfiguration(bucketName);
-		} catch (AmazonServiceException ase) {
-			verifyException(ase);
-			error = true;
-		} finally {
-			assertTrue("Expected to receive a 501 NotImplemented error but did not", error);
-		}
-
-		error = false;
-		try {
 			print("Fetching bucket website configuration for " + bucketName);
 			s3.getBucketWebsiteConfiguration(bucketName);
 		} catch (AmazonServiceException ase) {
@@ -341,6 +332,78 @@ public class S3BucketTests {
 			assertThat(false, "Failed to run versioningConfiguration");
 		}
 	}
+
+  @Test
+  public void testBucketTagging() throws Exception {
+    testInfo(this.getClass().getSimpleName() + " - buckettagging");
+
+    BucketTaggingConfiguration bucketTaggingConfiguration = new BucketTaggingConfiguration( );
+
+    print( "Getting TagSets for bucket '" + bucketName + "' when there is none" );
+    s3.getBucketTaggingConfiguration( bucketName);
+
+    print( "Setting TagSets for bucket '" + bucketName + "'" );
+    TagSet tagSet1 = new TagSet( );
+    for ( int j = 0; j < 5; j++) {
+      tagSet1.setTag( "keytag" + j, "valuetag" + j );
+    }
+    List<TagSet> tagSetList = new ArrayList<TagSet>(  );
+    tagSetList.add( tagSet1 );
+    bucketTaggingConfiguration.setTagSets( tagSetList );
+    s3.setBucketTaggingConfiguration( bucketName, bucketTaggingConfiguration );
+
+    print( "Getting TagSets for bucket '" + bucketName + "'" );
+    List<TagSet> tagSets = bucketTaggingConfiguration.getAllTagSets();
+    assertTrue( "Expected 3 TagSets from bucket '" + bucketName + "', got " + tagSets.size( ), tagSets.size() != 3 );
+
+    print( "Deleting TagSets for bucket '" + bucketName + "'" );
+    s3.deleteBucketTaggingConfiguration( bucketName );
+
+    print( "Trying to set empty TagSets for bucket '" + bucketName + "'" );
+    bucketTaggingConfiguration = new BucketTaggingConfiguration( );
+    List<TagSet> negativeTagSetList = new ArrayList<TagSet>( );
+    TagSet negativeTagSet = new TagSet( );
+    tagSetList.add( negativeTagSet );
+    bucketTaggingConfiguration.setTagSets( negativeTagSetList );
+    try {
+      s3.setBucketTaggingConfiguration( bucketName, bucketTaggingConfiguration );
+    } catch ( AmazonS3Exception e ) {
+      assertTrue( "Expected StatusCode 400 found: " + e.getStatusCode( ), e.getStatusCode( ) == 400 );
+      assertTrue( "Expected StatusCode MalformedXML found: " + e.getErrorCode(), e.getErrorCode( ).equals( "MalformedXML" ) );
+    }
+
+    print( "Trying to set wrong xml TagSets for bucket '" + bucketName + "'" );
+    bucketTaggingConfiguration = new BucketTaggingConfiguration( );
+    negativeTagSetList = new ArrayList<TagSet>(  );
+    TagSet negativeTagSet1 = new TagSet( );
+    negativeTagSet1.setTag( "keytag1", "valuetag1" );
+    negativeTagSetList.add( negativeTagSet1 );
+    TagSet negativeTagSet2 = new TagSet( );
+    negativeTagSet2.setTag( "keytag2", "valuetag2" );
+    negativeTagSetList.add( negativeTagSet2 );
+    bucketTaggingConfiguration.setTagSets( negativeTagSetList );
+    try {
+      s3.setBucketTaggingConfiguration( bucketName, bucketTaggingConfiguration );
+    } catch ( AmazonS3Exception e ) {
+      assertTrue( "Expected StatusCode 400 found: " + e.getStatusCode( ), e.getStatusCode( ) == 400 );
+      assertTrue( "Expected StatusCode MalformedXML found: " + e.getErrorCode(), e.getErrorCode( ).equals( "MalformedXML" ) );
+    }
+
+    print( "Trying to set too many TagSets for bucket '" + bucketName + "'" );
+    List<TagSet> tooManyTagSetList = new ArrayList<>( );
+    TagSet tooManyTagSet = new TagSet( );
+    for ( int j = 0; j < 11; j++) {
+      tooManyTagSet.setTag( "keytag" + j, "valuetag" + j );
+    }
+    tooManyTagSetList.add( tooManyTagSet );
+    bucketTaggingConfiguration.setTagSets( tooManyTagSetList );
+    try {
+      s3.setBucketTaggingConfiguration( bucketName, bucketTaggingConfiguration );
+    } catch ( AmazonS3Exception e ) {
+      assertTrue( "Expected StatusCode 400 found: " + e.getStatusCode( ), e.getStatusCode( ) == 400 );
+      assertTrue( "Expected StatusCode MalformedXML found: " + e.getErrorCode( ), e.getErrorCode( ).equals( "MalformedXML" ) );
+    }
+  }
 
 	private void printException(AmazonServiceException ase) {
 		ase.printStackTrace();

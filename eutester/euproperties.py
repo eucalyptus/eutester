@@ -120,6 +120,7 @@ class Euproperty():
         self.prop_mgr = prop_mgr
         self.lastvalue = value
         self.mandatory = mandatory
+        self.description = description
 
     def update(self):
         newprop = self.prop_mgr.update_property_list(
@@ -216,78 +217,90 @@ class Euproperty_Manager():
 
     def show_all_authentication_properties(self,
                                            partition=None,
-                                           debug_method=None):
+                                           debug_method=None,
+                                           descriptions=True):
         return self.show_all_properties(
             service_type=Euproperty_Type.authentication,
             partition=partition,
             debug_method=debug_method,
-            descriptions=True)
+            descriptions=descriptions)
 
-    def show_all_bootstrap_properties(self, partition=None, debug_method=None):
+    def show_all_bootstrap_properties(self, partition=None, debug_method=None, descriptions=True):
         return self.show_all_properties(service_type=Euproperty_Type.bootstrap,
                                         partition=partition,
                                         debug_method=debug_method,
-                                        descriptions=True)
+                                        descriptions=descriptions)
 
-    def show_all_cloud_properties(self, partition=None, debug_method=None):
+    def show_all_cloud_properties(self, partition=None, debug_method=None, descriptions=True):
         return self.show_all_properties(service_type=Euproperty_Type.cloud,
                                         partition=partition,
                                         debug_method=debug_method,
-                                        descriptions=True)
+                                        descriptions=descriptions)
 
-    def show_all_cluster_properties(self, partition=None, debug_method=None):
+    def show_all_cluster_properties(self, partition=None, debug_method=None, descriptions=True):
         return self.show_all_properties(service_type=Euproperty_Type.cluster,
                                         partition=partition,
                                         debug_method=debug_method,
-                                        descriptions=True)
+                                        descriptions=descriptions)
 
-    def show_all_reporting_properties(self, partition=None, debug_method=None):
+    def show_all_reporting_properties(self, partition=None, debug_method=None, descriptions=True):
         return self.show_all_properties(service_type=Euproperty_Type.reporting,
                                         partition=partition,
                                         debug_method=debug_method,
-                                        descriptions=True)
+                                        descriptions=descriptions)
 
-    def show_all_storage_properties(self, partition=None, debug_method=None):
+    def show_all_storage_properties(self, partition=None, debug_method=None, descriptions=True):
         return self.show_all_properties(service_type=Euproperty_Type.storage,
                                         partition=partition,
                                         debug_method=debug_method,
-                                        descriptions=True)
+                                        descriptions=descriptions)
 
-    def show_all_system_properties(self, partition=None, debug_method=None):
+    def show_all_system_properties(self, partition=None, debug_method=None, descriptions=True):
         return self.show_all_properties(service_type=Euproperty_Type.system,
                                         partition=partition,
                                         debug_method=debug_method,
-                                        descriptions=True)
+                                        descriptions=descriptions)
 
     def show_all_vmwarebroker_properties(self,
                                          partition=None,
-                                         debug_method=None):
+                                         debug_method=None,
+                                         descriptions=True):
         return self.show_all_properties(
             service_type=Euproperty_Type.vmwarebroker,
             partition=partition,
             debug_method=debug_method,
-            descriptions=True)
+            descriptions=descriptions)
 
-    def show_all_walrus_properties(self, partition=None, debug_method=None):
+    def show_all_walrus_properties(self, partition=None, debug_method=None, descriptions=True):
         return self.show_all_properties(service_type=Euproperty_Type.walrus,
                                         partition=partition,
                                         debug_method=debug_method,
-                                        descriptions=True)
+                                        descriptions=descriptions)
 
-    def show_all_www_properties(self,  partition=None, debug_method=None):
+    def show_all_objectstorage_properties(self,
+                                          partition=None,
+                                          debug_method=None,
+                                          descriptions=True):
+        return self.show_all_properties(service_type=Euproperty_Type.objectstorage,
+                                        partition=partition,
+                                        debug_method=debug_method,
+                                        descriptions=descriptions)
+
+    def show_all_www_properties(self,  partition=None, debug_method=None, descriptions=True):
         return self.show_all_properties(service_type=Euproperty_Type.www,
                                         partition=partition,
                                         debug_method=debug_method,
-                                        descriptions=True)
+                                        descriptions=descriptions)
 
     def show_all_autoscaling_properties(self,
                                         partition=None,
-                                        debug_method=None):
+                                        debug_method=None,
+                                        descriptions=True):
         return self.show_all_properties(
             service_type=Euproperty_Type.autoscaling,
             partition=partition,
             debug_method=debug_method,
-            descriptions=True)
+            descriptions=descriptions)
 
     def show_all_loadbalancing_properties(self,
                                           partition=None,

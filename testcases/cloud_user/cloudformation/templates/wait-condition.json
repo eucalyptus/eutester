@@ -1,0 +1,77 @@
+{
+  "Parameters" : {
+    "KeyName" : {
+      "Type" : "String"
+    },
+    "ImageId" : {
+      "Type" : "String"
+    }
+  },
+
+  "Resources":{
+    "myWaitHandle":{
+      "Type":"AWS::CloudFormation::WaitConditionHandle",
+      "Properties":{
+      }
+    },
+
+    "myWaitCondition":{
+      "Type":"AWS::CloudFormation::WaitCondition",
+      "DependsOn":"Ec2Instance",
+      "Properties":{
+        "Handle":{"Ref":"myWaitHandle"},
+        "Timeout":"300"
+      }
+    },
+
+    "Ec2Instance":{
+      "Type":"AWS::EC2::Instance",
+      "Properties":{
+        "ImageId": { "Ref" : "ImageId" },
+        "KeyName" : { "Ref" : "KeyName" },
+        "UserData" : {
+          "Fn::Base64" : {
+            "Fn::Join" : [ "",
+              [  "#!/bin/bash", "\n",
+                 "SignalURL=\"", { "Ref" : "myWaitHandle" },"\"\n",
+                 "echo SignalURL=$SignalURL", "\n",
+                 "apt-get update", "\n",
+                 "apt-get install -y apache2", "\n",
+                 "sleep 60", "\n",
+                 "curl -X PUT -H 'Content-Type:' --data-binary '{\"Status\" : \"SUCCESS\",\"Reason\" : \"Configuration Complete\",\"UniqueId\" : \"ID1234\",\"Data\" : \"Application has completed configuration.\"}' '$SignalURL'", "\n"
+              ]
+            ]
+          }
+        },
+        "SecurityGroups":[ { "Ref":"InstanceSecurityGroup" } ]
+      }
+    },
+    "InstanceSecurityGroup":{
+      "Type":"AWS::EC2::SecurityGroup",
+      "Properties":{
+        "GroupDescription":"Cloudformation Group",
+        "SecurityGroupIngress":[{
+          "IpProtocol":"tcp",
+          "FromPort":"22",
+          "ToPort":"22",
+          "CidrIp":"0.0.0.0/0"
+          }]
+        }
+      },
+      "IngressRule":{
+        "Type":"AWS::EC2::SecurityGroupIngress",
+        "Properties":{
+          "GroupId":{
+            "Fn::GetAtt": [
+              "InstanceSecurityGroup",
+              "GroupId"
+            ]
+          },
+          "FromPort":"80",
+          "ToPort":"80",
+          "IpProtocol":"tcp",
+          "CidrIp":"0.0.0.0/0"
+        }
+      }
+  }
+}

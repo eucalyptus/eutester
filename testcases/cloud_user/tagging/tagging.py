@@ -398,7 +398,7 @@ if __name__ == "__main__":
     testcase = TaggingBasics()
     ### Use the list of tests passed from config/command line to determine what subset of tests to run
     ### or use a predefined list  "VolumeTagging", "InstanceTagging", "SnapshotTagging", "ImageTagging"
-    list = testcase.args.tests or ["VolumeTagging", "SnapshotTagging","ImageTagging", "InstanceTagging", "SecurityGroupTagging"]
+    list = testcase.args.tests or ["VolumeTagging", "SnapshotTagging", "InstanceTagging", "SecurityGroupTagging"]
 
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
