@@ -1,0 +1,11 @@
+{
+    "Statement": [
+        {
+            "Action": [
+                "ec2:DescribeInstances"
+            ],
+            "Effect": "Allow",
+            "Resource": "arn:aws:ec2:*:408396244283:instance/*"
+        }
+    ]
+}
