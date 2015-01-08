@@ -1,15 +1,14 @@
 package com.eucalyptus.tests.awssdk;
 
 import static com.eucalyptus.tests.awssdk.Eutester4j.assertThat;
-import static com.eucalyptus.tests.awssdk.Eutester4j.initS3ClientWithNewAccount;
 import static com.eucalyptus.tests.awssdk.Eutester4j.eucaUUID;
+import static com.eucalyptus.tests.awssdk.Eutester4j.initS3ClientWithNewAccount;
 import static com.eucalyptus.tests.awssdk.Eutester4j.print;
 import static com.eucalyptus.tests.awssdk.Eutester4j.testInfo;
 import static org.testng.AssertJUnit.assertTrue;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
 
 import org.testng.annotations.AfterClass;
@@ -27,6 +26,7 @@ import com.amazonaws.services.s3.model.CanonicalGrantee;
 import com.amazonaws.services.s3.model.CreateBucketRequest;
 import com.amazonaws.services.s3.model.Grant;
 import com.amazonaws.services.s3.model.GroupGrantee;
+import com.amazonaws.services.s3.model.Owner;
 import com.amazonaws.services.s3.model.Permission;
 
 /**
@@ -44,12 +44,15 @@ import com.amazonaws.services.s3.model.Permission;
  * @author Swathi Gangisetty
  * 
  */
-public class S3BucketCannedACLTests {
+public class S3BucketACLTests {
 
 	private static String bucketName = null;
 	private static List<Runnable> cleanupTasks = null;
 	private static AmazonS3 s3 = null;
 	private static String account = null;
+	private static Owner owner = null;
+	private static String ownerName = null;
+	private static String ownerId = null;
 
 	@BeforeClass
 	public void init() throws Exception {
@@ -64,6 +67,10 @@ public class S3BucketCannedACLTests {
 			}
 			throw e;
 		}
+
+		owner = s3.getS3AccountOwner();
+		ownerName = owner.getDisplayName();
+		ownerId = owner.getId();
 	}
 
 	@AfterClass
@@ -108,7 +115,7 @@ public class S3BucketCannedACLTests {
 		/* Create bucket with Canned ACL AuthenticatedRead */
 		try {
 			createBucketWithCannedACL(bucketName, CannedAccessControlList.AuthenticatedRead);
-			verifyBucketACL(bucketName, CannedAccessControlList.AuthenticatedRead);
+			S3Utils.verifyBucketACL(s3, ownerName, bucketName, CannedAccessControlList.AuthenticatedRead, ownerId);
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run createBucket_CannedACL_AuthenticatedRead");
@@ -131,7 +138,7 @@ public class S3BucketCannedACLTests {
 			createBucket(bucketName);
 			print("Setting canned ACL " + CannedAccessControlList.AuthenticatedRead + " for bucket " + bucketName);
 			s3.setBucketAcl(bucketName, CannedAccessControlList.AuthenticatedRead);
-			verifyBucketACL(bucketName, CannedAccessControlList.AuthenticatedRead);
+			S3Utils.verifyBucketACL(s3, ownerName, bucketName, CannedAccessControlList.AuthenticatedRead, ownerId);
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run setBucket_CannedACL_AuthenticatedRead");
@@ -153,7 +160,7 @@ public class S3BucketCannedACLTests {
 		/* Create bucket with Canned ACL BucketOwnerFullControl */
 		try {
 			createBucketWithCannedACL(bucketName, CannedAccessControlList.BucketOwnerFullControl);
-			verifyBucketACL(bucketName, CannedAccessControlList.BucketOwnerFullControl);
+			S3Utils.verifyBucketACL(s3, ownerName, bucketName, CannedAccessControlList.BucketOwnerFullControl, ownerId);
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run createBucket_CannedACL_BucketOwnerFullControl");
@@ -177,7 +184,7 @@ public class S3BucketCannedACLTests {
 			createBucket(bucketName);
 			print("Setting canned ACL " + CannedAccessControlList.BucketOwnerFullControl + " for bucket " + bucketName);
 			s3.setBucketAcl(bucketName, CannedAccessControlList.BucketOwnerFullControl);
-			verifyBucketACL(bucketName, CannedAccessControlList.BucketOwnerFullControl);
+			S3Utils.verifyBucketACL(s3, ownerName, bucketName, CannedAccessControlList.BucketOwnerFullControl, ownerId);
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run setBucket_CannedACL_BucketOwnerFullControl");
@@ -201,7 +208,7 @@ public class S3BucketCannedACLTests {
 		/* Create bucket with Canned ACL BucketOwnerRead */
 		try {
 			createBucketWithCannedACL(bucketName, CannedAccessControlList.BucketOwnerRead);
-			verifyBucketACL(bucketName, CannedAccessControlList.BucketOwnerRead);
+			S3Utils.verifyBucketACL(s3, ownerName, bucketName, CannedAccessControlList.BucketOwnerRead, ownerId);
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run createBucket_CannedACL_BucketOwnerRead");
@@ -227,7 +234,7 @@ public class S3BucketCannedACLTests {
 			createBucket(bucketName);
 			print("Setting canned ACL " + CannedAccessControlList.BucketOwnerRead + " for bucket " + bucketName);
 			s3.setBucketAcl(bucketName, CannedAccessControlList.BucketOwnerRead);
-			verifyBucketACL(bucketName, CannedAccessControlList.BucketOwnerRead);
+			S3Utils.verifyBucketACL(s3, ownerName, bucketName, CannedAccessControlList.BucketOwnerRead, ownerId);
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run setBucket_CannedACL_BucketOwnerRead()");
@@ -248,7 +255,7 @@ public class S3BucketCannedACLTests {
 		/* Create bucket with Canned ACL LogDeliveryWrite */
 		try {
 			createBucketWithCannedACL(bucketName, CannedAccessControlList.LogDeliveryWrite);
-			verifyBucketACL(bucketName, CannedAccessControlList.LogDeliveryWrite);
+			S3Utils.verifyBucketACL(s3, ownerName, bucketName, CannedAccessControlList.LogDeliveryWrite, ownerId);
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run createBucket_CannedACL_LogDeliveryWrite");
@@ -271,7 +278,7 @@ public class S3BucketCannedACLTests {
 			createBucket(bucketName);
 			print("Setting canned ACL " + CannedAccessControlList.LogDeliveryWrite + " for bucket " + bucketName);
 			s3.setBucketAcl(bucketName, CannedAccessControlList.LogDeliveryWrite);
-			verifyBucketACL(bucketName, CannedAccessControlList.LogDeliveryWrite);
+			S3Utils.verifyBucketACL(s3, ownerName, bucketName, CannedAccessControlList.LogDeliveryWrite, ownerId);
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run setBucket_CannedACL_LogDeliveryWrite()");
@@ -292,7 +299,7 @@ public class S3BucketCannedACLTests {
 		/* Create bucket with Canned ACL Private */
 		try {
 			createBucketWithCannedACL(bucketName, CannedAccessControlList.Private);
-			verifyBucketACL(bucketName, CannedAccessControlList.Private);
+			S3Utils.verifyBucketACL(s3, ownerName, bucketName, CannedAccessControlList.Private, ownerId);
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run createBucket_CannedACL_Private");
@@ -315,7 +322,7 @@ public class S3BucketCannedACLTests {
 			createBucket(bucketName);
 			print("Setting canned ACL " + CannedAccessControlList.Private + " for bucket " + bucketName);
 			s3.setBucketAcl(bucketName, CannedAccessControlList.Private);
-			verifyBucketACL(bucketName, CannedAccessControlList.Private);
+			S3Utils.verifyBucketACL(s3, ownerName, bucketName, CannedAccessControlList.Private, ownerId);
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run setBucket_CannedACL_Private");
@@ -336,7 +343,7 @@ public class S3BucketCannedACLTests {
 		/* Create bucket with Canned ACL PublicRead */
 		try {
 			createBucketWithCannedACL(bucketName, CannedAccessControlList.PublicRead);
-			verifyBucketACL(bucketName, CannedAccessControlList.PublicRead);
+			S3Utils.verifyBucketACL(s3, ownerName, bucketName, CannedAccessControlList.PublicRead, ownerId);
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run createBucket_CannedACL_PublicRead");
@@ -359,7 +366,7 @@ public class S3BucketCannedACLTests {
 			createBucket(bucketName);
 			print("Setting canned ACL " + CannedAccessControlList.PublicRead + " for bucket " + bucketName);
 			s3.setBucketAcl(bucketName, CannedAccessControlList.PublicRead);
-			verifyBucketACL(bucketName, CannedAccessControlList.PublicRead);
+			S3Utils.verifyBucketACL(s3, ownerName, bucketName, CannedAccessControlList.PublicRead, ownerId);
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run setBucket_CannedACL_PublicRead");
@@ -380,7 +387,7 @@ public class S3BucketCannedACLTests {
 		/* Create bucket with Canned ACL PublicReadWrite */
 		try {
 			createBucketWithCannedACL(bucketName, CannedAccessControlList.PublicReadWrite);
-			verifyBucketACL(bucketName, CannedAccessControlList.PublicReadWrite);
+			S3Utils.verifyBucketACL(s3, ownerName, bucketName, CannedAccessControlList.PublicReadWrite, ownerId);
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run createBucket_CannedACL_PublicReadWrite");
@@ -403,7 +410,7 @@ public class S3BucketCannedACLTests {
 			createBucket(bucketName);
 			print("Setting canned ACL " + CannedAccessControlList.PublicReadWrite + " for bucket " + bucketName);
 			s3.setBucketAcl(bucketName, CannedAccessControlList.PublicReadWrite);
-			verifyBucketACL(bucketName, CannedAccessControlList.PublicReadWrite);
+			S3Utils.verifyBucketACL(s3, ownerName, bucketName, CannedAccessControlList.PublicReadWrite, ownerId);
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run setBucket_CannedACL_PublicReadWrite");
@@ -421,46 +428,81 @@ public class S3BucketCannedACLTests {
 		testInfo(this.getClass().getSimpleName() + " - setBucket_CannedACLs");
 
 		try {
-			final String bucketName = eucaUUID();
 			createBucket(bucketName);
 
 			/* Set Canned ACL AuthenticatedRead */
 			print("Setting canned ACL " + CannedAccessControlList.AuthenticatedRead + " for bucket " + bucketName);
 			s3.setBucketAcl(bucketName, CannedAccessControlList.AuthenticatedRead);
-			verifyBucketACL(bucketName, CannedAccessControlList.AuthenticatedRead);
+			S3Utils.verifyBucketACL(s3, ownerName, bucketName, CannedAccessControlList.AuthenticatedRead, ownerId);
 
 			/* Set Canned ACL BucketOwnerFullControl */
 			print("Setting canned ACL " + CannedAccessControlList.BucketOwnerFullControl + " for bucket " + bucketName);
 			s3.setBucketAcl(bucketName, CannedAccessControlList.BucketOwnerFullControl);
-			verifyBucketACL(bucketName, CannedAccessControlList.BucketOwnerFullControl);
+			S3Utils.verifyBucketACL(s3, ownerName, bucketName, CannedAccessControlList.BucketOwnerFullControl, ownerId);
 
 			/* Set Canned ACL BucketOwnerRead */
 			print("Setting canned ACL " + CannedAccessControlList.BucketOwnerRead + " for bucket " + bucketName);
 			s3.setBucketAcl(bucketName, CannedAccessControlList.BucketOwnerRead);
-			verifyBucketACL(bucketName, CannedAccessControlList.BucketOwnerRead);
+			S3Utils.verifyBucketACL(s3, ownerName, bucketName, CannedAccessControlList.BucketOwnerRead, ownerId);
 
 			/* Set Canned ACL LogDeliveryWrite */
 			print("Setting canned ACL " + CannedAccessControlList.LogDeliveryWrite + " for bucket " + bucketName);
 			s3.setBucketAcl(bucketName, CannedAccessControlList.LogDeliveryWrite);
-			verifyBucketACL(bucketName, CannedAccessControlList.LogDeliveryWrite);
+			S3Utils.verifyBucketACL(s3, ownerName, bucketName, CannedAccessControlList.LogDeliveryWrite, ownerId);
 
 			/* Set Canned ACL Private */
 			print("Setting canned ACL " + CannedAccessControlList.Private + " for bucket " + bucketName);
 			s3.setBucketAcl(bucketName, CannedAccessControlList.Private);
-			verifyBucketACL(bucketName, CannedAccessControlList.Private);
+			S3Utils.verifyBucketACL(s3, ownerName, bucketName, CannedAccessControlList.Private, ownerId);
 
 			/* Set Canned ACL PublicRead */
 			print("Setting canned ACL " + CannedAccessControlList.PublicRead + " for bucket " + bucketName);
 			s3.setBucketAcl(bucketName, CannedAccessControlList.PublicRead);
-			verifyBucketACL(bucketName, CannedAccessControlList.PublicRead);
+			S3Utils.verifyBucketACL(s3, ownerName, bucketName, CannedAccessControlList.PublicRead, ownerId);
 
 			/* Set Canned ACL PublicReadWrite */
 			print("Setting canned ACL " + CannedAccessControlList.PublicReadWrite + " for bucket " + bucketName);
 			s3.setBucketAcl(bucketName, CannedAccessControlList.PublicReadWrite);
-			verifyBucketACL(bucketName, CannedAccessControlList.PublicReadWrite);
+			S3Utils.verifyBucketACL(s3, ownerName, bucketName, CannedAccessControlList.PublicReadWrite, ownerId);
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run setBucket_CannedACLs");
+		}
+	}
+
+	@Test
+	public void createBucket_ACL_Headers() throws Exception {
+		testInfo(this.getClass().getSimpleName() + " - createBucket_ACL_Headers");
+		try {
+			AccessControlList acl = new AccessControlList();
+			acl.getGrants().add(new Grant(GroupGrantee.AuthenticatedUsers, Permission.ReadAcp));
+			acl.getGrants().add(new Grant(GroupGrantee.AllUsers, Permission.FullControl));
+			acl.getGrants().add(new Grant(new CanonicalGrantee(ownerId), Permission.FullControl));
+			createBucketWithACL(bucketName, acl);
+			S3Utils.verifyBucketACL(s3, ownerName, bucketName, acl, ownerId);
+		} catch (AmazonServiceException ase) {
+			printException(ase);
+			assertThat(false, "Failed to run createBucket_ACL_Headers");
+		}
+	}
+
+	@Test
+	public void setBucket_ACL_XMLBody() throws Exception {
+		testInfo(this.getClass().getSimpleName() + " - setBucket_ACL_XMLBody");
+		try {
+			createBucket(bucketName);
+
+			AccessControlList acl = new AccessControlList();
+			acl.setOwner(owner);
+			acl.getGrants().add(new Grant(GroupGrantee.LogDelivery, Permission.FullControl));
+			acl.getGrants().add(new Grant(GroupGrantee.AllUsers, Permission.WriteAcp));
+			acl.getGrants().add(new Grant(new CanonicalGrantee(ownerId), Permission.FullControl));
+			print("Setting ACL " + acl + " for bucket " + bucketName);
+			s3.setBucketAcl(bucketName, acl);
+			S3Utils.verifyBucketACL(s3, ownerName, bucketName, acl, ownerId);
+		} catch (AmazonServiceException ase) {
+			printException(ase);
+			assertThat(false, "Failed to run setBucket_ACL_XMLBody");
 		}
 	}
 
@@ -482,7 +524,7 @@ public class S3BucketCannedACLTests {
 			}
 		});
 
-		verifyBucketACL(bucketName, CannedAccessControlList.Private);
+		S3Utils.verifyBucketACL(s3, ownerName, bucketName, CannedAccessControlList.Private, ownerId);
 		return bucket;
 	}
 
@@ -501,135 +543,18 @@ public class S3BucketCannedACLTests {
 		assertTrue("Mismatch in bucket names. Expected bucket name to be " + bucketName + ", but got " + bucket.getName(), bucket.getName().equals(bucketName));
 	}
 
-	private void verifyBucketACL(String bucketName, CannedAccessControlList cannedACL) {
-		print("Getting ACL for bucket " + bucketName);
-		AccessControlList acl = s3.getBucketAcl(bucketName);
-		assertTrue("Expected owner of the ACL to be " + s3.getS3AccountOwner().getId() + ", but found " + acl.getOwner().getId(), s3.getS3AccountOwner()
-				.getId().equals(acl.getOwner().getId()));
-		Iterator<Grant> iterator = acl.getGrants().iterator();
+	private void createBucketWithACL(final String bucketName, AccessControlList acl) {
+		print("Creating bucket " + bucketName + " with ACL " + acl);
+		Bucket bucket = s3.createBucket(new CreateBucketRequest(bucketName).withAccessControlList(acl));
+		cleanupTasks.add(new Runnable() {
+			@Override
+			public void run() {
+				print("Deleting bucket " + bucketName);
+				s3.deleteBucket(bucketName);
+			}
+		});
 
-		switch (cannedACL) {
-			case AuthenticatedRead:
-				assertTrue("Mismatch in number of ACLs associated with the bucket. Expected 2 but got " + acl.getGrants().size(), acl.getGrants().size() == 2);
-				while (iterator.hasNext()) {
-					Grant grant = iterator.next();
-					if (grant.getGrantee() instanceof CanonicalGrantee) {
-						assertTrue("Expected grantee to be bucket owner " + acl.getOwner().getId() + ", but found " + grant.getGrantee().getIdentifier(), grant
-								.getGrantee().getIdentifier().equals(acl.getOwner().getId()));
-						assertTrue("Expected bucket owner to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(), grant
-								.getPermission().equals(Permission.FullControl));
-					} else {
-						assertTrue("Grantee of type GroupGrantee not found", grant.getGrantee() instanceof GroupGrantee);
-						assertTrue("Expected grantee to be " + GroupGrantee.AuthenticatedUsers + ", but found " + ((GroupGrantee) grant.getGrantee()),
-								((GroupGrantee) grant.getGrantee()).equals(GroupGrantee.AuthenticatedUsers));
-						assertTrue(
-								"Expected " + GroupGrantee.AuthenticatedUsers + " to have " + Permission.Read.toString() + " privilege, but found "
-										+ grant.getPermission(), grant.getPermission().equals(Permission.Read));
-					}
-				}
-				break;
-
-			case BucketOwnerFullControl:
-				assertTrue("Mismatch in number of ACLs associated with the bucket. Expected 1 but got " + acl.getGrants().size(), acl.getGrants().size() == 1);
-				while (iterator.hasNext()) {
-					Grant grant = iterator.next();
-					assertTrue("Grantee is not of type CanonicalGrantee", grant.getGrantee() instanceof CanonicalGrantee);
-					assertTrue("Expected grantee to be bucket owner " + acl.getOwner().getId() + ", but found " + grant.getGrantee().getIdentifier(), grant
-							.getGrantee().getIdentifier().equals(acl.getOwner().getId()));
-					assertTrue("Expected bucket owner to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(), grant
-							.getPermission().equals(Permission.FullControl));
-				}
-				break;
-
-			case BucketOwnerRead:
-				assertTrue("Mismatch in number of ACLs associated with the bucket. Expected 1 but got " + acl.getGrants().size(), acl.getGrants().size() == 1);
-				while (iterator.hasNext()) {
-					Grant grant = iterator.next();
-					assertTrue("Grantee is not of type CanonicalGrantee", grant.getGrantee() instanceof CanonicalGrantee);
-					assertTrue("Expected grantee to be bucket owner " + acl.getOwner().getId() + ", but found " + grant.getGrantee().getIdentifier(), grant
-							.getGrantee().getIdentifier().equals(acl.getOwner().getId()));
-					assertTrue("Expected bucket owner to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(), grant
-							.getPermission().equals(Permission.FullControl));
-				}
-				break;
-
-			case LogDeliveryWrite:
-				assertTrue("Mismatch in number of ACLs associated with the bucket. Expected 3 but got " + acl.getGrants().size(), acl.getGrants().size() == 3);
-				while (iterator.hasNext()) {
-					Grant grant = iterator.next();
-					if (grant.getGrantee() instanceof CanonicalGrantee) {
-						assertTrue("Expected grantee to be bucket owner " + acl.getOwner().getId() + ", but found " + grant.getGrantee().getIdentifier(), grant
-								.getGrantee().getIdentifier().equals(acl.getOwner().getId()));
-						assertTrue("Expected bucket owner to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(), grant
-								.getPermission().equals(Permission.FullControl));
-					} else {
-						assertTrue("Grantee of type GroupGrantee not found", grant.getGrantee() instanceof GroupGrantee);
-						assertTrue("Expected grantee to be " + GroupGrantee.LogDelivery + ", but found " + ((GroupGrantee) grant.getGrantee()),
-								((GroupGrantee) grant.getGrantee()).equals(GroupGrantee.LogDelivery));
-						assertTrue(
-								"Expected " + GroupGrantee.LogDelivery + " to have " + Permission.Write.toString() + " or "
-										+ grant.getPermission().equals(Permission.ReadAcp) + " privileges, but found " + grant.getPermission(), grant
-										.getPermission().equals(Permission.Write) || grant.getPermission().equals(Permission.ReadAcp));
-					}
-				}
-				break;
-
-			case Private:
-				assertTrue("Mismatch in number of ACLs associated with the bucket. Expected 1 but got " + acl.getGrants().size(), acl.getGrants().size() == 1);
-				while (iterator.hasNext()) {
-					Grant grant = iterator.next();
-					assertTrue("Grantee is not of type CanonicalGrantee", grant.getGrantee() instanceof CanonicalGrantee);
-					assertTrue("Expected grantee to be bucket owner " + acl.getOwner().getId() + ", but found " + grant.getGrantee().getIdentifier(), grant
-							.getGrantee().getIdentifier().equals(acl.getOwner().getId()));
-					assertTrue("Expected bucket owner to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(), grant
-							.getPermission().equals(Permission.FullControl));
-				}
-				break;
-
-			case PublicRead:
-				assertTrue("Mismatch in number of ACLs associated with the bucket. Expected 2 but got " + acl.getGrants().size(), acl.getGrants().size() == 2);
-				while (iterator.hasNext()) {
-					Grant grant = iterator.next();
-					if (grant.getGrantee() instanceof CanonicalGrantee) {
-						assertTrue("Expected grantee to be bucket owner " + acl.getOwner().getId() + ", but found " + grant.getGrantee().getIdentifier(), grant
-								.getGrantee().getIdentifier().equals(acl.getOwner().getId()));
-						assertTrue("Expected bucket owner to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(), grant
-								.getPermission().equals(Permission.FullControl));
-					} else {
-						assertTrue("Grantee of type GroupGrantee not found", grant.getGrantee() instanceof GroupGrantee);
-						assertTrue("Expected grantee to be " + GroupGrantee.AllUsers + ", but found " + ((GroupGrantee) grant.getGrantee()),
-								((GroupGrantee) grant.getGrantee()).equals(GroupGrantee.AllUsers));
-						assertTrue(
-								"Expected " + GroupGrantee.AllUsers + " to have " + Permission.Read.toString() + " privilege, but found "
-										+ grant.getPermission(), grant.getPermission().equals(Permission.Read));
-					}
-				}
-				break;
-
-			case PublicReadWrite:
-				assertTrue("Mismatch in number of ACLs associated with the bucket. Expected 3 but got " + acl.getGrants().size(), acl.getGrants().size() == 3);
-				while (iterator.hasNext()) {
-					Grant grant = iterator.next();
-					if (grant.getGrantee() instanceof CanonicalGrantee) {
-						assertTrue("Expected grantee to be bucket owner " + acl.getOwner().getId() + ", but found " + grant.getGrantee().getIdentifier(), grant
-								.getGrantee().getIdentifier().equals(acl.getOwner().getId()));
-						assertTrue("Expected bucket owner to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(), grant
-								.getPermission().equals(Permission.FullControl));
-					} else {
-						assertTrue("Grantee of type GroupGrantee not found", grant.getGrantee() instanceof GroupGrantee);
-						assertTrue("Expected grantee to be " + GroupGrantee.AllUsers + ", but found " + ((GroupGrantee) grant.getGrantee()),
-								((GroupGrantee) grant.getGrantee()).equals(GroupGrantee.AllUsers));
-						assertTrue("Expected " + GroupGrantee.AllUsers + " to have " + Permission.Read.toString() + " or " + Permission.Write.toString()
-								+ " privileges, but found " + grant.getPermission(), grant.getPermission().equals(Permission.Read)
-								|| grant.getPermission().equals(Permission.Write));
-					}
-				}
-				break;
-
-			default:
-				assertThat(false, "Unknown canned ACL");
-				break;
-
-		}
+		assertTrue("Invalid reference to bucket", bucket != null);
+		assertTrue("Mismatch in bucket names. Expected bucket name to be " + bucketName + ", but got " + bucket.getName(), bucket.getName().equals(bucketName));
 	}
 }
