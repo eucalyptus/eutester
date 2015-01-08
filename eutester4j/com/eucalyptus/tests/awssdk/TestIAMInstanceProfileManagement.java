@@ -66,7 +66,7 @@ public class TestIAMInstanceProfileManagement {
                                 .withInstanceProfileName(profileName));
                 assertThat(getProfileResult.getInstanceProfile() != null, "Expected profile");
                 assertThat(profileName.equals(getProfileResult.getInstanceProfile().getInstanceProfileName()), "Unexpected profile name");
-                assertThat("/path".equals(getProfileResult.getInstanceProfile().getPath()), "Unexpected profile path");
+                assertThat("/path/".equals(getProfileResult.getInstanceProfile().getPath()), "Unexpected profile path");
                 assertThat(getProfileResult.getInstanceProfile().getRoles() == null || getProfileResult.getInstanceProfile().getRoles().isEmpty(), "Unexpected roles");
             }
 
