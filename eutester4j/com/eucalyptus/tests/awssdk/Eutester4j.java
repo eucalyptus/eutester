@@ -58,6 +58,7 @@ class Eutester4j {
     static String CREDPATH = null;
     static String NAME_PREFIX;
     static String endpoints;
+    static String HOST_IP = null;
     static AmazonAutoScaling as;
     static AmazonEC2 ec2;
     static AmazonElasticLoadBalancing elb;
@@ -84,13 +85,13 @@ class Eutester4j {
         }
 
         print("Getting cloud information from " + CREDPATH);
-        EC2_ENDPOINT = parseEucarc(CREDPATH, "EC2_URL");
-        AS_ENDPOINT = parseEucarc(CREDPATH, "AWS_AUTO_SCALING_URL");
-        ELB_ENDPOINT = parseEucarc(CREDPATH, "AWS_ELB_URL");
-        CW_ENDPOINT = parseEucarc(CREDPATH, "AWS_CLOUDWATCH_URL");
-        IAM_ENDPOINT = parseEucarc(CREDPATH, "EUARE_URL");
-        S3_ENDPOINT = parseEucarc(CREDPATH, "S3_URL");
-        TOKENS_ENDPOINT = parseEucarc(CREDPATH, "TOKEN_URL");
+        EC2_ENDPOINT = parseEucarc(CREDPATH, "EC2_URL") + "/";
+        AS_ENDPOINT = parseEucarc(CREDPATH, "AWS_AUTO_SCALING_URL") + "/";
+        ELB_ENDPOINT = parseEucarc(CREDPATH, "AWS_ELB_URL") + "/";
+        CW_ENDPOINT = parseEucarc(CREDPATH, "AWS_CLOUDWATCH_URL") + "/";
+        IAM_ENDPOINT = parseEucarc(CREDPATH, "EUARE_URL") + "/";
+        S3_ENDPOINT = parseEucarc(CREDPATH, "S3_URL") + "/";
+        TOKENS_ENDPOINT = parseEucarc(CREDPATH, "TOKEN_URL") + "/";
         SECRET_KEY = parseEucarc(CREDPATH, "EC2_SECRET_KEY").replace("'", "");
         ACCESS_KEY = parseEucarc(CREDPATH, "EC2_ACCESS_KEY").replace("'", "");
         ACCOUNT_ID = parseEucarc(CREDPATH,"EC2_ACCOUNT_NUMBER").replace("'", "");
@@ -118,6 +119,21 @@ class Eutester4j {
         print("Cloud Discovery Complete");
     }
 
+    public static void minimalInit() throws Exception {
+        if (eucarc != null) {
+            CREDPATH = eucarc;
+        } else {
+            CREDPATH = "eucarc";
+        }
+        print("Getting cloud information from " + CREDPATH);
+        EC2_ENDPOINT = parseEucarc(CREDPATH, "EC2_URL") + "/";
+        HOST_IP=EC2_ENDPOINT.substring(7, EC2_ENDPOINT.length()-23);
+        print("HOST IP = " + HOST_IP);
+        SECRET_KEY = parseEucarc(CREDPATH, "EC2_SECRET_KEY").replace("'", "");
+        ACCESS_KEY = parseEucarc(CREDPATH, "EC2_ACCESS_KEY").replace("'", "");
+        print("Cloud Discovery Complete");
+    }
+
     // Quick way to initialize just the S3 client without initializing other clients in getCloudInfo().
     // For ease of use against AWS (mainly) as well as Eucalyptus
     public static void initS3Client() throws Exception {
@@ -135,8 +151,8 @@ class Eutester4j {
 
         print("Getting cloud information from " + CREDPATH);
 
-        EC2_ENDPOINT = parseEucarc(CREDPATH, "EC2_URL");
-        S3_ENDPOINT = parseEucarc(CREDPATH, "S3_URL");
+        EC2_ENDPOINT = parseEucarc(CREDPATH, "EC2_URL") + "/";
+        S3_ENDPOINT = parseEucarc(CREDPATH, "S3_URL") + "/";
 
         SECRET_KEY = parseEucarc(CREDPATH, "EC2_SECRET_KEY").replace("'", "");
         ACCESS_KEY = parseEucarc(CREDPATH, "EC2_ACCESS_KEY").replace("'", "");
@@ -149,53 +165,6 @@ class Eutester4j {
 
         print("S3 Discovery Complete");
     }
-    
-	public static AmazonS3 initS3ClientWithNewAccount(String account, String user) throws Exception {
-
-		// Initialize everything for the first time
-		if (EC2_ENDPOINT == null || S3_ENDPOINT == null || IAM_ENDPOINT == null || ACCESS_KEY == null || SECRET_KEY == null) {
-			if (eucarc != null) {
-				CREDPATH = eucarc;
-			} else {
-				CREDPATH = "eucarc";
-			}
-
-			if (endpointFile != null) {
-				endpoints = endpointFile;
-			} else {
-				endpoints = "endpoints.xml";
-			}
-
-			print("Getting cloud information from " + CREDPATH);
-
-			EC2_ENDPOINT = parseEucarc(CREDPATH, "EC2_URL");
-			S3_ENDPOINT = parseEucarc(CREDPATH, "S3_URL");
-			IAM_ENDPOINT = parseEucarc(CREDPATH, "EUARE_URL");
-
-			ACCESS_KEY = parseEucarc(CREDPATH, "EC2_ACCESS_KEY").replace("'", "");
-			SECRET_KEY = parseEucarc(CREDPATH, "EC2_SECRET_KEY").replace("'", "");
-
-			print("Updating endpoints file");
-			updateEndpoints(endpoints, EC2_ENDPOINT, S3_ENDPOINT);
-
-			youAre = getYouAreClient(ACCESS_KEY, SECRET_KEY, IAM_ENDPOINT);
-		}
-
-		// Create a new account if one does not exist
-		try {
-			createAccount(account);
-			if (!user.equalsIgnoreCase("admin")) {
-				createUser(account, user);
-			}
-		} catch (Exception e) {
-			// Account may already exist, try getting the keys
-		}
-		Map<String, String> keyMap = getUserKeys(account, user);
-
-		// Initialize the s3 client and return it
-		return getS3Client(keyMap.get("ak"), keyMap.get("sk"), S3_ENDPOINT);
-	}
-    
 
     public static void testInfo(String testName) {
         print("*****TEST NAME: " + testName);
@@ -328,7 +297,7 @@ class Eutester4j {
     public static void waitForHealthStatus(final String instanceId, final String expectedStatus)
             throws Exception {
         final long startTime = System.currentTimeMillis();
-        final long timeout = TimeUnit.MINUTES.toMillis(15);
+        final long timeout = TimeUnit.MINUTES.toMillis(5);
         boolean completed = false;
         while (!completed && (System.currentTimeMillis() - startTime) < timeout) {
             Thread.sleep(5000);
@@ -486,8 +455,7 @@ class Eutester4j {
     }
 
     public static String findImage() {
-        // Find an appropriate image to launch: instance-store not windows and not load balancer or image worker images
-        String imageId=null;
+        // Find an appropriate image to launch
         final DescribeImagesResult imagesResult = ec2
                 .describeImages(new DescribeImagesRequest().withFilters(
                         new Filter().withName("image-type").withValues(
@@ -496,14 +464,9 @@ class Eutester4j {
                                 "instance-store"),
                         new Filter().withName("is-public").withValues(
                                 "true")));
-        for (Image i : imagesResult.getImages()){
-            if (!i.getImageLocation().equals("imaging-worker-v1/eucalyptus-imaging-worker-image.img.manifest.xml") &&
-                    !i.getImageLocation().equals("loadbalancer-v1/eucalyptus-load-balancer-image.img.manifest.xml") &&
-                    !i.getPlatform().equals("windows")) {
-                imageId = i.getImageId();
-            }
-        }
-        assertThat(imageId != null, "No suitable image found");
+        assertThat(imagesResult.getImages().size() > 0, "Image not found");
+
+        final String imageId = imagesResult.getImages().get(0).getImageId();
         print("Using image: " + imageId);
         return imageId;
     }
