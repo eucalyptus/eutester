@@ -85,13 +85,13 @@ class Eutester4j {
         }
 
         print("Getting cloud information from " + CREDPATH);
-        EC2_ENDPOINT = parseEucarc(CREDPATH, "EC2_URL") + "/";
-        AS_ENDPOINT = parseEucarc(CREDPATH, "AWS_AUTO_SCALING_URL") + "/";
-        ELB_ENDPOINT = parseEucarc(CREDPATH, "AWS_ELB_URL") + "/";
-        CW_ENDPOINT = parseEucarc(CREDPATH, "AWS_CLOUDWATCH_URL") + "/";
-        IAM_ENDPOINT = parseEucarc(CREDPATH, "EUARE_URL") + "/";
-        S3_ENDPOINT = parseEucarc(CREDPATH, "S3_URL") + "/";
-        TOKENS_ENDPOINT = parseEucarc(CREDPATH, "TOKEN_URL") + "/";
+        EC2_ENDPOINT = parseEucarc(CREDPATH, "EC2_URL");
+        AS_ENDPOINT = parseEucarc(CREDPATH, "AWS_AUTO_SCALING_URL");
+        ELB_ENDPOINT = parseEucarc(CREDPATH, "AWS_ELB_URL");
+        CW_ENDPOINT = parseEucarc(CREDPATH, "AWS_CLOUDWATCH_URL");
+        IAM_ENDPOINT = parseEucarc(CREDPATH, "EUARE_URL");
+        S3_ENDPOINT = parseEucarc(CREDPATH, "S3_URL");
+        TOKENS_ENDPOINT = parseEucarc(CREDPATH, "TOKEN_URL");
         SECRET_KEY = parseEucarc(CREDPATH, "EC2_SECRET_KEY").replace("'", "");
         ACCESS_KEY = parseEucarc(CREDPATH, "EC2_ACCESS_KEY").replace("'", "");
         ACCOUNT_ID = parseEucarc(CREDPATH,"EC2_ACCOUNT_NUMBER").replace("'", "");
@@ -151,8 +151,8 @@ class Eutester4j {
 
         print("Getting cloud information from " + CREDPATH);
 
-        EC2_ENDPOINT = parseEucarc(CREDPATH, "EC2_URL") + "/";
-        S3_ENDPOINT = parseEucarc(CREDPATH, "S3_URL") + "/";
+        EC2_ENDPOINT = parseEucarc(CREDPATH, "EC2_URL");
+        S3_ENDPOINT = parseEucarc(CREDPATH, "S3_URL");
 
         SECRET_KEY = parseEucarc(CREDPATH, "EC2_SECRET_KEY").replace("'", "");
         ACCESS_KEY = parseEucarc(CREDPATH, "EC2_ACCESS_KEY").replace("'", "");
