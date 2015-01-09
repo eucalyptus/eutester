@@ -56,6 +56,7 @@ class Eutester4j {
     static String ACCESS_KEY = null;
     static String ACCOUNT_ID = null;
     static String CREDPATH = null;
+    static String HOST_IP = null;
     static String NAME_PREFIX;
     static String endpoints;
     static AmazonAutoScaling as;
@@ -195,6 +196,21 @@ class Eutester4j {
 		// Initialize the s3 client and return it
 		return getS3Client(keyMap.get("ak"), keyMap.get("sk"), S3_ENDPOINT);
 	}
+
+    public static void minimalInit() throws Exception {
+        if (eucarc != null) {
+            CREDPATH = eucarc;
+        } else {
+            CREDPATH = "eucarc";
+        }
+        print("Getting cloud information from " + CREDPATH);
+        EC2_ENDPOINT = parseEucarc(CREDPATH, "EC2_URL") + "/";
+        HOST_IP=EC2_ENDPOINT.substring(7, EC2_ENDPOINT.length()-23);
+        print("HOST IP = " + HOST_IP);
+        SECRET_KEY = parseEucarc(CREDPATH, "EC2_SECRET_KEY").replace("'", "");
+        ACCESS_KEY = parseEucarc(CREDPATH, "EC2_ACCESS_KEY").replace("'", "");
+        print("Cloud Discovery Complete");
+    }
     
 
     public static void testInfo(String testName) {
