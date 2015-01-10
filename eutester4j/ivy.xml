@@ -6,7 +6,7 @@
         <!-- core dependencies -->
         <dependency org="log4j" name="log4j" rev="1.2.17"/>
         <dependency org="org.testng" name="testng" rev="6.8.5"/>
-        <dependency org="com.amazonaws" name="aws-java-sdk" rev="1.6.12"/>
+        <dependency org="com.amazonaws" name="aws-java-sdk" rev="1.9.13"/>
         <dependency org="commons-lang" name="commons-lang" rev="2.6"/>
         <dependency org="org.codehaus.groovy" name="groovy-all" rev="1.8.9"/>
 
