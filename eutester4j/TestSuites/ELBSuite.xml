@@ -6,6 +6,7 @@
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingELBAddRemoveInstances"/>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingELBInstanceHealthMonitoring"/>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingELBReferenceValidation"/>
+            <class name="com.eucalyptus.tests.awssdk.TestELBAttributes"/>
         </classes>>
     </test>
 </suite>
