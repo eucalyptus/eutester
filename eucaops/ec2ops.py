@@ -172,6 +172,7 @@ disable_root: false"""
             ec2_connection_args['api_version'] = APIVersion
             ec2_connection_args['region'] = ec2_region
             self.debug("Attempting to create ec2 connection to " + ec2_region.endpoint + ':' + str(port) + path)
+            #self.ec2 = boto.connect_vpc(**ec2_connection_args)
             self.ec2 = boto.connect_ec2(**ec2_connection_args)
         except Exception, e:
             self.critical("Was unable to create ec2 connection because of exception: " + str(e))
@@ -467,8 +468,8 @@ disable_root: false"""
         if not force_args:
             if src_security_group or src_security_group_name:
                 cidr_ip=None
-                port=None
-                protocol=None
+                #port=None
+                #protocol=None
             if src_security_group:
                 src_security_group_owner_id= src_security_group_owner_id or src_security_group.owner_id
                 src_security_group_name = src_security_group_name or src_security_group.name
@@ -485,13 +486,23 @@ disable_root: false"""
             if src_security_group_name:
                 self.debug( "Attempting authorization of: {0}, from group:{1},"
                             " on port range: {2} to {3}, proto:{4}"
-                            .format(group_name, src_security_group, port,
+                            .format(group_name, src_security_group_name, port,
                                     end_port, protocol))
             else:
                 self.debug( "Attempting authorization of:{0}, on port "
                             "range: {1} to {2}, proto:{3} from {4}"
                             .format(group_name, port, end_port,
                                     protocol, cidr_ip))
+
+            self.ec2.authorize_security_group(group_name,
+                                              ip_protocol=protocol,
+                                              from_port=port,
+                                              to_port=end_port,
+                                              cidr_ip=cidr_ip,
+                                              src_security_group_name=src_security_group_name,
+                                              src_security_group_owner_id=src_security_group_owner_id,
+                                              )
+            """
             self.ec2.authorize_security_group_deprecated(group_name,
                                                          ip_protocol=protocol,
                                                          from_port=port,
@@ -500,6 +511,7 @@ disable_root: false"""
                                                          src_security_group_name=src_security_group_name,
                                                          src_security_group_owner_id=src_security_group_owner_id,
                                                          )
+            """
             return True
         except self.ec2.ResponseError, e:
             if e.code == 'InvalidPermission.Duplicate':

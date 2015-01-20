@@ -457,7 +457,7 @@ class Eutester(object):
         self.debug(  str(callback.func_name) + ' returned: "' + str(current_state) + '" after '
                     + str(elapsed/60) + " minutes " + str(elapsed%60) + " seconds.")
         if not oper(current_state,result):
-            raise Exception( str(callback.func_name) + " did not return " + str(operator.ne.__name__) +
+            raise WaitForResultException( str(callback.func_name) + " did not return " + str(operator.ne.__name__) +
                              "(" + str(result) + ") true after elapsed:"+str(elapsed))
         return current_state
 
@@ -481,6 +481,11 @@ class Eutester(object):
 
 
 
-    
+class WaitForResultException(Exception):
+    def __init__(self, value):
+        self.value = value
+
+    def __str__(self):
+        return repr(self.value)
 
 
