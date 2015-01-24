@@ -975,8 +975,9 @@ class Net_Tests(EutesterTestCase):
             raise ValueError('Group1 not found for this test')
         if not self.group1_instances:
             raise ValueError('No instances found from group1')
-        #Clean out any existing rules in group1
+        self.status('Clean out any existing rules in group1...')
         self.tester.revoke_all_rules(self.group1)
+        self.tester.show_security_group(self.group1)
         instance1 = self.group1_instances[0]
         #Add back ssh
         assert not tester.does_instance_sec_group_allow(instance=instance1,
@@ -984,19 +985,21 @@ class Net_Tests(EutesterTestCase):
                                                          port=22), \
             'Instance: {0}, security group still allows access after ' \
             'revoking all rules'
-
+        self.status('Authorize group1 access from group testing machine ssh (tcp/22)...')
         tester.authorize_group(self.group1,
                                cidr_ip=str(tester.ec2_source_ip) + '/32',
                                protocol='tcp',
                                port=22)
+        self.tester.show_security_group(self.group1)
+        self.status('Test ssh access from this testing machine to each instance in group1...')
         for instance in self.group1_instances:
             instance.reset_ssh_connection()
             instance.sys('echo "reset ssh worked"', code=0)
         self.status('Authorizing group2 access to group1...')
         tester.authorize_group(self.group1,
                                cidr_ip=None,
-                               port=0,
-                               end_port=65000,
+                               port=-1,
+                               protocol='icmp',
                                src_security_group_name=self.group2.name)
         tester.show_security_group(self.group1)
         for zone in zones:
@@ -1027,7 +1030,8 @@ class Net_Tests(EutesterTestCase):
             if self.tester.does_instance_sec_group_allow(
                     instance=zone.test_instance_group1,
                     src_group=self.group2,
-                    protocol='icmp'):
+                    protocol='icmp',
+                    port='-1'):
                 allowed = True
                 break
             if not allowed:
