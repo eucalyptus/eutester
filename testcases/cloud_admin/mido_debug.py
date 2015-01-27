@@ -526,7 +526,7 @@ class MidoDebug(object):
 
         else:
             buf += self._indent_table_buf(self._bold("MAC IS NOT LEARNED ON A BRIDGE PORT AT "
-                                                     "THIS TIME", 91))
+                                                     "THIS TIME !?!", 91))
             buf += "\n"
             buf += self._indent_table_buf(self._bold("(try pinging the addr?)", 91))
             buf += "\n"
@@ -634,3 +634,22 @@ class MidoDebug(object):
             return None
         else:
             return ret_buf
+
+    def show_instance_network_summary(self, instance, printme=True):
+        self.debug('Gathering network info... (this may take a few seconds)')
+        title = ("NETWORK SUMMARY FOR INSTANCE:{0}, (PRIVIP:{1}, PUBIP:{2})"
+                 .format(instance.id, instance.private_ip_address, instance.ip_address))
+        pt = PrettyTable([title])
+        pt.align[title] = 'l'
+        buf = str(self.show_router_for_instance(instance=instance, printme=False))
+        buf += str(self.show_bridge_for_instance(instance=instance, printme=False))
+        buf += str(self.show_bridge_port_for_instance(instance=instance, printme=False))
+
+        pt.add_row([buf])
+        if printme:
+            self.debug('\n{0}\n'.format(pt))
+        return pt
+
+
+
+
