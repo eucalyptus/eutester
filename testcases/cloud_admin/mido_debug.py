@@ -25,8 +25,26 @@ class arptable(resource_base.ResourceBase):
     def get_macaddr(self):
         return self.dto.get('macAddr')
 
+class mactable(resource_base.ResourceBase):
+    def __init__(self, uri, dto, auth):
+        super(mactable, self).__init__(uri, dto, auth)
+
+    def get_port_id(self):
+        return self.dto.get('portId')
+
+    def get_bridge_id(self):
+        return self.dto.get('bridgeId')
+
+    def get_vlan_id(self):
+        return self.dto.get('vlanId')
+
+    def get_macaddr(self):
+        return self.dto.get('macAddr')
+
 
 class MidoDebug(object):
+    _chain_jump = 107
+
     def __init__(self, midonet_api_host, midonet_api_port='8080', midonet_username=None,
                  midonet_password=None, eutester_config=None, eutester_password=None, tester=None):
         self.midonet_api_host = midonet_api_host
@@ -55,11 +73,29 @@ class MidoDebug(object):
                 ret_buf += '{0}{1}\n'.format(indent,line)
         return ret_buf
 
+    def _link_table_buf(self, table, indent=2):
+        if not table:
+            return None
+        if indent < 2:
+            indent = 2
+        preline = ""
+        linkline = "|\n+"
+        for x in xrange(0,indent-1):
+            linkline += "-"
+        for x in xrange(0, indent+1):
+            preline += " "
+        linkline += ">"
+        lines = str(table).splitlines()
+        ret_buf = "{0}{1}\n".format(linkline, lines[0])
+        for line in lines[1:]:
+            ret_buf += '{0}{1}\n'.format(preline,line)
+        return ret_buf
+
     def _header(self, text):
         return "\033[94m\033[1m{0}\033[0m".format(text)
 
-    def _bold(self, text):
-        return "\033[1m{0}\033[0m".format(text)
+    def _bold(self, text, value=1):
+        return "\033[{0}m{1}\033[0m".format(value, text)
 
     def _get_instance(self, instance):
         if not isinstance(instance, Instance):
@@ -69,6 +105,22 @@ class MidoDebug(object):
                 raise ValueError('Could not find instance {0} on system'.format(instance))
             instance = fetched_ins[0]
         return instance
+
+    def _highlight_buf_for_instance(self, buf, instance):
+        ret_buf = ""
+        for line in str(buf).splitlines():
+            searchstring= "{0}|{1}|{2}".format(instance.id,
+                                               instance.private_ip_address,
+                                               instance.ip_address)
+            try:
+                searchstring = "{0}|{1}".format(
+                    searchstring,
+                    self.tester.ec2.get_all_subnets(instance.subnet_id)[0].cidr_block)
+            except:pass
+            for match in re.findall(searchstring,line):
+                line = line.replace(match, self._bold(match, 102))
+            ret_buf += line + "\n"
+        return ret_buf
 
     def get_all_routers(self, search_dict={}, eval_op=re.search, query=None):
         """
@@ -127,8 +179,9 @@ class MidoDebug(object):
             routers = [routers]
         pt = PrettyTable(['Name', 'AdminState', 'ID', 'InboundChain', 'OutboundChain','T-ID' ])
         for router in routers:
-            pt.add_row([router.get_name(),router.get_admin_state_up(), router.get_id(), router.get_inbound_filter_id(),
-                       router.get_outbound_filter_id(), router.get_tenant_id()])
+            pt.add_row([router.get_name(),router.get_admin_state_up(), router.get_id(),
+                        router.get_inbound_filter_id(),router.get_outbound_filter_id(),
+                        router.get_tenant_id()])
         if printme:
             self.debug('\n{0}\n'.format(pt))
         return pt
@@ -183,6 +236,15 @@ class MidoDebug(object):
         buf += self._indent_table_buf(self.show_routes(routes=router.get_routes(), printme=False))
         buf += self._bold("{0}ROUTER PORTS:\n".format(indent))
         buf += self._indent_table_buf(self.show_ports(ports=router.get_ports(), printme=False))
+        if showchains:
+            if router.get_inbound_filter_id():
+                in_filter = self.mapi.get_chain(str(router.get_inbound_filter_id()))
+                buf += self._bold("{0}ROUTER INBOUND FILTER:\n".format(indent))
+                buf += self._indent_table_buf(self.show_chain(chain=in_filter, printme=False))
+            if router.get_outbound_filter_id():
+                out_filter = self.mapi.get_chain(str(router.get_outbound_filter_id()))
+                buf += self._bold("{0}ROUTER OUTBOUND FILTER:\n".format(indent))
+                buf += self._indent_table_buf(self.show_chain(chain=out_filter, printme=False))
         pt.add_row([buf])
         if printme:
             self.debug('\n{0}\n'.format(pt))
@@ -251,15 +313,15 @@ class MidoDebug(object):
                 bgps = 'ERROR'
                 self.debug('Error fetching bgps from port:{0}, err"{1}'.format(port.get_id(), E))
             if not pt:
-                pt = PrettyTable(['UP','PORT ID', 'BGPS', 'IPADDR', 'NETWORK', 'MAC',
-                                  'TYPE', 'PEER ID'])
-            pt.add_row([port.get_admin_state_up(),
-                        port.get_id(),
+                pt = PrettyTable(['PORT ID', 'BGPS', 'IPADDR', 'NETWORK', 'MAC',
+                                  'TYPE', 'UP', 'PEER ID'])
+            pt.add_row([port.get_id(),
                         bgps,
                         port.get_port_address(),
                         "{0}/{1}".format(port.get_network_address(), port.get_network_length()),
                         port.get_port_mac(),
                         port.get_type(),
+                        port.get_admin_state_up(),
                         port.get_peer_id()])
 
             if bgps and bgps != "ERROR":
@@ -271,7 +333,7 @@ class MidoDebug(object):
                 footer = lines[-1]
                 buf += "\n".join(lines) + '\n'
                 pt = None
-                buf += self._indent_table_buf(self.show_bgps(port.get_bgps(), printme=False))
+                buf += self._link_table_buf(self.show_bgps(port.get_bgps(), printme=False))
                 buf += footer +'\n'
         if pt:
             buf += str(pt)
@@ -281,19 +343,31 @@ class MidoDebug(object):
 
 
     def show_bgps(self, bgps, printme=True):
+        buf = ""
         if not isinstance(bgps,list):
             bgps = [bgps]
-        pt = PrettyTable(['BGP INFO FOR PORT ID', 'BGP ID', 'PEER ADDR', 'LOCAL AS', 'PEER AS', 'AD ROUTES'])
+        port=None
+        pt=None
         for bgp in bgps:
-            pt.add_row([bgp.dto.get('portId', ""),
+            if bgp.dto.get('portId') != port:
+                port = bgp.dto.get('portId')
+                if pt is not None:
+                    buf += str(pt)
+                port_header = 'BGP INFO FOR PORT:'.format(port)
+                pt = PrettyTable([port_header, 'BGP ID', 'PEER ADDR',
+                                  'LOCAL AS', 'PEER AS', 'AD ROUTES'])
+                pt.max_width[port_header] = len(port) or len('BGP INFO FOR PORT:')
+                pt.align[port_header] = 'l'
+            pt.add_row([port,
                         bgp.get_id(),
                         bgp.get_peer_addr(),
                         bgp.get_local_as(),
                         bgp.get_peer_as(),
                         self._format_ad_routes(bgp.get_ad_routes())])
+        buf += str(pt)
         if printme:
-            self.debug('\n{0}\n'.format(pt))
-        return pt
+            self.debug('\n{0}\n'.format(buf))
+        return buf
 
 
     def _format_ad_routes(self, ad_routes):
@@ -358,13 +432,25 @@ class MidoDebug(object):
                                     clazz=arptable)
         return table
 
+    def get_bridge_mac_table(self, bridge):
+        table = bridge.get_children(bridge.dto['macTable'],
+                                    query=None,
+                                    headers={"Accept":""},
+                                    clazz=mactable)
+        return table
+
     def show_bridge_arp_table(self, bridge, printme=True):
-        pt = PrettyTable(['IP', 'MAC', 'MAC ADDR', 'VM ID', 'VM HOST'])
+        pt = PrettyTable(['IP', 'MAC', 'MAC ADDR', 'VM ID', 'NC', 'LEARNED PORT'])
         table = self.get_bridge_arp_table(bridge)
+        mac_table = self.get_bridge_mac_table(bridge)
         for entry in table:
             instance_id = None
             vm_host = None
             entry_ip = entry.get_ip()
+            port = "NOT LEARNED"
+            for mac in mac_table:
+                if mac.get_macaddr() == entry.get_mac():
+                    port = mac.get_port_id()
             if self.tester:
                 try:
                     euca_instance = self.tester.get_instances(
@@ -377,15 +463,122 @@ class MidoDebug(object):
                         vm_host = euca_instance.tags.get('euca:node',None)
                 except:
                     raise
-            pt.add_row([entry_ip, entry.get_mac(), entry.get_macaddr(), instance_id, vm_host])
+            pt.add_row([entry_ip, entry.get_mac(), entry.get_macaddr(), instance_id, vm_host, port])
         if printme:
             self.debug('\n{0}\n'.format(pt))
         return pt
 
+    def get_bridge_port_for_instance(self, instance):
+        bridge = self.get_bridge_for_instance(instance)
+        arp_table = self.get_bridge_arp_table(bridge)
+        mac_table = self.get_bridge_mac_table(bridge)
+        arp_entry = None
+        for a_entry in arp_table:
+            if a_entry.get_ip() == instance.private_ip_address:
+                arp_entry = a_entry
+                break
+        if arp_entry:
+            for m_entry in mac_table:
+                if m_entry.get_macaddr() == arp_entry.get_mac():
+                    portid = m_entry.get_port_id()
+                    return self.mapi.get_port(portid)
+            self.debug('ARP entry for instance found, but mac has not been learned on a port yet')
+        return None
+
+    def show_chain(self, chain, printme=True):
+        title = 'CHAIN NAME: {0}, TENANT ID:{1}'.format(self._bold(chain.get_id(), self._chain_jump),
+                                                        chain.dto.get('tenantId', ""))
+        pt = PrettyTable([title])
+        pt.align[title] = 'l'
+        rules = chain.get_rules()
+        if not rules:
+            pt.add_row(['NO RULES'])
+        else:
+            rulesbuf = str(self.show_rules(rules=chain.get_rules(), jump=True, printme=False))
+            pt.add_row([rulesbuf])
+        if printme:
+            self.debug('\n{0}\n'.format(pt))
+        return pt
+
+    def show_rules(self, rules, jump=False, printme=True):
+        '''
+            midonet> chain ec8b6a76-63b0-4952-89de-33b62da492e7 list rule
+            rule rule0 dst !172.31.0.2 proto 0 tos 0 ip-address-group-src ip-address-group1
+            fragment-policy any pos 1 type snat action continue target 10.116.169.162
+
+            dst $nwDstAddress/$nwDstLength  proto $nwProto tos $nwTos
+            ip-address-group-src $ipAddrGroupSrc fragment-policy $fragmentPolicy pos $position
+            type $type action $natFlowAction target $natTargets
+        '''
+        if not isinstance(rules, list):
+            rules = [rules]
+        buf = ""
+        pt = None
+        for rule in rules:
+            if pt is None:
+                chain_id = rule.get_chain_id()
+                title = "RULE(S) FOR CHAIN: {1}".format(rules.index(rule),chain_id)
+
+                #title = "RULE(S) for CHAIN: {0}".format("{0}..{1}{2}".format(chain_id[0:5],
+                #                                                             chain_id[-5:-1],
+                #                                                             chain_id[-1]))
+                pt = PrettyTable([title, 'DST', 'PROTO', 'TOS', 'IP ADDR GRP','FRAG POL',
+                                  'POS', 'TYPE', 'ACTION', 'TARGET'])
+            jump_chain = None
+            action = rule.dto.get('flowAction', "")
+            targets = []
+            nattargets = rule.dto.get('natTargets') or []
+            rule_type = self._bold(rule.get_type())
+            for nattarget in nattargets:
+                targets.append(nattarget.get('addressFrom'))
+            targetstring = self._bold(",".join(targets))
+            if rule.get_type().upper() == 'JUMP':
+                jump_chain_id = rule.get_jump_chain_id()
+                jump_chain = self.mapi.get_chain(jump_chain_id)
+                rule_type = self._bold(rule.get_type(), self._chain_jump)
+                action = self._bold('to chain', self._chain_jump)
+                targetstring = self._bold(jump_chain_id, self._chain_jump)
+            pt.add_row(['RULE#{0}:{1}'.format(rules.index(rule)+1,rule.get_id()),
+                        "{0}/{1}".format(rule.get_nw_dst_address(), rule.get_nw_dst_length()),
+                        rule.get_nw_proto(),
+                        rule.get_nw_tos(),
+                        rule.get_ip_addr_group_src(),
+                        rule.get_fragment_policy(),
+                        rule.get_position(),
+                        rule_type,
+                        action,
+                        targetstring])
+            if jump_chain and jump:
+                buf += str(pt) + "\n"
+                pt = None
+                #buf += "|\n" + "+->\n"
+                #buf += str(self.show_chain(jump_chain, printme=False)) + "\n"
+                buf += self._link_table_buf(self.show_chain(jump_chain, printme=False))
+        buf += str(pt)
+        if printme:
+            self.debug('\n{0}\n'.format(buf))
+        return buf
+
+    def show_router_for_instance(self,instance, printme=True):
+        ret_buf = self._highlight_buf_for_instance(
+            buf=self.show_router_summary(router=self.get_router_for_instance(instance=instance),
+                                         printme=False),
+            instance=instance)
+        if printme:
+            self.debug('\n{0}\n'.format(ret_buf))
+            return None
+        else:
+            return ret_buf
 
 
 
-
-
-
-
+    def show_bridge_for_instance(self, instance, printme=True):
+        ret_buf = self._highlight_buf_for_instance(
+            buf=self.show_bridges(bridges=self.get_bridge_for_instance(instance=instance),
+                                  printme=False),
+            instance=instance)
+        if printme:
+            self.debug('\n{0}\n'.format(ret_buf))
+            return None
+        else:
+            return ret_buf
