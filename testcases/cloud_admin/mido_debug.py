@@ -12,9 +12,9 @@ from prettytable import PrettyTable
 import requests
 import re
 
-class arptable(resource_base.ResourceBase):
+class ArpTable(resource_base.ResourceBase):
     def __init__(self, uri, dto, auth):
-        super(arptable, self).__init__(uri, dto, auth)
+        super(ArpTable, self).__init__(uri, dto, auth)
 
     def get_ip(self):
         return self.dto.get('ip')
@@ -25,9 +25,9 @@ class arptable(resource_base.ResourceBase):
     def get_macaddr(self):
         return self.dto.get('macAddr')
 
-class mactable(resource_base.ResourceBase):
+class MacTable(resource_base.ResourceBase):
     def __init__(self, uri, dto, auth):
-        super(mactable, self).__init__(uri, dto, auth)
+        super(MacTable, self).__init__(uri, dto, auth)
 
     def get_port_id(self):
         return self.dto.get('portId')
@@ -403,8 +403,10 @@ class MidoDebug(object):
             buf += self._indent_table_buf(self.show_ports(bridge.get_ports(), printme=False))
             buf += self._bold("{0}BRIDGE ARP TABLE:\n".format(indent))
             buf += self._indent_table_buf(self.show_bridge_arp_table(bridge=bridge, printme=False))
-            buf += self._bold("{0}DHCP SUBNETS:\n".format(indent))
+            buf += self._bold("{0}BRIDGE DHCP SUBNETS:\n".format(indent))
             buf += self._indent_table_buf(self.show_bridge_dhcp_subnets(bridge, printme=False))
+            buf += self._bold("{0}BRIDGE MAC TABLE:\n".format(indent))
+            buf += self._indent_table_buf(self.show_bridge_mac_table(bridge=bridge, printme=False))
             box.add_row([buf])
             printbuf += str(box) + "\n"
         if printme:
@@ -429,15 +431,26 @@ class MidoDebug(object):
         table = bridge.get_children(bridge.dto['arpTable'],
                                     query=None,
                                     headers={"Accept":""},
-                                    clazz=arptable)
+                                    clazz=ArpTable)
         return table
 
     def get_bridge_mac_table(self, bridge):
         table = bridge.get_children(bridge.dto['macTable'],
                                     query=None,
                                     headers={"Accept":""},
-                                    clazz=mactable)
+                                    clazz=MacTable)
         return table
+
+    def show_bridge_mac_table(self, bridge, printme=True):
+        pt=PrettyTable(['BRIDGE ID', 'MAC ADDR', 'PORT ID', 'VLAN ID'])
+        mac_table = self.get_bridge_mac_table(bridge)
+        for entry in mac_table:
+            assert  isinstance(entry, MacTable)
+            pt.add_row([entry.get_bridge_id(), entry.get_macaddr(), entry.get_port_id(),
+                        entry.get_vlan_id()])
+        if printme:
+            self.debug('\n{0}\n'.format(pt))
+        return pt
 
     def show_bridge_arp_table(self, bridge, printme=True):
         pt = PrettyTable(['IP', 'MAC', 'MAC ADDR', 'VM ID', 'NC', 'LEARNED PORT'])
@@ -482,8 +495,47 @@ class MidoDebug(object):
                 if m_entry.get_macaddr() == arp_entry.get_mac():
                     portid = m_entry.get_port_id()
                     return self.mapi.get_port(portid)
-            self.debug('ARP entry for instance found, but mac has not been learned on a port yet')
+            self.debug('ARP entry for instance found, but mac has not been learned on a port yet, try pinging it?   ')
         return None
+
+    def show_bridge_port_for_instance(self, instance, showchains=True, indent=None, printme=True):
+        if indent is None:
+            indent = self.default_indent
+        bridge = self.get_bridge_for_instance(instance)
+        title = self._bold('BRIDGE PORT FOR INSTANCE:{0}, (BRIDGE:{1})'.format(instance.id,
+                                                                               bridge.get_name() or
+                                                                               bridge.get_id()), 94)
+        pt = PrettyTable([title])
+        pt.align[title] ='l'
+        buf = ""
+        port = self.get_bridge_port_for_instance(instance)
+        if port:
+            buf += self._bold("{0}PORT SUMMARY:\n".format(indent))
+            buf += self._indent_table_buf(str(self.show_ports(ports=[port], printme=False)))
+            if showchains:
+                if port.get_inbound_filter_id():
+                    in_filter = self.mapi.get_chain(str(port.get_inbound_filter_id()))
+                    buf += self._bold("{0}PORT INBOUND FILTER:".format(indent), 46)
+                    buf += "\n"
+                    buf += self._indent_table_buf(self.show_chain(chain=in_filter, printme=False))
+                if port.get_outbound_filter_id():
+                    out_filter = self.mapi.get_chain(str(port.get_outbound_filter_id()))
+                    buf += self._bold("{0}PORT OUTBOUND FILTER:".format(indent), 46)
+                    buf += "\n"
+                    buf += self._indent_table_buf(self.show_chain(chain=out_filter, printme=False))
+
+        else:
+            buf += self._indent_table_buf(self._bold("MAC IS NOT LEARNED ON A BRIDGE PORT AT "
+                                                     "THIS TIME", 91))
+            buf += "\n"
+            buf += self._indent_table_buf(self._bold("(try pinging the addr?)", 91))
+            buf += "\n"
+        pt.add_row([buf])
+        if printme:
+            self.debug('\n{0}\n'.format(pt))
+        else:
+            return pt
+
 
     def show_chain(self, chain, printme=True):
         title = 'CHAIN NAME: {0}, TENANT ID:{1}'.format(self._bold(chain.get_id(), self._chain_jump),
