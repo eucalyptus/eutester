@@ -3389,13 +3389,16 @@ disable_root: false"""
                 instance = self.convert_instance_to_euisntance(instance, auto_connect=False)
             plist.append(instance)
         first = plist.pop(0)
-        buf = first.printself(title=True, footer=True)
+        maintable = first.printself()
+        maintable.hrules = 1
         for instance in plist:
-            buf += instance.printself(title=False, footer=True)
+            pt = instance.printself()
+            if pt._rows:
+                maintable.add_row(pt._rows[0])
         if printme:
-            self.debug("\n"+str(buf)+"\n")
+            self.debug("\n"+str(maintable)+"\n")
         else:
-            return buf
+            return str(maintable)
 
     @Eutester.printinfo
     def wait_for_valid_ip(self, instances, regex="0.0.0.0", poll_interval=10, timeout = 60):

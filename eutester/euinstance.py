@@ -56,6 +56,7 @@ from boto.ec2.instance import InstanceState
 from random import randint
 import eutester.sshconnection as sshconnection
 from eutester.sshconnection import CommandExitCodeException
+from prettytable import PrettyTable
 import sys
 import os
 import re
@@ -220,16 +221,6 @@ class EuInstance(Instance, TaggedResource):
         return "\n" + line + "\n"
     
     def printself(self,title=True, footer=True, printmethod=None):
-        instid = 11
-        emi = 13
-        resid = 11
-        laststate =10
-        privaddr = 10
-        age = 13
-        vmtype = 12
-        rootvol = 13
-        cluster = 25
-        pubip = 16
 
         if self.bdm_root_vol:
             bdmvol = self.bdm_root_vol.id
@@ -238,46 +229,18 @@ class EuInstance(Instance, TaggedResource):
         reservation_id = None
         if self.reservation:
             reservation_id = self.reservation.id
-        header = ""
-        buf = ""
-        if title:
-            header = str('INST_ID').center(instid) +'|' + \
-                     str('EMI').center(emi) + '|' +  \
-                     str('RES_ID').center(resid) + '|' +  \
-                     str('LASTSTATE').center(laststate) + '|' +  \
-                     str('PRIV_ADDR').center(privaddr) + '|' +  \
-                     str('AGE@STATUS').center(age) + '|' +  \
-                     str('VMTYPE').center(vmtype) + '|' +  \
-                     str('ROOT_VOL').center(rootvol) + '|' +  \
-                     str('CLUSTER').center(cluster) + '|' +  \
-                     str('PUB_IP').center(pubip) + '|' +  \
-                     str('PRIV_IP')
-        summary = str(self.id).center(instid) + '|' + \
-                  str(self.image_id).center(emi) + '|' +  \
-                  str(reservation_id).center(resid) + '|' +  \
-                  str(self.laststate).center(laststate) + '|' +  \
-                  str(self.private_addressing).center(privaddr) + '|' + \
-                  str(self.age_at_state).center(age) + '|' +  \
-                  str(self.instance_type).center(vmtype) + '|' +  \
-                  str(bdmvol).center(rootvol) + '|' +  \
-                  str(self.placement).center(cluster) + '|' + \
-                  str(self.ip_address).center(pubip) + '|' + \
-                  str(self.private_ip_address).rstrip()
-
-        length = len(header)
-        if len(summary) > length:
-            length = len(summary)
-        line = self.get_line(length)
-        if title:
-            buf = line + header + line
-        buf += summary
-        if footer:
-            buf += line
+        netinfo = 'INSTANCE NETWORK INFO:'
+        pt = PrettyTable(['ID','EMI', 'RES', 'LASTSTATE', 'AGE', 'VMTYPE', 'ROOTVOL', 'CLUSTER',
+                          netinfo])
+        netpt = PrettyTable(['VPC', 'SUBNET', 'USEPRIV', 'PRIV IP', 'PUB IP'])
+        netpt.add_row([self.vpc_id, self.subnet_id, self.private_addressing,
+                       self.private_ip_address, self.ip_address])
+        pt.add_row([self.id, self.image_id, reservation_id, self.laststate, self.age_at_state,
+                    self.instance_type, bdmvol, self.placement, str(netpt)])
         if printmethod:
-            printmethod(buf)
-        return buf
+            printmethod("\n" + str(pt) + "\n")
+        return pt
 
-    
     def reset_ssh_connection(self, timeout=None):
         timeout = timeout or self.timeout
         self.debug('reset_ssh_connection for:'+str(self.id))

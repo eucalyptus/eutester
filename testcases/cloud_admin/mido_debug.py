@@ -78,7 +78,7 @@ class MidoDebug(object):
                 ret_buf += '{0}{1}\n'.format(indent,line)
         return ret_buf
 
-    def _link_table_buf(self, table, indent=2):
+    def _link_table_buf(self, table, indent=3):
         if not table:
             return None
         if indent < 2:
@@ -826,7 +826,7 @@ class MidoDebug(object):
         eucatitle = self._bold('"EUCALYPTUS CLOUD" INSTANCE INFO ({0}):'.format(instance.id), 94)
         ept = PrettyTable([eucatitle])
         ept.align[eucatitle] = 'l'
-        ebuf = str(self.tester.print_euinstance_list([instance], printme=False))
+        ebuf = "\n" + str(self.tester.print_euinstance_list([instance], printme=False)) + "\n"
         ebuf += str(self.show_security_groups_for_instance(instance=instance, printme=False))
         ept.add_row([ebuf])
         buf += str(ept)
