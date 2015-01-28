@@ -598,7 +598,7 @@ disable_root: false"""
         self.show_security_group(group)
         return group
 
-    def show_security_group(self, group):
+    def show_security_group(self, group, printme=True):
         try:
             from prettytable import PrettyTable, ALL
         except ImportError as IE:
@@ -608,12 +608,13 @@ disable_root: false"""
         if not group:
             raise ValueError('Show sec group failed. Could not fetch group:'
                              + str(group))
-        header = PrettyTable(["Security Group:" + group.name + "/" + group.id])
+        title = "Security Group:" + group.name + "/" + group.id
+        maintable = PrettyTable([title])
         table = PrettyTable(["CIDR_IP", "SRC_GRP_NAME",
                              "SRC_GRP_ID", "OWNER_ID", "PORT",
                              "END_PORT", "PROTO"])
-        table.align["CIDR_IP"] = 'l'
-        table.padding_width = 1
+        maintable.align["title"] = 'l'
+        #table.padding_width = 1
         for rule in group.rules:
             port = rule.from_port
             end_port = rule.to_port
@@ -623,8 +624,11 @@ disable_root: false"""
                                grant.group_id, grant.owner_id, port,
                                end_port, proto])
         table.hrules = ALL
-        header.add_row([str(table)])
-        self.debug("\n{0}".format(str(header)))
+        maintable.add_row([str(table)])
+        if printme:
+            self.debug("\n{0}".format(str(maintable)))
+        else:
+            return maintable
 
     def revoke(self, group,
                      port=22,
@@ -3349,7 +3353,8 @@ disable_root: false"""
                               private_ip=None,
                               ramdisk=None,
                               kernel=None,
-                              image_id=None
+                              image_id=None,
+                              printme=True
                               ):
         """
 
@@ -3387,7 +3392,10 @@ disable_root: false"""
         buf = first.printself(title=True, footer=True)
         for instance in plist:
             buf += instance.printself(title=False, footer=True)
-        self.debug("\n"+str(buf)+"\n")
+        if printme:
+            self.debug("\n"+str(buf)+"\n")
+        else:
+            return buf
 
     @Eutester.printinfo
     def wait_for_valid_ip(self, instances, regex="0.0.0.0", poll_interval=10, timeout = 60):
