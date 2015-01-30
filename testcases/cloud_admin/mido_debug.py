@@ -83,7 +83,7 @@ class MidoDebug(object):
                 ret_buf += '{0}{1}\n'.format(indent,line)
         return ret_buf
 
-    def _link_table_buf(self, table, indent=3):
+    def _link_table_buf(self, table, indent=4):
         if not table:
             return None
         if indent < 2:
@@ -777,12 +777,17 @@ class MidoDebug(object):
                 chain_id = rule.get_chain_id()
                 #title = "RULE(S) FOR CHAIN: {1}".format(rules.index(rule),chain_id)
 
-                title = "RULE(S) for CHAIN: {0}".format("{0}..{1}{2}".format(chain_id[0:5],
-                                                                             chain_id[-5:-1],
-                                                                             chain_id[-1]))
+                title = "RULE(S) FOR CHAIN: {0}".format("..{0}{1}".format(chain_id[-5:-1],
+                                                                          chain_id[-1]))
+
                 pt = PrettyTable([title, 'SRC', 'DST', 'PROTO', 'DPORTS', 'TOS',
                                   'GRP ADDRS','FRAG POL',
                                   'POS', 'TYPE', 'ACTION', 'TARGET'])
+                pt.max_width[title] = 20
+                pt.align[title] = 'l'
+                pt.max_width['TARGET'] = 20
+                pt.align['TARGET'] = 'l'
+                pt.hrules = 1
             jump_chain = None
             action = rule.dto.get('flowAction', "")
             targets = []
@@ -800,11 +805,12 @@ class MidoDebug(object):
                 jump_chain = self.mapi.get_chain(jump_chain_id)
                 rule_type = self._bold(rule.get_type(), self._chain_jump)
                 action = self._bold('to chain', self._chain_jump)
-                targetstring = self._bold(jump_chain_id, self._chain_jump)
+                targetstring = jump_chain_id
             ip_addr_group = rule.get_ip_addr_group_src()
             if ip_addr_group:
                 ip_addr_group = self.show_ip_addr_group_addrs(ipgroup=ip_addr_group, printme=False)
-            pt.add_row(['RULE#{0}:{1}'.format(rules.index(rule)+1,rule.get_id()),
+            pt.add_row(['{0} {1}'.format(self._bold("RULE#:" + str(rules.index(rule)+1)),
+                                         rule.get_id()),
                         "{0}/{1}".format(rule.get_nw_src_address(), rule.get_nw_src_length()),
                         "{0}/{1}".format(rule.get_nw_dst_address(), rule.get_nw_dst_length()),
                         self._get_protocol_name_by_number(rule.get_nw_proto()),
@@ -862,6 +868,7 @@ class MidoDebug(object):
         buf = str(self.show_router_for_instance(instance=instance, printme=False))
         buf += str(self.show_bridge_for_instance(instance=instance, printme=False))
         buf += str(self.show_bridge_port_for_instance(instance=instance, printme=False))
+        buf += str(self.show_host_for_instance(instance=instance, printme=False))
         buf += "\n"
         eucatitle = self._bold('"EUCALYPTUS CLOUD" INSTANCE INFO ({0}):'.format(instance.id), 94)
         ept = PrettyTable([eucatitle])
@@ -915,9 +922,14 @@ class MidoDebug(object):
             hosts = [hosts]
         if hosts is None:
             hosts = self.mapi.get_hosts(query=None)
-        pt = PrettyTable(["HOST ID", 'HOST NAME', "ALIVE"])
+        pt = PrettyTable(["HOST ID", 'HOST NAME', "ALIVE", "HOST IP(S)"])
         for host in hosts:
-            pt.add_row([host.get_id(), host.get_name(), host.dto.get('alive')])
+            ip_addrs = 'not resolved'
+            try:
+                name, aliaslist, addresslist = socket.gethostbyaddr(host.get_name())
+                ip_addrs = ", ".join(addresslist)
+            except:pass
+            pt.add_row([host.get_id(), host.get_name(), host.dto.get('alive'), ip_addrs])
         if printme:
             self.debug('\n{0}\n'.format(pt))
         else:
@@ -949,6 +961,10 @@ class MidoDebug(object):
             return buf
 
     def show_host_ports(self, host, printme=True):
+        '''
+        Fetches the 'HostInterfacePort's from a specific host and presents them in a formatted
+        table
+        '''
         assert isinstance(host, Host)
         ports = host.get_ports()
         porttable = PrettyTable(["HOST PORT NAME", "HOST PORT ID"])
@@ -961,6 +977,10 @@ class MidoDebug(object):
             return porttable
 
     def show_host_interfaces(self, host, printme=True):
+        '''
+        Fetches the 'HostInterface's from a specific host and presents them in a formatted
+        table
+        '''
         assert isinstance(host, Host), 'host type ({0}) is not of midonet Host type'\
             .format(type(host))
         interfaces = host.get_interfaces()
@@ -975,8 +995,23 @@ class MidoDebug(object):
         else:
             return pt
 
+    def show_host_for_instance(self, instance, printme=True):
+        instance = self._get_instance(instance)
+        node = instance.tags.get('euca:node', None)
+        if not node:
+            raise ValueError('Node for instance:"{0}" not found?'.format(instance.id))
+        host = self.get_host_by_hostname(node)
+        if not host:
+            raise ValueError('Mido Host for instance:"{0}" not found?'.format(instance.id))
+        return self.show_hosts(hosts=host, printme=printme)
 
-    def get_host_by_name(self, name):
+
+    def get_host_by_hostname(self, name):
+        """
+        Fetch a specific host by either ip address or hostname.
+        Attempts to match to resolve and then match to the host's name attribute
+        returns the host object if found
+        """
         name, aliaslist, addresslist = socket.gethostbyaddr(name)
         self.debug('looking up host with name:{0}'.format(name))
         for host in self.mapi.get_hosts():
