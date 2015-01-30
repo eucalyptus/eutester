@@ -3046,6 +3046,18 @@ disable_root: false"""
                                       src_group=None,
                                       protocol='tcp',
                                       port=22):
+        """
+        Attempts to check an instance's security group(s)' rules to determine if traffic of a
+        a specific type, source and destination port is permitted. if neither src_addr or
+        src_group is set, an attempt is made to determine the local src ip used when trying to
+        reach the instance's public interface.
+
+        :param instance: boto instance obj (required)
+        :param src_addr: cidr src address, default=None
+        :param src_group: boto Security group obj, default=None
+        :param protocol: string representing protocol (ie: tcp, udp, icmp) default: tcp
+        :param port: destination port, default=22
+        """
         if src_group:
             assert isinstance(src_group,SecurityGroup) , \
                 'src_group({0}) not of type SecurityGroup obj'.format(src_group)

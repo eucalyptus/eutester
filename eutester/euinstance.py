@@ -229,11 +229,19 @@ class EuInstance(Instance, TaggedResource):
         reservation_id = None
         if self.reservation:
             reservation_id = self.reservation.id
-        netinfo = 'INSTANCE NETWORK INFO:'
+        netinfo = 'INSTANCE NETWORK INFO:'.center(20)
         pt = PrettyTable(['ID','EMI', 'RES', 'LASTSTATE', 'AGE', 'VMTYPE', 'ROOTVOL', 'CLUSTER',
                           netinfo])
-        netpt = PrettyTable(['VPC', 'SUBNET', 'USEPRIV', 'PRIV IP', 'PUB IP'])
-        netpt.add_row([self.vpc_id, self.subnet_id, self.private_addressing,
+        pt.align[netinfo] = 'l'
+        netpt = PrettyTable(['VPC', 'SUBNET', 'SEC GRPS', 'P', 'PRIV IP', 'PUB IP'])
+        sec_grps = []
+        for grp in self.groups:
+            sec_grps.append(str(grp.id))
+        sec_grps = ",".join(sec_grps)
+        private_addressing = "N"
+        if self.private_addressing:
+            private_addressing = "Y"
+        netpt.add_row([self.vpc_id, self.subnet_id, sec_grps, private_addressing,
                        self.private_ip_address, self.ip_address])
         pt.add_row([self.id, self.image_id, reservation_id, self.laststate, self.age_at_state,
                     self.instance_type, bdmvol, self.placement, str(netpt)])

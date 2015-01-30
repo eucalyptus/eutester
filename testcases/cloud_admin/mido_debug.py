@@ -3,6 +3,9 @@ from midonetclient.router import Router
 from midonetclient import resource_base
 from midonetclient import vendor_media_type
 from midonetclient.bridge import Bridge
+from midonetclient.host import Host
+from midonetclient.host_interface_port import HostInterfacePort
+from midonetclient.host_interface import HostInterface
 from midonetclient.ip_addr_group import IpAddrGroup
 from eucaops import Eucaops
 from eutester import WaitForResultException
@@ -13,6 +16,7 @@ from boto.ec2.instance import Instance
 from prettytable import PrettyTable
 import requests
 import socket
+import time
 import re
 import copy
 
@@ -64,6 +68,7 @@ class MidoDebug(object):
             self.tester = Eucaops(config_file=eutester_config, password=eutester_password)
         self.logger = Eulogger(identifier='MidoDebug:{0}'.format(self.midonet_api_host))
         self.default_indent = "  "
+        self._euca_instances = {}
         self._protocols = {}
 
     def debug(self, msg):
@@ -96,6 +101,10 @@ class MidoDebug(object):
         for line in lines[1:]:
             ret_buf += '{0}{1}\n'.format(preline,line)
         return ret_buf
+
+    def _errmsg(self, text):
+        self.debug(self._bold(text), 101)
+
 
     def _header(self, text):
         return "\033[94m\033[1m{0}\033[0m".format(text)
@@ -144,10 +153,10 @@ class MidoDebug(object):
     def _get_instance(self, instance):
         if not isinstance(instance, Instance):
             if isinstance(instance, str):
-                fetched_ins = self.tester.get_instances(idstring=['verbose', instance])
+                fetched_ins = self._get_instance_by_id(id=instance)
             if not fetched_ins:
                 raise ValueError('Could not find instance {0} on system'.format(instance))
-            instance = fetched_ins[0]
+            instance = fetched_ins
         return instance
 
     def _ping_instance_private_ip_from_euca_internal(self,
@@ -518,7 +527,42 @@ class MidoDebug(object):
             adrs.append('{0}/{1}'.format(adr.get_nw_prefix(), adr.get_prefix_length()))
         return adrs
 
+    def _update_euca_instances(self):
+        instances = self.tester.get_instances(idstring=['verbose'])
+        now = time.time()
+        self._euca_instances = {'lastupdated':now, 'instances':instances}
 
+    @property
+    def euca_instances(self):
+        """
+        Attempt to cache instances locally for up to 5 seconds to speed up and prevent unnecessary
+        instance look ups on system
+        """
+        if self._euca_instances:
+            if time.time() - self._euca_instances.get('lastupdated', 0) < 5:
+                return self._euca_instances['instances']
+        self._update_euca_instances()
+        return self._euca_instances['instances']
+
+    def _get_instance_by_id(self, id):
+        for x in xrange(0,2):
+            for instance in self.euca_instances:
+                if instance.id == id:
+                    return instance
+            self._update_euca_instances()
+        return None
+
+    def _get_instance_by_private_ip(self, private_ip):
+        for instance in self.euca_instances:
+            if instance.private_ip_address == private_ip:
+                return instance
+        return None
+
+    def _get_instance_by_public_ip(self, public_ip):
+        for instance in self.euca_instances:
+            if instance.ip_address == public_ip:
+                return instance
+        return None
 
     def show_bridges(self, bridges=None, indent=None, printme=True):
         if indent is None:
@@ -540,15 +584,13 @@ class MidoDebug(object):
             buf += self._bold("{0}BRIDGE SUMMARY:\n".format(indent), 4)
             buf += self._indent_table_buf(str(pt))
             buf += self._bold("{0}BRIDGE PORTS:\n".format(indent), 4)
-            buf += self._indent_table_buf(self.show_ports(bridge.get_ports(), printme=False), 4)
+            buf += self._indent_table_buf(self.show_ports(bridge.get_ports(), printme=False))
             buf += self._bold("{0}BRIDGE ARP TABLE:\n".format(indent), 4)
-            buf += self._indent_table_buf(self.show_bridge_arp_table(bridge=bridge, printme=False)
-                                          , 4)
+            buf += self._indent_table_buf(self.show_bridge_arp_table(bridge=bridge, printme=False))
             buf += self._bold("{0}BRIDGE DHCP SUBNETS:\n".format(indent))
-            buf += self._indent_table_buf(self.show_bridge_dhcp_subnets(bridge, printme=False), 4)
+            buf += self._indent_table_buf(self.show_bridge_dhcp_subnets(bridge, printme=False))
             buf += self._bold("{0}BRIDGE MAC TABLE:\n".format(indent))
-            buf += self._indent_table_buf(self.show_bridge_mac_table(bridge=bridge, printme=False),
-                                          4)
+            buf += self._indent_table_buf(self.show_bridge_mac_table(bridge=bridge, printme=False))
             box.add_row([buf])
             printbuf += str(box) + "\n"
         if printme:
@@ -610,12 +652,8 @@ class MidoDebug(object):
                     port = mac.get_port_id()
             if self.tester:
                 try:
-                    euca_instance = self.tester.get_instances(
-                        idstring=['verbose'],
-                        filters={'network-interface.addresses.private-ip-address':entry_ip})
-                    #euca_instance = self.tester.get_instances(instance_id=['verbose'], privip=entry_ip)
+                    euca_instance = self._get_instance_by_private_ip(private_ip=entry_ip)
                     if euca_instance:
-                        euca_instance = euca_instance[0]
                         instance_id = self._bold(euca_instance.id)
                         vm_host = euca_instance.tags.get('euca:node',None)
                 except:
@@ -742,7 +780,8 @@ class MidoDebug(object):
                 title = "RULE(S) for CHAIN: {0}".format("{0}..{1}{2}".format(chain_id[0:5],
                                                                              chain_id[-5:-1],
                                                                              chain_id[-1]))
-                pt = PrettyTable([title, 'DST', 'PROTO', 'DSTPORTS', 'TOS', 'IP GRP ADDRS','FRAG POL',
+                pt = PrettyTable([title, 'SRC', 'DST', 'PROTO', 'DPORTS', 'TOS',
+                                  'GRP ADDRS','FRAG POL',
                                   'POS', 'TYPE', 'ACTION', 'TARGET'])
             jump_chain = None
             action = rule.dto.get('flowAction', "")
@@ -766,6 +805,7 @@ class MidoDebug(object):
             if ip_addr_group:
                 ip_addr_group = self.show_ip_addr_group_addrs(ipgroup=ip_addr_group, printme=False)
             pt.add_row(['RULE#{0}:{1}'.format(rules.index(rule)+1,rule.get_id()),
+                        "{0}/{1}".format(rule.get_nw_src_address(), rule.get_nw_src_length()),
                         "{0}/{1}".format(rule.get_nw_dst_address(), rule.get_nw_dst_length()),
                         self._get_protocol_name_by_number(rule.get_nw_proto()),
                         ports,
@@ -869,5 +909,77 @@ class MidoDebug(object):
         else:
             return ret_buf
 
+    def show_hosts_summary(self, hosts=None, printme=True):
+        if hosts and not isinstance(hosts, list):
+            assert isinstance(hosts, Host)
+            hosts = [hosts]
+        if hosts is None:
+            hosts = self.mapi.get_hosts(query=None)
+        pt = PrettyTable(["HOST ID", 'HOST NAME', "ALIVE"])
+        for host in hosts:
+            pt.add_row([host.get_id(), host.get_name(), host.dto.get('alive')])
+        if printme:
+            self.debug('\n{0}\n'.format(pt))
+        else:
+            return pt
+
+    def show_hosts(self, hosts=None, printme=True):
+        if hosts and not isinstance(hosts, list):
+            assert isinstance(hosts, Host)
+            hosts = [hosts]
+        if hosts is None:
+            hosts = self.mapi.get_hosts(query=None)
+        buf = self._bold("HOSTS TABLE:\n", 94)
+        for host in hosts:
+            title = self._bold("HOST:{0} ({1})".format(host.get_name(), host.get_id()), 94)
+            pt = PrettyTable([title])
+            pt.align[title] = "l"
+            hostbuf = self._bold("HOST SUMMARY:\n", 4)
+            hostbuf += self._indent_table_buf(str(self.show_hosts_summary(hosts=host,
+                                                                         printme=False)))
+            hostbuf += self._bold("HOST PORTS:\n", 4)
+            hostbuf += self._indent_table_buf(str(self.show_host_ports(host, printme=False)))
+            hostbuf += self._bold("HOST INTERFACES:\n", 4)
+            hostbuf += self._indent_table_buf(str(self.show_host_interfaces(host, printme=False)))
+            pt.add_row([hostbuf])
+            buf += str(pt) + "\n"
+        if printme:
+            self.debug('\n{0}\n'.format(buf))
+        else:
+            return buf
+
+    def show_host_ports(self, host, printme=True):
+        assert isinstance(host, Host)
+        ports = host.get_ports()
+        porttable = PrettyTable(["HOST PORT NAME", "HOST PORT ID"])
+        for port in ports:
+            assert isinstance(port, HostInterfacePort)
+            porttable.add_row([port.get_interface_name(), port.get_port_id()])
+        if printme:
+            self.debug('\n{0}\n'.format(porttable))
+        else:
+            return porttable
+
+    def show_host_interfaces(self, host, printme=True):
+        assert isinstance(host, Host), 'host type ({0}) is not of midonet Host type'\
+            .format(type(host))
+        interfaces = host.get_interfaces()
+        pt = PrettyTable(['NAME', 'TYPE', 'MAC','STATUS', 'MTU', 'ENDPOINT', 'ADDRESSES'])
+        for hi in interfaces:
+            assert isinstance(hi, HostInterface), "host interface type({0}) is not of midonet " \
+                                                  "Host Interface type ".format(type(hi))
+            pt.add_row([hi.get_name(), hi.get_type(), hi.get_mac(), hi.get_status(), hi.get_mtu(),
+                        hi.get_endpoint(), ", ".join(hi.get_addresses() or [])])
+        if printme:
+            self.debug('\n{0}\n'.format(pt))
+        else:
+            return pt
 
 
+    def get_host_by_name(self, name):
+        name, aliaslist, addresslist = socket.gethostbyaddr(name)
+        self.debug('looking up host with name:{0}'.format(name))
+        for host in self.mapi.get_hosts():
+            if host.get_name() == name:
+                return host
+        return None
