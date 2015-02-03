@@ -145,7 +145,7 @@ public class S3ObjectACLAcrossAccountsTests {
 			createBucket(s3ClientA, ownerNameA, bucketName, CannedAccessControlList.PublicReadWrite, ownerIdA);
 
 			/* Put object with Canned ACL BucketOwnerFullControl as account B admin */
-			putObjectWithCannedACL(ownerNameB, s3ClientB, bucketName, key, CannedAccessControlList.BucketOwnerFullControl);
+			putObjectWithCannedACL(s3ClientB, ownerNameB, bucketName, key, CannedAccessControlList.BucketOwnerFullControl);
 
 			/* Get object ACL as account B admin */
 			print(ownerNameB + ": Getting ACL for object " + key);
@@ -225,7 +225,7 @@ public class S3ObjectACLAcrossAccountsTests {
 			createBucket(s3ClientA, ownerNameA, bucketName, CannedAccessControlList.PublicReadWrite, ownerIdA);
 
 			/* Put object with Canned ACL BucketOwnerFullControl as account B admin */
-			putObjectWithCannedACL(ownerNameB, s3ClientB, bucketName, key, CannedAccessControlList.BucketOwnerFullControl);
+			putObjectWithCannedACL(s3ClientB, ownerNameB, bucketName, key, CannedAccessControlList.BucketOwnerFullControl);
 
 			/* Get object ACL as account B admin */
 			print(ownerNameB + ": Getting ACL for object " + key);
@@ -298,7 +298,7 @@ public class S3ObjectACLAcrossAccountsTests {
 			createBucket(s3ClientA, ownerNameA, bucketName, CannedAccessControlList.PublicReadWrite, ownerIdA);
 
 			/* Put object with Canned ACL BucketOwnerRead as account B admin */
-			putObjectWithCannedACL(ownerNameB, s3ClientB, bucketName, key, CannedAccessControlList.BucketOwnerRead);
+			putObjectWithCannedACL(s3ClientB, ownerNameB, bucketName, key, CannedAccessControlList.BucketOwnerRead);
 
 			/* Get object ACL as account B admin */
 			print(ownerNameB + ": Getting ACL for object " + key);
@@ -359,7 +359,7 @@ public class S3ObjectACLAcrossAccountsTests {
 			createBucket(s3ClientA, ownerNameA, bucketName, CannedAccessControlList.PublicReadWrite, ownerIdA);
 
 			/* Put object with Canned ACL BucketOwnerFullControl as account B admin */
-			putObjectWithCannedACL(ownerNameB, s3ClientB, bucketName, key, CannedAccessControlList.AuthenticatedRead);
+			putObjectWithCannedACL(s3ClientB, ownerNameB, bucketName, key, CannedAccessControlList.AuthenticatedRead);
 
 			/* Get object ACL as account B admin */
 			print(ownerNameB + ": Getting ACL for object " + key);
@@ -421,7 +421,7 @@ public class S3ObjectACLAcrossAccountsTests {
 			createBucket(s3ClientA, ownerNameA, bucketName, CannedAccessControlList.PublicReadWrite, ownerIdA);
 
 			/* Put object with Canned ACL BucketOwnerFullControl as account B admin */
-			putObjectWithCannedACL(ownerNameB, s3ClientB, bucketName, key, CannedAccessControlList.PublicRead);
+			putObjectWithCannedACL(s3ClientB, ownerNameB, bucketName, key, CannedAccessControlList.PublicRead);
 
 			/* Get object ACL as account B admin */
 			print(ownerNameB + ": Getting ACL for object " + key);
@@ -483,7 +483,7 @@ public class S3ObjectACLAcrossAccountsTests {
 			createBucket(s3ClientA, ownerNameA, bucketName, CannedAccessControlList.PublicReadWrite, ownerIdA);
 
 			/* Put object with Canned ACL BucketOwnerFullControl as account B admin */
-			putObjectWithCannedACL(ownerNameB, s3ClientB, bucketName, key, CannedAccessControlList.PublicReadWrite);
+			putObjectWithCannedACL(s3ClientB, ownerNameB, bucketName, key, CannedAccessControlList.PublicReadWrite);
 
 			/* Get object ACL as account B admin */
 			print(ownerNameB + ": Getting ACL for object " + key);
@@ -545,7 +545,7 @@ public class S3ObjectACLAcrossAccountsTests {
 			createBucket(s3ClientA, ownerNameA, bucketName, CannedAccessControlList.PublicReadWrite, ownerIdA);
 
 			/* Put object with Canned ACL BucketOwnerFullControl as account B admin */
-			putObjectWithCannedACL(ownerNameB, s3ClientB, bucketName, key, CannedAccessControlList.Private);
+			putObjectWithCannedACL(s3ClientB, ownerNameB, bucketName, key, CannedAccessControlList.Private);
 
 			/* Get object ACL as account B admin */
 			print(ownerNameB + ": Getting ACL for object " + key);
@@ -583,6 +583,46 @@ public class S3ObjectACLAcrossAccountsTests {
 		}
 	}
 
+	@Test
+	public void ACL_Headers() throws Exception {
+		testInfo(this.getClass().getSimpleName() + " - ACL_Headers");
+
+		try {
+			/* Create bucket as account B admin with read-write permission for account A */
+			AccessControlList acl = new AccessControlList();
+			acl.getGrants().add(new Grant(new CanonicalGrantee(ownerIdA), Permission.Read));
+			acl.getGrants().add(new Grant(new CanonicalGrantee(ownerIdA), Permission.Write));
+			acl.getGrants().add(new Grant(new CanonicalGrantee(ownerIdB), Permission.FullControl));
+			createBucket(s3ClientB, ownerNameB, bucketName, acl, ownerIdB);
+
+			/* Put object with as account A admin */
+			acl = new AccessControlList();
+			acl.getGrants().add(new Grant(GroupGrantee.LogDelivery, Permission.ReadAcp));
+			acl.getGrants().add(new Grant(GroupGrantee.AuthenticatedUsers, Permission.Read));
+			acl.getGrants().add(new Grant(new CanonicalGrantee(ownerIdB), Permission.Read));
+			acl.getGrants().add(new Grant(new CanonicalGrantee(ownerIdA), Permission.FullControl));
+			putObjectWithACL(s3ClientA, ownerNameA, bucketName, key, acl);
+
+			/* Verify object ACLs */
+			S3Utils.verifyObjectACL(s3ClientA, accountA, bucketName, key, acl, ownerIdA);
+
+			/* Verify that account B admin has READ permission */
+			assertTrue("Expected object owner " + ownerNameB + " to have READ permission over the object",
+					canReadObject(ownerNameB, s3ClientB, bucketName, key));
+
+			/* Verify that account A admin has READ, READ_ACP and WRITE_ACP permissions */
+			assertTrue("Expected bucket owner " + ownerNameA + " to not have READ permission over the object",
+					canReadObject(ownerNameA, s3ClientA, bucketName, key));
+			assertTrue("Expected bucket owner " + ownerNameA + " to not have READ_ACP permission over the object",
+					canReadObjectACP(ownerNameA, s3ClientA, bucketName, key));
+			assertTrue("Expected bucket owner " + ownerNameA + " to not have WRITE_ACP permission over the object",
+					canWriteObjectACP(ownerNameA, s3ClientA, bucketName, key));
+		} catch (AmazonServiceException ase) {
+			printException(ase);
+			assertThat(false, "Failed to run ACL_Headers");
+		}
+	}
+
 	private void printException(AmazonServiceException ase) {
 		ase.printStackTrace();
 		print("Caught Exception: " + ase.getMessage());
@@ -606,10 +646,42 @@ public class S3ObjectACLAcrossAccountsTests {
 		S3Utils.verifyBucketACL(s3, accountName, bucketName, cannedACL, bucketOwnerId);
 	}
 
-	private void putObjectWithCannedACL(final String accountName, final AmazonS3 s3, final String bucketName, final String key,
+	private void createBucket(final AmazonS3 s3, final String accountName, final String bucketName, AccessControlList acl, String bucketOwnerId) {
+		print(accountName + ": Creating bucket " + bucketName + " with " + acl);
+		Bucket bucket = s3.createBucket(new CreateBucketRequest(bucketName).withAccessControlList(acl));
+		cleanupTasks.add(new Runnable() {
+			@Override
+			public void run() {
+				print(accountName + ": Deleting bucket " + bucketName);
+				s3.deleteBucket(bucketName);
+			}
+		});
+		assertTrue("Invalid reference to bucket", bucket != null);
+		assertTrue("Mismatch in bucket names. Expected bucket name to be " + bucketName + ", but got " + bucket.getName(), bucketName.equals(bucket.getName()));
+
+		S3Utils.verifyBucketACL(s3, accountName, bucketName, acl, bucketOwnerId);
+	}
+
+	private void putObjectWithCannedACL(final AmazonS3 s3, final String accountName, final String bucketName, final String key,
 			CannedAccessControlList cannedACL) throws Exception {
 		print(accountName + ": Putting object " + key + " with canned ACL " + cannedACL + " in bucket " + bucketName);
 		PutObjectResult putObj = s3.putObject(new PutObjectRequest(bucketName, key, fileToPut).withCannedAcl(cannedACL));
+		cleanupTasks.add(new Runnable() {
+			@Override
+			public void run() {
+				print(accountName + ": Deleting object " + key + " from bucket " + bucketName);
+				s3.deleteObject(bucketName, key);
+			}
+		});
+		assertTrue("Invalid put object result", putObj != null);
+		assertTrue("Mimatch in md5sums between original object and PUT result. Expected " + md5_orig + ", but got " + putObj.getETag(),
+				putObj.getETag() != null && putObj.getETag().equals(md5_orig));
+	}
+
+	private void putObjectWithACL(final AmazonS3 s3, final String accountName, final String bucketName, final String key, AccessControlList acl)
+			throws Exception {
+		print(accountName + ": Putting object " + key + " with " + acl + " in bucket " + bucketName);
+		PutObjectResult putObj = s3.putObject(new PutObjectRequest(bucketName, key, fileToPut).withAccessControlList(acl));
 		cleanupTasks.add(new Runnable() {
 			@Override
 			public void run() {
