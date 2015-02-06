@@ -227,7 +227,7 @@ class EuInstance(Instance, TaggedResource):
             line += "-"
         return "\n" + line + "\n"
     
-    def printself(self,title=True, footer=True, printmethod=None):
+    def printself(self,title=True, footer=True, printmethod=None, printme=True):
         if self.bdm_root_vol:
             bdmvol = self.bdm_root_vol.id
         else:
@@ -235,11 +235,11 @@ class EuInstance(Instance, TaggedResource):
         reservation_id = None
         if self.reservation:
             reservation_id = self.reservation.id
-        id = str(self.tester.markup("ID:{0}".format(self.id), markups=[1,94]))
+        id = str(self.tester.markup("ID: {0}".format(self.id), markups=[1,94]))
         idlen = len(id)
         id_string = ("{0}{1}{2}".format(id.ljust(idlen),
-                                       "RES:{0}".format(reservation_id).ljust(idlen),
-                                       "ROOTVOL:{0}".format(bdmvol).ljust(idlen)))
+                                       "RES: {0}".format(reservation_id).ljust(idlen),
+                                       "ROOTVOL: {0}".format(bdmvol).ljust(idlen)))
         netinfo = 'INSTANCE NETWORK INFO:'.center(20)
         pt = PrettyTable(['ID','EMI','LASTSTATE', 'AGE', 'VMTYPE', 'CLUSTER',
                           netinfo])
@@ -260,7 +260,8 @@ class EuInstance(Instance, TaggedResource):
                        self.private_ip_address, self.ip_address])
         pt.add_row([id_string, self.image_id, self.laststate, self.age,
                     self.instance_type, self.placement, str(netpt)])
-        if printmethod:
+        if printme:
+            printmethod = printmethod or self.debug
             printmethod("\n" + str(pt) + "\n")
         return pt
 

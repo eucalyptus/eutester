@@ -2222,7 +2222,6 @@ disable_root: false"""
             basic_image = True
         if name is None:
              emi = "mi-"
-
         images = self.ec2.get_all_images(filters=filters)
         self.debug("Got " + str(len(images)) + " total images " + str(emi) + ", now filtering..." )
         for image in images:
@@ -2279,7 +2278,7 @@ disable_root: false"""
                    arch=None,
                    owner_id=None,
                    filters=None,
-                   basic_image=True,
+                   basic_image=None,
                    platform=None,
                    not_platform=None,
                    tagkey=None,
@@ -2354,8 +2353,11 @@ disable_root: false"""
     def show_images(self, images=None, verbose=False, printmethod=None):
         printmethod = printmethod or self.debug
         images = images or self.get_images()
+        buf = "\n"
         for image in images:
-            self.show_image(image=image, printmethod=printmethod)
+            buf += str(self.show_image(image=image, verbose=verbose, printme=False)) + "\n"
+        printmethod = printmethod or self.debug
+        printmethod(buf)
 
     def show_image(self, image, verbose=False, printmethod=None,
                    header_markups=[1,4], printme=True):
@@ -2368,27 +2370,30 @@ disable_root: false"""
         main_pt = PrettyTable([title])
         main_pt.align[title] = 'l'
         main_pt.padding_width = 0
-        mainbuf = header("IMAGE SUMMARY:\n")
+        mainbuf = ""
+        if verbose:
+            mainbuf += header("IMAGE SUMMARY:\n")
         platform = str(image.platform or "LINUX").upper()
         summary_pt = PrettyTable(["VIRT TYPE", "PUBLIC", "OWNER ID", "KERNEL ID", "RAMDISK ID",
-                                  "PLATFORM", "STATE"])
+                                  "PLATFORM", "ROOT DEV TYPE", "STATE"])
         summary_pt.padding_width = 0
         row = [image.virtualization_type, image.is_public, image.owner_id, image.kernel_id,
-               image.ramdisk_id, platform, image.state]
+               image.ramdisk_id, platform, image.root_device_type, image.state]
         summary_pt.add_row(row)
-        mainbuf += str(summary_pt) + "\n"
-        mainbuf += header("\nIMAGE MANIFEST PATH:\n")
-        locpt = PrettyTable(['IMAGE LOCATION:'])
-        locpt.add_row([image.location])
-        mainbuf += str(locpt) + "\n"
-        mainbuf += header("\nIMAGE BLOCK DEVICE MAPPING:")
-        if not image.block_device_mapping:
-            mainbuf += " N/A\n"
-        else:
-            mainbuf += "\n" + str(self.print_block_device_map(image.block_device_mapping,
-                                                              printme=False)) + "\n"
-        mainbuf += header("\nIMAGE TAGS:\n")
-        mainbuf += str(self.show_tags(image.tags, printme=False)) + "\n"
+        mainbuf += str(summary_pt)
+        if verbose:
+            mainbuf += header("\n\nIMAGE MANIFEST PATH:\n")
+            locpt = PrettyTable(['IMAGE LOCATION:'])
+            locpt.add_row([image.location])
+            mainbuf += str(locpt) + "\n"
+            mainbuf += header("\nIMAGE BLOCK DEVICE MAPPING:")
+            if not image.block_device_mapping:
+                mainbuf += " N/A\n"
+            else:
+                mainbuf += "\n" + str(self.print_block_device_map(image.block_device_mapping,
+                                                                  printme=False)) + "\n"
+            mainbuf += header("\nIMAGE TAGS:\n")
+            mainbuf += str(self.show_tags(image.tags, printme=False)) + "\n"
         main_pt.add_row([mainbuf])
         if printme:
             printmethod = printmethod or self.debug
@@ -3498,7 +3503,7 @@ disable_root: false"""
                 instance = self.convert_instance_to_euisntance(instance, auto_connect=False)
             plist.append(instance)
         first = plist.pop(0)
-        maintable = first.printself()
+        maintable = first.printself(printme=False)
         maintable.hrules = 1
         for instance in plist:
             pt = instance.printself()
