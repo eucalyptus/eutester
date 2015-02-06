@@ -235,15 +235,17 @@ class EuInstance(Instance, TaggedResource):
         reservation_id = None
         if self.reservation:
             reservation_id = self.reservation.id
-        id_string = "ID:{0}".format(self.id).ljust(20)
-        id_string += "RES:{0}".format(reservation_id).ljust(20)
-        id_string += "ROOTVOL:{0}".format(bdmvol).ljust(20)
+        id = str(self.tester.markup("ID:{0}".format(self.id), markups=[1,94]))
+        idlen = len(id)
+        id_string = ("{0}{1}{2}".format(id.ljust(idlen),
+                                       "RES:{0}".format(reservation_id).ljust(idlen),
+                                       "ROOTVOL:{0}".format(bdmvol).ljust(idlen)))
         netinfo = 'INSTANCE NETWORK INFO:'.center(20)
         pt = PrettyTable(['ID','EMI','LASTSTATE', 'AGE', 'VMTYPE', 'CLUSTER',
                           netinfo])
         pt.align[netinfo] = 'l'
         pt.align['ID'] = 'l'
-        pt.max_width['ID'] = 20
+        pt.max_width['ID'] = idlen
         pt.padding_width = 0
         netpt = PrettyTable(['VPC', 'SUBNET', 'SEC GRPS', 'P', 'PRIV IP', 'PUB IP'])
         netpt.padding_width = 0
