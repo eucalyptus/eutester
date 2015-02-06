@@ -47,6 +47,7 @@ import sys
 import traceback
 from datetime import datetime, timedelta
 from subprocess import Popen, PIPE
+from prettytable import PrettyTable
 from boto.ec2.group import Group
 
 from boto.ec2.image import Image
@@ -608,7 +609,7 @@ disable_root: false"""
         if not group:
             raise ValueError('Show sec group failed. Could not fetch group:'
                              + str(group))
-        title = "Security Group:" + group.name + "/" + group.id
+        title = "Security Group: {0}/{1}, VPC: {2}".format(group.name, group.id, group.vpc_id)
         maintable = PrettyTable([title])
         table = PrettyTable(["CIDR_IP", "SRC_GRP_NAME",
                              "SRC_GRP_ID", "OWNER_ID", "PORT",
@@ -629,6 +630,20 @@ disable_root: false"""
             self.debug("\n{0}".format(str(maintable)))
         else:
             return maintable
+
+    def show_security_groups_for_instance(self, instance, printmethod=None, printme=True):
+        buf = ""
+        title = self.markup("EUCA SECURITY GROUPS FOR INSTANCE:{0}".format(instance.id))
+        pt = PrettyTable([title])
+        pt.align['title'] = 'l'
+        for group in instance.groups:
+            buf += str(self.show_security_group(group=group, printme=False))
+        pt.add_row([buf])
+        if printme:
+            printmethod = printmethod or self.debug
+            printmethod('\n{0}\n'.format(pt))
+        else:
+            return pt
 
     def revoke(self, group,
                      port=22,
@@ -2336,8 +2351,76 @@ disable_root: false"""
                                tagvalue=tagvalue,
                                max_count=1)[0]
 
+    def show_images(self, images=None, verbose=False, printmethod=None):
+        printmethod = printmethod or self.debug
+        images = images or self.get_images()
+        for image in images:
+            self.show_image(image=image, printmethod=printmethod)
 
-    
+    def show_image(self, image, verbose=False, printmethod=None,
+                   header_markups=[1,4], printme=True):
+        def header(text):
+            return self.markup(text=text, markups=header_markups)
+
+        title =self.markup("IMAGE ID: {0},    IMAGE NAME:{1}".format(image.id, image.name),
+                           markups=[1,94])
+
+        main_pt = PrettyTable([title])
+        main_pt.align[title] = 'l'
+        main_pt.padding_width = 0
+        mainbuf = header("IMAGE SUMMARY:\n")
+        platform = str(image.platform or "LINUX").upper()
+        summary_pt = PrettyTable(["VIRT TYPE", "PUBLIC", "OWNER ID", "KERNEL ID", "RAMDISK ID",
+                                  "PLATFORM", "STATE"])
+        summary_pt.padding_width = 0
+        row = [image.virtualization_type, image.is_public, image.owner_id, image.kernel_id,
+               image.ramdisk_id, platform, image.state]
+        summary_pt.add_row(row)
+        mainbuf += str(summary_pt) + "\n"
+        mainbuf += header("\nIMAGE MANIFEST PATH:\n")
+        locpt = PrettyTable(['IMAGE LOCATION:'])
+        locpt.add_row([image.location])
+        mainbuf += str(locpt) + "\n"
+        mainbuf += header("\nIMAGE BLOCK DEVICE MAPPING:")
+        if not image.block_device_mapping:
+            mainbuf += " N/A\n"
+        else:
+            mainbuf += "\n" + str(self.print_block_device_map(image.block_device_mapping,
+                                                              printme=False)) + "\n"
+        mainbuf += header("\nIMAGE TAGS:\n")
+        mainbuf += str(self.show_tags(image.tags, printme=False)) + "\n"
+        main_pt.add_row([mainbuf])
+        if printme:
+            printmethod = printmethod or self.debug
+            printmethod( "\n" + str(main_pt) + "\n")
+        else:
+            return main_pt
+
+    def show_tags(self, tags, printmethod=None, printme=True):
+        if not isinstance(tags, boto.ec2.tag.TagSet) and not isinstance(tags, dict):
+            if hasattr(tags, 'tags'):
+                tags = tags.tags
+            else:
+                raise ValueError('unknown tags object of type "{0}" passed to show_tags'
+                                 .format(type(tags)))
+        name_header = self.markup("TAG NAME")
+        value_header = self.markup("TAG VALUE")
+        pt = PrettyTable([name_header, value_header])
+        pt.padding_width = 0
+        pt.align = 'l'
+        pt.hrules = 1
+        pt.max_width[name_header] = 20
+        pt.max_width[value_header] = 80
+        for tag in tags:
+            pt.add_row([str(tag), str(tags.get(tag, None))])
+        if printme:
+            printmethod = printmethod or self.debug
+            printmethod( "\n" + str(pt) + "\n")
+        else:
+            return pt
+
+
+
     def get_all_allocated_addresses(self,account_id=None):
         """
         Return all allocated addresses for a given account_id as boto.ec2.address objects
@@ -3352,6 +3435,20 @@ disable_root: false"""
                 raise Exception(failmsg)
             else:
                 self.debug(failmsg)
+
+    def show_instance(self, instance, printme=True):
+        if not isinstance(instance, EuInstance):
+            orig_instance = instance
+            if isinstance(instance, str):
+                instance = self.get_instances(idstring=instance)
+            if isinstance(instance, Instance):
+                instance = self.convert_instance_to_euisntance(instance=instance,
+                                                               auto_connect=False)
+            else:
+                raise ValueError('Unknown type for instance: "{0}:{1}"'
+                                 .format(orig_instance, type(orig_instance)))
+        return instance.show_summary(printme=printme)
+
 
     def print_euinstance_list(self,
                               euinstance_list=None,
@@ -4595,50 +4692,30 @@ disable_root: false"""
                 break
         return vm_type
 
-    def print_block_device_map(self,block_device_map, printmethod=None ):
+    def print_block_device_map(self,block_device_map, printmethod=None, printme=True ):
         printmethod = printmethod or self.debug
-        buf = '\n'
-        device_w = 16
-        snap_w = 15
-        volume_w = 15
-        dot_w = 7
-        size_w = 6
-        status_w = 7
-        ephemeral_name_w = 12
-        attach_time_w = 12
-        no_device_w = 7
-        line = ''
-        titles = str('DEVICE').ljust(device_w) + "|" + \
-                 str('VOLUME_ID').center(volume_w) + "|" + \
-                 str('SNAP_ID').center(snap_w) + "|" + \
-                 str('D.O.T.').center(dot_w) + "|" + \
-                 str('SIZE').center(size_w) + "|" + \
-                 str('EPHEMERAL').center(ephemeral_name_w) + "|" + \
-                 str('NO DEV').center(no_device_w) + "|" + \
-                 str('ATTACH TM').center(attach_time_w) + "|" + \
-                 str('STATUS').center(status_w) + "\n"
 
-        for x in titles:
-            if x == '|':
-                line += '|'
-            else:
-                line += "-"
-        line = line+"\n"
-        header = str('BLOCK DEVICE MAP').center(len(line)) + "\n"
-        buf += line + header + line + titles + line
+        title = 'BLOCK DEVICE MAP'
+        main_pt = PrettyTable([title])
+        main_pt.align[title] = 'l'
+        main_pt.padding_width = 0
+
+        headers = ['DEVICE', 'VOLUME_ID', 'SNAP_ID', 'D.O.T.', 'SIZE', 'EPHEMERAL',
+                  'NO DEV', 'ATTACH TM', 'STATUS']
+        pt = PrettyTable(headers)
+        pt.padding_width = 0
+
         for device in block_device_map:
             bdm = block_device_map[device]
-            buf += str(device).center(device_w) + "|" + \
-                   str(bdm.volume_id).center(volume_w) + "|" + \
-                   str(bdm.snapshot_id).center(snap_w) + "|" + \
-                   str(bdm.delete_on_termination).center(dot_w) + "|" + \
-                   str(bdm.size).center(size_w) + "|" + \
-                   str(bdm.ephemeral_name).center(ephemeral_name_w) + "|" + \
-                   str(bdm.no_device).center(no_device_w) + "|" + \
-                   str(bdm.attach_time).center(attach_time_w) + "|" + \
-                   str(bdm.status).center(status_w) + "\n"
-        buf += line
-        printmethod(buf)
+            row =  [str(device), str(bdm.volume_id), str(bdm.snapshot_id),
+                    str(bdm.delete_on_termination), str(bdm.size), str(bdm.ephemeral_name),
+                    str(bdm.no_device), str(bdm.attach_time), str(bdm.status)]
+            pt.add_row(row)
+        main_pt.add_row([str(pt)])
+        if printme:
+            printmethod("\n" + str(main_pt) + "\n")
+        else:
+            return main_pt
 
     def print_all_vm_types(self,zone=None, debugmethod=None):
         debugmethod = debugmethod or self.debug

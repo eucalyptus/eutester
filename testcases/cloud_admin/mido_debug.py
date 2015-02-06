@@ -51,7 +51,8 @@ class MacTable(resource_base.ResourceBase):
 
 
 class MidoDebug(object):
-    _chain_jump = 107
+    _CHAIN_JUMP = 107
+    _ADDR_SPACING = 16
 
     def __init__(self, midonet_api_host, midonet_api_port='8080', midonet_username=None,
                  midonet_password=None, eutester_config=None, eutester_password=None, tester=None):
@@ -67,7 +68,7 @@ class MidoDebug(object):
         if not self.tester:
             self.tester = Eucaops(config_file=eutester_config, password=eutester_password)
         self.logger = Eulogger(identifier='MidoDebug:{0}'.format(self.midonet_api_host))
-        self.default_indent = "  "
+        self.default_indent = ""
         self._euca_instances = {}
         self._protocols = {}
 
@@ -107,17 +108,11 @@ class MidoDebug(object):
 
 
     def _header(self, text):
-        return "\033[94m\033[1m{0}\033[0m".format(text)
+        return self.tester.markup(text=text, markups=[1,94])
+
 
     def _bold(self, text, value=1):
-        buf = ""
-        lines = []
-        for line in text.splitlines():
-            lines.append("\033[1;{0}m{1}\033[0m".format(value, line))
-        buf = "\n".join(lines)
-        if text.endswith('\n') and not buf.endswith('\n'):
-            buf += '\n'
-        return buf
+        return self.tester.markup(text=text, markups=[value])
 
     def _highlight_buf_for_instance(self, buf, instance):
         ret_buf = ""
@@ -151,9 +146,12 @@ class MidoDebug(object):
 
 
     def _get_instance(self, instance):
+        fetched_ins = None
         if not isinstance(instance, Instance):
             if isinstance(instance, str):
                 fetched_ins = self._get_instance_by_id(id=instance)
+            else:
+                raise ValueError('instance not type boto Instance nor instance id string')
             if not fetched_ins:
                 raise ValueError('Could not find instance {0} on system'.format(instance))
             instance = fetched_ins
@@ -259,7 +257,7 @@ class MidoDebug(object):
         return None
 
 
-    def show_routers_brief(self, routers=None, printme=True):
+    def show_routers_brief(self, routers=None, showchains=False, printme=True):
         """
         Show a list of of routers, or by default all routers available in the current session
         context. Use show_routers to display the route information of each router.
@@ -268,11 +266,16 @@ class MidoDebug(object):
             routers = self.get_all_routers()
         if not isinstance(routers,list):
             routers = [routers]
-        pt = PrettyTable(['Name', 'AdminState', 'ID', 'InboundChain', 'OutboundChain','T-ID' ])
+        headers = ['Name', 'AdminState', 'ID','T-ID' ]
+        if showchains:
+            headers.extend(['InboundChain', 'OutboundChain'])
+        pt = PrettyTable(headers)
         for router in routers:
-            pt.add_row([router.get_name(),router.get_admin_state_up(), router.get_id(),
-                        router.get_inbound_filter_id(),router.get_outbound_filter_id(),
-                        router.get_tenant_id()])
+            row = [router.get_name(),router.get_admin_state_up(), router.get_id(),
+                   router.get_tenant_id()]
+            if showchains:
+                row.extend([router.get_inbound_filter_id(), router.get_outbound_filter_id()])
+            pt.add_row(row)
         if printme:
             self.debug('\n{0}\n'.format(pt))
         else:
@@ -310,7 +313,8 @@ class MidoDebug(object):
         if not isinstance(routers,list):
             routers = [routers]
         for router in routers:
-            buf += str(self.show_router_summary(router, showchains=False, printme=False)) + "\n"
+            buf += "\n" + str(self.show_router_summary(router, showchains=False, printme=False)) \
+                   + "\n"
         self.debug(buf)
 
 
@@ -323,6 +327,7 @@ class MidoDebug(object):
         title = self._header("ROUTER:{0}".format(router.get_name()))
         pt = PrettyTable([title])
         pt.align[title] = 'l'
+        pt.padding_width = 0
         buf = self._bold("{0}ROUTER SUMMARY:\n".format(indent), 4)
         buf += self._indent_table_buf(self.show_routers_brief(routers=[router], printme=False))
         buf += self._bold("{0}ROUTES:\n".format(indent), 4)
@@ -331,12 +336,16 @@ class MidoDebug(object):
         buf += self._indent_table_buf(self.show_ports(ports=router.get_ports(), printme=False))
         if showchains:
             if router.get_inbound_filter_id():
-                in_filter = self.mapi.get_chain(str(router.get_inbound_filter_id()))
-                buf += self._bold("{0}ROUTER INBOUND FILTER:\n".format(indent), 4)
+                in_filter_id = str(router.get_inbound_filter_id())
+                in_filter = self.mapi.get_chain(in_filter_id)
+                buf += "\n" + self._bold("{0}ROUTER INBOUND FILTER ({1}):\n"
+                                         .format(indent, in_filter_id), 4)
                 buf += self._indent_table_buf(self.show_chain(chain=in_filter, printme=False))
             if router.get_outbound_filter_id():
-                out_filter = self.mapi.get_chain(str(router.get_outbound_filter_id()))
-                buf += self._bold("{0}ROUTER OUTBOUND FILTER:\n".format(indent), 4)
+                out_filter_id = str(router.get_outbound_filter_id())
+                out_filter = self.mapi.get_chain(out_filter_id)
+                buf += "\n" + self._bold("{0}ROUTER OUTBOUND FILTER ({1}):\n"
+                                         .format(indent, out_filter_id), 4)
                 buf += self._indent_table_buf(self.show_chain(chain=out_filter, printme=False))
         pt.add_row([buf])
         if printme:
@@ -351,7 +360,7 @@ class MidoDebug(object):
         if type == 'BRIDGE':
             device = self.mapi.get_bridge(port.get_device_id())
         if type == 'ROUTER':
-            device = self.map.get_router(port.get_device_id())
+            device = self.mapi.get_router(port.get_device_id())
         if not device:
             raise ValueError('Unknown device type for peerid:{0}, port:{1}, type:{2}'
                              .format(peerid, port.get_id(), port.get_type()) )
@@ -395,6 +404,8 @@ class MidoDebug(object):
         buf = self._bold("{0}PORT INFO:\n".format(indent), 4)
         pt = PrettyTable(['PORT ID', 'BGPS', 'IPADDR', 'NETWORK', 'MAC',
                               'TYPE', 'UP', 'PEER ID'])
+        pt.align['PEER ID'] = 'l'
+        pt.max_width['PEER ID'] = 20
         bgps = 0
         try:
             if port.dto.get('bgps'):
@@ -436,9 +447,10 @@ class MidoDebug(object):
         else:
             return titlept
 
-    def show_ports(self, ports, showchains=False,   printme=True):
+    def show_ports(self, ports, printme=True):
         """
-        Show formatted info about a specific port
+        Show formatted info about a list of ports or a specific port.
+        For more verbose info about a specific port use show_port_summary()
         """
         buf = ""
         if not isinstance(ports,list):
@@ -448,6 +460,7 @@ class MidoDebug(object):
 
             pt = PrettyTable(['PORT ID', 'BGPS', 'IPADDR', 'NETWORK', 'MAC',
                               'TYPE', 'UP', 'PEER ID'])
+            pt.padding_width=0
             bgps = 0
             try:
                 if port.dto.get('bgps'):
@@ -664,7 +677,7 @@ class MidoDebug(object):
         else:
             return pt
 
-    def get_bridge_port_for_instance(self, instance):
+    def get_bridge_port_for_instance_learned(self, instance):
         bridge = self.get_bridge_for_instance(instance)
         arp_table = self.get_bridge_arp_table(bridge)
         mac_table = self.get_bridge_mac_table(bridge)
@@ -678,63 +691,39 @@ class MidoDebug(object):
                 if m_entry.get_macaddr() == arp_entry.get_mac():
                     portid = m_entry.get_port_id()
                     return self.mapi.get_port(portid)
-            self.debug('ARP entry for instance found, but mac has not been learned on a port yet, try pinging it?   ')
+            self.debug('ARP entry for instance found, but mac has not been learned on a port yet, '
+                       'try pinging it?   ')
+        return None
+
+    def get_bridge_port_for_instance_by_port_name(self, instance):
+        host = self.get_host_for_instance(instance)
+        assert isinstance(host, Host)
+        for port in host.get_ports():
+            iname = port.get_interface_name()
+            lookfor_name = 'vn_' + str(instance.id)
+            if re.search(lookfor_name, iname):
+                return self.mapi.get_port(port.get_port_id())
         return None
 
     def show_bridge_port_for_instance(self, instance, showchains=True, indent=None, printme=True):
-
-        def not_learned_warning():
-            wbuf = ""
-            wbuf += self._indent_table_buf(self._bold("MAC IS NOT LEARNED ON A BRIDGE PORT AT "
-                                                     "THIS TIME !?!", 91))
-            wbuf += "\n"
-            wbuf += self._indent_table_buf(self._bold("(try pinging the addr?)", 91))
-            wbuf += "\n"
-            return wbuf
         if indent is None:
             indent = self.default_indent
         bridge = self.get_bridge_for_instance(instance)
-        title = self._bold('BRIDGE PORT FOR INSTANCE:{0}, (BRIDGE:{1})'.format(instance.id,
+        learned = "(LEARNED)"
+        port = self.get_bridge_port_for_instance_learned(instance)
+        if not port:
+            learned = "(NOT LEARNED)"
+            port = self.get_bridge_port_for_instance_by_port_name(instance)
+        title = self._bold('BRIDGE PORT FOR INSTANCE:{0}, (BRIDGE:{1}), {2}'.format(instance.id,
                                                                                bridge.get_name() or
-                                                                               bridge.get_id()), 94)
+                                                                               bridge.get_id(),
+                                                                               learned), 94)
         pt = PrettyTable([title])
         pt.align[title] ='l'
         buf = ""
-        port = self.get_bridge_port_for_instance(instance)
-        if not port:
-            # Port may not be currently active/learned on the bridge,
-            # try to ping the private interface...
-            try:
-                self.debug(self._bold("MAC IS NOT LEARNED ON A BRIDGE PORT AT THIS TIME !?!", 91))
-                self.debug(self._bold("Trying to ping the instance private addr('{0}') now...?)"
-                                      .format(instance.private_ip_address), 91))
-                self.ping_instance_private_ip_from_euca_internal(instance)
-            except WaitForResultException:pass
-            port = self.get_bridge_port_for_instance(instance)
+
         if port:
-            buf += self._indent_table_buf(str(self.show_port_summary(port, showchains=showchains,
-                                              printme=False)))
-            '''
-            buf += self._bold("{0}PORT SUMMARY:\n".format(indent))
-            buf += self._indent_table_buf(str(self.show_ports(ports=[port], printme=False)))
-            if showchains:
-                if port.get_inbound_filter_id():
-                    in_filter = self.mapi.get_chain(str(port.get_inbound_filter_id()))
-                    buf += self._bold("{0}PORT INBOUND FILTER:".format(indent), 46)
-                    buf += "\n"
-                    buf += self._indent_table_buf(self.show_chain(chain=in_filter, printme=False))
-                if port.get_outbound_filter_id():
-                    out_filter = self.mapi.get_chain(str(port.get_outbound_filter_id()))
-                    buf += self._bold("{0}PORT OUTBOUND FILTER:".format(indent), 46)
-                    buf += "\n"
-                    buf += self._indent_table_buf(self.show_chain(chain=out_filter, printme=False))
-            '''
-        else:
-            buf += self._indent_table_buf(self._bold("MAC IS NOT LEARNED ON A BRIDGE PORT AT "
-                                                     "THIS TIME !?!", 91))
-            buf += "\n"
-            buf += self._indent_table_buf(self._bold("(try pinging the addr?)", 91))
-            buf += "\n"
+            buf += str(self.show_port_summary(port, showchains=showchains, printme=False))
         pt.add_row([buf])
         if printme:
             self.debug('\n{0}\n'.format(pt))
@@ -743,8 +732,10 @@ class MidoDebug(object):
 
 
     def show_chain(self, chain, printme=True):
-        title = 'CHAIN NAME: {0}, TENANT ID:{1}'.format(self._bold(chain.get_id(), self._chain_jump),
-                                                        chain.dto.get('tenantId', ""))
+        title = 'CHAIN NAME:{0}, ID:{1} TENANT ID:{2}'.format(chain.dto.get('name', "NA"),
+                                                              self._bold(chain.get_id(),
+                                                                         self._CHAIN_JUMP),
+                                                              chain.dto.get('tenantId', ""))
         pt = PrettyTable([title])
         pt.align[title] = 'l'
         rules = chain.get_rules()
@@ -777,16 +768,19 @@ class MidoDebug(object):
                 chain_id = rule.get_chain_id()
                 #title = "RULE(S) FOR CHAIN: {1}".format(rules.index(rule),chain_id)
 
-                title = "RULE(S) FOR CHAIN: {0}".format("..{0}{1}".format(chain_id[-5:-1],
+                title = "RULES FOR CHAIN:{0}".format("..{0}{1}".format(chain_id[-5:-1],
                                                                           chain_id[-1]))
-
+                title_width = len(title)
                 pt = PrettyTable([title, 'SRC', 'DST', 'PROTO', 'DPORTS', 'TOS',
                                   'GRP ADDRS','FRAG POL',
                                   'POS', 'TYPE', 'ACTION', 'TARGET'])
-                pt.max_width[title] = 20
+                pt.padding_width = 0
+                pt.max_width[title] = title_width
                 pt.align[title] = 'l'
-                pt.max_width['TARGET'] = 20
+                pt.max_width['TARGET'] = self._ADDR_SPACING
                 pt.align['TARGET'] = 'l'
+                pt.max_width['GRP ADDRS'] = self._ADDR_SPACING
+                pt.align['GRP ADDRS'] = 'l'
                 pt.hrules = 1
             jump_chain = None
             action = rule.dto.get('flowAction', "")
@@ -803,13 +797,14 @@ class MidoDebug(object):
             if rule.get_type().upper() == 'JUMP':
                 jump_chain_id = rule.get_jump_chain_id()
                 jump_chain = self.mapi.get_chain(jump_chain_id)
-                rule_type = self._bold(rule.get_type(), self._chain_jump)
-                action = self._bold('to chain', self._chain_jump)
+                rule_type = self._bold(rule.get_type(), self._CHAIN_JUMP)
+                action = self._bold('to chain', self._CHAIN_JUMP)
                 targetstring = jump_chain_id
             ip_addr_group = rule.get_ip_addr_group_src()
             if ip_addr_group:
                 ip_addr_group = self.show_ip_addr_group_addrs(ipgroup=ip_addr_group, printme=False)
-            pt.add_row(['{0} {1}'.format(self._bold("RULE#:" + str(rules.index(rule)+1)),
+            pt.add_row(['{0} {1}'.format(self._bold("RULE#:" +
+                                                    str(rules.index(rule)+1)).ljust(title_width),
                                          rule.get_id()),
                         "{0}/{1}".format(rule.get_nw_src_address(), rule.get_nw_src_length()),
                         "{0}/{1}".format(rule.get_nw_dst_address(), rule.get_nw_dst_length()),
@@ -873,8 +868,7 @@ class MidoDebug(object):
         eucatitle = self._bold('"EUCALYPTUS CLOUD" INSTANCE INFO ({0}):'.format(instance.id), 94)
         ept = PrettyTable([eucatitle])
         ept.align[eucatitle] = 'l'
-        ebuf = "\n" + str(self.tester.print_euinstance_list([instance], printme=False)) + "\n"
-        ebuf += str(self.show_security_groups_for_instance(instance=instance, printme=False))
+        ebuf = "\n" + str(self.tester.show_instance(instance, printme=False)) + "\n"
         ept.add_row([ebuf])
         buf += str(ept)
         pt.add_row([buf])
@@ -887,16 +881,9 @@ class MidoDebug(object):
     def show_security_groups_for_instance(self, instance, printme=True):
         buf = ""
         instance = self._get_instance(instance)
-        title = self._bold("EUCA SECURITY GROUPS FOR INSTANCE:{0}".format(instance.id))
-        pt = PrettyTable([title])
-        pt.align['title'] = 'l'
-        for group in instance.groups:
-            buf += str(self.tester.show_security_group(group=group, printme=False))
-        pt.add_row([buf])
-        if printme:
-            self.debug('\n{0}\n'.format(pt))
-        else:
-            return pt
+        return self.tester.show_security_groups_for_instance(instance=instance,
+                                                             printmethod=self.debug,
+                                                             printme=printme)
 
 
     def show_ip_addr_group_addrs(self, ipgroup, printme=True):
@@ -909,8 +896,8 @@ class MidoDebug(object):
         for ga in grpaddrs:
             addr = ga.get_addr()
             if addr:
-                addrs.append(str(addr))
-        ret_buf = ",".join(addrs)
+                addrs.append(str(addr).ljust(self._ADDR_SPACING))
+        ret_buf = " ".join(addrs)
         if printme:
             self.debug('\n{0}\n'.format(ret_buf))
         else:
@@ -941,7 +928,7 @@ class MidoDebug(object):
             hosts = [hosts]
         if hosts is None:
             hosts = self.mapi.get_hosts(query=None)
-        buf = self._bold("HOSTS TABLE:\n", 94)
+        buf = "\n"
         for host in hosts:
             title = self._bold("HOST:{0} ({1})".format(host.get_name(), host.get_id()), 94)
             pt = PrettyTable([title])
@@ -954,9 +941,9 @@ class MidoDebug(object):
             hostbuf += self._bold("HOST INTERFACES:\n", 4)
             hostbuf += self._indent_table_buf(str(self.show_host_interfaces(host, printme=False)))
             pt.add_row([hostbuf])
-            buf += str(pt) + "\n"
+            buf += "\n" + str(pt) + "\n"
         if printme:
-            self.debug('\n{0}\n'.format(buf))
+            self.debug('{0}'.format(buf))
         else:
             return buf
 
@@ -997,14 +984,18 @@ class MidoDebug(object):
 
     def show_host_for_instance(self, instance, printme=True):
         instance = self._get_instance(instance)
+        host = self.get_host_for_instance(instance)
+        return self.show_hosts(hosts=host, printme=printme)
+
+    def get_host_for_instance(self, instance):
+        instance = self._get_instance(instance)
         node = instance.tags.get('euca:node', None)
-        if not node:
+        if instance.state == 'running' and not node:
             raise ValueError('Node for instance:"{0}" not found?'.format(instance.id))
         host = self.get_host_by_hostname(node)
         if not host:
             raise ValueError('Mido Host for instance:"{0}" not found?'.format(instance.id))
-        return self.show_hosts(hosts=host, printme=printme)
-
+        return host
 
     def get_host_by_hostname(self, name):
         """
@@ -1018,3 +1009,17 @@ class MidoDebug(object):
             if host.get_name() == name:
                 return host
         return None
+
+    def get_instance_learned_port_by_ping(self, instance):
+        # Port may not be currently active/learned on the bridge,
+        # try to ping the private interface...
+        port = self.get_bridge_port_for_instance_learned(instance)
+        if not port:
+            try:
+                self.debug(self._bold("MAC IS NOT LEARNED ON A BRIDGE PORT AT THIS TIME !?!", 91))
+                self.debug(self._bold("Trying to ping the instance private addr('{0}') now...?)"
+                                      .format(instance.private_ip_address), 91))
+                self.ping_instance_private_ip_from_euca_internal(instance)
+            except WaitForResultException:pass
+        port = self.get_bridge_port_for_instance_learned(instance)
+        return port

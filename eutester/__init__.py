@@ -180,7 +180,31 @@ class Eutester(object):
         self.critical("Was unable to ping address")
         return False
 
-    
+    def markup(self, text, markups=[1], resetvalue="\033[0m"):
+        """
+        Convenience method for using ansci markup. Attempts to check if terminal supports
+        ansi escape sequences for text markups. If so will return a marked up version of the
+        text supplied using the markups provided.
+        Some example markeups: 1 = bold, 4 = underline, 94 = blue or markups=[1, 4, 94]
+        :param text: string/buffer to be marked up
+        :markups: a value or list of values representing ansi codes.
+        :resetvalue: string used to reset the terminal, default: "\33[0m"
+        """
+        is_tty = hasattr(sys.stdout, 'isatty') and sys.stdout.isatty()
+        if not is_tty:
+            return text
+        buf = ""
+        lines = []
+        if not isinstance(markups, list):
+            markups = [markups]
+        markupvalues=";".join(str(x) for x in markups)
+        for line in text.splitlines():
+            lines.append("\033[{0}m{1}\033[0m".format(markupvalues, line))
+        buf = "\n".join(lines)
+        if text.endswith('\n') and not buf.endswith('\n'):
+            buf += '\n'
+        return buf
+
     def scan_port_range(self, ip, start, stop, timeout=1, tcp=True):
         '''
         Attempts to connect to ports, returns list of ports which accepted a connection

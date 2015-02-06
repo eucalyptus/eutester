@@ -53,10 +53,12 @@ from eutester.euvolume import EuVolume
 from eutester import eulogger
 from eutester.taggedresource import TaggedResource
 from boto.ec2.instance import InstanceState
+from boto.ec2.networkinterface import NetworkInterface
 from random import randint
 import eutester.sshconnection as sshconnection
 from eutester.sshconnection import CommandExitCodeException
 from prettytable import PrettyTable
+from datetime import datetime
 import sys
 import os
 import re
@@ -172,7 +174,12 @@ class EuInstance(Instance, TaggedResource):
                     newins.use_sudo = False
 
         return newins
-    
+
+    @property
+    def age(self):
+        launchtime = self.tester.get_datetime_from_resource_string(self.launch_time)
+        #return the elapsed time in seconds
+        return time.mktime(datetime.utcnow().utctimetuple()) - time.mktime(launchtime.utctimetuple())
 
     def update(self, validate=False, dry_run=False,
                 err_state='terminated', err_code=-1):
@@ -221,7 +228,6 @@ class EuInstance(Instance, TaggedResource):
         return "\n" + line + "\n"
     
     def printself(self,title=True, footer=True, printmethod=None):
-
         if self.bdm_root_vol:
             bdmvol = self.bdm_root_vol.id
         else:
@@ -229,11 +235,18 @@ class EuInstance(Instance, TaggedResource):
         reservation_id = None
         if self.reservation:
             reservation_id = self.reservation.id
+        id_string = "ID:{0}".format(self.id).ljust(20)
+        id_string += "RES:{0}".format(reservation_id).ljust(20)
+        id_string += "ROOTVOL:{0}".format(bdmvol).ljust(20)
         netinfo = 'INSTANCE NETWORK INFO:'.center(20)
-        pt = PrettyTable(['ID','EMI', 'RES', 'LASTSTATE', 'AGE', 'VMTYPE', 'ROOTVOL', 'CLUSTER',
+        pt = PrettyTable(['ID','EMI','LASTSTATE', 'AGE', 'VMTYPE', 'CLUSTER',
                           netinfo])
         pt.align[netinfo] = 'l'
+        pt.align['ID'] = 'l'
+        pt.max_width['ID'] = 20
+        pt.padding_width = 0
         netpt = PrettyTable(['VPC', 'SUBNET', 'SEC GRPS', 'P', 'PRIV IP', 'PUB IP'])
+        netpt.padding_width = 0
         sec_grps = []
         for grp in self.groups:
             sec_grps.append(str(grp.id))
@@ -243,11 +256,84 @@ class EuInstance(Instance, TaggedResource):
             private_addressing = "Y"
         netpt.add_row([self.vpc_id, self.subnet_id, sec_grps, private_addressing,
                        self.private_ip_address, self.ip_address])
-        pt.add_row([self.id, self.image_id, reservation_id, self.laststate, self.age_at_state,
-                    self.instance_type, bdmvol, self.placement, str(netpt)])
+        pt.add_row([id_string, self.image_id, self.laststate, self.age,
+                    self.instance_type, self.placement, str(netpt)])
         if printmethod:
             printmethod("\n" + str(pt) + "\n")
         return pt
+
+    def show_summary(self, printmethod=None, printme=True):
+        def header(text):
+            return self.tester.markup(text=text, markups=[1,4,94])
+
+        reservation_id = None
+        if self.reservation:
+            reservation_id = self.reservation.id
+        title = header('INSTANCE SUMMARY:"{0}", STATE:"{1}", PUB:"{2}", PRIV:"{3}'
+                       .format(self.id, self.state, self.ip_address, self.private_ip_address))
+        main_pt = PrettyTable([title])
+        main_pt.align[title] = 'l'
+        main_pt.padding_width = 0
+        mainbuf = header("SUMMARY:\n")
+        summary_pt = PrettyTable(['ID', 'RESERVATION', 'AGE', 'VMTYPE', 'CLUSTER', 'VIRT TYPE',
+                                  'REGION', 'KEY'])
+        summary_pt.padding_width = 0
+        summary_pt.add_row([self.id, reservation_id, self.age, self.instance_type,
+                            self.placement, self.virtualization_type, self.region, self.key_name])
+        mainbuf += str(summary_pt) + "\n"
+        mainbuf += header('\nINSTANCE NETWORK INFO:\n')
+        netpt = PrettyTable(['VPC', 'SUBNET', 'PRIV ONLY', 'PRIV DNS', 'PUB DNS'])
+        netpt.padding_width = 0
+        netpt.add_row([self.vpc_id, self.subnet_id, self.private_addressing,
+                       self.private_dns_name, self.public_dns_name])
+        mainbuf += str(netpt) + "\n"
+        mainbuf += header("\nINSTANCE ENI TABLE:\n")
+        mainbuf += str(self.show_enis(printme=False)) + "\n"
+        mainbuf += header("\nINSTANCE SECURITY GROUPS:\n")
+        mainbuf += str(self.tester.show_security_groups_for_instance(self, printme=False)) + "\n"
+        mainbuf += header("\nINSTANCE IMAGE:\n")
+        image = self.tester.get_emi(self.image_id)
+        mainbuf += str(self.tester.show_image(image=image, printme=False)) + "\n"
+        mainbuf += header("\nINSTANCE BLOCK DEVICE MAPPING:\n")
+        mainbuf += str(self.tester.print_block_device_map(self.block_device_mapping,
+                                                          printme=False))
+        main_pt.add_row([mainbuf])
+        if printme:
+            printmethod = printmethod or self.debug
+            printmethod("\n" + str(main_pt) + "\n")
+        return main_pt
+
+    def show_enis(self, printme=True):
+        buf = ""
+        for eni in self.interfaces:
+            if isinstance(eni, NetworkInterface):
+                title = " ENI ID: {0}, DESCRIPTION:{1}".format(eni.id, eni.description)
+                enipt = PrettyTable([title])
+                enipt.align[title] = 'l'
+                enipt.padding_width = 0
+                dot = "?"
+                attached_status = "?"
+                if eni.attachment:
+                    dot = eni.attachment.delete_on_termination
+                    attached_status = eni.attachment.status
+                pt = PrettyTable(['ENI ID', 'PRIV_IP (PRIMARY)', 'PUB IP', 'VPC', 'SUBNET',
+                                  'OWNER', 'DOT', 'STATUS'])
+                pt.padding_width = 0
+                if eni.private_ip_addresses:
+                    private_ips = ",".join(str("{0} ({1})".format(x.private_ip_address,
+                                                                x.primary).center(20))
+                                           for x in eni.private_ip_addresses)
+                else:
+                    private_ips = None
+                pt.add_row([eni.id, private_ips, eni.publicIp, eni.vpc_id, eni.subnet_id,
+                            eni.owner_id, dot, "{0} ({1})".format(eni.status, attached_status)])
+                enipt.add_row([(str(pt))])
+                buf += str(enipt)
+        if printme:
+            self.debug(buf)
+        else:
+            return buf
+
 
     def reset_ssh_connection(self, timeout=None):
         timeout = timeout or self.timeout
