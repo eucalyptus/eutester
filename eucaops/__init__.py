@@ -43,6 +43,7 @@ from s3ops import S3ops
 from stsops import STSops
 import time
 import traceback
+import os
 import sys
 import StringIO
 from eutester.euservice import EuserviceManager
@@ -53,16 +54,18 @@ from eutester.euproperties import Euproperty_Manager
 from eutester.machine import Machine
 from eutester.euvolume import EuVolume
 from eutester import eulogger
+from eutester.sshconnection import CommandExitCodeException
 import re
 import os
 
 class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
     
-    def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None,
-                     aws_secret_access_key = None,  account="eucalyptus", user="admin", username=None, APIVersion='2013-10-15',
+    def __init__(self, config_file=None, password=None, keypath=None, credpath=None,
+                 aws_access_key_id=None, aws_secret_access_key = None,  account="eucalyptus",
+                 user="admin", username=None, APIVersion='2013-10-15',
                  ec2_ip=None, ec2_path=None, iam_ip=None, iam_path=None, s3_ip=None, s3_path=None,
                  as_ip=None, as_path=None, elb_ip=None, elb_path=None, cw_ip=None, cw_path=None,
-                 cfn_ip=None, cfn_path=None, sts_ip=None, sts_path=None,
+                 cfn_ip=None, cfn_path=None, sts_ip=None, sts_path=None, force_cert_create=False,
                  port=8773, download_creds=True, boto_debug=0, debug_method=None, region=None):
         self.config_file = config_file 
         self.APIVersion = APIVersion
@@ -91,7 +94,9 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
         self.account_id = None
         self.aws_access_key_id = aws_access_key_id
         self.aws_secret_access_key = aws_secret_access_key
+        self.force_cert_create = force_cert_create
         self._property_manager = None
+        self.cred_zipfile = None
 
 
         if self.config_file is not None:
@@ -113,9 +118,11 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
             clc_array = self.get_component_machines("clc")
             self.clc = clc_array[0]
             self.sftp = self.clc.ssh.connection.open_sftp()
+            downloaded_creds = False
             if self.download_creds:
                 if self.credpath is None:
-                    ### TRY TO GET CREDS ON FIRST CLC if it fails try on second listed clc, if that fails weve hit a terminal condition
+                    ### TRY TO GET CREDS ON FIRST CLC if it fails try on second listed clc,
+                    ### if that fails we've hit a terminal condition
                     try:
                         self.debug("Attempting to get credentials and setup sftp")
                         self.sftp = self.clc.ssh.connection.open_sftp()
@@ -123,13 +130,17 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                         self.debug("Successfully downloaded and synced credentials")
                     except Exception, e:
                         tb = self.get_traceback()
-                        self.debug("Caught an exception when getting credentials from first CLC: " + str(e))
-                        ### If i only have one clc this is a critical failure, else try on the other clc
+                        self.debug("Caught an exception when getting credentials "
+                                   "from first CLC: " + str(e))
+                        ### If i only have one clc this is a critical failure,
+                        ### else try on the other clc
                         if len(clc_array) < 2:
-                            raise Exception(str(tb) + "\nCould not get credentials from first CLC and no other to try")
+                            raise Exception(str(tb) + "\nCould not get credentials from first CLC "
+                                                      "and no other to try")
                         self.swap_clc()
                         self.sftp = self.clc.ssh.connection.open_sftp()
                         self.get_credentials(account, user)
+                        downloaded_creds = True
                         
                 self.service_manager = EuserviceManager(self)
                 self.clc = self.service_manager.get_enabled_clc().machine
@@ -146,9 +157,11 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                 if self.credpath and not ec2_path:
                     ec2_path = self.get_ec2_path()
 
-                self.setup_ec2_connection(endpoint=ec2_ip, path=ec2_path, port=port, is_secure=False,
-                                          region=region, aws_access_key_id=aws_access_key_id,
-                                          aws_secret_access_key=aws_secret_access_key, APIVersion=APIVersion,
+                self.setup_ec2_connection(endpoint=ec2_ip, path=ec2_path, port=port,
+                                          is_secure=False, region=region,
+                                          aws_access_key_id=aws_access_key_id,
+                                          aws_secret_access_key=aws_secret_access_key,
+                                          APIVersion=APIVersion,
                                           boto_debug=boto_debug)
                 self.setup_ec2_resource_trackers()
 
@@ -156,25 +169,32 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                     iam_ip = self.get_iam_ip()
                 if self.credpath and not iam_path:
                     iam_path = self.get_iam_path()
-                self.setup_iam_connection(endpoint=iam_ip, path=iam_path,
-                                          port=port, is_secure=False, aws_access_key_id=aws_access_key_id,
-                                          aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
+                self.setup_iam_connection(endpoint=iam_ip,
+                                          path=iam_path,
+                                          port=port, is_secure=False,
+                                          aws_access_key_id=aws_access_key_id,
+                                          aws_secret_access_key=aws_secret_access_key,
+                                          boto_debug=boto_debug)
 
                 if self.credpath and not sts_ip:
                     sts_ip = self.get_sts_ip()
                 if self.credpath and not sts_path:
                     sts_path = self.get_sts_path()
-                self.setup_sts_connection(endpoint=sts_ip, path=sts_path, port=port, is_secure=False,
-                                          region=region, aws_access_key_id=aws_access_key_id,
-                                          aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
+                self.setup_sts_connection(endpoint=sts_ip, path=sts_path, port=port,
+                                          is_secure=False, region=region,
+                                          aws_access_key_id=aws_access_key_id,
+                                          aws_secret_access_key=aws_secret_access_key,
+                                          boto_debug=boto_debug)
 
                 if self.credpath and not cw_ip:
                     cw_ip = self.get_cw_ip()
                 if self.credpath and not cw_path:
                     cw_path = self.get_cw_path()
-                self.setup_cw_connection(endpoint=cw_ip, path=cw_path, port=port, is_secure=False,
-                                         region=region, aws_access_key_id=aws_access_key_id,
-                                         aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
+                self.setup_cw_connection(endpoint=cw_ip, path=cw_path, port=port,
+                                         is_secure=False, region=region,
+                                         aws_access_key_id=aws_access_key_id,
+                                         aws_secret_access_key=aws_secret_access_key,
+                                         boto_debug=boto_debug)
 
                 self.setup_cw_resource_trackers()
             except Exception, e:
@@ -187,7 +207,8 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                 if self.credpath and not s3_path:
                     s3_path = self.get_s3_path()
                 self.setup_s3_connection(endpoint=s3_ip, path=s3_path, port=port, is_secure=False,
-                                         aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,
+                                         aws_access_key_id=aws_access_key_id,
+                                         aws_secret_access_key=aws_secret_access_key,
                                          boto_debug=boto_debug)
                 self.setup_s3_resource_trackers()
             except Exception, e:
@@ -200,7 +221,8 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                     as_path = self.get_as_path()
                 self.setup_as_connection(endpoint=as_ip, path=as_path, port=port, is_secure=False,
                                          region=region, aws_access_key_id=aws_access_key_id,
-                                         aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
+                                         aws_secret_access_key=aws_secret_access_key,
+                                         boto_debug=boto_debug)
             except Exception, e:
                 self.debug("Unable to create AS connection because of: " + str(e) )
 
@@ -209,9 +231,11 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                     elb_ip = self.get_elb_ip()
                 if self.credpath and not elb_path:
                     elb_path = self.get_elb_path()
-                self.setup_elb_connection(endpoint=elb_ip, path=elb_path, port=port, is_secure=False,
-                                          region=region, aws_access_key_id=aws_access_key_id,
-                                          aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
+                self.setup_elb_connection(endpoint=elb_ip, path=elb_path, port=port,
+                                          is_secure=False, region=region,
+                                          aws_access_key_id=aws_access_key_id,
+                                          aws_secret_access_key=aws_secret_access_key,
+                                          boto_debug=boto_debug)
             except Exception, e:
                 self.debug("Unable to create ELB connection because of: " + str(e) )
             try:
@@ -219,13 +243,22 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                     cfn_ip = self.get_cfn_ip()
                 if self.credpath and not cfn_path:
                     cfn_path = self.get_cfn_path()
-                self.setup_cfn_connection(endpoint=cfn_ip, path=self.get_cfn_path(), port=port, is_secure=False,
-                                          region=region, aws_access_key_id=aws_access_key_id,
-                                          aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
+                self.setup_cfn_connection(endpoint=cfn_ip, path=self.get_cfn_path(), port=port,
+                                          is_secure=False, region=region,
+                                          aws_access_key_id=aws_access_key_id,
+                                          aws_secret_access_key=aws_secret_access_key,
+                                          boto_debug=boto_debug)
             except Exception, e:
                 self.debug("Unable to create CloudFormation connection because of: " + str(e) )
 
-
+            if not self.ec2_cert or not self.is_ec2_cert_active():
+                self.logger.log.critical('CERTS ARE NOT ACTIVE, TRYING TO UPDATE NOW...')
+                self.get_active_cert_for_creds()
+                self.get_credentials(force=True)
+                if not self.ec2_cert or not self.is_ec2_cert_active():
+                    self.logger.log.critical('CERTS ARE NOT ACTIVE, COULD NOT UPDATE')
+                else:
+                    self.debug('UPDATED CERTS')
 
     @property
     def property_manager(self):
@@ -286,12 +319,10 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                         "hs1.8xlarge" : 19
                       }[type] 
         type_state = zones[ zone_index + type_index ].state.split()
-        self.debug("Finding available VMs: Partition=" + zone +" Type= " + type + " Number=" +  str(int(type_state[0])) )
+        self.debug("Finding available VMs: Partition=" + zone +" Type= " + type + " Number=" +
+                   str(int(type_state[0])) )
         return int(type_state[0])
-        
-    
-    
-            
+
     def modify_property(self, property, value):
         """
         Modify a eucalyptus property through the command line euca-modify-property tool
@@ -299,26 +330,28 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
         value           Value to set it too
         """
         if self.credpath == None or self.eucapath == None or property == None or value == None:
-            self.fail("Cannot set property value due to insufficient arguments")
-            self.fail("credpath: " + ("None" if self.credpath is None else self.credpath))
-            self.fail("eucapath: " + ("None" if self.eucapath is None else self.eucapath))
-            self.fail("property: " + ("None" if property is None else property))
-            self.fail("value: " + ("None" if value is None else value))
-            raise Exception("Cannot set property: " + (property if property is not None else "unknown"))
+            fail_buf = "Cannot set property: " + (property if property is not None else "unknown")
+            fail_buf += "Cannot set property value due to insufficient arguments"
+            fail_buf += ("credpath: " + ("None" if self.credpath is None else self.credpath))
+            fail_buf += ("eucapath: " + ("None" if self.eucapath is None else self.eucapath))
+            fail_buf += ("property: " + ("None" if property is None else property))
+            fail_buf += ("value: " + ("None" if value is None else value))
+            raise ValueError(fail_buf)
         
-        command = "source " + self.credpath + "/eucarc && " + self.eucapath + "/usr/sbin/euca-modify-property -p " + property + "=" + value
+        command = "source " + self.credpath + "/eucarc && " + self.eucapath + \
+                  "/usr/sbin/euca-modify-property -p " + property + "=" + value
         if self.clc.found(command, property):
             self.debug("Properly modified property " + property)
         else:
             raise Exception("Setting property " + property + " failed")
-
 
     def cleanup_artifacts(self,instances=True, snapshots=True, volumes=True,
                           load_balancers=True, ip_addresses=True,
                           auto_scaling_groups=True, launch_configurations=True,
                           keypairs=True):
         """
-        Description: Attempts to remove artifacts created during and through this eutester's lifespan.
+        Description: Attempts to remove artifacts created during and through this
+        eutester's lifespan.
         """
         failmsg = ""
         failcount = 0
@@ -415,9 +448,11 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                 except Exception, e:
                     tb = self.get_traceback()
                     failcount += 1
-                    failmsg += str(tb) + "\nUnable to delete item: " + str(item) + "\n" + str(e)+"\n"
+                    failmsg += str(tb) + "\nUnable to delete item: " + str(item) + "\n" + \
+                               str(e)+"\n"
         if failmsg:
-            failmsg += "\nFound " + str(failcount) + " number of errors while cleaning up. See above"
+            failmsg += "\nFound " + str(failcount) + " number of errors while cleaning up. " \
+                                                     "See above"
             raise Exception(failmsg)
         if launch_configurations:
             try:
@@ -427,10 +462,10 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                 failcount +=1
                 failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
 
-
     def cleanup_load_balancers(self, lbs=None):
         """
-        :param lbs: optional list of load balancers, otherwise it will attempt to delete from test_resources[]
+        :param lbs: optional list of load balancers, otherwise it will attempt to delete
+                    from test_resources[]
         """
         if lbs:
             self.delete_load_balancers(lbs)
@@ -442,7 +477,8 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
 
     def cleanup_addresses(self, ips=None):
         """
-        :param ips: optional list of ip addresses, else will attempt to delete from test_resources[]
+        :param ips: optional list of ip addresses, else will attempt to delete from
+                    test_resources[]
 
         """
         addresses = ips or self.test_resources['addresses']
@@ -455,13 +491,16 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
             self.release_address(addresses.pop())
 
 
-    def cleanup_test_snapshots(self,snaps=None, clean_images=False, add_time_per_snap=10, wait_for_valid_state=120, base_timeout=180):
+    def cleanup_test_snapshots(self,snaps=None, clean_images=False, add_time_per_snap=10,
+                               wait_for_valid_state=120, base_timeout=180):
         """
         :param snaps: optional list of snapshots, else will attempt to delete from test_resources[]
-        :param clean_images: Boolean, if set will attempt to delete registered images referencing the snapshots first.
-                             Images referencing the snapshot may prevent snapshot deletion to protect the image.
+        :param clean_images: Boolean, if set will attempt to delete registered images referencing
+                             the snapshots first. Images referencing the snapshot may prevent
+                             snapshot deletion to protect the image.
         :param add_time_per_snap:  int number of seconds to append to base_timeout per snapshot
-        :param wait_for_valid_state: int seconds to wait for snapshot(s) to enter a 'deletable' state
+        :param wait_for_valid_state: int seconds to wait for snapshot(s) to enter
+                                     a 'deletable' state
         :param base_timeout: base timeout to use before giving up, and failing operation.
         """
         snaps = snaps or self.test_resources['snapshots']
@@ -486,28 +525,33 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
 
     def clean_up_test_volumes(self, volumes=None, min_timeout=180, timeout_per_vol=30):
         """
-        Definition: cleaup helper method intended to clean up volumes created within a test, after the test has ran.
+        Definition: cleaup helper method intended to clean up volumes created within a test,
+                    after the test has ran.
 
-        :param volumes: optional list of volumes to delete from system, otherwise will use test_resources['volumes']
+        :param volumes: optional list of volumes to delete from system, otherwise will use
+                        test_resources['volumes']
         """
         euvolumes = []
         detaching = []
         not_exist = []
-        line = '\n----------------------------------------------------------------------------------------------------\n'
+        line = '\n--------------------------------------------------------' \
+               '--------------------------------------------\n'
 
         volumes = volumes or self.test_resources['volumes']
         if not volumes:
             self.debug('clean_up_test_volumes, no volumes passed to delete')
             return
-        self.debug('clean_up_test_volumes starting\nVolumes to be deleted:' + ",".join(str(x) for x in volumes))
+        self.debug('clean_up_test_volumes starting\nVolumes to be deleted:' +
+                   ",".join(str(x) for x in volumes))
 
         for vol in volumes:
             try:
                 vol = self.get_volume(volume_id=vol.id)
             except:
                 tb = self.get_traceback()
-                self.debug("\n" + line + " Ignoring caught Exception:\n" + str(tb) + "\n"+ str(vol.id) +
-                           ', Could not retrieve volume, may no longer exist?' + line)
+                self.debug("\n" + line + " Ignoring caught Exception:\n" + str(tb) + "\n" +
+                           str(vol.id) + ', Could not retrieve volume, may no longer exist?' +
+                           line)
                 if vol in self.test_resources['volumes']:
                     self.test_resources['volumes'].remove(vol)
                 vol = None
@@ -529,7 +573,8 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
             try:
                 vol.update()
                 if vol.status == 'in-use':
-                    if vol.attach_data and (vol.attach_data.status != 'detaching' or vol.attach_data.status != 'detached'):
+                    if vol.attach_data and (vol.attach_data.status != 'detaching' or
+                                                    vol.attach_data.status != 'detached'):
                         try:
                             self.debug(str(vol.id) + ', Sending detach. Status:' +str(vol.status) +
                                        ', attach_data.status:' + str(vol.attach_data.status))
@@ -543,7 +588,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                     detaching.append(vol)
             except:
                 print self.get_traceback()
-        #If the volume was found to no longer exist on the system, remove it from further monitoring...
+        #If the volume was found to not exist on the system, remove it from further monitoring...
         for vol in not_exist:
             if vol in detaching:
                 detaching.remove(vol)
@@ -553,7 +598,8 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
         timeout = min_timeout + (len(volumes) * timeout_per_vol)
         #If detaching wait for detaching to transition to detached...
         if detaching:
-            self.monitor_euvolumes_to_status(detaching, status='available', attached_status=None,timeout=timeout)
+            self.monitor_euvolumes_to_status(detaching, status='available', attached_status=None,
+                                             timeout=timeout)
         self.debug('clean_up_volumes: Deleteing volumes now...')
         self.print_euvolume_list(euvolumes)
         if euvolumes:
@@ -561,8 +607,11 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
 
                     
     def get_current_resources(self,verbose=False):
-        '''Return a dictionary with all known resources the system has. Optional pass the verbose=True flag to print this info to the logs
-           Included resources are: addresses, images, instances, key_pairs, security_groups, snapshots, volumes, zones
+        '''
+        Return a dictionary with all known resources the system has. Optional pass the verbose=True
+        flag to print this info to the logs.
+        Included resources are: addresses, images, instances, key_pairs, security_groups,
+                                snapshots, volumes, zones
         '''
         current_artifacts = dict()
         current_artifacts["addresses"] = self.ec2.get_all_addresses()
@@ -590,10 +639,12 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
             Columns
             ------ 
                 IP or hostname of machine   
-                Distro installed on machine - Options are RHEL, CENTOS, UBUNTU additionally VMWARE can be used for NCs 
+                Distro installed on machine - Options are RHEL, CENTOS, UBUNTU additionally
+                                              VMWARE can be used for NCs
                 Distro version on machine  - RHEL (5.x, 6.x), CentOS (5.x), UBUNTU (LUCID)
                 Distro base architecture  - 32 or 64
-                System built from packages (REPO) or source (BZR), packages assumes path to eucalyptus is /, bzr assumes path to eucalyptus is /opt/eucalyptus
+                System built from packages (REPO) or source (BZR), packages assumes path to
+                eucalyptus is /, bzr assumes path to eucalyptus is /opt/eucalyptus
                 List of components installed on this machine encapsulated in brackets []
             
             These components can be:
@@ -676,27 +727,32 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
     def swap_walrus(self):
         all_walruses = self.get_component_machines("ws")
         if self.object_storage is all_walruses[0]:
-            self.debug("Swapping Walrus from " + all_walruses[0].hostname + " to " + all_walruses[1].hostname)
+            self.debug("Swapping Walrus from " + all_walruses[0].hostname + " to " +
+                       all_walruses[1].hostname)
             self.object_storage = all_walruses[1]
         elif self.object_storage is all_walruses[1]:
-            self.debug("Swapping Walrus from " + all_walruses[1].hostname + " to " + all_walruses[0].hostname)
+            self.debug("Swapping Walrus from " + all_walruses[1].hostname + " to " +
+                       all_walruses[0].hostname)
             self.object_storage = all_walruses[0]
             
     def get_network_mode(self):
         return self.config['network']
             
     def get_component_ip(self, component):
-        """ Parse the machine list and a bm_machine object for a machine that matches the component passed in"""
+        """ Parse the machine list and a bm_machine object for a machine that matches the
+         component passed in"""
         #loop through machines looking for this component type
         component.lower()
-        machines_with_role = [machine.hostname for machine in self.config['machines'] if component in machine.components]
+        machines_with_role = [machine.hostname for machine in self.config['machines']
+                              if component in machine.components]
         if len(machines_with_role) == 0:
             raise Exception("Could not find component "  + component + " in list of machines")
         else:
             return machines_with_role[0]
     
     def get_machine_by_ip(self, hostname):
-        machines = [machine for machine in self.config['machines'] if re.search(hostname, machine.hostname)]
+        machines = [machine for machine in self.config['machines'] if re.search(hostname,
+                                                                                machine.hostname)]
         
         if machines is None or len(machines) == 0:
             self.fail("Could not find machine at "  + hostname + " in list of machines")
@@ -705,13 +761,16 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
             return machines[0]
 
     def get_component_machines(self, component = None):
-        #loop through machines looking for this component type
-        """ Parse the machine list and a list of bm_machine objects that match the component passed in"""
+        """
+        loop through machines looking for this component type
+        Parse the machine list and a list of bm_machine objects that match the component passed in
+        """
         if component is None:
             return self.config['machines']
         else:
             component.lower()
-            machines_with_role = [machine for machine in self.config['machines'] if re.search(component, " ".join(machine.components))]
+            machines_with_role = [machine for machine in self.config['machines']
+                                  if re.search(component, " ".join(machine.components))]
             if len(machines_with_role) == 0:
                 raise IndexError("Could not find component "  + component + " in list of machines")
             else:
@@ -724,34 +783,42 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                 hostname = component_hostname
         return hostname
        
-    def get_credentials(self, account="eucalyptus", user="admin"):
-        """Login to the CLC and download credentials programatically for the user and account passed in
-           Defaults to admin@eucalyptus 
+    def get_credentials(self, account="eucalyptus", user="admin", force=False):
+        """
+        Login to the CLC and download credentials programatically for the user and account
+        passed in. Defaults to admin@eucalyptus
         """
         self.debug("Starting the process of getting credentials")
         
         ### GET the CLCs from the config file
         clcs = self.get_component_machines("clc")
         if len(clcs) < 1:
-            raise Exception("Could not find a CLC in the config file when trying to get credentials")
-        
+            raise Exception("Could not find a CLC in the config file when trying to"
+                            " get credentials")
         admin_cred_dir = "eucarc-" + clcs[0].hostname + "-" + account + "-" + user 
         cred_file_name = "creds.zip"
         full_cred_path = admin_cred_dir + "/" + cred_file_name
         
         ### IF I dont already have credentials, download and sync them
-        if self.credpath is None:
+        if force or self.credpath is None or not self.is_ec2_cert_active():
             ### SETUP directory remotely
             self.setup_remote_creds_dir(admin_cred_dir)
             
             ### Create credential from Active CLC
-            self.create_credentials(admin_cred_dir, account, user)
-        
+            # Store the zipfile info to check for active certs when iam/euare connection is
+            # established later...
+            self.cred_zipfile = self.create_credentials(admin_cred_dir, account, user,
+                                                        zipfile=cred_file_name)
+            if hasattr(self, 'euare') and self.euare:
+                self.get_active_cert_for_creds(credzippath=self.cred_zipfile, account=account,
+                                               user=user)
+            self.debug('self.cred_zipfile: ' + str(self.cred_zipfile))
             ### SETUP directory locally
             self.setup_local_creds_dir(admin_cred_dir)
           
             ### DOWNLOAD creds from clc
-            self.download_creds_from_clc(admin_cred_dir)
+            self.download_creds_from_clc(admin_cred_dir=os.path.dirname((self.cred_zipfile)),
+                                         zipfile=os.path.basename(self.cred_zipfile))
 
             ### SET CREDPATH ONCE WE HAVE DOWNLOADED IT LOCALLY
             self.credpath = admin_cred_dir
@@ -762,83 +829,321 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
 
         return admin_cred_dir
    
-    def create_credentials(self, admin_cred_dir, account, user):
-        cred_dir = admin_cred_dir + "/creds.zip"
+    def create_credentials(self, admin_cred_dir, account, user, zipfile='creds.zip'):
+        zipfilepath = os.path.join(admin_cred_dir, zipfile)
 
-        output = self.credential_exists(cred_dir)
+        output = self.credential_exist_on_remote_machine(zipfilepath)
         if output['status'] == 0:
-            self.debug("Found creds file, skipping download.")
+            self.debug("Found creds file, skipping euca_conf --get-credentials.")
         else:
-            cmd_download_creds = self.eucapath + "/usr/sbin/euca_conf --get-credentials " + admin_cred_dir + "/creds.zip " + "--cred-user "+ user + " --cred-account " + account
+            cmd_download_creds = str("{0}/usr/sbin/euca_conf --get-credentials {1}/creds.zip "
+                                     "--cred-user {2} --cred-account {3}"
+                                     .format(self.eucapath, admin_cred_dir, user, account))
             if self.clc.found(cmd_download_creds, "The MySQL server is not responding"):
                 raise IOError("Error downloading credentials, looks like CLC was not running")
-            if self.clc.found("unzip -o " + admin_cred_dir + "/creds.zip " + "-d " + admin_cred_dir,
+            if self.clc.found("unzip -o {0}/creds.zip -d {1}"
+                                      .format(admin_cred_dir, admin_cred_dir),
                               "cannot find zipfile directory"):
                 raise IOError("Empty ZIP file returned by CLC")
+        return zipfilepath
 
+    def get_active_cert_for_creds(self, credzippath=None, account=None, user=None, update=True):
+            if credzippath is None:
+                if hasattr(self, 'cred_zipfile'):
+                    credzippath = self.cred_zipfile
+                else:
+                    raise ValueError('cred zip file not provided or set for eutester object')
+            account = account or self.account_name
+            user = user or self.aws_username
+            admin_cred_dir = os.path.dirname(credzippath)
+            clc_eucarc = os.path.join(admin_cred_dir, 'eucarc')
             # backward compatibility
-            cert_exists_in_eucarc = self.clc.found("cat " + admin_cred_dir + "/eucarc", "export EC2_CERT")
-            if cert_exists_in_eucarc:
-                self.debug("Cert/pk already exist in '" + admin_cred_dir + "/eucarc' file.")
+            certpath_in_eucarc = self.clc.sys("source {0} && echo $EC2_CERT".format(clc_eucarc))[0]
+            self.debug('Current EC2_CERT path for {0}: {1}'.format(clc_eucarc, certpath_in_eucarc))
+            if certpath_in_eucarc and self.get_active_id_for_cert(certpath_in_eucarc):
+                self.debug("Cert/pk already exist and is active in '" +
+                           admin_cred_dir + "/eucarc' file.")
             else:
-                self.setup_user_certs(admin_cred_dir, account, user)
+                # Try to find existing active cert/key on clc first. Check admin_cred_dir then
+                # do a recursive search from ssh user's home dir (likely root/)
+                self.debug('Attempting to find an active cert for this account on the CLC...')
+                certpaths = self.find_active_cert_and_key_in_dir(dir=admin_cred_dir) or \
+                            self.find_active_cert_and_key_in_dir()
+                self.debug('Found Active cert and key paths')
+                if not certpaths:
+                    # No existing and active certs found, create new ones...
+                    self.debug('Could not find any existing active certs on clc, '
+                               'trying to create new ones...')
+                    certpaths = self.create_new_user_certs(admin_cred_dir, account, user)
+                # Copy cert and key into admin_cred_dir
+                certpath = certpaths.get('certpath')
+                keypath = certpaths.get('keypath')
+                newcertpath = os.path.join(admin_cred_dir, os.path.basename(certpath))
+                newkeypath = os.path.join(admin_cred_dir, os.path.basename(keypath))
+                self.debug('Using certpath:{0} and keypath:{1} on clc'
+                           .format(newcertpath, newkeypath))
+                self.clc.sys('cp {0} {1}'.format(certpath, newcertpath))
+                self.clc.sys('cp {0} {1}'.format(keypath, newkeypath))
+                # Update the existing eucarc with new cert and key path info...
                 self.debug("Setting cert/pk in '" + admin_cred_dir + "/eucarc'")
-                self.sys("echo 'export EC2_CERT=${EUCA_KEY_DIR}/euca2-cert.pem' >> " + admin_cred_dir + "/eucarc")
-                self.sys("echo 'export EC2_PRIVATE_KEY=${EUCA_KEY_DIR}/euca2-pk.pem' >> " + admin_cred_dir + "/eucarc")
+                self.sys("echo 'export EC2_CERT=${EUCA_KEY_DIR}/" + "{0}' >> {1}"
+                         .format(os.path.basename(newcertpath), clc_eucarc))
+                self.sys("echo 'export EC2_PRIVATE_KEY=${EUCA_KEY_DIR}/" + "{0}' >> {1}"
+                         .format(os.path.basename(newkeypath), clc_eucarc))
+                self.debug('updating zip file with new cert, key and eucarc: {0}'
+                           .format(credzippath))
+                for updatefile in [os.path.basename(newcertpath), os.path.basename(newkeypath),
+                             os.path.basename(clc_eucarc)]:
+                    self.clc.sys('cd {0} && zip -g {1} {2}'
+                                 .format(os.path.dirname(credzippath),
+                                         os.path.basename(credzippath),
+                                         updatefile), code=0)
 
-    def setup_user_certs(self, admin_cred_dir, account, user):
-        admin_certs = self.sys("source " + admin_cred_dir + "/eucarc" + " && " + "/usr/bin/euare-userlistcerts | grep -v Active")
+                return credzippath
+
+    def create_new_user_certs(self, admin_cred_dir, account, user,
+                              newcertpath=None, newkeypath=None):
+        eucarcpath = os.path.join(admin_cred_dir, 'eucarc')
+        newcertpath = newcertpath or os.path.join(admin_cred_dir, "euca2-cert.pem")
+        newkeypath = newkeypath or os.path.join(admin_cred_dir, "/euca2-pk.pem")
+        #admin_certs = self.clc.sys("source {0} && /usr/bin/euare-userlistcerts | grep -v Active"
+        #                           .format(eucarcpath))
+        admin_certs = []
+        for cert in self.get_active_certs():
+            admin_certs.append(cert.get('certificate_id'))
         if len(admin_certs) > 1:
-            self.debug("Found more than one certs, deleting last cert")
-            self.sys("source " + admin_cred_dir + "/eucarc" + " && " + "/usr/bin/euare-userdelcert -c " + admin_certs[len(admin_certs)-1] + " --user-name " + user)
+            if self.force_cert_create:
+                self.debug("Found more than one certs, deleting last cert")
+                self.clc.sys("source {0} && " + "/usr/bin/euare-userdelcert -c {1} --user-name {2}"
+                         .format(eucarcpath, admin_certs[admin_certs.pop()], user), code=0)
+            else:
+                raise RuntimeWarning('No active certs were found on the clc, and there are 2'
+                                     'certs outstanding. Either delete an existing '
+                                     'cert or move and active cert into clc root dir.'
+                                     'The option "force_cert_create" will "delete" an existing'
+                                     'cert automatically and replace it.'
+                                     'Warning: deleting existing certs may leave signed'
+                                     'objects in cloud unrecoverable.')
+        self.debug("Creating a new signing certificate for user '{0}' in account '{1}'."
+                   .format(user, account))
+        self.debug('New cert name:{0}, keyname:{1}'.format(os.path.basename(newcertpath),
+                                                           os.path.basename(newkeypath)))
 
-        self.debug("Creating a new signing certificate for user '" + user + "' in account '" + account + "'.")
-        self.sys("source " + admin_cred_dir + "/eucarc" + " && " + "/usr/bin/euare-usercreatecert --user-name " + user + " --out " + admin_cred_dir + "/euca2-cert.pem --keyout " + admin_cred_dir + "/euca2-pk.pem")
+        self.clc.sys("source {0} && /usr/bin/euare-usercreatecert --user-name {1}"
+                     " --out {2} --keyout {3}".format(eucarcpath,
+                                                      user,
+                                                      newcertpath,
+                                                      newkeypath),
+                    code=0)
+        return {"certpath":newcertpath, "keypath":newkeypath}
 
-    def credential_exists(self, cred_path):
-        return self.clc.ssh.cmd("test -e " + cred_path)
+    def get_active_certs(self):
+        '''
+        Query system for active certs list
+        :returns :list of active cert dicts
+        '''
+        if not hasattr(self, 'euare') or not self.euare:
+            self.critical('Cant update certs until euare interface is initialized')
+            return []
+        certs = []
+        resp = self.euare.get_all_signing_certs()
+        if resp:
+            cresp= resp.get('list_signing_certificates_response')
+            if cresp:
+                lscr = cresp.get('list_signing_certificates_result')
+                if lscr:
+                    certs = lscr.get('certificates', [])
+        return certs
 
-    def download_creds_from_clc(self, admin_cred_dir):
-        self.debug("Downloading credentials from " + self.clc.hostname + ", path:" + admin_cred_dir + "/creds.zip")
-        self.sftp.get(admin_cred_dir + "/creds.zip", admin_cred_dir + "/creds.zip")
-        self.local("unzip -o " + admin_cred_dir + "/creds.zip -d " + admin_cred_dir)
+    def get_active_id_for_cert(self, certpath, machine=None):
+        '''
+        Attempt to get the cloud's active id for a certificate at 'certpath' on
+        the 'machine' filesystem. Also see is_ec2_cert_active() for validating the current
+        cert in use or the body (string buffer) of a cert.
+        :param certpath: string representing the certificate path on the machines filesystem
+        :param machine: Machine obj which certpath exists on
+        :returns :str() certificate id (if cert is found to be active) else None
+        '''
+        if not certpath:
+            raise ValueError('No ec2 certpath provided or set for eutester obj')
+        machine = machine or self.clc
+        self.debug('Verifying cert: "{0}"...'.format(certpath))
+        body = str("\n".join(machine.sys('cat {0}'.format(certpath), verbose=False)) ).strip()
+        certs = []
+        if body:
+            certs = self.get_active_certs()
+        for cert in certs:
+            if str(cert.get('certificate_body')).strip() == body:
+                self.debug('verified certificate with id "{0}" is still valid'
+                           .format(cert.get('certificate_id')))
+                return cert.get('certificate_id')
+        self.debug('Cert: "{0}" is NOT active'.format(certpath or body))
+        return None
+
+    def find_active_cert_and_key_in_dir(self, dir="", machine=None, recursive=True):
+        '''
+        Attempts to find an "active" cert and the matching key files in the provided
+        directory 'dir' on the provided 'machine' via ssh.
+        If recursive is enabled, will attempt a recursive search from the provided directory.
+        :param dir: the base dir to search in on the machine provided
+        :param machine: a Machine() obj used for ssh search commands
+        :param recursive: boolean, if set will attempt to search recursively from the dir provided
+        :returns dict w/ values 'certpath' and 'keypath' or {} if not found.
+        '''
+        machine = machine or self.clc
+        ret_dict = {}
+        if dir and not dir.endswith("/"):
+            dir += "/"
+        if recursive:
+            rec = "r"
+        else:
+            rec = ""
+        certfiles = machine.sys('grep "{0}" -l{1} {2}*'.format('BEGIN CERTIFICATE', rec, dir))
+        for f in certfiles:
+            if self.get_active_id_for_cert(f, machine=machine):
+                dir = os.path.dirname(f)
+                keypath = self.get_key_for_cert(certpath=f, keydir=dir, machine=machine)
+                if keypath:
+                    self.debug('Found existing active cert and key on clc: {0}, {1}'
+                               .format(f, keypath))
+                    return {'certpath':f, 'keypath':keypath}
+        return ret_dict
+
+    def get_key_for_cert(self, certpath, keydir, machine=None, recursive=True):
+        '''
+        Attempts to find a matching key for cert at 'certpath' in the provided directory 'dir'
+        on the provided 'machine'.
+        If recursive is enabled, will attempt a recursive search from the provided directory.
+        :param dir: the base dir to search in on the machine provided
+        :param machine: a Machine() obj used for ssh search commands
+        :param recursive: boolean, if set will attempt to search recursively from the dir provided
+        :returns string representing the path to the key found or None if not found.
+        '''
+        machine = machine or self.clc
+        self.debug('Looking for key to go with cert...')
+        if keydir and not keydir.endswith("/"):
+            keydir += "/"
+        if recursive:
+            rec = "r"
+        else:
+            rec = ""
+        certmodmd5 = machine.sys('openssl x509 -noout -modulus -in {0}  | md5sum'
+                                  .format(certpath))
+        if certmodmd5:
+            certmodmd5 = str(certmodmd5[0]).strip()
+        else:
+            return None
+        keyfiles = machine.sys('grep "{0}" -l{1} {2}*'.format('BEGIN RSA PRIVATE KEY',
+                                                               rec, keydir))
+        for kf in keyfiles:
+            keymodmd5 = machine.sys('openssl rsa -noout -modulus -in {0} | md5sum'.format(kf))
+            if keymodmd5:
+                keymodmd5 = str(keymodmd5[0]).strip()
+            if keymodmd5 == certmodmd5:
+                self.debug('Found key {0} for cert {1}'.format(kf, certpath))
+                return kf
+        return None
+
+    def is_ec2_cert_active(self, certbody=None):
+        '''
+        Attempts to verify if the current self.ec2_cert @ self.ec2_certpath is still active.
+        :param certbody
+        :returns the cert id if found active, otherwise returns None
+        '''
+        certbody = certbody or self.ec2_cert
+        if not certbody:
+            raise ValueError('No ec2 cert body provided or set for eutester to check for active')
+        if isinstance(certbody, dict):
+            checkbody = certbody.get('certificate_body')
+            if not checkbody:
+                raise ValueError('Invalid certbody provided, did not have "certificate body" attr')
+        for cert in self.get_active_certs():
+            body = str(cert.get('certificate_body')).strip()
+            if body and body == str(certbody).strip():
+                return cert.get('certificate_id')
+        return None
+
+    def credential_exist_on_remote_machine(self, cred_path, machine=None):
+        machine = machine or self.clc
+        return machine.ssh.cmd("test -e " + cred_path)
+
+    def download_creds_from_clc(self, admin_cred_dir, zipfile="creds.zip"):
+
+        zipfilepath = os.path.join(admin_cred_dir, zipfile)
+        self.debug("Downloading credentials from " + self.clc.hostname + ", path:" + zipfilepath +
+                   " to local file: " + str(zipfile))
+        self.sftp.get(zipfilepath, zipfilepath)
+        unzip_cmd = "unzip -o {0} -d {1}".format(zipfilepath, admin_cred_dir)
+        self.debug('Trying unzip cmd: ' + str(unzip_cmd))
+        self.local(unzip_cmd)
         # backward compatibility
         cert_exists_in_eucarc = self.found("cat " + admin_cred_dir + "/eucarc", "export EC2_CERT")
         if cert_exists_in_eucarc:
             self.debug("Cert/pk already exist in '" + admin_cred_dir + "/eucarc' file.")
         else:
-            self.download_certs_from_clc(admin_cred_dir)
-            self.debug("Setting cert/pk in '" + admin_cred_dir + "/eucarc'")
-            self.local("echo 'export EC2_CERT=${EUCA_KEY_DIR}/euca2-cert.pem' >> " + admin_cred_dir + "/eucarc")
-            self.local("echo 'export EC2_PRIVATE_KEY=${EUCA_KEY_DIR}/euca2-pk.pem' >> " + admin_cred_dir + "/eucarc")
+            self.download_certs_from_clc(admin_cred_dir=admin_cred_dir, update_eucarc=True)
 
-    def download_certs_from_clc(self, admin_cred_dir):
-        self.debug("Downloading certs from " + self.clc.hostname + ", path:" + admin_cred_dir + "/")
-        self.sftp.get(admin_cred_dir + "/euca2-cert.pem", admin_cred_dir + "/euca2-cert.pem")
-        self.sftp.get(admin_cred_dir + "/euca2-pk.pem", admin_cred_dir + "/euca2-pk.pem")
+    def download_certs_from_clc(self, admin_cred_dir=None, update_eucarc=True):
+        admin_cred_dir = admin_cred_dir or self.credpath
+        self.debug("Downloading certs from " + self.clc.hostname + ", path:" +
+                   admin_cred_dir + "/")
+        clc_eucarc = os.path.join(admin_cred_dir, 'eucarc')
+        local_eucarc = os.path.join(admin_cred_dir,  'eucarc')
+        remotecertpath = self.clc.sys('source {0} && echo $EC2_CERT'.format(clc_eucarc))[0]
+        remotekeypath = self.clc.sys('source {0} && echo $EC2_PRIVATE_KEY'.format(clc_eucarc))[0]
+        if not remotecertpath or remotekeypath:
+            self.critical('CERT and KEY paths not provided in {0}'.format(clc_eucarc))
+            return {}
+        localcertpath = os.path.join(admin_cred_dir, os.path.basename(remotecertpath))
+        localkeypath = os.path.join(admin_cred_dir, os.path.basename(remotekeypath))
+        self.sftp.get(remotecertpath,localcertpath )
+        self.sftp.get(remotekeypath, localkeypath)
+        if update_eucarc:
+            self.debug("Setting cert/pk in '{0}".format(local_eucarc))
+            self.local("echo 'export EC2_CERT=${EUCA_KEY_DIR}/" +
+                       str(os.path.basename(localcertpath)) + "' >> " + local_eucarc)
+            self.local("echo 'export EC2_PRIVATE_KEY=${EUCA_KEY_DIR}/" +
+                       str(os.path.basename(localkeypath)) + "' >> " +local_eucarc)
+        return {'certpath':localcertpath, 'keypath':localkeypath}
 
-    def send_creds_to_machine(self, admin_cred_dir, machine):
+    def send_creds_to_machine(self, admin_cred_dir, machine, filename='creds.zip'):
+        filepath = os.path.join(admin_cred_dir, filename)
         self.debug("Sending credentials to " + machine.hostname)
+        localmd5 = None
+        remotemd5 = None
         try:
-            machine.sftp.listdir(admin_cred_dir + "/creds.zip")
-            self.debug("Machine " + machine.hostname + " already has credentials in place")
-        except IOError, e:
+            machine.sys('ls ' + filepath, code=0)
+            remotemd5 = self.get_md5_for_file(filepath, machine=machine)
+            localmd5 = self.get_md5_for_file(filepath)
+        except CommandExitCodeException:
+            pass
+        if not remotemd5 or (remotemd5 != localmd5):
             machine.sys("mkdir " + admin_cred_dir)
             machine.sftp.put( admin_cred_dir + "/creds.zip" , admin_cred_dir + "/creds.zip")
             machine.sys("unzip -o " + admin_cred_dir + "/creds.zip -d " + admin_cred_dir )
-
+            """
             # backward compatibility
-            cert_exists_in_eucarc = machine.found("cat " + admin_cred_dir + "/eucarc", "export EC2_CERT")
+            cert_exists_in_eucarc = machine.found("cat " + admin_cred_dir +
+                                                  "/eucarc", "export EC2_CERT")
             if cert_exists_in_eucarc:
                 self.debug("Cert/pk already exist in '" + admin_cred_dir + "/eucarc' file.")
             else:
                 self.debug("Sending cert/pk to " + machine.hostname)
-                machine.sftp.put(admin_cred_dir + "/euca2-cert.pem", admin_cred_dir + "/euca2-cert.pem")
-                machine.sftp.put(admin_cred_dir + "/euca2-pk.pem", admin_cred_dir + "/euca2-pk.pem")
+                machine.sftp.put(admin_cred_dir + "/euca2-cert.pem", admin_cred_dir +
+                                                                     "/euca2-cert.pem")
+                machine.sftp.put(admin_cred_dir + "/euca2-pk.pem", admin_cred_dir +
+                                                                   "/euca2-pk.pem")
                 self.debug("Setting cert/pk in '" + admin_cred_dir + "/eucarc'")
-                machine.sys("echo 'export EC2_CERT=${EUCA_KEY_DIR}/euca2-cert.pem' >> " + admin_cred_dir + "/eucarc")
-                machine.sys("echo 'export EC2_PRIVATE_KEY=${EUCA_KEY_DIR}/euca2-pk.pem' >> " + admin_cred_dir + "/eucarc")
-            # machine.sys("sed -i 's/" + self.get_ec2_ip() + "/" + machine.hostname  +"/g' " + admin_cred_dir + "/eucarc")
+                machine.sys("echo 'export EC2_CERT=${EUCA_KEY_DIR}/euca2-cert.pem' >> " +
+                            admin_cred_dir + "/eucarc")
+                machine.sys("echo 'export EC2_PRIVATE_KEY=${EUCA_KEY_DIR}/euca2-pk.pem' >> " +
+                            admin_cred_dir + "/eucarc")
+            # machine.sys("sed -i 's/" + self.get_ec2_ip() + "/" + machine.hostname  +"/g' " +
+            # admin_cred_dir + "/eucarc")
+            """
+        else:
+            self.debug("Machine " + machine.hostname + " already has credentials in place not "
+                                                       " sending")
 
     def setup_local_creds_dir(self, admin_cred_dir):
         if not os.path.exists(admin_cred_dir):
@@ -848,12 +1153,15 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
         self.sys("mkdir " + admin_cred_dir)
     
     def sys(self, cmd, verbose=True, listformat=True, timeout=120, code=None):
-        """ By default will run a command on the CLC machine, the connection used can be changed by passing a different hostname into the constructor
-            For example:
-            instance = Eutester( hostname=instance.ip_address, keypath="my_key.pem")
-            instance.sys("mount") # check mount points on instance and return the output as a list
         """
-        return self.clc.sys(cmd, verbose=verbose,  listformat=listformat, timeout=timeout, code=code)
+        By default will run a command on the CLC machine, the connection used can be changed by
+        passing a different hostname into the constructor
+        For example:
+        instance = Eutester( hostname=instance.ip_address, keypath="my_key.pem")
+        instance.sys("mount") # check mount points on instance and return the output as a list
+        """
+        return self.clc.sys(cmd, verbose=verbose,  listformat=listformat,
+                            timeout=timeout, code=code)
     
     @classmethod
     def get_traceback(cls):

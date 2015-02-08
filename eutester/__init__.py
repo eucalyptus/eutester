@@ -44,6 +44,7 @@ import sys
 import traceback
 import StringIO
 import eulogger
+import hashlib
 import types
 import operator
 import fcntl
@@ -88,6 +89,36 @@ class Eutester(object):
             self.account_id = self.get_account_id()
             self.user_id = self.get_user_id()
 
+    @property
+    def ec2_certpath(self):
+        try:
+            return  self.parse_eucarc('EC2_CERT')
+        except ValueError:
+             return None
+
+    @property
+    def ec2_cert(self):
+        certpath = self.ec2_certpath
+        if certpath and os.path.exists(certpath):
+            out = self.local('cat {0}'.format(certpath))
+            return str("\n".join(out)).strip()
+        return None
+
+    @property
+    def ec2_private_key_path(self):
+        try:
+            return self.parse_eucarc('EC2_PRIVATE_KEY')
+        except ValueError:
+            return None
+
+    @property
+    def ec2_private_key(self):
+        keypath = self.ec2_private_key_path
+        if keypath and os.path.exists(keypath):
+            out = self.local('cat {0}'.format(keypath))
+            return "\n".join(out)
+        return None
+
     def get_access_key(self):
         if not self.aws_access_key_id:     
             """Parse the eucarc for the EC2_ACCESS_KEY"""
@@ -110,7 +141,7 @@ class Eutester(object):
         if not self.user_id:
             self.user_id = self.parse_eucarc("EC2_USER_ID")
         """Parse the eucarc for the EC2_ACCOUNT_NUMBER"""
-        return self.user_id 
+        return self.user_id
 
     def get_port(self):
         """Parse the eucarc for the EC2_ACCOUNT_NUMBER"""
@@ -119,29 +150,31 @@ class Eutester(object):
 
     def parse_eucarc(self, field):
         if self.credpath is None:
-            raise ValueError('Credpath has not been set yet. '
-                             'Please set credpath or provide '
-                             'configuration file')
-        with open( self.credpath + "/eucarc") as eucarc:
-            for line in eucarc.readlines():
-                if re.search(field, line):
-                    return line.split("=")[1].strip().strip("'")
-            raise Exception("Unable to find " +  field + " id in eucarc")
-    
+            raise RuntimeError('Credpath has not been set yet. '
+                               'Please set credpath or provide '
+                               'configuration file')
+        out = self.local('source {0}/eucarc && echo ${1}'.format(self.credpath, field))
+        if out[0]:
+            return out[0]
+        else:
+            raise ValueError("Unable to find " +  field + " id in eucarc")
+
     def handle_timeout(self, signum, frame): 
         raise TimeoutFunctionException()
 
-    def local(self, cmd):
+    def local(self, cmd, shell=True):
         """
         Run a command on the localhost
         :param cmd: str representing the command to be run
         :return: :raise: CalledProcessError on non-zero return code
         """
-        args = cmd.split()
-        process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=4096)
+        args = cmd
+        process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                   bufsize=4096, shell=shell)
         output, unused_err = process.communicate()
         retcode = process.poll()
         if retcode:
+            self.debug('CMD:"{0}"\nOUTPUT:\n{1}'.format(cmd, str(output)))
             error = subprocess.CalledProcessError(retcode, cmd)
             error.output = output
             raise error
@@ -485,6 +518,25 @@ class Eutester(object):
                              "(" + str(result) + ") true after elapsed:"+str(elapsed))
         return current_state
 
+    def get_md5_for_file(self, filepath, machine=None):
+        if machine:
+            machinename = machine.hostname
+            out = machine.sys('md5sum {0}'.format(filepath), code=0)
+            md5string = str(out[0]).split()[0]
+        else:
+            machinename = 'local'
+            # If a machine wasn't provided try local...
+            md5 = hashlib.md5()
+            length = md5.block_size * 128
+            with open(filepath, "rb") as f:
+                while True:
+                    buf = f.read(length)
+                    if not buf:
+                        break
+                    md5.update(buf)
+            md5string = str(md5.hexdigest())
+        self.debug('MD5 for {0} on {1} is: "{2}"'.format(filepath, machinename, md5string))
+        return md5string
 
     @classmethod
     def get_traceback(cls):
