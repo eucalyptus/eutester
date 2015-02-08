@@ -88,7 +88,6 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
         self.download_creds = download_creds
         self.logger = eulogger.Eulogger(identifier="EUCAOPS")
         self.debug = debug_method or self.logger.log.debug
-        self.critical = self.logger.log.critical
         self.info = self.logger.log.info
         self.username = username
         self.account_id = None
@@ -97,7 +96,6 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
         self.force_cert_create = force_cert_create
         self._property_manager = None
         self.cred_zipfile = None
-
 
         if self.config_file is not None:
             ## read in the config file
@@ -252,13 +250,19 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                 self.debug("Unable to create CloudFormation connection because of: " + str(e) )
 
             if not self.ec2_cert or not self.is_ec2_cert_active():
-                self.logger.log.critical('CERTS ARE NOT ACTIVE, TRYING TO UPDATE NOW...')
+                self.logger.log.critical(self.markup('CERTS ARE NOT ACTIVE, '
+                                                     'TRYING TO UPDATE NOW...', 1))
                 self.get_active_cert_for_creds()
                 self.get_credentials(force=True)
                 if not self.ec2_cert or not self.is_ec2_cert_active():
-                    self.logger.log.critical('CERTS ARE NOT ACTIVE, COULD NOT UPDATE')
+                    self.logger.log.critical(self.markup('CERTS ARE NOT ACTIVE, COULD NOT UPDATE',
+                                                         91))
                 else:
-                    self.debug('UPDATED CERTS')
+                    self.debug(self.markup('UPDATED TEST ENV WITH ACTIVE CERTIFICATE AND '
+                                           'PRIVATE KEY',92))
+
+    def critical(self, text):
+        return self.logger.log.critical(self.markup(text, 91))
 
     @property
     def property_manager(self):
@@ -943,7 +947,8 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
         :returns :list of active cert dicts
         '''
         if not hasattr(self, 'euare') or not self.euare:
-            self.critical('Cant update certs until euare interface is initialized')
+            self.critical(self.markup('Cant update certs until euare interface '
+                                      'is initialized', 91))
             return []
         certs = []
         resp = self.euare.get_all_signing_certs()
