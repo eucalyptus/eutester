@@ -133,8 +133,14 @@ class Net_Tests(EutesterTestCase):
         self.setup_parser()
         self.parser.add_argument("--freeze_on_fail",
                                  action='store_true',
-                                 help="Boolean flag to avoid cleaning test resources upon failure, default: True ",
+                                 help="Boolean flag to avoid cleaning test resources upon failure, "
+                                      "default: True ",
                                  default=False)
+        self.parser.add_argument("--mido-host",
+                                 help="IP of midonet API host if cloud is running in Mido VPC mode"
+                                      "and admin has access to Mido api for debug purposes",
+                                 default=None)
+
         self.tester = tester
         self.get_args()
         # Allow __init__ to get args from __init__'s kwargs or through command line parser...
@@ -142,9 +148,11 @@ class Net_Tests(EutesterTestCase):
             print 'Setting kwarg:'+str(kw)+" to "+str(kwargs[kw])
             self.set_arg(kw ,kwargs[kw])
         self.show_args()
-        ### Create the Eucaops object, by default this will be Eucalyptus/Admin and have ssh access to components
+        ### Create the Eucaops object, by default this will be Eucalyptus/Admin and have ssh
+        ### access to components
         if not tester and not self.args.config:
-            print "Need eutester config file to execute this test. As well as system ssh credentials (key, password, etc)"
+            print "Need eutester config file to execute this test. As well as system ssh " \
+                  "credentials (key, password, etc)"
             self.parser.print_help()
             sys.exit(1)
         # Setup basic eutester object
@@ -199,7 +207,14 @@ class Net_Tests(EutesterTestCase):
             raise Exception('couldnt find instance store image')
 
 
+    @property
+    def mido(self):
+        if not self.is_vpc_mode():
+            return None
+        if not self._mido:
+            self._mido =
 
+        return self._mido
 
     ######################################################
     #   Test Utility Methods
@@ -1075,6 +1090,7 @@ class Net_Tests(EutesterTestCase):
         -For each zone, attempt to ssh to a vm in the same security group same zone
         """
         self.tester.authorize_group(self.group1, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
+        self.tester.authorize_group(self.group1, port=-1, protocol='icmp', cidr_ip='0.0.0.0/0')
         for zone in self.zones:
             instances =[]
             for instance in self.group1_instances:
@@ -1114,6 +1130,7 @@ class Net_Tests(EutesterTestCase):
             raise SkipTestException('Skipping multi-zone test, '
                                     'only a single zone found or provided')
         self.tester.authorize_group(self.group1, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
+        self.tester.authorize_group(self.group1, port=-1, protocol='icmp', cidr_ip='0.0.0.0/0')
         zone_instances = {}
         for zone in self.zones:
             instances =[]
@@ -1151,6 +1168,7 @@ class Net_Tests(EutesterTestCase):
         -For each zone, attempt to ssh to a vm in the same security group same zone
         """
         self.tester.authorize_group(self.group1, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
+        self.tester.authorize_group(self.group1, port=-1, protocol='icmp', cidr_ip='0.0.0.0/0')
         for zone in self.zones:
             instances =[]
             for instance in self.group1_instances:
@@ -1192,6 +1210,7 @@ class Net_Tests(EutesterTestCase):
             raise SkipTestException('Skipping multi-zone test, '
                                     'only a single zone found or provided')
         self.tester.authorize_group(self.group1, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
+        self.tester.authorize_group(self.group1, port=-1, protocol='icmp', cidr_ip='0.0.0.0/0')
         for zone in self.zones:
             instances =[]
             for instance in self.group1_instances:
@@ -1239,9 +1258,11 @@ class Net_Tests(EutesterTestCase):
             raise SkipTestException('Skipping multi-zone test, '
                                     'only a single zone found or provided')
         self.tester.authorize_group(self.group1, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
+        self.tester.authorize_group(self.group1, port=-1, protocol='icmp', cidr_ip='0.0.0.0/0')
         # In case a previous test has deleted group2...
         self.group2 = self.tester.add_group(self.group2.name)
         self.tester.authorize_group(self.group2, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
+        self.tester.authorize_group(self.group2, port=-1, protocol='icmp', cidr_ip='0.0.0.0/0')
         for zone in self.zones:
             instance1 = None
             instances =[]
@@ -1292,9 +1313,11 @@ class Net_Tests(EutesterTestCase):
             raise SkipTestException('Skipping multi-zone test, '
                                     'only a single zone found or provided')
         self.tester.authorize_group(self.group1, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
+        self.tester.authorize_group(self.group1, port=-1, protocol='icmp', cidr_ip='0.0.0.0/0')
         # In case a previous test has deleted group2...
         self.group2 = self.tester.add_group(self.group2.name)
         self.tester.authorize_group(self.group2, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
+        self.tester.authorize_group(self.group2, port=-1, protocol='icmp', cidr_ip='0.0.0.0/0')
         for zone in self.zones:
             instance1 = None
             instances =[]

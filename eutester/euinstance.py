@@ -235,8 +235,8 @@ class EuInstance(Instance, TaggedResource):
         reservation_id = None
         if self.reservation:
             reservation_id = self.reservation.id
-        id = str(self.tester.markup("ID: {0}".format(self.id), markups=[1,94]))
-        idlen = len(id)
+        id = str(self.tester.markup("ID: {0}".format(self.id), markups=[94]))
+        idlen = len(id) + 1
         id_string = ("{0}{1}{2}".format(id.ljust(idlen),
                                        "RES: {0}".format(reservation_id).ljust(idlen),
                                        "ROOTVOL: {0}".format(bdmvol).ljust(idlen)))

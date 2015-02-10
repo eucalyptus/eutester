@@ -947,6 +947,33 @@ class MidoDebug(object):
         else:
             return buf
 
+    def get_ip_for_host(self, host):
+        assert isinstance(host, Host)
+        name, aliaslist, addresslist = socket.gethostbyaddr(host.get_name())
+        if addresslist:
+            return addresslist[0]
+        return None
+
+    def reset_midolman_service_on_hosts(self,hosts=None):
+        if hosts and not isinstance(hosts, list):
+            assert isinstance(hosts, Host)
+            hosts = [hosts]
+        if hosts is None:
+            hosts = self.mapi.get_hosts(query=None) or []
+        self.debug('Attetmpting to stop all hosts first...')
+        self.debug('Restarting hosts: {0}'.format(",".join(str(x.get_name()) for x in hosts)))
+        for status in ['stop', 'start']:
+            for host in hosts:
+                ip = self.get_ip_for_host(host)
+                username = self.tester.username or 'root'
+                password = self.tester.password
+                ssh = SshConnection(host=ip, username=username,
+                                    password=password)
+                self.debug("Attempting to {0} host:{1} ({2})".format(status, host.get_name(), ip))
+                ssh.sys('service midolman {0}'.format(status), code=0)
+                time.sleep(1)
+        self.debug('Done restarting midolman on hosts')
+
     def show_host_ports(self, host, printme=True):
         '''
         Fetches the 'HostInterfacePort's from a specific host and presents them in a formatted

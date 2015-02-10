@@ -2926,9 +2926,10 @@ disable_root: false"""
             if keypair:
                 if isinstance(keypair, KeyPair):
                     keypair = keypair.name
-            self.debug('Euinstance list prior to running image...')
+            self.debug(self.markup('Euinstance list prior to running image...', 1))
             try:
-                self.print_euinstance_list()
+                self.debug('\nEuinstance list prior to running image:\n{0}'
+                           .format(self.print_euinstance_list(printme=False)))
             except Exception, e:
                 self.debug('Failed to print euinstance list before running image, err:' +str(e))
             #self.debug( "Attempting to run "+ str(image.root_device_type)  +" image " + str(image) + " in group " + str(group))
@@ -2949,29 +2950,29 @@ disable_root: false"""
                     self.debug(str(instance.id)+':Converting instance to euinstance type.')
                     #convert to euinstances, connect ssh later...
                     if image.platform == 'windows':
-                        eu_instance = WinInstance.make_euinstance_from_instance( instance,
-                                                                                 self,
-                                                                                 keypair=keypair,
-                                                                                 username='Administrator',
-                                                                                 password=password,
-                                                                                 reservation=reservation,
-                                                                                 private_addressing=private_addressing,
-                                                                                 timeout=timeout,
-                                                                                 cmdstart=cmdstart,
-                                                                                 auto_connect=False
-                                                                                 )
-
+                        eu_instance = WinInstance.make_euinstance_from_instance(
+                            instance,
+                            self,
+                            keypair=keypair,
+                            username='Administrator',
+                            password=password,
+                            reservation=reservation,
+                            private_addressing=private_addressing,
+                            timeout=timeout,
+                            cmdstart=cmdstart,
+                            auto_connect=False)
                     else:
-                        eu_instance =  EuInstance.make_euinstance_from_instance( instance,
-                                                                                 self,
-                                                                                 keypair=keypair,
-                                                                                 username = username,
-                                                                                 password=password,
-                                                                                 reservation = reservation,
-                                                                                 private_addressing=private_addressing,
-                                                                                 timeout=timeout,
-                                                                                 cmdstart=cmdstart,
-                                                                                 auto_connect=False )
+                        eu_instance =  EuInstance.make_euinstance_from_instance(
+                            instance,
+                            self,
+                            keypair=keypair,
+                            username = username,
+                            password=password,
+                            reservation = reservation,
+                            private_addressing=private_addressing,
+                            timeout=timeout,
+                            cmdstart=cmdstart,
+                            auto_connect=False )
                     #set the connect flag in the euinstance object for future use
                     eu_instance.auto_connect = auto_connect
                     instances.append(eu_instance)
@@ -3506,7 +3507,7 @@ disable_root: false"""
         maintable = first.printself(printme=False)
         maintable.hrules = 1
         for instance in plist:
-            pt = instance.printself()
+            pt = instance.printself(printme=False)
             if pt._rows:
                 maintable.add_row(pt._rows[0])
         if printme:
