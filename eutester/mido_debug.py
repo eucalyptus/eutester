@@ -1050,10 +1050,3 @@ class MidoDebug(object):
             except WaitForResultException:pass
         port = self.get_bridge_port_for_instance_learned(instance)
         return port
-
-class MidoError(Exception):
-    def __init__(self, value):
-        self.value = value
-
-    def __str__(self):
-        return repr(self.value)

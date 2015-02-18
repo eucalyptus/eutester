@@ -126,6 +126,13 @@ class TestZone():
         self.test_instance_group1 = None
         self.test_instance_group2 = None
 
+class MidoError(Exception):
+    def __init__(self, value):
+        self.value = value
+
+    def __str__(self):
+        return repr(self.value)
+
 class Net_Tests(EutesterTestCase):
 
     def __init__(self,  tester=None, **kwargs):
@@ -217,7 +224,7 @@ class Net_Tests(EutesterTestCase):
         if not self._mido:
             mido_host = self.args.mido_host or self.tester.clc.hostname
             try:
-                from eutester.mido_debug import MidoDebug, MidoError
+                from eutester.mido_debug import MidoDebug
                 self._mido = MidoDebug(mido_host, tester=self.tester)
             except:
                 self.debug('Failed to create midonet debug object, err:\n{0}'
@@ -398,7 +405,7 @@ class Net_Tests(EutesterTestCase):
                                       " hosts to retest and provide additional info..."
                                       .format(instance.id))
                         self.mido.reset_midolman_service_on_hosts()
-                        time.sleep(10)
+                        time.sleep(15)
                     else:
                         self.errormsg('Failed to ping instance before and after '
                                       'restarting Midolman')
@@ -532,7 +539,7 @@ class Net_Tests(EutesterTestCase):
                     self.errormsg('Could not connect to instance:"{0}", restarting midolman'
                                       ' on all hosts...'.format(instance.id))
                     self.mido.reset_midolman_service_on_hosts()
-                    time.sleep(10)
+                    time.sleep(15)
                     try:
                         instance.connect_to_instance(timeout=90)
                         self.status('Connect to instance:"{0}" succeeded'.format(instance.id))
@@ -637,7 +644,8 @@ class Net_Tests(EutesterTestCase):
                                 instance1 = instance
                                 break
                         if not instance1:
-                            raise Exception('Could not find instance in group1 for zone:' + str(zone))
+                            raise Exception('Could not find instance in group1 for zone:' +
+                                            str(zone))
 
                         for instance in self.group2_instances:
                             if instance.placement == zone:
@@ -661,6 +669,10 @@ class Net_Tests(EutesterTestCase):
                                                               src_addr=instance1.private_ip_address,
                                                               protocol='tcp',
                                                               port=22)
+
+                    self.debug('Reset ssh connection to instance:{0} first...'
+                               .format(instance1.id))
+                    instance1.connect_to_instance()
                     self.debug('Now Running the ssh command which checks connectivity from '
                                'instance1 to instance2...')
                     instance1.sys("ssh -o StrictHostKeyChecking=no -i "
@@ -682,12 +694,16 @@ class Net_Tests(EutesterTestCase):
                             self.errormsg('Could not connect to instance:"{0}", restarting midolman'
                                       ' on all hosts and retrying...'.format(instance.id))
                             self.mido.reset_midolman_service_on_hosts()
-                            time.sleep(10)
-                if self.mido and mido_retries:
+                            time.sleep(15)
+                    mido_retries += 1
+                else:
+                    if mido_retries:
+                        self.debug('MidoRetries:{0}'.format(mido_retries))
                         raise MidoError('Connectivity test passed, but only after '
                                         'restarting Midolman.')
-                mido_retries += 1
-            self.status('Ssh between instances passed')
+                    else:
+                        self.status('Ssh between instances passed')
+                        break
 
         self.status('Authorizing access from group1 to group1, then checking connectivity...')
         self.authorize_group_for_instance_list(self.group2, self.group1_instances)
