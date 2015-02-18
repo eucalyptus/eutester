@@ -220,7 +220,8 @@ class Net_Tests(EutesterTestCase):
                 from eutester.mido_debug import MidoDebug, MidoError
                 self._mido = MidoDebug(mido_host, tester=self.tester)
             except:
-                self.debug('Failed to create midonet debug object, err:\n{0}'.format(self.tester.get_traceback()    ))
+                self.debug('Failed to create midonet debug object, err:\n{0}'
+                           .format(self.tester.get_traceback()))
                 pass
         return self._mido
 
@@ -538,12 +539,15 @@ class Net_Tests(EutesterTestCase):
                         self.errormsg('SSH succeeded after restarting Midolman, dumping post restart '
                                   'Midolman info for instance...')
                         self.dump_mido_info_for_instance(instance)
+                        raise type(ConnectErr)(str(ConnectErr.message) +
+                                       '(SSH succeeded after restarting Midolman)' )
                     except SSHException, SE:
                         self.errormsg('{0}\nCould not ssh to instance:"{1}", restarting '
                                       'midolman did not help, err on 2nd attempt:\n{2}'
                                       .format(SE,instance.id, self.tester.get_traceback()))
-                raise type(ConnectErr)(str(ConnectErr.message) +
-                                       '(SSH succeeded after restarting Midolman)' )
+                        raise type(SE)(str(SE.message) + '\nCould not ssh to instance:"{0}", '
+                                                         'restarting midolman did not help, '
+                                                         'err on 2nd attempt'.format(instance.id))
             self.status('SSH connection to instance:' + str(instance.id) +
                         ' successful to public ip:' + str(instance.ip_address) +
                         ', zone:' + str(instance.placement))
