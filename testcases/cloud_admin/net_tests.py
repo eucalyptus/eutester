@@ -112,7 +112,6 @@ from eutester.eutestcase import SkipTestException
 from eutester.euinstance import EuInstance
 from boto.ec2.instance import Instance
 from eutester.sshconnection import CommandExitCodeException, SshConnection
-from eutester.mido_debug import MidoDebug, MidoError
 import socket
 import json
 import time
@@ -217,7 +216,12 @@ class Net_Tests(EutesterTestCase):
             return None
         if not self._mido:
             mido_host = self.args.mido_host or self.tester.clc.hostname
-            self._mido = MidoDebug(mido_host, tester=self.tester)
+            try:
+                from eutester.mido_debug import MidoDebug, MidoError
+                self._mido = MidoDebug(mido_host, tester=self.tester)
+            except:
+                self.debug('Failed to create midonet debug object, err:\n{0}'.format(self.tester.get_traceback()    ))
+                pass
         return self._mido
 
     ######################################################
