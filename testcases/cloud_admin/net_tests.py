@@ -112,6 +112,7 @@ from eutester.eutestcase import SkipTestException
 from eutester.euinstance import EuInstance
 from boto.ec2.instance import Instance
 from eutester.sshconnection import CommandExitCodeException, SshConnection
+from eutester.mido_debug import MidoDebug, MidoError
 import socket
 import json
 import time
@@ -136,11 +137,14 @@ class Net_Tests(EutesterTestCase):
                                  help="Boolean flag to avoid cleaning test resources upon failure, "
                                       "default: True ",
                                  default=False)
-        self.parser.add_argument("--mido-host",
+        self.parser.add_argument("--mido-host", dest='mido_host',
                                  help="IP of midonet API host if cloud is running in Mido VPC mode"
                                       "and admin has access to Mido api for debug purposes",
                                  default=None)
-
+        self.parser.add_argument("--basic-only", dest='basic_only', action='store_true',
+                                 help="Boolean flag to run only the first 3 tests in the suite",
+                                 default=False)
+        self._mido = None
         self.tester = tester
         self.get_args()
         # Allow __init__ to get args from __init__'s kwargs or through command line parser...
@@ -212,8 +216,8 @@ class Net_Tests(EutesterTestCase):
         if not self.is_vpc_mode():
             return None
         if not self._mido:
-            self._mido =
-
+            mido_host = self.args.mido_host or self.tester.clc.hostname
+            self._mido = MidoDebug(mido_host, tester=self.tester)
         return self._mido
 
     ######################################################
@@ -297,7 +301,7 @@ class Net_Tests(EutesterTestCase):
             vpc_proxy_ssh.cmd = newcmd
         return vpc_proxy_ssh
 
-    def create_ssh_connection_to_instance(self, instance, retry=10):
+    def create_proxy_ssh_connection_to_instance(self, instance, retry=10):
         if self.is_vpc_mode():
             return self.get_vpc_proxy_ssh_connection(instance=instance)
         proxy_machine = self.get_proxy_machine(instance)
@@ -356,32 +360,59 @@ class Net_Tests(EutesterTestCase):
         net_namespace = None
         if self.is_vpc_mode():
             net_namespace = instance.vpc_id
-        try:
-            self.tester.wait_for_result(self._ping_instance_private_ip_from_euca_internal,
-                                        result=True,
-                                        timeout=ping_timeout,
-                                        instance=instance,
-                                        proxy_machine=proxy_machine,
-                                        net_namespace=net_namespace)
-        except WaitForResultException:
-            self.errormsg('Failed to ping instance: {0},  private ip:{1} from internal host: {2}'
-                          .format(instance.id,
-                                  instance.private_ip_address,
-                                  proxy_machine.hostname))
-            self.errormsg('Ping failure. Fetching network debug info from internal host...')
-            proxy_machine.machine.dump_netfail_info(ip=instance.private_ip_address,
+        mido_retries = 0
+        max_retries = 1
+        while mido_retries <= max_retries:
+            if not self.mido:
+                mido_retries = max_retries + 1
+            try:
+                self.tester.wait_for_result(self._ping_instance_private_ip_from_euca_internal,
+                                            result=True,
+                                            timeout=ping_timeout,
+                                            instance=instance,
+                                            proxy_machine=proxy_machine,
                                             net_namespace=net_namespace)
-            self.errormsg('Done fetching/logging network debug info from internal euca proxy host'
-                          'used in ping attempt to instance {0}, private ip: {1}, from '
-                          'internal host: {2}'.format(instance.id,
-                                                      instance.private_ip_address,
-                                                      proxy_machine.hostname))
-            raise
+            except WaitForResultException:
+                self.errormsg('Failed to ping instance: {0},  private ip:{1} from internal host: {2}'
+                              .format(instance.id,
+                                      instance.private_ip_address,
+                                      proxy_machine.hostname))
+                self.errormsg('Ping failure. Fetching network debug info from internal host...')
+                proxy_machine.machine.dump_netfail_info(ip=instance.private_ip_address,
+                                                net_namespace=net_namespace)
+                self.errormsg('Done dumping network debug info from the "internal euca proxy host" @ '
+                              '{0} '
+                              'used in attempting to ping instance {1}, private ip: {2}'
+                              .format(proxy_machine.hostname,
+                                      instance.id,
+                                      instance.private_ip_address))
+                if self.mido:
+                    self.dump_mido_info_for_instance(instance)
+                    if not mido_retries:
+                        self.errormsg("Failed to ping instance:'{0}', restarting Midolman on all"
+                                      " hosts to retest and provide additional info..."
+                                      .format(instance.id))
+                        self.mido.reset_midolman_service_on_hosts()
+                        time.sleep(10)
+                    else:
+                        self.errormsg('Failed to ping instance before and after '
+                                      'restarting Midolman')
+                        raise
+                else:
+                    raise
+            mido_retries += 1
         self.debug('Successfully pinged instance: {0},  private ip:{1} from internal host: {2}'
                    .format(instance.id,
                            instance.private_ip_address,
                            proxy_machine.hostname))
 
+    def dump_mido_info_for_instance(self, instance):
+        if self.mido:
+            try:
+                self.mido.show_instance_network_summary(instance)
+            except Exception, ME:
+                self.debug('{0}\nCould not dump Mido debug, err:{1}'
+                           .format(ME,self.tester.get_traceback()))
 
     def _ping_instance_private_ip_from_euca_internal(self,
                                                      instance,
@@ -484,7 +515,31 @@ class Net_Tests(EutesterTestCase):
                                                       src_addr=None,
                                                       protocol='tcp',
                                                       port=22)
-            instance.connect_to_instance(timeout=90)
+            try:
+                instance.connect_to_instance(timeout=90)
+            except Exception, ConnectErr:
+                if self.mido:
+                    self.errormsg('{0}\n{1}\nFailed to connect to instance:"{2}", dumping info '
+                                  'then attempting to restart Midolman service...'
+                                  .format(ConnectErr, self.tester.get_traceback(), instance.id))
+                    self.errormsg('Midonet info before restarting midolman...')
+                    self.dump_mido_info_for_instance(instance)
+                    self.errormsg('Could not connect to instance:"{0}", restarting midolman'
+                                      ' on all hosts...'.format(instance.id))
+                    self.mido.reset_midolman_service_on_hosts()
+                    time.sleep(10)
+                    try:
+                        instance.connect_to_instance(timeout=90)
+                        self.status('Connect to instance:"{0}" succeeded'.format(instance.id))
+                        self.errormsg('SSH succeeded after restarting Midolman, dumping post restart '
+                                  'Midolman info for instance...')
+                        self.dump_mido_info_for_instance(instance)
+                    except SSHException, SE:
+                        self.errormsg('{0}\nCould not ssh to instance:"{1}", restarting '
+                                      'midolman did not help, err on 2nd attempt:\n{2}'
+                                      .format(SE,instance.id, self.tester.get_traceback()))
+                raise type(ConnectErr)(str(ConnectErr.message) +
+                                       '(SSH succeeded after restarting Midolman)' )
             self.status('SSH connection to instance:' + str(instance.id) +
                         ' successful to public ip:' + str(instance.ip_address) +
                         ', zone:' + str(instance.placement))
@@ -532,7 +587,7 @@ class Net_Tests(EutesterTestCase):
             if not auto_connect:
                 self.status('Make sure ssh is working through an internal euca path before '
                             'trying between instances...')
-                instance.proxy_ssh = self.create_ssh_connection_to_instance(instance)
+                instance.proxy_ssh = self.create_proxy_ssh_connection_to_instance(instance)
                 self.status('SSH connection to instance:' + str(instance.id) +
                             ' successful to private ip:' + str(instance.private_ip_address) +
                             ', zone:' + str(instance.placement))
@@ -559,41 +614,71 @@ class Net_Tests(EutesterTestCase):
             - Run same 2 tests from above by authorizing a SecurityGroup
         '''
         def check_instance_connectivity():
-            for zone in self.zones:
-                instance1 = None
-                instance2 = None
-                for instance in self.group1_instances:
-                    if instance.placement == zone:
-                        assert isinstance(instance, EuInstance)
-                        instance1 = instance
-                        break
-                if not instance1:
-                    raise Exception('Could not find instance in group1 for zone:' + str(zone))
+            max_retries = 1
+            mido_retries = 0
+            while mido_retries <= max_retries:
+                if not self.mido:
+                    mido_retries = max_retries + 1
+                try:
+                    for zone in self.zones:
+                        instance1 = None
+                        instance2 = None
+                        for instance in self.group1_instances:
+                            if instance.placement == zone:
+                                assert isinstance(instance, EuInstance)
+                                instance1 = instance
+                                break
+                        if not instance1:
+                            raise Exception('Could not find instance in group1 for zone:' + str(zone))
 
-                for instance in self.group2_instances:
-                    if instance.placement == zone:
-                        assert isinstance(instance, EuInstance)
-                        instance2 = instance
-                        break
-                if not instance2:
-                    raise Exception('Could not find instance in group2 for zone:' + str(zone))
-            self.status(
-                'Attempting to run ssh command "uname -a" between instances across '
-                'security groups:\n'
-                + str(instance1.id) + '/sec grps(' + str(instance1.security_groups)+") --> "
-                + str(instance2.id) + '/sec grps(' + str(instance2.security_groups)+")\n"
-                + "Current test run in zone: " + str(zone))
-            self.debug('Check some debug information re this data connection in this security group first...')
-            self.show_instance_security_groups(instance2)
-            self.tester.does_instance_sec_group_allow(instance=instance2,
-                                                      src_addr=instance1.private_ip_address,
-                                                      protocol='tcp',
-                                                      port=22)
-            self.debug('Now Running the ssh command...')
-            instance1.sys("ssh -o StrictHostKeyChecking=no -i "
-                          + str(os.path.basename(instance1.keypath))
-                          + " root@" + str(instance2.private_ip_address)
-                          + " 'uname -a'", code=0)
+                        for instance in self.group2_instances:
+                            if instance.placement == zone:
+                                assert isinstance(instance, EuInstance)
+                                instance2 = instance
+                                break
+                        if not instance2:
+                            raise Exception('Could not find instance in group2 for zone:'
+                                            + str(zone))
+                    self.status(
+                        'Attempting to run ssh command "uname -a" between instances across '
+                        'security groups:\n'
+                        + str(instance1.id) + '/sec grps(' + str(instance1.security_groups) +
+                        ") --> "
+                        + str(instance2.id) + '/sec grps(' + str(instance2.security_groups) + ")\n"
+                        + "Current test run in zone: " + str(zone))
+                    self.debug('Check some debug information re this data connection in this '
+                               'security group first...')
+                    self.show_instance_security_groups(instance2)
+                    self.tester.does_instance_sec_group_allow(instance=instance2,
+                                                              src_addr=instance1.private_ip_address,
+                                                              protocol='tcp',
+                                                              port=22)
+                    self.debug('Now Running the ssh command which checks connectivity from '
+                               'instance1 to instance2...')
+                    instance1.sys("ssh -o StrictHostKeyChecking=no -i "
+                                  + str(os.path.basename(instance1.keypath))
+                                  + " root@" + str(instance2.private_ip_address)
+                                  + " 'uname -a'", code=0)
+                    self.status('"{0}" to "{1}" connectivity test succeeded'.format(instance1.id,
+                                                                                    instance2.id))
+                except Exception, ConnectivityErr:
+                    if mido_retries:
+                        if self.mido:
+                            self.errormsg('Retry failed connectivity test after restarting '
+                                          'midolman on all hosts')
+                        raise ConnectivityErr
+
+                    if self.mido:
+                            self.dump_mido_info_for_instance(instance1)
+                            self.dump_mido_info_for_instance(instance2)
+                            self.errormsg('Could not connect to instance:"{0}", restarting midolman'
+                                      ' on all hosts and retrying...'.format(instance.id))
+                            self.mido.reset_midolman_service_on_hosts()
+                            time.sleep(10)
+                if self.mido and mido_retries:
+                        raise MidoError('Connectivity test passed, but only after '
+                                        'restarting Midolman.')
+                mido_retries += 1
             self.status('Ssh between instances passed')
 
         self.status('Authorizing access from group1 to group1, then checking connectivity...')
@@ -623,6 +708,12 @@ class Net_Tests(EutesterTestCase):
             self.tester.does_instance_sec_group_allow(instance=instance, src_addr=None, protocol='tcp',port=22)
             try:
                 instance.reset_ssh_connection(timeout=5)
+                if self.mido:
+                    try:
+                        self.mido.show_instance_network_summary(instance)
+                    except Exception, ME:
+                        self.debug('{0}\nCould not dump Mido debug, err:{1}'
+                                   .format(ME,self.tester.get_traceback()))
                 raise Exception('Was able to connect to instance: ' + str(instance.id) + ' in security group:'
                                 + str(self.group2.name))
             except:
@@ -678,11 +769,20 @@ class Net_Tests(EutesterTestCase):
                                                               protocol='tcp',
                                                               port=22)
                     self.debug('Now Running the ssh command...')
-                    instance1.sys("ssh -o StrictHostKeyChecking=no -i "
-                                  + str(os.path.basename(instance1.keypath))
-                                  + " root@" + str(instance2.private_ip_address)
-                                  + " ' uname -a'", code=0)
-                    self.debug('Ssh between instances passed')
+                    try:
+                        instance1.sys("ssh -o StrictHostKeyChecking=no -i "
+                                      + str(os.path.basename(instance1.keypath))
+                                      + " root@" + str(instance2.private_ip_address)
+                                      + " ' uname -a'", code=0)
+                        self.debug('Ssh between instances passed')
+                    except Exception, ME:
+                        if self.mido:
+                            try:
+                                self.mido.show_instance_network_summary(instance)
+                            except Exception, ME:
+                                self.debug('{0}\nCould not dump Mido debug, err:{1}'
+                                           .format(ME,self.tester.get_traceback()))
+                        raise
 
 
 
@@ -1008,7 +1108,7 @@ class Net_Tests(EutesterTestCase):
         self.tester.show_security_group(self.group1)
         self.status('Test ssh access from this testing machine to each instance in group1...')
         for instance in self.group1_instances:
-            instance.reset_ssh_connection()
+            instance.connect_to_instance()
             instance.sys('echo "reset ssh worked"', code=0)
         self.status('Authorizing group2 access to group1...')
         tester.authorize_group(self.group1,
@@ -1379,39 +1479,49 @@ class Net_Tests(EutesterTestCase):
         self.tester.delete_group(revoke_group)
 
 if __name__ == "__main__":
-    testcase = Net_Tests()
+    nettests = Net_Tests()
 
     ### Use the list of tests passed from config/command line to determine what subset of tests to run
     ### or use a predefined list
-
-    if testcase.args.tests:
-        testlist = testcase.args.tests
+    unit_list = [ ]
+    if nettests.args.tests:
+        testlist = nettests.args.tests
         if not isinstance(testlist, list):
             testlist.replace(',',' ')
             testlist = testlist.split()
+        for test in testlist:
+            unit_list.append( nettests.create_testunit_by_name(test) )
     else:
-        testlist =[
-            'test1_create_instance_in_zones_for_security_group1',
-            'test2_create_instance_in_zones_for_security_group2',
-            'test3_test_ssh_between_instances_in_diff_sec_groups_same_zone',
-            'test4_attempt_unauthorized_ssh_from_test_machine_to_group2',
-            'test5_test_ssh_between_instances_in_same_sec_groups_different_zone',
-            'test7_add_and_revoke_tcp_port_range',
-            'test8_verify_deleting_of_auth_source_group2',
-            'test9_ssh_between_instances_same_group_same_zone_public',
-            'test10_ssh_between_instances_same_group_public_different_zone',
-            'test11_ssh_between_instances_same_group_same_zone_private',
-            'test12_ssh_between_instances_same_group_private_different_zone',
-            'test13_ssh_between_instances_diff_group_private_different_zone',
-            'test14_ssh_between_instances_diff_group_public_different_zone']
+        # The first tests will have the End On Failure flag set to true. If these tests fail
+        # the remaining tests will not be attempted.
+        unit_list =[
+            nettests.create_testunit_by_name('test1_create_instance_in_zones_for_security_group1',
+                                             eof=True),
+            nettests.create_testunit_by_name('test2_create_instance_in_zones_for_security_group2',
+                                             eof=True),
+            nettests.create_testunit_by_name(
+                'test3_test_ssh_between_instances_in_diff_sec_groups_same_zone', eof=True)]
+        if nettests.args.basic_only:
+            testlist = []
+        else:
+            # Then add the rest of the tests...
+            testlist = [ 'test4_attempt_unauthorized_ssh_from_test_machine_to_group2',
+                         'test5_test_ssh_between_instances_in_same_sec_groups_different_zone',
+                         'test7_add_and_revoke_tcp_port_range',
+                         'test8_verify_deleting_of_auth_source_group2',
+                         'test9_ssh_between_instances_same_group_same_zone_public',
+                         'test10_ssh_between_instances_same_group_public_different_zone',
+                         'test11_ssh_between_instances_same_group_same_zone_private',
+                         'test12_ssh_between_instances_same_group_private_different_zone',
+                         'test13_ssh_between_instances_diff_group_private_different_zone',
+                         'test14_ssh_between_instances_diff_group_public_different_zone']
+        for test in testlist:
+            unit_list.append( nettests.create_testunit_by_name(test) )
         ### Convert test suite methods to EutesterUnitTest objects
     print 'Got test list:' + str(testlist)
-    unit_list = [ ]
-    for test in testlist:
-        unit_list.append( testcase.create_testunit_by_name(test) )
 
     ### Run the EutesterUnitTest objects
-    result = testcase.run_test_case_list(unit_list,eof=False,clean_on_exit=True)
+    result = nettests.run_test_case_list(unit_list,eof=False,clean_on_exit=True)
     exit(result)
 
 

@@ -1092,7 +1092,7 @@ class EutesterTestCase(unittest.TestCase):
         
         
     
-    def create_testunit_by_name(self, name, obj=None, eof=True, autoarg=True, *args,**kwargs ):
+    def create_testunit_by_name(self, name, obj=None, eof=False, autoarg=True, *args,**kwargs ):
         '''
         Description: Attempts to match a method name contained with object 'obj', and create a EutesterTestUnit object from that method and the provided
         positional as well as keyword arguments provided. 
@@ -1109,12 +1109,10 @@ class EutesterTestCase(unittest.TestCase):
         :type kwargs: keyword arguments
         :param kwargs: None or more keyword arguements to be passed to method to be run
         '''
-        eof=False
-        autoarg=True
+        autoarg=autoarg
         obj = obj or self
         meth = getattr(obj,name)
         methvars = self.get_meth_arg_names(meth)
-
 
         
         #Pull out value relative to this method, leave in any that are intended to be passed through
