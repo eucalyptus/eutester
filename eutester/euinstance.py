@@ -247,6 +247,8 @@ class EuInstance(Instance, TaggedResource):
         pt.align[netinfo] = 'l'
         pt.align['ID'] = 'l'
         pt.max_width['ID'] = idlen
+        pt.max_width['LASTSTATE'] = 10
+
         pt.padding_width = 0
         netpt = PrettyTable(['VPC', 'SUBNET', 'SEC GRPS', 'P', 'PRIV IP', 'PUB IP'])
         netpt.padding_width = 0

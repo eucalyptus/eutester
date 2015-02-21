@@ -50,7 +50,7 @@ class MacTable(resource_base.ResourceBase):
         return self.dto.get('macAddr')
 
 
-class MidoDebug(object):
+class Midget(object):
     _CHAIN_JUMP = 107
     _ADDR_SPACING = 16
 

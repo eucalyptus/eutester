@@ -150,6 +150,17 @@ class Net_Tests(EutesterTestCase):
         self.parser.add_argument("--basic-only", dest='basic_only', action='store_true',
                                  help="Boolean flag to run only the first 3 tests in the suite",
                                  default=False)
+        self.parser.add_argument("--allow-mido-restart", dest='allow_mido_restart',
+                                 action='store_true', default=False,
+                                 help='Boolean flag to allow the test to restart all the'
+                                      'midonet componets upon failures to retry provide more info')
+        self.parser.add_argument("--keypath", dest='keypath', default=None,
+                                 help="ssh key to use for logging into the component machines")
+        self.parser.add_argument("--subnetid", dest='subnet_id', default=None,
+                                 help="(VPC mode only) The subnet in which to create an "
+                                      "instances network interface in ")
+
+
         self._mido = None
         self.tester = tester
         self.get_args()
@@ -182,6 +193,7 @@ class Net_Tests(EutesterTestCase):
         if not self.zones:
             raise Exception('No zones found to run this test?')
         self.debug('Running test against zones:' + ",".join(self.zones))
+        self.subnet_id = self.args.subnet_id
 
         ### Add and authorize security groups
         self.debug("Creating group1..")
@@ -224,8 +236,8 @@ class Net_Tests(EutesterTestCase):
         if not self._mido:
             mido_host = self.args.mido_host or self.tester.clc.hostname
             try:
-                from eutester.mido_debug import MidoDebug
-                self._mido = MidoDebug(mido_host, tester=self.tester)
+                from eutester.midget import Midget
+                self._mido = Midget(mido_host, tester=self.tester)
             except:
                 self.debug('Failed to create midonet debug object, err:\n{0}'
                            .format(self.tester.get_traceback()))
@@ -400,15 +412,18 @@ class Net_Tests(EutesterTestCase):
                                       instance.private_ip_address))
                 if self.mido:
                     self.dump_mido_info_for_instance(instance)
-                    if not mido_retries:
-                        self.errormsg("Failed to ping instance:'{0}', restarting Midolman on all"
-                                      " hosts to retest and provide additional info..."
-                                      .format(instance.id))
-                        self.mido.reset_midolman_service_on_hosts()
-                        time.sleep(15)
+                    if self.args.allow_mido_restart:
+                        if not mido_retries:
+                            self.errormsg("Failed to ping instance:'{0}', restarting Midolman on all"
+                                          " hosts to retest and provide additional info..."
+                                          .format(instance.id))
+                            self.mido.reset_midolman_service_on_hosts()
+                            time.sleep(15)
+                        else:
+                            self.errormsg('Failed to ping instance before and after '
+                                          'restarting Midolman')
+                            raise
                     else:
-                        self.errormsg('Failed to ping instance before and after '
-                                      'restarting Midolman')
                         raise
                 else:
                     raise
@@ -510,6 +525,7 @@ class Net_Tests(EutesterTestCase):
                                              group=self.group1,
                                              zone=zone,
                                              auto_connect=False,
+                                             subnet_id=self.subnet_id,
                                              monitor_to_running=False)[0]
             self.group1_instances.append(instance)
         self.tester.monitor_euinstances_to_running(self.group1_instances)
@@ -532,14 +548,16 @@ class Net_Tests(EutesterTestCase):
             except Exception, ConnectErr:
                 if self.mido:
                     self.errormsg('{0}\n{1}\nFailed to connect to instance:"{2}", dumping info '
-                                  'then attempting to restart Midolman service...'
                                   .format(ConnectErr, self.tester.get_traceback(), instance.id))
-                    self.errormsg('Midonet info before restarting midolman...')
                     self.dump_mido_info_for_instance(instance)
-                    self.errormsg('Could not connect to instance:"{0}", restarting midolman'
-                                      ' on all hosts...'.format(instance.id))
-                    self.mido.reset_midolman_service_on_hosts()
-                    time.sleep(15)
+                    if self.args.allow_mido_restart:
+                        self.errormsg('Midonet info before restarting midolman...')
+                        self.errormsg('Could not connect to instance:"{0}", restarting midolman'
+                                          ' on all hosts...'.format(instance.id))
+                        self.mido.reset_midolman_service_on_hosts()
+                        time.sleep(15)
+                    else:
+                        raise ConnectErr
                     try:
                         instance.connect_to_instance(timeout=90)
                         self.status('Connect to instance:"{0}" succeeded'.format(instance.id))
@@ -588,6 +606,7 @@ class Net_Tests(EutesterTestCase):
                                              keypair=self.keypair,
                                              group=self.group2,
                                              zone=zone,
+                                             subnet_id = self.subnet_id,
                                              auto_connect=auto_connect,
                                              monitor_to_running=False)[0]
             self.group2_instances.append(instance)
@@ -691,10 +710,14 @@ class Net_Tests(EutesterTestCase):
                     if self.mido:
                             self.dump_mido_info_for_instance(instance1)
                             self.dump_mido_info_for_instance(instance2)
-                            self.errormsg('Could not connect to instance:"{0}", restarting midolman'
-                                      ' on all hosts and retrying...'.format(instance.id))
-                            self.mido.reset_midolman_service_on_hosts()
-                            time.sleep(15)
+                            self.errormsg('Could not connect to instance:"{0}"'
+                                          .format(instance.id))
+                            if self.args.allow_mido_restart:
+                                self.errormsg('Restarting midolman on all hosts and retrying...')
+                                self.mido.reset_midolman_service_on_hosts()
+                                time.sleep(15)
+                            else:
+                                raise ConnectivityErr
                     mido_retries += 1
                 else:
                     if mido_retries:
@@ -1487,6 +1510,7 @@ class Net_Tests(EutesterTestCase):
         for zone in self.zones:
             instance = self.tester.run_image(image=self.image,
                                                  keypair=self.keypair,
+                                                 subnet_id = self.subnet_id,
                                                  group=revoke_group,
                                                  zone=zone)[0]
             self.tester.revoke(revoke_group, protocol='tcp', port=22)

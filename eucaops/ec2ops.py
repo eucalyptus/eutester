@@ -2877,6 +2877,7 @@ disable_root: false"""
                   private_addressing=False, 
                   username="root", 
                   password=None,
+                  subnet_id=None,
                   auto_connect=True,
                   clean_on_fail=True,
                   monitor_to_running = True,
@@ -2896,6 +2897,7 @@ disable_root: false"""
         :param private_addressing: boolean to run instances without public ips
         :param username: username for connecting ssh to instances
         :param password: password for connnecting ssh to instances
+        :param subnet_id: (VPC MODE) the subnet to create this instances network interface in
         :param auto_connect: boolean flag whether or not ssh connections should be automatically attempted
         :param clean_on_fail: boolean flag whether or not to attempt to delete/remove failed instances-(not implemented)
         :param monitor_to_running: boolean flag whether or not to monitor instances to a running state
@@ -2936,7 +2938,8 @@ disable_root: false"""
             cmdstart=time.time()
             reservation = image.run(key_name=keypair,security_groups=[group],instance_type=type, placement=zone,
                                     min_count=min, max_count=max, user_data=user_data, addressing_type=addressing_type,
-                                    block_device_map=block_device_map, **boto_run_args)
+                                    block_device_map=block_device_map, subnet_id=subnet_id,
+                                    **boto_run_args)
             self.test_resources["reservations"].append(reservation)
             
             if (len(reservation.instances) < min) or (len(reservation.instances) > max):
