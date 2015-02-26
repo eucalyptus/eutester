@@ -2928,6 +2928,22 @@ disable_root: false"""
             if keypair:
                 if isinstance(keypair, KeyPair):
                     keypair = keypair.name
+            if group:
+                if isinstance(group, str):
+                    if not re.match('^sg-\w{8}$',str(group).strip()):
+                        try:
+                            group = self.get_security_group(name=group)
+                            group = group.id
+                        except:
+                            self.critical('Run Image, Unable to find security group for: "{0}"'
+                                          .format(group))
+                            raise
+                elif isinstance(group, SecurityGroup):
+                    group = group.id
+                else:
+                    raise ValueError('Unknown arg passed for group to RunImage "{0}"'
+                                     .format(group))
+
             self.debug(self.markup('Euinstance list prior to running image...', 1))
             try:
                 self.debug('\nEuinstance list prior to running image:\n{0}'
@@ -2936,7 +2952,7 @@ disable_root: false"""
                 self.debug('Failed to print euinstance list before running image, err:' +str(e))
             #self.debug( "Attempting to run "+ str(image.root_device_type)  +" image " + str(image) + " in group " + str(group))
             cmdstart=time.time()
-            reservation = image.run(key_name=keypair,security_groups=[group],instance_type=type, placement=zone,
+            reservation = image.run(key_name=keypair,security_group_ids=[group],instance_type=type, placement=zone,
                                     min_count=min, max_count=max, user_data=user_data, addressing_type=addressing_type,
                                     block_device_map=block_device_map, subnet_id=subnet_id,
                                     **boto_run_args)

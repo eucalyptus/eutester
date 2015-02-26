@@ -1526,9 +1526,54 @@ class Net_Tests(EutesterTestCase):
             self.tester.terminate_instances(instance)
         self.tester.delete_group(revoke_group)
 
+
+    def _run_suite(self, testlist=[], basic_only=False):
+        # The first tests will have the End On Failure flag set to true. If these tests fail
+        # the remaining tests will not be attempted.
+        unit_list = []
+        if testlist:
+
+            if not isinstance(testlist, list):
+                testlist.replace(',',' ')
+                testlist = testlist.split()
+            for test in testlist:
+                unit_list.append( nettests.create_testunit_by_name(test))
+        else:
+            unit_list =[
+                self.create_testunit_by_name('test1_create_instance_in_zones_for_security_group1',
+                                                 eof=True),
+                self.create_testunit_by_name('test2_create_instance_in_zones_for_security_group2',
+                                                 eof=True),
+                self.create_testunit_by_name(
+                    'test3_test_ssh_between_instances_in_diff_sec_groups_same_zone', eof=True)]
+            if basic_only:
+                testlist = []
+            else:
+                # Then add the rest of the tests...
+                testlist = [ 'test4_attempt_unauthorized_ssh_from_test_machine_to_group2',
+                             'test5_test_ssh_between_instances_in_same_sec_groups_different_zone',
+                             'test7_add_and_revoke_tcp_port_range',
+                             'test8_verify_deleting_of_auth_source_group2',
+                             'test9_ssh_between_instances_same_group_same_zone_public',
+                             'test10_ssh_between_instances_same_group_public_different_zone',
+                             'test11_ssh_between_instances_same_group_same_zone_private',
+                             'test12_ssh_between_instances_same_group_private_different_zone',
+                             'test13_ssh_between_instances_diff_group_private_different_zone',
+                             'test14_ssh_between_instances_diff_group_public_different_zone']
+            for test in testlist:
+                unit_list.append(self.create_testunit_by_name(test))
+        self.status('Got running the following list of tests:' + str(testlist))
+
+        ### Run the EutesterUnitTest objects
+        result = self.run_test_case_list(unit_list,eof=False,clean_on_exit=True)
+        self.status('Test finished with status:"{0}"'.format(result))
+        return result
+
 if __name__ == "__main__":
     nettests = Net_Tests()
+    exit(nettests._run_suite(testlist=nettests.args.tests, basic_only=nettests.args.basic_only))
 
+    '''
     ### Use the list of tests passed from config/command line to determine what subset of tests to run
     ### or use a predefined list
     unit_list = [ ]
@@ -1571,6 +1616,7 @@ if __name__ == "__main__":
     ### Run the EutesterUnitTest objects
     result = nettests.run_test_case_list(unit_list,eof=False,clean_on_exit=True)
     exit(result)
+    '''
 
 
 
