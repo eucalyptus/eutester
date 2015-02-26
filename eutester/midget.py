@@ -50,7 +50,12 @@ class MacTable(resource_base.ResourceBase):
         return self.dto.get('macAddr')
 
 
+
 class Midget(object):
+    '''
+    Midonet get agent used for getting status and describing the system for the purposes
+    of debugging a Eucalyptus cloud's usage of it.
+    '''
     _CHAIN_JUMP = 107
     _ADDR_SPACING = 16
 

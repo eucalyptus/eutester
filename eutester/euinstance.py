@@ -331,8 +331,13 @@ class EuInstance(Instance, TaggedResource):
                                            for x in eni.private_ip_addresses)
                 else:
                     private_ips = None
-                pt.add_row([eni.id, private_ips, eni.publicIp, eni.vpc_id, eni.subnet_id,
-                            eni.owner_id, dot, "{0} ({1})".format(eni.status, attached_status)])
+                pt.add_row([eni.id, private_ips,
+                            getattr(eni, 'publicIp', None),
+                            getattr(eni,'vpc_id', None),
+                            getattr(eni, 'subnet_id', None),
+                            getattr(eni, 'owner_id', None),
+                            dot,
+                            "{0} ({1})".format(eni.status, attached_status)])
                 enipt.add_row([(str(pt))])
                 buf += str(enipt)
         if printme:
