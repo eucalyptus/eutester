@@ -970,10 +970,11 @@ class Midget(object):
         for status in ['stop', 'start']:
             for host in hosts:
                 ip = self.get_ip_for_host(host)
-                username = self.tester.username or 'root'
+                username = self.tester.username # or 'root'
                 password = self.tester.password
+                keypath = self.tester.keypath
                 ssh = SshConnection(host=ip, username=username,
-                                    password=password)
+                                    password=password, keypath=keypath)
                 self.debug("Attempting to {0} host:{1} ({2})".format(status, host.get_name(), ip))
                 ssh.sys('service midolman {0}'.format(status), code=0)
                 time.sleep(1)
