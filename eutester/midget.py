@@ -970,7 +970,7 @@ class Midget(object):
         for status in ['stop', 'start']:
             for host in hosts:
                 ip = self.get_ip_for_host(host)
-                username = self.tester.username # or 'root'
+                username = self.tester.username or 'root'
                 password = self.tester.password
                 keypath = self.tester.keypath
                 ssh = SshConnection(host=ip, username=username,
