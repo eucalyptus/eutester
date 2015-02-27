@@ -2884,13 +2884,14 @@ disable_root: false"""
                   monitor_to_running = True,
                   return_reservation=False,
                   assign_public_ip=True,
+                  network_interfaces=None,
                   timeout=480,
                   **boto_run_args):
         """
 
         :param image: image object or string image_id to create instances with
         :param keypair: keypair to create instances with
-        :param group: security group to run instances in
+        :param group: security group (or list of groups) to run instances in
         :param type: vmtype to run instances as
         :param zone: availability zone (aka cluster, aka parition) to run instances in
         :param min: minimum amount of instances to try to run
@@ -2900,13 +2901,23 @@ disable_root: false"""
         :param username: username for connecting ssh to instances
         :param password: password for connnecting ssh to instances
         :param subnet_id: (VPC MODE) the subnet to create this instances network interface in
-        :param auto_connect: boolean flag whether or not ssh connections should be automatically attempted
-        :param clean_on_fail: boolean flag whether or not to attempt to delete/remove failed instances-(not implemented)
-        :param monitor_to_running: boolean flag whether or not to monitor instances to a running state
+        :param auto_connect: boolean flag whether or not ssh connections should be
+                            automatically attempted
+        :param clean_on_fail: boolean flag whether or not to attempt to delete/remove
+                             failed instances-(not implemented)
+        :param monitor_to_running: boolean flag whether or not to monitor instances to a
+                                  running state
         :pararm block_device_map: block device map obj
         :param assign_public_ip: flag to indicate whether this method should auto create and assign
-                                 an elastic network interfaces to associate w/ a public ip. This
-                                 is only used for non-default VPC and subnets.
+                        an elastic network interfaces to associate w/ a public ip. This
+                        is only used for non-default VPC and subnets.
+        :param network_interfaces: A boto NetworkInterfaceCollection type obj.
+                       This obj contains a list of existing boto NetworkInterface
+                       or NetworkInterfaceSpecification objs.
+                        Note:
+                       when providing network interfaces, the group and subnet_ids
+                       will be derived from these and the args; group, subnet_id will
+                       be ignored.
         :param timeout: time allowed before failing this operation
         :return: list of euinstances
         """
@@ -2924,26 +2935,86 @@ disable_root: false"""
                 connect = False
             else:
                 addressing_type = None
+
             #In the case a keypair object was passed instead of the keypair name
             if keypair:
                 if isinstance(keypair, KeyPair):
                     keypair = keypair.name
-            if group:
-                if isinstance(group, str):
-                    if not re.match('^sg-\w{8}$',str(group).strip()):
-                        try:
-                            group = self.get_security_group(name=group)
-                            group = group.id
-                        except:
-                            self.critical('Run Image, Unable to find security group for: "{0}"'
-                                          .format(group))
-                            raise
-                elif isinstance(group, SecurityGroup):
-                    group = group.id
-                else:
-                    raise ValueError('Unknown arg passed for group to RunImage "{0}"'
-                                     .format(group))
 
+            # Format the provided security group arg, and store it for debug purposes.
+            secgroups = None
+            if group:
+                secgroups = []
+                if isinstance(group, list):
+                    groups = group
+                else:
+                    groups = [group]
+                for group in groups:
+                    if group:
+                        if isinstance(group, str):
+                            if not re.match('^sg-\w{8}$',str(group).strip()):
+                                try:
+                                    group = self.get_security_group(name=group)
+                                    group = group.id
+                                except:
+                                    self.critical('Run Image, Unable to find security group '
+                                                  'for: "{0}"'.format(group))
+                                    raise
+                        elif isinstance(group, SecurityGroup):
+                            group = group.id
+                        else:
+                            raise ValueError('Unknown arg passed for group to RunImage "{0}"'
+                                             .format(group))
+                        secgroups.append(group)
+
+
+            # Do some convenience work around network interfaces for run requests in a VPC cloud...
+            if network_interfaces:
+                self.debug('Network interfaces were provided')
+                if not isinstance(network_interfaces, NetworkInterfaceCollection):
+                    raise ValueError('network_interfaces must be of type'
+                                     ' NetworkInterfaceSpecification which contains type'
+                                     ' NetworkInterface eni objs')
+                if group or subnet_id:
+                    self.critical('WARNING: group and subnet_id args will be ignored when'
+                                  'providing network_interfaces. The ENIs provided should'
+                                  'contain this info')
+                secgroups = None
+                subnet_id = None
+            elif assign_public_ip and subnet_id:
+                self.debug('No Network interfaces provided, but subnet_id and assign_public_ip'
+                           'flag were...')
+                # No network_interfaces were provided, check to see if this subnet already
+                # maps a public ip by default or if a new eni should be created to request one...
+
+                subnet = self.ec2.get_all_subnets(subnet_id)
+                if subnet:
+                    subnet = subnet[0]
+                else:
+                    raise ValueError('Subnet: "{0}" not found during run_image'.format(subnet_id))
+                # mapPublicIpOnLaunch may be unicode true/false...
+                if not isinstance(subnet.mapPublicIpOnLaunch, bool):
+                    if str(subnet.mapPublicIpOnLaunch).upper().strip() == 'TRUE':
+                        subnet.mapPublicIpOnLaunch = True
+                    else:
+                        subnet.mapPublicIpOnLaunch = False
+                # Default subnets or subnets whos attributes have been modified to
+                # provide a public ip should automatically provide an ENI and public ip association
+                # skip if this is true...
+                if not subnet.mapPublicIpOnLaunch:
+                    eni = NetworkInterfaceSpecification(device_index=0,
+                                                        subnet_id=subnet_id,
+                                                        groups=secgroups,
+                                                        delete_on_termination=True,
+                                                        description='eutester_auto_assigned',
+                                                        associate_public_ip_address=True)
+                    network_interfaces = NetworkInterfaceCollection(eni)
+                    # sec group  and subnet info is now passed via the eni(s),
+                    # not to the run request
+                    secgroups = None
+                    subnet_id = None
+            # For debug purposes, attempt to print a table showing all the instances
+            #  visible to this user on this system prior to making this run instance request...
             self.debug(self.markup('Euinstance list prior to running image...', 1))
             try:
                 self.debug('\n{0}\n{1}'
@@ -2951,32 +3022,13 @@ disable_root: false"""
                                    self.print_euinstance_list(printme=False)))
             except Exception, e:
                 self.debug('Failed to print euinstance list before running image, err:' +str(e))
-
-            network_interfaces = None
-            if assign_public_ip and subnet_id:
-                subnet = self.ec2.get_all_subnets(subnet_id)
-                if subnet:
-                    subnet = subnet.pop()
-                else:
-                    raise ValueError('Subnet: "{0}" not found during run_image'.format(subnet_id))
-
-                secgroups = None
-                if group:
-                    secgroups = [group]
-                # Default subnets should automatically provide an ENI and public ip association
-                # skip this if this is a default subnet...
-                if not subnet.defaultForAz:
-                    eni = NetworkInterfaceSpecification(subnet_id=subnet_id,
-                                                        groups=secgroups,
-                                                        associate_public_ip_address=True)
-                    network_interfaces = NetworkInterfaceCollection()
-                    network_interfaces.append(eni)
-                    # sec group  and subnet info is now passed via the eni(s),
-                    # not to the run request
-                    secgroups = None
-                    subnet_id = None
-
             cmdstart=time.time()
+
+            self.debug(self.markup("\n\n Making Run instance request...."))
+            if network_interfaces:
+                params = {}
+                network_interfaces.build_list_params(params)
+                self.debug('network interface params:{0}'.format(params))
             reservation = self.ec2.run_instances(image_id = image.id,
                                                  key_name=keypair,
                                                  security_group_ids=secgroups,
@@ -2990,6 +3042,7 @@ disable_root: false"""
                                                  subnet_id=subnet_id,
                                                  network_interfaces=network_interfaces,
                                                  **boto_run_args)
+            self.debug(self.markup("\n\n done with run instance request...."))
             self.test_resources["reservations"].append(reservation)
             
             if (len(reservation.instances) < min) or (len(reservation.instances) > max):
