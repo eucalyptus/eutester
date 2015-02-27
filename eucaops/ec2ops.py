@@ -54,6 +54,7 @@ from boto.ec2.image import Image
 from boto.ec2.instance import Reservation, Instance
 from boto.ec2.keypair import KeyPair
 from boto.ec2.blockdevicemapping import BlockDeviceMapping, BlockDeviceType
+from boto.ec2.networkinterface import NetworkInterfaceSpecification, NetworkInterfaceCollection
 from boto.ec2.securitygroup import SecurityGroup
 from boto.ec2.volume import Volume
 from boto.ec2.bundleinstance import BundleInstanceTask
@@ -2882,6 +2883,7 @@ disable_root: false"""
                   clean_on_fail=True,
                   monitor_to_running = True,
                   return_reservation=False,
+                  assign_public_ip=True,
                   timeout=480,
                   **boto_run_args):
         """
@@ -2902,17 +2904,15 @@ disable_root: false"""
         :param clean_on_fail: boolean flag whether or not to attempt to delete/remove failed instances-(not implemented)
         :param monitor_to_running: boolean flag whether or not to monitor instances to a running state
         :pararm block_device_map: block device map obj
+        :param assign_public_ip: flag to indicate whether this method should auto create and assign
+                                 an elastic network interfaces to associate w/ a public ip. This
+                                 is only used for non-default VPC and subnets.
         :param timeout: time allowed before failing this operation
         :return: list of euinstances
         """
         reservation = None
         try:
             instances = []
-            if image is None:
-                images = self.ec2.get_all_images()
-                for emi in images:
-                    if re.match("emi",emi.id):
-                        image = emi      
             if not isinstance(image, Image):
                 image = self.get_emi(emi=str(image))
             if image is None:
@@ -2950,12 +2950,40 @@ disable_root: false"""
                            .format(self.print_euinstance_list(printme=False)))
             except Exception, e:
                 self.debug('Failed to print euinstance list before running image, err:' +str(e))
-            #self.debug( "Attempting to run "+ str(image.root_device_type)  +" image " + str(image) + " in group " + str(group))
+
+            network_interfaces = None
+            if assign_public_ip and subnet_id:
+                subnet = self.ec2.get_all_subnets(subnet_id)
+                if subnet:
+                    subnet = subnet.pop()
+                else:
+                    raise ValueError('Subnet: "{0}" not found during run_image'.format(subnet_id))
+                # Default subnets should automatically provide an ENI and public ip association
+                # skip this if this is a default subnet...
+                if not subnet.defaultForAz:
+                    if group:
+                        groups = [group]
+                    else:
+                        groups = []
+                    eni = NetworkInterfaceSpecification(subnet_id=subnet_id,
+                                                        groups=groups,
+                                                        associate_public_ip_address=True)
+                    network_interfaces = NetworkInterfaceCollection()
+                    network_interfaces.append(eni)
             cmdstart=time.time()
-            reservation = image.run(key_name=keypair,security_group_ids=[group],instance_type=type, placement=zone,
-                                    min_count=min, max_count=max, user_data=user_data, addressing_type=addressing_type,
-                                    block_device_map=block_device_map, subnet_id=subnet_id,
-                                    **boto_run_args)
+            reservation = self.ec2.run_instances(image_id = image.id, 
+                                                 key_name=keypair,
+                                                 security_group_ids=[group],
+                                                 instance_type=type,
+                                                 placement=zone,
+                                                 min_count=min,
+                                                 max_count=max,
+                                                 user_data=user_data,
+                                                 addressing_type=addressing_type,
+                                                 block_device_map=block_device_map,
+                                                 subnet_id=subnet_id,
+                                                 network_interfaces=network_interfaces,
+                                                 **boto_run_args)
             self.test_resources["reservations"].append(reservation)
             
             if (len(reservation.instances) < min) or (len(reservation.instances) > max):
