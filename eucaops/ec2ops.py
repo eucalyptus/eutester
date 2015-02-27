@@ -2946,8 +2946,9 @@ disable_root: false"""
 
             self.debug(self.markup('Euinstance list prior to running image...', 1))
             try:
-                self.debug('\nEuinstance list prior to running image:\n{0}'
-                           .format(self.print_euinstance_list(printme=False)))
+                self.debug('\n{0}\n{1}'
+                           .format(self.markup('Euinstance list prior to running image:'),
+                                   self.print_euinstance_list(printme=False)))
             except Exception, e:
                 self.debug('Failed to print euinstance list before running image, err:' +str(e))
 
@@ -2958,22 +2959,27 @@ disable_root: false"""
                     subnet = subnet.pop()
                 else:
                     raise ValueError('Subnet: "{0}" not found during run_image'.format(subnet_id))
+
+                secgroups = None
+                if group:
+                    secgroups = [group]
                 # Default subnets should automatically provide an ENI and public ip association
                 # skip this if this is a default subnet...
                 if not subnet.defaultForAz:
-                    if group:
-                        groups = [group]
-                    else:
-                        groups = []
                     eni = NetworkInterfaceSpecification(subnet_id=subnet_id,
-                                                        groups=groups,
+                                                        groups=secgroups,
                                                         associate_public_ip_address=True)
                     network_interfaces = NetworkInterfaceCollection()
                     network_interfaces.append(eni)
+                    # sec group  and subnet info is now passed via the eni(s),
+                    # not to the run request
+                    secgroups = None
+                    subnet_id = None
+
             cmdstart=time.time()
-            reservation = self.ec2.run_instances(image_id = image.id, 
+            reservation = self.ec2.run_instances(image_id = image.id,
                                                  key_name=keypair,
-                                                 security_group_ids=[group],
+                                                 security_group_ids=secgroups,
                                                  instance_type=type,
                                                  placement=zone,
                                                  min_count=min,
