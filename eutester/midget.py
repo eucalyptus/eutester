@@ -156,7 +156,8 @@ class Midget(object):
             if isinstance(instance, str):
                 fetched_ins = self._get_instance_by_id(id=instance)
             else:
-                raise ValueError('instance not type boto Instance nor instance id string')
+                raise ValueError('instance not type boto Instance nor instance id string. '
+                                 'instance: "{0}:{1}"'.format(instance, type(instance)))
             if not fetched_ins:
                 raise ValueError('Could not find instance {0} on system'.format(instance))
             instance = fetched_ins

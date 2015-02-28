@@ -56,6 +56,8 @@ from boto.ec2.keypair import KeyPair
 from boto.ec2.blockdevicemapping import BlockDeviceMapping, BlockDeviceType
 from boto.ec2.networkinterface import NetworkInterfaceSpecification, NetworkInterfaceCollection
 from boto.ec2.securitygroup import SecurityGroup
+from boto.vpc.vpc import VPC
+from boto.vpc.subnet import Subnet
 from boto.ec2.volume import Volume
 from boto.ec2.bundleinstance import BundleInstanceTask
 from boto.exception import EC2ResponseError
@@ -668,6 +670,114 @@ disable_root: false"""
                                        cidr_ip=cidr_ip,
                                        src_security_group_name=src_security_group_name,
                                        src_security_group_owner_id=src_security_group_owner_id)
+
+
+    def show_vpc(self, vpc, printmethod=None, show_tags=True, printme=True):
+        if isinstance(vpc, str):
+            vpcs = self.ec2.get_all_vpcs(vpc)
+            if vpcs:
+                vpc = vpcs[0]
+        if not isinstance(vpc, VPC):
+             raise ValueError('show_vpc passed on non VPC type: "{0}:{1}"'.format(vpc, type(vpc)))
+        title = self.markup('  VPC SUMMARY: "{0}"'.format(vpc.id), markups=[1,94])
+        main_pt = PrettyTable([title])
+        main_pt.align[title] = 'l'
+        main_pt.padding_width = 0
+        mainbuf = ""
+        summary_pt = PrettyTable(["CIDR BLOCK", "DHCP OPT ID", "INS TENANCY", "STATE",
+                                  "IS DEFAULT"])
+        summary_pt.padding_width = 0
+        summary_pt.add_row([vpc.cidr_block, vpc.dhcp_options_id, vpc.instance_tenancy, vpc.state,
+                            vpc.is_default])
+        mainbuf += str(summary_pt)
+        if show_tags and vpc.tags:
+            mainbuf += self.markup('\nVPC "{0}" TAGS:\n'.format(vpc.id), markups=[1,4])
+            mainbuf += str(self.show_tags(vpc.tags, printme=False)) + "\n"
+        main_pt.add_row([mainbuf])
+        if printme:
+            printmethod = printmethod or self.debug
+            printmethod( "\n" + str(main_pt) + "\n")
+        else:
+            return main_pt
+
+    def show_vpcs(self, vpcs=None, printmethod=None, show_tags=True, printme=True):
+        ret_buf = self.markup('--------------VPC LIST--------------', markups=[1,4,94])
+        if not vpcs:
+            vpcs = self.ec2.get_all_vpcs()
+        for vpc in vpcs:
+            ret_buf += "\n" + str(self.show_vpc(vpc, show_tags=show_tags, printme=False))
+        if printme:
+            printmethod = printmethod or self.debug
+            printmethod( "\n" + str(ret_buf) + "\n")
+        else:
+            return ret_buf
+
+
+    def modify_subnet_attribute(self, subnet, mapPublicIpAtLaunch):
+        if isinstance(subnet, str):
+            subnets = self.ec2.get_all_subnets(subnet)
+            if subnets:
+                subnet=subnets[0]
+        if not isinstance(subnet, Subnet):
+             raise ValueError('modify_subnet_attribute passed on non Subnet type for subnet: '
+                              '"{0}:{1}"'.format(subnet, type(subnet)))
+        if not isinstance(mapPublicIpAtLaunch, bool):
+            raise ValueError('modify_subnet_attribute passed on non bool type for'
+                             ' mapPublicIpAtLaunch: "{0}:{1}"'.format(mapPublicIpAtLaunch,
+                                                                      type(mapPublicIpAtLaunch)))
+        ret = self.ec2.get_status('ModifySubnetAttribute',
+                                  {'SubnetId': subnet.id,
+                                   'MapPublicIpOnLaunch.Value': mapPublicIpAtLaunch},
+                                  verb='POST')
+        subnet = self.ec2.get_all_subnets(subnet.id)[0]
+        if not str(subnet.mapPublicIpOnLaunch).upper().strip() == str(mapPublicIpAtLaunch).upper():
+            raise ValueError("Subnet: {0} mapPublicIpAtLaunch current value:'{1}' does not "
+                             "match the request value: '{2}'".format(subnet.id,
+                                                                     subnet.mapPublicIpOnLaunch,
+                                                                     mapPublicIpAtLaunch))
+        return ret
+    
+    def show_subnet(self, subnet, printmethod=None, show_tags=True, printme=True):
+        if isinstance(subnet, str):
+            subnets = self.ec2.get_all_subnets(subnet)
+            if subnets:
+                subnet=subnets[0]
+        if not isinstance(subnet, Subnet):
+             raise ValueError('show_subnet passed on non Subnet type: "{0}:{1}"'
+                              .format(subnet, type(subnet)))
+        title = self.markup('  SUBNET SUMMARY: "{0}"'.format(subnet.id), markups=[1,94])
+        main_pt = PrettyTable([title])
+        main_pt.align[title] = 'l'
+        main_pt.padding_width = 0
+        mainbuf = ""
+        summary_pt = PrettyTable(["VPC ID", "CIDR BLOCK", "AVAIL IP CNT", "MAP PUB IP",
+                                  "STATE", "ZONE", "ZONE DEFAULT"])
+        summary_pt.padding_width = 0
+        summary_pt.add_row([subnet.vpc_id, subnet.cidr_block, subnet.available_ip_address_count,
+                            subnet.mapPublicIpOnLaunch, subnet.state, subnet.availability_zone,
+                            subnet.defaultForAz])
+        mainbuf += str(summary_pt)
+        if show_tags and subnet.tags:
+            mainbuf += self.markup('\nSUBNET "{0}" TAGS:\n'.format(subnet.id), markups=[1,4])
+            mainbuf += str(self.show_tags(subnet.tags, printme=False)) + "\n"
+        main_pt.add_row([mainbuf])
+        if printme:
+            printmethod = printmethod or self.debug
+            printmethod( "\n" + str(main_pt) + "\n")
+        else:
+            return main_pt
+
+    def show_subnets(self, subnets=None, printmethod=None, show_tags=True, printme=True):
+        ret_buf = self.markup('--------------SUBNET LIST--------------', markups=[1,4,94])
+        if not subnets:
+            subnets = self.ec2.get_all_subnets()
+        for subnet in subnets:
+            ret_buf += "\n" + str(self.show_subnet(subnet, show_tags=show_tags, printme=False))
+        if printme:
+            printmethod = printmethod or self.debug
+            printmethod( "\n" + str(ret_buf) + "\n")
+        else:
+            return ret_buf
 
     def terminate_single_instance(self, instance, timeout=300 ):
         """
@@ -3042,7 +3152,6 @@ disable_root: false"""
                                                  subnet_id=subnet_id,
                                                  network_interfaces=network_interfaces,
                                                  **boto_run_args)
-            self.debug(self.markup("\n\n done with run instance request...."))
             self.test_resources["reservations"].append(reservation)
             
             if (len(reservation.instances) < min) or (len(reservation.instances) > max):
