@@ -708,6 +708,45 @@ disable_root: false"""
                                        src_security_group_name=src_security_group_name,
                                        src_security_group_owner_id=src_security_group_owner_id)
 
+    def show_account_attributes(self, attribute_names=None, printmethod=None, printme=True):
+        attrs = self.ec2.describe_account_attributes(attribute_names=attribute_names)
+
+        main_pt = PrettyTable([self.markup('ACCOUNT ATTRIBUTES')])
+        pt = PrettyTable([self.markup('NAME'), self.markup('VALUE')])
+        pt.hrules = ALL
+        for attr in attrs:
+            pt.add_row([attr.attribute_name, attr.attribute_values])
+        main_pt.add_row([str(pt)])
+        if printme:
+            printmethod = printmethod or self.debug
+            printmethod( "\n" + str(main_pt) + "\n")
+        else:
+            return main_pt
+
+    def get_supported_platforms(self):
+        attr = self.ec2.describe_account_attributes(attribute_names='supported-platforms')
+        if attr:
+            return attr[0].attribute_values
+        return []
+
+    def get_default_vpc_attribute(self):
+        attr = self.ec2.describe_account_attributes(attribute_names='default-vpc')
+        if attr:
+            return attr[0].attribute_values
+        return []
+
+    def vpc_supported(self):
+        return 'VPC' in self.get_supported_platforms()
+
+    def get_default_vpcs(self):
+        vpc_ids = self.get_default_vpc_attribute()
+        if vpc_ids:
+            return self.ec2.get_all_vpcs(vpc_ids=vpc_ids)
+        return []
+
+    def get_all_vpcs(self, *args, **kwargs):
+        return self.ec2.get_all_vpcs(*args, **kwargs)
+    get_all_vpcs.__doc__ = "{0}".format(VPCConnection.get_all_vpcs.__doc__)
 
     def show_vpc(self, vpc, printmethod=None, show_tags=True, printme=True):
         if isinstance(vpc, str):
@@ -796,37 +835,6 @@ disable_root: false"""
                                                                      subnet.mapPublicIpOnLaunch,
                                                                      mapPublicIpAtLaunch))
         return ret
-
-
-    def show_account_attributes(self, attribute_names=None, printmethod=None, printme=True):
-        attrs = self.ec2.describe_account_attributes(attribute_names=attribute_names)
-
-        main_pt = PrettyTable([self.markup('ACCOUNT ATTRIBUTES')])
-        pt = PrettyTable([self.markup('NAME'), self.markup('VALUE')])
-        pt.hrules = ALL
-        for attr in attrs:
-            pt.add_row([attr.attribute_name, attr.attribute_values])
-        main_pt.add_row([str(pt)])
-        if printme:
-            printmethod = printmethod or self.debug
-            printmethod( "\n" + str(main_pt) + "\n")
-        else:
-            return main_pt
-
-    def get_supported_platforms(self):
-        attr = self.ec2.describe_account_attributes(attribute_names='supported-platforms')
-        if attr:
-            return attr[0].attribute_values
-        return []
-
-    def get_default_vpc_attribute(self):
-        attr = self.ec2.describe_account_attributes(attribute_names='default-vpc')
-        if attr:
-            return attr[0].attribute_values
-        return []
-
-    def vpc_supported(self):
-        return 'VPC' in self.get_supported_platforms()
 
     def show_subnet(self, subnet, printmethod=None, show_tags=True, printme=True):
         if isinstance(subnet, str):
@@ -3182,38 +3190,46 @@ disable_root: false"""
                                   'contain this info')
                 secgroups = None
                 subnet_id = None
-            elif assign_public_ip and subnet_id:
+            elif assign_public_ip:
                 self.debug('No Network interfaces provided, but subnet_id and assign_public_ip'
                            'flag were...')
-                # No network_interfaces were provided, check to see if this subnet already
-                # maps a public ip by default or if a new eni should be created to request one...
+                if subnet_id:
+                    # No network_interfaces were provided, check to see if this subnet already
+                    # maps a public ip by default or if a new eni should be created to
+                    # request one...
 
-                subnet = self.ec2.get_all_subnets(subnet_id)
-                if subnet:
-                    subnet = subnet[0]
-                else:
-                    raise ValueError('Subnet: "{0}" not found during run_image'.format(subnet_id))
-                # mapPublicIpOnLaunch may be unicode true/false...
-                if not isinstance(subnet.mapPublicIpOnLaunch, bool):
-                    if str(subnet.mapPublicIpOnLaunch).upper().strip() == 'TRUE':
-                        subnet.mapPublicIpOnLaunch = True
+                    subnets = self.ec2.get_all_subnets(subnet_id)
+                    if subnets:
+                        subnet = subnets[0]
                     else:
-                        subnet.mapPublicIpOnLaunch = False
-                # Default subnets or subnets whos attributes have been modified to
-                # provide a public ip should automatically provide an ENI and public ip association
-                # skip if this is true...
-                if not subnet.mapPublicIpOnLaunch:
-                    eni = NetworkInterfaceSpecification(device_index=0,
-                                                        subnet_id=subnet_id,
-                                                        groups=secgroups,
-                                                        delete_on_termination=True,
-                                                        description='eutester_auto_assigned',
-                                                        associate_public_ip_address=True)
-                    network_interfaces = NetworkInterfaceCollection(eni)
-                    # sec group  and subnet info is now passed via the eni(s),
-                    # not to the run request
-                    secgroups = None
-                    subnet_id = None
+                        raise ValueError('Subnet: "{0}" not found during run_image'
+                                         .format(subnet_id))
+                else:
+                    subnets = self.get_default_subnets(zone=zone)
+                    if subnets:
+                        subnet = subnets[0]
+                if subnet:
+                    # mapPublicIpOnLaunch may be unicode true/false...
+                    if not isinstance(subnet.mapPublicIpOnLaunch, bool):
+                        if str(subnet.mapPublicIpOnLaunch).upper().strip() == 'TRUE':
+                            subnet.mapPublicIpOnLaunch = True
+                        else:
+                            subnet.mapPublicIpOnLaunch = False
+                    # Default subnets or subnets whos attributes have been modified to
+                    # provide a public ip should automatically provide an ENI and public ip
+                    # association, skip if this is true...
+                    if not subnet.mapPublicIpOnLaunch:
+                        eni = NetworkInterfaceSpecification(device_index=0,
+                                                            subnet_id=subnet_id,
+                                                            groups=secgroups,
+                                                            delete_on_termination=True,
+                                                            description='eutester_auto_assigned',
+                                                            associate_public_ip_address=True)
+                        network_interfaces = NetworkInterfaceCollection(eni)
+                        # sec group  and subnet info is now passed via the eni(s),
+                        # not to the run request
+                        secgroups = None
+                        subnet_id = None
             # For debug purposes, attempt to print a table showing all the instances
             #  visible to this user on this system prior to making this run instance request...
             self.debug(self.markup('Euinstance list prior to running image...', 1))
