@@ -3095,6 +3095,7 @@ disable_root: false"""
                   assign_public_ip=True,
                   network_interfaces=None,
                   timeout=480,
+                  boto_debug_level=2,
                   **boto_run_args):
         """
 
@@ -3209,6 +3210,7 @@ disable_root: false"""
                     if subnets:
                         subnet = subnets[0]
                 if subnet:
+                    subnet_id = subnet.id
                     # mapPublicIpOnLaunch may be unicode true/false...
                     if not isinstance(subnet.mapPublicIpOnLaunch, bool):
                         if str(subnet.mapPublicIpOnLaunch).upper().strip() == 'TRUE':
@@ -3246,19 +3248,25 @@ disable_root: false"""
                 params = {}
                 network_interfaces.build_list_params(params)
                 self.debug('network interface params:{0}'.format(params))
-            reservation = self.ec2.run_instances(image_id = image.id,
-                                                 key_name=keypair,
-                                                 security_group_ids=secgroups,
-                                                 instance_type=type,
-                                                 placement=zone,
-                                                 min_count=min,
-                                                 max_count=max,
-                                                 user_data=user_data,
-                                                 addressing_type=addressing_type,
-                                                 block_device_map=block_device_map,
-                                                 subnet_id=subnet_id,
-                                                 network_interfaces=network_interfaces,
-                                                 **boto_run_args)
+            orig_boto_debug_level = getattr(self.ec2.connection, 'debuglevel', None)
+            try:
+                self.ec2.connection.debuglevel = boto_debug_level
+                reservation = self.ec2.run_instances(image_id = image.id,
+                                                     key_name=keypair,
+                                                     security_group_ids=secgroups,
+                                                     instance_type=type,
+                                                     placement=zone,
+                                                     min_count=min,
+                                                     max_count=max,
+                                                     user_data=user_data,
+                                                     addressing_type=addressing_type,
+                                                     block_device_map=block_device_map,
+                                                     subnet_id=subnet_id,
+                                                     network_interfaces=network_interfaces,
+                                                     **boto_run_args)
+            except:
+                self.ec2.connection.debuglevel = orig_boto_debug_level
+                raise
             self.test_resources["reservations"].append(reservation)
             
             if (len(reservation.instances) < min) or (len(reservation.instances) > max):
