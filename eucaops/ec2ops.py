@@ -47,7 +47,7 @@ import sys
 import traceback
 from datetime import datetime, timedelta
 from subprocess import Popen, PIPE
-from prettytable import PrettyTable
+from prettytable import PrettyTable, ALL
 from boto.ec2.group import Group
 
 from boto.ec2.image import Image
@@ -57,7 +57,8 @@ from boto.ec2.blockdevicemapping import BlockDeviceMapping, BlockDeviceType
 from boto.ec2.networkinterface import NetworkInterfaceSpecification, NetworkInterfaceCollection
 from boto.ec2.securitygroup import SecurityGroup
 from boto.vpc.vpc import VPC
-from boto.vpc.subnet import Subnet
+from boto.vpc import VPCConnection
+from boto.vpc.subnet import Subnet as BotoSubnet
 from boto.ec2.volume import Volume
 from boto.ec2.bundleinstance import BundleInstanceTask
 from boto.exception import EC2ResponseError
@@ -74,6 +75,42 @@ from eutester.euvolume import EuVolume
 from eutester.eusnapshot import EuSnapshot
 from eutester.euzone import EuZone
 from testcases.cloud_user.images.conversiontask import ConversionTask
+
+class EucaSubnet(BotoSubnet):
+    def __init__(self, *args, **kwargs):
+        super(self.__class__, self).__init__(*args, **kwargs)
+        self._defaultForAz = None
+        self._mapPublicIpOnLaunch = None
+
+    @property
+    def defaultForAz(self):
+        return self._defaultForAz
+
+    @defaultForAz.setter
+    def defaultForAz(self, value):
+        if re.search('true', value, flags=re.IGNORECASE):
+            self._defaultForAz = True
+        else:
+            self._defaultForAz = False
+
+    @property
+    def mapPublicIpOnLaunch(self):
+        return self._mapPublicIpOnLaunch
+
+    @mapPublicIpOnLaunch.setter
+    def mapPublicIpOnLaunch(self, value):
+        if re.search('true', value, flags=re.IGNORECASE):
+            self._mapPublicIpOnLaunch = True
+        else:
+            self._mapPublicIpOnLaunch = False
+
+    def endElement(self, name, value, connection):
+        BotoSubnet.endElement(self, name, value, connection)
+        if name == 'mapPublicIpOnLaunch':
+            self.mapPublicIpOnLaunch = value
+        elif name == 'defaultForAz':
+            self.defaultForAz = value
+
 
 EC2RegionData = {
     'us-east-1' : 'ec2.us-east-1.amazonaws.com',
@@ -712,13 +749,36 @@ disable_root: false"""
         else:
             return ret_buf
 
+    def get_all_subnets(self, *args, **kwargs):
+        ret_list = []
+        subnets = self.ec2.get_all_subnets(*args, **kwargs)
+        for subnet in subnets:
+            euca_sub = EucaSubnet()
+            euca_sub.__dict__ = dict(euca_sub.__dict__.items() + subnet.__dict__.items())
+            euca_sub.mapPublicIpOnLaunch = subnet.mapPublicIpOnLaunch
+            euca_sub.defaultForAz = subnet.defaultForAz
+            ret_list.append(euca_sub)
+        return ret_list
+
+    get_all_subnets.__doc__ = "{0}".format(VPCConnection.get_all_subnets.__doc__)
+
+    def get_default_subnets(self, zone=None):
+        ret_list = []
+        filters = None
+        if zone:
+            filters = {'availabilityZone':zone}
+        subnets = self.get_all_subnets(filters = filters)
+        for subnet in subnets:
+            if subnet.defaultForAz:
+                ret_list.append(subnet)
+        return ret_list
 
     def modify_subnet_attribute(self, subnet, mapPublicIpAtLaunch):
         if isinstance(subnet, str):
             subnets = self.ec2.get_all_subnets(subnet)
             if subnets:
                 subnet=subnets[0]
-        if not isinstance(subnet, Subnet):
+        if not isinstance(subnet, BotoSubnet):
              raise ValueError('modify_subnet_attribute passed on non Subnet type for subnet: '
                               '"{0}:{1}"'.format(subnet, type(subnet)))
         if not isinstance(mapPublicIpAtLaunch, bool):
@@ -736,13 +796,44 @@ disable_root: false"""
                                                                      subnet.mapPublicIpOnLaunch,
                                                                      mapPublicIpAtLaunch))
         return ret
-    
+
+
+    def show_account_attributes(self, attribute_names=None, printmethod=None, printme=True):
+        attrs = self.ec2.describe_account_attributes(attribute_names=attribute_names)
+
+        main_pt = PrettyTable([self.markup('ACCOUNT ATTRIBUTES')])
+        pt = PrettyTable([self.markup('NAME'), self.markup('VALUE')])
+        pt.hrules = ALL
+        for attr in attrs:
+            pt.add_row([attr.attribute_name, attr.attribute_values])
+        main_pt.add_row([str(pt)])
+        if printme:
+            printmethod = printmethod or self.debug
+            printmethod( "\n" + str(main_pt) + "\n")
+        else:
+            return main_pt
+
+    def get_supported_platforms(self):
+        attr = self.ec2.describe_account_attributes(attribute_names='supported-platforms')
+        if attr:
+            return attr[0].attribute_values
+        return []
+
+    def get_default_vpc_attribute(self):
+        attr = self.ec2.describe_account_attributes(attribute_names='default-vpc')
+        if attr:
+            return attr[0].attribute_values
+        return []
+
+    def vpc_supported(self):
+        return 'VPC' in self.get_supported_platforms()
+
     def show_subnet(self, subnet, printmethod=None, show_tags=True, printme=True):
         if isinstance(subnet, str):
             subnets = self.ec2.get_all_subnets(subnet)
             if subnets:
                 subnet=subnets[0]
-        if not isinstance(subnet, Subnet):
+        if not isinstance(subnet, BotoSubnet):
              raise ValueError('show_subnet passed on non Subnet type: "{0}:{1}"'
                               .format(subnet, type(subnet)))
         title = self.markup('  SUBNET SUMMARY: "{0}"'.format(subnet.id), markups=[1,94])
@@ -3280,7 +3371,7 @@ disable_root: false"""
         except Exception, e:
             tb = self.get_traceback()
             ip_err = str(tb)  + "\nWARNING in wait_for_valid_ip: "+str(e)
-            self.debug(ip_err)
+            self.critical(ip_err)
         #Now attempt to connect to instances if connect flag is set in the instance...
         waiting = copy.copy(instances)
         good = []
