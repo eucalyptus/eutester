@@ -700,7 +700,7 @@ class EbsTestSuite(EutesterTestCase):
                         vol.add_tag('ebstestsuite_created')
                     createdvols.extend(new_vols)
                 vols.extend(self.tester.monitor_created_euvolumes_to_state(createdvols, timepergig=tpg))
-                self.tester.print_euvolume_list(vols)
+                self.tester.show_volumes(vols)
                 self.status("Attempting to attach new vols from new snapshots to instance:"+str(instance.id)+" to verify md5s...")
                 for newvol in vols:
                     try:
@@ -784,7 +784,7 @@ class EbsTestSuite(EutesterTestCase):
                     vol.add_tag('ebstestsuite_created')
                 vols.extend(new_vols)
             vols = self.tester.monitor_created_euvolumes_to_state(vols,timepergig=tpg)
-            self.tester.print_euvolume_list(vols)
+            self.tester.show_volumes(vols)
             for zone in zonelist:
                 instance = zone.instances[0]
                 instances.append(instance)
@@ -816,7 +816,7 @@ class EbsTestSuite(EutesterTestCase):
                 for avol in instance.attached_vols:
                     if avol in vols:
                         instance.detach_euvolume(avol)
-            self.tester.print_euvolume_list(vols)
+            self.tester.show_volumes(vols)
             delfail = None
             for vol in vols:
                 try:

@@ -301,7 +301,7 @@ class EuInstance(Instance, TaggedResource):
         image = self.tester.get_emi(self.image_id)
         mainbuf += str(self.tester.show_image(image=image, printme=False)) + "\n"
         mainbuf += header("\nINSTANCE BLOCK DEVICE MAPPING:\n")
-        mainbuf += str(self.tester.print_block_device_map(self.block_device_mapping,
+        mainbuf += str(self.tester.show_block_device_map(self.block_device_mapping,
                                                           printme=False))
         main_pt.add_row([mainbuf])
         if printme:
@@ -1766,7 +1766,7 @@ class EuInstance(Instance, TaggedResource):
                         raise Exception(str(self.id) + ', Volume ' + str(volume.id) + ':' + str(volume.status)
                                         + ' state did not remain in-use during stop'  )
         self.debug("\n"+ str(self.id) + ": Printing Instance 'attached_vol' list:\n")
-        self.tester.print_euvolume_list(self.attached_vols)
+        self.tester.show_volumes(self.attached_vols)
         msg=""
         start = time.time()
         elapsed = 0
@@ -2031,7 +2031,7 @@ class EuInstance(Instance, TaggedResource):
         Checks current instances meta data against a provided block device map & root_dev, or
         against the current values of the instance; self.block_device_mapping & self.root_device_name
         '''
-        self.tester.print_block_device_map(self.block_device_mapping)
+        self.tester.show_block_device_map(self.block_device_mapping)
         meta_dev_names = self.get_metadata('block-device-mapping')
         meta_devices = {}
         root_dev = root_dev or self.root_device_name

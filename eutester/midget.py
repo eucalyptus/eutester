@@ -3,6 +3,7 @@ from midonetclient.router import Router
 from midonetclient import resource_base
 from midonetclient import vendor_media_type
 from midonetclient.bridge import Bridge
+from midonetclient.chain import Chain
 from midonetclient.host import Host
 from midonetclient.host_interface_port import HostInterfacePort
 from midonetclient.host_interface import HostInterface
@@ -13,6 +14,7 @@ from eutester.sshconnection import SshConnection
 from eutester.euinstance import EuInstance
 from eutester.eulogger import Eulogger
 from boto.ec2.instance import Instance
+from boto.ec2.securitygroup import SecurityGroup
 from prettytable import PrettyTable
 import requests
 import socket
@@ -736,8 +738,30 @@ class Midget(object):
         else:
             return pt
 
+    def get_chain_by_name(self, name):
+        chains = self.mapi.get_chains(query=None)
+        for chain in chains:
+            if str(chain.get_name()).strip() == str(name):
+                return chain
+        return None
+
+    def get_chain_by_id(self, id):
+        chains = self.mapi.get_chains(query=None)
+        for chain in chains:
+            if str(chain.get_id()).strip() == str(id):
+                return chain
+        return None
 
     def show_chain(self, chain, printme=True):
+        if chain and isinstance(chain, unicode) or isinstance(chain, str):
+            if re.match('^\w{8}-\w{4}-\w{4}-\w{4}-\w{12}$', chain):
+                chain = self.get_chain_by_id(chain)
+            else:
+                chain = self.get_chain_by_name(chain)
+            raise ValueError('Chain:"{0}" not found in show_chain'.format(chain))
+        if not isinstance(chain, Chain):
+            raise ValueError("Unsupported type passed to show_chain, chain:'{0}:{1}'"
+                             .format(chain, type(chain)))
         title = 'CHAIN NAME:{0}, ID:{1} TENANT ID:{2}'.format(chain.dto.get('name', "NA"),
                                                               self._bold(chain.get_id(),
                                                                          self._CHAIN_JUMP),
@@ -754,6 +778,36 @@ class Midget(object):
             self.debug('\n{0}\n'.format(pt))
         else:
             return pt
+
+    def show_chain_for_security_group(self, group):
+        #sg_ingress_sg-012aee24
+        group_id = None
+        if isinstance(group, SecurityGroup):
+            group_id = str(group.id)
+        elif group:
+            if isinstance(group, str) or isinstance(group, unicode):
+                if re.match('^sg-\w{8}$', group):
+                    group = self.tester.get_security_group(id=group)
+                    self._errmsg('Could not find security group:"{0}" on cloud? Trying to lookup'
+                             'midonet chain anyways...'.format(group))
+                    group_id = str(group)
+                else:
+                    group = self.tester.get_security_group(name=group)
+                    if not group:
+                        raise ValueError('Group not found on system and not could not perform'
+                                         'a chain lookup because group was not provided in '
+                                         'id format, ie:"sg-XXXXXXXX", group:"{0}"'.format(group))
+        if not group_id:
+            raise RuntimeError('Group id is none, lookup failed for provided group arg:"{0}"'
+                               .format(group))
+        chain_name = "sg_ingress_" + str(group_id)
+        chain = self.get_chain_by_name(name=chain_name)
+        if not chain:
+            self._errmsg('Chain lookup failed, this could be expected if security group is extant '
+                         'and no running are referencing it')
+        else:
+            self.show_chain(chain)
+
 
     def show_rules(self, rules, jump=False, printme=True):
         '''

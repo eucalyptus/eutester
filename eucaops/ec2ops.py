@@ -30,41 +30,35 @@
 #
 # Author: vic.iglesias@eucalyptus.com
 
-
-import time
 import re
 import os
 import copy
 import socket
-import types
 import hmac
-import json
 import hashlib
 import base64
 import time
 import types
-import sys
 import traceback
 from datetime import datetime, timedelta
 from subprocess import Popen, PIPE
 from prettytable import PrettyTable, ALL
-from boto.ec2.group import Group
-
+from boto.ec2.blockdevicemapping import BlockDeviceMapping, BlockDeviceType
+from boto.ec2.bundleinstance import BundleInstanceTask
+from boto.ec2.group import Group as BotoGroup
 from boto.ec2.image import Image
 from boto.ec2.instance import Reservation, Instance
 from boto.ec2.keypair import KeyPair
-from boto.ec2.blockdevicemapping import BlockDeviceMapping, BlockDeviceType
 from boto.ec2.networkinterface import NetworkInterfaceSpecification, NetworkInterfaceCollection
-from boto.ec2.securitygroup import SecurityGroup
-from boto.vpc.vpc import VPC
+from boto.ec2.regioninfo import RegionInfo
+from boto.ec2.securitygroup import SecurityGroup, IPPermissions
+from boto.ec2.tag import TagSet, Tag
+from boto.ec2.volume import Volume
 from boto.vpc import VPCConnection
 from boto.vpc.subnet import Subnet as BotoSubnet
-from boto.ec2.volume import Volume
-from boto.ec2.bundleinstance import BundleInstanceTask
+from boto.vpc.vpc import VPC
 from boto.exception import EC2ResponseError
-from boto.ec2.regioninfo import RegionInfo
 from boto.resultset import ResultSet
-from boto.ec2.securitygroup import SecurityGroup, IPPermissions
 import boto
 
 from eutester import Eutester
@@ -597,12 +591,11 @@ disable_root: false"""
                                             force_args=force_args)
 
     def revoke_all_rules(self, group):
-
-        if not isinstance(group, SecurityGroup):
-            group = self.get_security_group(name=group)
-        else:
-            # group obj does not have update() yet...
+        if isinstance(group, SecurityGroup) or isinstance(group, BotoGroup):
+            # group obj does not have update() yet so fetch it again to make sure it's current...
             group = self.get_security_group(id=group.id)
+        else:
+            group = self.get_security_group(group)
         if not group:
             raise ValueError('Security group "{0}" not found'.format(group))
         self.show_security_group(group)
@@ -685,22 +678,29 @@ disable_root: false"""
         else:
             return pt
 
-    def revoke(self, group,
-                     port=22,
-                     protocol="tcp",
-                     cidr_ip="0.0.0.0/0",
-                     src_security_group_name=None,
-                     src_security_group_owner_id=None):
-        if isinstance(group, SecurityGroup):
-            group_name = group.name
-        else:
+    def revoke(self, group, port=22, protocol="tcp", cidr_ip="0.0.0.0/0",
+               src_security_group_name=None, src_security_group_owner_id=None):
+        group_name = None
+        group_id = None
+        if isinstance(group, SecurityGroup) or isinstance(group, BotoGroup):
+            group_id = group.id
+
+        elif re.match('^sg-\w{8}$',str(group).strip()):
+            group_id = group
+        elif isinstance(group, str) or isinstance(group, unicode):
             group_name = group
-        if src_security_group_name:
-            self.debug( "Attempting revoke of " + group_name + " from " + str(src_security_group_name) +
-                        " on port " + str(port) + " " + str(protocol) )
         else:
-            self.debug( "Attempting revoke of " + group_name + " on port " + str(port) + " " + str(protocol) )
-        self.ec2.revoke_security_group(group_name,
+            raise ValueError('Could not find or format group arg for revoke. group:"{0}:{1}"'
+                             .format(group, type(group)))
+        self.debug( 'Attempting revoke: group:"{0}/{1}", port:{2}, protocol:{3}, '
+                    'cidr_ip:"{4}", src_grp:"{5}"'.format(group_id,
+                                                          group_name,
+                                                          port,
+                                                          protocol,
+                                                          cidr_ip,
+                                                          src_security_group_name))
+        self.ec2.revoke_security_group(group_name=group_name,
+                                       group_id=group_id,
                                        ip_protocol=protocol,
                                        from_port=port,
                                        to_port=port,
@@ -1042,7 +1042,7 @@ disable_root: false"""
         self.debug( str(len(volumes))+"/"+str(count)+" requests for volume creation succeeded." )
         
         if volumes:
-            self.print_euvolume_list(volumes)
+            self.show_volumes(volumes)
         
         if not monitor_to_state:
             self.test_resources["volumes"].extend(volumes)
@@ -1174,7 +1174,7 @@ disable_root: false"""
                 retlist.remove(failedvol)
                 buf += str(failedvol.id)+"-state:"+str(failedvol.status)+","
                 self.debug(buf)
-        self.print_euvolume_list(origlist)
+        self.show_volumes(origlist)
         return retlist
 
     @Eutester.printinfo
@@ -1238,7 +1238,7 @@ disable_root: false"""
             except:
                 self.debug(self.get_traceback())
 
-        self.print_euvolume_list(monitor)
+        self.show_volumes(monitor)
         while monitor and (elapsed < timeout):
             elapsed = int(time.time()-start)
             for vol in monitor:
@@ -1274,10 +1274,10 @@ disable_root: false"""
                             good.append(monitor.pop(monitor.index(vol)))
             self.debug('Waiting for '+str(len(monitor))+ " remaining Volumes. Sleeping for poll_interval: "
                        +str(poll_interval)+" seconds ...")
-            self.print_euvolume_list(euvolumes)
+            self.show_volumes(euvolumes)
             time.sleep(poll_interval)
         self.debug('Done with monitor volumes after '+str(elapsed)+"/"+str(timeout)+"...")
-        self.print_euvolume_list(euvolumes)
+        self.show_volumes(euvolumes)
         if monitor:
             for vol in monitor:
                 failmsg +=  str(vol.id)+" -TIMED OUT current state/attached_state:'" \
@@ -1287,13 +1287,13 @@ disable_root: false"""
             failed.extend(monitor)
         #finally raise an exception if any failures were detected al    long the way...
         if failmsg:
-            self.print_euvolume_list(failed)
+            self.show_volumes(failed)
             raise Exception(failmsg)
         return good
 
 
                 
-    def print_euvolume_list(self,euvolumelist=None):
+    def show_volumes(self,euvolumelist=None):
         """
 
         :param euvolumelist: list of euvolume
@@ -1318,7 +1318,7 @@ disable_root: false"""
             buf += volume.printself(title=False)
         self.debug("\n"+str(buf)+"\n")
         
-    def print_eusnapshot_list(self,eusnapshots=None):
+    def show_snapshots(self,eusnapshots=None):
         """
 
         :param eusnapshots: list of eusnapshots
@@ -1976,7 +1976,7 @@ disable_root: false"""
         snapshots = copy.copy(retlist)
         snapshots.extend(failed)
         #Print the results in a formated table
-        self.print_eusnapshot_list(snapshots)
+        self.show_snapshots(snapshots)
         #Check for failure and failure criteria and return 
         self.test_resources['snapshots'].extend(snapshots)
         if failed and eof:
@@ -2600,7 +2600,7 @@ disable_root: false"""
             if not image.block_device_mapping:
                 mainbuf += " N/A\n"
             else:
-                mainbuf += "\n" + str(self.print_block_device_map(image.block_device_mapping,
+                mainbuf += "\n" + str(self.show_block_device_map(image.block_device_mapping,
                                                                   printme=False)) + "\n"
             mainbuf += header("\nIMAGE TAGS:\n")
             mainbuf += str(self.show_tags(image.tags, printme=False)) + "\n"
@@ -2612,7 +2612,7 @@ disable_root: false"""
             return main_pt
 
     def show_tags(self, tags, printmethod=None, printme=True):
-        if not isinstance(tags, boto.ec2.tag.TagSet) and not isinstance(tags, dict):
+        if not isinstance(tags, TagSet) and not isinstance(tags, dict):
             if hasattr(tags, 'tags'):
                 tags = tags.tags
             else:
@@ -3238,7 +3238,7 @@ disable_root: false"""
             try:
                 self.debug('\n{0}\n{1}'
                            .format(self.markup('Euinstance list prior to running image:'),
-                                   self.print_euinstance_list(printme=False)))
+                                   self.show_instances(printme=False)))
             except Exception, e:
                 self.debug('Failed to print euinstance list before running image, err:' +str(e))
             cmdstart=time.time()
@@ -3349,7 +3349,7 @@ disable_root: false"""
                         good.append(instance)
                 else:
                     good.append(instance)
-                    self.print_block_device_map(instance.block_device_mapping)
+                    self.show_block_device_map(instance.block_device_mapping)
             for instance in good:
                 if instance in waiting:
                     waiting.remove(instance)
@@ -3452,7 +3452,7 @@ disable_root: false"""
             for instance in waiting:
                 buf += str(instance.id)+":"+str(instance.ip_address)+","
             raise Exception(buf)
-        self.print_euinstance_list(good)
+        self.show_instances(good)
         return good
     
 
@@ -3522,12 +3522,111 @@ disable_root: false"""
             if s:
                 s.close()
 
+    def revoke_instance_for_test_machine(self,
+                                         instance,
+                                         group=None,
+                                         auths={'tcp':22, 'icmp':-1},
+                                         force_source_update=False):
+        '''
+        Attempts to remove any of the specific rules that self.authorize_instance_for_test_machine
+        may have added allowing access from the localhost/test machine to this instance.
+        This does not guarantee that other (more open) rules are not present allowing this
+        machine access. See self.does_instance_security_group_allow method for how to check
+        if a security group allows access or not.
+        :param instance: a Boto instance obj
+        :param group: Boto Security group, if not provided the first one found in use by the
+                      instance will be used.
+        :param auths: a dict of protocol:port mappings to be used, ie: {'tcp':22, 'icmp':-1}
+        :param revoke: if True, this method will revoke instead of authorize the auths provided
+        :param force_source_update: Force the update of self.ec2_source_ip
+        '''
+        self.authorize_group(instance=instance, group=group, auths=auths, revoke=True,
+                             force_source_update=force_source_update)
+
+
+    def authorize_instance_for_test_machine(self,
+                                            instance,
+                                            group=None,
+                                            auths={'tcp':22, 'icmp':-1},
+                                            revoke=False,
+                                            force_source_update=False):
+        """
+        Attempts to add specific security groups rules allowing the current/local test machine's
+        ip access to an instance using single host(32 bit masked) cidr_ip rules for the local host.
+
+        To avoid conflicts with multi-homed test machines, this method attempts to find the
+        interface/IP used to reach a particular instance and authorize the local IP for
+        access to the instance. By default ssh and icmp access are authorized.
+        By default this method will attempt to authorize the provided 'auth' dict of protocol/port
+        mappings. If 'revoke' is set to True this method will instead attempt to revoke the
+        provided auths mappings.
+        The value is retained under the 'ec2_source_ip' but can be updated with use of
+        the 'force_source_update' param/flag.
+
+        :param instance: a Boto instance obj
+        :param group: Boto Security group, if not provided the first one found in use by the
+                      instance will be used.
+        :param auths: a dict of protocol:port mappings to be used, ie: {'tcp':22, 'icmp':-1}
+        :param revoke: if True, this method will revoke instead of authorize the auths provided
+        :param force_source_update: Force the update of self.ec2_source_ip
+        """
+        if not isinstance(instance, Instance):
+            raise ValueError('instance type must be Boto Instance class, got type:"{0}:{1}"'
+                             .format(instance, type(instance)))
+        if group:
+            if not isinstance(group, SecurityGroup):
+                raise ValueError('group must be of type Boto SecurityGroup class, '
+                                 'got type:"{0}:{1}"'.format(group, type(group)))
+        elif instance.groups:
+            group = instance.groups[0]
+        else:
+            raise RuntimeError('Group not found or provided for instance:"{0}"'
+                               .format(instance.id))
+        #Use the local test machine's addr
+        if force_source_update or not self.ec2_source_ip or self.ec2_source_ip == "0.0.0.0":
+            #Try to get the outgoing addr used to connect to this instance
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM,socket.IPPROTO_UDP)
+            s.connect((instance.ip_address,1))
+            # set the tester's global source_ip, assuming it can
+            # re-used (at least until another method sets it to None again)
+            self.ec2_source_ip = s.getsockname()[0]
+        if self.ec2_source_ip == "0.0.0.0":
+            raise RuntimeError('Test machine source ip detected:' + str(self.ec2_source_ip) +
+                               ', tester may need ec2_source_ip set manually')
+        cidr_ip = self.ec2_source_ip + "/32"
+        for protocol in auths:
+            if revoke:
+                self.revoke(group=group, protocol=protocol, port=auths[protocol], cidr_ip=cidr_ip)
+            else:
+                self.authorize_group(group=group, protocol=protocol, port=auths[protocol],
+                                     cidr_ip=cidr_ip)
+
+        self.debug('Done operating on Instance:"{0}" SecGroup:"{1}" for test machine access'
+                   .format(instance.id, group.id))
+        self.show_security_group(group)
+
+
+
     def get_security_group(self, id=None, name=None):
-        #Adding this as both a convienence to the user to separate euare groups from security groups
-        #Not sure if botos filter on group names and ids is reliable?
+        """
+         Adding this as both a convienence to the user to separate euare groups
+         from security groups
+        """
+        # To allow easy updating of a group (since group.update() is not implemented at this time),
+        # handle SecurityGroup arg type for either kwargs...
+        names = None
+        ids = None
+        if isinstance(id, SecurityGroup) or isinstance(id, BotoGroup):
+            id = id.id
+        if isinstance(name, SecurityGroup) or isinstance(name, BotoGroup):
+            name = name.name
         if not id and not name:
             raise Exception('get_security_group needs either a name or an id')
-        groups = self.ec2.get_all_security_groups(groupnames=[name], group_ids=id)
+        if id:
+            ids = [id]
+        if name:
+            names = [name]
+        groups = self.ec2.get_all_security_groups(groupnames=names, group_ids=ids)
         for group in groups:
             if not id or (id and group.id == id):
                 if not name or (name and group.name == name):
@@ -3758,7 +3857,7 @@ disable_root: false"""
             if monitor:
                 time.sleep(poll_interval)
                 
-        self.print_euinstance_list(instance_list)
+        self.show_instances(instance_list)
         if monitor:
             failmsg = "Some instances did not go to state:"+str(state)+' within timeout:'+str(timeout)+"\nFailed:"
             for instance in monitor:
@@ -3786,7 +3885,7 @@ disable_root: false"""
         return instance.show_summary(printme=printme)
 
 
-    def print_euinstance_list(self,
+    def show_instances(self,
                               euinstance_list=None,
                               state=None,
                               instance_id=None,
@@ -4228,7 +4327,7 @@ disable_root: false"""
                 else:
                     raise e
         try:
-            self.print_euinstance_list(euinstance_list=monitor_list)
+            self.show_instances(euinstance_list=monitor_list)
         except:
             pass
         try:
@@ -4302,12 +4401,12 @@ disable_root: false"""
         prefix = prefix or 'bundleof-' + str(instance.id)
         s3_upload_policy = self.generate_default_s3_upload_policy(bucket_name,prefix)
         bundle_task = self.ec2.bundle_instance(instance.id, bucket_name, prefix, s3_upload_policy)
-        self.print_bundle_task(bundle_task)
+        self.show_bundle_task(bundle_task)
         return bundle_task
 
 
 
-    def print_bundle_task(self,bundle, header=True, footer=True, printout=True):
+    def show_bundle_task(self,bundle, header=True, footer=True, printout=True):
 
         """
         Prints formatted output of bundle task attributes.
@@ -4437,7 +4536,7 @@ disable_root: false"""
                 try:
                     bundle_task = self.get_bundle_task_by_id(bundle_id)
                     if bundle_task:
-                        self.print_bundle_task(bundle_task)
+                        self.show_bundle_task(bundle_task)
                     else:
                         self.debug(str(bundle_id) + ": Assuming bundle task is complete, fetch came back empty?")
                         monitor_list.remove(bundle_id)
@@ -4743,7 +4842,7 @@ disable_root: false"""
                         done_list.append(task)
                         continue
             try:
-                self.print_conversion_task_list(clist=monitor_list)
+                self.show_conversion_task_list(clist=monitor_list)
             except Exception as PE:
                 self.debug('failed to print conversion task list, err:' +
                     str(PE))
@@ -4758,7 +4857,7 @@ disable_root: false"""
                            .format(len(checking_list), state, interval))
                 time.sleep(interval)
             elapsed = int(time.time() - start)
-        self.print_conversion_task_list(clist=tasks)
+        self.show_conversion_task_list(clist=tasks)
         #Any tasks still in checking_list are failures
         for task in checking_list:
             err_buf += ('Monitor complete. Task "{0}:{1}" not in desired '
@@ -4773,7 +4872,7 @@ disable_root: false"""
             raise Exception('Monitor conversion tasks failures detected:\n'
                             + str(err_buf))
 
-    def print_conversion_task_list(self,
+    def show_conversion_task_list(self,
                                    clist=None,
                                    doprint=True,
                                    printmethod=None):
@@ -4867,7 +4966,7 @@ disable_root: false"""
         tasks = tasks or self.test_resources['conversion_tasks']
         if not isinstance(tasks, types.ListType):
             tasks = [tasks]
-        printbuf = self.print_conversion_task_list(clist=tasks, doprint=False)
+        printbuf = self.show_conversion_task_list(clist=tasks, doprint=False)
         self.debug('Cancel Conversion task list...\n' + str(printbuf))
         cancel_tasks = copy.copy(tasks)
         for task in tasks:
@@ -4879,7 +4978,7 @@ disable_root: false"""
         for task in cancel_tasks:
             task.cancel()
         self.monitor_conversion_tasks(tasks=cancel_tasks, states=['canceled'])
-        printbuf = self.print_conversion_task_list(clist=tasks, doprint=False)
+        printbuf = self.show_conversion_task_list(clist=tasks, doprint=False)
         self.debug('Done with canceling_conversion_tasks...' + str(printbuf))
 
 
@@ -5028,7 +5127,7 @@ disable_root: false"""
                 break
         return vm_type
 
-    def print_block_device_map(self,block_device_map, printmethod=None, printme=True ):
+    def show_block_device_map(self,block_device_map, printmethod=None, printme=True ):
         printmethod = printmethod or self.debug
 
         title = 'BLOCK DEVICE MAP'
@@ -5053,7 +5152,7 @@ disable_root: false"""
         else:
             return main_pt
 
-    def print_all_vm_types(self,zone=None, debugmethod=None):
+    def show_vm_types(self,zone=None, debugmethod=None):
         debugmethod = debugmethod or self.debug
         buf = "\n"
         if zone:

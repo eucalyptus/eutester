@@ -692,7 +692,7 @@ class Net_Tests(EutesterTestCase):
                     self.debug('Reset ssh connection to instance:{0} first...'
                                .format(instance1.id))
                     instance1.connect_to_instance()
-                    self.debug('Now Running the ssh command which checks connectivity from '
+                    self.status('Now Running the ssh command which checks connectivity from '
                                'instance1 to instance2...')
                     instance1.sys("ssh -o StrictHostKeyChecking=no -i "
                                   + str(os.path.basename(instance1.keypath))
@@ -728,16 +728,26 @@ class Net_Tests(EutesterTestCase):
                         self.status('Ssh between instances passed')
                         break
 
-        self.status('Authorizing access from group1 to group1, then checking connectivity...')
+        self.status('Authorizing access from group1 individual instance IPs to group2, '
+                    'then checking connectivity...')
         self.authorize_group_for_instance_list(self.group2, self.group1_instances)
+        self.status('group2 should now allow access from each individual instance IP from '
+                    'group1...')
+        self.tester.show_security_group(self.group2)
         check_instance_connectivity()
-        self.status('Revoking auth for group1 to group2, then re-add...')
+        self.status('Revoking auth for group1 instances from group2, then re-add using '
+                    'the using the group id instead of invididual instance IPs...')
         self.revoke_group_for_instance_list(self.group2, self.group1_instances)
+        self.status('group2 should no longer have authorization from the individual instance IPs'
+                    'from group1...')
+        self.tester.show_security_group(self.group2)
         self.status('Auth group1 access to group2...')
         self.tester.authorize_group(self.group2, cidr_ip=None, port=22,
                                     protocol='tcp', src_security_group_name=self.group1.name )
         self.tester.authorize_group(self.group2, cidr_ip=None, port=None,
                                     protocol='icmp', src_security_group_name=self.group1.name )
+        self.status('Group2 should now allow access from source group1 on tcp/22 and icmp...')
+        self.tester.show_security_group(self.group2)
         check_instance_connectivity()
 
     def test4_attempt_unauthorized_ssh_from_test_machine_to_group2(self):
