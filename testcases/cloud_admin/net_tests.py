@@ -531,8 +531,9 @@ class Net_Tests(EutesterTestCase):
         self.tester.monitor_euinstances_to_running(self.group1_instances)
         #Now run the network portion.
         for instance in self.group1_instances:
-            self.status('Checking connectivity to:' + str(instance.id) + ":" + str(instance.private_ip_address)+
-                        ", zone:" + str(instance.placement) )
+            self.status('Checking connectivity to:'
+                        + str(instance.id) + ":" + str(instance.private_ip_address)
+                        + ", zone:" + str(instance.placement) )
             assert isinstance(instance, EuInstance)
             self.debug('Attempting to ping instances private ip from cc...')
             self.ping_instance_private_ip_from_euca_internal(instance=instance, ping_timeout=ping_timeout)

@@ -13,6 +13,7 @@ from eutester import WaitForResultException
 from eutester.sshconnection import SshConnection
 from eutester.euinstance import EuInstance
 from eutester.eulogger import Eulogger
+from boto.ec2.group import Group as BotoGroup
 from boto.ec2.instance import Instance
 from boto.ec2.securitygroup import SecurityGroup
 from prettytable import PrettyTable
@@ -779,10 +780,31 @@ class Midget(object):
         else:
             return pt
 
-    def show_chain_for_security_group(self, group):
+    def show_chains_for_instance_security_groups(self, instance, printme=True):
+        if not instance.groups:
+            self.debug('Instance.groups is empty')
+        mainbuf = self._bold("\nSECURITY GROUP/MIDO CHAIN RULE MAPPING for INSTANCE: '{0}'"
+                             .format(instance.id))
+        for group in instance.groups:
+            buf = ""
+            title = 'MIDO CHAIN RULES FOR EUCA SECURITY GROUP:{0} ({1})'.format(group.id, group.name)
+            pt = PrettyTable([title])
+            pt.align[title] ='l'
+            buf += "\n" + str(self.tester.show_security_group(group, printme=False))
+            buf += "\n" + str(self.show_chain_for_security_group(group, printme=False))
+            pt.add_row([buf])
+            mainbuf += "\n" + str(pt)
+        if printme:
+            self.debug(mainbuf)
+        else:
+            return mainbuf
+
+
+
+    def show_chain_for_security_group(self, group, printme=True):
         #sg_ingress_sg-012aee24
         group_id = None
-        if isinstance(group, SecurityGroup):
+        if isinstance(group, SecurityGroup) or isinstance(group, BotoGroup):
             group_id = str(group.id)
         elif group:
             if isinstance(group, str) or isinstance(group, unicode):
@@ -806,7 +828,7 @@ class Midget(object):
             self._errmsg('Chain lookup failed, this could be expected if security group is extant '
                          'and no running are referencing it')
         else:
-            self.show_chain(chain)
+            return self.show_chain(chain, printme=printme)
 
 
     def show_rules(self, rules, jump=False, printme=True):
