@@ -80,7 +80,7 @@ public class TestAutoScalingMetricsManagement {
                     .withAvailabilityZones(AVAILABILITY_ZONE));
 
             // Describe metrics collection types
-            print("Describeing metric collection types");
+            print("Describing metric collection types");
             final DescribeMetricCollectionTypesResult collectionTypesResult = as.describeMetricCollectionTypes();
             print(collectionTypesResult.toString());
             assertThat(collectionTypesResult.getGranularities() != null, "Expected granularities");

@@ -146,7 +146,7 @@ public class TestAutoScalingSuspendAndResumeProcesses {
             // Wait for instances to launch
             print("Waiting for instance to launch");
             final long startTime = System.currentTimeMillis();
-            final long launchTimeout = TimeUnit.MINUTES.toMillis(5);
+            final long launchTimeout = TimeUnit.MINUTES.toMillis(15);
             boolean launched = false;
             while (!launched && (System.currentTimeMillis() - startTime) < launchTimeout) {
                 Thread.sleep(5000);
@@ -165,7 +165,7 @@ public class TestAutoScalingSuspendAndResumeProcesses {
             // Wait for instances to terminate
             print("Waiting for instance to terminate");
             final long terminateStartTime = System.currentTimeMillis();
-            final long terminateTimeout = TimeUnit.MINUTES.toMillis(5);
+            final long terminateTimeout = TimeUnit.MINUTES.toMillis(15);
             boolean terminated = false;
             while (!terminated && (System.currentTimeMillis() - terminateStartTime) < terminateTimeout) {
                 Thread.sleep(5000);

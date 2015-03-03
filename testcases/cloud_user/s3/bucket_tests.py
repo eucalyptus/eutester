@@ -8,6 +8,7 @@
 ###########################################
 
 #Author: Zach Hill <zach@eucalyptus.com>
+from datetime import date
 
 from eucaops import Eucaops
 import argparse
@@ -24,6 +25,7 @@ from boto.s3.bucket import Bucket
 from boto.s3.key import Key
 from boto.s3.acl import ACL, Policy, Grant
 from boto.s3.connection import Location
+from boto.s3.lifecycle import Lifecycle, Rule, Expiration
 
 
 class BucketTestSuite(EutesterTestCase):
@@ -31,22 +33,22 @@ class BucketTestSuite(EutesterTestCase):
     def __init__(self):
         self.setuptestcase()
         self.setup_parser()
-        self.parser.add_argument("--s3endpoint", default=None)
+        self.parser.add_argument("--endpoint", default=None)
         self.get_args()
         # Setup basic eutester object
-        if self.args.s3endpoint:
-            self.tester = S3ops( credpath=self.args.credpath, endpoint=self.args.endpoint)
+        if self.args.endpoint:
+            self.tester = S3ops(credpath=self.args.credpath, endpoint=self.args.endpoint)
         else:
             self.tester = Eucaops( credpath=self.args.credpath, config_file=self.args.config, password=self.args.password)
 
-        self.bucket_prefix = "eutester-bucket-test-suite-" + str(int(time.time())) + "-"
+        self.bucket_prefix = "eutester-bucket-test-suite-" + str(int(time.time()))
         self.buckets_used = set()
         
     def test_bucket_get_put_delete(self):
         '''
         Method: Tests creating and deleting buckets as well as getting the bucket listing
         '''
-        test_bucket=self.bucket_prefix + "simple_test_bucket"
+        test_bucket=self.bucket_prefix + "-simple-test-bucket"
         self.buckets_used.add(test_bucket)
         self.tester.debug("Starting get/put/delete bucket test using bucket name: " + test_bucket)
  
@@ -77,75 +79,29 @@ class BucketTestSuite(EutesterTestCase):
             self.tester.debug( "Correctly got exception trying to get a deleted bucket! " )
             
         self.tester.debug( "Testing an invalid bucket names, calls should fail." )
-        try:
-            bad_bucket = self.bucket_prefix + "bucket123/"
-            self.tester.create_bucket(bad_bucket)
-            should_fail = True            
+        def test_creating_bucket_invalid_names(bad_bucket):
+            should_fail = False
             try:
-                self.tester.delete_bucket(bad_bucket)
-            except:
-                self.tester.debug( "Exception deleting bad bucket, shouldn't be here anyway. Test WILL fail" )
-                
+                bucket = self.tester.create_bucket(bad_bucket)
+                should_fail = True            
+                try:
+                    self.tester.delete_bucket(bucket)
+                except:
+                    self.tester.debug( "Exception deleting bad bucket, shouldn't be here anyway. Test WILL fail" )
+            except Exception as e:
+                self.tester.debug("Correctly caught the exception for bucket name '" + bad_bucket + "' Reason: " + e.reason)
             if should_fail:
                 self.fail("Should have caught exception for bad bucket name: " + bad_bucket)
-        except:
-            self.tester.debug( "Correctly caught the exception" )
-        
-        try:
-            bad_bucket = self.bucket_prefix + "bucket.123"
-            self.tester.create_bucket(bad_bucket)
-            should_fail = True            
-            try:
-                self.tester.delete_bucket(bad_bucket)
-            except:
-                self.tester.debug( "Exception deleting bad bucket, shouldn't be here anyway. Test WILL fail" )
-                
-            if should_fail:
-                self.fail("Should have caught exception for bad bucket name: " + bad_bucket)
-        except:
-            self.tester.debug( "Correctly caught the exception" )
-        
-        try:
-            bad_bucket = self.bucket_prefix + "bucket&123"
-            self.tester.create_bucket(bad_bucket)
-            should_fail = True            
-            try:
-                self.tester.delete_bucket(bad_bucket)
-            except:
-                self.tester.debug( "Exception deleting bad bucket, shouldn't be here anyway. Test WILL fail" )
-                
-            if should_fail:
-                self.fail("Should have caught exception for bad bucket name: " + bad_bucket)
-        except:
-            self.tester.debug( "Correctly caught the exception" )
-        
-        try:
-            bad_bucket = self.bucket_prefix + "bucket*123"
-            self.tester.create_bucket(bad_bucket)
-            should_fail = True            
-            try:
-                self.tester.delete_bucket(bad_bucket)
-            except:
-                self.tester.debug( "Exception deleting bad bucket, shouldn't be here anyway. Test WILL fail" )
-                
-            if should_fail:
-                self.fail("Should have caught exception for bad bucket name: " + bad_bucket)
-        except:
-            self.tester.debug( "Correctly caught the exception" )
-        
-        try:
-            bad_bucket = self.bucket_prefix + "/bucket123"
-            self.tester.create_bucket(bad_bucket)
-            should_fail = True            
-            try:
-                self.tester.delete_bucket(bad_bucket)
-            except:
-                self.tester.debug( "Exception deleting bad bucket, shouldn't be here anyway. Test WILL fail" )
-                
-            if should_fail:
-                self.fail("Should have caught exception for bad bucket name: " + bad_bucket)
-        except:
-            self.tester.debug( "Correctly caught the exception" )
+
+        # with the EUCA-8864 fix, a new property 'objectstorage.bucket_naming_restrictions'
+        # has been introduced, now 'bucket..123', 'bucket.' are actually valid bucket names
+        # when using 'extended' naming convention.
+        # http://docs.aws.amazon.com/AmazonS3/latest/dev/BucketRestrictions.html
+        # when DNS is not being used, for now buckets can be created with bucket
+        # names like '/bucket123', 'bucket123/', see EUCA-8863
+        # TODO check what bucket naming convention is being used for the test
+        for bad_bucket in ["bucket&123", "bucket*123"]:
+            test_creating_bucket_invalid_names(self.bucket_prefix + bad_bucket)
 
         """
         Test creating bucket with null name
@@ -157,8 +113,8 @@ class BucketTestSuite(EutesterTestCase):
             if bucket_obj:
                 self.fail("Should have caught exception for creating bucket with empty-string name.")
         except S3ResponseError as e:
-            self.assertEqual(e.status, 405, 'Expected response status code to be 405, actual status code is ' + str(e.status))
-            self.assertTrue(re.search("MethodNotAllowed", e.code), "Incorrect exception returned when creating bucket with null name.")
+            assert (e.status == 405), 'Expected response status code to be 405, actual status code is ' + str(e.status)
+            assert (re.search("MethodNotAllowed", e.code)), "Incorrect exception returned when creating bucket with null name."
         except Exception, e:
             self.tester.debug("Failed due to EUCA-7059 " + str(e))
 
@@ -436,7 +392,7 @@ class BucketTestSuite(EutesterTestCase):
         test_bucket = self.bucket_prefix + "versioning_test_bucket"
         self.tester.info('Testing bucket versioning using bucket:' + test_bucket)
         version_bucket = self.tester.s3.create_bucket(test_bucket)
-        self.buckets_used.add(version_bucket)
+        self.buckets_used.add(test_bucket)
         version_status = version_bucket.get_versioning_status().get("Versioning")
         
         #Test the default setup after bucket creation. Should be disabled.
@@ -481,7 +437,7 @@ class BucketTestSuite(EutesterTestCase):
         self.tester.info("Versioning of bucket is set to: " + version_status)
         
         version_bucket.delete()
-        self.buckets_used.remove(version_bucket)
+        self.buckets_used.remove(test_bucket)
         self.tester.info("Bucket Versioning: PASSED")
                
     def test_bucket_key_listing_paging(self):
@@ -539,7 +495,7 @@ class BucketTestSuite(EutesterTestCase):
         key_list = testbucket.get_all_keys()
         
         for k in key_list:
-            self.tester.info("Deleting key: " + k.key())
+            self.tester.info("Deleting key: " + k.name)
             testbucket.delete_key(k)
 
         self.tester.info("Deleting the bucket")
@@ -549,9 +505,68 @@ class BucketTestSuite(EutesterTestCase):
     def test_list_multipart_uploads(self):
         self.fail("Feature Not implemented")
 
-    def test_bucket_lifecycle(self):        
-        self.fail("Feature Not implemented")
-        
+    def test_bucket_lifecycle(self):
+        lifecycle_id = 'eutester lifecycle test'
+        lifecycle_prefix = 'eulifecycle'
+        lifecycle_status = 'Enabled'
+        lifecycle_expiration = 1
+        bucket_name = self.bucket_prefix + "lifecycle-test0"
+        self.buckets_used.add(bucket_name)
+        bucket = self.tester.create_bucket(bucket_name)
+
+        lifecycle = Lifecycle()
+        lifecycle.add_rule(lifecycle_id, lifecycle_prefix, lifecycle_status, lifecycle_expiration)
+        bucket.configure_lifecycle(lifecycle)
+        responses = bucket.get_lifecycle_config()
+        assert (len(responses) == 1), 'found not true'
+        lifecycle_response = responses[0]
+        assert (lifecycle_response.id == lifecycle_id), "Expected lifecycle Id to be: " + lifecycle_id + " found " + lifecycle_response.id
+        assert (lifecycle_response.prefix == lifecycle_prefix), "Expected lifecycle prefix to be: " + lifecycle_prefix + " found " + lifecycle_response.prefix
+        assert (lifecycle_response.status == lifecycle_status), "Expected lifecycle status to be: " + lifecycle_status + " found " + lifecycle_response.status
+        assert (lifecycle_response.expiration.days == lifecycle_expiration), "Expected lifecycle expiration days to be: " + str(lifecycle_expiration) + " found " + str(lifecycle_response.expiration.days)
+
+        bucket.delete_lifecycle_configuration()
+        assert (len(responses) == 1), "Expected no configuration, found " + len(responses) + " configuration"
+
+        # multiple rules
+        bucket_name = self.bucket_prefix + "lifecycle-test1"
+        bucket = self.tester.create_bucket(bucket_name)
+        self.buckets_used.add(bucket_name)
+        date = '2022-10-12T00:10:10.011Z'
+        lifecycle = Lifecycle()
+        lifecycle.add_rule("1", "1/", "Enabled", 1)
+        lifecycle.add_rule("2", "2/", "Enabled", Expiration(days=2))
+        lifecycle.add_rule("3", "3/", "Enabled", Expiration(date=date))
+        lifecycle.add_rule("4", "4/", "Disabled", Expiration(date=date))
+        bucket.configure_lifecycle(lifecycle)
+        lifecycle_responses = bucket.get_lifecycle_config()
+        if lifecycle_responses < 0:
+            self.fail("no lifecycle found!")
+
+        for response in lifecycle_responses:
+            if response.id == "1":
+                assert (response.prefix == "1/"), "Expected lifecycle prefix to be: " + "1/" + " found: " + response.prefix
+                assert (response.status == "Enabled"), "Expected lifecycle status to be: " + "Enabled" + " found " + response.status
+                assert (response.expiration.days == 1), "Expected lifecycle expiration days to be: " + str(1) + " found " + str(response.expiration.days)
+            elif response.id == "2":
+                assert (response.prefix == "2/"), "Expected lifecycle prefix to be: " + "2/" + " found: " + response.prefix
+                assert (response.status == "Enabled"), "Expected lifecycle status to be: " + "Enabled" + " found: " + response.status
+                assert (response.expiration.days == 2), "Expected lifecycle expiration days to be: " + str(2) + " found " + str(response.expiration.days)
+            elif response.id == "3":
+                assert (response.prefix == "3/"), "Expected lifecycle prefix to be: " + "3/" + " found: " + response.prefix
+                assert (response.status == "Enabled"), "Expected lifecycle status to be: " + "Enabled" + " found " + response.status
+                assert (response.expiration.date == date), "Expected lifecycle expiration days to be: " + date + " found " + str(response.expiration.date)
+            elif response.id == "4":
+                assert (response.prefix == "4/"), "Expected lifecycle prefix to be: " + "4/" + " found: " + response.prefix
+                assert (response.status == "Disabled"), "Expected lifecycle status to be: " + "Disabled" + " found " + response.status
+                assert (response.expiration.date == date), "Expected lifecycle expiration days to be: " + date + " found " + str(response.expiration.date)
+            else:
+                self.fail("no response found")
+
+        self.debug("Cleaning up used buckets")
+        for bucket in self.buckets_used:
+            self.tester.clear_bucket(bucket)
+
     def test_bucket_policy(self):
         self.fail("Feature Not implemented")
         
@@ -572,7 +587,7 @@ class BucketTestSuite(EutesterTestCase):
                 else:
                     self.tester.info('Bucket ' + bucket + ' not found, skipping')
             except:
-                self.tester.info('Exception checking bucket ' + bucket)
+                self.tester.info('Exception checking bucket ' + str(bucket))
 
         return
           

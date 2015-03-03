@@ -1,4 +1,4 @@
-# Copyright 2011-2012 Eucalyptus Systems, Inc.
+# Copyright 2011-2014 Eucalyptus Systems, Inc.
 #
 # Redistribution and use of this software in source and binary forms,
 # with or without modification, are permitted provided that the following
@@ -44,6 +44,17 @@ class STSops(Eutester):
         super(STSops, self).__init__(credpath=credpath)
         self.setup_sts_connection(endpoint=endpoint, region=region, aws_access_key_id=self.aws_access_key_id, aws_secret_access_key=self.aws_secret_access_key)
 
+    def get_sts_ip(self):
+        """Parse the eucarc for the TOKEN_URL"""
+        sts_url = self.parse_eucarc("TOKEN_URL")
+        return sts_url.split("/")[2].split(":")[0]
+
+    def get_sts_path(self):
+        """Parse the eucarc for the TOKEN_URL"""
+        sts_url = self.parse_eucarc("TOKEN_URL")
+        sts_path = "/".join(sts_url.split("/")[3:])
+        return sts_path
+
     def setup_sts_connection(self, endpoint=None, region=None, aws_access_key_id=None, aws_secret_access_key=None, path="/",port=443, is_secure=True, boto_debug=0):
         sts_region = RegionInfo()
         if region:
@@ -60,7 +71,7 @@ class STSops(Eutester):
             if endpoint:
                 sts_region.endpoint = endpoint
             else:
-                sts_region.endpoint = self.get_ec2_ip()
+                sts_region.endpoint = self.get_sts_ip()
 
         try:
             sts_connection_args = { 'aws_access_key_id' : aws_access_key_id,
@@ -70,7 +81,7 @@ class STSops(Eutester):
                                     'port' : port,
                                     'path' : path,
                                     'region' : sts_region}
-            self.debug("Attempting to create STS connection to " + self.get_ec2_ip() + ':' + str(port) + path)
+            self.debug("Attempting to create STS connection to " + sts_region.endpoint + ':' + str(port) + path)
             self.tokens = boto.connect_sts(**sts_connection_args)
         except Exception, e:
             self.critical("Was unable to create STS connection because of exception: " + str(e))

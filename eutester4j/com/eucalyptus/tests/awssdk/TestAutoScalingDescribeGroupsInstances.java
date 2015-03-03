@@ -90,7 +90,7 @@ public class TestAutoScalingDescribeGroupsInstances {
 
             // Wait for instances to launch
             print( "Waiting for instance to launch" );
-            final long timeout = TimeUnit.MINUTES.toMillis( 5 );
+            final long timeout = TimeUnit.MINUTES.toMillis( 15 );
             final String instanceId = (String) waitForInstances(timeout, 1, groupName,true).get( 0 );
 
             // Verify instances are included when describing the group
@@ -113,7 +113,7 @@ public class TestAutoScalingDescribeGroupsInstances {
             assertThat( configName.equals(asInstance.getLaunchConfigurationName()), "Unexpected launch configuration name: " + asInstance.getLaunchConfigurationName() );
             assertThat(AVAILABILITY_ZONE.equals(asInstance.getAvailabilityZone()), "Unexpected availability zone: " + asInstance.getAvailabilityZone());
             assertThat("Healthy".equals(asInstance.getHealthStatus()), "Unexpected health status: " + asInstance.getHealthStatus());
-            waitForInstances("InService", TimeUnit.MINUTES.toMillis(5), groupName, false);
+            waitForInstances("InService", TimeUnit.MINUTES.toMillis(15), groupName, false);
             print( "Test complete" );
         } finally {
             // Attempt to clean up anything we created

@@ -52,8 +52,10 @@ from eutester import Eutester
 from eutester.euvolume import EuVolume
 from eutester import eulogger
 from eutester.taggedresource import TaggedResource
+from boto.ec2.instance import InstanceState
 from random import randint
-import sshconnection
+import eutester.sshconnection as sshconnection
+from eutester.sshconnection import CommandExitCodeException
 import sys
 import os
 import re
@@ -141,7 +143,7 @@ class EuInstance(Instance, TaggedResource):
         newins.retry = retry    
         newins.private_addressing = private_addressing
         newins.reservation = reservation or newins.get_reservation()
-        if newins.reservation:
+        if newins.reservation and newins.state != 'terminated':
             newins.security_groups = newins.tester.get_instance_security_groups(newins)
         else:
             newins.security_groups = None
@@ -149,8 +151,9 @@ class EuInstance(Instance, TaggedResource):
         newins.cmdstart = cmdstart
         newins.auto_connect = auto_connect
         newins.set_last_status()
-        newins.update_vm_type_info()
-        if newins.root_device_type == 'ebs':
+        if newins.state != 'terminated':
+            newins.update_vm_type_info()
+        if newins.root_device_type == 'ebs' and newins.state != 'terminated':
             try:
                 volume = newins.tester.get_volume(volume_id = newins.block_device_mapping.get(newins.root_device_name).volume_id)
                 newins.bdm_root_vol = EuVolume.make_euvol_from_vol(volume, tester=newins.tester,cmdstart=newins.cmdstart)
@@ -158,7 +161,6 @@ class EuInstance(Instance, TaggedResource):
                 
         if newins.auto_connect and newins.state == 'running':
             newins.connect_to_instance(timeout=timeout)
-            newins.set_rootfs_device()
         #Allow non-root users to try sudo if available else su -c to execute privileged commands
         newins.try_non_root_exec = try_non_root_exec
         if newins.try_non_root_exec:
@@ -170,17 +172,43 @@ class EuInstance(Instance, TaggedResource):
 
         return newins
     
-    def update(self):
-        super(EuInstance, self).update()
+
+    def update(self, validate=False, dry_run=False,
+                err_state='terminated', err_code=-1):
+        ret = None
+        tb = ""
+        retries = 2
+        for x in xrange(0, retries):
+            try:
+                #send with validation True, fail later...
+                ret = super(EuInstance, self).update(validate=True,
+                                                      dry_run=dry_run)
+                break
+            except ValueError:
+                if validate:
+                    raise
+                tb = self.tester.get_traceback()
+                self.debug('Failed to update instance. Attempt:{0}/{1}'
+                           .format(x, retries))
+        if not ret:
+            failmsg = 'Failed to update instance. Instance may no longer ' \
+                      'be present on system"{0}"'.format(self.id)
+            self.debug('{0}\n{1}'.format(tb, failmsg))
+            self.debug('{0} setting fake state to:"{1}"'.format(self.id,
+                                                                err_state))
+            state = InstanceState(name=err_state, code=err_code)
+            self._state = state
+            ret = self.state
         self.set_last_status()
-    
+        return ret
+
     def set_last_status(self,status=None):
         self.laststate = self.state
         self.laststatetime = time.time()
         self.age_at_state = self.tester.get_instance_time_launched(self)
         #Also record age from user's perspective, ie when they issued the run instance request (if this is available)
-        if self.cmdstart:
-            self.age_from_run_cmd = "{0:.2f}".format(time.time() - self.cmdstart) 
+        if hasattr(self, "cmdstart") and self.cmdstart:
+            self.age_from_run_cmd = "{0:.2f}".format(time.time() - self.cmdstart)
         else:
             self.age_from_run_cmd = None
         
@@ -268,7 +296,8 @@ class EuInstance(Instance, TaggedResource):
                                                     debugmethod=self.debugmethod,
                                                     verbose=self.verbose)
         else:
-            self.debug("keypath or username/password need to be populated for ssh connection") 
+            self.debug("keypath or username/password need to be populated "
+                       "for ssh connection")
             
 
     def get_reservation(self):
@@ -277,18 +306,21 @@ class EuInstance(Instance, TaggedResource):
             res = self.tester.get_reservation_for_instance(self)
         except Exception, e:
             self.update()
-            self.debug('Could not get reservation for instance in state:' + str(self.state) + ", err:" + str(e))
+            self.debug('Could not get reservation for instance in state:' +
+                       str(self.state) + ", err:" + str(e))
         return res
 
 
     def connect_to_instance(self, timeout=60):
         '''
         Attempts to connect to an instance via ssh.
-        timeout - optional - time in seconds to wait for connection before failure
+        timeout - optional - time in seconds to wait for connection
+                  before failure
         '''
         self.debug("Attempting to reconnect_to_instance:" + self.id)
         attempts = 0
-        if ((self.keypath is not None) or ((self.username is not None)and(self.password is not None))):
+        if ((self.keypath is not None) or
+                ((self.username is not None)and(self.password is not None))):
             start = time.time()
             elapsed = 0
             if self.ssh is not None:
@@ -302,19 +334,49 @@ class EuInstance(Instance, TaggedResource):
                     self.debug('Try some sys...')
                     self.sys("")
                 except Exception, se:
-                    self.debug('Caught exception attempting to reconnect ssh:'+ str(se))
+                    self.debug('Caught exception attempting to reconnect '
+                               'ssh:' + str(se))
                     elapsed = int(time.time()-start)
-                    self.debug('connect_to_instance: Attempts:'+str(attempts)+', elapsed:'+str(elapsed)+'/'+str(timeout))
+                    self.debug('connect_to_instance: Attempts:' +
+                               str(attempts) + ', elapsed:' + str(elapsed) +
+                               '/' + str(timeout))
                     time.sleep(5)
                     pass
                 else:
                     break
             elapsed = int(time.time()-start)
             if self.ssh is None:
-                raise Exception(str(self.id)+":Failed establishing ssh connection to instance, elapsed:"+str(elapsed)+
-                                "/"+str(timeout))
+                self.get_connection_debug()
+                raise RuntimeError(str(self.id) +
+                                   ":Failed establishing ssh connection to "
+                                   "instance, elapsed:" + str(elapsed) +
+                                   "/"+str(timeout))
+            self.set_rootfs_device()
         else:
-            self.debug("keypath or username/password need to be populated for ssh connection")
+            self.debug("keypath or username/password need to be populated "
+                       "for ssh connection")
+
+    def get_connection_debug(self):
+        # Add network debug/diag info here...
+        # First show arp cache from local machine
+        # todo Consider getting info from relevant euca components:
+        # - iptables info
+        # - route info
+        # - instance xml
+        try:
+            # Show local ARP info...
+            arp_out = "\nLocal ARP cache for instance ip: " \
+                      + str(self.ip_address) + "\n"
+            arp_fd = os.popen('arp ' + str(self.ip_address))
+            for line in arp_fd:
+                arp_out += line
+            self.debug(arp_out)
+        except Exception as AE:
+            self.log.debug('Failed to get arp info:' + str(AE))
+        try:
+            self.tester.get_console_output(self)
+        except Exception as CE:
+            self.log.debug('Failed to get console output:' + str(CE))
 
     def has_sudo(self):
         try:
@@ -322,20 +384,23 @@ class EuInstance(Instance, TaggedResource):
             self.ssh.sys('which sudo', code=0)
             return True
         except sshconnection.CommandExitCodeException, se:
-            self.debug('Could not find sudo on remote machine:' + str(self.ip_address))
+            self.debug('Could not find sudo on remote machine:' +
+                       str(self.ip_address))
         return False
 
 
     
     def debug(self,msg,traceback=1,method=None,frame=False):
         '''
-        Used to print debug, defaults to print() but over ridden by self.debugmethod if not None
+        Used to print debug, defaults to print() but over ridden by
+        self.debugmethod if not None
         msg - mandatory -string, message to be printed
         '''
         if ( self.verbose is True ):
             self.debugmethod(msg)
 
-    def sys(self, cmd, verbose=True, code=None, try_non_root_exec=None, enable_debug=False, timeout=120):
+    def sys(self, cmd, verbose=True, code=None, try_non_root_exec=None,
+            enable_debug=False, timeout=120):
         '''
         Issues a command against the ssh connection to this instance
         Returns a list of the lines from stdout+stderr as a result of the command
@@ -347,28 +412,46 @@ class EuInstance(Instance, TaggedResource):
             raise Exception("Euinstance ssh connection is None")
         if self.username != 'root' and try_non_root_exec:
             if self.use_sudo:
-                results = self.sys_with_sudo(cmd, verbose=verbose, code=code, enable_debug=enable_debug, timeout=timeout)
+                results = self.sys_with_sudo(cmd,
+                                             verbose=verbose,
+                                             code=code,
+                                             enable_debug=enable_debug,
+                                             timeout=timeout)
                 for content in results:
                     if content.startswith("sudo"):
                         results.remove(content)
                         break
                 return results
             else:
-                return self.sys_with_su(cmd, verbose=verbose, code=code, enable_debug=enable_debug, timeout=timeout)
+                return self.sys_with_su(cmd,
+                                        verbose=verbose,
+                                        code=code,
+                                        enable_debug=enable_debug,
+                                        timeout=timeout)
 
         return self.ssh.sys(cmd, verbose=verbose, code=code, timeout=timeout)
 
 
-    def sys_with_su(self, cmd, verbose=True, enable_debug=False, code=None, prompt='^Password:', username='root', password=None, retry=0, timeout=120):
+    def sys_with_su(self, cmd, verbose=True, enable_debug=False, code=None,
+                    prompt='^Password:', username='root', password=None,
+                    retry=0, timeout=120):
         password = password or self.exec_password
-        out = self.cmd_with_su(cmd, username=username, password=password, prompt=prompt,
-                               verbose=verbose, enable_debug=enable_debug, timeout=timeout, retry=retry, listformat=True)
+        out = self.cmd_with_su(cmd,
+                               username=username,
+                               password=password,
+                               prompt=prompt,
+                               verbose=verbose,
+                               enable_debug=enable_debug,
+                               timeout=timeout,
+                               retry=retry,
+                               listformat=True)
         output = out['output']
         if code is not None:
             if out['status'] != code:
                 self.debug(output)
-                raise sshconnection.CommandExitCodeException('Cmd:' + str(cmd) + ' failed with status code:'
-                                               + str(out['status']) + ", output:" + str(output))
+                raise sshconnection.CommandExitCodeException(
+                    'Cmd:' + str(cmd) + ' failed with status code:' +
+                    str(out['status']) + ", output:" + str(output))
         return output
 
     def cmd_with_su(self,
@@ -399,15 +482,25 @@ class EuInstance(Instance, TaggedResource):
                                         retry=retry)
 
 
-    def sys_with_sudo(self, cmd, verbose=True, enable_debug=False, prompt='^\[sudo\] password', code=None, password=None, retry=0, timeout=120):
+    def sys_with_sudo(self, cmd, verbose=True, enable_debug=False,
+                      prompt='^\[sudo\] password', code=None,
+                      password=None, retry=0, timeout=120):
         password = password or self.exec_password
-        out = self.cmd_with_sudo(cmd, password=password, enable_debug=enable_debug, prompt=prompt, verbose=verbose, timeout=timeout, retry=retry, listformat=True)
+        out = self.cmd_with_sudo(cmd,
+                                 password=password,
+                                 enable_debug=enable_debug,
+                                 prompt=prompt,
+                                 verbose=verbose,
+                                 timeout=timeout,
+                                 retry=retry,
+                                 listformat=True)
         output = out['output']
         if code is not None:
             if out['status'] != code:
                 self.debug(output)
-                raise sshconnection.CommandExitCodeException('Cmd:' + str(cmd) + ' failed with status code:'
-                                                             + str(out['status']) + ", output:" + str(output))
+                raise sshconnection.CommandExitCodeException(
+                    'Cmd:' + str(cmd) + ' failed with status code:' +
+                    str(out['status']) + ", output:" + str(output))
         return output
 
     def cmd_with_sudo(self,
@@ -458,14 +551,27 @@ class EuInstance(Instance, TaggedResource):
         if (self.ssh is None):
             raise Exception("Euinstance ssh connection is None")
         password = password or self.exec_password
-        return self.ssh.cmd(cmd,verbose=verbose, timeout=timeout, listformat=listformat,
-                            cb=self.ssh.expect_password_cb, cbargs=[password, prompt, cb, cbargs, retry, 0, enable_debug], get_pty=get_pty)
+        return self.ssh.cmd(cmd,
+                            verbose=verbose,
+                            timeout=timeout,
+                            listformat=listformat,
+                            cb=self.ssh.expect_password_cb,
+                            cbargs=[password,
+                                    prompt,
+                                    cb,
+                                    cbargs,
+                                    retry,
+                                    0,
+                                    enable_debug],
+                            get_pty=get_pty)
 
 
     def start_interactive_ssh(self, timeout=180):
         return self.ssh.start_interactive(timeout=timeout)
 
-    def cmd(self, cmd, verbose=None, enable_debug=False, try_non_root_exec=None, timeout=120, listformat=False, cb=None, cbargs=[], get_pty=True):
+    def cmd(self, cmd, verbose=None, enable_debug=False,
+            try_non_root_exec=None, timeout=120, listformat=False,
+            cb=None, cbargs=[], get_pty=True):
         """
         Runs a command 'cmd' within an ssh connection.
         Upon success returns dict representing outcome of the command.
@@ -611,7 +717,15 @@ class EuInstance(Instance, TaggedResource):
             self.debug("List after\n"+" ".join(dev_list_after))
             raise Exception('Volume:'+str(euvolume.id)+' attached, but not found on guest'+str(self.id)+' after '+str(elapsed)+' seconds?')
         #Check to see if this volume has unique data in the head otherwise write some and md5 it
-        self.vol_write_random_data_get_md5(euvolume,overwrite=overwrite)
+        def try_to_write_to_disk():
+            try:
+                self.vol_write_random_data_get_md5(euvolume,overwrite=overwrite)
+                return True
+            except:
+                self.debug("\n" + str(self.tester.get_traceback()) +
+                           "\nError caught in try_to_write_to_disk")
+                return False
+        self.tester.wait_for_result(try_to_write_to_disk, True)
         self.debug('Success attaching volume:'+str(euvolume.id)+' to instance:'+self.id+', cloud dev:'+str(euvolume.attach_data.device)+', attached dev:'+str(attached_dev))
         return attached_dev
     
@@ -677,24 +791,27 @@ class EuInstance(Instance, TaggedResource):
         self.block_device_prefix = "sd"
         self.virtio_blk = False
         try:
-            self.sys("dmesg | grep vda",code=0)
+            self.sys("ls /dev/vda",code=0)
             self.rootfs_device = "vda"
             self.block_device_prefix = "vd"
             self.virtio_blk = True
+            return
         except:
             pass
         try:
-            self.sys("dmesg | grep xvda",code=0)
+            self.sys("ls /dev/xvda",code=0)
             self.rootfs_device = "xvda"
             self.block_device_prefix = "xvd"
             self.virtio_blk = False
+            return
         except:
             pass
         try:
-            self.sys("dmesg | grep sda",code=0)
+            self.sys("ls /dev/sda",code=0)
             self.rootfs_device = "sda"
             self.block_device_prefix = "sd"
             self.virtio_blk = False
+            return
         except:
             pass
 
@@ -785,13 +902,14 @@ class EuInstance(Instance, TaggedResource):
         return retlist
     
     
-    def get_free_scsi_dev(self, prefix=None,maxdevs=16):
+    def get_free_scsi_dev(self, prefix=None, maxdevs=100):
         '''
         The volume attach command requires a cloud level device name that is not currently associated with a volume 
         Note: This is the device name from the clouds perspective, not necessarily the guest's 
         This method attempts to find a free device name to use in the command
         optional - prefix - string, pre-pended to the the device search string
-        optional - maxdevs - number use to specify the max device names to iterate over.Some virt envs have a limit of 16 devs. 
+        optional - maxdevs - number use to specify the max device names to iterate over.
+                   Some virt envs have a limit of 16 devs.
         '''
         d='e'
         in_use_cloud = ""
@@ -800,7 +918,7 @@ class EuInstance(Instance, TaggedResource):
         if prefix is None:
             prefix = self.block_device_prefix
         cloudlist=self.tester.get_volumes(attached_instance=self.id)
-        
+
         for x in xrange(0,maxdevs):
             inuse=False
             #double up the letter identifier to avoid exceeding z
@@ -1045,7 +1163,7 @@ class EuInstance(Instance, TaggedResource):
         buf += linediv
         sys.stdout.write(buf)
         sys.stdout.flush()
-        
+        dd_exit_code = -1
         #Keep getting and printing dd status until done...
         while not done and (elapsed < timeout):
             #send sig usr1 to have dd process dump status to stderr redirected to tmpfile
@@ -1053,6 +1171,8 @@ class EuInstance(Instance, TaggedResource):
             cmdstatus = int(output['status'])
             if cmdstatus != 0:
                 done = True
+                cmdout = self.cmd('wait {0}'.format(dd_pid), verbose=False)
+                dd_exit_code = int(cmdout['status'])
                 #if the command returned error, process is done
                 out = self.sys('cat '+str(tmpfile)+"; rm -f "+str(tmpfile),code=0, verbose=False)
             else:
@@ -1118,12 +1238,25 @@ class EuInstance(Instance, TaggedResource):
         #if we have any info from exceptions caught during parsing, print that here...
         if infobuf:
             print infobuf
+        #format last output for debug in case of errors
+        if out:
+            outbuf = "\n".join(out)
+        # Check for exit code of dd command, 127 may indicate dd process ended before wait pid,
+        # use additional checks below to determine a failure when 127 is returned.
+        if dd_exit_code != 127 and dd_exit_code != 0:
+            raise CommandExitCodeException('dd cmd failed with exit code:' + str(dd_exit_code))
         #if we didn't transfer any bytes of data, assume the cmd failed and wrote to stderr now in outbuf...
-        if not ret['dd_bytes']:
-            if out:
-                outbuf = "\n".join(out)
-            raise Exception('Did not transfer any data using dd cmd:'+str(ddcmd)+"\nstderr: "+str(outbuf))
-        self.debug('Done with dd, copied '+str(ret['dd_bytes'])+' over elapsed:'+str(elapsed))
+        if not ret['dd_full_rec_out'] and not ret['dd_partial_rec_out']:
+            raise CommandExitCodeException('Did not transfer any data using dd cmd:' +
+                            str(ddcmd) + "\nstderr: " + str(outbuf))
+        if ((ret['dd_full_rec_in'] != ret['dd_full_rec_out']) or
+                (ret['dd_partial_rec_out'] != ret['dd_partial_rec_in'])):
+            raise CommandExitCodeException('dd in records do not match out records in transfer')
+        self.debug('Done with dd, copied:{0} bytes, {1} fullrecords, {2} partrecords - '
+                   'over elapsed:{3}'.format(ret['dd_bytes'],
+                                             ret['dd_full_rec_out'],
+                                             ret['dd_partial_rec_out'],
+                                             elapsed))
         self.sys('rm -f ' + str(tmpfile))
         self.sys('rm -f ' + str(tmppidfile))
         return ret
@@ -1269,9 +1402,23 @@ class EuInstance(Instance, TaggedResource):
         self.debug(self.id+" reboot_instance_and_verify Success")
         
 
-    def get_uptime(self):
-        return int(self.sys('cat /proc/uptime', code=0)[0].split()[0].split('.')[0])
-
+    def get_uptime(self, retries=10, interval=10):
+        start = time.time()
+        for x in xrange(0, retries):
+            try:
+                uptime = int(self.sys('cat /proc/uptime',code=0)[0].split()[0]
+                    .split('.')[0])
+                return uptime
+                break
+            except Exception, E:
+                self.debug('Error getting uptime attempt:{0}/{1}, err:{2}'
+                           .format(x, retries, E))
+                self.debug('Waiting {0} seconds before checking uptime...'
+                           .format(interval))
+                time.sleep(interval)
+        raise RuntimeError('{0}: Could not get uptime from instance after '
+                           'elapsed:{1}'
+                           .format(self.id, int(time.time() - start)))
 
     def attach_euvolume_list(self,list,intervoldelay=0, timepervol=90, md5len=32):
         '''

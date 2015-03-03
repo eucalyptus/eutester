@@ -1,6 +1,6 @@
 # Software License Agreement (BSD License)
 #
-# Copyright (c) 2009-2011, Eucalyptus Systems, Inc.
+# Copyright (c) 2009-2014, Eucalyptus Systems, Inc.
 # All rights reserved.
 #
 # Redistribution and use of this software in source and binary forms, with or
@@ -40,6 +40,7 @@ import cookielib
 from eutester import Eutester
 from boto.ec2.elb.listener import Listener
 from boto.ec2.elb.healthcheck import HealthCheck
+from os.path import join, abspath
 
 ELBRegionData = {
     'us-east-1': 'elasticloadbalancing.us-east-1.amazonaws.com',
@@ -154,9 +155,15 @@ class ELBops(Eutester):
         elb_url = self.parse_eucarc("AWS_ELB_URL")
         return elb_url.split("/")[2].split(":")[0]
 
-    def create_listner(self, load_balancer_port=80, protocol="HTTP", instance_port=80, load_balancer=None):
+    def get_elb_path(self):
+        """Parse the eucarc for the AWS_ELB_URL"""
+        elb_url = self.parse_eucarc("AWS_ELB_URL")
+        elb_path = "/".join(elb_url.split("/")[3:])
+        return elb_path
+
+    def create_listener(self, load_balancer_port=80, protocol="HTTP", instance_port=80, load_balancer=None):
         self.debug(
-            "Creating ELB Listner for protocol " + protocol + " and port " + str(load_balancer_port) + "->" + str(
+            "Creating ELB Listener for protocol " + protocol + " and port " + str(load_balancer_port) + "->" + str(
                 instance_port))
         listner = Listener(load_balancer=load_balancer,
                            protocol=protocol,
@@ -164,7 +171,7 @@ class ELBops(Eutester):
                            instance_port=instance_port)
         return listner
 
-    def create_healthcheck(self, target="HTTP:80/instance-name", interval=10, timeout=5, healthy_threshold=2,
+    def create_healthcheck(self, target="HTTP:80/instance-name", interval=5, timeout=2, healthy_threshold=2,
                            unhealthy_threshold=10):
         self.debug("Creating healthcheck: " + target + " interval=" + str(interval) + " timeout=" + str(timeout) +
                    " healthy threshold=" + str(healthy_threshold) + " unhealthy threshold=" + str(unhealthy_threshold))
@@ -223,7 +230,7 @@ class ELBops(Eutester):
 
     def create_load_balancer(self, zones, name="test", load_balancer_port=80, instances=None):
         self.debug("Creating load balancer: " + name + " on port " + str(load_balancer_port))
-        listener = self.create_listner(load_balancer_port=load_balancer_port)
+        listener = self.create_listener(load_balancer_port=load_balancer_port)
         self.elb.create_load_balancer(name, zones=zones, listeners=[listener])
 
         healthcheck = self.create_healthcheck()
@@ -288,6 +295,21 @@ class ELBops(Eutester):
         self.elb.delete_lb_policy(lb_name=lb_name,
                                   policy_name=policy_name)
 
-    def describe_lb_policies(self,lb):
+    def describe_lb_policies(self, lb):
         lbs = self.elb.get_all_load_balancers(load_balancer_names=[lb])
         return lbs[0].policies
+
+    def add_lb_listener(self, lb_name, listener):
+        self.debug("adding listener")
+        self.elb.create_load_balancer_listeners(name=lb_name, listeners=[listener])
+
+    def remove_lb_listener(self, lb_name, port):
+        self.debug("removing listener")
+        self.elb.delete_load_balancer_listeners(name=lb_name, ports=[port])
+
+    def add_server_cert(self, cert_name, cert_dir="./testcases/cloud_user/elb/test_data", 
+                        cert_file="ssl_server_certs_basics.crt",
+                        key_file="ssl_server_certs_basics.pem"):
+        cert_body = open(join(cert_dir, cert_file)).read()
+        cert_key = open(join(cert_dir, key_file)).read()
+        self.upload_server_cert(cert_name=cert_name, cert_body=cert_body, private_key=cert_key)

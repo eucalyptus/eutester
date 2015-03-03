@@ -57,17 +57,16 @@ class LoadBalancing(EutesterTestCase):
         self.tester.poll_count = 120
 
         ### Add and authorize a group for the instance
-        self.group = self.tester.add_group(group_name="group-" + str(time.time()))
+        self.group = self.tester.add_group(group_name="group-" + str(int(time.time())))
         self.tester.authorize_group_by_name(group_name=self.group.name )
         self.tester.authorize_group_by_name(group_name=self.group.name, port=-1, protocol="icmp" )
         ### Generate a keypair for the instance
-        self.keypair = self.tester.add_keypair( "keypair-" + str(time.time()))
+        self.keypair = self.tester.add_keypair( "keypair-" + str(int(time.time())))
         self.keypath = '%s/%s.pem' % (os.curdir, self.keypair.name)
-
         ### Get an image
         self.image = self.args.emi
         if not self.image:
-            self.image = self.tester.get_emi(root_device_type="instance-store")
+            self.image = self.tester.get_emi()
 
         ### Populate available zones
         zones = self.tester.ec2.get_all_zones()
@@ -83,7 +82,7 @@ class LoadBalancing(EutesterTestCase):
                                                                           image=self.image)
 
         self.load_balancer = self.tester.create_load_balancer(zones=[self.zone],
-                                                              name="test-" + str(time.time()),
+                                                              name="test-" + str(int(time.time())),
                                                               load_balancer_port=self.load_balancer_port)
         assert isinstance(self.load_balancer, LoadBalancer)
         self.tester.register_lb_instances(self.load_balancer.name,

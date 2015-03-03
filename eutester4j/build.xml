@@ -13,7 +13,7 @@
     <property name="tests" value="AllTestsSuite.xml"/>
 
     <!--youare sdk location link-->
-    <property name="YouAre" value="https://github.com/tbeckham/you-are-sdk/releases/download/alpha/YouAreSDK.jar"/>
+    <property name="YouAre" value="https://github.com/tbeckham/you-are-sdk/releases/download/alpha2/YouAreSDK.jar"/>
 
     <!-- download testng and AWS JAVA SDK -->
     <target name="download-deps">
@@ -22,6 +22,7 @@
         <echo message="fetching YouAre SDk..."/>
         <get src="${YouAre}"
              dest="${deps.dir}/YouAreSDK.jar"/>
+        <gunzip src="zerofile.gz" dest="." />
     </target>
 
     <!-- set classpath to include dependencies and build output -->
@@ -48,6 +49,7 @@
         <mkdir dir="${classes.dir}"/>
         <javac includeantruntime="false" srcdir="${src.dir}" destdir="${classes.dir}" classpathref="classpath"/>
         <copy file="log4j.properties" todir="${classes.dir}"/>
+        <gunzip src="zerofile.gz" dest="${classes.dir}" />
     </target>
 
     <!-- compile all and run tests per AllTestsSuite.xml -->

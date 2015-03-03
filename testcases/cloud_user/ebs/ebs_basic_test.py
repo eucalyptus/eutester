@@ -41,37 +41,17 @@
 #    @author: clarkmatthew
 
 
-from eutester.eutestcase import EutesterTestCase
 from ebstestsuite import EbsTestSuite
 
-
-ebssuite = None
-zone = None
-config_file = None
-password = None
-credpath = None
-keypair = None
-group = None
-vmtype = None
-emi = None
-
-
 if __name__ == "__main__":
-    ## If given command line arguments, use them as test names to launch
+    # This script is now just a wrapper for ebstestsuite's basic test suite
+    testcase= EbsTestSuite()
+    testcase.clean_method = testcase.clean_created_resources
+    testlist = testcase.ebs_basic_test_suite(run=False)
 
-    testcase= EutesterTestCase(name='ebs_basic_test')    
-    testcase.setup_parser(description="Attempts to test and provide info on focused areas related to Eucalyptus EBS related functionality.", 
-                          testlist=False)
-    testcase.parser.add_argument('--instance_password',dest='inst_pass', help='String representing root password for instance, will replace keypair ssh login',default=None)
-    testcase.parser.add_argument('--reboot_timeout',dest='waitconnect', help='Time to wait before trying to connect to rebooted guests',default=30)
-
-    testcase.get_args()
-    ebstestsuite= testcase.do_with_args(EbsTestSuite)
-    testcase.clean_method = ebstestsuite.clean_created_resources
-    testlist = ebstestsuite.ebs_basic_test_suite(run=False)
-    ret = testcase.run_test_case_list(testlist)
+    ret = testcase.run_test_case_list(testlist,
+                                      eof=testcase.args.exit_on_failure,
+                                      clean_on_exit=testcase.args.clean_on_exit)
     print "ebs_basic_test exiting:("+str(ret)+")"
     exit(ret)
 
-    
-  

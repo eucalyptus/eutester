@@ -32,7 +32,7 @@
 #
 # Author: vic.iglesias@eucalyptus.com
 
-__version__ = '0.0.9'
+__version__ = '0.0.10'
 
 import re
 import os
@@ -46,13 +46,16 @@ import StringIO
 import eulogger
 import types
 import operator
-
+import fcntl
+import struct
+import subprocess
+import termios
 from functools import wraps
 
 
 class TimeoutFunctionException(Exception): 
     """Exception to raise on a timeout""" 
-    pass 
+    pass
 
 
 class Eutester(object):
@@ -115,6 +118,10 @@ class Eutester(object):
         return ec2_url.split(':')[1].split("/")[0]
 
     def parse_eucarc(self, field):
+        if self.credpath is None:
+            raise ValueError('Credpath has not been set yet. '
+                             'Please set credpath or provide '
+                             'configuration file')
         with open( self.credpath + "/eucarc") as eucarc:
             for line in eucarc.readlines():
                 if re.search(field, line):
@@ -130,7 +137,6 @@ class Eutester(object):
         :param cmd: str representing the command to be run
         :return: :raise: CalledProcessError on non-zero return code
         """
-        import subprocess
         args = cmd.split()
         process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=4096)
         output, unused_err = process.communicate()
@@ -161,16 +167,16 @@ class Eutester(object):
             self.critical("Address is all 0s and will not be able to ping it") 
             return False
         self.debug("Attempting to ping " + address)
-        while poll_count > 0:
-            poll_count -= 1
+        for x in xrange(0, poll_count):
             try:
                 self.local("ping -c 1 " + address)
                 self.debug("Was able to ping address")
                 return True
-            except:
-                pass
-            self.debug("Ping unsuccessful retrying in 2 seconds " + str(poll_count) + " more times")
-            self.sleep(2)
+            except subprocess.CalledProcessError as CPE:
+                self.debug('Output:' + str(CPE.output))
+                self.debug('Ping attempt {0}/{1} failed, err:{2}'
+                           .format(x, poll_count, str(CPE)))
+                self.sleep(2)
         self.critical("Was unable to ping address")
         return False
 
@@ -190,10 +196,18 @@ class Eutester(object):
                 pass
         return ret
     
-    def test_port_status(self, ip, port, timeout=5, tcp=True, verbose=True):
+    def test_port_status(self,
+                         ip,
+                         port,
+                         timeout=5,
+                         tcp=True,
+                         recv_size=0,
+                         send_buf=None,
+                         verbose=True):
         '''
         Attempts to connect to tcp port at ip:port within timeout seconds
         '''
+        ret_buf = ""
         if verbose:
             debug = self.debug
         else:
@@ -209,8 +223,13 @@ class Eutester(object):
             if tcp:
                 s.connect((ip, port))
             else:
-                s.sendto("--TEST LINE--", (ip, port))
-                recv, svr = s.recvfrom(255)
+                #for UDP always try send
+                if send_buf is None:
+                    send_buf = "--TEST LINE--"
+            if send_buf is not None:
+                s.sendto(send_buf, (ip, port))
+            if recv_size:
+                ret_buf = s.recv(recv_size)
         except socket.error, se:
             debug('test_port_status failed socket error:'+str(se[0]))
             #handle specific errors here, for now just for debug...
@@ -229,7 +248,8 @@ class Eutester(object):
             s.settimeout(None)
             s.close()
         debug('test_port_status, success')
-    
+        return ret_buf
+
     def grep(self, string,list):
         """ Remove the strings from the list that do not match the regex string"""
         expr = re.compile(string)
@@ -279,7 +299,44 @@ class Eutester(object):
              chars   Array of characters to use in generation of the string
         """
         return ''.join(random.choice(chars) for x in range(size))
-    
+
+    @staticmethod
+    def get_terminal_size():
+        '''
+        Attempts to get terminal size. Currently only Linux.
+        returns (height, width)
+        '''
+        h=30
+        w=80
+        try:
+            # todo Add Windows support
+            t_h,t_w = struct.unpack('hh', fcntl.ioctl(sys.stdout,
+                                                   termios.TIOCGWINSZ,
+                                                   '1234'))
+            #Temp hack. Some env will return <= 1
+            if t_h > 1 and t_w > 1:
+                h = t_h
+                w = t_w
+        except:
+            pass
+        return (h,w)
+
+    @staticmethod
+    def get_line(length=None):
+        line = ""
+        if not length:
+            try:
+                length = Eutester.get_terminal_size()[1]
+                if length <= 1:
+                    length = 80
+            except:
+                length = 80
+        for x in xrange(0,int(length)):
+            line += "-"
+            return "\n" + line + "\n"
+
+
+
     @classmethod
     def printinfo(cls, func):
         '''
@@ -299,6 +356,7 @@ class Eutester(object):
 
         @wraps(func)
         def methdecor(*func_args, **func_kwargs):
+            _args_dict = {} # If method has this kwarg populate with args here
             try:
                 defaults = func.func_defaults
                 kw_count = len(defaults or [])
@@ -311,6 +369,19 @@ class Eutester(object):
                 for kw_name in kw_names: 
                     kw_defaults[kw_name] = defaults[kw_names.index(kw_name)]
                 arg_string=''
+                # If the underlying method is using a special kwarg named
+                # '_args_dict' then provide all the args & kwargs it was
+                # called with in that dict for inspection with that method
+                if 'self' in var_names and len(func_args) <= 1:
+                    func_args_empty = True
+                else:
+                    func_args_empty = False
+                if (not func_args_empty or func_kwargs) and \
+                                '_args_dict' in kw_names:
+                    if not '_args_dict' in func_kwargs or \
+                            not func_kwargs['_args_dict']:
+                        func_kwargs['_args_dict'] = {'args':func_args,
+                                                     'kwargs':func_kwargs}
                 #iterate on func_args instead of arg_names to make sure we pull out self object if present
                 for count, arg in enumerate(func_args):
                     if count == 0 and var_names[0] == 'self': #and if hasattr(arg, func.func_name):
@@ -348,7 +419,14 @@ class Eutester(object):
             return func(*func_args, **func_kwargs)
         return methdecor
 
-    def wait_for_result(self, callback, result, timeout=60, poll_wait=10, oper=operator.eq,  **callback_kwargs):
+    def wait_for_result(self,
+                        callback,
+                        result,
+                        timeout=60,
+                        poll_wait=10,
+                        oper=operator.eq,
+                        allowed_exception_types=None,
+                        **callback_kwargs):
         """
         Wait for the instance to enter the state
 
@@ -360,6 +438,7 @@ class Eutester(object):
         :return: result upon success
         :raise: Exception when instance does not enter proper state
         """
+        allowed_exception_types = allowed_exception_types or []
         self.debug( "Beginning poll loop for result " + str(callback.func_name) + " to go to " + str(result) )
         start = time.time()
         elapsed = 0
@@ -369,7 +448,11 @@ class Eutester(object):
             self.debug(  str(callback.func_name) + ' returned: "' + str(current_state) + '" after '
                        + str(elapsed/60) + " minutes " + str(elapsed%60) + " seconds.")
             self.sleep(poll_wait)
-            current_state = callback(**callback_kwargs)
+            try:
+                current_state = callback(**callback_kwargs)
+            except allowed_exception_types as AE:
+                self.debug('Caught allowed exception:' + str(AE))
+                pass
             elapsed = int(time.time()- start)
         self.debug(  str(callback.func_name) + ' returned: "' + str(current_state) + '" after '
                     + str(elapsed/60) + " minutes " + str(elapsed%60) + " seconds.")
@@ -395,6 +478,8 @@ class Eutester(object):
     
     def __str__(self):
         return 'got self'
+
+
 
     
 

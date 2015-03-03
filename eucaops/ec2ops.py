@@ -1,6 +1,6 @@
 # Software License Agreement (BSD License)
 #
-# Copyright (c) 2009-2011, Eucalyptus Systems, Inc.
+# Copyright (c) 2009-2014, Eucalyptus Systems, Inc.
 # All rights reserved.
 #
 # Redistribution and use of this software in source and binary forms, with or
@@ -41,19 +41,25 @@ import hmac
 import json
 import hashlib
 import base64
-from datetime import datetime, timedelta
 import time
+import types
 import sys
-from datetime import datetime
+import traceback
+from datetime import datetime, timedelta
+from subprocess import Popen, PIPE
+from boto.ec2.group import Group
 
 from boto.ec2.image import Image
 from boto.ec2.instance import Reservation, Instance
 from boto.ec2.keypair import KeyPair
 from boto.ec2.blockdevicemapping import BlockDeviceMapping, BlockDeviceType
+from boto.ec2.securitygroup import SecurityGroup
 from boto.ec2.volume import Volume
 from boto.ec2.bundleinstance import BundleInstanceTask
 from boto.exception import EC2ResponseError
 from boto.ec2.regioninfo import RegionInfo
+from boto.resultset import ResultSet
+from boto.ec2.securitygroup import SecurityGroup, IPPermissions
 import boto
 
 from eutester import Eutester
@@ -63,6 +69,7 @@ from eutester.windows_instance import WinInstance
 from eutester.euvolume import EuVolume
 from eutester.eusnapshot import EuSnapshot
 from eutester.euzone import EuZone
+from testcases.cloud_user.images.conversiontask import ConversionTask
 
 EC2RegionData = {
     'us-east-1' : 'ec2.us-east-1.amazonaws.com',
@@ -182,11 +189,21 @@ disable_root: false"""
         self.test_resources["keypairs"] = []
         self.test_resources["security-groups"] = []
         self.test_resources["images"] = []
+        self.test_resources["addresses"]=[]
+        self.test_resources["auto-scaling-groups"]=[]
+        self.test_resources["launch-configurations"]=[]
+        self.test_resources["conversion-tasks"]=[]
 
     def get_ec2_ip(self):
-        """Parse the eucarc for the S3_URL"""
+        """Parse the eucarc for the EC2_URL"""
         ec2_url = self.parse_eucarc("EC2_URL")
         return ec2_url.split("/")[2].split(":")[0]
+
+    def get_ec2_path(self):
+        """Parse the eucarc for the EC2_URL"""
+        ec2_url = self.parse_eucarc("EC2_URL")
+        ec2_path = "/".join(ec2_url.split("/")[3:])
+        return ec2_path
 
     def create_tags(self, resource_ids, tags):
         """
@@ -328,7 +345,13 @@ disable_root: false"""
     
     
     @Eutester.printinfo
-    def get_windows_instance_password(self, instance, private_key_path=None, key=None, dir=None, exten=".pem", encoded=True):
+    def get_windows_instance_password(self,
+                                      instance,
+                                      private_key_path=None,
+                                      key=None,
+                                      dir=None,
+                                      exten=".pem",
+                                      encoded=True):
         """
         Get password for a windows instance.
 
@@ -343,24 +366,20 @@ disable_root: false"""
         """
         self.debug("get_windows_instance_password, instance:"+str(instance.id)+", keypath:"+str(private_key_path)+
                    ", dir:"+str(dir)+", exten:"+str(exten)+", encoded:"+str(encoded))
-        try:
-            from M2Crypto import RSA
-            import base64
-        except ImportError:
-            raise ImportError("Unable to load M2Crypto. Please install by using your package manager to install "
-                              "python-m2crypto or 'easy_install M2crypto'")
         key = key or self.get_keypair(instance.key_name)
         if private_key_path is None and key is not None:
             private_key_path = str(self.verify_local_keypath( key.name , dir, exten))
         if not private_key_path:
-            raise Exception('get_windows_instance_password, keypath not found?')        
+            raise Exception('get_windows_instance_password, keypath not found?')
         encrypted_string = self.ec2.get_password_data(instance.id)
-        user_priv_key = RSA.load_key(private_key_path)
         if encoded:
             string_to_decrypt = base64.b64decode(encrypted_string)
         else:
             string_to_decrypt = encrypted_string
-        return user_priv_key.private_decrypt(string_to_decrypt,RSA.pkcs1_padding)
+        popen = Popen(['openssl', 'rsautl', '-decrypt', '-inkey',
+                       private_key_path, '-pkcs'], stdin=PIPE, stdout=PIPE)
+        (stdout, _) = popen.communicate(string_to_decrypt)
+        return stdout
 
     @Eutester.printinfo
     def add_group(self, group_name=None, description=None, fail_if_exists=False ):
@@ -426,6 +445,7 @@ disable_root: false"""
     def authorize_group_by_name(self,
                                 group_name="default",
                                 port=22,
+                                end_port=None,
                                 protocol="tcp",
                                 cidr_ip="0.0.0.0/0",
                                 src_security_group=None,
@@ -437,6 +457,7 @@ disable_root: false"""
 
         :param group_name: Name of the group to authorize, default="default"
         :param port: Port to open, default=22
+        :param end_port: End of port range to open, defaults to 'port' arg.
         :param protocol: Protocol to authorize, default=tcp
         :param cidr_ip: CIDR subnet to authorize, default="0.0.0.0/0" everything
         :param src_security_group_name: Grant access to 'group' from src_security_group_name, default=None
@@ -455,19 +476,26 @@ disable_root: false"""
             if src_security_group_name and not src_security_group_owner_id:
                     group = self.get_security_group(name=src_security_group_name)
                     src_security_group_owner_id = group.owner_id
+            if end_port is None:
+                end_port = port
 
         old_api_version = self.ec2.APIVersion
         try:
             #self.ec2.APIVersion = "2009-10-31"
             if src_security_group_name:
-                self.debug( "Attempting authorization of " + group_name + " from " + str(src_security_group_name) +
-                            " on port " + str(port) + " " + str(protocol) )
+                self.debug( "Attempting authorization of: {0}, from group:{1},"
+                            " on port range: {2} to {3}, proto:{4}"
+                            .format(group_name, src_security_group, port,
+                                    end_port, protocol))
             else:
-                self.debug( "Attempting authorization of " + group_name + " on port " + str(port) + " " + str(protocol) )
+                self.debug( "Attempting authorization of:{0}, on port "
+                            "range: {1} to {2}, proto:{3} from {4}"
+                            .format(group_name, port, end_port,
+                                    protocol, cidr_ip))
             self.ec2.authorize_security_group_deprecated(group_name,
                                                          ip_protocol=protocol,
                                                          from_port=port,
-                                                         to_port=port,
+                                                         to_port=end_port,
                                                          cidr_ip=cidr_ip,
                                                          src_security_group_name=src_security_group_name,
                                                          src_security_group_owner_id=src_security_group_owner_id,
@@ -485,6 +513,7 @@ disable_root: false"""
     def authorize_group(self,
                         group,
                         port=22,
+                        end_port=None,
                         protocol="tcp",
                         cidr_ip="0.0.0.0/0",
                         src_security_group=None,
@@ -496,6 +525,7 @@ disable_root: false"""
 
         :param group: boto.group object
         :param port: Port to open, default=22
+        :param end_port: End of port range to open, defaults to 'port' arg.
         :param protocol: Protocol to authorize, default=tcp
         :param cidr_ip: CIDR subnet to authorize, default="0.0.0.0/0" everything
         :param src_security_group_name: Grant access to 'group' from src_security_group_name, default=None
@@ -505,13 +535,108 @@ disable_root: false"""
         """
         return self.authorize_group_by_name(group.name,
                                             port=port,
+                                            end_port=end_port,
                                             protocol=protocol,
                                             cidr_ip=cidr_ip,
                                             src_security_group=src_security_group,
                                             src_security_group_name=src_security_group_name,
                                             src_security_group_owner_id=src_security_group_owner_id,
                                             force_args=force_args)
-    
+
+    def revoke_all_rules(self, group):
+
+        if not isinstance(group, SecurityGroup):
+            group = self.get_security_group(name=group)
+        else:
+            # group obj does not have update() yet...
+            group = self.get_security_group(id=group.id)
+        if not group:
+            raise ValueError('Security group "{0}" not found'.format(group))
+        self.show_security_group(group)
+        assert isinstance(group, SecurityGroup)
+        rules = copy.copy(group.rules)
+        for r in rules:
+            self.debug('Attempting to revoke rule:{0}, grants:{1}'
+                       .format(r, r.grants))
+            assert isinstance(r, IPPermissions)
+            for grant in r.grants:
+                if grant.cidr_ip:
+                    self.debug('{0}.revoke(ip_protocol:{1}, from_port:{2}, '
+                               'to_port{3}, cidr_ip:{4})'.format(group.name,
+                                                                 r.ip_protocol,
+                                                                 r.from_port,
+                                                                 r.to_port,
+                                                                 grant))
+                    group.revoke(ip_protocol=r.ip_protocol, from_port=r.from_port,
+                                 to_port=r.to_port, cidr_ip=grant.cidr_ip)
+                if grant.name or grant.group_id:
+                    group.revoke(ip_protocol=r.ip_protocol,
+                                 from_port=r.from_port,
+                                 to_port=r.to_port,
+                                 src_group=grant,
+                                 cidr_ip=None )
+                    self.debug('{0}.revoke(ip_protocol:{1}, from_port:{2}, '
+                               'to_port:{3}, src_group:{4})'.format(group.name,
+                                                                   r.ip_protocol,
+                                                                   r.from_port,
+                                                                   r.to_port,
+                                                                   grant))
+        group = self.get_security_group(id=group.id)
+        self.debug('AFTER removing all rules...')
+        self.show_security_group(group)
+        return group
+
+    def show_security_group(self, group):
+        try:
+            from prettytable import PrettyTable, ALL
+        except ImportError as IE:
+            self.debug('No pretty table import failed:' + str(IE))
+            return
+        group = self.get_security_group(id=group.id)
+        if not group:
+            raise ValueError('Show sec group failed. Could not fetch group:'
+                             + str(group))
+        header = PrettyTable(["Security Group:" + group.name + "/" + group.id])
+        table = PrettyTable(["CIDR_IP", "SRC_GRP_NAME",
+                             "SRC_GRP_ID", "OWNER_ID", "PORT",
+                             "END_PORT", "PROTO"])
+        table.align["CIDR_IP"] = 'l'
+        table.padding_width = 1
+        for rule in group.rules:
+            port = rule.from_port
+            end_port = rule.to_port
+            proto = rule.ip_protocol
+            for grant in rule.grants:
+                table.add_row([grant.cidr_ip, grant.name,
+                               grant.group_id, grant.owner_id, port,
+                               end_port, proto])
+        table.hrules = ALL
+        header.add_row([str(table)])
+        self.debug("\n{0}".format(str(header)))
+
+    def revoke(self, group,
+                     port=22,
+                     protocol="tcp",
+                     cidr_ip="0.0.0.0/0",
+                     src_security_group_name=None,
+                     src_security_group_owner_id=None):
+        if isinstance(group, SecurityGroup):
+            group_name = group.name
+        else:
+            group_name = group
+        if src_security_group_name:
+            self.debug( "Attempting revoke of " + group_name + " from " + str(src_security_group_name) +
+                        " on port " + str(port) + " " + str(protocol) )
+        else:
+            self.debug( "Attempting revoke of " + group_name + " on port " + str(port) + " " + str(protocol) )
+        self.ec2.revoke_security_group(group_name,
+                                       ip_protocol=protocol,
+                                       from_port=port,
+                                       to_port=port,
+                                       cidr_ip=cidr_ip,
+                                       src_security_group_name=src_security_group_name,
+                                       src_security_group_owner_id=src_security_group_owner_id)
+
     def terminate_single_instance(self, instance, timeout=300 ):
         """
         Terminate an instance
@@ -865,7 +990,7 @@ disable_root: false"""
         self.debug('Updating volume list before monitoring...')
         for vol in euvolumes:
             try:
-                vol.update()
+                vol = self.get_volume(vol.id)
                 if not isinstance(vol, EuVolume):
                     vol = EuVolume.make_euvol_from_vol(vol,self)
                 monitor.append(vol)
@@ -1046,8 +1171,17 @@ disable_root: false"""
             raise Exception("delete_volumes: volume_list was empty")
         for volume in vollist:
             try:
-                self.debug( "Sending delete for volume: " +  str(volume.id)  )
-                volume.update()
+                self.debug( "Sending delete for volume: " +  str(volume.id))
+                if volume in self.test_resources['volumes']:
+                    self.test_resources['volumes'].remove(volume)
+                volumes = self.ec2.get_all_volumes([volume.id])
+                if len(volumes) == 1:
+                    volume = volumes[0]
+                    #previous_status = volume.status
+                    #self.ec2.delete_volume(volume.id)
+                elif len(volumes) == 0:
+                    vollist.remove(volume)
+                    continue
                 previous_status = volume.status
                 self.ec2.delete_volume(volume.id)
             except EC2ResponseError, be:
@@ -1066,10 +1200,15 @@ disable_root: false"""
         elapsed = 0
         while vollist and elapsed < timeout:
             for volume in vollist:
-                volume.update()
-                self.debug( str(volume) + " in " + volume.status)
-                volume.update()
-                if volume.status == "deleted":
+                volumes = self.ec2.get_all_volumes([volume.id])
+                if len(volumes) == 1:
+                    volume = volumes[0]
+                elif len(volumes) == 0:
+                    vollist.remove(volume)
+                    self.debug("Volume no longer found")
+                    continue
+                self.debug(str(volume) + " in " + volume.status)
+                if volume and volume.status == "deleted"and volume in vollist:
                     vollist.remove(volume)
                     if volume in self.test_resources['volumes']:
                         self.test_resources['volumes'].remove(volume)
@@ -1078,12 +1217,12 @@ disable_root: false"""
             self.debug("---Waiting for:"+str(len(vollist))+" volumes to delete. Sleeping:"+
                        str(poll_interval)+", elapsed:"+str(elapsed)+"/"+str(timeout)+"---")
         if vollist or errmsg:
-            for volume in vollist:
-                errmsg += "ERROR:"+str(volume) + " left in " +  volume.status + ',elapsed:'+str(elapsed) + "\n"
-            raise Exception(errmsg)
-        
-        
-        
+                for volume in vollist:
+
+                  errmsg += "ERROR:"+str(volume) + " left in " +  volume.status + ',elapsed:'+str(elapsed) + "\n"
+                raise Exception(errmsg)
+
+
     def delete_all_volumes(self):
         """
         Deletes all volumes on the cloud
@@ -1244,7 +1383,9 @@ disable_root: false"""
         return time.mktime(datetime.utcnow().utctimetuple()) - time.mktime(launch_time.utctimetuple())
     
     @classmethod
-    def get_datetime_from_resource_string(cls,timestamp):
+    def get_datetime_from_resource_string(cls,
+                                          timestamp,
+                                          time_format="%Y %m %d %H %M %S"):
         """
         Convert a typical resource timestamp to datetime time_struct.
 
@@ -1259,7 +1400,7 @@ disable_root: false"""
         #remove milliseconds from list...
         t.pop()
         #create a time_struct out of our list
-        return datetime.strptime(" ".join(t), "%Y %m %d %H %M %S")
+        return datetime.strptime(" ".join(t), time_format)
     
     
     @Eutester.printinfo
@@ -1633,8 +1774,7 @@ disable_root: false"""
         :param owner_id: string owner id to use as filter
         :return: list of snapshots found
         """
-        retlist =[]
-        owner_id = owner_id or self.get_account_id()
+        retlist = []
         #Start by comparing resources the current test obj is tracking to see if they are still in sync with the system
         snapshots = copy.copy(self.test_resources['snapshots'])
         snapshot_list = []
@@ -1676,13 +1816,17 @@ disable_root: false"""
         Delete a list of snapshots.
 
         :param snapshots: List of snapshot IDs
-        :param valid_states: Valid status for snapshot to enter (Default: 'completed,failed')
+        :param valid_states: Valid status for snapshot to
+                             enter (Default: 'completed,failed')
         :param base_timeout: Timeout for waiting for poll interval
-        :param add_time_per_snap: Amount of time to add to base_timeout per snapshot in the list
-        :param wait_for_valid_state: How long to wait for a valid state to be reached before attempting delete,
-                                     as some states will reject a delete request.
+        :param add_time_per_snap: Amount of time to add to base_timeout
+                                  per snapshot in the list
+        :param wait_for_valid_state: How long to wait for a valid state to
+                                     be reached before attempting delete, as
+                                     some states will reject a delete request.
         :param poll_interval: Time to wait between checking the snapshot states
-        :param eof: Whether or not to call an Exception() when first failure is reached
+        :param eof: Whether or not to call an Exception() when first
+                    failure is reached
         :raise:
         """
         snaps = copy.copy(snapshots)
@@ -1691,38 +1835,65 @@ disable_root: false"""
         elapsed = 0
         valid_delete_states = str(valid_states).split(',')
         if not valid_delete_states:
-            raise Exception("delete_snapshots, error in valid_states provided:"+str(valid_states))
+            raise Exception("delete_snapshots, error in valid_states "
+                            "provided:" + str(valid_states))
 
         #Wait for snapshot to enter a state that will accept the deletion action, before attempting to delete it...
         while snaps and (elapsed < wait_for_valid_state):
             elapsed = int(time.time()-start)
-            for snap in snaps:
-                snap.update()
-                self.debug("Checking snapshot:"+str(snap.id)+" status:"+str(snap.status))
-                for v_state in valid_delete_states:
-                    v_state = str(v_state).rstrip().lstrip()
-                    if snap.status == v_state:
+            check_state_list = copy.copy(snaps)
+            for snap in check_state_list:
+                try:
+                    snap_id = self.get_snapshot(snap.id)
+                    if not snap_id:
+                        self.debug("Get Snapshot not found, assuming it's "
+                                   "already deleted:" + str(snap.id))
                         delete_me.append(snap)
-                        snap.delete()
                         break
+                except EC2ResponseError as ec2e:
+                    if ec2e.status == 400:
+                        self.debug("Get Snapshot not found, assuming it's "
+                                   "already deleted:" + str(snap.id) +
+                                   ", err:" + str(ec2e))
+                        delete_me.append(snap)
+                else:
+                    snap.update()
+                    self.debug("Checking snapshot:" + str(snap.id) +
+                               " status:"+str(snap.status))
+                    for v_state in valid_delete_states:
+                        v_state = str(v_state).rstrip().lstrip()
+                        if snap.status == v_state:
+                            delete_me.append(snap)
+                            try:
+                                snap.delete()
+                            except EC2ResponseError as ec2e:
+                                self.debug("Snapshot not found, assuming "
+                                           "it's already deleted:" +
+                                           str(snap.id))
+                                delete_me.append(snap)
+                            break
             for snap in delete_me:
                 if snap in snaps:
                     snaps.remove(snap)
             if snaps:
-                buf = "\n-------| WAITING ON "+str(len(snaps))+" SNAPSHOTS TO ENTER A DELETE-ABLE STATE:("\
-                      +str(valid_states)+"), elapsed:"+ str(elapsed)+'/'+str(wait_for_valid_state)+"|-----"
+                buf = "\n-------| WAITING ON " + str(len(snaps)) + \
+                      " SNAPSHOTS TO ENTER A DELETE-ABLE STATE:(" + \
+                      str(valid_states) + "), elapsed:" + str(elapsed) + \
+                      '/' + str(wait_for_valid_state) + "|-----"
                 for snap in snaps:
-                    buf = buf +"\nSnapshot:"+str(snap.id)+",status:"+str(snap.status)+", progress:"+str(snap.progress)
+                    buf = buf + "\nSnapshot:"+str(snap.id) + ",status:" + \
+                          str(snap.status)+", progress:"+str(snap.progress)
                 self.debug(buf)
-                self.debug('waiting poll_interval to recheck snapshots:'+str(poll_interval)+' seconds')
+                self.debug('waiting poll_interval to recheck snapshots:' +
+                           str(poll_interval) +' seconds')
                 time.sleep(poll_interval)
-            
-
+        #Now poll all the snapshots which a delete() request was made for
         if snaps:
             buf = ""
             for snap in snaps:
                 buf = buf+','+str(snap.id)
-            msg = "Following snapshots did not enter a valid state("+str(valid_states)+") for deletion:"+str(buf)
+            msg = "Following snapshots did not enter a valid state(" + \
+                  str(valid_states) + ") for deletion:" + str(buf)
             if eof:
                 raise Exception(msg)
             else:
@@ -1730,21 +1901,39 @@ disable_root: false"""
         start = time.time()
         elapsed = 0
         timeout= base_timeout + (add_time_per_snap*len(delete_me))
+        # Wait for all snapshots in delete_me list to be deleted or timeout...
         while delete_me and (elapsed < timeout):
-            self.debug('Waiting for remaining '+str(int(len(delete_me)))+' snaps to delete...' )
-            for snapshot in delete_me:
-                snapshot.update()
-                if not self.ec2.get_all_snapshots(snapshot_ids=[snapshot.id]) or snapshot.status == 'deleted':
+            self.debug('Waiting for remaining ' + str(int(len(delete_me))) +
+                       ' snaps to delete...' )
+            waiting_list = copy.copy(delete_me)
+            for snapshot in waiting_list:
+                try:
+                    snapshot.update()
+                    get_snapshot = self.ec2.get_all_snapshots(
+                        snapshot_ids=[snapshot.id])
+                except EC2ResponseError as ec2re:
+                    self.debug("Snapshot not found, assuming "
+                                           "it's already deleted:" +
+                                           str(snapshot.id))
+                if not get_snapshot or snapshot.status == 'deleted':
                     self.debug('Snapshot:'+str(snapshot.id)+" is deleted")
                     delete_me.remove(snapshot)
-            time.sleep(poll_interval)
+                    #snapshot is deleted remove it from test resources list
+                    for testsnap in self.test_resources['snapshots']:
+                        if snapshot.id == testsnap.id:
+                            self.test_resources['snapshots'].remove(testsnap)
+            if delete_me and (elapsed < timeout):
+                time.sleep(poll_interval)
             elapsed = int(time.time()-start)
+        # Record any snapshots not yet deleted as errors...
         if delete_me:
             buf = ""
             for snap in snaps:
-                buf += "\nSnapshot:"+str(snap.id)+",status:"+str(snap.status)+", progress:"+str(snap.progress)+\
-                       ", elapsed:"+str(elapsed)+'/'+str(timeout)
-            raise Exception("Snapshots did not delete within timeout:"+str(timeout)+"\n"+str(buf))
+                buf += "\nSnapshot:" + str(snap.id)+",status:" + \
+                       str(snap.status) + ", progress:"+str(snap.progress) +\
+                       ", elapsed:" + str(elapsed) + '/' + str(timeout)
+            raise Exception("Snapshots did not delete within timeout:" +
+                            str(timeout) + "\n" + str(buf))
                 
              
         
@@ -1807,7 +1996,8 @@ disable_root: false"""
                                  kernel=None,
                                  size=None,
                                  dot=True,
-                                 block_device_map=None):
+                                 block_device_map=None,
+                                 custom_params=None):
         """
         Register an image snapshot
 
@@ -1823,12 +2013,13 @@ disable_root: false"""
         :param block_device_map: existing block device map to add the snapshot block dev type to
         :return: emi id of registered image
         """
+        custom_params = custom_params or {}
         if bdmdev is None:
             bdmdev=root_device_name
         if name is None:
             name="bfebs_"+ snap_id
-        if ( windows ) and (not kernel):
-            kernel="windows"     
+        if windows:
+            custom_params['Platform'] = "windows"
             
         bdmap = block_device_map or BlockDeviceMapping()
         block_dev_type = BlockDeviceType()
@@ -1840,8 +2031,8 @@ disable_root: false"""
         self.debug("Register image with: snap_id:"+str(snap_id)+", root_device_name:"+str(root_device_name)+", desc:"+str(description)+
                    ", windows:"+str(windows)+", bdname:"+str(bdmdev)+", name:"+str(name)+", ramdisk:"+
                    str(ramdisk)+", kernel:"+str(kernel))
-        image_id = self.ec2.register_image(name=name, description=description, kernel_id=kernel, ramdisk_id=ramdisk,
-                                           block_device_map=bdmap, root_device_name=root_device_name)
+        image_id = self._register_image_custom_params(name=name, description=description, kernel_id=kernel, ramdisk_id=ramdisk,
+                                           block_device_map=bdmap, root_device_name=root_device_name, **custom_params)
         self.debug("Image now registered as " + image_id)
         return image_id
 
@@ -1853,10 +2044,12 @@ disable_root: false"""
                         description=None,
                         architecture=None,
                         virtualization_type=None,
+                        platform=None,
                         bdmdev=None,
                         name=None,
                         ramdisk=None,
-                        kernel=None):
+                        kernel=None,
+                        custom_params=None):
         """
         Register an image based on the s3 stored manifest location
 
@@ -1869,34 +2062,21 @@ disable_root: false"""
         :param kernel: kernel id (note for windows this name should be "windows")
         :return: image id string
         """
-        ri_kwargs = { 'name':name,
-                   'description':description,
-                   'kernel_id':kernel,
-                   'image_location':image_location,
-                   'ramdisk_id':ramdisk,
-                   'architecture':architecture,
-                   'block_device_map':bdmdev,
-                   'root_device_name':root_device_name}
+        custom_params = custom_params or {}
+        if platform:
+             custom_params['Platform']= platform
         #Check to see if boto is recent enough to have this param...
-        if virtualization_type:
-            if 'virtualization_type' in self.ec2.register_image.im_func.func_code.co_varnames:
-                ri_kwargs['virtualization_type'] = virtualization_type
-            else:
-                raise Exception('virtualization_type arg populated but not found in this version of ec2.register_image?')
-        image_id = self.ec2.register_image(**ri_kwargs)
-
-        '''
-        image_id = self.ec2.register_image(name=name,
-                                           description=description,
-                                           kernel_id=kernel,
-                                           image_location=image_location,
-                                           ramdisk_id=ramdisk,
-                                           architecture=architecture,
-                                           virtualization_type=virtualization_type,
-                                           block_device_map=bdmdev,
-                                           root_device_name=root_device_name)
-        '''
-        self.test_resources["images"].append(image_id)
+        image_id = self._register_image_custom_params(name=name,
+                                                      description=description,
+                                                      kernel_id=kernel,
+                                                      image_location=image_location,
+                                                      ramdisk_id=ramdisk,
+                                                      architecture=architecture,
+                                                      virtualization_type=virtualization_type,
+                                                      block_device_map=bdmdev,
+                                                      root_device_name=root_device_name,
+                                                      **custom_params)
+        self.test_resources["images"].append(self.ec2.get_all_images([image_id])[0])
         return image_id
 
     def delete_image(self, image, timeout=60):
@@ -1940,17 +2120,23 @@ disable_root: false"""
 
     @Eutester.printinfo
     def get_images(self,
-                emi=None,
-                root_device_type=None,
-                root_device_name=None,
-                virtualization_type=None,
-                location=None,
-                state="available",
-                arch=None,
-                owner_id=None,
-                filters=None,
-                not_location=None,
-                max_count=None):
+                   emi=None,
+                   name=None,
+                   root_device_type=None,
+                   root_device_name=None,
+                   virtualization_type=None,
+                   location=None,
+                   state="available",
+                   arch=None,
+                   owner_id=None,
+                   filters=None,
+                   basic_image=None,
+                   platform=None,
+                   not_platform=None,
+                   tagkey=None,
+                   tagvalue=None,
+                   max_count=None,
+                   _args_dict=None):
         """
         Get a list of images which match the provided criteria.
 
@@ -1962,9 +2148,12 @@ disable_root: false"""
         :param state: example: 'available'
         :param arch: example: 'x86_64'
         :param owner_id: owners numeric id
-        :param not_location: skip if location string matches this comma separated string or list of strings. Examples:
-                            not_location='windows,centos', not_location=['loadbalancer', 'lucid']
+        :param filters: standard filters
+        :param basic_image: boolean, avoids returning windows, load balancer and service images
+        :param not_platform: skip if platform string matches this string. Example: not_platform='windows'
         :param max_count: return after finding 'max_count' number of matching images
+        :param _args_dict: dict which can be populated by annotation to give
+                            insight into the args/kwargs this was called with
         :return: image id
         :raise: Exception if image is not found
         """
@@ -1974,6 +2163,8 @@ disable_root: false"""
             filters = {}
             if emi:
                 filters['image-id'] = emi
+            if name:
+                filters['name'] = name
             if root_device_type:
                 filters['root-device-type'] = root_device_type
             if root_device_name:
@@ -1986,14 +2177,25 @@ disable_root: false"""
                 filters['architecture'] = arch
             if owner_id:
                 filters['owner-id'] = owner_id
+            if platform:
+                filters['platform'] = platform
+            if tagkey:
+                filters['tag-key'] = tagkey
+            if tagvalue:
+                filters['tag-value'] = tagvalue
 
-        if emi is None:
-            emi = "mi-"
+        # if emi is None and not platform:
+        if basic_image is None and not _args_dict:
+            # If a specific EMI was not provided, set some sane defaults for
+            # fetching a test image to work with...
+            basic_image = True
+        if name is None:
+             emi = "mi-"
 
         images = self.ec2.get_all_images(filters=filters)
         self.debug("Got " + str(len(images)) + " total images " + str(emi) + ", now filtering..." )
         for image in images:
-            if (re.search(emi, image.id) is None) and (re.search(emi, image.name) is None):      
+            if (re.search(emi, image.id) is None) and (re.search(emi, image.name) is None):
                 continue
             if (root_device_type is not None) and (image.root_device_type != root_device_type):
                 continue
@@ -2008,14 +2210,15 @@ disable_root: false"""
             if (state is not None) and (image.state != state):
                 continue            
             if (location is not None) and (not re.search( location, image.location)):
-                continue           
+                continue
+            if (name is not None) and (image.name != name):
+                continue
             if (arch is not None) and (image.architecture != arch):
-                continue                
+                continue
             if (owner_id is not None) and (image.owner_id != owner_id):
                 continue
-            if (not_location is not None):
-                if not isinstance(not_location,types.ListType):
-                    not_location = not_location.split(',')
+            if basic_image:
+                not_location = ["windows", "imaging-worker", "loadbalancer"]
                 skip = False
                 for loc in not_location:
                     if (re.search( str(loc), image.location)):
@@ -2023,17 +2226,21 @@ disable_root: false"""
                         break
                 if skip:
                     continue
+            if (not_platform is not None) and (image.platform == not_platform):
+                continue
             self.debug("Returning image:"+str(image.id))
             ret_list.append(image)
             if max_count and len(ret_list) >= max_count:
                 return ret_list
         if not ret_list:
-            raise Exception("Unable to find an EMI")
+            raise ResourceNotFoundException("Unable to find an EMI")
         return ret_list
 
 
+    @Eutester.printinfo
     def get_emi(self,
                    emi=None,
+                   name=None,
                    root_device_type=None,
                    root_device_name=None,
                    location=None,
@@ -2041,7 +2248,12 @@ disable_root: false"""
                    arch=None,
                    owner_id=None,
                    filters=None,
-                   not_location=None,
+                   basic_image=True,
+                   platform=None,
+                   not_platform=None,
+                   tagkey=None,
+                   tagvalue=None,
+                   _args_dict=None,
                    ):
         """
         Get an emi with name emi, or just grab any emi in the system. Additional 'optional' match criteria can be defined.
@@ -2053,11 +2265,47 @@ disable_root: false"""
         :param state: example: 'available'
         :param arch: example: 'x86_64'
         :param owner_id: owners numeric id
-        :param not_location: skip if location string matches this string. Example: not_location='windows'
+        :param filters: standard filters, dict.
+        :param basic_image: boolean, avoids returning windows, load balancer and service images
+        :param not_platform: skip if platform string matches this string. Example: not_platform='windows'
+        :param _args_dict: dict which can be populated by annotation to give
+                            insight into the args/kwargs this was called with
         :return: image id
         :raise: Exception if image is not found
         """
+        # If no criteria was provided for filter an image, use 'basic_image'
+        # flag to provide some sane defaults
+        if basic_image is None:
+            if not _args_dict:
+                basic_image = True
+            else:
+                basic_image = False
+        if filters is None and emi is None and \
+                        name is None and location is None:
+            # Attempt to get a eutester created image if it happens to meet
+            # the other criteria provided. Otherwise remove filter and
+            # return the image found without the imposed filters.
+            filters={'tag-key':'eutester-created'}
+            try:
+                return self.get_images(emi=emi,
+                                   name=name,
+                                   root_device_type=root_device_type,
+                                   root_device_name=root_device_name,
+                                   location=location,
+                                   state=state,
+                                   arch=arch,
+                                   owner_id=owner_id,
+                                   filters=filters,
+                                   basic_image=basic_image,
+                                   platform=platform,
+                                   not_platform=not_platform,
+                                   tagkey=tagkey,
+                                   tagvalue=tagvalue,
+                                   max_count=1)[0]
+            except:
+                filters = None
         return self.get_images(emi=emi,
+                               name=name,
                                root_device_type=root_device_type,
                                root_device_name=root_device_name,
                                location=location,
@@ -2065,7 +2313,11 @@ disable_root: false"""
                                arch=arch,
                                owner_id=owner_id,
                                filters=filters,
-                               not_location=not_location,
+                               basic_image=basic_image,
+                               platform=platform,
+                               not_platform=not_platform,
+                               tagkey=tagkey,
+                               tagvalue=tagvalue,
                                max_count=1)[0]
 
 
@@ -2146,7 +2398,7 @@ disable_root: false"""
         self.debug(buf)
 
 
-    def allocate_address(self):
+    def allocate_address(self, domain=None):
         """
         Allocate an address for the current user
 
@@ -2154,7 +2406,7 @@ disable_root: false"""
         """
         try:
             self.debug("Allocating an address")
-            address = self.ec2.allocate_address()
+            address = self.ec2.allocate_address(domain=domain)
         except Exception, e:
             tb = self.get_traceback()
             err_msg = 'Unable to allocate address'
@@ -2208,7 +2460,7 @@ disable_root: false"""
                 self.sleep(5)
                 instance.update()
                 self.debug('Refreshing EuInstance:'+str(instance.id)+' ssh connection to associated addr:'+str(instance.ip_address))
-                instance.reset_ssh_connection()
+                instance.connect_to_instance()
             else:
                 self.debug('WARNING: associate_address called with refresh_ssh set to true, but instance is not EuInstance type:'+str(instance.id))
 
@@ -2339,7 +2591,7 @@ disable_root: false"""
                 volume = EuVolume.make_euvol_from_vol(volume)
             retlist.append(volume)
         if eof and retlist == []:
-            raise Exception("Unable to find matching volume")
+            raise ResourceNotFoundException("Unable to find matching volume")
         else:
             return retlist
 
@@ -2374,6 +2626,7 @@ disable_root: false"""
             vol = self.get_volumes(volume_id=volume_id, status=status, attached_instance=attached_instance,
                                    attached_dev=attached_dev, snapid=snapid, zone=zone, minsize=minsize,
                                    maxsize=maxsize, eof=eof)[0]
+
         except Exception, e:
             if eof:
                 raise e
@@ -2384,6 +2637,7 @@ disable_root: false"""
                      image=None,
                      keypair=None,
                      group="default",
+                     name=None,
                      type=None,
                      zone=None,
                      min=1,
@@ -2490,6 +2744,10 @@ disable_root: false"""
 
             if is_reachable:
                 self.ping(instance.ip_address, 20)
+
+        ## Add name tag
+        if name:
+            self.create_tags([reservation.instances], {"Name:": name})
                 
         #calculate remaining time to wait for establishing an ssh session/euinstance     
         timeout -= int(time.time() - start)
@@ -2518,7 +2776,9 @@ disable_root: false"""
                   auto_connect=True,
                   clean_on_fail=True,
                   monitor_to_running = True,
-                  timeout=480):
+                  return_reservation=False,
+                  timeout=480,
+                  **boto_run_args):
         """
 
         :param image: image object or string image_id to create instances with
@@ -2571,7 +2831,7 @@ disable_root: false"""
             cmdstart=time.time()
             reservation = image.run(key_name=keypair,security_groups=[group],instance_type=type, placement=zone,
                                     min_count=min, max_count=max, user_data=user_data, addressing_type=addressing_type,
-                                    block_device_map=block_device_map)
+                                    block_device_map=block_device_map, **boto_run_args)
             self.test_resources["reservations"].append(reservation)
             
             if (len(reservation.instances) < min) or (len(reservation.instances) > max):
@@ -2615,9 +2875,11 @@ disable_root: false"""
                     self.debug(self.get_traceback())
                     raise Exception("Unable to create Euinstance from " + str(instance)+", err:\n"+str(e))
             if monitor_to_running:
-                return self.monitor_euinstances_to_running(instances, timeout=timeout)
-            else:
-                return instances
+                instances = self.monitor_euinstances_to_running(instances, timeout=timeout)
+            if return_reservation:
+                reservation.instances = instances
+                return reservation
+            return instances
         except Exception, e:
             trace = self.get_traceback()
             self.debug('!!! Run_instance failed, terminating reservation. Error:'+str(e)+"\n"+trace)
@@ -2626,7 +2888,10 @@ disable_root: false"""
             raise e 
     
     
-    def wait_for_instances_block_dev_mapping(self, instances, poll_interval=1, timeout=60):
+    def wait_for_instances_block_dev_mapping(self,
+                                             instances,
+                                             poll_interval=1,
+                                             timeout=60):
         waiting = copy.copy(instances)
         elapsed = 0
         good = []
@@ -2683,15 +2948,18 @@ disable_root: false"""
 
     @Eutester.printinfo 
     def monitor_euinstances_to_running(self,instances, poll_interval=10, timeout=480):
+        if not isinstance(instances, types.ListType):
+            instances = [instances]
         self.debug("("+str(len(instances))+") Monitor_instances_to_running starting...")
         ip_err = ""
         #Wait for instances to go to running state...
-        self.monitor_euinstances_to_state(instances, failstates=['terminated','shutting-down'],timeout=timeout)
+        self.monitor_euinstances_to_state(instances, failstates=['stopped', 'terminated','shutting-down'],timeout=timeout)
         #Wait for instances in list to get valid ips, check for duplicates, etc...
         try:
-            self.wait_for_valid_ip(instances, timeout)
+            self.wait_for_valid_ip(instances, timeout=timeout)
         except Exception, e:
-            ip_err = "WARNING in wait_for_valid_ip: "+str(e)
+            tb = self.get_traceback()
+            ip_err = str(tb)  + "\nWARNING in wait_for_valid_ip: "+str(e)
             self.debug(ip_err)
         #Now attempt to connect to instances if connect flag is set in the instance...
         waiting = copy.copy(instances)
@@ -2752,13 +3020,23 @@ disable_root: false"""
         self.print_euinstance_list(good)
         return good
     
-    
+
+
+
     @Eutester.printinfo
-    def does_instance_sec_group_allow(self, instance, src_addr=None, protocol='tcp',port=22):
+    def does_instance_sec_group_allow(self,
+                                      instance,
+                                      src_addr=None,
+                                      src_group=None,
+                                      protocol='tcp',
+                                      port=22):
+        if src_group:
+            assert isinstance(src_group,SecurityGroup) , \
+                'src_group({0}) not of type SecurityGroup obj'.format(src_group)
         s = None
         #self.debug("does_instance_sec_group_allow:"+str(instance.id)+" src_addr:"+str(src_addr))
         try:
-            if not src_addr:
+            if not src_group and not src_addr:
                 #Use the local test machine's addr
                 if not self.ec2_source_ip:
                     #Try to get the outgoing addr used to connect to this instance
@@ -2769,22 +3047,34 @@ disable_root: false"""
                 if self.ec2_source_ip == "0.0.0.0":
                     raise Exception('Test machine source ip detected:'+str(self.ec2_source_ip)+', tester may need ec2_source_ip set manually')
                 src_addr = self.ec2_source_ip
-            
-            self.debug('Using src_addr:'+str(src_addr))
+            if src_addr:
+                self.debug('Using src_addr:'+str(src_addr))
+            elif src_group:
+                self.debug('Using src_addr:'+str(src_addr))
+            else:
+                raise ValueError('Was not able to find local src ip')
             groups = self.get_instance_security_groups(instance)
             for group in groups:
-                self.debug("Is src_addr:"+str(src_addr)+" allowed in group:"+str(group.name)+"...?")
-                if self.does_sec_group_allow(group, src_addr, protocol=protocol, port=port):
-                    self.debug("Sec allows from source")
+                if self.does_sec_group_allow(group,
+                                             src_addr=src_addr,
+                                             src_group=src_group,
+                                             protocol=protocol,
+                                             port=port):
+                    self.debug("Sec allows from test source addr: " +
+                               str(src_addr) + ", src_group:" +
+                               str(src_group) + ", protocol:" +
+                               str(protocol) + ", port:" + str(port))
+                    #Security group allows from the src/proto/port
                     return True
-            self.debug("Sec does NOT allow from source")
+            #Security group does not allow from the src/proto/port
             return False
         except Exception, e:
-            self.debug(self.get_traceback())
+            self.debug(self.get_traceback() + "\nError in sec group check")
             raise e
         finally:
             if s:
                 s.close()
+
     def get_security_group(self, id=None, name=None):
         #Adding this as both a convienence to the user to separate euare groups from security groups
         #Not sure if botos filter on group names and ids is reliable?
@@ -2800,29 +3090,67 @@ disable_root: false"""
         return None
         
     @Eutester.printinfo                    
-    def does_sec_group_allow(self, group, src, protocol='tcp', port=22):
+    def does_sec_group_allow(self, group, src_addr=None, src_group=None,
+                             protocol='tcp', port=22):
         """
         Test whether a security group will allow traffic from a specific 'src' ip address to
         a specific 'port' using a specific 'protocol'
         :param group: Security group obj to use in lookup
-        :param src: Source address to lookup against sec group rule(s)
+        :param src_addr: Source address to lookup against sec group rule(s)
+        :param src_group: Boto sec group to use in auth check
         :param protocol: Protocol to lookup sec group rule against
         :param port: Network port to lookup sec group rule against
         """
+        if src_group:
+            assert isinstance(src_group, SecurityGroup)
+        port = int(port)
+        protocol = str(protocol).strip().lower()
+        self.debug('Security group:' + str(group.name) + ", src ip:" +
+                   str(src_addr) + ", src_group:" + str(src_group) +
+                   ", proto:" + str(protocol) + ", port:" + str(port))
         group = self.get_security_group(id=group.id, name=group.name)
-        g_buf =""
         for rule in group.rules:
-            if rule.ip_protocol == protocol:
+            g_buf =""
+            if str(rule.ip_protocol).strip().lower() == protocol:
                 for grant in rule.grants:
                     g_buf += str(grant)+","
-                self.debug("rule#"+str(group.rules.index(rule))+": port:"+str(rule.to_port)+", grants:"+str(g_buf))
+                self.debug("rule#{0}: ports:{1}-{2}, grants:{3}"
+                           .format(str(group.rules.index(rule)),
+                                   str(rule.from_port),
+                                   str(rule.to_port),
+                                   str(g_buf)))
+                from_port = int(rule.from_port)
                 to_port= int(rule.to_port)
-                if (to_port == 0 ) or (to_port == -1) or (to_port == port):
+                if (to_port == 0 ) or (to_port == -1) or \
+                        (port >= from_port and port <= to_port):
                     for grant in rule.grants:
-                        if self.is_address_in_network(src, str(grant)):
-                            self.debug("does_sec_group_allow? True")
-                            return True
-        self.debug("does_sec_group_allow? False")
+                        if src_addr and grant.cidr_ip:
+                            if self.is_address_in_network(src_addr, str(grant)):
+                                self.debug('sec_group DOES allow: group:"{0}"'
+                                           ', src:"{1}", proto:"{2}", port:"{3}"'
+                                           .format(group.name,
+                                                   src_addr,
+                                                   protocol,
+                                                   port))
+                                return True
+                        if src_group:
+                            src_group_id = str(src_group.name) + \
+                                           "-" + (src_group.owner_id)
+                            if ( src_group.id == grant.groupId ) or \
+                                    ( grant.group_id == src_group_id ):
+                                self.debug('sec_group DOES allow: group:"{0}"'
+                                           ', src_group:"{1}"/"{2}", '
+                                           'proto:"{3}", ''port:"{4}"'
+                                           .format(group.name,
+                                                   src_group.id,
+                                                   src_group.name,
+                                                   protocol,
+                                                   port))
+                                return True
+
+        self.debug('sec_group:"{0}" DOES NOT allow from: src_ip:"{1}", '
+                   'src_group:"{2}", proto:"{3}", port:"{4}"'
+                   .format(group.name, src_addr, src_group, protocol, port))
         return False
                     
     @classmethod
@@ -2836,6 +3164,10 @@ disable_root: false"""
         """
         ip_addr = str(ip_addr)
         network = str(network)
+        # Check for 0.0.0.0/0 network first...
+        rem_zero = network.replace('0','')
+        if not re.search('\d', rem_zero):
+            return True
         ipaddr = int(''.join([ '%02x' % int(x) for x in ip_addr.split('.') ]), 16)
         netstr, bits = network.split('/')
         netaddr = int(''.join([ '%02x' % int(x) for x in netstr.split('.') ]), 16)
@@ -2850,14 +3182,21 @@ disable_root: false"""
         :return:
         """
         secgroups = []
+        groups = []
         if hasattr(instance, 'security_groups') and instance.security_groups:
             return instance.security_groups
-        if hasattr(instance, 'reservation') and instance.reservation:
-            res = instance.reservation
+
+        if hasattr(instance, 'groups') and instance.groups:
+            groups = instance.groups
         else:
-            res = self.get_reservation_for_instance(instance)
-        for group in res.groups:
-         secgroups.extend(self.ec2.get_all_security_groups(groupnames=str(group.name)))
+            if hasattr(instance, 'reservation') and instance.reservation:
+                res = instance.reservation
+            else:
+                res = self.get_reservation_for_instance(instance)
+            groups = res.groups
+        for group in groups:
+            secgroups.extend(self.ec2.get_all_security_groups(
+                groupnames=[str(group.name)]))
         return secgroups
     
     def get_reservation_for_instance(self, instance):
@@ -2902,8 +3241,7 @@ disable_root: false"""
         monitor = copy.copy(instance_list)
         for instance in monitor:
             if not isinstance(instance, EuInstance) and not isinstance(instance, WinInstance):
-                instance = EuInstance.make_euinstance_from_instance( instance, self, auto_connect=False)
-
+                instance = self.convert_instance_to_euisntance(instance, auto_connect=False)
         good = []
         failed = []
         elapsed = 0
@@ -3021,7 +3359,10 @@ disable_root: false"""
                                            kernel=kernel,
                                            image_id=image_id)
             for instance in instances:
-                euinstance_list.append(self.convert_instance_to_euisntance(instance, auto_connect=False))
+                if instance:
+                    instance_res = getattr(instance, 'reservation', None)
+                    euinstance_list.append(self.convert_instance_to_euisntance(
+                        instance, reservation=instance_res, auto_connect=False))
         if not euinstance_list:
             self.debug('No instances to print')
             return
@@ -3062,7 +3403,9 @@ disable_root: false"""
             elapsed = int(time.time()- start)
             for instance in monitoring:
                 instance.update()
-                if zeros.search(str(instance.ip_address)) or zeros.search(str(instance.private_ip_address)):
+                if hasattr(instance, 'ip_address') and instance.ip_address and \
+                        (zeros.search(str(instance.ip_address)) or zeros.search(str(instance.private_ip_address))):
+                    # Either public or private ip was still not populated
                     self.debug(str(instance.id)+": WAITING for public ip. Current:"+str(instance.ip_address)+
                                ", elapsed:"+str(elapsed)+"/"+str(timeout))
                 else:
@@ -3132,7 +3475,13 @@ disable_root: false"""
         self.debug("Done with check_system_for_dup_ip")
         
 
-    def convert_reservation_to_euinstance(self, reservation, username="root", password=None, keyname=None, private_addressing=False, timeout=60):
+    def convert_reservation_to_euinstance(self,
+                                          reservation,
+                                          username=None,
+                                          password=None,
+                                          keyname=None,
+                                          private_addressing=False,
+                                          timeout=60):
         """
         Convert all instances in an entire reservation into eutester.euinstance.Euinstance objects.
 
@@ -3147,32 +3496,63 @@ disable_root: false"""
         keypair = None
         if keyname is not None:
                 keypair = self.get_keypair(keyname)
+        auto_connect = True
+        if private_addressing:
+            auto_connect = False
         for instance in reservation.instances:
-            if keypair is not None or (password is not None and username is not None):
+            if keypair is not None or password is not None:
                 try:
-                    euinstance_list.append( EuInstance.make_euinstance_from_instance(instance, 
-                                                                                     self, 
-                                                                                     keypair=keypair, 
-                                                                                     username = username, 
-                                                                                     password=password, 
-                                                                                     timeout=timeout,
-                                                                                     private_addressing=private_addressing))
+                    euinstance_list.append(
+                        self.convert_instance_to_euisntance(instance,
+                                                            keypair=keypair,
+                                                            username = username,
+                                                            password=password,
+                                                            timeout=timeout,
+                                                            auto_connect=auto_connect))
                 except Exception, e:
                     self.debug(self.get_traceback())
                     euinstance_list.append(instance)
+                    self.get_console_output(instance)
                     self.fail("Unable to create Euinstance from " + str(instance)+": "+str(e))
             else:
                 euinstance_list.append(instance)
         reservation.instances = euinstance_list
         return reservation
 
-    def convert_instance_to_euisntance(self, instance, keypair=None, username="root", password=None, auto_connect=True,timeout=120):
+    def convert_instance_to_euisntance(self, instance, keypair=None,
+                                       username=None, password=None,
+                                       reservation=None, auto_connect=True,
+                                       timeout=120):
         if instance.platform == 'windows':
-            return WinInstance.make_euinstance_from_instance(instance, self, keypair=keypair, username = username,
-                                                        password=password, auto_connect=auto_connect,timeout=timeout )
+            username = username or 'Administrator'
+            instance = WinInstance.make_euinstance_from_instance(
+                instance,
+                self,
+                keypair=keypair,
+                username = username,
+                password=password,
+                reservation=reservation,
+                auto_connect=auto_connect,
+                timeout=timeout)
         else:
-            return EuInstance.make_euinstance_from_instance(instance, self, keypair=keypair, username = username,
-                                                        password=password, auto_connect=auto_connect,timeout=timeout )
+            username = username or 'root'
+            instance = EuInstance.make_euinstance_from_instance(
+                instance,
+                self,
+                keypair=keypair,
+                username = username,
+                password=password,
+                reservation=reservation,
+                auto_connect=auto_connect,
+                timeout=timeout)
+        if 'instances' in self.test_resources:
+            for x in xrange(0, len(self.test_resources['instances'])):
+                ins = self.test_resources['instances'][x] == instance.id
+                if ins.id == instance.id:
+                     self.test_resources['instances'][x] = instance
+        return instance
+
+
 
     def get_console_output(self, instance):
         """
@@ -3186,7 +3566,7 @@ disable_root: false"""
         if isinstance(instance, Instance):
             instance = instance.id
         output = self.ec2.get_console_output(instance_id=instance)
-        self.debug(output)
+        self.debug(output.output)
         return output
 
 
@@ -3278,12 +3658,13 @@ disable_root: false"""
                         continue
                     if (image_id is not None) and (i.image_id != image_id):
                         continue
+                    i.reservation = res
                     ilist.append(i)
         return ilist
 
         
     
-    def get_connectable_euinstances(self,path=None,username='root', password=None, connect=True):
+    def get_connectable_euinstances(self,path=None,username=None, password=None, connect=True):
         """
         Convenience method, returns a list of all running instances, for the current creduser
         for which there are local keys at 'path'
@@ -3305,13 +3686,14 @@ disable_root: false"""
                         keypair=None
                         euinstances.append(instance)
                     else:
-                        euinstances.append(EuInstance.make_euinstance_from_instance( instance, 
-                                                                                     self, 
-                                                                                     username=username,
-                                                                                     password=password,
-                                                                                     keypair=keypair ))
+                        euinstances.append(
+                            self.convert_instance_to_euisntance(instance,
+                                                                username=username,
+                                                                password=password,
+                                                                keypair=keypair ))
             return euinstances
         except Exception, e:
+            traceback.print_exc()
             self.debug("Failed to find a pre-existing instance we can connect to:"+str(e))
             pass
     
@@ -3347,6 +3729,8 @@ disable_root: false"""
         if reservation and not isinstance(reservation, types.ListType):
             if isinstance(reservation, Reservation):
                 instance_list = reservation.instances or []
+            elif isinstance(reservation, Instance):
+                instance_list.append(reservation)
             else:
                 raise Exception('Unknown type:' + str(type(reservation)) + ', for reservation passed to terminate_instances')
         else:
@@ -3375,13 +3759,16 @@ disable_root: false"""
                     pass
                 else:
                     raise e
-
-        self.print_euinstance_list(euinstance_list=monitor_list)
+        try:
+            self.print_euinstance_list(euinstance_list=monitor_list)
+        except:
+            pass
         try:
             self.monitor_euinstances_to_state(instance_list=monitor_list, state='terminated', timeout=timeout)
             aggregate_result = True
         except Exception, e:
-            self.debug('Caught Exception in monitoring instances to terminated state:' + str(e))
+            tb =  traceback.format_exc()
+            self.debug(str(tb) + '\nCaught Exception in monitoring instances to terminated state:' + str(e))
 
         return aggregate_result
     
@@ -3442,10 +3829,9 @@ disable_root: false"""
                 id_count = len(self.get_images(location=instance.id))
             except:
                 id_count = 0
-            bucket_name =  'win' \
-                           + str(instance.id) + "-" \
+            bucket_name =  str(instance.id) + "-" \
                            + str(id_count)
-        prefix = prefix or 'windows-bundleof-' + str(instance.id)
+        prefix = prefix or 'bundleof-' + str(instance.id)
         s3_upload_policy = self.generate_default_s3_upload_policy(bucket_name,prefix)
         bundle_task = self.ec2.bundle_instance(instance.id, bucket_name, prefix, s3_upload_policy)
         self.print_bundle_task(bundle_task)
@@ -3530,7 +3916,7 @@ disable_root: false"""
         self.debug("bundle_instance_monitor_and_register:" + str(bundle_task.id)
                    + " monitored to completed, now get manifest and register...")
         manifest = self.get_manifest_string_from_bundle_task(bundle_task)
-        image = self.register_manifest(manifest)
+        image = self.register_manifest(manifest, virtualization_type=instance.virtualization_type)
         self.debug("bundle_instance_monitor_and_register:" + str(bundle_task.id)
                    + ", registered as image:" + str(image.id))
         self.debug("bundle_instance_monitor_and_register:" + str(bundle_task.id)
@@ -3616,6 +4002,7 @@ disable_root: false"""
                           description=None,
                           architecture=None,
                           virtualization_type=None,
+                          platform=None,
                           bdmdev=None,
                           name=None,
                           ramdisk=None,
@@ -3630,6 +4017,7 @@ disable_root: false"""
                                     description=description,
                                     architecture=architecture,
                                     virtualization_type=virtualization_type,
+                                    platform=platform,
                                     bdmdev=bdmdev,
                                     name=name,
                                     ramdisk=ramdisk,
@@ -3642,10 +4030,450 @@ disable_root: false"""
         self.debug("Registered '" + str(manifest) + "as image:" + str(image))
         return image_obj
 
+    def _register_image_custom_params(self,
+                                     name=None,
+                                     description=None,
+                                     image_location=None,
+                                     architecture=None,
+                                     kernel_id=None,
+                                     ramdisk_id=None,
+                                     root_device_name=None,
+                                     block_device_map=None,
+                                     dry_run=False,
+                                     virtualization_type=None,
+                                     sriov_net_support=None,
+                                     snapshot_id=None,
+                                     platform=None,
+                                     **custom_params):
+        '''
+        Register method to allow testing of 'custom_params' dict if provided
+        '''
+        params = custom_params or {}
+        if name:
+            params['Name'] = name
+        if description:
+            params['Description'] = description
+        if architecture:
+            params['Architecture'] = architecture
+        if kernel_id:
+            params['KernelId'] = kernel_id
+        if ramdisk_id:
+            params['RamdiskId'] = ramdisk_id
+        if image_location:
+            params['ImageLocation'] = image_location
+        if platform:
+            params['Platform'] = platform
+        if root_device_name:
+            params['RootDeviceName'] = root_device_name
+        if snapshot_id:
+            root_vol = BlockDeviceType(snapshot_id=snapshot_id)
+            block_device_map = BlockDeviceMapping()
+            block_device_map[root_device_name] = root_vol
+        if block_device_map:
+            block_device_map.ec2_build_list_params(params)
+        if dry_run:
+            params['DryRun'] = 'true'
+        if virtualization_type:
+            params['VirtualizationType'] = virtualization_type
+        if sriov_net_support:
+            params['SriovNetSupport'] = sriov_net_support
+
+
+        rs = self.ec2.get_object('RegisterImage', params,
+                                 ResultSet, verb='POST')
+        image_id = getattr(rs, 'imageId', None)
+        return image_id
+
+
+
+    def create_image(self, instance, name, description=None, no_reboot=False, block_device_mapping=None, dry_run=False,
+                     timeout=600):
+        """
+        :type instance_id: string
+        :param instance_id: the ID of the instance to image.
+
+        :type name: string
+        :param name: The name of the new image
+
+        :type description: string
+        :param description: An optional human-readable string describing
+            the contents and purpose of the AMI.
+
+        :type no_reboot: bool
+        :param no_reboot: An optional flag indicating that the
+            bundling process should not attempt to shutdown the
+            instance before bundling.  If this flag is True, the
+            responsibility of maintaining file system integrity is
+            left to the owner of the instance.
+
+        :type block_device_mapping: :class:`boto.ec2.blockdevicemapping.BlockDeviceMapping`
+        :param block_device_mapping: A BlockDeviceMapping data structure
+            describing the EBS volumes associated with the Image.
+
+        :type dry_run: bool
+        :param dry_run: Set to True if the operation should not actually run.
+
+        :type timeout: int
+        :param timeout: Time to allow image to get to "available" state.
+
+        :raise Exception: On not reaching the correct state or when more than one image is returned
+        """
+        if isinstance(instance, Instance):
+            instance_id = instance.id
+        else:
+            instance_id = instance
+        image_id = self.ec2.create_image(instance_id, name=name,description=description,no_reboot=no_reboot,
+                                     block_device_mapping=block_device_mapping, dry_run=dry_run)
+        def get_emi_state():
+            images = self.ec2.get_all_images(image_ids=[image_id])
+            if len(images) == 0:
+                raise Exception("Image not found after sending create image request: " + image_id)
+            elif len(images) == 1:
+                state = images[0].state
+                self.debug( image_id + " returned state: " + state)
+                return state
+            else:
+                raise Exception("More than one image returned for: " + image_id)
+        self.wait_for_result(get_emi_state, "available", timeout=timeout,poll_wait=20)
+        return image_id
+
+    def get_all_conversion_tasks(self, taskid=None):
+        params = {}
+        if taskid:
+            params['ConversionTaskId'] = str(taskid)
+        return self.ec2.get_list('DescribeConversionTasks',
+                                  params,
+                                  [('item', ConversionTask),
+                                   ('euca:item', ConversionTask)],
+                                  verb='POST')
+
+    def get_conversion_task(self, taskid):
+        params = {'ConversionTaskId':str(taskid)}
+        task = self.ec2.get_object('DescribeConversionTasks',
+                                   params,
+                                   ConversionTask,
+                                   verb='POST')
+        if not task:
+            raise ResourceNotFoundException('"{0}". Conversion task not found'
+                                            .format(taskid))
+        return task
+
+    def monitor_conversion_tasks(self,
+                                 tasks,
+                                 states='completed',
+                                 time_per_gig=90,
+                                 base_timeout=600,
+                                 interval=10,
+                                 exit_on_failure=False):
+        """
+        Monitors a list a task or list of tasks. Will monitor each
+        task's state to the provided 'state', or until failure, timeout.
+        Note: timeout is calculated by size of the largest task multiplied by
+              'time_per_gig' added to the 'base_timeout'.
+        :param tasks: list of tasks.
+        :param state: string representing desired state to monitor to.
+                      (pending, active, cancelled, completed, failed)
+        :param time_per_gig: time in seconds per largest task size in GB
+                             to append to base timeout
+        :param base_timeout: base timeout in seconds
+        :param interval: seconds between polling tasks
+        :param exit_on_failure: Will stop monitoring and raise an exception
+                                upon first found failure. Otherwise will
+                                continue monitoring remaining tasks in list
+                                and raise the error when all tasks are
+                                complete or timed out.
+        """
+        err_buf = ""
+        monitor_list = []
+        if not isinstance(states, types.ListType):
+            states = [states]
+        #Sanitize provided list...
+        if not isinstance(tasks, types.ListType):
+            tasks = [tasks]
+        for task in tasks:
+            if (not isinstance(task,ConversionTask) and
+                    isinstance(task,types.StringType)):
+                task = self.get_conversion_task(taskid=task)
+            monitor_list.append(task)
+        checking_list = copy.copy(monitor_list)
+        done_list = []
+        start = time.time()
+        elapsed = 0
+        timeout = 0
+        for task in checking_list:
+            for im in task.importvolumes:
+                task_timeout = int(im.volume_size) * int(time_per_gig)
+                if task_timeout > timeout:
+                    timeout = task_timeout
+        timeout += base_timeout
+        while checking_list and elapsed < timeout:
+            for task in checking_list:
+                task.update()
+                self.debug(task)
+                #If the task volume is present add it to the resources list.
+                found = False
+                for vol in task.volumes:
+                    for resvol in self.test_resources['volumes']:
+                        if resvol.id == vol.id:
+                            found = True
+                            break
+                    if not found and not vol in self.test_resources['volumes']:
+                        self.test_resources['volumes'].append(vol)
+                found = False
+                if task.instanceid:
+                    for resins in self.test_resources['reservations']:
+                        if resins.id == task.instanceid:
+                            found = True
+                            break
+                        if resins.id == task.instance.reservation.id:
+                            found = True
+                            break
+                    if not found:
+                        ins = self.get_instances(idstring=task.instanceid)
+                        if ins:
+                            ins = ins[0]
+                            if not ins in self.test_resources['reservations']:
+                                self.test_resources['reservations'].append(ins)
+                #notfound flag is set if task is not found during update()
+                if task.notfound:
+                    err_msg = 'Task "{0}" not found after elapsed:"{1}"'\
+                        .format(task.conversiontaskid, elapsed)
+                    err_buf += "\n" + err_msg
+                    self.debug(err_msg)
+                    done_list.append(task)
+                    continue
+                self.debug('Monitoring task:"{0}:{1}", elapsed:'
+                           '"{2}/{3}"'
+                           .format(task.conversiontaskid,
+                                   task.state,
+                                   elapsed,
+                                   timeout))
+                task_state = task.state.lower()
+                in_state = False
+                #Check state of task against all desired states provided
+                for state in states:
+                    if task_state == state:
+                        in_state = True
+                        break
+                if in_state:
+                    self.debug('Task:"{0}" found in desired state:"{1}"'.
+                               format(task.conversiontaskid, task.state))
+                    done_list.append(task)
+                    continue
+                # Fail fast for tasks found a final state that doesnt match
+                # the desired state provided
+                for final_state in ["completed", "cancelled", "failed"]:
+                    if re.search(final_state, task_state):
+                        err_msg = ('Task "{0}" found in a final state:"{1}" '
+                                   'after elapsed:"{2}", msg:"{3}"'
+                                   .format(task.conversiontaskid,
+                                           task.state,
+                                           elapsed,
+                                           task.statusmessage))
+                        err_buf += "\n" + err_msg
+                        self.debug(err_msg)
+                        done_list.append(task)
+                        continue
+            try:
+                self.print_conversion_task_list(clist=monitor_list)
+            except Exception as PE:
+                self.debug('failed to print conversion task list, err:' +
+                    str(PE))
+            if exit_on_failure and err_buf:
+                break
+            for done_task in done_list:
+                if done_task in checking_list:
+                    checking_list.remove(done_task)
+            if checking_list:
+                self.debug('Waiting for "{0}" remaining tasks to reach '
+                           'desired state:"{1}". Sleeping:"{2}"'
+                           .format(len(checking_list), state, interval))
+                time.sleep(interval)
+            elapsed = int(time.time() - start)
+        self.print_conversion_task_list(clist=tasks)
+        #Any tasks still in checking_list are failures
+        for task in checking_list:
+            err_buf += ('Monitor complete. Task "{0}:{1}" not in desired '
+                        'state "{2}" after elapsed:"{3}"\n'
+                        .format(task.conversiontaskid,
+                                task.state,
+                                state,
+                                elapsed))
+        if err_buf:
+            err_buf = "Exit on first failure set to:" + str(exit_on_failure) \
+                      + "\n" + err_buf
+            raise Exception('Monitor conversion tasks failures detected:\n'
+                            + str(err_buf))
+
+    def print_conversion_task_list(self,
+                                   clist=None,
+                                   doprint=True,
+                                   printmethod=None):
+        clist = clist or self.get_all_conversion_tasks()
+        printmethod = printmethod or self.debug
+        taskidlen = 19
+        statusmsglen = 24
+        availzonelen=14
+        volumelen=16
+        snaplen=13
+        instancelen=13
+        imagelen=13
+        header = ('TASKID'.center(taskidlen) + " | " +
+                  'SNAPSHOTS'.center(snaplen) + " | " +
+                  'INSTANCE'.center(instancelen) + " | " +
+                  'IMAGE ID'.center(imagelen) + " | " +
+                  'ZONE'.center(availzonelen) + " | " +
+                  'VOLUMES'.center(volumelen) + " | " +
+                  'STATUS MSG'.center(statusmsglen) + " |\n" )
+        line = ""
+        for x in xrange(0, len(header)):
+            line += '-'
+        line += "\n"
+        buf = "\n" + line + header + line
+        for task in clist:
+            sizestr = None
+            instancestr = "???"
+            instancestatus = ""
+            imagesize = None
+            vollist = []
+            volbytes = []
+            for importvol in task.importvolumes:
+                bytesconverted = importvol.bytesconverted
+                volume_id = importvol.volume_id
+                if importvol.image:
+                    imagesize = long(importvol.image.size)
+                if imagesize is not None:
+                    sizegb = "%.3f" % float(
+                        long(imagesize) / float(1073741824))
+                    gbconverted = "%.3f" % float(
+                        long(bytesconverted) / float(1073741824))
+                    sizestr = ("{0}/{1}gb".format(gbconverted, sizegb))
+                vollist.append(str(volume_id))
+                volbytes.append(sizestr)
+            volumes = ",".join(vollist)
+            volbytescon = ",".join(volbytes)
+            volstatus = ",".join([str('(' + str(vol.status) + ':' +
+                                      str(vol.size) + ')')
+                                  for vol in task.volumes]) or "???"
+            snaps = ",".join([str(snap.id ) for snap in task.snapshots]) or \
+                    "???"
+            snapstatus = ",".join([str('(' + snap.status + ')')
+                                   for snap in task.snapshots])
+            if task.instance:
+                instancestr = str(task.instance.id)
+                instancestatus = '(' + str(task.instance.state) + ')'
+            image_id = task.image_id or "???"
+            buf += (str(task.conversiontaskid).center(taskidlen) + " | " +
+
+                    str(snaps).center(snaplen) + " | " +
+                    str(instancestr).center(instancelen) + " | " +
+                    str(image_id ).center(imagelen) + " | " +
+                    str(task.availabilityzone).center(availzonelen) + " | " +
+                    str(volumes).center(volumelen) + " | " +
+                    str(task.statusmessage[:statusmsglen]).ljust(statusmsglen)
+                    + " |\n")
+            buf += (str('(' + task.state + ')').center(taskidlen) + " | " +
+                    str(snapstatus).center(snaplen) + " | " +
+                    str(instancestatus).center(instancelen) + " | " +
+                    str('').center(imagelen) + " | " +
+                    str('').center(availzonelen) + " | " +
+                    str(volstatus).center(volumelen) + " | " +
+                    str(task.statusmessage[
+                        statusmsglen:(2*statusmsglen)]).ljust(statusmsglen)
+                    + " |\n")
+            buf += (str('').center(taskidlen) + " | " +
+                    str('').center(snaplen) + " | " +
+                    str('').center(instancelen) + " | " +
+                    str('').center(imagelen) + " | " +
+                    str('').center(availzonelen) + " | " +
+                    str(volbytescon).center(volumelen) + " | " +
+                    str(task.statusmessage[
+                        (2*statusmsglen):(3*statusmsglen)]).ljust(statusmsglen)
+                    + " |\n")
+            buf += line
+        if doprint:
+            printmethod(buf)
+        return buf
+
+    def cancel_conversion_tasks(self, tasks, timeout=180):
+        tasks = tasks or self.test_resources['conversion_tasks']
+        if not isinstance(tasks, types.ListType):
+            tasks = [tasks]
+        printbuf = self.print_conversion_task_list(clist=tasks, doprint=False)
+        self.debug('Cancel Conversion task list...\n' + str(printbuf))
+        cancel_tasks = copy.copy(tasks)
+        for task in tasks:
+            task.update()
+            for state in ['canceled', 'failed', 'completed']:
+                if task.state == state:
+                    cancel_tasks.remove(task)
+                    break
+        for task in cancel_tasks:
+            task.cancel()
+        self.monitor_conversion_tasks(tasks=cancel_tasks, states=['canceled'])
+        printbuf = self.print_conversion_task_list(clist=tasks, doprint=False)
+        self.debug('Done with canceling_conversion_tasks...' + str(printbuf))
+
+
+    def cleanup_conversion_task_resources(self, tasks=None):
+        tasks = tasks or self.test_resources['conversion_tasks']
+        if not isinstance(tasks, types.ListType):
+            tasks = [tasks]
+        error_msg = ""
+        try:
+            self.cancel_conversion_tasks(tasks)
+        except Exception as CE:
+                tb = self.get_traceback()
+                self.critical('Failed to cancel some tasks:' + str(CE))
+
+        for task in tasks:
+            self.debug('Attempting to delete all resources associated '
+                       'with task: "{0}"'
+                       .format(getattr(task, 'id', 'UNKOWN_ID')))
+            try:
+                assert isinstance(task,ConversionTask)
+                task.update()
+                try:
+                    if task.instance:
+                        self.terminate_single_instance(task.instance)
+                except Exception, e:
+                    tb = self.get_traceback()
+                    error_msg += str(tb) + '\n"{0}":Cleanup_error:"{1}"\n'\
+                        .format(task.conversiontaskid, str(e))
+                try:
+                    if task.image_id:
+                        image = self.get_images(emi=task.image_id)
+                        if image:
+                            self.delete_image(image=image)
+                except Exception, e:
+                    tb = self.get_traceback()
+                    error_msg += str(tb) + '\n"{0}":Cleanup_error:"{1}"\n'\
+                        .format(task.conversiontaskid, str(e))
+                try:
+                    if task.snapshots:
+                        self.delete_snapshots(snapshots=task.snapshots)
+                except Exception, e:
+                    tb = self.get_traceback()
+                    error_msg += str(tb) + '\n"{0}":Cleanup_error:"{1}"\n'\
+                        .format(task.conversiontaskid, str(e))
+                try:
+                    if task.volumes:
+                        self.delete_volumes(volume_list=task.volumes)
+                except Exception, e:
+                    tb = self.get_traceback()
+                    error_msg += str(tb) + '\n"{0}":Cleanup_error:"{1}"\n'\
+                        .format(task.conversiontaskid, str(e))
+            except Exception as TE:
+                tb = self.get_traceback()
+                error_msg += '{0}\n"{1}" Failed to cleanup task, err:"{1}"'\
+                    .format(str(tb), getattr(task, 'id', 'UNKOWN_ID'), str(TE))
+        if error_msg:
+            raise Exception(error_msg)
+
 
     def create_web_servers(self, keypair, group, zone, port=80, count=2, image=None, filename="test-file", cookiename="test-cookie"):
         if not image:
-            image = self.get_emi()
+            image = self.get_emi(root_device_type="instance-store", not_location="loadbalancer", not_platform="windows")
         reservation = self.run_instance(image, keypair=keypair, group=group, zone=zone, min=count, max=count)
         self.authorize_group(group=group,port=port)
 
@@ -3655,6 +4483,7 @@ disable_root: false"""
             try:
                 instance.sys("which apt-get", code=0)
                 ## Debian based Linux
+                instance.sys("apt-get update", code=0)
                 instance.sys("apt-get install -y apache2", code=0)
                 instance.sys("echo \"" + instance.id +"\" > /var/www/" + filename)
                 instance.sys("echo \"CookieTracking on\" >> /etc/apache2/apache2.conf")
@@ -3718,6 +4547,7 @@ disable_root: false"""
 
 
     def get_vm_type_list_from_zone(self, zone):
+        self.debug('Looking up zone:' + str(zone))
         euzone = self.get_euzones(zone)[0]
         return euzone.vm_types
 
@@ -3805,3 +4635,9 @@ class VolumeStateException(Exception):
     def __str__(self):
         return repr(self.value)
 
+class ResourceNotFoundException(Exception):
+    def __init__(self, value):
+        self.value = value
+
+    def __str__(self):
+        return repr(self.value)

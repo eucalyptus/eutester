@@ -28,7 +28,7 @@ class InstanceRestore(EutesterTestCase):
         ### Generate a keypair for the instance
         self.keypair = self.tester.add_keypair( "keypair-" + str(time.time()))
         self.keypath = '%s/%s.pem' % (os.curdir, self.keypair.name)
-        self.image = self.tester.get_emi()
+        self.image = self.tester.get_emi(root_device_type="instance-store")
         self.reservation = None
         self.private_addressing = False
         zones = self.tester.ec2.get_all_zones()
@@ -57,19 +57,22 @@ class InstanceRestore(EutesterTestCase):
         except Exception,e:
             self.tester.register_image(image_location=self.image.location,
                                        ramdisk=self.image.ramdisk_id,
-                                       kernel=self.image.kernel_id)
+                                       kernel=self.image.kernel_id,
+                                       virtualization_type=self.image.virtualization_type)
 
     def RestoreLogic(self):
         self.tester.modify_property("cloud.vmstate.instance_timeout","1")
         self.tester.modify_property("cloud.vmstate.terminated_time","1")
 
-        self.reservation = self.tester.run_instance(self.image, keypair=self.keypair.name, group=self.group.name, zone=self.zone)
+        ### desired number of instances in the reservation
+        res_count = 2
+        self.reservation = self.tester.run_instance(self.image, keypair=self.keypair.name, group=self.group.name, zone=self.zone, min=res_count, max=res_count)
 
         for nc in self.ncs:
             nc.sys("service eucalyptus-nc stop")
 
-        ### Wait for instance to show up as terminating
-        self.tester.wait_for_reservation(self.reservation, state="terminated", timeout=600)
+        ### Wait for instance to show up as terminated
+        self.tester.monitor_euinstances_to_state(self.reservation.instances, state="terminated", timeout=600)
 
         instance_under_test = None
         for instance in self.reservation.instances:
@@ -81,22 +84,19 @@ class InstanceRestore(EutesterTestCase):
         for nc in self.ncs:
             nc.sys("service eucalyptus-nc start")
 
-        found = False
-        while not found:
+        def check_for_instance():
             try:
                 if not self.tester.ec2.get_all_instances(instance_ids=[instance_under_test.id]):
                     raise Exception("Unable to find instance")
                 else:
-                    found = True
+                    return True
             except Exception, e:
-                self.tester.debug(str(instance_under_test) + " not found yet")
-            self.tester.sleep(10)
-
-        self.tester.wait_for_instance(instance_under_test, state="running", timeout=600)
+                return False
+        self.tester.wait_for_result(check_for_instance, True, timeout=600)
+        self.tester.monitor_euinstances_to_state(self.reservation.instances, state="running", timeout=600)
 
         for instance in self.reservation.instances:
             instance.sys("uname -r", code=0)
-
 
 
 if __name__ == "__main__":
@@ -106,7 +106,7 @@ if __name__ == "__main__":
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
     for test in list:
-        unit_list.append( testcase.create_testunit_by_name(test) )
+        unit_list.append(testcase.create_testunit_by_name(test))
         ### Run the EutesterUnitTest objects
 
     result = testcase.run_test_case_list(unit_list,clean_on_exit=True)

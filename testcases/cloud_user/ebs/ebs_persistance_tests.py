@@ -99,7 +99,7 @@ class Ebs_Persistance_Tests(EutesterTestCase):
         if self.args.emi:
             self.image = self.tester.get_emi(emi=str(self.args.emi))
         else:
-            self.image = self.tester.get_emi(root_device_type="instance-store",not_location='windows')
+            self.image = self.tester.get_emi(root_device_type="instance-store")
         if not self.image:
             raise Exception('couldnt find instance store image')
         self.clean_method = self.cleanup
@@ -110,7 +110,7 @@ class Ebs_Persistance_Tests(EutesterTestCase):
                 if self.image.root_device_type != "ebs":
                     raise Exception(str(self.args.bfebsemi) + ": Does not have EBS root_device_type")
             else:
-                self.bfebs_image = self.tester.get_emi(root_device_type="ebs",not_location='windows')
+                self.bfebs_image = self.tester.get_emi(root_device_type="ebs")
             if not self.image:
                 raise Exception('"testbfebs" argument was set, but no BFEBS image found or provided')
         self.volumes = []

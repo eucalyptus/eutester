@@ -64,7 +64,7 @@ class AutoScalingBasics(EutesterTestCase):
 
         self.image = self.args.emi
         if not self.image:
-            self.image = self.tester.get_emi(root_device_type="instance-store", not_location="loadbalancer")
+            self.image = self.tester.get_emi()
         self.address = None
         self.asg = None
 
@@ -260,41 +260,22 @@ class AutoScalingBasics(EutesterTestCase):
                                     desired_capacity=1)
 
         assert isinstance(self.asg, AutoScalingGroup)
+        self.tester.wait_for_result(self.tester.wait_for_instances, True, timeout=360, group_name=self.asg.name)
+
         self.tester.update_as_group(group_name=self.asg.name,
                                     launch_config=second_launch_config,
                                     availability_zones=self.tester.get_zones(),
                                     min_size=1,
                                     max_size=4)
-        def wait_for_instances(number=1):
-            self.asg = self.tester.describe_as_group(self.asg.name)
-            instances = self.asg.instances
-            if not instances:
-                self.tester.debug("No instances in ASG")
-                return False
-            if len(self.asg.instances) != number:
-                self.tester.debug("Instances not yet allocated")
-                return False
-            for instance in instances:
-                assert isinstance(instance, Instance)
-                instance = self.tester.get_instances(idstring=instance.instance_id)[0]
-                if instance.state != "running":
-                    self.tester.debug("Instance: " + str(instance) + " still in " + instance.state + " state")
-                    return False
-                else:
-                    self.tester.debug("Instance: " + str(instance) + " now running")
-            return True
-
-        self.tester.wait_for_result(wait_for_instances, True ,timeout=360)
         ### Set desired capacity
         new_desired = 2
         self.asg.set_capacity(new_desired)
-        self.tester.wait_for_result(wait_for_instances, True, number=new_desired, timeout=360)
-        #wait briefly before changing capacity
-        # TODO  get new instance ID and get it's type verify correct type
-        ### Delete Auto Scaling Group
+        self.tester.wait_for_result(self.tester.wait_for_instances, True, timeout=360, group_name=self.asg.name,
+                                    number=new_desired)
         last_instance = self.tester.get_instances(idstring=self.tester.get_last_instance_id())[0]
         assert last_instance.instance_type == "m1.large"
 
+        ### Delete Auto Scaling Group
         self.tester.wait_for_result(self.gracefully_delete, True)
         self.asg = None
         ### delete launch configs

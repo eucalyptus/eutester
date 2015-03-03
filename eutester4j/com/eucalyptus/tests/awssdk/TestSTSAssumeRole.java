@@ -91,8 +91,6 @@ public class TestSTSAssumeRole {
             assertThat(userResult.getUser().getArn() != null, "Expected current user ARN");
             final String userArn = userResult.getUser().getArn();
             print("Got user ARN (will convert account alias to ID if necessary): " + userArn);
-
-
             {
                 final String roleNameA = NAME_PREFIX + "AssumeRoleTestA";
                 print("Creating role to determine account number: " + roleNameA);
@@ -168,11 +166,19 @@ public class TestSTSAssumeRole {
             assertThat(result.getRole().getArn() != null, "Expected role ARN");
             final String roleArn = result.getRole().getArn();
 
-            // Describe images using role, no permissions so should see nothing
+            /* Describe images using role with no permissions
+             * In 3.X this would just return nothing
+             * In 4.0 should get error. see EUCA-8513
+             */
             print("Describing images to ensure no permission with role: " + roleName);
             {
-                final DescribeImagesResult imagesResult = getImagesUsingRole(account, user, roleName, roleArn, "222222222222");
-                assertThat(imagesResult.getImages().size() == 0, "Image found when using role with no permissions");
+                try {
+                    final DescribeImagesResult imagesResult = getImagesUsingRole(account, user, roleName, roleArn, "222222222222");
+                    imagesResult.getImages();
+                } catch (AmazonServiceException e) {
+                    print("Got Expected Failure: " + e.getMessage());
+                    assertThat(e.getMessage().length() > 0, "Should have failed to list images for role without expressed permission");
+                }
             }
 
             // Add policy to role

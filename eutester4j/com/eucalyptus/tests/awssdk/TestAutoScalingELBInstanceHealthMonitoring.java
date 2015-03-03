@@ -19,10 +19,8 @@
  ************************************************************************/
 package com.eucalyptus.tests.awssdk;
 
-import com.amazonaws.services.autoscaling.model.CreateAutoScalingGroupRequest;
-import com.amazonaws.services.autoscaling.model.CreateLaunchConfigurationRequest;
-import com.amazonaws.services.autoscaling.model.DeleteLaunchConfigurationRequest;
-import com.amazonaws.services.autoscaling.model.SetDesiredCapacityRequest;
+import com.amazonaws.AmazonServiceException;
+import com.amazonaws.services.autoscaling.model.*;
 import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
 import com.amazonaws.services.elasticloadbalancing.model.ConfigureHealthCheckRequest;
 import com.amazonaws.services.elasticloadbalancing.model.HealthCheck;
@@ -54,7 +52,7 @@ public class TestAutoScalingELBInstanceHealthMonitoring {
         final List<Runnable> cleanupTasks = new ArrayList<Runnable>();
         try {
             // Generate a load balancer to use
-            final String loadBalancerName = NAME_PREFIX + "ELBInstanceHealthMonitoringTest";
+            final String loadBalancerName = NAME_PREFIX + "ELBHealth";
             print("Creating a load balancer for test use: " + loadBalancerName);
             createLoadBalancer(loadBalancerName);
             cleanupTasks.add(new Runnable() {
@@ -112,11 +110,11 @@ public class TestAutoScalingELBInstanceHealthMonitoring {
 
             // Wait for instance to launch
             print("Waiting for instance to launch");
-            final long timeout = TimeUnit.MINUTES.toMillis(5);
+            final long timeout = TimeUnit.MINUTES.toMillis(15);
             final String instanceId = (String) waitForInstances(timeout, 1, groupName,true).get(0);
 
             print("Waiting for instance to be added to ELB");
-            waitForElbInstances(loadBalancerName, TimeUnit.MINUTES.toMillis(5), Arrays.asList(instanceId));
+            waitForElbInstances(loadBalancerName, TimeUnit.MINUTES.toMillis(15), Arrays.asList(instanceId));
             print("Instance added to ELB");
 
             // Verify initial health status
@@ -128,11 +126,11 @@ public class TestAutoScalingELBInstanceHealthMonitoring {
             elb.configureHealthCheck(new ConfigureHealthCheckRequest()
                     .withLoadBalancerName(loadBalancerName)
                     .withHealthCheck(new HealthCheck()
-                            .withHealthyThreshold(1)
-                            .withUnhealthyThreshold(1)
+                            .withHealthyThreshold(2)
+                            .withUnhealthyThreshold(2)
                             .withInterval(5)
                             .withTimeout(4)
-                            .withTarget("HTTP:1023")
+                            .withTarget("HTTP:1023/")
                     )
             );
 
@@ -149,6 +147,22 @@ public class TestAutoScalingELBInstanceHealthMonitoring {
             final String replacementInstanceId = (String) waitForInstances(timeout, 1, groupName,true).get(0);
             assertThat(!replacementInstanceId.equals(instanceId), "Instance not replaced");
 
+            // Set desired capacity below minimum exception expected
+            print("Setting desired capacity to 0 (below minimum should fail) for group: " + groupName);
+            try {
+                as.setDesiredCapacity(new SetDesiredCapacityRequest()
+                        .withAutoScalingGroupName(groupName)
+                        .withDesiredCapacity(0));
+                assertThat(false, "Setting Desired Capacity below min should fail");
+            } catch (AmazonServiceException e) {
+                print("Expected error returned: " + e);
+            }
+
+            // Set desired minimum size to zero
+            as.updateAutoScalingGroup(new UpdateAutoScalingGroupRequest()
+                    .withAutoScalingGroupName(groupName)
+                    .withMinSize(0));
+            print("Changed Minimum size to Zero");
             // Set desired capacity to zero
             print("Setting desired capacity to 0 for group: " + groupName);
             as.setDesiredCapacity(new SetDesiredCapacityRequest()

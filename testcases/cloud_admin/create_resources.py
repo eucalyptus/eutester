@@ -68,12 +68,21 @@ class ResourceGeneration(EutesterTestCase):
             user_name = user['user_name']
             user_account = user['account_name']
             if not re.search("eucalyptus", user_account ):
-                self.tester.debug("Creating access key for " + user_name + " in account " +  user_account)
+                self.tester.debug("Creating access key for " + user_name + " in account " + user_account)
                 keys = self.tester.create_access_key(user_name=user_name, delegate_account=user_account)
                 access_key = keys['access_key_id']
                 secret_key = keys['secret_access_key']
-                self.tester.debug("Creating Eucaops object with access key " + access_key + " and secret key " +  secret_key)
-                new_tester = Eucaops(aws_access_key_id=access_key, aws_secret_access_key=secret_key, ec2_ip=self.tester.ec2.host, s3_ip=self.tester.s3.host, s3_path=self.tester.get_s3_path()  , username=user_name, account=user_account)
+                self.tester.debug("Creating Eucaops object with access key " + access_key +
+                                  " and secret key " + secret_key)
+                new_tester = Eucaops(aws_access_key_id=access_key, aws_secret_access_key=secret_key,
+                                     ec2_ip=self.tester.ec2.host, ec2_path=self.tester.ec2.path,
+                                     iam_ip=self.tester.euare.host, iam_path=self.tester.euare.path,
+                                     s3_ip=self.tester.s3.host, s3_path=self.tester.s3.path,
+                                     sts_ip=self.tester.tokens.host, sts_path=self.tester.tokens.path,
+                                     cw_ip=self.tester.cw.host, cw_path=self.tester.cw.path,
+                                     as_ip=self.tester.autoscale.host, as_path=self.tester.autoscale.path,
+                                     elb_ip=self.tester.elb.host, elb_path=self.tester.elb.path,
+                                     username=user_name, account=user_account)
                 self.testers.append(new_tester)
 
         self.tester.debug("Created a total of " + str(len(self.testers)) + " testers" )
@@ -101,7 +110,7 @@ class ResourceGeneration(EutesterTestCase):
                 resource_tester.disassociate_address_from_instance(instance)
                 if not self.args.no_cleanup:
                     resource_tester.release_address(address)
-            self.tester.sleep(5)
+            self.tester.sleep(20)
             instance.update()
             instance.reset_ssh_connection()
             volume = resource_tester.create_volume(size=1, zone=zone)

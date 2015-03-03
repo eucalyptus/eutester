@@ -1,6 +1,6 @@
 # Software License Agreement (BSD License)
 #
-# Copyright (c) 2009-2011, Eucalyptus Systems, Inc.
+# Copyright (c) 2009-2014, Eucalyptus Systems, Inc.
 # All rights reserved.
 #
 # Redistribution and use of this software in source and binary forms, with or
@@ -60,7 +60,18 @@ class IAMops(Eutester):
             self.euare = boto.connect_iam(**euare_connection_args)
         except Exception, e:
             self.critical("Was unable to create IAM connection because of exception: " + str(e))
-    
+
+    def get_iam_ip(self):
+        """Parse the eucarc for the EUARE_URL"""
+        iam_url = self.parse_eucarc("EUARE_URL")
+        return iam_url.split("/")[2].split(":")[0]
+
+    def get_iam_path(self):
+        """Parse the eucarc for the EUARE_URL"""
+        iam_url = self.parse_eucarc("EUARE_URL")
+        iam_path = "/".join(iam_url.split("/")[3:])
+        return iam_path
+
     def create_account(self,account_name):
         """
         Create an account with the given name
@@ -633,7 +644,7 @@ class IAMops(Eutester):
     def delete_server_cert(self, cert_name):
         self.debug("deleting server certificate: " + cert_name)
         self.euare.delete_server_cert(cert_name)
-        if (cert_name) in str(self.euare.list_server_certs()):
+        if (cert_name) in str(self.euare.get_all_server_certs()):
             raise Exception("certificate " + cert_name + " not deleted.")
 
     def list_server_certs(self, path_prefix='/', marker=None, max_items=None):
@@ -641,3 +652,11 @@ class IAMops(Eutester):
         certs = self.euare.list_server_certs(path_prefix=path_prefix, marker=marker, max_items=max_items)
         self.debug(certs)
         return certs
+
+    def create_login_profile(self, user_name, password, delegate_account=None):
+        self.debug("Creating login profile for: " + user_name + " with password: " + password)
+        params = {'UserName': user_name,
+                  'Password': password}
+        if delegate_account:
+            params['DelegateAccount'] = delegate_account
+        self.euare.get_response('CreateLoginProfile', params, verb='POST')
