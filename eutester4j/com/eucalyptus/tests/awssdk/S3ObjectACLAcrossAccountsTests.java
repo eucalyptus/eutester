@@ -30,6 +30,7 @@ import com.amazonaws.services.s3.model.CreateBucketRequest;
 import com.amazonaws.services.s3.model.Grant;
 import com.amazonaws.services.s3.model.GroupGrantee;
 import com.amazonaws.services.s3.model.ObjectMetadata;
+import com.amazonaws.services.s3.model.Owner;
 import com.amazonaws.services.s3.model.Permission;
 import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.s3.model.PutObjectResult;
@@ -45,18 +46,20 @@ import com.amazonaws.util.Md5Utils;
  * @author Swathi Gangisetty
  * 
  */
-public class S3ObjectCannedACLAcrossAccountsTests {
+public class S3ObjectACLAcrossAccountsTests {
 
 	private static String bucketName = null;
 	private static String key = null;
 	private static List<Runnable> cleanupTasks = null;
 	private static final File fileToPut = new File("test.dat");
-	private static AmazonS3 s3clientA = null;
-	private static AmazonS3 s3clientB = null;
-	private static String accountNameA = null;
-	private static String accountNameB = null;
+	private static AmazonS3 s3ClientA = null;
+	private static AmazonS3 s3ClientB = null;
 	private static String accountA = null;
 	private static String accountB = null;
+	private static String ownerNameA = null;
+	private static String ownerNameB = null;
+	private static String ownerIdA = null;
+	private static String ownerIdB = null;
 	private static String md5_orig = null;
 
 	@BeforeClass
@@ -66,8 +69,8 @@ public class S3ObjectCannedACLAcrossAccountsTests {
 		try {
 			accountA = this.getClass().getSimpleName().toLowerCase() + "a";
 			accountB = this.getClass().getSimpleName().toLowerCase() + "b";
-			s3clientA = initS3ClientWithNewAccount(accountA, "admin");
-			s3clientB = initS3ClientWithNewAccount(accountB, "admin");
+			s3ClientA = initS3ClientWithNewAccount(accountA, "admin");
+			s3ClientB = initS3ClientWithNewAccount(accountB, "admin");
 		} catch (Exception e) {
 			try {
 				teardown();
@@ -76,8 +79,13 @@ public class S3ObjectCannedACLAcrossAccountsTests {
 			throw e;
 		}
 
-		accountNameA = s3clientA.getS3AccountOwner().getDisplayName();
-		accountNameB = s3clientB.getS3AccountOwner().getDisplayName();
+		Owner ownerA = s3ClientA.getS3AccountOwner();
+		Owner ownerB = s3ClientB.getS3AccountOwner();
+		ownerNameA = ownerA.getDisplayName();
+		ownerNameB = ownerB.getDisplayName();
+		ownerIdA = ownerA.getId();
+		ownerIdB = ownerB.getId();
+
 		md5_orig = BinaryUtils.toHex(Md5Utils.computeMD5Hash(new FileInputStream(fileToPut)));
 	}
 
@@ -86,10 +94,10 @@ public class S3ObjectCannedACLAcrossAccountsTests {
 		print("*** POST SUITE CLEANUP ***");
 		Eutester4j.deleteAccount(accountA);
 		Eutester4j.deleteAccount(accountB);
-		s3clientA = null;
-		s3clientB = null;
+		s3ClientA = null;
+		s3ClientB = null;
 	}
-	
+
 	@BeforeMethod
 	public void setup() throws Exception {
 		print("*** PRE TEST SETUP ***");
@@ -134,64 +142,64 @@ public class S3ObjectCannedACLAcrossAccountsTests {
 
 		try {
 			/* Create bucket with Canned ACL PublicReadWrite as account A admin */
-			createBucket(accountNameA, s3clientA, bucketName, CannedAccessControlList.PublicReadWrite);
+			createBucket(s3ClientA, ownerNameA, bucketName, CannedAccessControlList.PublicReadWrite, ownerIdA);
 
 			/* Put object with Canned ACL BucketOwnerFullControl as account B admin */
-			putObjectWithCannedACL(accountNameB, s3clientB, bucketName, key, CannedAccessControlList.BucketOwnerFullControl);
+			putObjectWithCannedACL(s3ClientB, ownerNameB, bucketName, key, CannedAccessControlList.BucketOwnerFullControl);
 
 			/* Get object ACL as account B admin */
-			print(accountNameB + ": Getting ACL for object " + key);
-			AccessControlList objectACL = s3clientB.getObjectAcl(bucketName, key);
+			print(ownerNameB + ": Getting ACL for object " + key);
+			AccessControlList objectACL = s3ClientB.getObjectAcl(bucketName, key);
 			assertTrue("Mismatch in number of ACLs associated with the object. Expected 2 but got " + objectACL.getGrants().size(), objectACL.getGrants()
 					.size() == 2);
 			Iterator<Grant> iterator = objectACL.getGrants().iterator();
 			while (iterator.hasNext()) {
 				Grant grant = iterator.next();
 				assertTrue("Grantee is not of type CanonicalGrantee", grant.getGrantee() instanceof CanonicalGrantee);
-				assertTrue("Expected grantee to be object owner " + objectACL.getOwner().getId() + " or bucket owner " + s3clientA.getS3AccountOwner().getId()
+				assertTrue("Expected grantee to be object owner " + objectACL.getOwner().getId() + " or bucket owner " + s3ClientA.getS3AccountOwner().getId()
 						+ ", but found " + grant.getGrantee().getIdentifier(), grant.getGrantee().getIdentifier().equals(objectACL.getOwner().getId())
-						|| grant.getGrantee().getIdentifier().equals(s3clientA.getS3AccountOwner().getId()));
+						|| grant.getGrantee().getIdentifier().equals(s3ClientA.getS3AccountOwner().getId()));
 				assertTrue("Expected object/bucket owner to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(), grant
 						.getPermission().equals(Permission.FullControl));
 			}
 
 			/* Verify that account A admin has READ, READ_ACP and WRITE_ACP permissions */
-			assertTrue("Expected bucket owner " + accountNameA + " to have READ permission over the object",
-					canReadObject(accountNameA, s3clientA, bucketName, key));
-			assertTrue("Expected bucket owner " + accountNameA + " to have READ_ACP permission over the object",
-					canReadObjectACP(accountNameA, s3clientA, bucketName, key));
-			assertTrue("Expected bucket owner " + accountNameA + " to have WRITE_ACP permission over the object",
-					canWriteObjectACP(accountNameA, s3clientA, bucketName, key));
+			assertTrue("Expected bucket owner " + ownerNameA + " to have READ permission over the object",
+					canReadObject(ownerNameA, s3ClientA, bucketName, key));
+			assertTrue("Expected bucket owner " + ownerNameA + " to have READ_ACP permission over the object",
+					canReadObjectACP(ownerNameA, s3ClientA, bucketName, key));
+			assertTrue("Expected bucket owner " + ownerNameA + " to have WRITE_ACP permission over the object",
+					canWriteObjectACP(ownerNameA, s3ClientA, bucketName, key));
 
 			/* Verify that account B admin has READ, READ_ACP and WRITE_ACP permissions */
-			assertTrue("Expected object owner " + accountNameB + " to have READ permission over the object",
-					canReadObject(accountNameB, s3clientB, bucketName, key));
-			assertTrue("Expected object owner " + accountNameB + " to have READ_ACP permission over the object",
-					canReadObjectACP(accountNameB, s3clientB, bucketName, key));
-			assertTrue("Expected object owner " + accountNameB + " to have WRITE_ACP permission over the object",
-					canWriteObjectACP(accountNameB, s3clientB, bucketName, key));
+			assertTrue("Expected object owner " + ownerNameB + " to have READ permission over the object",
+					canReadObject(ownerNameB, s3ClientB, bucketName, key));
+			assertTrue("Expected object owner " + ownerNameB + " to have READ_ACP permission over the object",
+					canReadObjectACP(ownerNameB, s3ClientB, bucketName, key));
+			assertTrue("Expected object owner " + ownerNameB + " to have WRITE_ACP permission over the object",
+					canWriteObjectACP(ownerNameB, s3ClientB, bucketName, key));
 
 			/* Set canned ACL Private for object as account A admin */
-			print(accountNameA + ": Setting canned ACL " + CannedAccessControlList.Private + " for object " + key);
-			s3clientA.setObjectAcl(bucketName, key, CannedAccessControlList.Private);
+			print(ownerNameA + ": Setting canned ACL " + CannedAccessControlList.Private + " for object " + key);
+			s3ClientA.setObjectAcl(bucketName, key, CannedAccessControlList.Private);
 
 			/* Verify that account A admin has READ, READ_ACP and WRITE_ACP permissions */
-			assertTrue("Expected bucket owner " + accountNameA + " to have READ permission over the object",
-					canReadObject(accountNameA, s3clientA, bucketName, key));
-			assertTrue("Expected bucket owner " + accountNameA + " to have READ_ACP permission over the object",
-					canReadObjectACP(accountNameA, s3clientA, bucketName, key));
-			assertTrue("Expected bucket owner " + accountNameA + " to have WRITE_ACP permission over the object",
-					canWriteObjectACP(accountNameA, s3clientA, bucketName, key));
+			assertTrue("Expected bucket owner " + ownerNameA + " to have READ permission over the object",
+					canReadObject(ownerNameA, s3ClientA, bucketName, key));
+			assertTrue("Expected bucket owner " + ownerNameA + " to have READ_ACP permission over the object",
+					canReadObjectACP(ownerNameA, s3ClientA, bucketName, key));
+			assertTrue("Expected bucket owner " + ownerNameA + " to have WRITE_ACP permission over the object",
+					canWriteObjectACP(ownerNameA, s3ClientA, bucketName, key));
 
 			/* Verify that account B admin has READ_ACP permission */
-			assertTrue("Expected object owner " + accountNameB + " to have READ_ACP permission over the object",
-					canReadObjectACP(accountNameB, s3clientB, bucketName, key));
+			assertTrue("Expected object owner " + ownerNameB + " to have READ_ACP permission over the object",
+					canReadObjectACP(ownerNameB, s3ClientB, bucketName, key));
 
 			/* Verify that account B admin does not have READ or WRITE_ACP permissions */
-			assertTrue("Expected object owner " + accountNameB + " to not have READ permission over the object",
-					!canReadObject(accountNameB, s3clientB, bucketName, key));
-			assertTrue("Expected object owner " + accountNameB + " to not have WRITE_ACP permission over the object",
-					!canWriteObjectACP(accountNameB, s3clientB, bucketName, key));
+			assertTrue("Expected object owner " + ownerNameB + " to not have READ permission over the object",
+					!canReadObject(ownerNameB, s3ClientB, bucketName, key));
+			assertTrue("Expected object owner " + ownerNameB + " to not have WRITE_ACP permission over the object",
+					!canWriteObjectACP(ownerNameB, s3ClientB, bucketName, key));
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run bucket_PublicReadWrite_object_BucketOwnerFullControl_1");
@@ -214,62 +222,62 @@ public class S3ObjectCannedACLAcrossAccountsTests {
 
 		try {
 			/* Create bucket with Canned ACL PublicReadWrite as account A admin */
-			createBucket(accountNameA, s3clientA, bucketName, CannedAccessControlList.PublicReadWrite);
+			createBucket(s3ClientA, ownerNameA, bucketName, CannedAccessControlList.PublicReadWrite, ownerIdA);
 
 			/* Put object with Canned ACL BucketOwnerFullControl as account B admin */
-			putObjectWithCannedACL(accountNameB, s3clientB, bucketName, key, CannedAccessControlList.BucketOwnerFullControl);
+			putObjectWithCannedACL(s3ClientB, ownerNameB, bucketName, key, CannedAccessControlList.BucketOwnerFullControl);
 
 			/* Get object ACL as account B admin */
-			print(accountNameB + ": Getting ACL for object " + key);
-			AccessControlList objectACL = s3clientB.getObjectAcl(bucketName, key);
+			print(ownerNameB + ": Getting ACL for object " + key);
+			AccessControlList objectACL = s3ClientB.getObjectAcl(bucketName, key);
 			assertTrue("Mismatch in number of ACLs associated with the object. Expected 2 but got " + objectACL.getGrants().size(), objectACL.getGrants()
 					.size() == 2);
 			Iterator<Grant> iterator = objectACL.getGrants().iterator();
 			while (iterator.hasNext()) {
 				Grant grant = iterator.next();
 				assertTrue("Grantee is not of type CanonicalGrantee", grant.getGrantee() instanceof CanonicalGrantee);
-				assertTrue("Expected grantee to be object owner " + objectACL.getOwner().getId() + " or bucket owner " + s3clientA.getS3AccountOwner().getId()
+				assertTrue("Expected grantee to be object owner " + objectACL.getOwner().getId() + " or bucket owner " + s3ClientA.getS3AccountOwner().getId()
 						+ ", but found " + grant.getGrantee().getIdentifier(), grant.getGrantee().getIdentifier().equals(objectACL.getOwner().getId())
-						|| grant.getGrantee().getIdentifier().equals(s3clientA.getS3AccountOwner().getId()));
+						|| grant.getGrantee().getIdentifier().equals(s3ClientA.getS3AccountOwner().getId()));
 				assertTrue("Expected object/bucket owner to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(), grant
 						.getPermission().equals(Permission.FullControl));
 			}
 
 			/* Verify that account A admin has READ, READ_ACP and WRITE_ACP permissions */
-			assertTrue("Expected bucket owner " + accountNameA + " to have READ permission over the object",
-					canReadObject(accountNameA, s3clientA, bucketName, key));
-			assertTrue("Expected bucket owner " + accountNameA + " to have READ_ACP permission over the object",
-					canReadObjectACP(accountNameA, s3clientA, bucketName, key));
-			assertTrue("Expected bucket owner " + accountNameA + " to have WRITE_ACP permission over the object",
-					canWriteObjectACP(accountNameA, s3clientA, bucketName, key));
+			assertTrue("Expected bucket owner " + ownerNameA + " to have READ permission over the object",
+					canReadObject(ownerNameA, s3ClientA, bucketName, key));
+			assertTrue("Expected bucket owner " + ownerNameA + " to have READ_ACP permission over the object",
+					canReadObjectACP(ownerNameA, s3ClientA, bucketName, key));
+			assertTrue("Expected bucket owner " + ownerNameA + " to have WRITE_ACP permission over the object",
+					canWriteObjectACP(ownerNameA, s3ClientA, bucketName, key));
 
 			/* Verify that account B admin has READ, READ_ACP and WRITE_ACP permissions */
-			assertTrue("Expected object owner " + accountNameB + " to have READ permission over the object",
-					canReadObject(accountNameB, s3clientB, bucketName, key));
-			assertTrue("Expected object owner " + accountNameB + " to have READ_ACP permission over the object",
-					canReadObjectACP(accountNameB, s3clientB, bucketName, key));
-			assertTrue("Expected object owner " + accountNameB + " to have WRITE_ACP permission over the object",
-					canWriteObjectACP(accountNameB, s3clientB, bucketName, key));
+			assertTrue("Expected object owner " + ownerNameB + " to have READ permission over the object",
+					canReadObject(ownerNameB, s3ClientB, bucketName, key));
+			assertTrue("Expected object owner " + ownerNameB + " to have READ_ACP permission over the object",
+					canReadObjectACP(ownerNameB, s3ClientB, bucketName, key));
+			assertTrue("Expected object owner " + ownerNameB + " to have WRITE_ACP permission over the object",
+					canWriteObjectACP(ownerNameB, s3ClientB, bucketName, key));
 
 			/* Set canned ACL Private for object as account B admin */
-			print(accountNameB + ": Setting canned ACL " + CannedAccessControlList.Private + " for object " + key);
-			s3clientB.setObjectAcl(bucketName, key, CannedAccessControlList.Private);
+			print(ownerNameB + ": Setting canned ACL " + CannedAccessControlList.Private + " for object " + key);
+			s3ClientB.setObjectAcl(bucketName, key, CannedAccessControlList.Private);
 
 			/* Verify that account A admin does not have READ, READ_ACP and WRITE_ACP permissions */
-			assertTrue("Expected bucket owner " + accountNameA + " to not have READ permission over the object",
-					!canReadObject(accountNameA, s3clientA, bucketName, key));
-			assertTrue("Expected bucket owner " + accountNameA + " to not have READ_ACP permission over the object",
-					!canReadObjectACP(accountNameA, s3clientA, bucketName, key));
-			assertTrue("Expected bucket owner " + accountNameA + " to not have WRITE_ACP permission over the object",
-					!canWriteObjectACP(accountNameA, s3clientA, bucketName, key));
+			assertTrue("Expected bucket owner " + ownerNameA + " to not have READ permission over the object",
+					!canReadObject(ownerNameA, s3ClientA, bucketName, key));
+			assertTrue("Expected bucket owner " + ownerNameA + " to not have READ_ACP permission over the object",
+					!canReadObjectACP(ownerNameA, s3ClientA, bucketName, key));
+			assertTrue("Expected bucket owner " + ownerNameA + " to not have WRITE_ACP permission over the object",
+					!canWriteObjectACP(ownerNameA, s3ClientA, bucketName, key));
 
 			/* Verify that account B admin has READ, READ_ACP and WRITE_ACP permissions */
-			assertTrue("Expected object owner " + accountNameB + " to have READ permission over the object",
-					canReadObject(accountNameB, s3clientB, bucketName, key));
-			assertTrue("Expected object owner " + accountNameB + " to have READ_ACP permission over the object",
-					canReadObjectACP(accountNameB, s3clientB, bucketName, key));
-			assertTrue("Expected object owner " + accountNameB + " to have WRITE_ACP permission over the object",
-					canWriteObjectACP(accountNameB, s3clientB, bucketName, key));
+			assertTrue("Expected object owner " + ownerNameB + " to have READ permission over the object",
+					canReadObject(ownerNameB, s3ClientB, bucketName, key));
+			assertTrue("Expected object owner " + ownerNameB + " to have READ_ACP permission over the object",
+					canReadObjectACP(ownerNameB, s3ClientB, bucketName, key));
+			assertTrue("Expected object owner " + ownerNameB + " to have WRITE_ACP permission over the object",
+					canWriteObjectACP(ownerNameB, s3ClientB, bucketName, key));
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run bucket_PublicReadWrite_object_BucketOwnerFullControl_2");
@@ -287,23 +295,23 @@ public class S3ObjectCannedACLAcrossAccountsTests {
 
 		try {
 			/* Create bucket with Canned ACL PublicReadWrite as account A admin */
-			createBucket(accountNameA, s3clientA, bucketName, CannedAccessControlList.PublicReadWrite);
+			createBucket(s3ClientA, ownerNameA, bucketName, CannedAccessControlList.PublicReadWrite, ownerIdA);
 
 			/* Put object with Canned ACL BucketOwnerRead as account B admin */
-			putObjectWithCannedACL(accountNameB, s3clientB, bucketName, key, CannedAccessControlList.BucketOwnerRead);
+			putObjectWithCannedACL(s3ClientB, ownerNameB, bucketName, key, CannedAccessControlList.BucketOwnerRead);
 
 			/* Get object ACL as account B admin */
-			print(accountNameB + ": Getting ACL for object " + key);
-			AccessControlList objectACL = s3clientB.getObjectAcl(bucketName, key);
+			print(ownerNameB + ": Getting ACL for object " + key);
+			AccessControlList objectACL = s3ClientB.getObjectAcl(bucketName, key);
 			assertTrue("Mismatch in number of ACLs associated with the object. Expected 2 but got " + objectACL.getGrants().size(), objectACL.getGrants()
 					.size() == 2);
 			Iterator<Grant> iterator = objectACL.getGrants().iterator();
 			while (iterator.hasNext()) {
 				Grant grant = iterator.next();
 				assertTrue("Grantee is not of type CanonicalGrantee", grant.getGrantee() instanceof CanonicalGrantee);
-				assertTrue("Expected grantee to be object owner " + objectACL.getOwner().getId() + " or bucket owner " + s3clientA.getS3AccountOwner().getId()
+				assertTrue("Expected grantee to be object owner " + objectACL.getOwner().getId() + " or bucket owner " + s3ClientA.getS3AccountOwner().getId()
 						+ ", but found " + grant.getGrantee().getIdentifier(), grant.getGrantee().getIdentifier().equals(objectACL.getOwner().getId())
-						|| grant.getGrantee().getIdentifier().equals(s3clientA.getS3AccountOwner().getId()));
+						|| grant.getGrantee().getIdentifier().equals(s3ClientA.getS3AccountOwner().getId()));
 				if (grant.getGrantee().getIdentifier().equals(objectACL.getOwner().getId())) {
 					assertTrue("Expected object owner to have " + Permission.FullControl.toString() + " privileges, but found " + grant.getPermission(), grant
 							.getPermission().equals(Permission.FullControl));
@@ -315,22 +323,22 @@ public class S3ObjectCannedACLAcrossAccountsTests {
 			}
 
 			/* Verify that account A admin has READ permission */
-			assertTrue("Expected bucket owner " + accountNameA + " to have READ permission over the object",
-					canReadObject(accountNameA, s3clientA, bucketName, key));
+			assertTrue("Expected bucket owner " + ownerNameA + " to have READ permission over the object",
+					canReadObject(ownerNameA, s3ClientA, bucketName, key));
 
 			/* Verify that account A admin does not have READ_ACP and WRITE_ACP permissions */
-			assertTrue("Expected bucket owner " + accountNameA + " to not have READ_ACP permission over the object",
-					!canReadObjectACP(accountNameA, s3clientA, bucketName, key));
-			assertTrue("Expected bucket owner " + accountNameA + " to not have WRITE_ACP permission over the object",
-					!canWriteObjectACP(accountNameA, s3clientA, bucketName, key));
+			assertTrue("Expected bucket owner " + ownerNameA + " to not have READ_ACP permission over the object",
+					!canReadObjectACP(ownerNameA, s3ClientA, bucketName, key));
+			assertTrue("Expected bucket owner " + ownerNameA + " to not have WRITE_ACP permission over the object",
+					!canWriteObjectACP(ownerNameA, s3ClientA, bucketName, key));
 
 			/* Verify that account B admin has READ, READ_ACP and WRITE_ACP permissions */
-			assertTrue("Expected object owner " + accountNameB + " to have READ permission over the object",
-					canReadObject(accountNameB, s3clientB, bucketName, key));
-			assertTrue("Expected object owner " + accountNameB + " to have READ_ACP permission over the object",
-					canReadObjectACP(accountNameB, s3clientB, bucketName, key));
-			assertTrue("Expected object owner " + accountNameB + " to have WRITE_ACP permission over the object",
-					canWriteObjectACP(accountNameB, s3clientB, bucketName, key));
+			assertTrue("Expected object owner " + ownerNameB + " to have READ permission over the object",
+					canReadObject(ownerNameB, s3ClientB, bucketName, key));
+			assertTrue("Expected object owner " + ownerNameB + " to have READ_ACP permission over the object",
+					canReadObjectACP(ownerNameB, s3ClientB, bucketName, key));
+			assertTrue("Expected object owner " + ownerNameB + " to have WRITE_ACP permission over the object",
+					canWriteObjectACP(ownerNameB, s3ClientB, bucketName, key));
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run bucket_PublicReadWrite_object_BucketOwnerRead");
@@ -348,14 +356,14 @@ public class S3ObjectCannedACLAcrossAccountsTests {
 
 		try {
 			/* Create bucket with Canned ACL PublicReadWrite as account A admin */
-			createBucket(accountNameA, s3clientA, bucketName, CannedAccessControlList.PublicReadWrite);
+			createBucket(s3ClientA, ownerNameA, bucketName, CannedAccessControlList.PublicReadWrite, ownerIdA);
 
 			/* Put object with Canned ACL BucketOwnerFullControl as account B admin */
-			putObjectWithCannedACL(accountNameB, s3clientB, bucketName, key, CannedAccessControlList.AuthenticatedRead);
+			putObjectWithCannedACL(s3ClientB, ownerNameB, bucketName, key, CannedAccessControlList.AuthenticatedRead);
 
 			/* Get object ACL as account B admin */
-			print(accountNameB + ": Getting ACL for object " + key);
-			AccessControlList objectACL = s3clientB.getObjectAcl(bucketName, key);
+			print(ownerNameB + ": Getting ACL for object " + key);
+			AccessControlList objectACL = s3ClientB.getObjectAcl(bucketName, key);
 			assertTrue("Mismatch in number of ACLs associated with the object. Expected 2 but got " + objectACL.getGrants().size(), objectACL.getGrants()
 					.size() == 2);
 			Iterator<Grant> iterator = objectACL.getGrants().iterator();
@@ -377,22 +385,22 @@ public class S3ObjectCannedACLAcrossAccountsTests {
 			}
 
 			/* Verify that account A admin has READ permission */
-			assertTrue("Expected bucket owner " + accountNameA + " to have READ permission over the object",
-					canReadObject(accountNameA, s3clientA, bucketName, key));
+			assertTrue("Expected bucket owner " + ownerNameA + " to have READ permission over the object",
+					canReadObject(ownerNameA, s3ClientA, bucketName, key));
 
 			/* Verify that account A admin does not have READ_ACP and WRITE_ACP permissions */
-			assertTrue("Expected bucket owner " + accountNameA + " to not have READ_ACP permission over the object",
-					!canReadObjectACP(accountNameA, s3clientA, bucketName, key));
-			assertTrue("Expected bucket owner " + accountNameA + " to not have WRITE_ACP permission over the object",
-					!canWriteObjectACP(accountNameA, s3clientA, bucketName, key));
+			assertTrue("Expected bucket owner " + ownerNameA + " to not have READ_ACP permission over the object",
+					!canReadObjectACP(ownerNameA, s3ClientA, bucketName, key));
+			assertTrue("Expected bucket owner " + ownerNameA + " to not have WRITE_ACP permission over the object",
+					!canWriteObjectACP(ownerNameA, s3ClientA, bucketName, key));
 
 			/* Verify that account B admin has READ, READ_ACP and WRITE_ACP permissions */
-			assertTrue("Expected object owner " + accountNameB + " to have READ permission over the object",
-					canReadObject(accountNameB, s3clientB, bucketName, key));
-			assertTrue("Expected object owner " + accountNameB + " to have READ_ACP permission over the object",
-					canReadObjectACP(accountNameB, s3clientB, bucketName, key));
-			assertTrue("Expected object owner " + accountNameB + " to have WRITE_ACP permission over the object",
-					canWriteObjectACP(accountNameB, s3clientB, bucketName, key));
+			assertTrue("Expected object owner " + ownerNameB + " to have READ permission over the object",
+					canReadObject(ownerNameB, s3ClientB, bucketName, key));
+			assertTrue("Expected object owner " + ownerNameB + " to have READ_ACP permission over the object",
+					canReadObjectACP(ownerNameB, s3ClientB, bucketName, key));
+			assertTrue("Expected object owner " + ownerNameB + " to have WRITE_ACP permission over the object",
+					canWriteObjectACP(ownerNameB, s3ClientB, bucketName, key));
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run bucket_PublicReadWrite_object_AuthenticatedRead");
@@ -410,14 +418,14 @@ public class S3ObjectCannedACLAcrossAccountsTests {
 
 		try {
 			/* Create bucket with Canned ACL PublicReadWrite as account A admin */
-			createBucket(accountNameA, s3clientA, bucketName, CannedAccessControlList.PublicReadWrite);
+			createBucket(s3ClientA, ownerNameA, bucketName, CannedAccessControlList.PublicReadWrite, ownerIdA);
 
 			/* Put object with Canned ACL BucketOwnerFullControl as account B admin */
-			putObjectWithCannedACL(accountNameB, s3clientB, bucketName, key, CannedAccessControlList.PublicRead);
+			putObjectWithCannedACL(s3ClientB, ownerNameB, bucketName, key, CannedAccessControlList.PublicRead);
 
 			/* Get object ACL as account B admin */
-			print(accountNameB + ": Getting ACL for object " + key);
-			AccessControlList objectACL = s3clientB.getObjectAcl(bucketName, key);
+			print(ownerNameB + ": Getting ACL for object " + key);
+			AccessControlList objectACL = s3ClientB.getObjectAcl(bucketName, key);
 			assertTrue("Mismatch in number of ACLs associated with the object. Expected 2 but got " + objectACL.getGrants().size(), objectACL.getGrants()
 					.size() == 2);
 			Iterator<Grant> iterator = objectACL.getGrants().iterator();
@@ -439,22 +447,22 @@ public class S3ObjectCannedACLAcrossAccountsTests {
 			}
 
 			/* Verify that account A admin has READ permission */
-			assertTrue("Expected bucket owner " + accountNameA + " to have READ permission over the object",
-					canReadObject(accountNameA, s3clientA, bucketName, key));
+			assertTrue("Expected bucket owner " + ownerNameA + " to have READ permission over the object",
+					canReadObject(ownerNameA, s3ClientA, bucketName, key));
 
 			/* Verify that account A admin does not have READ_ACP and WRITE_ACP permissions */
-			assertTrue("Expected bucket owner " + accountNameA + " to not have READ_ACP permission over the object",
-					!canReadObjectACP(accountNameA, s3clientA, bucketName, key));
-			assertTrue("Expected bucket owner " + accountNameA + " to not have WRITE_ACP permission over the object",
-					!canWriteObjectACP(accountNameA, s3clientA, bucketName, key));
+			assertTrue("Expected bucket owner " + ownerNameA + " to not have READ_ACP permission over the object",
+					!canReadObjectACP(ownerNameA, s3ClientA, bucketName, key));
+			assertTrue("Expected bucket owner " + ownerNameA + " to not have WRITE_ACP permission over the object",
+					!canWriteObjectACP(ownerNameA, s3ClientA, bucketName, key));
 
 			/* Verify that account B admin has READ, READ_ACP and WRITE_ACP permissions */
-			assertTrue("Expected object owner " + accountNameB + " to have READ permission over the object",
-					canReadObject(accountNameB, s3clientB, bucketName, key));
-			assertTrue("Expected object owner " + accountNameB + " to have READ_ACP permission over the object",
-					canReadObjectACP(accountNameB, s3clientB, bucketName, key));
-			assertTrue("Expected object owner " + accountNameB + " to have WRITE_ACP permission over the object",
-					canWriteObjectACP(accountNameB, s3clientB, bucketName, key));
+			assertTrue("Expected object owner " + ownerNameB + " to have READ permission over the object",
+					canReadObject(ownerNameB, s3ClientB, bucketName, key));
+			assertTrue("Expected object owner " + ownerNameB + " to have READ_ACP permission over the object",
+					canReadObjectACP(ownerNameB, s3ClientB, bucketName, key));
+			assertTrue("Expected object owner " + ownerNameB + " to have WRITE_ACP permission over the object",
+					canWriteObjectACP(ownerNameB, s3ClientB, bucketName, key));
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run bucket_PublicReadWrite_object_PublicRead");
@@ -472,14 +480,14 @@ public class S3ObjectCannedACLAcrossAccountsTests {
 
 		try {
 			/* Create bucket with Canned ACL PublicReadWrite as account A admin */
-			createBucket(accountNameA, s3clientA, bucketName, CannedAccessControlList.PublicReadWrite);
+			createBucket(s3ClientA, ownerNameA, bucketName, CannedAccessControlList.PublicReadWrite, ownerIdA);
 
 			/* Put object with Canned ACL BucketOwnerFullControl as account B admin */
-			putObjectWithCannedACL(accountNameB, s3clientB, bucketName, key, CannedAccessControlList.PublicReadWrite);
+			putObjectWithCannedACL(s3ClientB, ownerNameB, bucketName, key, CannedAccessControlList.PublicReadWrite);
 
 			/* Get object ACL as account B admin */
-			print(accountNameB + ": Getting ACL for object " + key);
-			AccessControlList objectACL = s3clientB.getObjectAcl(bucketName, key);
+			print(ownerNameB + ": Getting ACL for object " + key);
+			AccessControlList objectACL = s3ClientB.getObjectAcl(bucketName, key);
 			assertTrue("Mismatch in number of ACLs associated with the object. Expected 3 but got " + objectACL.getGrants().size(), objectACL.getGrants()
 					.size() == 3);
 			Iterator<Grant> iterator = objectACL.getGrants().iterator();
@@ -501,22 +509,22 @@ public class S3ObjectCannedACLAcrossAccountsTests {
 			}
 
 			/* Verify that account A admin has READ permission */
-			assertTrue("Expected bucket owner " + accountNameA + " to have READ permission over the object",
-					canReadObject(accountNameA, s3clientA, bucketName, key));
+			assertTrue("Expected bucket owner " + ownerNameA + " to have READ permission over the object",
+					canReadObject(ownerNameA, s3ClientA, bucketName, key));
 
 			/* Verify that account A admin does not have READ_ACP and WRITE_ACP permissions */
-			assertTrue("Expected bucket owner " + accountNameA + " to not have READ_ACP permission over the object",
-					!canReadObjectACP(accountNameA, s3clientA, bucketName, key));
-			assertTrue("Expected bucket owner " + accountNameA + " to not have WRITE_ACP permission over the object",
-					!canWriteObjectACP(accountNameA, s3clientA, bucketName, key));
+			assertTrue("Expected bucket owner " + ownerNameA + " to not have READ_ACP permission over the object",
+					!canReadObjectACP(ownerNameA, s3ClientA, bucketName, key));
+			assertTrue("Expected bucket owner " + ownerNameA + " to not have WRITE_ACP permission over the object",
+					!canWriteObjectACP(ownerNameA, s3ClientA, bucketName, key));
 
 			/* Verify that account B admin has READ, READ_ACP and WRITE_ACP permissions */
-			assertTrue("Expected object owner " + accountNameB + " to have READ permission over the object",
-					canReadObject(accountNameB, s3clientB, bucketName, key));
-			assertTrue("Expected object owner " + accountNameB + " to have READ_ACP permission over the object",
-					canReadObjectACP(accountNameB, s3clientB, bucketName, key));
-			assertTrue("Expected object owner " + accountNameB + " to have WRITE_ACP permission over the object",
-					canWriteObjectACP(accountNameB, s3clientB, bucketName, key));
+			assertTrue("Expected object owner " + ownerNameB + " to have READ permission over the object",
+					canReadObject(ownerNameB, s3ClientB, bucketName, key));
+			assertTrue("Expected object owner " + ownerNameB + " to have READ_ACP permission over the object",
+					canReadObjectACP(ownerNameB, s3ClientB, bucketName, key));
+			assertTrue("Expected object owner " + ownerNameB + " to have WRITE_ACP permission over the object",
+					canWriteObjectACP(ownerNameB, s3ClientB, bucketName, key));
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run bucket_PublicReadWrite_object_PublicReadWrite");
@@ -534,14 +542,14 @@ public class S3ObjectCannedACLAcrossAccountsTests {
 
 		try {
 			/* Create bucket with Canned ACL PublicReadWrite as account A admin */
-			createBucket(accountNameA, s3clientA, bucketName, CannedAccessControlList.PublicReadWrite);
+			createBucket(s3ClientA, ownerNameA, bucketName, CannedAccessControlList.PublicReadWrite, ownerIdA);
 
 			/* Put object with Canned ACL BucketOwnerFullControl as account B admin */
-			putObjectWithCannedACL(accountNameB, s3clientB, bucketName, key, CannedAccessControlList.Private);
+			putObjectWithCannedACL(s3ClientB, ownerNameB, bucketName, key, CannedAccessControlList.Private);
 
 			/* Get object ACL as account B admin */
-			print(accountNameB + ": Getting ACL for object " + key);
-			AccessControlList objectACL = s3clientB.getObjectAcl(bucketName, key);
+			print(ownerNameB + ": Getting ACL for object " + key);
+			AccessControlList objectACL = s3ClientB.getObjectAcl(bucketName, key);
 			assertTrue("Mismatch in number of ACLs associated with the object. Expected 1 but got " + objectACL.getGrants().size(), objectACL.getGrants()
 					.size() == 1);
 			Iterator<Grant> iterator = objectACL.getGrants().iterator();
@@ -555,23 +563,63 @@ public class S3ObjectCannedACLAcrossAccountsTests {
 			}
 
 			/* Verify that account A admin does not have READ, READ_ACP and WRITE_ACP permissions */
-			assertTrue("Expected bucket owner " + accountNameA + " to not have READ permission over the object",
-					!canReadObject(accountNameA, s3clientA, bucketName, key));
-			assertTrue("Expected bucket owner " + accountNameA + " to not have READ_ACP permission over the object",
-					!canReadObjectACP(accountNameA, s3clientA, bucketName, key));
-			assertTrue("Expected bucket owner " + accountNameA + " to not have WRITE_ACP permission over the object",
-					!canWriteObjectACP(accountNameA, s3clientA, bucketName, key));
+			assertTrue("Expected bucket owner " + ownerNameA + " to not have READ permission over the object",
+					!canReadObject(ownerNameA, s3ClientA, bucketName, key));
+			assertTrue("Expected bucket owner " + ownerNameA + " to not have READ_ACP permission over the object",
+					!canReadObjectACP(ownerNameA, s3ClientA, bucketName, key));
+			assertTrue("Expected bucket owner " + ownerNameA + " to not have WRITE_ACP permission over the object",
+					!canWriteObjectACP(ownerNameA, s3ClientA, bucketName, key));
 
 			/* Verify that account B admin has READ, READ_ACP and WRITE_ACP permissions */
-			assertTrue("Expected object owner " + accountNameB + " to have READ permission over the object",
-					canReadObject(accountNameB, s3clientB, bucketName, key));
-			assertTrue("Expected object owner " + accountNameB + " to have READ_ACP permission over the object",
-					canReadObjectACP(accountNameB, s3clientB, bucketName, key));
-			assertTrue("Expected object owner " + accountNameB + " to have WRITE_ACP permission over the object",
-					canWriteObjectACP(accountNameB, s3clientB, bucketName, key));
+			assertTrue("Expected object owner " + ownerNameB + " to have READ permission over the object",
+					canReadObject(ownerNameB, s3ClientB, bucketName, key));
+			assertTrue("Expected object owner " + ownerNameB + " to have READ_ACP permission over the object",
+					canReadObjectACP(ownerNameB, s3ClientB, bucketName, key));
+			assertTrue("Expected object owner " + ownerNameB + " to have WRITE_ACP permission over the object",
+					canWriteObjectACP(ownerNameB, s3ClientB, bucketName, key));
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run bucket_PublicReadWrite_object_PublicReadWrite");
+		}
+	}
+
+	@Test
+	public void ACL_Headers() throws Exception {
+		testInfo(this.getClass().getSimpleName() + " - ACL_Headers");
+
+		try {
+			/* Create bucket as account B admin with read-write permission for account A */
+			AccessControlList acl = new AccessControlList();
+			acl.getGrants().add(new Grant(new CanonicalGrantee(ownerIdA), Permission.Read));
+			acl.getGrants().add(new Grant(new CanonicalGrantee(ownerIdA), Permission.Write));
+			acl.getGrants().add(new Grant(new CanonicalGrantee(ownerIdB), Permission.FullControl));
+			createBucket(s3ClientB, ownerNameB, bucketName, acl, ownerIdB);
+
+			/* Put object with as account A admin */
+			acl = new AccessControlList();
+			acl.getGrants().add(new Grant(GroupGrantee.LogDelivery, Permission.ReadAcp));
+			acl.getGrants().add(new Grant(GroupGrantee.AuthenticatedUsers, Permission.Read));
+			acl.getGrants().add(new Grant(new CanonicalGrantee(ownerIdB), Permission.Read));
+			acl.getGrants().add(new Grant(new CanonicalGrantee(ownerIdA), Permission.FullControl));
+			putObjectWithACL(s3ClientA, ownerNameA, bucketName, key, acl);
+
+			/* Verify object ACLs */
+			S3Utils.verifyObjectACL(s3ClientA, accountA, bucketName, key, acl, ownerIdA);
+
+			/* Verify that account B admin has READ permission */
+			assertTrue("Expected object owner " + ownerNameB + " to have READ permission over the object",
+					canReadObject(ownerNameB, s3ClientB, bucketName, key));
+
+			/* Verify that account A admin has READ, READ_ACP and WRITE_ACP permissions */
+			assertTrue("Expected bucket owner " + ownerNameA + " to not have READ permission over the object",
+					canReadObject(ownerNameA, s3ClientA, bucketName, key));
+			assertTrue("Expected bucket owner " + ownerNameA + " to not have READ_ACP permission over the object",
+					canReadObjectACP(ownerNameA, s3ClientA, bucketName, key));
+			assertTrue("Expected bucket owner " + ownerNameA + " to not have WRITE_ACP permission over the object",
+					canWriteObjectACP(ownerNameA, s3ClientA, bucketName, key));
+		} catch (AmazonServiceException ase) {
+			printException(ase);
+			assertThat(false, "Failed to run ACL_Headers");
 		}
 	}
 
@@ -582,7 +630,7 @@ public class S3ObjectCannedACLAcrossAccountsTests {
 		print("Amazon Error Code: " + ase.getErrorCode());
 	}
 
-	private void createBucket(final String accountName, final AmazonS3 s3, final String bucketName, CannedAccessControlList cannedACL) {
+	private void createBucket(final AmazonS3 s3, final String accountName, final String bucketName, CannedAccessControlList cannedACL, String bucketOwnerId) {
 		print(accountName + ": Creating bucket " + bucketName + " with canned ACL " + cannedACL);
 		Bucket bucket = s3.createBucket(new CreateBucketRequest(bucketName).withCannedAcl(cannedACL));
 		cleanupTasks.add(new Runnable() {
@@ -595,141 +643,45 @@ public class S3ObjectCannedACLAcrossAccountsTests {
 		assertTrue("Invalid reference to bucket", bucket != null);
 		assertTrue("Mismatch in bucket names. Expected bucket name to be " + bucketName + ", but got " + bucket.getName(), bucketName.equals(bucket.getName()));
 
-		print(accountName + ": Getting ACL for bucket " + bucketName);
-		AccessControlList acl = s3.getBucketAcl(bucketName);
-		assertTrue("Expected owner of the ACL to be " + s3.getS3AccountOwner().getId() + ", but found " + acl.getOwner().getId(), s3.getS3AccountOwner()
-				.getId().equals(acl.getOwner().getId()));
-		Iterator<Grant> iterator = acl.getGrants().iterator();
-
-		switch (cannedACL) {
-			case AuthenticatedRead:
-				assertTrue("Mismatch in number of ACLs associated with the bucket. Expected 2 but got " + acl.getGrants().size(), acl.getGrants().size() == 2);
-				while (iterator.hasNext()) {
-					Grant grant = iterator.next();
-					if (grant.getGrantee() instanceof CanonicalGrantee) {
-						assertTrue("Expected grantee to be bucket owner " + acl.getOwner().getId() + ", but found " + grant.getGrantee().getIdentifier(), grant
-								.getGrantee().getIdentifier().equals(acl.getOwner().getId()));
-						assertTrue("Expected bucket owner to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(), grant
-								.getPermission().equals(Permission.FullControl));
-					} else {
-						assertTrue("Grantee of type GroupGrantee not found", grant.getGrantee() instanceof GroupGrantee);
-						assertTrue("Expected grantee to be " + GroupGrantee.AuthenticatedUsers + ", but found " + ((GroupGrantee) grant.getGrantee()),
-								((GroupGrantee) grant.getGrantee()).equals(GroupGrantee.AuthenticatedUsers));
-						assertTrue(
-								"Expected " + GroupGrantee.AuthenticatedUsers + " to have " + Permission.Read.toString() + " privilege, but found "
-										+ grant.getPermission(), grant.getPermission().equals(Permission.Read));
-					}
-				}
-				break;
-
-			case BucketOwnerFullControl:
-				assertTrue("Mismatch in number of ACLs associated with the bucket. Expected 1 but got " + acl.getGrants().size(), acl.getGrants().size() == 1);
-				while (iterator.hasNext()) {
-					Grant grant = iterator.next();
-					assertTrue("Grantee is not of type CanonicalGrantee", grant.getGrantee() instanceof CanonicalGrantee);
-					assertTrue("Expected grantee to be bucket owner " + acl.getOwner().getId() + ", but found " + grant.getGrantee().getIdentifier(), grant
-							.getGrantee().getIdentifier().equals(acl.getOwner().getId()));
-					assertTrue("Expected bucket owner to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(), grant
-							.getPermission().equals(Permission.FullControl));
-				}
-				break;
-
-			case BucketOwnerRead:
-				assertTrue("Mismatch in number of ACLs associated with the bucket. Expected 1 but got " + acl.getGrants().size(), acl.getGrants().size() == 1);
-				while (iterator.hasNext()) {
-					Grant grant = iterator.next();
-					assertTrue("Grantee is not of type CanonicalGrantee", grant.getGrantee() instanceof CanonicalGrantee);
-					assertTrue("Expected grantee to be bucket owner " + acl.getOwner().getId() + ", but found " + grant.getGrantee().getIdentifier(), grant
-							.getGrantee().getIdentifier().equals(acl.getOwner().getId()));
-					assertTrue("Expected bucket owner to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(), grant
-							.getPermission().equals(Permission.FullControl));
-				}
-				break;
-
-			case LogDeliveryWrite:
-				assertTrue("Mismatch in number of ACLs associated with the bucket. Expected 3 but got " + acl.getGrants().size(), acl.getGrants().size() == 3);
-				while (iterator.hasNext()) {
-					Grant grant = iterator.next();
-					if (grant.getGrantee() instanceof CanonicalGrantee) {
-						assertTrue("Expected grantee to be bucket owner " + acl.getOwner().getId() + ", but found " + grant.getGrantee().getIdentifier(), grant
-								.getGrantee().getIdentifier().equals(acl.getOwner().getId()));
-						assertTrue("Expected bucket owner to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(), grant
-								.getPermission().equals(Permission.FullControl));
-					} else {
-						assertTrue("Grantee of type GroupGrantee not found", grant.getGrantee() instanceof GroupGrantee);
-						assertTrue("Expected grantee to be " + GroupGrantee.LogDelivery + ", but found " + ((GroupGrantee) grant.getGrantee()),
-								((GroupGrantee) grant.getGrantee()).equals(GroupGrantee.LogDelivery));
-						assertTrue(
-								"Expected " + GroupGrantee.LogDelivery + " to have " + Permission.Write.toString() + " or "
-										+ grant.getPermission().equals(Permission.ReadAcp) + " privileges, but found " + grant.getPermission(), grant
-										.getPermission().equals(Permission.Write) || grant.getPermission().equals(Permission.ReadAcp));
-					}
-				}
-				break;
-
-			case Private:
-				assertTrue("Mismatch in number of ACLs associated with the bucket. Expected 1 but got " + acl.getGrants().size(), acl.getGrants().size() == 1);
-				while (iterator.hasNext()) {
-					Grant grant = iterator.next();
-					assertTrue("Grantee is not of type CanonicalGrantee", grant.getGrantee() instanceof CanonicalGrantee);
-					assertTrue("Expected grantee to be bucket owner " + acl.getOwner().getId() + ", but found " + grant.getGrantee().getIdentifier(), grant
-							.getGrantee().getIdentifier().equals(acl.getOwner().getId()));
-					assertTrue("Expected bucket owner to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(), grant
-							.getPermission().equals(Permission.FullControl));
-				}
-				break;
-
-			case PublicRead:
-				assertTrue("Mismatch in number of ACLs associated with the bucket. Expected 2 but got " + acl.getGrants().size(), acl.getGrants().size() == 2);
-				while (iterator.hasNext()) {
-					Grant grant = iterator.next();
-					if (grant.getGrantee() instanceof CanonicalGrantee) {
-						assertTrue("Expected grantee to be bucket owner " + acl.getOwner().getId() + ", but found " + grant.getGrantee().getIdentifier(), grant
-								.getGrantee().getIdentifier().equals(acl.getOwner().getId()));
-						assertTrue("Expected bucket owner to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(), grant
-								.getPermission().equals(Permission.FullControl));
-					} else {
-						assertTrue("Grantee of type GroupGrantee not found", grant.getGrantee() instanceof GroupGrantee);
-						assertTrue("Expected grantee to be " + GroupGrantee.AllUsers + ", but found " + ((GroupGrantee) grant.getGrantee()),
-								((GroupGrantee) grant.getGrantee()).equals(GroupGrantee.AllUsers));
-						assertTrue(
-								"Expected " + GroupGrantee.AllUsers + " to have " + Permission.Read.toString() + " privilege, but found "
-										+ grant.getPermission(), grant.getPermission().equals(Permission.Read));
-					}
-				}
-				break;
-
-			case PublicReadWrite:
-				assertTrue("Mismatch in number of ACLs associated with the bucket. Expected 3 but got " + acl.getGrants().size(), acl.getGrants().size() == 3);
-				while (iterator.hasNext()) {
-					Grant grant = iterator.next();
-					if (grant.getGrantee() instanceof CanonicalGrantee) {
-						assertTrue("Expected grantee to be bucket owner " + acl.getOwner().getId() + ", but found " + grant.getGrantee().getIdentifier(), grant
-								.getGrantee().getIdentifier().equals(acl.getOwner().getId()));
-						assertTrue("Expected bucket owner to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(), grant
-								.getPermission().equals(Permission.FullControl));
-					} else {
-						assertTrue("Grantee of type GroupGrantee not found", grant.getGrantee() instanceof GroupGrantee);
-						assertTrue("Expected grantee to be " + GroupGrantee.AllUsers + ", but found " + ((GroupGrantee) grant.getGrantee()),
-								((GroupGrantee) grant.getGrantee()).equals(GroupGrantee.AllUsers));
-						assertTrue("Expected " + GroupGrantee.AllUsers + " to have " + Permission.Read.toString() + " or " + Permission.Write.toString()
-								+ " privileges, but found " + grant.getPermission(), grant.getPermission().equals(Permission.Read)
-								|| grant.getPermission().equals(Permission.Write));
-					}
-				}
-				break;
-
-			default:
-				assertThat(false, "Unknown canned ACL");
-				break;
-
-		}
+		S3Utils.verifyBucketACL(s3, accountName, bucketName, cannedACL, bucketOwnerId);
 	}
 
-	private void putObjectWithCannedACL(final String accountName, final AmazonS3 s3, final String bucketName, final String key,
+	private void createBucket(final AmazonS3 s3, final String accountName, final String bucketName, AccessControlList acl, String bucketOwnerId) {
+		print(accountName + ": Creating bucket " + bucketName + " with " + acl);
+		Bucket bucket = s3.createBucket(new CreateBucketRequest(bucketName).withAccessControlList(acl));
+		cleanupTasks.add(new Runnable() {
+			@Override
+			public void run() {
+				print(accountName + ": Deleting bucket " + bucketName);
+				s3.deleteBucket(bucketName);
+			}
+		});
+		assertTrue("Invalid reference to bucket", bucket != null);
+		assertTrue("Mismatch in bucket names. Expected bucket name to be " + bucketName + ", but got " + bucket.getName(), bucketName.equals(bucket.getName()));
+
+		S3Utils.verifyBucketACL(s3, accountName, bucketName, acl, bucketOwnerId);
+	}
+
+	private void putObjectWithCannedACL(final AmazonS3 s3, final String accountName, final String bucketName, final String key,
 			CannedAccessControlList cannedACL) throws Exception {
 		print(accountName + ": Putting object " + key + " with canned ACL " + cannedACL + " in bucket " + bucketName);
 		PutObjectResult putObj = s3.putObject(new PutObjectRequest(bucketName, key, fileToPut).withCannedAcl(cannedACL));
+		cleanupTasks.add(new Runnable() {
+			@Override
+			public void run() {
+				print(accountName + ": Deleting object " + key + " from bucket " + bucketName);
+				s3.deleteObject(bucketName, key);
+			}
+		});
+		assertTrue("Invalid put object result", putObj != null);
+		assertTrue("Mimatch in md5sums between original object and PUT result. Expected " + md5_orig + ", but got " + putObj.getETag(),
+				putObj.getETag() != null && putObj.getETag().equals(md5_orig));
+	}
+
+	private void putObjectWithACL(final AmazonS3 s3, final String accountName, final String bucketName, final String key, AccessControlList acl)
+			throws Exception {
+		print(accountName + ": Putting object " + key + " with " + acl + " in bucket " + bucketName);
+		PutObjectResult putObj = s3.putObject(new PutObjectRequest(bucketName, key, fileToPut).withAccessControlList(acl));
 		cleanupTasks.add(new Runnable() {
 			@Override
 			public void run() {
