@@ -632,6 +632,17 @@ disable_root: false"""
         self.show_security_group(group)
         return group
 
+    def show_security_groups(self, groups=None, verbose=True, printme=True):
+        ret_buf = ""
+        groups = groups or self.ec2.get_all_security_groups()
+        for group in groups:
+            ret_buf += "\n" + str(self.show_security_group(group, printme=False))
+        if printme:
+            self.debug(ret_buf)
+        else:
+            return ret_buf
+
+
     def show_security_group(self, group, printme=True):
         try:
             from prettytable import PrettyTable, ALL
@@ -642,7 +653,8 @@ disable_root: false"""
         if not group:
             raise ValueError('Show sec group failed. Could not fetch group:'
                              + str(group))
-        title = "Security Group: {0}/{1}, VPC: {2}".format(group.name, group.id, group.vpc_id)
+        title = self.markup("Security Group: {0}/{1}, VPC: {2}"
+                            .format(group.name, group.id, group.vpc_id))
         maintable = PrettyTable([title])
         table = PrettyTable(["CIDR_IP", "SRC_GRP_NAME",
                              "SRC_GRP_ID", "OWNER_ID", "PORT",
@@ -3540,8 +3552,11 @@ disable_root: false"""
         :param revoke: if True, this method will revoke instead of authorize the auths provided
         :param force_source_update: Force the update of self.ec2_source_ip
         '''
-        self.authorize_group(instance=instance, group=group, auths=auths, revoke=True,
-                             force_source_update=force_source_update)
+        self.authorize_instance_for_test_machine(instance=instance,
+                                                 group=group,
+                                                 auths=auths,
+                                                 revoke=True,
+                                                 force_source_update=force_source_update)
 
 
     def authorize_instance_for_test_machine(self,
@@ -3596,7 +3611,11 @@ disable_root: false"""
         cidr_ip = self.ec2_source_ip + "/32"
         for protocol in auths:
             if revoke:
+                self.debug('Attempting to revoke test machine access, ip:"{0}" for {1}:{2}'
+                           .format(self.ec2_source_ip, protocol, auths[protocol]))
                 self.revoke(group=group, protocol=protocol, port=auths[protocol], cidr_ip=cidr_ip)
+                self.debug('Attempting to authorize test machine access, ip:"{0}" for {1}:{2}'
+                           .format(self.ec2_source_ip, protocol, auths[protocol]))
             else:
                 self.authorize_group(group=group, protocol=protocol, port=auths[protocol],
                                      cidr_ip=cidr_ip)

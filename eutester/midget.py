@@ -15,7 +15,7 @@ from eutester.euinstance import EuInstance
 from eutester.eulogger import Eulogger
 from boto.ec2.group import Group as BotoGroup
 from boto.ec2.instance import Instance
-from boto.ec2.securitygroup import SecurityGroup
+from boto.ec2.securitygroup import SecurityGroup,IPPermissions
 from prettytable import PrettyTable
 import requests
 import socket
@@ -144,7 +144,7 @@ class Midget(object):
             proto_dict = {}
             for attr in dir(socket):
                 if attr.startswith('IPPROTO_'):
-                          proto_dict[str(getattr(socket, attr))]  = attr.replace('IPPROTO_','').upper()
+                    proto_dict[str(getattr(socket, attr))] = attr.replace('IPPROTO_','').upper()
             self._protocols = proto_dict
         return self._protocols
 
@@ -799,9 +799,7 @@ class Midget(object):
         else:
             return mainbuf
 
-
-
-    def show_chain_for_security_group(self, group, printme=True):
+    def get_chain_for_security_group(self, group):
         #sg_ingress_sg-012aee24
         group_id = None
         if isinstance(group, SecurityGroup) or isinstance(group, BotoGroup):
@@ -828,8 +826,163 @@ class Midget(object):
             self._errmsg('Chain lookup failed, this could be expected if security group is extant '
                          'and no running are referencing it')
         else:
-            return self.show_chain(chain, printme=printme)
+            return chain
 
+    def show_chain_for_security_group(self, group, printme=True):
+        chain = self.get_chain_for_security_group(group)
+        return self.show_chain(chain, printme=printme)
+
+    def does_chain_allow(self, chain, src_addr, protocol, port):
+        if not isinstance(chain, Chain):
+            raise ValueError('does_chain_allow passed non Chain type:"{0}:{1}"'
+                             .format(chain, type(chain)))
+        if not src_addr or not protocol or not port:
+            raise ValueError('Missing or empty arg not provided; src_addr:"{0}", protocol:"{1}", '
+                             'port:"{2}"'.format(src_addr, protocol, port))
+        protocol = str(protocol).upper().strip()
+        port = int(port)
+        for rule in chain.get_rules():
+            src_ip = str(rule.get_nw_src_address() or '0.0.0.0')
+            src_mask = str(rule.get_nw_src_length() or 0)
+            rule_cidr =  src_ip + "/" + src_mask
+            rule_protocol = self._get_protocol_name_by_number(rule.get_nw_proto())
+            port_dict = rule.get_tp_dst()
+            start_port = port_dict.get('start')
+            end_port = port_dict.get('end')
+            if protocol == str(rule_protocol).upper().strip():
+                if port >= start_port and port <= end_port:
+                    if rule_cidr == "0.0.0.0/0" or self.tester.is_address_in_network(src_addr,
+                                                                                     rule_cidr):
+                        self.debug('Found rule which allows src_addr:"{0}", protocol:"{1}", '
+                                   'port:"{2}"'.format(src_addr, protocol, port))
+                        self.show_rules(rules=[rule])
+                        return True
+        self.debug('Chain does not allow: src_addr:"{0}", protocol:"{1}", port:"{2}"'
+                   .format(src_addr, protocol, port))
+        return False
+
+    def get_unsynced_rules_for_security_group(self, group, show_rules=True):
+        chain = self.get_chain_for_security_group(group)
+        unsynced_rules = []
+        for rule in group.rules:
+            if not self.get_security_group_rule_mapping_from_backend(group, rule):
+                unsynced_rules.append(rule)
+        self.debug('{0} unsynced rules out of {1} total rules found for group:"{2}"'
+                   .format(len(unsynced_rules), len(group.rules), group.name))
+        if unsynced_rules and show_rules:
+            title = self.tester.markup('The following rules for group:"{0}" were not found) on '
+                               'backend'.format(group.name), [1,91,7])
+            main_pt = PrettyTable([title])
+            pt = PrettyTable(['cidr_ip', 'src_grp_name','src_grp_id', 'protocol', 'port_range'])
+            for rule in unsynced_rules:
+                for grant in rule.grants:
+                    pt.add_row([grant.cidr_ip, grant.name, grant.group_id, rule.ip_protocol,
+                               "{0}:{1}".format(rule.from_port, rule.to_port)])
+            main_pt.add_row([str(pt)])
+            self.debug("\n" + str(main_pt) + "\n")
+        return unsynced_rules
+
+    def get_unsynced_rules_for_instance(self, instance, show_rules=True):
+        unsynced_rules = []
+        for group in instance.groups:
+            group = self.tester.get_security_group(id = group.id)
+            unsynced_rules.extend(self.get_unsynced_rules_for_security_group(group,
+                                  show_rules=show_rules))
+        self.debug('Number of unsynced rules found for instance ({0}):{1}'
+                   .format(instance.id, len(unsynced_rules)))
+        return unsynced_rules
+
+    def get_security_group_rule_mapping_from_backend(self, group, security_group_rule):
+        """
+        Attempts to find the provided security group rule within midonent.
+        """
+        ret_rules = []
+        assert isinstance(security_group_rule, IPPermissions), \
+            'security_group_rule arg must be of type boto.IPPermissions, got:"{0}:{1}'\
+                .format(security_group_rule, type(security_group_rule))
+        chain = self.get_chain_for_security_group(group)
+        ip_grants = copy.copy(security_group_rule.grants)
+        protocol = security_group_rule.ip_protocol and \
+                   str(security_group_rule.ip_protocol).upper() or None
+        from_port = security_group_rule.from_port
+        to_port = security_group_rule.to_port
+        if from_port is not None:
+            from_port = int(from_port)
+        if to_port is not None:
+            to_port = int(to_port)
+        if from_port == -1:
+            from_port = None
+        if to_port == -1:
+            to_port = None
+        for grant in security_group_rule.grants:
+            self.debug(self._bold('Looking for chain rule against grant: cidr_ip:"{0}", '
+                                  'srg_grp:"{1}", proto:"{2}", start_port:"{3}", end_port:"{4}"'
+                                  .format(grant.cidr_ip, grant.group_id,
+                                          security_group_rule.ip_protocol,
+                                          security_group_rule.from_port,
+                                          security_group_rule.to_port)))
+            for rule in chain.get_rules():
+                match = False
+                protocol_number = rule.get_nw_proto()
+                r_protocol = None
+                if protocol_number is not None:
+                     r_protocol = str(self._get_protocol_name_by_number(protocol_number)).upper()
+                self.debug('checking protocol:"{0}" vs rule_proto:"{1}"'.format(protocol,
+                                                                                r_protocol))
+                if not (protocol == r_protocol):
+                    continue
+                port_dict = rule.get_tp_dst() or {}
+                start_port = port_dict.get('start')
+                end_port = port_dict.get('end')
+                self.debug('Protocol matched, checking fport:{0} vs sport:{1}, and tport:{2}'
+                               ' vs eport:{3}'.format(from_port, start_port, to_port, end_port))
+                if not (from_port == start_port and to_port == end_port):
+                    continue
+                self.debug('Rules port and protocols match up, now ip/src grp comparison...')
+                src_ip = str(rule.get_nw_src_address() or '0.0.0.0')
+                src_mask = str(rule.get_nw_src_length() or 0)
+                rule_cidr =  src_ip + "/" + src_mask
+                ip_addr_grp_id = rule.get_ip_addr_group_src()
+                ip_addr_grp_name = ""
+                self.debug('This rule has ipaddr group:"{0}"'.format(ip_addr_grp_id))
+                if ip_addr_grp_id:
+                    ip_addr_grp = self.mapi.get_ip_addr_group(ip_addr_grp_id)
+                    if ip_addr_grp:
+                        ip_addr_grp_name = str(ip_addr_grp.get_name())
+                        self.debug('This rule has ipaddr group name:"{0}"'
+                                   .format(ip_addr_grp_name))
+                self.debug('checking grant.cidr_ip:"{0}" vs rule_cidr:"{1}"'
+                           .format(grant.cidr_ip, rule_cidr))
+                if grant.cidr_ip and (str(grant.cidr_ip) == rule_cidr):
+                    match = True
+                elif grant.group_id and str(grant.group_id) in ip_addr_grp_name:
+                    match = True
+                if match:
+                    self.debug('Found rule for cidr_ip:"{0}", srg_grp:"{1}", proto:"{2}", '
+                                   'start_port:"{3}", end_port:"{4}"'
+                                   .format(grant.cidr_ip, grant.group_id, protocol,
+                                           from_port, to_port))
+                    if not rule in ret_rules:
+                        ret_rules.append(rule)
+                    if grant in ip_grants:
+                        ip_grants.remove(grant)
+                        break
+        self.debug('Found "{0}" rules for; Group:"{1}", ip_grants:"{2}", proto:"{3}", '
+                   'start_port:"{4}", end_port:"{5}"'
+                   .format(len(ret_rules), group,security_group_rule.grants, protocol,
+                           from_port, to_port))
+        if ret_rules:
+            self.show_rules(rules=ret_rules)
+        return ret_rules
+
+    def do_instance_rules_allow(self, instance, src_addr, protocol, port ):
+        for group in instance.groups:
+            chain = self.get_chain_for_security_group(group)
+            self.debug('Checking midonet chain:"{0}" for instance:"{1}", security group "{2}"'
+                       .format(chain.get_name(), instance.id, group.name))
+            if self.does_chain_allow(chain=chain, src_addr=src_addr, protocol=protocol, port=port):
+                return True
+        return False
 
     def show_rules(self, rules, jump=False, printme=True):
         '''
@@ -1035,6 +1188,12 @@ class Midget(object):
         if addresslist:
             return addresslist[0]
         return None
+
+    def restart_backend(self, hosts=None):
+        """
+        Generic reset method not specific to a midonet backend, for tests to call...
+        """
+        return self.reset_midolman_service_on_hosts(hosts=hosts)
 
     def reset_midolman_service_on_hosts(self,hosts=None):
         if hosts and not isinstance(hosts, list):

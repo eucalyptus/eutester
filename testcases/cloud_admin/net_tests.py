@@ -143,17 +143,19 @@ class Net_Tests(EutesterTestCase):
                                  help="Boolean flag to avoid cleaning test resources upon failure, "
                                       "default: True ",
                                  default=False)
-        self.parser.add_argument("--mido-host", dest='mido_host',
-                                 help="IP of midonet API host if cloud is running in Mido VPC mode"
-                                      "and admin has access to Mido api for debug purposes",
+        self.parser.add_argument("--vpc_backend-host", dest='vpc_backend_host',
+                                 help="IP of VPC backend API host if cloud is running in VPC mode"
+                                      "and admin has access to this api for debug purposes",
                                  default=None)
         self.parser.add_argument("--basic-only", dest='basic_only', action='store_true',
                                  help="Boolean flag to run only the first 3 tests in the suite",
                                  default=False)
-        self.parser.add_argument("--allow-mido-restart", dest='allow_mido_restart',
+        self.parser.add_argument("--allow-vpc_backend-restart", dest='allow_vpc_backend_restart',
                                  action='store_true', default=False,
                                  help='Boolean flag to allow the test to restart all the'
-                                      'midonet componets upon failures to retry provide more info')
+                                      'vpc backend service(s) upon failures to retry. '
+                                      'Warning. This is a very intrusive method used as a means '
+                                      'to provide more info around test failures')
         self.parser.add_argument("--keypath", dest='keypath', default=None,
                                  help="ssh key to use for logging into the component machines")
         self.parser.add_argument("--subnetid", dest='subnet_id', default=None,
@@ -161,7 +163,7 @@ class Net_Tests(EutesterTestCase):
                                       "instances network interface in ")
 
 
-        self._mido = None
+        self._vpc_backend = None
         self.tester = tester
         self.get_args()
         # Allow __init__ to get args from __init__'s kwargs or through command line parser...
@@ -230,19 +232,19 @@ class Net_Tests(EutesterTestCase):
 
 
     @property
-    def mido(self):
+    def vpc_backend(self):
         if not self.is_vpc_mode():
             return None
-        if not self._mido:
-            mido_host = self.args.mido_host or self.tester.clc.hostname
+        if not self._vpc_backend:
+            vpc_backend_host = self.args.vpc_backend_host or self.tester.clc.hostname
             try:
                 from eutester.midget import Midget
-                self._mido = Midget(mido_host, tester=self.tester)
+                self._vpc_backend = Midget(vpc_backend_host, tester=self.tester)
             except:
-                self.debug('Failed to create midonet debug object, err:\n{0}'
+                self.debug('FYI... Failed to create vpc backend interface, err:\n{0}'
                            .format(self.tester.get_traceback()))
                 pass
-        return self._mido
+        return self._vpc_backend
 
     ######################################################
     #   Test Utility Methods
@@ -273,13 +275,7 @@ class Net_Tests(EutesterTestCase):
             self.tester.cleanup_artifacts()
 
     def is_vpc_mode(self):
-        conf_prop= self.tester.property_manager.get_property_by_string(
-            'cloud.network.network_configuration')
-        if conf_prop:
-            network_config = json.loads(conf_prop.value)
-            if 'Mode' in network_config and network_config['Mode'] == 'VPCMIDO':
-                return True
-        return False
+        return 'VPC' in self.tester.get_supported_platforms()
 
     def get_proxy_machine(self, instance):
         if self.is_vpc_mode():
@@ -384,11 +380,11 @@ class Net_Tests(EutesterTestCase):
         net_namespace = None
         if self.is_vpc_mode():
             net_namespace = instance.vpc_id
-        mido_retries = 0
+        vpc_backend_retries = 0
         max_retries = 1
-        while mido_retries <= max_retries:
-            if not self.mido:
-                mido_retries = max_retries + 1
+        while vpc_backend_retries <= max_retries:
+            if not self.vpc_backend:
+                vpc_backend_retries = max_retries + 1
             try:
                 self.tester.wait_for_result(self._ping_instance_private_ip_from_euca_internal,
                                             result=True,
@@ -403,21 +399,21 @@ class Net_Tests(EutesterTestCase):
                                       proxy_machine.hostname))
                 self.errormsg('Ping failure. Fetching network debug info from internal host...')
                 proxy_machine.machine.dump_netfail_info(ip=instance.private_ip_address,
-                                                net_namespace=net_namespace)
+                                                        net_namespace=net_namespace)
                 self.errormsg('Done dumping network debug info from the "internal euca proxy host" @ '
                               '{0} '
                               'used in attempting to ping instance {1}, private ip: {2}'
                               .format(proxy_machine.hostname,
                                       instance.id,
                                       instance.private_ip_address))
-                if self.mido:
-                    self.dump_mido_info_for_instance(instance)
-                    if self.args.allow_mido_restart:
-                        if not mido_retries:
+                if self.vpc_backend:
+                    self.dump_vpc_backend_info_for_instance(instance)
+                    if self.args.allow_vpc_backend_restart:
+                        if not vpc_backend_retries:
                             self.errormsg("Failed to ping instance:'{0}', restarting Midolman on all"
                                           " hosts to retest and provide additional info..."
                                           .format(instance.id))
-                            self.mido.reset_midolman_service_on_hosts()
+                            self.vpc_backend.restart_backend()
                             time.sleep(15)
                         else:
                             self.errormsg('Failed to ping instance before and after '
@@ -427,18 +423,18 @@ class Net_Tests(EutesterTestCase):
                         raise
                 else:
                     raise
-            mido_retries += 1
+            vpc_backend_retries += 1
         self.debug('Successfully pinged instance: {0},  private ip:{1} from internal host: {2}'
                    .format(instance.id,
                            instance.private_ip_address,
                            proxy_machine.hostname))
 
-    def dump_mido_info_for_instance(self, instance):
-        if self.mido:
+    def dump_vpc_backend_info_for_instance(self, instance):
+        if self.vpc_backend:
             try:
-                self.mido.show_instance_network_summary(instance)
+                self.vpc_backend.show_instance_network_summary(instance)
             except Exception, ME:
-                self.debug('{0}\nCould not dump Mido debug, err:{1}'
+                self.debug('{0}\nCould not dump vpc backend debug, err:{1}'
                            .format(ME,self.tester.get_traceback()))
 
     def _ping_instance_private_ip_from_euca_internal(self,
@@ -498,6 +494,8 @@ class Net_Tests(EutesterTestCase):
             self.tester.show_security_group(group)
 
 
+
+
     ################################################################
     #   Test Methods
     ################################################################
@@ -547,15 +545,15 @@ class Net_Tests(EutesterTestCase):
             try:
                 instance.connect_to_instance(timeout=90)
             except Exception, ConnectErr:
-                if self.mido:
+                if self.vpc_backend:
                     self.errormsg('{0}\n{1}\nFailed to connect to instance:"{2}", dumping info '
                                   .format(ConnectErr, self.tester.get_traceback(), instance.id))
-                    self.dump_mido_info_for_instance(instance)
-                    if self.args.allow_mido_restart:
-                        self.errormsg('Midonet info before restarting midolman...')
-                        self.errormsg('Could not connect to instance:"{0}", restarting midolman'
+                    self.dump_vpc_backend_info_for_instance(instance)
+                    if self.args.allow_vpc_backend_restart:
+                        self.errormsg('VPC backend info before restarting vpc backend...')
+                        self.errormsg('Could not connect to instance:"{0}", restarting vpc backend'
                                           ' on all hosts...'.format(instance.id))
-                        self.mido.reset_midolman_service_on_hosts()
+                        self.vpc_backend.restart_backend()
                         time.sleep(15)
                     else:
                         raise ConnectErr
@@ -564,15 +562,15 @@ class Net_Tests(EutesterTestCase):
                         self.status('Connect to instance:"{0}" succeeded'.format(instance.id))
                         self.errormsg('SSH succeeded after restarting Midolman, dumping post restart '
                                   'Midolman info for instance...')
-                        self.dump_mido_info_for_instance(instance)
+                        self.dump_vpc_backend_info_for_instance(instance)
                         raise type(ConnectErr)(str(ConnectErr.message) +
                                        '(SSH succeeded after restarting Midolman)' )
                     except SSHException, SE:
                         self.errormsg('{0}\nCould not ssh to instance:"{1}", restarting '
-                                      'midolman did not help, err on 2nd attempt:\n{2}'
+                                      'vpc backend did not help, err on 2nd attempt:\n{2}'
                                       .format(SE,instance.id, self.tester.get_traceback()))
                         raise type(SE)(str(SE.message) + '\nCould not ssh to instance:"{0}", '
-                                                         'restarting midolman did not help, '
+                                                         'restarting backend did not help, '
                                                          'err on 2nd attempt'.format(instance.id))
             self.status('SSH connection to instance:' + str(instance.id) +
                         ' successful to public ip:' + str(instance.ip_address) +
@@ -650,10 +648,10 @@ class Net_Tests(EutesterTestCase):
         '''
         def check_instance_connectivity():
             max_retries = 1
-            mido_retries = 0
-            while mido_retries <= max_retries:
-                if not self.mido:
-                    mido_retries = max_retries + 1
+            vpc_backend_retries = 0
+            while vpc_backend_retries <= max_retries:
+                if not self.vpc_backend:
+                    vpc_backend_retries = max_retries + 1
                 try:
                     for zone in self.zones:
                         instance1 = None
@@ -702,27 +700,28 @@ class Net_Tests(EutesterTestCase):
                     self.status('"{0}" to "{1}" connectivity test succeeded'.format(instance1.id,
                                                                                     instance2.id))
                 except Exception, ConnectivityErr:
-                    if mido_retries:
-                        if self.mido:
-                            self.errormsg('Retry failed connectivity test after restarting '
-                                          'midolman on all hosts')
+                    if vpc_backend_retries:
+                        if self.vpc_backend:
+                            self.errormsg('Retry still failed connectivity test after restarting '
+                                          'vpc backend')
                         raise ConnectivityErr
 
-                    if self.mido:
-                            self.dump_mido_info_for_instance(instance1)
-                            self.dump_mido_info_for_instance(instance2)
+                    if self.vpc_backend:
+                            self.dump_vpc_backend_info_for_instance(instance1)
+                            self.dump_vpc_backend_info_for_instance(instance2)
                             self.errormsg('Could not connect to instance:"{0}"'
                                           .format(instance.id))
-                            if self.args.allow_mido_restart:
-                                self.errormsg('Restarting midolman on all hosts and retrying...')
-                                self.mido.reset_midolman_service_on_hosts()
+                            if self.args.allow_vpc_backend_restart:
+                                self.errormsg('Restarting vpc backend on all hosts and '
+                                              'retrying...')
+                                self.vpc_backend.restart_backend()
                                 time.sleep(15)
                             else:
                                 raise ConnectivityErr
-                    mido_retries += 1
+                    vpc_backend_retries += 1
                 else:
-                    if mido_retries:
-                        self.debug('MidoRetries:{0}'.format(mido_retries))
+                    if vpc_backend_retries:
+                        self.debug('MidoRetries:{0}'.format(vpc_backend_retries))
                         raise MidoError('Connectivity test passed, but only after '
                                         'restarting Midolman.')
                     else:
@@ -766,9 +765,9 @@ class Net_Tests(EutesterTestCase):
             self.tester.does_instance_sec_group_allow(instance=instance, src_addr=None, protocol='tcp',port=22)
             try:
                 instance.reset_ssh_connection(timeout=5)
-                if self.mido:
+                if self.vpc_backend:
                     try:
-                        self.mido.show_instance_network_summary(instance)
+                        self.vpc_backend.show_instance_network_summary(instance)
                     except Exception, ME:
                         self.debug('{0}\nCould not dump Mido debug, err:{1}'
                                    .format(ME,self.tester.get_traceback()))
@@ -834,9 +833,9 @@ class Net_Tests(EutesterTestCase):
                                       + " ' uname -a'", code=0)
                         self.debug('Ssh between instances passed')
                     except Exception, ME:
-                        if self.mido:
+                        if self.vpc_backend:
                             try:
-                                self.mido.show_instance_network_summary(instance)
+                                self.vpc_backend.show_instance_network_summary(instance)
                             except Exception, ME:
                                 self.debug('{0}\nCould not dump Mido debug, err:{1}'
                                            .format(ME,self.tester.get_traceback()))

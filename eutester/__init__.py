@@ -213,7 +213,8 @@ class Eutester(object):
         self.critical("Was unable to ping address")
         return False
 
-    def markup(self, text, markups=[1], resetvalue="\033[0m"):
+    @classmethod
+    def markup(cls, text, markups=[1], resetvalue="\033[0m"):
         """
         Convenience method for using ansci markup. Attempts to check if terminal supports
         ansi escape sequences for text markups. If so will return a marked up version of the
@@ -223,8 +224,7 @@ class Eutester(object):
         :markups: a value or list of values representing ansi codes.
         :resetvalue: string used to reset the terminal, default: "\33[0m"
         """
-        is_tty = hasattr(sys.stdout, 'isatty') and sys.stdout.isatty()
-        if not is_tty:
+        if not (hasattr(sys.stdout, 'isatty') and sys.stdout.isatty()):
             return text
         buf = ""
         lines = []
