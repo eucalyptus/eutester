@@ -1305,10 +1305,14 @@ disable_root: false"""
 
 
                 
-    def show_volumes(self,euvolumelist=None):
+    def show_volumes(self,euvolumelist=None, printme=True):
         """
-
-        :param euvolumelist: list of euvolume
+        Creates and displays a table of volumes with summary information
+        :param euvolumelist: list of euvolumes to be included in the table, if not provided
+                             all volumes available to this account will be fetched and displayed
+        :param printme: boolean flag, if True table will be displayed with self.debug, else
+                        the PrettyTable obj will be returned
+        :returns: None if printme is True, else will return the PrettyTable obj
         """
         buf=""
         euvolumes = []
@@ -1321,37 +1325,63 @@ disable_root: false"""
             if not isinstance(volume, EuVolume):
                 self.debug("object not of type EuVolume. Found type:"+str(type(volume)))
                 volume = EuVolume.make_euvol_from_vol(volume=volume, tester=self)
+            else:
+                volume.update()
             euvolumes.append(volume)
         if not euvolumes:
             return
-        volume = euvolumes.pop()
-        buf = volume.printself()
+        first = euvolumes.pop(0)
+        maintable = first.printself(printme=False)
+        maintable.hrules = 1
         for volume in euvolumes:
-            buf += volume.printself(title=False)
-        self.debug("\n"+str(buf)+"\n")
-        
-    def show_snapshots(self,eusnapshots=None):
-        """
+            pt = volume.printself(printme=False)
+            if pt._rows:
+                maintable.add_row(pt._rows[0])
+        if printme:
+            self.debug("\n"+str(maintable)+"\n")
+        else:
+            return str(maintable)
 
-        :param eusnapshots: list of eusnapshots
+
+        
+    def show_snapshots(self,eusnapshots=None, printme=True):
+        """
+        Creates and displays a table showing snapshot summary information
+        :param eusnapshots: list of eusnapshots, if None all snapshots available to this user
+                            will be shown
+        :param printme: boolean, if True the table will be printed with self.debug, if False the
+                        PrettyTable obj will be returned.
+        :returns: None if printme is True and/or no snapshots are available,
+                  else will return PrettyTable obj
         """
         buf=""
-        print_list = []
+        plist = []
         if not eusnapshots:
             eusnapshots = self.get_snapshots()
         if not eusnapshots:
             self.debug('No snapshots to print')
-            return
+            return None
         for snapshot in eusnapshots:
             if not isinstance(snapshot, EuSnapshot):
                 self.debug("object not of type EuSnapshot. Found type:"+str(type(snapshot)))
                 snapshot = EuSnapshot.make_eusnap_from_snap(snapshot=snapshot, tester=self)
-            print_list.append(snapshot)
-        snapshot = print_list.pop()
-        buf = snapshot.printself()
-        for snapshot in print_list:
-            buf += snapshot.printself(title=False)
-        self.debug("\n"+str(buf)+"\n")
+            else:
+                snapshot.update()
+            plist.append(snapshot)
+        first = plist.pop(0)
+        maintable = first.printself(printme=False)
+        maintable.hrules = 1
+        for snap in plist:
+            pt = snap.printself(printme=False)
+            if pt._rows:
+                maintable.add_row(pt._rows[0])
+        if printme:
+            self.debug("\n"+str(maintable)+"\n")
+            return None
+        else:
+            return str(maintable)
+
+
 
     def wait_for_volume(self, volume, status="available"):
         def get_volume_state():
@@ -1800,7 +1830,9 @@ disable_root: false"""
                 cmdtime = time.time()-start
                 if snapshot:
                     self.debug("Attempting to create snapshot #"+str(x)+ ", id:"+str(snapshot.id))
-                    snapshot = EuSnapshot().make_eusnap_from_snap(snapshot, tester=self ,cmdstart=start)
+                    snapshot = EuSnapshot().make_eusnap_from_snap(snapshot,
+                                                                  tester=self ,
+                                                                  cmdstart=start)
                     #Append some attributes for tracking snapshot through creation and test lifecycle.
                     snapshot.eutest_polls = 0
                     snapshot.eutest_poll_count = poll_count
@@ -3903,24 +3935,38 @@ disable_root: false"""
 
 
     def show_instances(self,
-                              euinstance_list=None,
-                              state=None,
-                              instance_id=None,
-                              reservation=None,
-                              root_device_type=None,
-                              zone=None,
-                              key=None,
-                              public_ip=None,
-                              private_ip=None,
-                              ramdisk=None,
-                              kernel=None,
-                              image_id=None,
-                              printme=True
-                              ):
+                       euinstance_list=None,
+                       state=None,
+                       instance_id=None,
+                       reservation=None,
+                       root_device_type=None,
+                       zone=None,
+                       key=None,
+                       public_ip=None,
+                       private_ip=None,
+                       ramdisk=None,
+                       kernel=None,
+                       image_id=None,
+                       printme=True
+                       ):
         """
+        Display or return a table of instances and summary information
+        :param euinstance_list: list of euinstance objs, otherwise all instances will be shown
+        :param state: filter to be applied if no instance list is provided
+        :param instance_id: filter to be applied if no instance list is provided
+        :param reservation: filter to be applied if no instance list is provided
+        :param root_device_type: filter to be applied if no instance list is provided
+        :param zone: filter to be applied if no instance list is provided
+        :param key: filter to be applied if no instance list is provided
+        :param public_ip: filter to be applied if no instance list is provided
+        :param private_ip: filter to be applied if no instance list is provided
+        :param ramdisk: filter to be applied if no instance list is provided
+        :param kernel: filter to be applied if no instance list is provided
+        :param image_id: filter to be applied if no instance list is provided
+        :param printme: boolean flag, if True will print the table with self.debug, else will
+                        return the PrettyTable obj
 
-        :param euinstance_list: list of euinstance objs
-        :raise:
+        :returns: None if printme is True, else will return the PrettyTable obj
         """
         plist = []
         if not euinstance_list:
