@@ -252,7 +252,10 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
             if not self.ec2_cert or not self.is_ec2_cert_active():
                 self.logger.log.critical(self.markup('CERTS ARE NOT ACTIVE, '
                                                      'TRYING TO UPDATE NOW...', 1))
-                self.get_active_cert_for_creds()
+                try:
+                    self.get_active_cert_for_creds()
+                except ValueError, VE:
+                    self.critical('Could not get active cert for creds. Err:\n{0}'.format(VE))
                 self.get_credentials(force=True)
                 if not self.ec2_cert or not self.is_ec2_cert_active():
                     self.logger.log.critical(self.markup('CERTS ARE NOT ACTIVE, COULD NOT UPDATE',
@@ -853,8 +856,10 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
 
     def get_active_cert_for_creds(self, credzippath=None, account=None, user=None, update=True):
             if credzippath is None:
-                if hasattr(self, 'cred_zipfile'):
+                if hasattr(self, 'cred_zipfile') and self.cred_zipfile:
                     credzippath = self.cred_zipfile
+                elif self.credpath:
+                    credzippath = self.credpath
                 else:
                     raise ValueError('cred zip file not provided or set for eutester object')
             account = account or self.account_name
