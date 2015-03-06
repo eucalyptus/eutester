@@ -3204,13 +3204,11 @@ disable_root: false"""
                 secgroups = None
                 subnet_id = None
             elif assign_public_ip:
-                self.debug('No Network interfaces provided, but subnet_id and assign_public_ip'
-                           'flag were...')
+                subnet = None
                 if subnet_id:
                     # No network_interfaces were provided, check to see if this subnet already
                     # maps a public ip by default or if a new eni should be created to
                     # request one...
-
                     subnets = self.ec2.get_all_subnets(subnet_id)
                     if subnets:
                         subnet = subnets[0]
