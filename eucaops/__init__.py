@@ -249,7 +249,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
             except Exception, e:
                 self.debug("Unable to create CloudFormation connection because of: " + str(e) )
 
-            if not self.ec2_cert or not self.is_ec2_cert_active():
+            if self.clc and not self.ec2_cert or not self.is_ec2_cert_active():
                 self.logger.log.critical(self.markup('CERTS ARE NOT ACTIVE, '
                                                      'TRYING TO UPDATE NOW...', 1))
                 try:
