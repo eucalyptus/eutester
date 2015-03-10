@@ -5,16 +5,17 @@
 #               features for Eucalyptus.  The test cases/modules that are executed can be 
 #               found in the script under the "tests" list.
 
-import time
-from concurrent.futures import ThreadPoolExecutor
-import threading
-from eucaops import Eucaops
-from eutester.euinstance import EuInstance
-from eutester.eutestcase import EutesterTestCase
-from eucaops import EC2ops
 import os
 import re
 import random
+import time
+import threading
+from concurrent.futures import ThreadPoolExecutor
+from eutester.euca.euca_ops import Eucaops
+from eutester.aws.ec2.euinstance import EuInstance
+from eutester.utils.eutestcase import EutesterTestCase
+from eutester.aws.ec2.ec2ops import EC2ops
+
 
 
 class InstanceBasics(EutesterTestCase):

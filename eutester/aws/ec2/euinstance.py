@@ -45,17 +45,6 @@ Sample usage:
     testinstance.sys('yum install ntpd')
 '''
 
-from boto.ec2.volume import Volume
-from boto.ec2.instance import Instance
-#from eutester import euvolume
-from eutester import Eutester
-from eutester.euvolume import EuVolume
-from eutester import eulogger
-from eutester.taggedresource import TaggedResource
-from boto.ec2.instance import InstanceState
-from random import randint
-import eutester.sshconnection as sshconnection
-from eutester.sshconnection import CommandExitCodeException
 import sys
 import os
 import re
@@ -63,6 +52,16 @@ import time
 import copy
 import types
 import operator
+from random import randint
+
+from boto.ec2.instance import Instance
+from boto.ec2.instance import InstanceState
+
+from eutester import Eutester
+from eutester import eulogger
+from eutester.aws.ec2.euvolume import EuVolume
+from eutester.taggedresource import TaggedResource
+from eutester.utils import sshconnection
 
 
 class EuInstance(Instance, TaggedResource):
@@ -1244,14 +1243,14 @@ class EuInstance(Instance, TaggedResource):
         # Check for exit code of dd command, 127 may indicate dd process ended before wait pid,
         # use additional checks below to determine a failure when 127 is returned.
         if dd_exit_code != 127 and dd_exit_code != 0:
-            raise CommandExitCodeException('dd cmd failed with exit code:' + str(dd_exit_code))
+            raise sshconnection.CommandExitCodeException('dd cmd failed with exit code:' + str(dd_exit_code))
         #if we didn't transfer any bytes of data, assume the cmd failed and wrote to stderr now in outbuf...
         if not ret['dd_full_rec_out'] and not ret['dd_partial_rec_out']:
-            raise CommandExitCodeException('Did not transfer any data using dd cmd:' +
+            raise sshconnection.CommandExitCodeException('Did not transfer any data using dd cmd:' +
                             str(ddcmd) + "\nstderr: " + str(outbuf))
         if ((ret['dd_full_rec_in'] != ret['dd_full_rec_out']) or
                 (ret['dd_partial_rec_out'] != ret['dd_partial_rec_in'])):
-            raise CommandExitCodeException('dd in records do not match out records in transfer')
+            raise sshconnection.CommandExitCodeException('dd in records do not match out records in transfer')
         self.debug('Done with dd, copied:{0} bytes, {1} fullrecords, {2} partrecords - '
                    'over elapsed:{3}'.format(ret['dd_bytes'],
                                              ret['dd_full_rec_out'],

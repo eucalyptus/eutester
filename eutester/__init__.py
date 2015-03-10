@@ -43,7 +43,7 @@ import socket
 import sys
 import traceback
 import StringIO
-import eulogger
+from eutester.utils import eulogger
 import types
 import operator
 import fcntl

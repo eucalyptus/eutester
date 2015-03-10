@@ -30,16 +30,14 @@ Cleanup:
 -remove all volumes, instance, and snapshots created during this test
 
 '''
-import copy
 import types
 import time
-import os
 
-from eucaops import Eucaops
-from eutester import euinstance
-from eutester.eutestcase import EutesterTestCase
-from eucaops import ec2ops
-from eutester.eutestcase import TestColor
+from eutester.euca.euca_ops import Eucaops
+from eutester.aws.ec2 import euinstance
+from eutester.utils.eutestcase import EutesterTestCase
+from eutester.aws.ec2 import ec2ops
+from eutester.utils.eutestcase import TestColor
 
 class TestZone():
     def __init__(self, partition):

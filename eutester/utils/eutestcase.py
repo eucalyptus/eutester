@@ -11,11 +11,11 @@ import types
 import traceback
 import random
 import string
-from eutester.eulogger import Eulogger
-from eutester.euconfig import EuConfig
+from eutester.utils.eulogger import Eulogger
+from eutester.utils.euconfig import EuConfig
 import StringIO
 import copy
-from eutester.timer import Timer
+from eutester.utils.timer import Timer
 import uuid
 
 '''

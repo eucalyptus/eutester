@@ -47,24 +47,24 @@ wins.attach_volume(vol)
 
 
 '''
-from boto.ec2.instance import Instance
-from eutester import Eutester
-#from eucaops import Eucaops
-from eutester.euvolume import EuVolume
-from eutester import eulogger
-from eutester.taggedresource import TaggedResource
-from boto.ec2.instance import InstanceState
-from random import randint
-from datetime import datetime
-import winrm_connection
+
 import socket
-import sys
 import os
 import re
 import time
 import copy
 import types
 import operator
+from boto.ec2.instance import Instance
+from eutester import Eutester
+#from eucaops import Eucaops
+from eutester.aws.ec2.euvolume import EuVolume
+from eutester import eulogger
+from eutester.taggedresource import TaggedResource
+from boto.ec2.instance import InstanceState
+from datetime import datetime
+from eutester.utils import winrm_connection
+
 get_line = Eutester.get_line
 
 

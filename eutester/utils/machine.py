@@ -34,7 +34,7 @@ import threading
 import time
 import eulogger
 from eutester import Eutester
-from eutester.euconfig import EuConfig
+from eutester.utils.euconfig import EuConfig
 import sshconnection
 import re
 import os

@@ -33,26 +33,26 @@
 
 from boto.ec2.image import Image
 from boto.ec2.volume import Volume
-from cwops import CWops
-from asops import ASops
-from eucaops.cfnops import CFNops
-from eucaops.elbops import ELBops
-from iamops import IAMops
-from ec2ops import EC2ops
-from s3ops import S3ops
-from stsops import STSops
+from eutester.aws.cloudwatch.cwops import CWops
+from eutester.aws.autoscaling.asops import ASops
+from eutester.aws.cloudformation.cfnops import CFNops
+from eutester.aws.elb.elbops import ELBops
+from eutester.aws.iam.iamops import IAMops
+from eutester.aws.ec2.ec2ops import EC2ops
+from eutester.aws.s3.s3ops import S3ops
+from eutester.aws.sts.stsops import STSops
 import time
 import traceback
 import sys
 import StringIO
-from eutester.euservice import EuserviceManager
+from eutester.euca.euservice import EuserviceManager
 from boto.ec2.instance import Reservation, Instance
 from boto.exception import EC2ResponseError
-from eutester.euconfig import EuConfig
-from eutester.euproperties import Euproperty_Manager
-from eutester.machine import Machine
-from eutester.euvolume import EuVolume
-from eutester import eulogger
+from eutester.utils.euconfig import EuConfig
+from eutester.euca.euproperties import Euproperty_Manager
+from eutester.utils.machine import Machine
+from eutester.aws.ec2.euvolume import EuVolume
+from eutester.utils import eulogger
 import re
 import os
 

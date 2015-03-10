@@ -31,29 +31,23 @@
 # Author: vic.iglesias@eucalyptus.com
 
 
-import time
 import re
 import os
 import copy
 import socket
-import types
 import hmac
-import json
 import hashlib
 import base64
 import time
 import types
-import sys
 import traceback
 from datetime import datetime, timedelta
 from subprocess import Popen, PIPE
-from boto.ec2.group import Group
 
 from boto.ec2.image import Image
 from boto.ec2.instance import Reservation, Instance
 from boto.ec2.keypair import KeyPair
 from boto.ec2.blockdevicemapping import BlockDeviceMapping, BlockDeviceType
-from boto.ec2.securitygroup import SecurityGroup
 from boto.ec2.volume import Volume
 from boto.ec2.bundleinstance import BundleInstanceTask
 from boto.exception import EC2ResponseError
@@ -63,12 +57,12 @@ from boto.ec2.securitygroup import SecurityGroup, IPPermissions
 import boto
 
 from eutester import Eutester
-import eutester
-from eutester.euinstance import EuInstance
-from eutester.windows_instance import WinInstance
-from eutester.euvolume import EuVolume
-from eutester.eusnapshot import EuSnapshot
-from eutester.euzone import EuZone
+from eutester.utils import sshconnection
+from eutester.aws.ec2.euinstance import EuInstance
+from eutester.aws.ec2.windows_instance import WinInstance
+from eutester.aws.ec2.euvolume import EuVolume
+from eutester.aws.ec2.eusnapshot import EuSnapshot
+from eutester.aws.ec2.euzone import EuZone
 from testcases.cloud_user.images.conversiontask import ConversionTask
 
 EC2RegionData = {
@@ -4488,7 +4482,7 @@ disable_root: false"""
                 instance.sys("echo \"" + instance.id +"\" > /var/www/" + filename)
                 instance.sys("echo \"CookieTracking on\" >> /etc/apache2/apache2.conf")
                 instance.sys("echo CookieName " + cookiename +" >> /etc/apache2/apache2.conf")
-            except eutester.sshconnection.CommandExitCodeException, e:
+            except sshconnection.CommandExitCodeException, e:
                 ### Enterprise Linux
                 instance.sys("yum install -y httpd", code=0)
                 instance.sys("echo \"" + instance.id +"\" > /var/www/html/" + filename)

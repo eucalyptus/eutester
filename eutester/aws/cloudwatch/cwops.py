@@ -31,11 +31,8 @@
 # Author: vic.iglesias@eucalyptus.com
 import re
 import copy
-import time
-import datetime
 from boto.ec2.regioninfo import RegionInfo
 import boto.ec2.cloudwatch
-from eutester.euinstance import EuInstance
 from eutester import Eutester
 
 
