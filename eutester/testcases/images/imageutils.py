@@ -30,15 +30,15 @@
 #
 # Author: matt.clark@eucalyptus.com
 
-from eucaops import Eucaops
+from eutester.euca.euca_ops import Eucaops
 import re
 import time
 import httplib
 from xml.etree import ElementTree
 import sys
-from eutester.eutestcase import EutesterTestCase
-from eutester.sshconnection import SshCbReturn
-from eutester.machine import Machine
+from eutester.utils.eutestcase import EutesterTestCase
+from eutester.utils.sshconnection import SshCbReturn
+from eutester.utils.machine import Machine
 from conversiontask import ConversionTask
 
 
