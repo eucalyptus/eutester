@@ -2613,7 +2613,7 @@ disable_root: false"""
         printmethod = printmethod or self.debug
         printmethod(buf)
 
-    def show_image(self, image, verbose=False, printmethod=None,
+    def show_image(self, image, verbose=True, printmethod=None,
                    header_markups=[1,4], printme=True):
         def header(text):
             return self.markup(text=text, markups=header_markups)

@@ -257,7 +257,7 @@ class EuInstance(Instance, TaggedResource):
             return (buf, maxlen)
         bdmvol = self.root_device_type
         if self.bdm_root_vol:
-            bdmvol += ":{1}".format(self.bdm_root_vol.id)
+            bdmvol += bdmvol + ":" + self.bdm_root_vol.id
         reservation_id = None
         if self.reservation:
             reservation_id = self.reservation.id
