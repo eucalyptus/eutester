@@ -57,7 +57,7 @@ from boto.ec2.networkinterface import NetworkInterface
 from random import randint
 import eutester.sshconnection as sshconnection
 from eutester.sshconnection import CommandExitCodeException
-from prettytable import PrettyTable
+from prettytable import PrettyTable, ALL
 from datetime import datetime
 import sys
 import os
@@ -249,30 +249,41 @@ class EuInstance(Instance, TaggedResource):
             buf = ""
             maxlen = 0
             for line in lines:
-                if len(line) + 1 > maxlen:
-                    maxlen = len(line) + 1
+                if len(line) + 2 > maxlen:
+                    maxlen = len(line) + 2
             for line in lines:
-                buf += str(line).ljust(maxlen)
+                buf += str(line).ljust(maxlen) + "\n"
+            buf = buf.rstrip()
             return (buf, maxlen)
-
+        bdmvol = self.root_device_type
         if self.bdm_root_vol:
-            bdmvol = self.bdm_root_vol.id
-        else:
-            bdmvol = None
+            bdmvol += ":{1}".format(self.bdm_root_vol.id)
         reservation_id = None
         if self.reservation:
             reservation_id = self.reservation.id
         # Create a multi line field for instance's run info
-        id_string, idlen = multi_line([markup("{0} {1}".format('ID:', self.id) ,markups=[1,4,94]),
-                                       "{0} {1}".format(markup('VMTYPE:'), self.instance_type),
-                                       "{0} {1}".format(markup('RES:'),reservation_id),
-                                       "{0} {1}".format(markup("KEYPAIR:"), self.key_name)])
+        idlist = [markup("{0} {1}".format('ID:', self.id) ,markups=[1,4,94]),
+                         "{0} {1}".format(markup('VMTYPE:'), self.instance_type),
+                         "{0} {1}".format(markup('RES:'),reservation_id)]
+        if self.key_name and len(self.key_name) > 20:
+            idlist.extend(["{0}".format(markup("KEYPAIR:")), self.key_name])
+        else:
+            idlist.append("{0} {1}".format(markup("KEYPAIR:"), self.key_name))
+        id_string, idlen = multi_line(idlist)
+        try:
+            emi = self.tester.get_emi(self.image_id)
+            emi_name = str(emi.name[0:22]) + ".."
+        except:
+            emi_name = ""
         # Create a multi line field for the instance's image info
+        virt_type = 'PV'
+        if self.virtualization_type == 'hvm':
+            virt_type = 'HVM'
         emi_string, emilen = multi_line(
             [markup("{0} {1}".format('EMI:', self.image_id)),
              "{0} {1}".format(markup('OS:'), self.platform or 'linux'),
-             "{0} {1}".format(markup('VIRT:'), self.virtualization_type),
-             "{0} {1}".format(markup('BFEBS:'),bdmvol)])
+             "{0} {1}".format(markup('VIRT:'), virt_type),
+             "({0})".format(emi_name)])
 
         # Create a multi line field for the instance's state info
         if self.age:
@@ -280,20 +291,25 @@ class EuInstance(Instance, TaggedResource):
         state_string, state_len = multi_line(
             [markup("{0} {1}".format('STATE:', state_markup(self.laststate))),
             "{0} {1}".format(markup('AGE:'), age),
-            "{0} {1}".format(markup("ZONE:"),self.placement)])
+            "{0} {1}".format(markup("ZONE:"), self.placement),
+            "{0} {1}".format(markup('ROOTDEV:'), bdmvol)])
 
         # Create the primary table called pt...
         netinfo = 'INSTANCE NETWORK INFO:'
-        pt = PrettyTable(['ID', 'IMAGE', 'STATE', netinfo])
+        idheader = 'INSTANCE ID'
+        imageheader = 'INSTANCE IMAGE'
+        stateheader = 'INSTANCE STATE'
+        pt = PrettyTable([idheader, imageheader, stateheader, netinfo])
         pt.align[netinfo] = 'l'
-        pt.valign[netinfo] = 'm'
-        pt.align['ID'] = 'l'
-        pt.align['IMAGE'] = 'l'
-        pt.align['STATE'] = 'l'
-        pt.max_width['ID'] = idlen
-        pt.max_width['IMAGE'] = emilen
-        pt.max_width['STATE'] = state_len
+        pt.valign[netinfo] = 't'
+        pt.align[idheader] = 'l'
+        pt.align[imageheader] = 'l'
+        pt.align[stateheader] = 'l'
+        pt.max_width[idheader] = idlen
+        pt.max_width[imageheader] = emilen
+        pt.max_width[stateheader] = state_len
         pt.padding_width = 0
+        pt.hrules = ALL
         # PrettyTable headers do not work with ascii markups, so make a sudo header
         new_header = []
         for field in pt._field_names:
