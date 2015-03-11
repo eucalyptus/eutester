@@ -317,8 +317,11 @@ class EuInstance(Instance, TaggedResource):
         pt.header = False
         # Create a subtable 'netpt' to summarize and format the networking portion...
         # Set the maxwidth of each column so the tables line up when showing multiple instances
-        vpc_col = ('VPC', 12)
-        subnet_col = ('SUBNET', 15)
+        vpc_col = ('VPC', 4)
+        subnet_col = ('SUBNET', 6)
+        if self.vpc_id:
+            vpc_col = ('VPC', 12)
+            subnet_col = ('SUBNET', 15)
         secgrp_col = ('SEC GRPS', 11)
         privaddr_col = ('P', 1)
         privip_col = ('PRIV IP', 15)
@@ -346,8 +349,12 @@ class EuInstance(Instance, TaggedResource):
         private_addressing = "N"
         if self.private_addressing:
             private_addressing = "Y"
-        netpt.add_row([self.vpc_id, self.subnet_id, sec_grps, private_addressing,
-                       self.private_ip_address, self.ip_address])
+        netpt.add_row([str(self.vpc_id).center(vpc_col[1]),
+                       str(self.subnet_id).center(subnet_col[1]),
+                       str(sec_grps).center(secgrp_col[1]),
+                       str(private_addressing).center(privaddr_col[1]),
+                       str(self.private_ip_address).center(privip_col[1]),
+                       str(self.ip_address).center(pubip_col[1])])
         # To squeeze a potentially long keyname under the network summary table, get the length
         # and format this column to allow for wrapping a keyname under the table...
         netbuf = netpt.get_string()
