@@ -557,7 +557,7 @@ class WinInstance(EuInstance, TaggedResource):
         for key in dict:
             buf += str(key).ljust(longest_key) + " -----> :" + str(dict[key]) + "\n"
         printmethod(buf)
- 
+
     def show_summary(self, printmethod=None, printme=True):
         def header(text):
             return self.tester.markup(text=text, markups=[1,4,94])
@@ -598,45 +598,7 @@ class WinInstance(EuInstance, TaggedResource):
             printmethod = printmethod or self.debug
             printmethod("\n" + str(main_pt) + "\n")
         return main_pt
-    '''
-    def printself(self,title=True, footer=True, printmethod=None, printme=True):
-        if self.bdm_root_vol:
-            bdmvol = self.bdm_root_vol.id
-        else:
-            bdmvol = None
-        reservation_id = None
-        if self.reservation:
-            reservation_id = self.reservation.id
-        id = str(self.tester.markup("ID: {0}".format(self.id), markups=[1,94]))
-        idlen = len(id) + 1
-        id_string = ("{0}{1}{2}".format(id.ljust(idlen),
-                                       "RES: {0}".format(reservation_id).ljust(idlen),
-                                       "ROOTVOL: {0}".format(bdmvol).ljust(idlen)))
-        netinfo = 'INSTANCE NETWORK INFO:'.center(20)
-        pt = PrettyTable(['ID','EMI','LASTSTATE', 'AGE', 'VMTYPE', 'CLUSTER',
-                          netinfo])
-        pt.align[netinfo] = 'l'
-        pt.align['ID'] = 'l'
-        pt.max_width['ID'] = idlen
-        pt.padding_width = 0
-        netpt = PrettyTable(['VPC', 'SUBNET', 'SEC GRPS', 'P', 'PRIV IP', 'PUB IP'])
-        netpt.padding_width = 0
-        sec_grps = []
-        for grp in self.groups:
-            sec_grps.append(str(grp.id))
-        sec_grps = ",".join(sec_grps)
-        private_addressing = "N"
-        if self.private_addressing:
-            private_addressing = "Y"
-        netpt.add_row([self.vpc_id, self.subnet_id, sec_grps, private_addressing,
-                       self.private_ip_address, self.ip_address])
-        pt.add_row([id_string, self.image_id, self.laststate, self.age,
-                    self.instance_type, self.placement, str(netpt)])
-        if printme:
-            printmethod = printmethod or self.debug
-            printmethod("\n" + str(pt) + "\n")
-        return pt
-    '''
+
     def show_summary(self, printmethod=None, printme=True):
         def header(text):
             return self.tester.markup(text=text, markups=[1,4,94])
