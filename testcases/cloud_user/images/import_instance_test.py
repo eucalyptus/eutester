@@ -350,8 +350,13 @@ class ImportInstanceTests(EutesterTestCase):
             username = self.args.instance_user
             euinst = tester.convert_instance_to_euisntance(instance=inst,
                                                            keypair=self.keypair,
-                                                           username=username)
+                                                           username=username,
+                                                           auto_connect=False)
             tester.monitor_euinstances_to_running(euinst)
+            if euinst.platform == 'windows':
+                euinst.connect_to_instance(wait_for_boot=180, timeout=300)
+            else:
+                euinst.connect_to_instance()
         else:
             raise RuntimeError('Instance:"{0}" not found from task:"{1}"'
                             .format(task.instanceid, task.id))
@@ -374,6 +379,26 @@ class ImportInstanceTests(EutesterTestCase):
         params = self.latest_task_dict['params']
         task = self.latest_task_dict['task']
         return self.validate_params_against_task(params=params, task=task)
+
+    def test3_make_image_public(self):
+        if not self.latest_task_dict:
+            raise RuntimeError('Dict for latest task not found to validate?')
+        task = self.latest_task_dict['task']
+        emi = self.tester.get_emi(emi=task.image_id)
+        emi.set_launch_permissions(group_names=['all'])
+
+    def test4_tag_image(self):
+        if not self.latest_task_dict:
+            raise RuntimeError('Dict for latest task not found to validate?')
+        task = self.latest_task_dict['task']
+        emi = self.tester.get_emi(emi=task.image_id)
+        try:
+            if self.url:
+                emi.add_tag('source', value=(str(self.url)))
+            emi.add_tag('eutester-created', value="import-instance-test")
+        except Exception, te:
+            self.debug('Could not add tags to image:' + str(emi.id) +
+                       ", err:" + str(te))
 
     def validate_params_against_task(self, params, task):
         assert isinstance(params, types.DictionaryType)
@@ -507,7 +532,9 @@ if __name__ == "__main__":
         list = testcase.args.tests.splitlines(',')
     else:
         list = ['test1_basic_create_import_instance',
-                'test2_validate_params_against_task']
+                'test2_validate_params_against_task',
+                'test3_make_image_public',
+                'test4_tag_image']
 
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
