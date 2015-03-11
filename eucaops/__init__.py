@@ -284,6 +284,13 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
     def property_manager(self, new_property_mgr):
         self._property_manager = new_property_mgr
 
+    def _update_euzone_list(self):
+        zones = self.ec2.get_all_zones()
+        verbose_zones = self.ec2.get_all_zones("verbose")
+
+
+
+
     def get_available_vms(self, type=None, zone=None):
         """
         Get available VMs of a certain type, defaults to m1.small

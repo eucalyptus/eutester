@@ -228,6 +228,18 @@ class EuInstance(Instance, TaggedResource):
         return "\n" + line + "\n"
     
     def printself(self,title=True, footer=True, printmethod=None, printme=True):
+        markup = self.tester.markup
+        # Utility method for creating multi line table entries...
+        def multi_line(lines):
+            buf = ""
+            maxlen = 0
+            for line in lines:
+                if len(line) + 1 > maxlen:
+                    maxlen = len(line) + 1
+            for line in lines:
+                buf += str(line).ljust(maxlen)
+            return (buf, maxlen)
+
         if self.bdm_root_vol:
             bdmvol = self.bdm_root_vol.id
         else:
@@ -235,23 +247,61 @@ class EuInstance(Instance, TaggedResource):
         reservation_id = None
         if self.reservation:
             reservation_id = self.reservation.id
-        id = str(self.tester.markup("ID: {0}".format(self.id), markups=[94]))
-        idlen = len(id) + 1
-        id_string = ("{0}{1}{2}{3}".format(id.ljust(idlen),
-                                           "RES: {0}".format(reservation_id).ljust(idlen),
-                                           "ROOTVOL: {0}".format(bdmvol).ljust(idlen),
-                                           "KEYNAME: {0}".format(self.key_name).ljust(idlen)))
-        netinfo = 'INSTANCE NETWORK INFO:'.center(20)
-        pt = PrettyTable(['ID','EMI','LASTSTATE', 'AGE', 'VMTYPE', 'CLUSTER',
-                          netinfo])
+        # Create a multi line field for instance's run info
+        id_string, idlen = multi_line([markup("{0} {1}".format('ID:', self.id) ,markups=[1,4,94]),
+                                       "{0} {1}".format(markup('VMTYPE:'), self.instance_type),
+                                       "{0} {1}".format(markup('RES:'),reservation_id),
+                                       "{0} {1}".format(markup("KEYPAIR:"), self.key_name)])
+        # Create a multi line field for the instance's image info
+        emi_string, emilen = multi_line(
+            [markup("{0} {1}".format('EMI:', self.image_id)),
+             "{0} {1}".format(markup('OS:'), self.platform or 'linux'),
+             "{0} {1}".format(markup('VIRT:'), self.virtualization_type),
+             "{0} {1}".format(markup('BFEBS:'),bdmvol)])
+
+        # Create a multi line field for the instance's state info
+        if self.age:
+            age = int(self.age)
+        state_string, state_len = multi_line(
+            [markup("{0} {1}".format('STATE:', self.laststate)),
+            "{0} {1}".format(markup('AGE:'), age),
+            "{0} {1}".format(markup("ZONE:"),self.placement)])
+
+        # Create the primary table called pt...
+        netinfo = 'INSTANCE NETWORK INFO:'
+        pt = PrettyTable(['ID', 'IMAGE', 'STATE', netinfo])
         pt.align[netinfo] = 'l'
         pt.align['ID'] = 'l'
+        pt.align['IMAGE'] = 'l'
+        pt.align['STATE'] = 'l'
         pt.max_width['ID'] = idlen
-        pt.max_width['LASTSTATE'] = 10
-
+        pt.max_width['IMAGE'] = emilen
+        pt.max_width['STATE'] = state_len
         pt.padding_width = 0
-        netpt = PrettyTable(['VPC', 'SUBNET', 'SEC GRPS', 'P', 'PRIV IP', 'PUB IP'])
+        # Create a subtable 'netpt' to summarize and format the networking portion...
+        # Set the maxwidth of each column so the tables line up when showing multiple instances
+        vpc_col = ('VPC', 12)
+        subnet_col = ('SUBNET', 15)
+        secgrp_col = ('SEC GRPS', 11)
+        privaddr_col = ('P', 1)
+        privip_col = ('PRIV IP', 15)
+        pubip_col = ('PUB IP', 15)
+        net_cols = [vpc_col, subnet_col, secgrp_col, privaddr_col, privip_col, pubip_col]
+        # Get the Max width of the main tables network summary column...
+        # Start with 2 to account for beginning and end column borders
+        netinfo_width = 2
+        netinfo_header = []
+        for col in net_cols:
+            netinfo_width += col[1] + 1
+            netinfo_header.append(col[0])
+        pt.max_width[netinfo] = netinfo_width
+        netpt = PrettyTable([vpc_col[0], subnet_col[0], secgrp_col[0], privaddr_col[0],
+                             privip_col[0], pubip_col[0]])
         netpt.padding_width = 0
+        netpt.vrules = 1
+        netpt.hrules = 3
+        for col in net_cols:
+            netpt.max_width[col[0]] = col[1]
         sec_grps = []
         for grp in self.groups:
             sec_grps.append(str(grp.id))
@@ -261,8 +311,11 @@ class EuInstance(Instance, TaggedResource):
             private_addressing = "Y"
         netpt.add_row([self.vpc_id, self.subnet_id, sec_grps, private_addressing,
                        self.private_ip_address, self.ip_address])
-        pt.add_row([id_string, self.image_id, self.laststate, self.age,
-                    self.instance_type, self.placement, str(netpt)])
+        # To squeeze a potentially long keyname under the network summary table, get the length
+        # and format this column to allow for wrapping a keyname under the table...
+        netbuf = netpt.get_string()
+        # Create the row in the main table...
+        pt.add_row([id_string, emi_string, state_string, netbuf])
         if printme:
             printmethod = printmethod or self.debug
             printmethod("\n" + str(pt) + "\n")

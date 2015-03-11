@@ -173,6 +173,11 @@ class ImportInstanceTests(EutesterTestCase):
 
         self.args.worker_password = self.args.worker_password or self.args.password
         self.args.worker_keypath = self.args.worker_keypath or self.args.keypair
+        # Format platform case sensitive arg.
+        if str(self.args.platform).upper().strip() == "WINDOWS":
+            self.args.platform = "Windows"
+        elif str(self.args.platform).upper().strip() == "LINUX":
+            self.args.platform = "Linux"
         self.latest_task_dict = None
         #Create an ImageUtils helper from the arguments provided in this self...
         self.img_utils = self.do_with_args(ImageUtils)
@@ -212,6 +217,12 @@ class ImportInstanceTests(EutesterTestCase):
         #authorize group for ssh and icmp
         tester.authorize_group(self.group)
         tester.authorize_group(self.group, protocol='icmp', port='-1')
+        if self.args.platform == 'Windows':
+            tester.authorize_group(self.group, protocol='tcp', port='3389')
+            tester.authorize_group(self.group, protocol='tcp', port='80')
+            tester.authorize_group(self.group, protocol='tcp', port='443')
+            tester.authorize_group(self.group, protocol='tcp', port='5985')
+            tester.authorize_group(self.group, protocol='tcp', port='5986')
         return self.group
 
     def get_keypair(self):

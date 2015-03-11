@@ -52,6 +52,7 @@ from eutester import Eutester
 #from eucaops import Eucaops
 from eutester.euvolume import EuVolume
 from eutester import eulogger
+from eutester.euinstance import EuInstance
 from eutester.taggedresource import TaggedResource
 from boto.ec2.instance import InstanceState
 from boto.ec2.networkinterface import NetworkInterface
@@ -384,7 +385,7 @@ class WinInstanceLogicalDisk(WinInstanceDiskType):
         return buf
 
 
-class WinInstance(Instance, TaggedResource):
+class WinInstance(EuInstance, TaggedResource):
     gigabyte = 1073741824
     megabyte = 1048576
 
@@ -556,7 +557,48 @@ class WinInstance(Instance, TaggedResource):
         for key in dict:
             buf += str(key).ljust(longest_key) + " -----> :" + str(dict[key]) + "\n"
         printmethod(buf)
+ 
+    def show_summary(self, printmethod=None, printme=True):
+        def header(text):
+            return self.tester.markup(text=text, markups=[1,4,94])
 
+        reservation_id = None
+        if self.reservation:
+            reservation_id = self.reservation.id
+        title = header('INSTANCE SUMMARY:"{0}", STATE:"{1}", PUB:"{2}", PRIV:"{3}'
+                       .format(self.id, self.state, self.ip_address, self.private_ip_address))
+        main_pt = PrettyTable([title])
+        main_pt.align[title] = 'l'
+        main_pt.padding_width = 0
+        mainbuf = header("SUMMARY:\n")
+        summary_pt = PrettyTable(['ID', 'RESERVATION', 'AGE', 'VMTYPE', 'CLUSTER', 'VIRT TYPE',
+                                  'REGION', 'KEY'])
+        summary_pt.padding_width = 0
+        summary_pt.add_row([self.id, reservation_id, self.age, self.instance_type,
+                            self.placement, self.virtualization_type, self.region, self.key_name])
+        mainbuf += str(summary_pt) + "\n"
+        mainbuf += header('\nINSTANCE NETWORK INFO:\n')
+        netpt = PrettyTable(['VPC', 'SUBNET', 'PRIV ONLY', 'PRIV DNS', 'PUB DNS'])
+        netpt.padding_width = 0
+        netpt.add_row([self.vpc_id, self.subnet_id, self.private_addressing,
+                       self.private_dns_name, self.public_dns_name])
+        mainbuf += str(netpt) + "\n"
+        mainbuf += header("\nINSTANCE ENI TABLE:\n")
+        mainbuf += str(self.show_enis(printme=False)) + "\n"
+        mainbuf += header("\nINSTANCE SECURITY GROUPS:\n")
+        mainbuf += str(self.tester.show_security_groups_for_instance(self, printme=False)) + "\n"
+        mainbuf += header("\nINSTANCE IMAGE:\n")
+        image = self.tester.get_emi(self.image_id)
+        mainbuf += str(self.tester.show_image(image=image, printme=False)) + "\n"
+        mainbuf += header("\nINSTANCE BLOCK DEVICE MAPPING:\n")
+        mainbuf += str(self.tester.show_block_device_map(self.block_device_mapping,
+                                                          printme=False))
+        main_pt.add_row([mainbuf])
+        if printme:
+            printmethod = printmethod or self.debug
+            printmethod("\n" + str(main_pt) + "\n")
+        return main_pt
+    '''
     def printself(self,title=True, footer=True, printmethod=None, printme=True):
         if self.bdm_root_vol:
             bdmvol = self.bdm_root_vol.id
@@ -594,7 +636,7 @@ class WinInstance(Instance, TaggedResource):
             printmethod = printmethod or self.debug
             printmethod("\n" + str(pt) + "\n")
         return pt
-
+    '''
     def show_summary(self, printmethod=None, printme=True):
         def header(text):
             return self.tester.markup(text=text, markups=[1,4,94])

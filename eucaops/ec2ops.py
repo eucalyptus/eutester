@@ -2717,43 +2717,37 @@ disable_root: false"""
         """
         Print table to debug output showing all addresses available to cloud admin using verbose filter
         """
-        address_width = 20
-        info_width = 64
-        account_width = 24
-        buf = ""
-        line = ""
-        header = "| " + str("PUBLIC IP").ljust(address_width) + " | " + str("ADDRESS INFO").ljust(info_width) + \
-                 " | " + str("ACCOUNT NAME").ljust(account_width) + " | " + str("REGION") + "\n"
-        longest = len(header)
+        pt = PrettyTable([self.markup('PUBLIC IP'), self.markup('ACCOUNT NAME'),
+                          self.markup('REGION'), self.markup('ADDRESS INFO')])
+        pt.align = 'l'
         try:
             ad_list = self.ec2.get_all_addresses(addresses='verbose')
             for ad in ad_list:
+                instance_id = ad.instance_id
+                public_ip = ad.public_ip
+                region = None
+                if ad.region:
+                    region = ad.region.name
                 account_name = ""
-                adline = ""
                 match = re.findall('\(arn:*.*\)', ad.instance_id)
                 if match:
                     try:
                         match = match[0]
                         account_id = match.split(':')[4]
                         account_name = self.get_all_accounts(account_id=account_id)[0]['account_name']
+                        if account_name:
+                            account_name = self.markup(account_name)
+                            instance_id = self.markup(instance_id)
+                            public_ip = self.markup(public_ip)
+                            region = self.markup(region)
                     except:pass
-                if ad.region:
-                    region = ad.region.name
-                adline = "| " + str(ad.public_ip ).ljust(address_width) + " | " + str(ad.instance_id).ljust(info_width) + \
-                       " | " + str(account_name).ljust(account_width)  + " | " + str(region) + "\n"
-                buf += adline
-                if len(adline) > longest:
-                    longest = len(adline)
+                pt.add_row([public_ip, account_name, region, instance_id])
         except Exception, e:
             tb = self.get_traceback()
-            buf = str(tb) + "\n ERROR in show_all_addresses_verbose:" + str(e)
-        for x in xrange(0,longest):
-            line += "-"
-        line += "\n"
-        buf = "\n" + line + header + line + buf + line
+            self.critical( str(tb) + "\n ERROR in show_all_addresses_verbose:" + str(e))
         if not display:
-            return buf
-        self.debug(buf)
+            return pt
+        self.debug("\n" + str(pt) + "\n")
 
 
     def allocate_address(self, domain=None):
@@ -3998,14 +3992,26 @@ disable_root: false"""
         first = plist.pop(0)
         maintable = first.printself(printme=False)
         maintable.hrules = 1
+        count = 0
+        new_header = []
+        for field in maintable._field_names:
+            new_header.append(self.markup(field, markups=[1,4]))
         for instance in plist:
+            count += 1
+            if not count % 5:
+                maintable.add_row(new_header)
             pt = instance.printself(printme=False)
             if pt._rows:
                 maintable.add_row(pt._rows[0])
+            for key in pt._max_width:
+                pt_max = pt._max_width[key] or 0
+                max = maintable._max_width.get(key, 0)
+                if pt_max > max:
+                    maintable._max_width[key] = pt_max
         if printme:
             self.debug("\n"+str(maintable)+"\n")
         else:
-            return str(maintable)
+            return maintable
 
     @Eutester.printinfo
     def wait_for_valid_ip(self, instances, regex="0.0.0.0", poll_interval=10, timeout = 60):
