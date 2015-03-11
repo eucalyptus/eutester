@@ -226,9 +226,24 @@ class EuInstance(Instance, TaggedResource):
         for x in xrange(0,int(length)):
             line += "-"
         return "\n" + line + "\n"
+
     
     def printself(self,title=True, footer=True, printmethod=None, printme=True):
         markup = self.tester.markup
+        # Markup instance state...
+        def state_markup(state):
+            if state == 'running':
+                return markup(state, markups=[1,92])
+            if state == 'terminated':
+                return markup(state, markups=[1,97])
+            if state == 'shutting-down':
+                return markup(state, markups=[1,95])
+            if state == 'pending':
+                return markup(state, markups=[1,93])
+            if state == 'stopped':
+                return markup(state, markups=[1,91])
+            else:
+                return markup(state, markups=[1,91])
         # Utility method for creating multi line table entries...
         def multi_line(lines):
             buf = ""
@@ -263,7 +278,7 @@ class EuInstance(Instance, TaggedResource):
         if self.age:
             age = int(self.age)
         state_string, state_len = multi_line(
-            [markup("{0} {1}".format('STATE:', self.laststate)),
+            [markup("{0} {1}".format('STATE:', state_markup(self.laststate))),
             "{0} {1}".format(markup('AGE:'), age),
             "{0} {1}".format(markup("ZONE:"),self.placement)])
 
@@ -271,6 +286,7 @@ class EuInstance(Instance, TaggedResource):
         netinfo = 'INSTANCE NETWORK INFO:'
         pt = PrettyTable(['ID', 'IMAGE', 'STATE', netinfo])
         pt.align[netinfo] = 'l'
+        pt.valign[netinfo] = 'm'
         pt.align['ID'] = 'l'
         pt.align['IMAGE'] = 'l'
         pt.align['STATE'] = 'l'
@@ -278,6 +294,12 @@ class EuInstance(Instance, TaggedResource):
         pt.max_width['IMAGE'] = emilen
         pt.max_width['STATE'] = state_len
         pt.padding_width = 0
+        # PrettyTable headers do not work with ascii markups, so make a sudo header
+        new_header = []
+        for field in pt._field_names:
+            new_header.append(markup(field, markups=[1,4]))
+        pt.add_row(new_header)
+        pt.header = False
         # Create a subtable 'netpt' to summarize and format the networking portion...
         # Set the maxwidth of each column so the tables line up when showing multiple instances
         vpc_col = ('VPC', 12)

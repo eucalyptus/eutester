@@ -3918,7 +3918,9 @@ disable_root: false"""
         if not isinstance(instance, EuInstance):
             orig_instance = instance
             if isinstance(instance, str):
-                instance = self.get_instances(idstring=instance)
+                try:
+                    instance = self.get_instances(idstring=instance)[0]
+                except IndexError: pass
             if isinstance(instance, Instance):
                 instance = self.convert_instance_to_euisntance(instance=instance,
                                                                auto_connect=False)
@@ -3990,19 +3992,21 @@ disable_root: false"""
                 instance = self.convert_instance_to_euisntance(instance, auto_connect=False)
             plist.append(instance)
         first = plist.pop(0)
+        # Build upon a table created from a euinstance class obj
         maintable = first.printself(printme=False)
         maintable.hrules = 1
         count = 0
-        new_header = []
-        for field in maintable._field_names:
-            new_header.append(self.markup(field, markups=[1,4]))
+        # The first row of the table returned from a euinstance.printself() is a sudo header
+        new_header = maintable._rows[0]
         for instance in plist:
             count += 1
             if not count % 5:
+                # Add a header every 5th row to make the tables easier to read
                 maintable.add_row(new_header)
             pt = instance.printself(printme=False)
             if pt._rows:
-                maintable.add_row(pt._rows[0])
+                maintable.add_row(pt._rows[1])
+            # Adjust the table's column widths to allow the largest entries
             for key in pt._max_width:
                 pt_max = pt._max_width[key] or 0
                 max = maintable._max_width.get(key, 0)
