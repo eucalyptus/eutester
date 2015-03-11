@@ -264,11 +264,9 @@ class EuInstance(Instance, TaggedResource):
         # Create a multi line field for instance's run info
         idlist = [markup("{0} {1}".format('ID:', self.id) ,markups=[1,4,94]),
                          "{0} {1}".format(markup('VMTYPE:'), self.instance_type),
-                         "{0} {1}".format(markup('RES:'),reservation_id)]
-        if self.key_name and len(self.key_name) > 20:
-            idlist.extend(["{0}".format(markup("KEYPAIR:")), self.key_name])
-        else:
-            idlist.append("{0} {1}".format(markup("KEYPAIR:"), self.key_name))
+                         "{0} {1}".format(markup('RES:'),reservation_id),
+                         markup("KEYPAIR:"),
+                         "{0}".format(self.key_name)]
         id_string, idlen = multi_line(idlist)
         try:
             emi = self.tester.get_emi(self.image_id)
@@ -289,10 +287,11 @@ class EuInstance(Instance, TaggedResource):
         if self.age:
             age = int(self.age)
         state_string, state_len = multi_line(
-            [markup("{0} {1}".format('STATE:', state_markup(self.laststate))),
+            ["STATE: " + state_markup(self.laststate),
             "{0} {1}".format(markup('AGE:'), age),
             "{0} {1}".format(markup("ZONE:"), self.placement),
-            "{0} {1}".format(markup('ROOTDEV:'), bdmvol)])
+            markup('ROOTDEV:'),
+            bdmvol])
 
         # Create the primary table called pt...
         netinfo = 'INSTANCE NETWORK INFO:'
