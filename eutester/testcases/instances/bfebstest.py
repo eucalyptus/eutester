@@ -1,8 +1,7 @@
 #!/usr/bin/python
 import time
-from eutester.eutestcase import EutesterTestCase
 from instancetest import InstanceBasics
-from eutester.euinstance import EuInstance
+from eutester.aws.ec2.euinstance import EuInstance
 
 class BFEBSBasics(InstanceBasics):
     def __init__(self, name="BFEBSBasics", credpath=None, region=None, config_file=None,

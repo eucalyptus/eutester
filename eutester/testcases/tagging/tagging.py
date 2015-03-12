@@ -1,9 +1,9 @@
 #!/usr/bin/python
 
 import time
-from eucaops import Eucaops
-from eucaops import EC2ops
-from eutester.eutestcase import EutesterTestCase
+from eutester.euca.euca_ops import Eucaops
+from eutester.aws.ec2.ec2ops import EC2ops
+from eutester.utils.eutestcase import EutesterTestCase
 import os
 import random
 
