@@ -33,10 +33,10 @@
 #
 
 import time
-from eucaops import Eucaops
-from eucaops import ELBops
+from eutester.euca.euca_ops import Eucaops
+from eutester.aws.elb.elbops import ELBops
 from boto.ec2.elb import LoadBalancer
-from eutester.eutestcase import EutesterTestCase
+from eutester.utils.eutestcase import EutesterTestCase
 import os
 import random
 

@@ -33,11 +33,11 @@
 '''
 Create resources (keypairs,groups, volumes,snapshots, buckets) for each user in the cloud. 
 '''
-from eucaops import Eucaops
+from eutester.euca.euca_ops import Eucaops
 import re
 import string
-from eutester.euinstance import EuInstance
-from eutester.eutestcase import EutesterTestCase
+from eutester.aws.ec2.euinstance import EuInstance
+from eutester.utils.eutestcase import EutesterTestCase
 
 class ResourceGeneration(EutesterTestCase):
     

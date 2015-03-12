@@ -34,10 +34,10 @@
 
 import time
 import os
-from boto.ec2.autoscale import AutoScalingGroup, Instance, Activity
+from boto.ec2.autoscale import AutoScalingGroup, Activity
 from boto.exception import BotoServerError
-from eucaops import Eucaops
-from eutester.eutestcase import EutesterTestCase
+from eutester.euca.euca_ops import Eucaops
+from eutester.utils.eutestcase import EutesterTestCase
 
 class AutoScalingBasics(EutesterTestCase):
     def __init__(self, extra_args= None):

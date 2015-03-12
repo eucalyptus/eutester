@@ -30,9 +30,9 @@ import boto.s3, boto.s3.connection
 import dateutil.parser
 
 
-from eucaops import Eucaops
-from eutester.eutestcase import EutesterTestCase
-from eucaops import S3ops
+from eutester.euca.euca_ops import Eucaops
+from eutester.utils.eutestcase import EutesterTestCase
+from eutester.aws.s3.s3ops import S3ops
 
 import requests
 

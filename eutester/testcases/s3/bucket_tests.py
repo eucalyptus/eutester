@@ -8,24 +8,22 @@
 ###########################################
 
 #Author: Zach Hill <zach@eucalyptus.com>
-from datetime import date
 
-from eucaops import Eucaops
-import argparse
-import time
 import re
+import time
+from eutester.euca.euca_ops import Eucaops
 
-from eutester.eutestcase import EutesterTestCase
-from eucaops import S3ops
+
+from eutester.utils.eutestcase import EutesterTestCase
+from eutester.aws.s3.s3ops import S3ops
 from boto.exception import S3ResponseError
 from boto.exception import S3CreateError
 import boto
 import boto.s3
-from boto.s3.bucket import Bucket
 from boto.s3.key import Key
-from boto.s3.acl import ACL, Policy, Grant
+from boto.s3.acl import Grant
 from boto.s3.connection import Location
-from boto.s3.lifecycle import Lifecycle, Rule, Expiration
+from boto.s3.lifecycle import Lifecycle, Expiration
 
 
 class BucketTestSuite(EutesterTestCase):

@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
-from eucaops import Eucaops
-from eutester.eutestcase import EutesterTestCase
+from eutester.euca.euca_ops import Eucaops
+from eutester.utils.eutestcase import EutesterTestCase
 
 class SampleTest(EutesterTestCase):
     def __init__(self):
