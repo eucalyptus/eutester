@@ -55,11 +55,17 @@ class ImportInstanceTests(EutesterTestCase):
         self.setup_parser(testname='import_instance_tests',
                               description='Runs tests against import instance'
                                           'conversion tasks',
-                              emi=False)
+                              emi=False,
+                              instance_user=False)
 
         self.parser.add_argument('--url',
                                  help='URL containing remote image to create '
                                       'import instance task from',
+                                 default=None)
+
+        self.parser.add_argument('--instance-user', dest='instance_user',
+                                 help='Username used for ssh or winrm login. '
+                                      'Defaults; Linux:"root", Windows:"Administrator"',
                                  default=None)
         self.parser.add_argument('--workerip',dest='worker_machine',
                                  help='The ip/hostname of the machine that the '
@@ -170,7 +176,7 @@ class ImportInstanceTests(EutesterTestCase):
                 raise ArgumentError(None,'Required URL not provided')
             else:
                 self.url = self.args.url
-
+        self.imagelocation = None
         self.args.worker_password = self.args.worker_password or self.args.password
         self.args.worker_keypath = self.args.worker_keypath or self.args.keypair
         # Format platform case sensitive arg.
@@ -178,6 +184,11 @@ class ImportInstanceTests(EutesterTestCase):
             self.args.platform = "Windows"
         elif str(self.args.platform).upper().strip() == "LINUX":
             self.args.platform = "Linux"
+        if self.args.instance_user is None:
+            if self.args.platform == "Windows":
+                self.args.instance_user = 'Administrator'
+            else:
+                self.args.instance_user = 'root'
         self.latest_task_dict = None
         #Create an ImageUtils helper from the arguments provided in this self...
         self.img_utils = self.do_with_args(ImageUtils)
@@ -276,7 +287,12 @@ class ImportInstanceTests(EutesterTestCase):
     def get_import_bucket_to_use(self, bucketname=None):
         bucketname = bucketname or self.args.bucketname
         if not bucketname:
-            bucketname = 'import_instance_test_bucket'
+            if self.imagelocation or self.url:
+                location = self.imagelocation or self.url
+                image_name = os.path.basename(location)[0:15]
+            else:
+                image_name = str(self.args.platform or 'test')
+            bucketname = 'eutester_import_' + str(image_name)
         self.bucket = self.tester.s3.create_bucket(bucketname).name
 
     def test1_basic_create_import_instance(self,

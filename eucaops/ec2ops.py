@@ -2771,7 +2771,7 @@ disable_root: false"""
                   block_device_map=None,
                   user_data=None,
                   private_addressing=False, 
-                  username="root", 
+                  username=None,
                   password=None,
                   auto_connect=True,
                   clean_on_fail=True,
@@ -2790,7 +2790,8 @@ disable_root: false"""
         :param max: max amount of instances to try to run
         :param user_data: user_data to run instances with
         :param private_addressing: boolean to run instances without public ips
-        :param username: username for connecting ssh to instances
+        :param username: username for connecting ssh to instances.
+                         Default usernames: Linux=root, Windows=Administrator
         :param password: password for connnecting ssh to instances
         :param auto_connect: boolean flag whether or not ssh connections should be automatically attempted
         :param clean_on_fail: boolean flag whether or not to attempt to delete/remove failed instances-(not implemented)
@@ -2845,10 +2846,12 @@ disable_root: false"""
                     self.debug(str(instance.id)+':Converting instance to euinstance type.')
                     #convert to euinstances, connect ssh later...
                     if image.platform == 'windows':
+                        if username is None:
+                            username = 'Administrator'
                         eu_instance = WinInstance.make_euinstance_from_instance( instance,
                                                                                  self,
                                                                                  keypair=keypair,
-                                                                                 username='Administrator',
+                                                                                 username=username,
                                                                                  password=password,
                                                                                  reservation=reservation,
                                                                                  private_addressing=private_addressing,
@@ -2858,6 +2861,8 @@ disable_root: false"""
                                                                                  )
 
                     else:
+                        if username is None:
+                            username = 'root'
                         eu_instance =  EuInstance.make_euinstance_from_instance( instance,
                                                                                  self,
                                                                                  keypair=keypair,
