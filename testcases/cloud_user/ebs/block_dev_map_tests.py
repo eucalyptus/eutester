@@ -64,14 +64,17 @@ import math
 import re
 
 
-class FixedBlockDeviceMapping(BlockDeviceMapping):
-    #Temporary class until boto fixes this upstream.
-    # 'nodevice' param is formatted incorrectly, should not prefix with 'Ebs' before 'NoDevice'.
 
-    def build_list_params(self, params, prefix=''):
+class FixedBlockDeviceMapping(BlockDeviceMapping):
+    # Originally a Temporary class until boto fixes this upstream.
+    # 'nodevice' param is formatted incorrectly, should not prefix with 'Ebs' before 'NoDevice'.
+    # As of 3/14 this appears to be fixed, although now euca may be requiring the nodevice param
+    # to be populated with a boolean, and Boto is sending an empty string. See: EUCA-10649
+
+    def _build_list_params(self, params, prefix=''):
         i = 1
         for dev_name in self:
-            pre = '%sBlockDeviceMapping.%d' % (prefix, i)
+            pre = '%s.%d' % (prefix, i)
             params['%s.DeviceName' % pre] = dev_name
             block_dev = self[dev_name]
             if block_dev.ephemeral_name:
@@ -79,18 +82,31 @@ class FixedBlockDeviceMapping(BlockDeviceMapping):
             else:
                 if block_dev.no_device:
                     params['%s.NoDevice' % pre] = 'true'
-                if block_dev.snapshot_id:
-                    params['%s.Ebs.SnapshotId' % pre] = block_dev.snapshot_id
-                if block_dev.size:
-                    params['%s.Ebs.VolumeSize' % pre] = block_dev.size
-                if block_dev.delete_on_termination:
-                    params['%s.Ebs.DeleteOnTermination' % pre] = 'true'
                 else:
-                    params['%s.Ebs.DeleteOnTermination' % pre] = 'false'
+                    if block_dev.snapshot_id:
+                        params['%s.Ebs.SnapshotId' % pre] = block_dev.snapshot_id
+                    if block_dev.size:
+                        params['%s.Ebs.VolumeSize' % pre] = block_dev.size
+                    if block_dev.delete_on_termination:
+                        params['%s.Ebs.DeleteOnTermination' % pre] = 'true'
+                    else:
+                        params['%s.Ebs.DeleteOnTermination' % pre] = 'false'
+                    if block_dev.volume_type:
+                        params['%s.Ebs.VolumeType' % pre] = block_dev.volume_type
+                    if block_dev.iops is not None:
+                        params['%s.Ebs.Iops' % pre] = block_dev.iops
+                    # The encrypted flag (even if False) cannot be specified for the root EBS
+                    # volume.
+                    if block_dev.encrypted is not None:
+                        if block_dev.encrypted:
+                            params['%s.Ebs.Encrypted' % pre] = 'true'
+                        else:
+                            params['%s.Ebs.Encrypted' % pre] = 'false'
+
             i += 1
 
-
-
+    def build_list_params(self, params, prefix=''):
+        return self._build_list_params(params=params, prefix=prefix)
 
 class Block_Device_Mapping_Tests(EutesterTestCase):
     #Define the bytes per gig
@@ -161,7 +177,11 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         if self.args.zone:
             self.zone = str(self.args.zone)
         else:
-            self.zone = 'PARTI00'
+            zones = self.tester.get_zones()
+            if zones:
+                self.zone = zones[0]
+            else:
+                raise RuntimeError('No zones provided by user or found on cloud')
         self.groupname = 'jenkins'
         self.group = self.tester.add_group(self.groupname)
         self.tester.authorize_group(self.group)
@@ -183,7 +203,8 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         if self.args.emi:
             self.image = self.tester.get_emi(emi=str(self.args.emi))
         else:
-            images = self.tester.get_images(basic_image=True)
+            images = self.tester.get_images(basic_image=True, not_platform='windows',
+                                            root_device_type='instance-store')
             if images:
                 self.image = images[0]
         if not self.image:
@@ -1162,7 +1183,7 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
             instance.update()
             self.tester.print_block_device_map(instance.block_device_mapping)
             self.status('Detaching the recently attached volume from instance...')
-            instance.detach_euvolume(self.base_test_volume)
+            instance.detach_euvolume(new_vol)
             self.status('Block dev map after detaching volume from instance...')
             instance.update()
             self.tester.print_block_device_map(instance.block_device_mapping)
@@ -1198,9 +1219,10 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         errmsg = ""
         bdm_snapshot_dev = '/dev/vdc'
         bdm_snap_size = 6
-        orig_maxsize = self.tester.property_manager.get_storage_maxvolumesizeingb_value()
+        maxprop = self.tester.property_manager.get_euproperty_by_name('maxvolumesizeingb')
+        orig_maxsize = maxprop.value
         try:
-            self.tester.property_manager.set_storage_maxvolumesizeingb_value(1)
+            maxprop.set(1)
             image = self.test_image1
             self.status('Using image:' +str(self.test_image1.id)+ ", ephemeral, and snapshot ebs devices added at run time..")
             self.status('Original Image block device map:')
@@ -1227,7 +1249,7 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
             self.endfailure(errmsg)
 
         finally:
-            self.tester.property_manager.set_storage_maxvolumesizeingb_value(orig_maxsize)
+            maxprop.set(orig_maxsize)
             if errmsg:
                 raise Exception(errmsg)
 
@@ -1240,9 +1262,10 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
         errmsg = ""
         bdm_snapshot_dev = '/dev/vdc'
         bdm_snap_size = 6
-        orig_maxtotal = self.tester.property_manager.get_storage_maxtotalvolumesizeingb_value()
+        maxtotal_prop = self.tester.property_manager.get_euproperty_by_name('maxtotalvolumesizeingb')
+        orig_maxtotal = maxtotal_prop.value
         try:
-            self.tester.property_manager.set_storage_maxtotalvolumesizeingb_value(5)
+            maxtotal_prop.set(5)
             image = self.test_image1
             self.status('Using image:' +str(self.test_image1.id)+ ", ephemeral, and snapshot ebs devices added at run time..")
             self.status('Original Image block device map:')
@@ -1269,7 +1292,7 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
             self.endfailure(errmsg)
 
         finally:
-            self.tester.property_manager.set_storage_maxtotalvolumesizeingb_value(orig_maxtotal)
+            maxtotal_prop.set(orig_maxtotal)
             if errmsg:
                 raise Exception(errmsg)
 

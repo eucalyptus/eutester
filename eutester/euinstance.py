@@ -1970,18 +1970,20 @@ class EuInstance(Instance, TaggedResource):
         root_dev = os.path.basename(root_dev)
         orig_bdm = bdm or self.block_device_mapping
         bdm = copy.copy(orig_bdm)
+
         if root_dev in bdm:
             bdm.pop(root_dev)
         if '/dev/'+root_dev in bdm:
             bdm.pop('/dev/'+root_dev)
 
         for device in meta_dev_names:
-            #Check root device meta data against the root device, else add to dict for comparison against block dev map
-            if device == 'ami' or device == 'emi' or device == 'root' or \
-            (device == 'ebs1' and self.root_device_type == 'ebs'):
+            # Check root device meta data against the root device, else add to dict for
+            # comparison against block dev map
+            if device == 'ami' or device == 'emi' or device == 'root':
                 meta_device = self.get_metadata('block-device-mapping/' + str(device))
                 if not meta_device:
-                    raise Exception('Device:' + str(device) + ' metadata response:' + str(meta_device))
+                    raise Exception('Device:' + str(device) + ' metadata response:' +
+                                    str(meta_device))
                 if not root_dev in meta_device and not '/dev/'+str(root_dev) in meta_device:
                     raise Exception('Meta data "block-device-mapping/' + str(device) + '", root dev:'
                                     + str(root_dev) + ' not in ' + str(meta_device))
@@ -1999,18 +2001,24 @@ class EuInstance(Instance, TaggedResource):
                 else:
                     dev_name_prefix = 'ebs'
                 for meta_dev in meta_devices:
+                    self.debug('looking for device:{0}, dev_name_prefix:{1}, meta dev:{2}'
+                               .format(device, dev_name_prefix, meta_dev))
                     if str(meta_dev).startswith(dev_name_prefix):
-                        if meta_devices.get(meta_dev) == device:
-                            self.debug('Found meta data match for block device:' + str(device) + " at: " + str(meta_dev))
+                        if os.path.basename(meta_devices.get(meta_dev)) == os.path.basename(device):
+                            self.debug('Found meta data match for block device:' + str(device) +
+                                       " for meta name: " + str(meta_dev))
                             meta_devices.pop(meta_dev)
                             found = True
                             break
                 if not found:
                     raise Exception('No meta data found for block dev map device:' + str(device))
         if meta_devices:
-            err_buf = 'Unknown meta data found for the following not in:' + str(self.id) + "'s block_device_mapping:"
+            err_buf = "({0})The following devices were found in meta data, but not in the instance's " \
+                      "block dev mapping:".format(self.id)
             for meta_dev in meta_devices:
-                err_buf += "'" + str(meta_dev) + ":" + str(meta_devices.get(meta_dev)) + "', "
+                err_buf += "\n'Metadata block device name: '" + str(meta_dev) + \
+                           "' --> Metadata device value:'" + \
+                           str(meta_devices.get(meta_dev)) + "' (Not found in Instance's BDM)"
             raise Exception(err_buf)
 
 
