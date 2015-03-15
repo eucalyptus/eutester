@@ -57,7 +57,7 @@ from boto.ec2.networkinterface import NetworkInterface
 from random import randint
 import eutester.sshconnection as sshconnection
 from eutester.sshconnection import CommandExitCodeException
-from prettytable import PrettyTable, ALL
+from prettytable import PrettyTable, ALL, HEADER, FRAME, NONE
 from datetime import datetime
 import sys
 import os
@@ -257,7 +257,7 @@ class EuInstance(Instance, TaggedResource):
             return (buf, maxlen)
         bdmvol = self.root_device_type
         if self.bdm_root_vol:
-            bdmvol += bdmvol + ":" + self.bdm_root_vol.id
+            bdmvol += ":" + self.bdm_root_vol.id
         reservation_id = None
         if self.reservation:
             reservation_id = self.reservation.id
@@ -300,7 +300,7 @@ class EuInstance(Instance, TaggedResource):
         stateheader = 'INSTANCE STATE'
         pt = PrettyTable([idheader, imageheader, stateheader, netinfo])
         pt.align[netinfo] = 'l'
-        pt.valign[netinfo] = 't'
+        pt.valign[netinfo] = 'm'
         pt.align[idheader] = 'l'
         pt.align[imageheader] = 'l'
         pt.align[stateheader] = 'l'
@@ -338,8 +338,7 @@ class EuInstance(Instance, TaggedResource):
         netpt = PrettyTable([vpc_col[0], subnet_col[0], secgrp_col[0], privaddr_col[0],
                              privip_col[0], pubip_col[0]])
         netpt.padding_width = 0
-        netpt.vrules = 1
-        netpt.hrules = 3
+        netpt.vrules = ALL
         for col in net_cols:
             netpt.max_width[col[0]] = col[1]
         sec_grps = []

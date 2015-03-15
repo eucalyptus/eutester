@@ -153,10 +153,23 @@ class Eutester(object):
             raise RuntimeError('Credpath has not been set yet. '
                                'Please set credpath or provide '
                                'configuration file')
-        out = self.local('source {0}/eucarc && echo ${1}'.format(self.credpath, field))
+        cmd = 'source {0}/eucarc &> /dev/null && echo ${1}'.format(self.credpath, field)
+        out = self.local(cmd)
         if out[0]:
             return out[0]
         else:
+            if out:
+                out = "\n".join(out)
+            self.critical('Failed to find field: {0},\nCommand:{1}\nReturned:\n"{2}"'
+                          .format(field, cmd, out))
+            try:
+                catcmd = 'cat {0}/eucarc | grep {1}'.format(self.credpath, field)
+                catout = self.local(catcmd)
+                catout = "\n".join(catout)
+            except Exception, ce:
+                catout = "Command failed:{0}, err:{1}".format(catcmd, ce)
+            self.critical("Unable to find {0} id in eucarc. {1}:\n{2}\n"
+                          .format(field, catcmd, catout))
             raise ValueError("Unable to find " +  field + " id in eucarc")
 
     def handle_timeout(self, signum, frame): 

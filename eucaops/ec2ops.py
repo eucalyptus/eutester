@@ -233,7 +233,14 @@ disable_root: false"""
     def get_ec2_ip(self):
         """Parse the eucarc for the EC2_URL"""
         ec2_url = self.parse_eucarc("EC2_URL")
-        return ec2_url.split("/")[2].split(":")[0]
+        try:
+            ec2_ip = ec2_url.split("/")[2].split(":")[0]
+            return  ec2_ip
+        except:
+            tb =self.get_traceback()
+            self.critical(str(tb) + '\nError parsing ec2_url from eucarc, ec2url: ' + str(ec2_url))
+            raise
+
 
     def get_ec2_path(self):
         """Parse the eucarc for the EC2_URL"""
