@@ -38,7 +38,10 @@ from boto.s3.key import Key
 from boto.s3.acl import ACL, Grant
 from boto.exception import S3ResponseError
 from boto.s3.deletemarker import DeleteMarker
+from boto.s3.bucket import Bucket, Key
 import boto.s3
+from prettytable import PrettyTable, ALL, NONE
+
 
 class S3opsException(Exception):
     """Exception raised for errors that occur when running S3 operations.
@@ -346,4 +349,73 @@ class S3ops(Eutester):
         if data_hash != eTag:
             raise Exception( "Hash/eTag mismatch: \nhash = " + data_hash + "\neTag= " + eTag)
             
-                
+    def show_bucket(self, bucket, showkeys=True, printme=True):
+        ret_table = None
+        if isinstance(bucket, str):
+            bucket = self.get_bucket_by_name(bucket)
+            if not bucket:
+                raise ValueError('Bucket "{0}" not found for show_bucket'.format(bucket))
+        if not isinstance(bucket, Bucket):
+            raise ValueError('show_bucket expected type Bucket obj, got:{0}:{1}'
+                             .format(bucket, type(bucket)))
+        bucket_pt = PrettyTable([self.markup('BUCKET NAME'), self.markup('VERSIONED'),
+                                 self.markup('KEYS'), self.markup('TOTAL SIZE')])
+        bucket_pt.align = 'l'
+        version_enabled = bool('Enabled' == bucket.get_versioning_status().get('Versioning'))
+        if showkeys:
+            key_pt = PrettyTable([self.markup('KEYNAME'), self.markup('SIZE'),
+                                  self.markup('VERSIONS')])
+            key_pt.max_width['VERSIONS'] = 33
+            key_pt.hrules = ALL
+            key_pt.align = 'l'
+        else:
+            key_pt = None
+        total_size = 0
+        total_keys = 0
+        last_key = None
+        last_key_size = 0
+        last_key_versions = []
+        last_written = None
+        for key in bucket.list_versions():
+            if last_key and last_key.name != key.name:
+                    total_size += last_key_size
+                    total_keys += 1
+                    if key_pt:
+                        key_pt.add_row([last_key.name,
+                                        last_key.size,
+                                        "\n".join(last_key_versions)])
+                    last_written = last_key
+                    last_key = key
+                    last_key_size = key.size
+                    last_key_versions = []
+            else:
+                if key.size > last_key_size:
+                    last_key_size = key.size
+                last_key_versions.append(key.version_id)
+                last_key = key
+        if last_key != last_written:
+            total_size += last_key_size
+            total_keys += 1
+            if key_pt:
+                key_pt.add_row([last_key.name,
+                                last_key.size,
+                                "\n".join(last_key_versions)])
+        bucket_pt.add_row([self.markup(bucket.name, [1,4,94]),
+                           version_enabled, total_keys, total_size])
+        if not showkeys:
+            ret_table = bucket_pt
+        else:
+            main_pt = PrettyTable(["BUCKET SUMMARY:"])
+            main_pt.header = False
+            main_pt.align = 'l'
+            main_pt.add_row([str(bucket_pt)])
+            main_pt.add_row([str(key_pt)])
+            ret_table = main_pt
+        if printme:
+            self.debug("\n{0}\n".format(ret_table))
+        else:
+            return ret_table
+
+
+
+
