@@ -38,7 +38,7 @@ from boto.s3.key import Key
 from boto.s3.acl import ACL, Grant
 from boto.exception import S3ResponseError
 from boto.s3.deletemarker import DeleteMarker
-from boto.s3.bucket import Bucket, Key
+from boto.s3.bucket import Bucket, Key, DeleteMarker
 import boto.s3
 from prettytable import PrettyTable, ALL, NONE
 
@@ -349,8 +349,7 @@ class S3ops(Eutester):
         if data_hash != eTag:
             raise Exception( "Hash/eTag mismatch: \nhash = " + data_hash + "\neTag= " + eTag)
             
-    def show_bucket(self, bucket, showkeys=True, printme=True):
-        ret_table = None
+    def show_bucket_summary(self, bucket, showkeys=True, format_size=True, printme=True):
         if isinstance(bucket, str):
             bucket = self.get_bucket_by_name(bucket)
             if not bucket:
@@ -358,50 +357,158 @@ class S3ops(Eutester):
         if not isinstance(bucket, Bucket):
             raise ValueError('show_bucket expected type Bucket obj, got:{0}:{1}'
                              .format(bucket, type(bucket)))
-        bucket_pt = PrettyTable([self.markup('BUCKET NAME'), self.markup('VERSIONED'),
-                                 self.markup('KEYS'), self.markup('TOTAL SIZE')])
-        bucket_pt.align = 'l'
-        version_enabled = bool('Enabled' == bucket.get_versioning_status().get('Versioning'))
+        ret_table = None
+        kb = 1000
+        mb = 1000000
+        gb = 1000000000
+        NA = self.markup("N/A", [1,91])
+        # Util method to format size of bucket and keys for tables (human readability, etc)...
+        def get_size_string(bytes):
+            if not format_size or bytes == NA:
+                return str(bytes)
+            if bytes < kb:
+                ret_bytes = "{0:.2f}B ".format(bytes)
+            elif bytes < mb:
+                ret_bytes = "{0:.2f}KB".format(round(float(bytes/float(kb)), 2))
+            elif bytes < gb:
+                ret_bytes = "{0:.2f}MB".format(round(float(bytes/float(mb)), 2))
+            else:
+                ret_bytes = "{0:.2f}GB".format(round(float(bytes/float(gb)), 2))
+            return  ret_bytes
+        # Define bucket table, header names, sizes and alignments
+        bk_name_col = ('BUCKET NAME:', 64)
+        bk_ver_col = ('VERSIONED', 10)
+        bk_keys_col = ('# OF KEYS', 10)
+        bk_size_col = ('TOTAL SIZE', 16)
+        # Define key table, header names, sizes and alignments
+        key_name_col = ('KEY NAMES:', 60)
+        key_size_col = ('SIZE', 12)
+        key_ver_col = ('VERSION IDS', 33)
+        key_del_col = ('DELETE MARKER', 33)
+        # Create a bucket summary table using size and header alignments defined above.
+        bucket_pt = PrettyTable([self.markup(bk_name_col[0], [1,4]), self.markup(bk_ver_col[0]),
+                                 self.markup(bk_keys_col[0]), self.markup(bk_size_col[0])])
+        bucket_pt.max_width[bk_name_col[0]] = bk_name_col[1]
+        bucket_pt.max_width[bk_ver_col[0]] = bk_ver_col[1]
+        bucket_pt.max_width[bk_keys_col[0]] = bk_keys_col[1]
+        bucket_pt.max_width[bk_size_col[0]] = bk_size_col[1]
         if showkeys:
-            key_pt = PrettyTable([self.markup('KEYNAME'), self.markup('SIZE'),
-                                  self.markup('VERSIONS')])
-            key_pt.max_width['VERSIONS'] = 33
+            bucket_pt.align[bk_name_col[0]] = 'c'
+        else:
+            bucket_pt.align[bk_name_col[0]] = 'l'
+        bucket_pt.align[bk_size_col[0]] = 'r'
+        bucket_pt.align[bk_keys_col[0]] = 'l'
+        bucket_pt.align[bk_ver_col[0]] = 'l'
+        bucket_pt.right_padding_width = 0
+        bucket_pt.left_padding_width = 1
+
+        # Now calc bucket keys information...
+        if showkeys:
+            # If showkeys is True, create a subtable to show key summary information using
+            # the size and header alignments defined above...
+            key_pt = PrettyTable([self.markup(key_name_col[0], [1,4]), self.markup(key_size_col[0]),
+                                  self.markup(key_ver_col[0]), self.markup(key_del_col[0])])
+            key_pt.max_width[key_ver_col[0]] = key_ver_col[1]
+            key_pt.max_width[key_name_col[0]] = key_name_col[1]
+            key_pt.max_width[key_size_col[0]] = key_size_col[1]
+            key_pt.max_width[key_del_col[0]] = key_del_col[1]
             key_pt.hrules = ALL
-            key_pt.align = 'l'
+            key_pt.align[key_ver_col[0]] = 'l'
+            key_pt.align[key_name_col[0]] = 'l'
+            key_pt.align[key_size_col[0]] = 'r'
+            key_pt.align[key_del_col[0]] = 'l'
+            key_pt.right_padding_width = 0
+            key_pt.left_padding_width = 1
         else:
             key_pt = None
         total_size = 0
         total_keys = 0
         last_key = None
-        last_key_size = 0
+        last_key_sizes = []
         last_key_versions = []
+        last_key_del_marker = None
         last_written = None
+        # Iterate through keys to gather total size, total number of keys, and create a keys
+        # subtable if show_keys was true...
         for key in bucket.list_versions():
-            if last_key and last_key.name != key.name:
-                    total_size += last_key_size
-                    total_keys += 1
-                    if key_pt:
-                        key_pt.add_row([last_key.name,
-                                        last_key.size,
-                                        "\n".join(last_key_versions)])
-                    last_written = last_key
-                    last_key = key
-                    last_key_size = key.size
-                    last_key_versions = []
+            if isinstance(key, DeleteMarker):
+                current_ver = None
+                current_size = None
+                current_name = key.name
+                current_del_marker = key.version_id
             else:
-                if key.size > last_key_size:
-                    last_key_size = key.size
-                last_key_versions.append(key.version_id)
+                current_ver = key.version_id
+                current_size = key.size
+                current_name = key.name
+                current_del_marker = ""
+                total_size += current_size
+                total_keys += 1
+
+            if last_key and last_key.name != current_name:
+                # This is a new key...
+                if key_pt:
+                    if last_key_del_marker:
+                        last_key_versions.insert(0,self.markup("<delete marker>", [1,91]))
+                        last_key_sizes.insert(0, NA)
+                        last_key_del_marker = self.markup(last_key_del_marker, [1,91])
+                        keyname = str(self.markup('KEY:' + last_key.name, [1,91])).\
+                            ljust(key_name_col[1])
+                    else:
+                        keyname = str(self.markup('KEY:' + last_key.name)).ljust(key_name_col[1])
+                    vstr = ("\n".join('{0}'.format(x).ljust(key_ver_col[1]) for x in
+                                      last_key_versions))
+                    sizestr = ("\n".join('{0}'.format(get_size_string(x)).rjust(key_size_col[1])
+                                         for x in last_key_sizes))
+                    key_pt.add_row([
+                        keyname,
+                        str(sizestr).ljust(key_size_col[1]),
+                        vstr,
+                        last_key_del_marker])
+                last_written = last_key
                 last_key = key
+                if current_size is None:
+                    last_key_sizes = []
+                else:
+                    last_key_sizes = [current_size]
+                if current_ver:
+                    last_key_versions = [current_ver]
+                else:
+                    last_key_versions = []
+                last_key_del_marker = current_del_marker
+            else:
+                if current_size is not None:
+                    last_key_sizes.append(current_size)
+                if current_ver:
+                    last_key_versions.append(current_ver)
+                last_key = key
+                last_key_del_marker = last_key_del_marker or current_del_marker
         if last_key != last_written:
-            total_size += last_key_size
-            total_keys += 1
             if key_pt:
-                key_pt.add_row([last_key.name,
-                                last_key.size,
-                                "\n".join(last_key_versions)])
-        bucket_pt.add_row([self.markup(bucket.name, [1,4,94]),
-                           version_enabled, total_keys, total_size])
+                if last_key_del_marker:
+                    last_key_versions.insert(0,self.markup("<delete marker>", [1,91]))
+                    last_key_sizes.insert(0, NA)
+                    last_key_del_marker = self.markup(last_key_del_marker, [1,91])
+                    keyname = str(self.markup('KEY:' + last_key.name, [1,91])).\
+                            ljust(key_name_col[1])
+                else:
+                    keyname = str(self.markup('KEY:' + last_key.name)).ljust(key_name_col[1])
+                vstr = "\n".join('{0}'.format(x).ljust(key_ver_col[1]) for x in last_key_versions)
+                sizestr = ("\n".join('{0}'.format(get_size_string(x)).rjust(key_size_col[1])
+                                         for x in last_key_sizes))
+                key_pt.add_row([keyname,
+                               str(sizestr).ljust(key_size_col[1]),
+                               vstr,
+                               last_key_del_marker])
+        # Populate the bucket summary table with calc'd data...
+        version_enabled = bool('Enabled' == bucket.get_versioning_status().get('Versioning'))
+        if showkeys:
+            bucket_name = str(self.markup(bucket.name, [1,4,94])).center(bk_name_col[1])
+        else:
+            bucket_name = str(self.markup(bucket.name, [1,4,94])).ljust(bk_name_col[1])
+        bucket_pt.add_row([bucket_name,
+                           str(version_enabled).ljust(bk_ver_col[1]),
+                           str(total_keys).ljust(bk_keys_col[1]),
+                           str(get_size_string(total_size)).rjust(bk_size_col[1])])
         if not showkeys:
             ret_table = bucket_pt
         else:
@@ -417,5 +524,31 @@ class S3ops(Eutester):
             return ret_table
 
 
+    def show_buckets(self, buckets=None, format_size=True, printme=True):
+        if not buckets:
+            buckets = self.s3.get_all_buckets()
+        elif isinstance(buckets, str) or isinstance(buckets, unicode):
+            buckets = self.get_bucket_by_name(str(buckets))
+        if isinstance(buckets, Bucket):
+            buckets = [buckets]
+        if not isinstance(buckets, list):
+            raise ValueError('Error with type for "buckets", expected list of type boto.Bucket, '
+                             'got:"{0}:{1}"'.format(buckets, type(buckets)))
+        first = buckets.pop(0)
+        main_table = self.show_bucket_summary(bucket=first, showkeys=False,
+                                              format_size=format_size, printme=False)
+        main_table.hrules = ALL
+        main_table.vrules = ALL
+        for field in main_table.field_names:
+            main_table.align[field] = 'l'
+        for bucket in buckets:
+            bucket_table = self.show_bucket_summary(bucket=bucket, showkeys=False,
+                                                    format_size=format_size, printme=False)
+            if hasattr(bucket_table, '_rows') and bucket_table._rows:
+                main_table.add_row(bucket_table._rows[0])
+        if printme:
+            self.debug("\n{0}\n".format(str(main_table)))
+        else:
+            return main_table
 
 
