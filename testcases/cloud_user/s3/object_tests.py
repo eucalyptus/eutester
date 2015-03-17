@@ -119,7 +119,7 @@ class ObjectTestSuite(EutesterTestCase):
 
     def post_object_sts(self, bucket_name=None, object_key=None, object_data=None, policy=None, acl=None, credentials=None):
         """Uploads an object using POST + form upload using an STS token"""
-        self.assertIsNotNone(credentials, msg='Credentials missing')
+        self.assertNotEqual(credentials, None, msg='Credentials missing')
 
         fields = {
             'key': object_key,
@@ -409,11 +409,11 @@ class ObjectTestSuite(EutesterTestCase):
         self.tester.info("Testing POST form upload on bucket with STS token" + self.test_bucket_name)
         self.tester.info("Getting STS credential for test")
         credentials = self.tester.issue_session_token()
-        self.assertIsNotNone(credentials, msg='Could not get credentials')
-        self.assertIsNotNone(credentials.access_key, msg='Credentials missing access_key')
-        self.assertIsNotNone(credentials.secret_key, msg='Credentials missing secret_key')
-        self.assertIsNotNone(credentials.session_token, msg='Credentials missing session_token')
-        self.assertIsNotNone(credentials.expiration, msg='Credentials missing expiration')
+        self.assertNotEqual(credentials, None,msg='Could not get credentials')
+        self.assertNotEqual(credentials.access_key, None, msg='Credentials missing access_key')
+        self.assertNotEqual(credentials.secret_key, None, msg='Credentials missing secret_key')
+        self.assertNotEqual(credentials.session_token, None, msg='Credentials missing session_token')
+        self.assertNotEqual(credentials.expiration, None, msg='Credentials missing expiration')
 
         self.test_bucket = self.clear_and_rebuild_bucket(self.test_bucket_name)
         itr = 1
