@@ -43,6 +43,7 @@ import traceback
 from datetime import datetime, timedelta
 from subprocess import Popen, PIPE
 from prettytable import PrettyTable, ALL
+from boto.ec2.address import Address
 from boto.ec2.blockdevicemapping import BlockDeviceMapping, BlockDeviceType
 from boto.ec2.bundleinstance import BundleInstanceTask
 from boto.ec2.group import Group as BotoGroup
@@ -2453,7 +2454,7 @@ disable_root: false"""
         ret_list = []
         if not filters:
             filters = {}
-            if emi:
+            if emi and re.match('^\wmi-\w{8}$', str(emi)):
                 filters['image-id'] = emi
             if name:
                 filters['name'] = name
@@ -2481,10 +2482,11 @@ disable_root: false"""
             # If a specific EMI was not provided, set some sane defaults for
             # fetching a test image to work with...
             basic_image = True
-        if name is None:
+        if name is None and not emi:
              emi = "mi-"
         images = self.ec2.get_all_images(filters=filters)
         self.debug("Got " + str(len(images)) + " total images " + str(emi) + ", now filtering..." )
+        # Note: the following can likely be removed now that Euca supports filters for requests
         for image in images:
             if (re.search(emi, image.id) is None) and (re.search(emi, image.name) is None):
                 continue
@@ -2622,6 +2624,13 @@ disable_root: false"""
 
     def show_image(self, image, verbose=True, printmethod=None,
                    header_markups=[1,4], printme=True):
+        if isinstance(image, str):
+            image = self.get_emi(emi=image)
+            if not image:
+                raise ResourceNotFoundException('Image:"{0}" not found'.format(image))
+        if not isinstance(image, Image):
+            raise ValueError('Unknown type provided for image:"{0}:{1}"'.format(image,
+                                                                                type(image)))
         def header(text):
             return self.markup(text=text, markups=header_markups)
 
@@ -2720,15 +2729,39 @@ disable_root: false"""
         return ret
 
 
-    def show_all_addresses_verbose(self, display=True):
+    def show_addresses(self, addresses=None, verbose=True, printme=True):
         """
-        Print table to debug output showing all addresses available to cloud admin using verbose filter
+        Print table to debug output showing all addresses available to
+        cloud admin using verbose filter
+        :param addresses:
         """
         pt = PrettyTable([self.markup('PUBLIC IP'), self.markup('ACCOUNT NAME'),
                           self.markup('REGION'), self.markup('ADDRESS INFO')])
         pt.align = 'l'
+        show_addresses = []
+        get_addresses = []
         try:
-            ad_list = self.ec2.get_all_addresses(addresses='verbose')
+            if addresses:
+                if not isinstance(addresses, list):
+                    addresses = [addresses]
+                for address in addresses:
+                    if isinstance(addresses, str) or isinstance(addresses, unicode):
+                        get_addresses.append(address)
+                    elif isinstance(address, Address):
+                        show_addresses.append(address)
+                    else:
+                        raise ValueError('Show_addresses(). Got unknown address type: {0}:{1}'
+                                         .format(address, type(address)))
+                if get_addresses and verbose:
+                    get_addresses.append('verbose')
+                ad_list = show_addresses.extend(self.ec2.get_all_addresses(
+                    addresses=get_addresses))
+            else:
+                if verbose:
+                    get_addresses = ['verbose']
+                else:
+                    get_addresses = None
+                ad_list = self.ec2.get_all_addresses(addresses=get_addresses)
             for ad in ad_list:
                 instance_id = ad.instance_id
                 public_ip = ad.public_ip
@@ -2752,7 +2785,7 @@ disable_root: false"""
         except Exception, e:
             tb = self.get_traceback()
             self.critical( str(tb) + "\n ERROR in show_all_addresses_verbose:" + str(e))
-        if not display:
+        if not printme:
             return pt
         self.debug("\n" + str(pt) + "\n")
 
@@ -5040,7 +5073,8 @@ disable_root: false"""
             buf += line
         if doprint:
             printmethod(buf)
-        return buf
+        else:
+            return buf
 
     def cancel_conversion_tasks(self, tasks, timeout=180):
         tasks = tasks or self.test_resources['conversion_tasks']
