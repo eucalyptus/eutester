@@ -38,7 +38,7 @@ class TaggedResource():
 
     def create_tags(self, tags, timeout=600):
         self.tester.debug("Current tags: " + str(self.tags))
-        self.tester.create_tags([self.id], tags)
+        self.tester.connection.create_tags([self.id], tags)
         self.wait_for_tags(tags, timeout=timeout)
 
     def wait_for_tags(self, tags, creation=True, timeout=60):
@@ -46,7 +46,7 @@ class TaggedResource():
         elapsed = 0
         while elapsed < timeout:
             self.update()
-            applied_tags =  self.convert_tag_list_to_dict(self.tester.ec2.get_all_tags(filters={u'resource_id':self.id}))
+            applied_tags = self.convert_tag_list_to_dict(self.tester.connection.get_all_tags(filters={u'resource_id':self.id}))
             self.tester.debug("Current tags: " + str(applied_tags))
             found_keys = 0
             for key, value in tags.iteritems():
@@ -75,5 +75,5 @@ class TaggedResource():
 
     def delete_tags(self, tags, timeout=600):
         self.tester.debug("Current tags: " + str(self.tags))
-        self.tester.delete_tags([self.id], tags)
+        self.tester.connection.delete_tags([self.id], tags)
         self.wait_for_tags(tags, creation=False, timeout=timeout)

@@ -55,7 +55,7 @@ ASRegionData = {
 
 class ASops(Eutester):
     def __init__(self, host=None, credpath=None, endpoint=None, aws_access_key_id=None, aws_secret_access_key=None,
-                 username="root", region=None, is_secure=False, path='/', port=80, boto_debug=0):
+                 username="root", region=None, is_secure=False, path='/', port=80, boto_debug=0, test_resources=None):
         """
         :param host:
         :param credpath:
@@ -73,8 +73,11 @@ class ASops(Eutester):
         self.aws_secret_access_key = aws_secret_access_key
         self.account_id = None
         self.user_id = None
+        if test_resources:
+            self.test_resources = test_resources
+        self.connection = None
+        self.as_source_ip = None
         super(ASops, self).__init__(credpath=credpath)
-
         self.setup_as_connection(host=host,
                                  region=region,
                                  endpoint=endpoint,
@@ -86,10 +89,7 @@ class ASops(Eutester):
                                  boto_debug=boto_debug)
         self.poll_count = 48
         self.username = username
-        self.test_resources = {}
-        self.setup_as_resource_trackers()
 
-    @Eutester.printinfo
     def setup_as_connection(self, endpoint=None, aws_access_key_id=None, aws_secret_access_key=None, is_secure=True,
                             host=None, region=None, path="/", port=443, boto_debug=0):
         """
@@ -135,21 +135,12 @@ class ASops(Eutester):
             as_connection_args = copy.copy(connection_args)
             as_connection_args['path'] = path
             as_connection_args['region'] = as_region
-            self.debug("Attempting to create auto scale connection to " + as_region.endpoint + ':' + str(port) + path)
-            self.autoscale = boto.ec2.autoscale.AutoScaleConnection(**as_connection_args)
+            self.connection = boto.ec2.autoscale.AutoScaleConnection(**as_connection_args)
         except Exception, e:
             self.critical("Was unable to create auto scale connection because of exception: " + str(e))
 
         #Source ip on local test machine used to reach instances
         self.as_source_ip = None
-
-    def setup_as_resource_trackers(self):
-        """
-        Setup keys in the test_resources hash in order to track artifacts created
-        """
-        self.test_resources["keypairs"] = []
-        self.test_resources["security-groups"] = []
-        self.test_resources["images"] = []
 
     def create_launch_config(self, name, image_id, key_name=None, security_groups=None, user_data=None,
                              instance_type=None, kernel_id=None, ramdisk_id=None, block_device_mappings=None,
@@ -174,7 +165,7 @@ class ASops(Eutester):
                                  instance_monitoring=instance_monitoring,
                                  instance_profile_name=instance_profile_name)
         self.debug("Creating launch config: " + name)
-        self.autoscale.create_launch_configuration(lc)
+        self.connection.create_launch_configuration(lc)
         if len(self.describe_launch_config([name])) != 1:
             raise Exception('Launch Config not created')
         self.debug('SUCCESS: Created Launch Config: ' +
@@ -187,11 +178,11 @@ class ASops(Eutester):
         :param names: list of names to query (optional) otherwise return all launch configs
         :return:
         """
-        return self.autoscale.get_all_launch_configurations(names=names)
+        return self.connection.get_all_launch_configurations(names=names)
 
     def delete_launch_config(self, launch_config_name):
         self.debug("Deleting launch config: " + launch_config_name)
-        self.autoscale.delete_launch_configuration(launch_config_name)
+        self.connection.delete_launch_configuration(launch_config_name)
         if len(self.describe_launch_config([launch_config_name])) != 0:
             raise Exception('Launch Config not deleted')
         self.debug('SUCCESS: Deleted Launch Config: ' + launch_config_name)
@@ -210,7 +201,7 @@ class ASops(Eutester):
         :param max_size: Maximum size of group (required).
         """
         self.debug("Creating Auto Scaling group: " + group_name)
-        as_group = AutoScalingGroup(connection=self.autoscale,
+        as_group = AutoScalingGroup(connection=self.connection,
                                     group_name=group_name,
                                     load_balancers=load_balancers,
                                     availability_zones=availability_zones,
@@ -223,7 +214,7 @@ class ASops(Eutester):
                                     health_check_period=health_check_period,
                                     tags=tags,
                                     termination_policies=termination_policies)
-        self.autoscale.create_auto_scaling_group(as_group)
+        self.connection.create_auto_scaling_group(as_group)
 
         as_group = self.describe_as_group(group_name)
 
@@ -239,7 +230,7 @@ class ASops(Eutester):
         :param name:
         :return:
         """
-        groups = self.autoscale.get_all_groups(names=[name])
+        groups = self.connection.get_all_groups(names=[name])
         if len(groups) > 1:
             raise Exception("More than one group with name: " + name)
         if len(groups) == 0:
@@ -250,7 +241,7 @@ class ASops(Eutester):
         self.debug("Deleting Auto Scaling Group: " + name)
         self.debug("Forcing: " + str(force))
         # self.autoscale.set_desired_capacity(group_name=names, desired_capacity=0)
-        self.autoscale.delete_auto_scaling_group(name=name, force_delete=force)
+        self.connection.delete_auto_scaling_group(name=name, force_delete=force)
         try:
             self.describe_as_group([name])
             raise Exception('Auto Scaling Group not deleted')
@@ -273,7 +264,7 @@ class ASops(Eutester):
                                        scaling_adjustment=scaling_adjustment,
                                        cooldown=cooldown)
         self.debug("Creating Auto Scaling Policy: " + name)
-        self.autoscale.create_scaling_policy(scaling_policy)
+        self.connection.create_scaling_policy(scaling_policy)
 
     def describe_as_policies(self, as_group=None, policy_names=None):
         """
@@ -283,15 +274,15 @@ class ASops(Eutester):
         :param as_group:
         :param policy_names:
         """
-        self.autoscale.get_all_policies(as_group=as_group, policy_names=policy_names)
+        self.connection.get_all_policies(as_group=as_group, policy_names=policy_names)
 
     def execute_as_policy(self, policy_name=None, as_group=None, honor_cooldown=None):
         self.debug("Executing Auto Scaling Policy: " + policy_name)
-        self.autoscale.execute_policy(policy_name=policy_name, as_group=as_group, honor_cooldown=honor_cooldown)
+        self.connection.execute_policy(policy_name=policy_name, as_group=as_group, honor_cooldown=honor_cooldown)
 
     def delete_as_policy(self, policy_name=None, autoscale_group=None):
         self.debug("Deleting Policy: " + policy_name + " from group: " + autoscale_group)
-        self.autoscale.delete_policy(policy_name=policy_name, autoscale_group=autoscale_group)
+        self.connection.delete_policy(policy_name=policy_name, autoscale_group=autoscale_group)
 
     def cleanup_autoscaling_groups(self, asg_list = None):
         """
@@ -305,8 +296,6 @@ class ASops(Eutester):
         for asg in auto_scaling_groups:
             self.debug("Found Auto Scaling Group: " + asg.name)
             self.delete_as_group(name=asg.name, force=True)
-
-
 
     def delete_all_autoscaling_groups(self):
         """
@@ -347,19 +336,8 @@ class ASops(Eutester):
             for lc in self.describe_launch_config():
                 self.debug("Found Launch Config:" + lc.name)
 
-    def get_as_ip(self):
-        """Parse the eucarc for the AWS_AUTO_SCALING_URL"""
-        as_url = self.parse_eucarc("AWS_AUTO_SCALING_URL")
-        return as_url.split("/")[2].split(":")[0]
-
-    def get_as_path(self):
-        """Parse the eucarc for the AWS_AUTO_SCALING_URL"""
-        as_url = self.parse_eucarc("AWS_AUTO_SCALING_URL")
-        as_path = "/".join(as_url.split("/")[3:])
-        return as_path
-
-    def get_last_instance_id(self):
-        reservations = self.ec2.get_all_instances()
+    def get_last_instance_id(self, tester=None):
+        reservations = tester.ec2.connection.get_all_instances()
         instances = [i for r in reservations for i in r.instances]
         newest_time = None
         newest_id = None
@@ -374,22 +352,22 @@ class ASops(Eutester):
         # self.debug("Autoscale group info: " + str(self.tester.autoscale.get_all_groups(names=[auto_scaling_group_name])[0].tags))
 
         tag = Tag(key=key, value=value, propagate_at_launch=propagate_at_launch, resource_id=resource_id)
-        self.autoscale.create_or_update_tags([tag])
-        if len(self.autoscale.get_all_tags(filters=key)) != 1:
-            self.debug("Number of tags: " + str(len(self.autoscale.get_all_tags(filters=key))))
+        self.connection.create_or_update_tags([tag])
+        if len(self.connection.get_all_tags(filters=key)) != 1:
+            self.debug("Number of tags: " + str(len(self.connection.get_all_tags(filters=key))))
             raise Exception('Tag not created')
-        self.debug("created or updated tag: " + str(self.autoscale.get_all_tags(filters=key)[0]))
+        self.debug("created or updated tag: " + str(self.connection.get_all_tags(filters=key)[0]))
 
     def delete_all_group_tags(self):
-        all_tags = self.autoscale.get_all_tags()
-        self.autoscale.delete_tags(all_tags)
-        self.debug("Number of tags: " + str(len(self.autoscale.get_all_tags())))
+        all_tags = self.connection.get_all_tags()
+        self.connection.delete_tags(all_tags)
+        self.debug("Number of tags: " + str(len(self.connection.get_all_tags())))
 
     def delete_all_policies(self):
-        policies = self.autoscale.get_all_policies()
+        policies = self.connection.get_all_policies()
         for policy in policies:
             self.delete_as_policy(policy_name=policy.name, autoscale_group=policy.as_name)
-        if len(self.autoscale.get_all_policies()) != 0:
+        if len(self.connection.get_all_policies()) != 0:
             raise Exception('Not all auto scaling policies deleted')
         self.debug("SUCCESS: Deleted all auto scaling policies")
 
@@ -410,19 +388,19 @@ class ASops(Eutester):
         :param health_check_period:
         """
         self.debug("Updating ASG: " + group_name)
-        return AutoScalingGroup(connection=self.autoscale,
-                         name=group_name,
-                         launch_config=launch_config,
-                         min_size=min_size,
-                         max_size=max_size,
-                         availability_zones=availability_zones,
-                         desired_capacity=desired_capacity,
-                         default_cooldown=default_cooldown,
-                         health_check_type=health_check_type,
-                         health_check_period=health_check_period,
-                         termination_policies=termination_policies).update()
+        return AutoScalingGroup(connection=self.connection,
+                                name=group_name,
+                                launch_config=launch_config,
+                                min_size=min_size,
+                                max_size=max_size,
+                                availability_zones=availability_zones,
+                                desired_capacity=desired_capacity,
+                                default_cooldown=default_cooldown,
+                                health_check_type=health_check_type,
+                                health_check_period=health_check_period,
+                                termination_policies=termination_policies).update()
 
-    def wait_for_instances(self, group_name, number=1):
+    def wait_for_instances(self, group_name, number=1, tester=None):
         asg = self.describe_as_group(group_name)
         instances = asg.instances
         if not instances:
@@ -433,7 +411,7 @@ class ASops(Eutester):
             return False
         for instance in instances:
             assert isinstance(instance, Instance)
-            instance = self.get_instances(idstring=instance.instance_id)[0]
+            instance = tester.ec2.get_instances(idstring=instance.instance_id)[0]
             if instance.state != "running":
                 self.debug("Instance: " + str(instance) + " still in " + instance.state + " state")
                 return False

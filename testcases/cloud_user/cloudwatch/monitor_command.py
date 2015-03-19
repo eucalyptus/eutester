@@ -1,9 +1,9 @@
 #!/usr/bin/python
 import subprocess
-from eucaops import Eucaops
-from eucaops import EC2ops
-from eutester.eutestcase import EutesterTestCase
-from eutester.sshconnection import CommandExitCodeException
+from eutester.euca.euca_ops import Eucaops
+from eutester.aws.ec2.ec2ops import EC2ops
+from eutester.utils.eutestcase import EutesterTestCase
+from eutester.utils.sshconnection import CommandExitCodeException
 
 class CloudWatchCustom(EutesterTestCase):
     def __init__(self, extra_args= None):
@@ -33,7 +33,7 @@ class CloudWatchCustom(EutesterTestCase):
                 output = self.tester.local(self.args.command)
                 self.tester.debug(output)
                 value = int(output)
-                self.tester.put_metric_data(self.args.namespace, self.args.metric_name, value=value, unit=self.args.unit)
+                self.tester.cloudwatch.put_metric_data(self.args.namespace, self.args.metric_name, value=value, unit=self.args.unit)
             except subprocess.CalledProcessError:
                 self.tester.critical("Command exited Non-zero not putting data")
             except ValueError:
@@ -48,10 +48,10 @@ class CloudWatchCustom(EutesterTestCase):
                     self.tester.debug(output)
                     value = int(output)
                     ### Push to Hostname dimension
-                    self.tester.put_metric_data(self.args.namespace, self.args.metric_name, unit=self.args.unit,
+                    self.tester.cloudwatch.put_metric_data(self.args.namespace, self.args.metric_name, unit=self.args.unit,
                                                 dimensions={"Hostname": machine.hostname}, value=value)
                     ### Push to aggregate metric as well
-                    self.tester.put_metric_data(self.args.namespace, self.args.metric_name, unit=self.args.unit, value=value)
+                    self.tester.cloudwatch.put_metric_data(self.args.namespace, self.args.metric_name, unit=self.args.unit, value=value)
                 except CommandExitCodeException:
                     self.tester.critical("Command exited Non-zero not putting data")
                 except ValueError:

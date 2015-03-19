@@ -33,44 +33,39 @@ from eutester import Eutester
 import re
 import boto
 
+
 class IAMops(Eutester):
 
     def __init__(self,credpath=None, endpoint="iam.amazonaws.com", aws_access_key_id=None, aws_secret_access_key=None,
-                 is_secure=True, port=443, path='/', boto_debug=0 ):
+                 is_secure=True, port=443, path='/', boto_debug=0, test_resources=None):
         self.aws_access_key_id = aws_access_key_id
         self.aws_secret_access_key = aws_secret_access_key
         self.user_id = None
         self.account_id = None
+        if test_resources:
+            self.test_resource = test_resources
         super(IAMops, self).__init__(credpath=credpath)
-        self.setup_iam_connection(endpoint=endpoint, aws_access_key_id=self.aws_access_key_id ,
-                                  aws_secret_access_key=self.aws_secret_access_key, is_secure=is_secure, port=port,
-                                  path=path, boto_debug=boto_debug )
+        self.setup_iam_connection(endpoint=endpoint,
+                                  aws_access_key_id=self.aws_access_key_id,
+                                  aws_secret_access_key=self.aws_secret_access_key,
+                                  is_secure=is_secure,
+                                  port=port,
+                                  path=path,
+                                  boto_debug=boto_debug)
 
     def setup_iam_connection(self, endpoint="iam.amazonaws.com", aws_access_key_id=None,aws_secret_access_key=None,
-                             is_secure=True, port=443, path='/', boto_debug=0 ):
+                             is_secure=True, port=443, path='/', boto_debug=0):
         try:
-            euare_connection_args = { 'aws_access_key_id' : aws_access_key_id,
-                                      'aws_secret_access_key': aws_secret_access_key,
-                                      'is_secure': is_secure,
-                                      'debug':boto_debug,
-                                      'port' : port,
-                                      'path' : path,
-                                      'host' : endpoint}
-            self.debug("Attempting to create IAM connection to " + endpoint + ':' + str(port) + path)
+            euare_connection_args = {'aws_access_key_id' : aws_access_key_id,
+                                     'aws_secret_access_key': aws_secret_access_key,
+                                     'is_secure': is_secure,
+                                     'debug': boto_debug,
+                                     'port': port,
+                                     'path': path,
+                                     'host': endpoint}
             self.euare = boto.connect_iam(**euare_connection_args)
         except Exception, e:
             self.critical("Was unable to create IAM connection because of exception: " + str(e))
-
-    def get_iam_ip(self):
-        """Parse the eucarc for the EUARE_URL"""
-        iam_url = self.parse_eucarc("EUARE_URL")
-        return iam_url.split("/")[2].split(":")[0]
-
-    def get_iam_path(self):
-        """Parse the eucarc for the EUARE_URL"""
-        iam_url = self.parse_eucarc("EUARE_URL")
-        iam_path = "/".join(iam_url.split("/")[3:])
-        return iam_path
 
     def create_account(self,account_name):
         """

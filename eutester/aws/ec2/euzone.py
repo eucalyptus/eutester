@@ -74,7 +74,7 @@ class EuZone(Zone):
         get_zone.append('verbose')
         found = False
         try:
-            myzone = self.tester.ec2.get_all_zones(zones=get_zone)
+            myzone = self.tester.connection.get_all_zones(zones=get_zone)
         except Exception, e:
             tb = self.tester.get_traceback()
             raise Exception(str(tb) + '\n Could not get zone:' + str(self.name) + "\n" + str(e))

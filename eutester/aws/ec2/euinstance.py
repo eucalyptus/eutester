@@ -1615,7 +1615,7 @@ class EuInstance(Instance, TaggedResource):
             except Exception, e:
                raise Exception("Error in sync_volume_list attempting to detach badvol:"+str(badvol.id)+". Err:"+str(e))
                 
-        cloudlist=self.tester.ec2.get_all_volumes()
+        cloudlist=self.tester.connection.get_all_volumes()
         found = False
         for vol in cloudlist:
             #check to see if the volume is attached to us, but is not involved with the bdm for this instance

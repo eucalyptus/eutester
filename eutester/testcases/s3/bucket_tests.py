@@ -43,14 +43,14 @@ class BucketTestSuite(EutesterTestCase):
         self.buckets_used = set()
         
     def test_bucket_get_put_delete(self):
-        '''
+        """
         Method: Tests creating and deleting buckets as well as getting the bucket listing
-        '''
-        test_bucket=self.bucket_prefix + "-simple-test-bucket"
+        """
+        test_bucket = self.bucket_prefix + "-simple-test-bucket"
         self.buckets_used.add(test_bucket)
         self.tester.debug("Starting get/put/delete bucket test using bucket name: " + test_bucket)
  
-        try :
+        try:
             bucket = self.tester.s3.create_bucket(test_bucket)                
             if bucket == None:
                 self.tester.s3.delete_bucket(test_bucket)
@@ -58,7 +58,7 @@ class BucketTestSuite(EutesterTestCase):
         except (S3ResponseError, S3CreateError) as e:
             self.fail(test_bucket + " create caused exception: " + e)
         
-        try :    
+        try:
             bucket = self.tester.s3.get_bucket(test_bucket)
             if bucket == None:
                 self.tester.s3.delete_bucket(test_bucket)
@@ -66,10 +66,9 @@ class BucketTestSuite(EutesterTestCase):
         except S3ResponseError as e:
             self.tester.s3.delete_bucket(test_bucket)
             self.fail("Exception getting bucket" + e)
-            
-        
-        self.tester.s3.delete_bucket(test_bucket)        
-        try :
+
+        self.tester.s3.delete_bucket(test_bucket)
+        try:
             if self.tester.s3.get_bucket(test_bucket) != None:
                 self.tester.s3.delete_bucket(test_bucket)            
                 self.fail("Delete of " + test_bucket + " failed, still exists")
@@ -80,12 +79,12 @@ class BucketTestSuite(EutesterTestCase):
         def test_creating_bucket_invalid_names(bad_bucket):
             should_fail = False
             try:
-                bucket = self.tester.create_bucket(bad_bucket)
+                bucket = self.tester.s3.create_bucket(bad_bucket)
                 should_fail = True            
                 try:
-                    self.tester.delete_bucket(bucket)
+                    self.tester.s3.delete_bucket(bucket)
                 except:
-                    self.tester.debug( "Exception deleting bad bucket, shouldn't be here anyway. Test WILL fail" )
+                    self.tester.debug("Exception deleting bad bucket, shouldn't be here anyway. Test WILL fail")
             except Exception as e:
                 self.tester.debug("Correctly caught the exception for bucket name '" + bad_bucket + "' Reason: " + e.reason)
             if should_fail:
@@ -106,7 +105,7 @@ class BucketTestSuite(EutesterTestCase):
         """
         try:
             null_bucket_name = ""
-            bucket_obj = self.tester.create_bucket(null_bucket_name)
+            bucket_obj = self.tester.s3.create_bucket(null_bucket_name)
             self.tester.sleep(10)
             if bucket_obj:
                 self.fail("Should have caught exception for creating bucket with empty-string name.")
@@ -176,7 +175,7 @@ class BucketTestSuite(EutesterTestCase):
         #<Grant><Grantee xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="CanonicalUser"><ID>EXPECTED_ID</ID><DisplayName>EXPECTED_NAME</DisplayName></Grantee><Permission>READ</Permission></Grant>
         #</AccessControlList>'                
             
-        if acl_check == None or not self.tester.check_acl_equivalence(acl1=acl_check.acl, acl2=new_acl.acl):
+        if acl_check == None or not self.tester.s3.check_acl_equivalence(acl1=acl_check.acl, acl2=new_acl.acl):
             self.tester.s3.delete_bucket(test_bucket)
             self.fail("Incorrect acl length or acl not found\n. Got bucket ACL:\n" + acl_check.acl.to_xml() + "\nExpected:" + new_acl.acl.to_xml())
         else:
@@ -197,13 +196,13 @@ class BucketTestSuite(EutesterTestCase):
                 self.fail("Got exception trying to set acl to " + acl + ": " + str(e))
             
             self.tester.info( "Set canned-ACL: " + acl + " -- Got ACL from service: " + acl_check.acl.to_xml() )            
-            expected_acl = self.tester.get_canned_acl(bucket_owner_id=owner_id,canned_acl=acl, bucket_owner_display_name=owner_display_name)
+            expected_acl = self.tester.s3.get_canned_acl(bucket_owner_id=owner_id,canned_acl=acl, bucket_owner_display_name=owner_display_name)
                         
             if expected_acl == None:
                 self.tester.s3.delete_bucket(test_bucket)
                 self.fail("Got None when trying to generate expected acl for canned acl string: " + acl)
                         
-            if not self.tester.check_acl_equivalence(acl1=expected_acl, acl2=acl_check.acl):
+            if not self.tester.s3.check_acl_equivalence(acl1=expected_acl, acl2=acl_check.acl):
                 self.tester.s3.delete_bucket(test_bucket)
                 self.fail("Invalid " + acl + " acl returned from Walrus:\n" + acl_check.acl.to_xml() + "\nExpected\n" + expected_acl.to_xml())
             else:
@@ -233,9 +232,9 @@ class BucketTestSuite(EutesterTestCase):
             try:
                 testbucket = self.tester.s3.get_bucket(bucket_name=test_bucket_name)
             except S3ResponseError as err:
-                self.tester.debug( "Fatal error: could to create or get bucket" )
+                self.tester.debug("Fatal error: could to create or get bucket")
                 for b in self.tester.s3.get_all_buckets():
-                    self.tester.debug( "Bucket: " + b.name   )             
+                    self.tester.debug("Bucket: " + b.name)
                 self.fail("Could not setup bucket, " + test_bucket_name + " for test: " + err.error_message )
 
         prefix = "users"
@@ -257,16 +256,16 @@ class BucketTestSuite(EutesterTestCase):
             key.set_contents_from_string("aoiavsvjasldfjadfiajss")
     
         keys = testbucket.get_all_keys(prefix=prefix, delimiter=delim, max_keys=10)
-        self.tester.debug( "Prefix with 10 keys max returned: " + str(len(keys)) + " results" )
+        self.tester.debug("Prefix with 10 keys max returned: " + str(len(keys)) + " results")
         
         for k in keys:
-                self.tester.debug( k )
+                self.tester.debug(k)
             
         keys = testbucket.get_all_keys(prefix=prefix, delimiter=delim, max_keys=20)
         self.tester.debug( "Prefix with 20 keys max returned: " + str(len(keys)) + " results" )
         
         for k in keys:
-                self.tester.debug( k )
+                self.tester.debug(k)
             
         print "Cleaning up the bucket"
         for i in range(10):
@@ -277,8 +276,7 @@ class BucketTestSuite(EutesterTestCase):
 
         print "Deleting the bucket"
         self.tester.s3.delete_bucket(testbucket)
-        
-        
+
     def test_bucket_location(self):        
         test_bucket = self.bucket_prefix + "location_test_bucket"
         self.tester.info('Starting bucket location test using bucket: ' + test_bucket)
@@ -292,7 +290,7 @@ class BucketTestSuite(EutesterTestCase):
             self.fail("Bucket location test failed, could not get bucket or location is not 'US'")        
         
         test_bucket = self.bucket_prefix + "eu_location_test"
-        bucket = self.tester.s3.create_bucket(test_bucket,location=Location.EU)
+        bucket = self.tester.s3.create_bucket(test_bucket, location=Location.EU)
         self.buckets_used.add(test_bucket)
         if bucket == None:
             self.fail("Bucket creation at location EU failed")
@@ -504,13 +502,14 @@ class BucketTestSuite(EutesterTestCase):
         self.fail("Feature Not implemented")
 
     def test_bucket_lifecycle(self):
+        # TODO add lifecycle operation in s3ops
         lifecycle_id = 'eutester lifecycle test'
         lifecycle_prefix = 'eulifecycle'
         lifecycle_status = 'Enabled'
         lifecycle_expiration = 1
         bucket_name = self.bucket_prefix + "lifecycle-test0"
         self.buckets_used.add(bucket_name)
-        bucket = self.tester.create_bucket(bucket_name)
+        bucket = self.tester.s3.create_bucket(bucket_name)
 
         lifecycle = Lifecycle()
         lifecycle.add_rule(lifecycle_id, lifecycle_prefix, lifecycle_status, lifecycle_expiration)
@@ -528,7 +527,7 @@ class BucketTestSuite(EutesterTestCase):
 
         # multiple rules
         bucket_name = self.bucket_prefix + "lifecycle-test1"
-        bucket = self.tester.create_bucket(bucket_name)
+        bucket = self.tester.s3.create_bucket(bucket_name)
         self.buckets_used.add(bucket_name)
         date = '2022-10-12T00:10:10.011Z'
         lifecycle = Lifecycle()
@@ -563,7 +562,7 @@ class BucketTestSuite(EutesterTestCase):
 
         self.debug("Cleaning up used buckets")
         for bucket in self.buckets_used:
-            self.tester.clear_bucket(bucket)
+            self.tester.s3.clear_bucket(bucket)
 
     def test_bucket_policy(self):
         self.fail("Feature Not implemented")
@@ -580,7 +579,7 @@ class BucketTestSuite(EutesterTestCase):
                 self.tester.info('Checking bucket ' + bucket + ' for possible cleaning/delete')
                 if self.tester.s3.bucket_exists(bucket):
                     self.tester.info('Found bucket exists, cleaning it')
-                    self.tester.clear_bucket(bucket)
+                    self.tester.s3.clear_bucket(bucket)
                     self.buckets_used.remove(bucket)
                 else:
                     self.tester.info('Bucket ' + bucket + ' not found, skipping')
@@ -592,16 +591,17 @@ class BucketTestSuite(EutesterTestCase):
 if __name__ == "__main__":
     testcase = BucketTestSuite()
     ### Either use the list of tests passed from config/command line to determine what subset of tests to run
-    list = testcase.args.tests or [ 'test_bucket_get_put_delete', \
-                                   #'test_bucket_acl', \ FAILING AS OF 3.3.1
-                                   'test_bucket_key_list_delim_prefix', \
-                                   'test_bucket_key_listing_paging', \
-                                   'test_bucket_location', \
-                                   'test_bucket_versioning']
+    list = testcase.args.tests or ['test_bucket_get_put_delete',
+                                   'test_bucket_key_list_delim_prefix',
+                                   'test_bucket_key_listing_paging',
+                                   'test_bucket_versioning',
+                                   'test_bucket_location']
+                                 # 'test_bucket_acl', \ FAILING AS OF 3.3.1
+                                 # 'test_bucket_lifecycle', # check why not added
     ### Convert test suite methods to EutesterUnitTest objects
-    unit_list = [ ]
+    unit_list = []
     for test in list:
-        unit_list.append( testcase.create_testunit_by_name(test) )
+        unit_list.append(testcase.create_testunit_by_name(test))
     ### Run the EutesterUnitTest objects
 
     result = testcase.run_test_case_list(unit_list,clean_on_exit=True)

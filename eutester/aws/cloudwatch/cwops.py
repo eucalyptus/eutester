@@ -100,6 +100,7 @@ class CWops(Eutester):
         self.aws_secret_access_key = aws_secret_access_key
         self.account_id = None
         self.user_id = None
+        self.connection = None
         super(CWops, self).__init__(credpath=credpath)
 
         self.setup_cw_connection(host=host,
@@ -116,10 +117,8 @@ class CWops(Eutester):
         self.test_resources = {}
         self.setup_cw_resource_trackers()
 
-    @Eutester.printinfo
     def setup_cw_connection(self, endpoint=None, aws_access_key_id=None, aws_secret_access_key=None, is_secure=True,
-                            host=None,
-                            region=None, path='/', port=443, boto_debug=0):
+                            host=None, region=None, path='/', port=443, boto_debug=0):
         '''
 
         :param endpoint:
@@ -166,7 +165,7 @@ class CWops(Eutester):
             cw_connection_args['path'] = path
             cw_connection_args['region'] = cw_region
             self.debug('Attempting to create cloud watch connection to ' + cw_region.endpoint + ':' + str(port) + path)
-            self.cw = boto.connect_cloudwatch(**cw_connection_args)
+            self.connection = boto.connect_cloudwatch(**cw_connection_args)
         except Exception, e:
             self.critical('Was unable to create Cloud Watch connection because of exception: ' + str(e))
 
@@ -178,24 +177,13 @@ class CWops(Eutester):
         self.test_resources['metric'] = []
         self.test_resources['datapoint'] = []
 
-    def get_cw_ip(self):
-        '''Parse the eucarc for the AWS_CLOUDWATCH_URL'''
-        cw_url = self.parse_eucarc('AWS_CLOUDWATCH_URL')
-        return cw_url.split('/')[2].split(':')[0]
-
-    def get_cw_path(self):
-        """Parse the eucarc for the AWS_CLOUDWATCH_URL"""
-        cw_url = self.parse_eucarc("AWS_CLOUDWATCH_URL")
-        cw_path = "/".join(cw_url.split("/")[3:])
-        return cw_path
-
     def get_namespaces(self):
         '''
         Convenience function for easily segregating metrics into their namespaces
 
         :return: Dict where key is the Namespace and the value is a list with all metrics
         '''
-        metrics= self.cw.list_metrics()
+        metrics= self.connection.list_metrics()
         namespaces = {}
         for metric in metrics:
             if not namespaces[metric.namespace]:
@@ -206,17 +194,17 @@ class CWops(Eutester):
 
     def list_metrics( self, next_token=None, dimensions=None, metric_name=None, namespace=None ):
         self.debug('Calling list_metrics( {p1}, {p2}, {p3}, {p4} )'.format(p1=next_token, p2=dimensions, p3=metric_name, p4=namespace))
-        return self.cw.list_metrics(next_token , dimensions, metric_name, namespace)
+        return self.connection.list_metrics(next_token , dimensions, metric_name, namespace)
 
     def get_metric_statistics( self, period, start_time, end_time, metric_name, namespace, statistics, dimensions=None, unit=None):
         self.debug('Calling get_metric_statistics( {p1}, {p2}, {p3}, {p4}, {p5}, {p6}, {p7}, {p8} )'.format(
                    p1=period, p2=start_time, p3=end_time, p4=metric_name, p5=namespace, p6=statistics, p7=dimensions, p8=unit))
-        return self.cw.get_metric_statistics(period, start_time, end_time, metric_name, namespace, statistics, dimensions, unit)
+        return self.connection.get_metric_statistics(period, start_time, end_time, metric_name, namespace, statistics, dimensions, unit)
 
     def put_metric_data( self, namespace, name, value=None, timestamp=None, unit=None, dimensions=None, statistics=None):
         self.debug('Calling put_metric_data( {p1}, {p2}, {p3}, {p4}, {p5}, {p6}, {p7} )'.format(
                    p1=namespace, p2=name, p3=value, p4=timestamp, p5=unit, p6=dimensions, p7=dimensions))
-        return self.cw.put_metric_data(namespace, name, value, timestamp, unit, dimensions, statistics)
+        return self.connection.put_metric_data(namespace, name, value, timestamp, unit, dimensions, statistics)
 
     def metric_alarm(self, name, metric, comparison, threshold, period, evaluation_periods, statistic,
                      description=None, dimensions=None, alarm_actions=None,
@@ -235,33 +223,33 @@ class CWops(Eutester):
 
     def put_metric_alarm(self, alarm):
         self.debug('Calling put_metric_alarm (' + str(alarm) +')')
-        self.cw.put_metric_alarm(alarm)
+        self.connection.put_metric_alarm(alarm)
 
     def set_alarm_state(self, alarm_name, state_reason='testing', state_value='ALARM', state_reason_data=None):
         self.debug('Calling set_alarm_state( {p1}, {p2}, {p3}, {p4})'.format( p1=alarm_name, p2=state_reason, p3=state_value, p4=state_reason_data))
-        self.cw.set_alarm_state(alarm_name, state_reason, state_value)
+        self.connection.set_alarm_state(alarm_name, state_reason, state_value)
 
     def delete_all_alarms(self):
-        self.debug('Calling delete_all_alarms(' + str(self.cw.describe_alarms()) + ')')
-        alarms = self.cw.describe_alarms()
+        self.debug('Calling delete_all_alarms(' + str(self.connection.describe_alarms()) + ')')
+        alarms = self.connection.describe_alarms()
         if alarms:
             alarm_names = [alarm.name for alarm in alarms]
-            self.cw.delete_alarms(alarm_names)
+            self.connection.delete_alarms(alarm_names)
 
     def describe_alarms(self, action_prefix=None, alarm_name_prefix=None, alarm_names=None, max_records=None, state_value=None, next_token=None):
         self.debug('Calling describe_alarms( {p1}, {p2}, {p3}, {p4}, {p5}, {p6} )'.format(p1=action_prefix, p2=alarm_name_prefix, p3=alarm_names,
                    p4=max_records, p5=state_value, p6=next_token))
-        return self.cw.describe_alarms(action_prefix, alarm_name_prefix, alarm_names, max_records, state_value, next_token)
+        return self.connection.describe_alarms(action_prefix, alarm_name_prefix, alarm_names, max_records, state_value, next_token)
 
     def describe_alarms_for_metric(self, metric_name, namespace, period=None, statistic=None, dimensions=None, unit=None):
         self.debug('Calling describe_alarms_for_metric( {p1}, {p2}, {p3}, {p4}, {p5}, {p6} )'.format(p1=metric_name, p2=namespace, p3=period, p4=statistic,
                    p5=dimensions, p6=unit))
-        return self.cw.describe_alarms_for_metric(metric_name, namespace, period, statistic, dimensions, unit)
+        return self.connection.describe_alarms_for_metric(metric_name, namespace, period, statistic, dimensions, unit)
 
     def describe_alarm_history(self, alarm_name=None, start_date=None, end_date=None, max_records=None, history_item_type=None, next_token=None):
         self.debug('Calling describe_alarm_history( {p1}, {p2}, {p3}, {p4}, {p5}, {p6} )'.format(p1=alarm_name, p2=start_date, p3=end_date, p4=max_records, 
                   p5=history_item_type, p6=next_token))
-        return self.cw.describe_alarm_history(alarm_name, start_date, end_date, max_records, history_item_type, next_token)
+        return self.connection.describe_alarm_history(alarm_name, start_date, end_date, max_records, history_item_type, next_token)
 
     def get_dimension_array(self):
         return DimensionArray
@@ -280,11 +268,11 @@ class CWops(Eutester):
 
     def enable_alarm_actions(self, alarm_names ):
         self.debug('Calling enable_alarm_actions( ' + str(alarm_names) + ' )')
-        self.cw.enable_alarm_actions(alarm_names)
+        self.connection.enable_alarm_actions(alarm_names)
 
     def disable_alarm_actions(self, alarm_names ):
         self.debug('Calling disable_alarm_actions( ' + str(alarm_names) + ' )')
-        self.cw.disable_alarm_actions(alarm_names)
+        self.connection.disable_alarm_actions(alarm_names)
 
     def validateStats(self, values):
         average = float(values[0])

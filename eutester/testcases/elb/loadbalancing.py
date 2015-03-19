@@ -57,35 +57,35 @@ class LoadBalancing(EutesterTestCase):
         self.tester.poll_count = 120
 
         ### Add and authorize a group for the instance
-        self.group = self.tester.add_group(group_name="group-" + str(int(time.time())))
-        self.tester.authorize_group_by_name(group_name=self.group.name )
-        self.tester.authorize_group_by_name(group_name=self.group.name, port=-1, protocol="icmp" )
+        self.group = self.tester.ec2.add_group(group_name="group-" + str(int(time.time())))
+        self.tester.ec2.authorize_group_by_name(group_name=self.group.name )
+        self.tester.ec2.authorize_group_by_name(group_name=self.group.name, port=-1, protocol="icmp" )
         ### Generate a keypair for the instance
-        self.keypair = self.tester.add_keypair( "keypair-" + str(int(time.time())))
+        self.keypair = self.tester.ec2.add_keypair( "keypair-" + str(int(time.time())))
         self.keypath = '%s/%s.pem' % (os.curdir, self.keypair.name)
         ### Get an image
         self.image = self.args.emi
         if not self.image:
-            self.image = self.tester.get_emi()
+            self.image = self.tester.ec2.get_emi()
 
         ### Populate available zones
-        zones = self.tester.ec2.get_all_zones()
+        zones = self.tester.ec2.connection.get_all_zones()
         self.zone = random.choice(zones).name
 
         self.load_balancer_port = 80
 
-        (self.web_servers, self.filename) = self.tester.create_web_servers(keypair=self.keypair,
+        (self.web_servers, self.filename) = self.tester.ec2.create_web_servers(keypair=self.keypair,
                                                                           group=self.group,
                                                                           zone=self.zone,
                                                                           port=self.load_balancer_port,
                                                                           filename='instance-name',
                                                                           image=self.image)
 
-        self.load_balancer = self.tester.create_load_balancer(zones=[self.zone],
+        self.load_balancer = self.tester.elb.create_load_balancer(zones=[self.zone],
                                                               name="test-" + str(int(time.time())),
                                                               load_balancer_port=self.load_balancer_port)
         assert isinstance(self.load_balancer, LoadBalancer)
-        self.tester.register_lb_instances(self.load_balancer.name,
+        self.tester.elb.register_lb_instances(self.load_balancer.name,
                                           self.web_servers.instances)
 
     def clean_method(self):
@@ -99,7 +99,7 @@ class LoadBalancing(EutesterTestCase):
         dns = self.tester.service_manager.get_enabled_dns()
         lb_ip = dns.resolve(self.load_balancer.dns_name)
         lb_url = "http://{0}:{1}/instance-name".format(lb_ip, self.load_balancer_port)
-        self.tester.generate_http_requests(url=lb_url, count=1000)
+        self.tester.elb.generate_http_requests(url=lb_url, count=1000)
 
 if __name__ == "__main__":
     testcase = LoadBalancing()

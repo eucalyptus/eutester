@@ -37,6 +37,7 @@ import boto
 from concurrent.futures import ThreadPoolExecutor
 import urllib2
 import cookielib
+import requests
 from eutester import Eutester
 from boto.ec2.elb.listener import Listener
 from boto.ec2.elb.healthcheck import HealthCheck
@@ -52,9 +53,8 @@ ELBRegionData = {
 
 
 class ELBops(Eutester):
-    @Eutester.printinfo
     def __init__(self, host=None, credpath=None, endpoint=None, aws_access_key_id=None, aws_secret_access_key=None,
-                 username="root", region=None, is_secure=False, path='/', port=80, boto_debug=0):
+                 username="root", region=None, is_secure=False, path='/', port=80, boto_debug=0, test_resources=None):
         """
 
         :param host:
@@ -73,6 +73,10 @@ class ELBops(Eutester):
         self.aws_secret_access_key = aws_secret_access_key
         self.account_id = None
         self.user_id = None
+        self.connection = None
+        if test_resources:
+            self.test_resources = test_resources
+
         super(ELBops, self).__init__(credpath=credpath)
 
         self.setup_elb_connection(host=host,
@@ -86,13 +90,9 @@ class ELBops(Eutester):
                                   boto_debug=boto_debug)
         self.poll_count = 48
         self.username = username
-        self.test_resources = {}
-        self.setup_elb_resource_trackers()
 
-    @Eutester.printinfo
     def setup_elb_connection(self, endpoint=None, aws_access_key_id=None, aws_secret_access_key=None, is_secure=True,
-                             host=None,
-                             region=None, path="/", port=443, boto_debug=0):
+                             host=None, region=None, path="/", port=443, boto_debug=0):
         """
 
         :param endpoint:
@@ -140,7 +140,7 @@ class ELBops(Eutester):
             elb_connection_args['region'] = elb_region
             self.debug(
                 "Attempting to create load balancer connection to " + elb_region.endpoint + ':' + str(port) + path)
-            self.elb = boto.connect_elb(**elb_connection_args)
+            self.connection = boto.connect_elb(**elb_connection_args)
         except Exception, e:
             self.critical("Was unable to create elb connection because of exception: " + str(e))
 
@@ -149,17 +149,6 @@ class ELBops(Eutester):
         Setup keys in the test_resources hash in order to track artifacts created
         """
         self.test_resources["load_balancers"] = []
-
-    def get_elb_ip(self):
-        """Parse the eucarc for the AWS_ELB_URL"""
-        elb_url = self.parse_eucarc("AWS_ELB_URL")
-        return elb_url.split("/")[2].split(":")[0]
-
-    def get_elb_path(self):
-        """Parse the eucarc for the AWS_ELB_URL"""
-        elb_url = self.parse_eucarc("AWS_ELB_URL")
-        elb_path = "/".join(elb_url.split("/")[3:])
-        return elb_path
 
     def create_listener(self, load_balancer_port=80, protocol="HTTP", instance_port=80, load_balancer=None):
         self.debug(
@@ -191,15 +180,15 @@ class ELBops(Eutester):
         response_futures = []
         with ThreadPoolExecutor(max_workers=worker_threads) as executor:
             for _ in range(count):
-                response_futures.append(executor.submit(urllib2.urlopen, url))
+                response_futures.append(executor.submit(requests.get, url))
 
         responses = []
         for response in response_futures:
             http_response = response.result()
             try:
-                http_error_code = http_response.getcode()
+                http_error_code = http_response.status_code
                 if http_error_code == 200:
-                    result = "{0}".format(http_response.read().rstrip())
+                    result = "{0}".format(http_response.content.rstrip())
                     self.debug("Request response: " + result)
                     responses.append(result)
                 else:
@@ -212,11 +201,11 @@ class ELBops(Eutester):
     def register_lb_instances(self, name, instances, timeout=360, poll_count=15):
         inst_ids = [inst.id for inst in instances]
         self.debug("Registering instances {0} with lb {1}".format(inst_ids, name))
-        self.elb.register_instances(name, inst_ids)
+        self.connection.register_instances(name, inst_ids)
         poll_sleep = timeout / poll_count
         for _ in range(poll_count):
             self.debug("Checking instance health for {0}".format(inst_ids))
-            inst_states = self.elb.describe_instance_health(name, instances=inst_ids)
+            inst_states = self.connection.describe_instance_health(name, instances=inst_ids)
             states = [state.state for state in inst_states]
             if not states or 'OutOfService' in states:
                 time.sleep(poll_sleep)
@@ -231,16 +220,16 @@ class ELBops(Eutester):
     def create_load_balancer(self, zones, name="test", load_balancer_port=80, instances=None):
         self.debug("Creating load balancer: " + name + " on port " + str(load_balancer_port))
         listener = self.create_listener(load_balancer_port=load_balancer_port)
-        self.elb.create_load_balancer(name, zones=zones, listeners=[listener])
+        self.connection.create_load_balancer(name, zones=zones, listeners=[listener])
 
         healthcheck = self.create_healthcheck()
-        self.elb.configure_health_check(name, healthcheck)
+        self.connection.configure_health_check(name, healthcheck)
 
         if instances:
             self.register_instances(name, instances)
 
         ### Validate the creation of the load balancer
-        lbs = self.elb.get_all_load_balancers(load_balancer_names=[name])
+        lbs = self.connection.get_all_load_balancers(load_balancer_names=[name])
         if not "load_balancers" in self.test_resources:
             self.test_resources["load_balancers"] = []
 
@@ -256,10 +245,10 @@ class ELBops(Eutester):
 
     def delete_load_balancer(self, lb, timeout=60, poll_sleep=10):
         self.debug("Deleting Loadbalancer: {0}".format(lb.name))
-        self.elb.delete_load_balancer(lb.name)
+        self.connection.delete_load_balancer(lb.name)
         poll_count = timeout / poll_sleep
         for _ in range(poll_count):
-            lbs = self.elb.get_all_load_balancers(load_balancer_names=[lb.name])
+            lbs = self.connection.get_all_load_balancers(load_balancer_names=[lb.name])
             if lb in lbs:
                 time.sleep(poll_sleep)
         if lb in self.test_resources["load_balancers"]:
@@ -267,45 +256,45 @@ class ELBops(Eutester):
 
     def create_app_cookie_stickiness_policy(self, name, lb_name, policy_name):
         self.debug("Create app cookie stickiness policy: " + str(policy_name))
-        self.elb.create_app_cookie_stickiness_policy(name=name,
+        self.connection.create_app_cookie_stickiness_policy(name=name,
                                                      lb_name=lb_name,
                                                      policy_name=policy_name)
 
     def create_lb_cookie_stickiness_policy(self, cookie_expiration_period, lb_name, policy_name):
         self.debug("Create lb cookie stickiness policy: " + str(policy_name))
-        self.elb.create_lb_cookie_stickiness_policy(cookie_expiration_period=cookie_expiration_period,
+        self.connection.create_lb_cookie_stickiness_policy(cookie_expiration_period=cookie_expiration_period,
                                                     lb_name=lb_name,
                                                     policy_name=policy_name)
 
     def create_lb_policy(self, lb_name, policy_name, policy_type, policy_attributes):
         self.debug("Create lb policy: " + str(policy_name))
-        self.elb.create_lb_policy(lb_name=lb_name,
+        self.connection.create_lb_policy(lb_name=lb_name,
                                   policy_name=policy_name,
                                   policy_type=policy_type,
                                   policy_attributes=policy_attributes)
 
     def set_lb_policy(self, lb_name, lb_port, policy_name=None):
         self.debug("Set policy " + str(policy_name) + " for " + lb_name)
-        self.elb.set_lb_policies_of_listener(lb_name=lb_name,
+        self.connection.set_lb_policies_of_listener(lb_name=lb_name,
                                              lb_port=lb_port,
                                              policies=policy_name)
 
     def delete_lb_policy(self, lb_name, policy_name):
         self.debug("Deleting lb policy " + str(policy_name) + " from " + str(lb_name))
-        self.elb.delete_lb_policy(lb_name=lb_name,
+        self.connection.delete_lb_policy(lb_name=lb_name,
                                   policy_name=policy_name)
 
     def describe_lb_policies(self, lb):
-        lbs = self.elb.get_all_load_balancers(load_balancer_names=[lb])
+        lbs = self.connection.get_all_load_balancers(load_balancer_names=[lb])
         return lbs[0].policies
 
     def add_lb_listener(self, lb_name, listener):
         self.debug("adding listener")
-        self.elb.create_load_balancer_listeners(name=lb_name, listeners=[listener])
+        self.connection.create_load_balancer_listeners(name=lb_name, listeners=[listener])
 
     def remove_lb_listener(self, lb_name, port):
         self.debug("removing listener")
-        self.elb.delete_load_balancer_listeners(name=lb_name, ports=[port])
+        self.connection.delete_load_balancer_listeners(name=lb_name, ports=[port])
 
     def add_server_cert(self, cert_name, cert_dir="./testcases/cloud_user/elb/test_data",
                         cert_file="ssl_server_certs_basics.crt",

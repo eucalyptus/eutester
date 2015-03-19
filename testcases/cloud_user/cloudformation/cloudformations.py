@@ -36,8 +36,9 @@ from troposphere import Base64, FindInMap, GetAtt
 from troposphere import Parameter, Ref, Template
 import troposphere.ec2 as ec2
 import time
-from eucaops import Eucaops, CFNops
-from eutester.eutestcase import EutesterTestCase
+from eutester.aws.cloudformation.cfnops import CFNops
+from eutester.euca.euca_ops import Eucaops
+from eutester.utils.eutestcase import EutesterTestCase
 import os
 
 class CloudFormations(EutesterTestCase):
@@ -53,11 +54,11 @@ class CloudFormations(EutesterTestCase):
             self.tester = CFNops( credpath=self.args.credpath, region=self.args.region)
         else:
             self.tester = Eucaops( credpath=self.args.credpath, config_file=self.args.config,password=self.args.password)
-        self.group = self.tester.add_group(group_name="group-" + str(time.time()))
-        self.tester.authorize_group_by_name(group_name=self.group.name)
-        self.tester.authorize_group_by_name(group_name=self.group.name, port=-1, protocol="icmp")
+        self.group = self.tester.ec2.add_group(group_name="group-" + str(time.time()))
+        self.tester.ec2.authorize_group_by_name(group_name=self.group.name)
+        self.tester.ec2.authorize_group_by_name(group_name=self.group.name, port=-1, protocol="icmp")
         ### Generate a keypair for the instance
-        self.keypair = self.tester.add_keypair("keypair-" + str(time.time()))
+        self.keypair = self.tester.ec2.add_keypair("keypair-" + str(time.time()))
         self.keypath = '%s/%s.pem' % (os.curdir, self.keypair.name)
 
     def InstanceVolumeTemplate(self):
@@ -66,7 +67,7 @@ class CloudFormations(EutesterTestCase):
         keyname_param = template.add_parameter(Parameter("KeyName", Description="Name of an existing EC2 KeyPair "
                                                                                 "to enable SSH access to the instance",
                                                          Type="String",))
-        template.add_mapping('RegionMap', {"": {"AMI": self.tester.get_emi().id}})
+        template.add_mapping('RegionMap', {"": {"AMI": self.tester.ec2.get_emi().id}})
         for i in xrange(2):
             ec2_instance = template.add_resource(ec2.Instance("Instance{0}".format(i),
                                                               ImageId=FindInMap("RegionMap", Ref("AWS::Region"), "AMI"),
@@ -76,11 +77,11 @@ class CloudFormations(EutesterTestCase):
                                                    AvailabilityZone=GetAtt("Instance{0}".format(i), "AvailabilityZone")))
             mount = template.add_resource(ec2.VolumeAttachment("MountPt{0}".format(i), InstanceId=Ref("Instance{0}".format(i)),
                                                                VolumeId=Ref("Volume{0}".format(i)), Device="/dev/vdc"))
-        stack = self.tester.create_stack(self.stack_name, template.to_json(), parameters=[("KeyName",self.keypair.name)])
+        stack = self.tester.cloudformation.create_stack(self.stack_name, template.to_json(), parameters=[("KeyName",self.keypair.name)])
         def stack_completed():
             return self.tester.cloudformation.describe_stacks(self.stack_name).status == "CREATE_COMPLETE"
         self.tester.wait_for_result(stack_completed, True, timeout=600)
-        self.tester.delete_stack(self.stack_name)
+        self.tester.cloudformation.delete_stack(self.stack_name)
 
     def clean_method(self):
         self.tester.cleanup_artifacts()

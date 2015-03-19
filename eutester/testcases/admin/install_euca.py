@@ -2,8 +2,8 @@ import json
 
 __author__ = 'viglesias'
 import re
-from eucaops import Eucaops
-from eutester.eutestcase import EutesterTestCase
+from eutester.euca.euca_ops import Eucaops
+from eutester.utils.eutestcase import EutesterTestCase
 
 class Install(EutesterTestCase):
 

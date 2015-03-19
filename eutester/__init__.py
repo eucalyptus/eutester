@@ -82,11 +82,88 @@ class Eutester(object):
 
         ### Pull the access and secret keys from the eucarc or use the ones provided to the constructor
         if self.credpath is not None:
-            self.debug("Extracting keys from " + self.credpath)         
+            # self.debug("Extracting keys from " + self.credpath)
             self.aws_access_key_id = self.get_access_key()
             self.aws_secret_access_key = self.get_secret_key()
             self.account_id = self.get_account_id()
             self.user_id = self.get_user_id()
+
+    def get_ec2_ip(self):
+        """Parse the eucarc for the EC2_URL"""
+        ec2_url = self.parse_eucarc("EC2_URL")
+        return ec2_url.split("/")[2].split(":")[0]
+
+    def get_ec2_path(self):
+        """Parse the eucarc for the EC2_URL"""
+        ec2_url = self.parse_eucarc("EC2_URL")
+        ec2_path = "/".join(ec2_url.split("/")[3:])
+        return ec2_path
+
+    def get_s3_ip(self):
+        """Parse the eucarc for the S3_URL"""
+        s3_url = self.parse_eucarc("S3_URL")
+        return s3_url.split("/")[2].split(":")[0]
+
+    def get_s3_path(self):
+        """Parse the eucarc for the S3_URL"""
+        s3_url = self.parse_eucarc("S3_URL")
+        s3_path = "/".join(s3_url.split("/")[3:])
+        return s3_path
+
+    def get_elb_ip(self):
+        """Parse the eucarc for the AWS_ELB_URL"""
+        elb_url = self.parse_eucarc("AWS_ELB_URL")
+        return elb_url.split("/")[2].split(":")[0]
+
+    def get_elb_path(self):
+        """Parse the eucarc for the AWS_ELB_URL"""
+        elb_url = self.parse_eucarc("AWS_ELB_URL")
+        elb_path = "/".join(elb_url.split("/")[3:])
+        return elb_path
+
+    def get_as_ip(self):
+        """Parse the eucarc for the AWS_AUTO_SCALING_URL"""
+        as_url = self.parse_eucarc("AWS_AUTO_SCALING_URL")
+        return as_url.split("/")[2].split(":")[0]
+
+    def get_as_path(self):
+        """Parse the eucarc for the AWS_AUTO_SCALING_URL"""
+        as_url = self.parse_eucarc("AWS_AUTO_SCALING_URL")
+        as_path = "/".join(as_url.split("/")[3:])
+        return as_path
+
+    def get_iam_ip(self):
+        """Parse the eucarc for the EUARE_URL"""
+        iam_url = self.parse_eucarc("EUARE_URL")
+        return iam_url.split("/")[2].split(":")[0]
+
+    def get_iam_path(self):
+        """Parse the eucarc for the EUARE_URL"""
+        iam_url = self.parse_eucarc("EUARE_URL")
+        iam_path = "/".join(iam_url.split("/")[3:])
+        return iam_path
+
+    def get_cfn_ip(self):
+        """Parse the eucarc for the AWS_CLOUDFORMATION_URL"""
+        cfn_url = self.parse_eucarc("AWS_CLOUDFORMATION_URL")
+        return cfn_url.split("/")[2].split(":")[0]
+
+    def get_cfn_path(self):
+        """Parse the eucarc for the AWS_CLOUDFORMATION_URL"""
+        cfn_url = self.parse_eucarc("AWS_CLOUDFORMATION_URL")
+        cfn_path = "/".join(cfn_url.split("/")[3:])
+        return cfn_path
+
+    def get_cw_ip(self):
+        '''Parse the eucarc for the AWS_CLOUDWATCH_URL'''
+        cw_url = self.parse_eucarc('AWS_CLOUDWATCH_URL')
+        return cw_url.split('/')[2].split(':')[0]
+
+    def get_cw_path(self):
+        """Parse the eucarc for the AWS_CLOUDWATCH_URL"""
+        cw_url = self.parse_eucarc("AWS_CLOUDWATCH_URL")
+        cw_path = "/".join(cw_url.split("/")[3:])
+        return cw_path
 
     def get_access_key(self):
         if not self.aws_access_key_id:     

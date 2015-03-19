@@ -29,11 +29,12 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 # Author: vic.iglesias@eucalyptus.com
+from boto.s3.bucket import Bucket
 
 from eutester import Eutester
 import os
 import hashlib
-from boto.s3.connection import OrdinaryCallingFormat
+from boto.s3.connection import OrdinaryCallingFormat, S3Connection
 from boto.s3.key import Key
 from boto.s3.acl import ACL, Grant
 from boto.exception import S3ResponseError
@@ -59,31 +60,54 @@ class S3ops(Eutester):
              "log_delivery":"http://acs.amazonaws.com/groups/s3/LogDelivery"
              }
 
-    def __init__(self, endpoint=None, credpath=None, aws_access_key_id=None, aws_secret_access_key = None, is_secure=False, path="/", port=80, boto_debug=0):
+    def __init__(self,
+                 endpoint=None,
+                 credpath=None,
+                 aws_access_key_id=None,
+                 aws_secret_access_key=None,
+                 is_secure=False,
+                 path="/",
+                 port=80,
+                 boto_debug=0,
+                 test_resources=None):
         self.aws_access_key_id = aws_access_key_id
         self.aws_secret_access_key = aws_secret_access_key
         self.user_id = None
         self.account_id = None
+        self.connection = None
+
         super(S3ops, self).__init__(credpath=credpath)
-        self.setup_s3_connection(endpoint=endpoint, aws_access_key_id=self.aws_access_key_id ,aws_secret_access_key=self.aws_secret_access_key, is_secure=is_secure, path=path, port=port, boto_debug=boto_debug)
-        self.test_resources = {}
+        self.setup_s3_connection(endpoint=endpoint,
+                                 aws_access_key_id=self.aws_access_key_id,
+                                 aws_secret_access_key=self.aws_secret_access_key,
+                                 is_secure=is_secure,
+                                 path=path,
+                                 port=port,
+                                 boto_debug=boto_debug)
+        if test_resources:
+            self.test_resources = test_resources
         self.setup_s3_resource_trackers()
 
-    def setup_s3_connection(self, endpoint=None, aws_access_key_id=None, aws_secret_access_key=None, is_secure=False, path="/", port=80, boto_debug=0):
+    def setup_s3_connection(self,
+                            endpoint=None,
+                            aws_access_key_id=None,
+                            aws_secret_access_key=None,
+                            is_secure=False,
+                            path="/",
+                            port=80,
+                            boto_debug=0):
         try:
             if not endpoint:
                 endpoint = self.get_s3_ip()
-            s3_connection_args = { 'aws_access_key_id' :aws_access_key_id,
-                                   'aws_secret_access_key': aws_secret_access_key,
-                                   'is_secure': is_secure,
-                                   'host' : endpoint,
-                                   'path'  : path,
-                                   'port' : port,
-                                   'debug':boto_debug,
-                                   'calling_format':OrdinaryCallingFormat(),
-                                   }
-            self.debug("Attempting to create S3 connection to " + endpoint + ':' + str(port) + path)
-            self.s3 = boto.connect_s3(**s3_connection_args)
+            s3_connection_args = {'aws_access_key_id' :aws_access_key_id,
+                                  'aws_secret_access_key': aws_secret_access_key,
+                                  'is_secure': is_secure,
+                                  'host': endpoint,
+                                  'path': path,
+                                  'port': port,
+                                  'debug': boto_debug,
+                                  'calling_format': OrdinaryCallingFormat()}
+            self.connection = boto.connect_s3(**s3_connection_args)
         except Exception, e:
             raise Exception("Was unable to create S3 connection because of exception: " + str(e))
 
@@ -94,18 +118,18 @@ class S3ops(Eutester):
         self.test_resources["keys"] = []
         self.test_resources["buckets"] = []
 
-    def get_s3_ip(self):
-        """Parse the eucarc for the S3_URL"""
-        s3_url = self.parse_eucarc("S3_URL")
-        return s3_url.split("/")[2].split(":")[0]
+    def get_bucket(self, bucket_name):
+        """
+        Bring balance in the force.
+        Basically this method just returns the output using boto connection,
+        but may be in future it will do something meaningful.
+        This wrapper ensures that tester can continue using eutester APIs.
+        :param bucket_name:
+        :return:
+        """
+        return self.connection.get_bucket(bucket_name)
 
-    def get_s3_path(self):
-        """Parse the eucarc for the S3_URL"""
-        s3_url = self.parse_eucarc("S3_URL")
-        s3_path = "/".join(s3_url.split("/")[3:])
-        return s3_path
-
-    def create_bucket(self,bucket_name):
+    def create_bucket(self, bucket_name, location=None):
         """
         Create a bucket.  If the bucket already exists and you have
         access to it, no error will be returned by AWS.
@@ -117,14 +141,15 @@ class S3ops(Eutester):
         # bucket exists and we have access to it or None.
         bucket = self.get_bucket_by_name(bucket_name)
         if bucket:
-            self.debug( 'Bucket (%s) already exists' % bucket_name )
+            self.debug("Bucket '(%s)' already exists" % bucket_name)
         else:
-                # Let's try to create the bucket.  This will fail if
-                # the bucket has already been created by someone else.
             try:
-                bucket = self.s3.create_bucket(bucket_name)
-            except self.s3.provider.storage_create_error, e:
-                raise S3opsException( 'Bucket (%s) is owned by another user' % bucket_name )
+                if location:
+                    bucket = self.connection.create_bucket(bucket_name, location=location)
+                else:
+                    bucket = self.connection.create_bucket(bucket_name)
+            except self.connection.provider.storage_create_error, e:
+                raise S3opsException("Bucket '(%s)' is owned by another user" % bucket_name )
             if not self.get_bucket_by_name(bucket.name):
                 raise S3opsException("Bucket could not be found after creation")
         self.test_resources["buckets"].append(bucket)
@@ -139,20 +164,27 @@ class S3ops(Eutester):
         # First let's see if we already have a bucket of this name.
         # The lookup method will return a Bucket object if the
         # bucket exists and we have access to it or None.
+        if not isinstance(bucket, Bucket):
+            try:
+                bucket = self.connection.get_bucket(bucket)
+            except:
+                raise S3opsException("Bucket '(%s)' not found." % bucket)
+
         bucket_name = bucket.name
         try:
             bucket.delete()
-        except self.s3.provider.storage_create_error, e:
-                raise S3opsException( 'Bucket (%s) is owned by another user' % bucket_name )
+        except self.connection.provider.storage_create_error, e:
+                raise S3opsException('Bucket (%s) is owned by another user' % bucket_name)
+
         ### Check if the bucket still exists
         if self.get_bucket_by_name(bucket_name):
-            raise S3opsException('Bucket (%s) still exists after delete operation'  % bucket_name )
-    
+            raise S3opsException('Bucket (%s) still exists after delete operation' % bucket_name )
+
     def get_bucket_by_name(self, bucket_name):
         """
         Lookup a bucket by name, if it does not exist raise an exception
         """
-        bucket = self.s3.lookup(bucket_name)
+        bucket = self.connection.lookup(bucket_name)
         if bucket:
             return bucket
         else:
@@ -202,7 +234,7 @@ class S3ops(Eutester):
         name = object.name
         object.delete()
         try:
-            self.s3.get_bucket(bucket).get_key(name)
+            self.connection.get_bucket(bucket).get_key(name)
             raise S3opsException("Walrus object " + name + " in bucket "  +  bucket.name  + " still exists after delete")
         except Exception, e:
             return
@@ -212,8 +244,8 @@ class S3ops(Eutester):
             THIS WILL DELETE EVERYTHING!
            bucket       bucket name to clear
         """
-        try :
-            bucket = self.s3.get_bucket(bucket_name=bucket_name)      
+        try:
+            bucket = self.connection.get_bucket(bucket_name=bucket_name)
         except S3ResponseError as e:
             self.debug('No bucket' + bucket_name + ' found: ' + e.message)
             raise Exception('Not found')
@@ -256,26 +288,25 @@ class S3ops(Eutester):
                     
     def clear_keys_with_prefix(self, bucket, prefix):
         try :
-            listing = self.walrus.get_all_buckets()        
+            listing = self.connection.get_all_buckets()
             for bucket in listing:
                 if bucket.name.startswith(prefix):
-                    self.debug( "Getting bucket listing for " + bucket.name)
+                    self.debug("Getting bucket listing for " + bucket.name)
                     key_list = bucket.list()
                     for k in key_list:
                         if isinstance(k, boto.s3.prefix.Prefix):
-                            self.debug( "Skipping prefix" )
+                            self.debug("Skipping prefix")
                             continue
-                        self.debug( "Deleting key: " + k.name )
+                        self.debug("Deleting key: " + k.name)
                         bucket.delete_key(k)
                     bucket.delete()
                 else:
-                    self.debug( "skipping bucket: " + bucket.name )
+                    self.debug("skipping bucket: " + bucket.name)
         except S3ResponseError as e:
-            raise S3opsException( "Exception caught doing bucket cleanup." )
-                    
-    
+            raise S3opsException("Exception caught doing bucket cleanup.")
+
     def get_canned_acl(self, canned_acl=None, bucket_owner_id=None, bucket_owner_display_name=None):
-        '''
+        """
         Returns an acl object that can be applied to a bucket or key. It is intended to be used to verify
         results that the service returns. To set a canned-acl you can simply set it on the bucket directly without
         this method.
@@ -284,7 +315,7 @@ class S3ops(Eutester):
         canned_acl       Canned acl to implement. Required. 
                          Options: ['private','public-read', 'public-read-write', 'authenticated-read',  'log-delivery-write', 'bucket-owner-full-control', 'bucket-owner-full-control']
         bucket_owner_display_name  Required. The account display name for the bucket owner, so that the correct permission can be generated fully
-        '''
+        """
         if bucket_owner_id == None or canned_acl == None or bucket_owner_display_name == None :
             raise S3opsException( "No user_id or canned_acl passed to get_canned_acl()" )
         
@@ -345,5 +376,3 @@ class S3ops(Eutester):
         data_hash = "\"" + hasher.hexdigest() + "\""
         if data_hash != eTag:
             raise Exception( "Hash/eTag mismatch: \nhash = " + data_hash + "\neTag= " + eTag)
-            
-                

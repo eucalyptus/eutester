@@ -33,6 +33,7 @@
 
 from boto.ec2.image import Image
 from boto.ec2.volume import Volume
+from eutester import Eutester
 from eutester.aws.cloudwatch.cwops import CWops
 from eutester.aws.autoscaling.asops import ASops
 from eutester.aws.cloudformation.cfnops import CFNops
@@ -56,10 +57,10 @@ from eutester.utils import eulogger
 import re
 import os
 
-class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
+class Eucaops(Eutester):
     
     def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None,
-                     aws_secret_access_key = None,  account="eucalyptus", user="admin", username=None, APIVersion='2013-10-15',
+                 aws_secret_access_key = None,  account="eucalyptus", user="admin", username=None, APIVersion='2013-10-15',
                  ec2_ip=None, ec2_path=None, iam_ip=None, iam_path=None, s3_ip=None, s3_path=None,
                  as_ip=None, as_path=None, elb_ip=None, elb_path=None, cw_ip=None, cw_path=None,
                  cfn_ip=None, cfn_path=None, sts_ip=None, sts_path=None,
@@ -93,6 +94,25 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
         self.aws_secret_access_key = aws_secret_access_key
         self._property_manager = None
 
+        self.boto_debug = boto_debug
+
+        self.region = region
+        self.ec2_ip = ec2_ip
+        self.ec2_path = ec2_path
+        self.iam_ip = iam_ip
+        self.iam_path = iam_path
+        self.s3_ip = s3_ip
+        self.s3_path = s3_path
+        self.as_ip = as_ip
+        self.as_path = as_path
+        self.elb_ip = elb_ip
+        self.elb_path = elb_path
+        self.cw_ip = cw_ip
+        self.cw_path = cw_path
+        self.cfn_ip = cfn_ip
+        self.cfn_path = cfn_path
+        self.sts_ip = sts_ip
+        self.sts_path = sts_path
 
         if self.config_file is not None:
             ## read in the config file
@@ -135,97 +155,195 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                 self.clc = self.service_manager.get_enabled_clc().machine
 
         if self.credpath and not aws_access_key_id:
-            aws_access_key_id = self.get_access_key()
+            self.aws_access_key_id = self.get_access_key()
         if self.credpath and not aws_secret_access_key:
-            aws_secret_access_key = self.get_secret_key()
+            self.aws_secret_access_key = self.get_secret_key()
         self.test_resources = {}
-        if self.download_creds:
-            try:
-                if self.credpath and not ec2_ip:
-                    ec2_ip = self.get_ec2_ip()
-                if self.credpath and not ec2_path:
-                    ec2_path = self.get_ec2_path()
+        self.setup_ec2_resource_trackers()
 
-                self.setup_ec2_connection(endpoint=ec2_ip, path=ec2_path, port=port, is_secure=False,
-                                          region=region, aws_access_key_id=aws_access_key_id,
-                                          aws_secret_access_key=aws_secret_access_key, APIVersion=APIVersion,
-                                          boto_debug=boto_debug)
-                self.setup_ec2_resource_trackers()
+        # if self.download_creds:
+        #     try:
+        #
+        #         if self.credpath and not sts_ip:
+        #             sts_ip = self.get_sts_ip()
+        #         if self.credpath and not sts_path:
+        #             sts_path = self.get_sts_path()
+        #         self.setup_sts_connection(endpoint=sts_ip, path=sts_path, port=port, is_secure=False,
+        #                                   region=region, aws_access_key_id=aws_access_key_id,
+        #                                   aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
+        #
+        #         if self.credpath and not cw_ip:
+        #             cw_ip = self.get_cw_ip()
+        #         if self.credpath and not cw_path:
+        #             cw_path = self.get_cw_path()
+        #         self.setup_cw_connection(endpoint=cw_ip, path=cw_path, port=port, is_secure=False,
+        #                                  region=region, aws_access_key_id=aws_access_key_id,
+        #                                  aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
+        #
+        #         self.setup_cw_resource_trackers()
+        #     except Exception, e:
+        #         tb = self.get_traceback()
+        #         raise Exception(tb + "\nUnable to create EC2 connection because of: " + str(e) )
 
-                if self.credpath and not iam_ip:
-                    iam_ip = self.get_iam_ip()
-                if self.credpath and not iam_path:
-                    iam_path = self.get_iam_path()
-                self.setup_iam_connection(endpoint=iam_ip, path=iam_path,
-                                          port=port, is_secure=False, aws_access_key_id=aws_access_key_id,
-                                          aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
+    def setup_ec2_resource_trackers(self):
+        """
+        Setup keys in the test_resources hash in order to track artifacts created
+        """
+        self.test_resources["reservations"] = []
+        self.test_resources["volumes"] = []
+        self.test_resources["snapshots"] = []
+        self.test_resources["keypairs"] = []
+        self.test_resources["security-groups"] = []
+        self.test_resources["images"] = []
+        self.test_resources["addresses"] = []
+        self.test_resources["auto-scaling-groups"] = []
+        self.test_resources["launch-configurations"] = []
+        self.test_resources["conversion-tasks"] = []
+        self.test_resources["load_balancers"] = []
 
-                if self.credpath and not sts_ip:
-                    sts_ip = self.get_sts_ip()
-                if self.credpath and not sts_path:
-                    sts_path = self.get_sts_path()
-                self.setup_sts_connection(endpoint=sts_ip, path=sts_path, port=port, is_secure=False,
-                                          region=region, aws_access_key_id=aws_access_key_id,
-                                          aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
+    @property
+    def ec2(self):
+        if self.credpath and not self.ec2_ip:
+            self.ec2_ip = self.get_ec2_ip()
+        if self.credpath and not self.ec2_path:
+            self.ec2_path = self.get_ec2_path()
+        if 'ec2' not in self.__dict__:
+            ops = EC2ops(path="/services/compute",
+                         port=8773,
+                         is_secure=False,
+                         region=self.region,
+                         aws_access_key_id=self.aws_access_key_id,
+                         aws_secret_access_key=self.aws_secret_access_key,
+                         APIVersion='2011-01-01',
+                         boto_debug=self.boto_debug,
+                         credpath=self.credpath,
+                         test_resources=self.test_resources)
+            return ops
+        else:
+            return self.ec2
 
-                if self.credpath and not cw_ip:
-                    cw_ip = self.get_cw_ip()
-                if self.credpath and not cw_path:
-                    cw_path = self.get_cw_path()
-                self.setup_cw_connection(endpoint=cw_ip, path=cw_path, port=port, is_secure=False,
-                                         region=region, aws_access_key_id=aws_access_key_id,
-                                         aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
+    @property
+    def iam(self):
+        if self.credpath and not self.iam_ip:
+            self.iam_ip = self.get_iam_ip()
+        if self.credpath and not self.iam_path:
+            self.iam_path = self.get_iam_path()
+        if 'ec2' not in self.__dict__:
+        #         self.setup_iam_connection(endpoint=iam_ip, path=iam_path,
+        #                                   port=port, is_secure=False, aws_access_key_id=aws_access_key_id,
+        #                                   aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
+            ops = IAMops(endpoint=self.iam_ip,
+                         path=self.iam_path,
+                         port=8773,
+                         is_secure=False,
+                         aws_access_key_id=self.aws_access_key_id,
+                         aws_secret_access_key=self.aws_secret_access_key,
+                         boto_debug=self.boto_debug,
+                         credpath=self.credpath,
+                         test_resources=self.test_resources)
+            return ops
+        else:
+            return self.ec2
 
-                self.setup_cw_resource_trackers()
-            except Exception, e:
-                tb = self.get_traceback()
-                raise Exception(tb + "\nUnable to create EC2 connection because of: " + str(e) )
+    @property
+    def s3(self):
+        if self.credpath and not self.ec2_ip:
+            self.s3_ip = self.get_s3_ip()
+        if self.credpath and not self.s3_path:
+            self.s3_path = self.get_ec2_path()
+        if 's3' not in self.__dict__:
+            ops = S3ops(path="/services/objectstorage",
+                        port=8773,
+                        is_secure=False,
+                        aws_access_key_id=self.aws_access_key_id,
+                        aws_secret_access_key=self.aws_secret_access_key,
+                        boto_debug=self.boto_debug,
+                        credpath=self.credpath,
+                        test_resources=self.test_resources)
+            return ops
+        else:
+            return self.s3
 
-            try:
-                if self.credpath and not s3_ip:
-                    s3_ip = self.get_s3_ip()
-                if self.credpath and not s3_path:
-                    s3_path = self.get_s3_path()
-                self.setup_s3_connection(endpoint=s3_ip, path=s3_path, port=port, is_secure=False,
-                                         aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,
-                                         boto_debug=boto_debug)
-                self.setup_s3_resource_trackers()
-            except Exception, e:
-                self.debug("Unable to create S3 connection because of: " + str(e) )
+    @property
+    def elb(self):
+        if self.credpath and not self.elb_ip:
+            self.elb_ip = self.get_elb_ip()
+        if self.credpath and not self.elb_path:
+            self.elb_path = self.get_elb_path()
+        if 'elb' not in self.__dict__:
+            ops = ELBops(endpoint=self.elb_ip,
+                         path=self.elb_path,
+                         port=8773,
+                         is_secure=False,
+                         aws_access_key_id=self.aws_access_key_id,
+                         aws_secret_access_key=self.aws_secret_access_key,
+                         boto_debug=self.boto_debug,
+                         credpath=self.credpath,
+                         test_resources=self.test_resources)
+            return ops
+        else:
+            return self.elb
 
-            try:
-                if self.credpath and not as_ip:
-                    as_ip = self.get_as_ip()
-                if self.credpath and not as_path:
-                    as_path = self.get_as_path()
-                self.setup_as_connection(endpoint=as_ip, path=as_path, port=port, is_secure=False,
-                                         region=region, aws_access_key_id=aws_access_key_id,
-                                         aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
-            except Exception, e:
-                self.debug("Unable to create AS connection because of: " + str(e) )
+    @property
+    def autoscaling(self):
+        if self.credpath and not self.as_ip:
+            self.as_ip = self.get_as_ip()
+        if self.credpath and not self.as_path:
+            self.as_path = self.get_as_path()
+        if 'autoscaling' not in self.__dict__:
+            ops = ASops(endpoint=self.as_ip,
+                        path=self.as_path,
+                        port=8773,
+                        region=self.region,
+                        is_secure=False,
+                        aws_access_key_id=self.aws_access_key_id,
+                        aws_secret_access_key=self.aws_secret_access_key,
+                        boto_debug=self.boto_debug,
+                        credpath=self.credpath,
+                        test_resources=self.test_resources)
+            return ops
+        else:
+            return self.autoscaling
 
-            try:
-                if self.credpath and not elb_ip:
-                    elb_ip = self.get_elb_ip()
-                if self.credpath and not elb_path:
-                    elb_path = self.get_elb_path()
-                self.setup_elb_connection(endpoint=elb_ip, path=elb_path, port=port, is_secure=False,
-                                          region=region, aws_access_key_id=aws_access_key_id,
-                                          aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
-            except Exception, e:
-                self.debug("Unable to create ELB connection because of: " + str(e) )
-            try:
-                if self.credpath and not cfn_ip:
-                    cfn_ip = self.get_cfn_ip()
-                if self.credpath and not cfn_path:
-                    cfn_path = self.get_cfn_path()
-                self.setup_cfn_connection(endpoint=cfn_ip, path=self.get_cfn_path(), port=port, is_secure=False,
-                                          region=region, aws_access_key_id=aws_access_key_id,
-                                          aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
-            except Exception, e:
-                self.debug("Unable to create CloudFormation connection because of: " + str(e) )
+    @property
+    def cloudformation(self):
+        if self.credpath and not self.cfn_ip:
+            self.cfn_ip = self.get_cfn_ip()
+        if self.credpath and not self.cfn_path:
+            self.cfn_path = self.get_cfn_path()
+        if 'cloudformation' not in self.__dict__:
+            ops = CFNops(endpoint=self.cfn_ip,
+                         path=self.cfn_path,
+                         port=8773,
+                         region=self.region,
+                         is_secure=False,
+                         aws_access_key_id=self.aws_access_key_id,
+                         aws_secret_access_key=self.aws_secret_access_key,
+                         boto_debug=self.boto_debug,
+                         credpath=self.credpath)
+            return ops
+        else:
+            return self.cloudformation
 
-
+    @property
+    def cloudwatch(self):
+        if self.credpath and not self.cw_ip:
+            self.cfn_ip = self.get_cw_ip()
+        if self.credpath and not self.cw_path:
+            self.cw_path = self.get_cw_path()
+        if 'cloudwatch' not in self.__dict__:
+            ops = CFNops(endpoint=self.cw_ip,
+                         path=self.cw_path,
+                         port=8773,
+                         region=self.region,
+                         is_secure=False,
+                         aws_access_key_id=self.aws_access_key_id,
+                         aws_secret_access_key=self.aws_secret_access_key,
+                         boto_debug=self.boto_debug,
+                         credpath=self.credpath)
+            return ops
+        else:
+            return self.cloudwatch
 
     @property
     def property_manager(self):
@@ -249,7 +367,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
         type        VM type to get available vms 
         """
         
-        zones = self.ec2.get_all_zones("verbose")
+        zones = self.ec2.connection.get_all_zones("verbose")
         if type is None:
             type = "m1.small"
         ### Look for the right place to start parsing the zones
@@ -266,24 +384,24 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
             zone = zones[0].name
             
         ### Inline switch statement
-        type_index = {  "t1.micro": 2,
-                        "m1.small": 3,
-                        "m1.large": 4,
-                        "m1.xlarge" : 5,
-                        "c1.xlarge" : 6,
-                        "m2.xlarge" : 7,
-                        "c1.medium" : 8,
-                        "m1.medium" : 9,
-                        "m3.xlarge" : 10,
-                        "m2.2xlarge" : 11,
-                        "m3.2xlarge" : 12,
-                        "m2.4xlarge" : 13,
-                        "cc1.4xlarge" : 14,
-                        "hi1.4xlarge" : 15,
-                        "cc2.8xlarge" : 16,
-                        "cg1.4xlarge" : 17,
-                        "cr1.8xlarge" : 18,
-                        "hs1.8xlarge" : 19
+        type_index = {"t1.micro": 2,
+                      "m1.small": 3,
+                      "m1.large": 4,
+                      "m1.xlarge": 5,
+                      "c1.xlarge": 6,
+                      "m2.xlarge": 7,
+                      "c1.medium": 8,
+                      "m1.medium": 9,
+                      "m3.xlarge": 10,
+                      "m2.2xlarge": 11,
+                      "m3.2xlarge": 12,
+                      "m2.4xlarge": 13,
+                      "cc1.4xlarge": 14,
+                      "hi1.4xlarge": 15,
+                      "cc2.8xlarge": 16,
+                      "cg1.4xlarge": 17,
+                      "cr1.8xlarge": 18,
+                      "hs1.8xlarge": 19
                       }[type] 
         type_state = zones[ zone_index + type_index ].state.split()
         self.debug("Finding available VMs: Partition=" + zone +" Type= " + type + " Number=" +  str(int(type_state[0])) )
@@ -312,10 +430,14 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
         else:
             raise Exception("Setting property " + property + " failed")
 
-
-    def cleanup_artifacts(self,instances=True, snapshots=True, volumes=True,
-                          load_balancers=True, ip_addresses=True,
-                          auto_scaling_groups=True, launch_configurations=True,
+    def cleanup_artifacts(self,
+                          instances=True,
+                          snapshots=True,
+                          volumes=True,
+                          load_balancers=True,
+                          ip_addresses=True,
+                          auto_scaling_groups=True,
+                          launch_configurations=True,
                           keypairs=True):
         """
         Description: Attempts to remove artifacts created during and through this eutester's lifespan.
@@ -323,7 +445,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
         failmsg = ""
         failcount = 0
         self.debug("Starting cleanup of artifacts")
-        if auto_scaling_groups:
+        if auto_scaling_groups and self.test_resources["auto-scaling-groups"]:
             try:
                 self.cleanup_autoscaling_groups()
             except Exception, e:
@@ -349,7 +471,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
             # Now monitor to terminated state...
             for res in self.test_resources["reservations"]:
                 try:
-                    self.terminate_instances(res)
+                    self.ec2.terminate_instances(res)
                     remove_list.append(res)
                 except Exception, e:
                     tb = self.get_traceback()
@@ -379,7 +501,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                 tb = self.get_traceback()
                 failcount +=1
                 failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
-        if load_balancers:
+        if load_balancers and self.test_resources["load_balancers"]:
             try:
                 self.cleanup_load_balancers()
             except Exception, e:
@@ -387,7 +509,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                 failcount +=1
                 failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
 
-        if launch_configurations:
+        if launch_configurations and self.test_resources["launch-configurations"]:
             try:
                 self.cleanup_launch_configs()
             except Exception, e:
@@ -419,7 +541,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
         if failmsg:
             failmsg += "\nFound " + str(failcount) + " number of errors while cleaning up. See above"
             raise Exception(failmsg)
-        if launch_configurations:
+        if launch_configurations and self.test_resources["launch-configurations"]:
             try:
                 self.cleanup_launch_configs()
             except Exception, e:
@@ -427,16 +549,15 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                 failcount +=1
                 failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
 
-
     def cleanup_load_balancers(self, lbs=None):
         """
         :param lbs: optional list of load balancers, otherwise it will attempt to delete from test_resources[]
         """
         if lbs:
-            self.delete_load_balancers(lbs)
+            self.elb.delete_load_balancers(lbs)
         else:
             try:
-                self.delete_load_balancers(self.test_resources['load_balancers'])
+                self.elb.delete_load_balancers(self.test_resources['load_balancers'])
             except KeyError:
                 self.debug("No loadbalancers to delete")
 
@@ -452,7 +573,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
         self.debug('Attempting to release to the cloud the following IP addresses:')
 
         while addresses:
-            self.release_address(addresses.pop())
+            self.ec2.release_address(addresses.pop())
 
 
     def cleanup_test_snapshots(self,snaps=None, clean_images=False, add_time_per_snap=10, wait_for_valid_state=120, base_timeout=180):
@@ -468,21 +589,18 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
         if not snaps:
             return
         self.debug('Attempting to clean the following snapshots:')
-        self.print_eusnapshot_list(snaps)
+        self.ec2.print_eusnapshot_list(snaps)
         if clean_images:
             for snap in snaps:
                 for image in self.test_resources['images']:
                     for dev in image.block_device_mapping:
                         if image.block_device_mapping[dev].snapshot_id == snap.id:
-                            self.delete_image(image)
+                            self.ec2.delete_image(image)
         if snaps:
-            return self.delete_snapshots(snaps,
+            return self.ec2.delete_snapshots(snaps,
                                         base_timeout=base_timeout,
                                         add_time_per_snap=add_time_per_snap,
                                         wait_for_valid_state=wait_for_valid_state)
-
-
-
 
     def clean_up_test_volumes(self, volumes=None, min_timeout=180, timeout_per_vol=30):
         """
@@ -503,7 +621,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
 
         for vol in volumes:
             try:
-                vol = self.get_volume(volume_id=vol.id)
+                vol = self.ec2.get_volume(volume_id=vol.id)
             except:
                 tb = self.get_traceback()
                 self.debug("\n" + line + " Ignoring caught Exception:\n" + str(tb) + "\n"+ str(vol.id) +
@@ -522,7 +640,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                     self.debug('Ignoring caught Exception: \n' + str(tb))
         try:
             self.debug('Attempting to clean up the following volumes:')
-            self.print_euvolume_list(euvolumes)
+            self.ec2.print_euvolume_list(euvolumes)
         except: pass
         self.debug('Clean_up_volumes: Detaching any attached volumes to be deleted...')
         for vol in euvolumes:

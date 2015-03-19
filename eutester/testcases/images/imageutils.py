@@ -457,7 +457,7 @@ class ImageUtils(EutesterTestCase):
             if re.search('IMAGE',line):
                 emi = line.split().pop().strip()
         assert emi, 'Invalid emi value: "' + str(emi) + '"'
-        self.tester.test_resources["images"].append(self.tester.ec2.get_all_images([emi])[0])
+        self.tester.test_resources["images"].append(self.tester.ec2.connection.get_all_images([emi])[0])
         return emi
 
     def euca2ools_download_bundle(self,
@@ -737,7 +737,7 @@ class ImageUtils(EutesterTestCase):
     def _get_unique_bucket_name(self, basename, id='test', start=0):
         bx=start
         bname = basename
-        while self.tester.get_bucket_by_name(bname) is not None:
+        while self.tester.s3.get_bucket_by_name(bname) is not None:
             bx += 1
             bname = basename+str(id)+str(bx)
         return bname
@@ -903,7 +903,7 @@ class ImageUtils(EutesterTestCase):
                    '", now verify it exists on the cloud...')
 
         #Verify emi exists on the system, and convert to boto obj...
-        emi = self.tester.get_emi(emi)
+        emi = self.tester.ec2.get_emi(emi)
 
         #Add tags that might have test use meaning...
         try:
