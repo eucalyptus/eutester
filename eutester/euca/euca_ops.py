@@ -33,6 +33,7 @@
 
 from boto.ec2.image import Image
 from boto.ec2.volume import Volume
+from boto.iam.connection import IAMConnection
 from eutester import Eutester
 from eutester.aws.cloudwatch.cwops import CWops
 from eutester.aws.autoscaling.asops import ASops
@@ -152,7 +153,8 @@ class Eucaops(Eutester):
                         self.get_credentials(account, user)
                         
                 self.service_manager = EuserviceManager(self)
-                self.clc = self.service_manager.get_enabled_clc().machine
+                if account is "eucalyptus":
+                    self.clc = self.service_manager.get_enabled_clc().machine
 
         if self.credpath and not aws_access_key_id:
             self.aws_access_key_id = self.get_access_key()
@@ -208,7 +210,8 @@ class Eucaops(Eutester):
         if self.credpath and not self.ec2_path:
             self.ec2_path = self.get_ec2_path()
         if 'ec2' not in self.__dict__:
-            ops = EC2ops(path="/services/compute",
+            ops = EC2ops(endpoint=self.ec2_ip,
+                         path=self.ec2_path,
                          port=8773,
                          is_secure=False,
                          region=self.region,
@@ -229,9 +232,6 @@ class Eucaops(Eutester):
         if self.credpath and not self.iam_path:
             self.iam_path = self.get_iam_path()
         if 'ec2' not in self.__dict__:
-        #         self.setup_iam_connection(endpoint=iam_ip, path=iam_path,
-        #                                   port=port, is_secure=False, aws_access_key_id=aws_access_key_id,
-        #                                   aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
             ops = IAMops(endpoint=self.iam_ip,
                          path=self.iam_path,
                          port=8773,
@@ -243,16 +243,17 @@ class Eucaops(Eutester):
                          test_resources=self.test_resources)
             return ops
         else:
-            return self.ec2
+            return self.iam
 
     @property
     def s3(self):
-        if self.credpath and not self.ec2_ip:
+        if self.credpath and not self.s3_ip:
             self.s3_ip = self.get_s3_ip()
         if self.credpath and not self.s3_path:
-            self.s3_path = self.get_ec2_path()
+            self.s3_path = self.get_s3_path()
         if 's3' not in self.__dict__:
-            ops = S3ops(path="/services/objectstorage",
+            ops = S3ops(endpoint=self.s3_ip,
+                        path=self.s3_path,
                         port=8773,
                         is_secure=False,
                         aws_access_key_id=self.aws_access_key_id,
