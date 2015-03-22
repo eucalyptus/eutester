@@ -2581,20 +2581,20 @@ disable_root: false"""
             filters={'tag-key':'eutester-created'}
             try:
                 return self.get_images(emi=emi,
-                                   name=name,
-                                   root_device_type=root_device_type,
-                                   root_device_name=root_device_name,
-                                   location=location,
-                                   state=state,
-                                   arch=arch,
-                                   owner_id=owner_id,
-                                   filters=filters,
-                                   basic_image=basic_image,
-                                   platform=platform,
-                                   not_platform=not_platform,
-                                   tagkey=tagkey,
-                                   tagvalue=tagvalue,
-                                   max_count=1)[0]
+                                       name=name,
+                                       root_device_type=root_device_type,
+                                       root_device_name=root_device_name,
+                                       location=location,
+                                       state=state,
+                                       arch=arch,
+                                       owner_id=owner_id,
+                                       filters=filters,
+                                       basic_image=basic_image,
+                                       platform=platform,
+                                       not_platform=not_platform,
+                                       tagkey=tagkey,
+                                       tagvalue=tagvalue,
+                                       max_count=1)[0]
             except:
                 filters = None
         return self.get_images(emi=emi,
@@ -2613,13 +2613,17 @@ disable_root: false"""
                                tagvalue=tagvalue,
                                max_count=1)[0]
 
-    def show_images(self, images=None, verbose=False, printmethod=None):
+    def show_images(self, images=None, verbose=False, basic_image=False, printmethod=None):
         printmethod = printmethod or self.debug
-        images = images or self.get_images()
         buf = "\n"
+        if not images:
+            try:
+                images = self.get_images(basic_image=basic_image) or []
+            except ResourceNotFoundException, nfe:
+                printmethod("\nNo images found\n")
+                return
         for image in images:
             buf += str(self.show_image(image=image, verbose=verbose, printme=False)) + "\n"
-        printmethod = printmethod or self.debug
         printmethod(buf)
 
     def show_image(self, image, verbose=True, printmethod=None,

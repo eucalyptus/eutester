@@ -1016,7 +1016,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
             rec = "r"
         else:
             rec = ""
-        certfiles = machine.sys('grep "{0}" -l{1} {2}*'.format('BEGIN CERTIFICATE', rec, dir))
+        certfiles = machine.sys('grep "{0}" -l{1} {2}*'.format('^-*BEGIN CERTIFICATE', rec, dir))
         for f in certfiles:
             if self.get_active_id_for_cert(f, machine=machine):
                 dir = os.path.dirname(f)
@@ -1051,8 +1051,9 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
             certmodmd5 = str(certmodmd5[0]).strip()
         else:
             return None
-        keyfiles = machine.sys('grep "{0}" -l{1} {2}*'.format('BEGIN RSA PRIVATE KEY',
-                                                               rec, keydir))
+        keyfiles = machine.sys('grep "{0}" -lz{1} {2}*.pem'
+                               .format("^\-*BEGIN RSA PRIVATE KEY.*\n.*END RSA PRIVATE KEY\-*",
+                                       rec, keydir))
         for kf in keyfiles:
             keymodmd5 = machine.sys('openssl rsa -noout -modulus -in {0} | md5sum'.format(kf))
             if keymodmd5:
