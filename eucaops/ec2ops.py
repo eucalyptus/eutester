@@ -707,7 +707,7 @@ disable_root: false"""
 
         elif re.match('^sg-\w{8}$',str(group).strip()):
             group_id = group
-        elif isinstance(group, str) or isinstance(group, unicode):
+        elif isinstance(group, basestring):
             group_name = group
         else:
             raise ValueError('Could not find or format group arg for revoke. group:"{0}:{1}"'
@@ -2749,7 +2749,7 @@ disable_root: false"""
                 if not isinstance(addresses, list):
                     addresses = [addresses]
                 for address in addresses:
-                    if isinstance(addresses, str) or isinstance(addresses, unicode):
+                    if isinstance(addresses, basestring):
                         get_addresses.append(address)
                     elif isinstance(address, Address):
                         show_addresses.append(address)
@@ -3243,7 +3243,7 @@ disable_root: false"""
                     groups = [group]
                 for group in groups:
                     if group:
-                        if isinstance(group, str):
+                        if isinstance(group, basestring):
                             if not re.match('^sg-\w{8}$',str(group).strip()):
                                 try:
                                     group = self.get_security_group(name=group)
@@ -3255,8 +3255,9 @@ disable_root: false"""
                         elif isinstance(group, SecurityGroup):
                             group = group.id
                         else:
-                            raise ValueError('Unknown arg passed for group to RunImage "{0}"'
-                                             .format(group))
+                            raise ValueError('Unknown arg passed for group to RunImage,'
+                                             ' group: "{0}", (type:{1})'
+                                             .format(group, type(group)))
                         secgroups.append(group)
 
 
