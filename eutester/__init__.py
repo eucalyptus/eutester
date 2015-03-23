@@ -44,6 +44,7 @@ import sys
 import traceback
 import StringIO
 import eulogger
+import hashlib
 import types
 import operator
 import fcntl
@@ -88,6 +89,36 @@ class Eutester(object):
             self.account_id = self.get_account_id()
             self.user_id = self.get_user_id()
 
+    @property
+    def ec2_certpath(self):
+        try:
+            return  self.parse_eucarc('EC2_CERT')
+        except ValueError:
+             return None
+
+    @property
+    def ec2_cert(self):
+        certpath = self.ec2_certpath
+        if certpath and os.path.exists(certpath):
+            out = self.local('cat {0}'.format(certpath))
+            return str("\n".join(out)).strip()
+        return None
+
+    @property
+    def ec2_private_key_path(self):
+        try:
+            return self.parse_eucarc('EC2_PRIVATE_KEY')
+        except ValueError:
+            return None
+
+    @property
+    def ec2_private_key(self):
+        keypath = self.ec2_private_key_path
+        if keypath and os.path.exists(keypath):
+            out = self.local('cat {0}'.format(keypath))
+            return "\n".join(out)
+        return None
+
     def get_access_key(self):
         if not self.aws_access_key_id:     
             """Parse the eucarc for the EC2_ACCESS_KEY"""
@@ -110,7 +141,7 @@ class Eutester(object):
         if not self.user_id:
             self.user_id = self.parse_eucarc("EC2_USER_ID")
         """Parse the eucarc for the EC2_ACCOUNT_NUMBER"""
-        return self.user_id 
+        return self.user_id
 
     def get_port(self):
         """Parse the eucarc for the EC2_ACCOUNT_NUMBER"""
@@ -119,29 +150,44 @@ class Eutester(object):
 
     def parse_eucarc(self, field):
         if self.credpath is None:
-            raise ValueError('Credpath has not been set yet. '
-                             'Please set credpath or provide '
-                             'configuration file')
-        with open( self.credpath + "/eucarc") as eucarc:
-            for line in eucarc.readlines():
-                if re.search(field, line):
-                    return line.split("=")[1].strip().strip("'")
-            raise Exception("Unable to find " +  field + " id in eucarc")
-    
+            raise RuntimeError('Credpath has not been set yet. '
+                               'Please set credpath or provide '
+                               'configuration file')
+        cmd = 'source {0}/eucarc &> /dev/null && echo ${1}'.format(self.credpath, field)
+        out = self.local(cmd)
+        if out[0]:
+            return out[0]
+        else:
+            if out:
+                out = "\n".join(out)
+            self.critical('Failed to find field: {0},\nCommand:{1}\nReturned:\n"{2}"'
+                          .format(field, cmd, out))
+            try:
+                catcmd = 'cat {0}/eucarc | grep {1}'.format(self.credpath, field)
+                catout = self.local(catcmd)
+                catout = "\n".join(catout)
+            except Exception, ce:
+                catout = "Command failed:{0}, err:{1}".format(catcmd, ce)
+            self.critical("Unable to find {0} id in eucarc. {1}:\n{2}\n"
+                          .format(field, catcmd, catout))
+            raise ValueError("Unable to find " +  field + " id in eucarc")
+
     def handle_timeout(self, signum, frame): 
         raise TimeoutFunctionException()
 
-    def local(self, cmd):
+    def local(self, cmd, shell=True):
         """
         Run a command on the localhost
         :param cmd: str representing the command to be run
         :return: :raise: CalledProcessError on non-zero return code
         """
-        args = cmd.split()
-        process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=4096)
+        args = cmd
+        process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                   bufsize=4096, shell=shell)
         output, unused_err = process.communicate()
         retcode = process.poll()
         if retcode:
+            self.debug('CMD:"{0}"\nOUTPUT:\n{1}'.format(cmd, str(output)))
             error = subprocess.CalledProcessError(retcode, cmd)
             error.output = output
             raise error
@@ -180,7 +226,31 @@ class Eutester(object):
         self.critical("Was unable to ping address")
         return False
 
-    
+    @classmethod
+    def markup(cls, text, markups=[1], resetvalue="\033[0m"):
+        """
+        Convenience method for using ansci markup. Attempts to check if terminal supports
+        ansi escape sequences for text markups. If so will return a marked up version of the
+        text supplied using the markups provided.
+        Some example markeups: 1 = bold, 4 = underline, 94 = blue or markups=[1, 4, 94]
+        :param text: string/buffer to be marked up
+        :markups: a value or list of values representing ansi codes.
+        :resetvalue: string used to reset the terminal, default: "\33[0m"
+        """
+        if not (hasattr(sys.stdout, 'isatty') and sys.stdout.isatty()):
+            return text
+        buf = ""
+        lines = []
+        if not isinstance(markups, list):
+            markups = [markups]
+        markupvalues=";".join(str(x) for x in markups)
+        for line in text.splitlines():
+            lines.append("\033[{0}m{1}\033[0m".format(markupvalues, line))
+        buf = "\n".join(lines)
+        if text.endswith('\n') and not buf.endswith('\n'):
+            buf += '\n'
+        return buf
+
     def scan_port_range(self, ip, start, stop, timeout=1, tcp=True):
         '''
         Attempts to connect to ports, returns list of ports which accepted a connection
@@ -457,10 +527,29 @@ class Eutester(object):
         self.debug(  str(callback.func_name) + ' returned: "' + str(current_state) + '" after '
                     + str(elapsed/60) + " minutes " + str(elapsed%60) + " seconds.")
         if not oper(current_state,result):
-            raise Exception( str(callback.func_name) + " did not return " + str(operator.ne.__name__) +
+            raise WaitForResultException( str(callback.func_name) + " did not return " + str(operator.ne.__name__) +
                              "(" + str(result) + ") true after elapsed:"+str(elapsed))
         return current_state
 
+    def get_md5_for_file(self, filepath, machine=None):
+        if machine:
+            machinename = machine.hostname
+            out = machine.sys('md5sum {0}'.format(filepath), code=0)
+            md5string = str(out[0]).split()[0]
+        else:
+            machinename = 'local'
+            # If a machine wasn't provided try local...
+            md5 = hashlib.md5()
+            length = md5.block_size * 128
+            with open(filepath, "rb") as f:
+                while True:
+                    buf = f.read(length)
+                    if not buf:
+                        break
+                    md5.update(buf)
+            md5string = str(md5.hexdigest())
+        self.debug('MD5 for {0} on {1} is: "{2}"'.format(filepath, machinename, md5string))
+        return md5string
 
     @classmethod
     def get_traceback(cls):
@@ -481,6 +570,11 @@ class Eutester(object):
 
 
 
-    
+class WaitForResultException(Exception):
+    def __init__(self, value):
+        self.value = value
+
+    def __str__(self):
+        return repr(self.value)
 
 

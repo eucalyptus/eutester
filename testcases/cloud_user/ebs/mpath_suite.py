@@ -1067,7 +1067,7 @@ class Mpath_Suite(EutesterTestCase):
                 raise Exception('Not enough paths to shut one down for test')
             self.status('Getting volume for use in test...')
             volumes = self.get_test_volumes(count=int(vols_after_block + vols_before_block))
-            self.tester.print_euvolume_list(volumes)
+            self.tester.show_volumes(volumes)
             after_block = copy.copy(volumes)
             self.status('Checking paths to make sure none are currently blocked...')
             if path_controller.get_blocked_paths():
@@ -1086,7 +1086,7 @@ class Mpath_Suite(EutesterTestCase):
                 self.instance.vol_write_random_data_get_md5(volume, length=1048576, overwrite=True)
                 self.status('Remote write/read done for volume:' +str(volume.id))
             self.status('Attached all ' + str(vols_before_block) + ' volumes before blocking a path')
-            self.tester.print_euvolume_list(volumes)
+            self.tester.show_volumes(volumes)
             if after_block:
                 self.status('Blocking single path: "' + str(single_path) + "...")
                 path_controller.block_path(single_path)
@@ -1101,7 +1101,7 @@ class Mpath_Suite(EutesterTestCase):
                     self.status('Attempting to run some basic io on guest volume...')
                     self.instance.vol_write_random_data_get_md5(volume, length=1048576, overwrite=True)
                     self.status('Remote write/read done for volume:'  + str(volume.id) )
-            self.tester.print_euvolume_list(volumes)
+            self.tester.show_volumes(volumes)
             self.status('Detaching a volume while path is down...')
             detach_vols = []
             #Grab a volume from each list to detach
@@ -1128,7 +1128,7 @@ class Mpath_Suite(EutesterTestCase):
                     for volume in detach_vols:
                         self.instance.detach_euvolume(volume)
             before_block.extend(after_block)
-            self.tester.print_euvolume_list(volumes)
+            self.tester.show_volumes(volumes)
             self.status('terminating instance with ' + str(len(before_block)) + ' volumes attached')
 
         except Exception, e:

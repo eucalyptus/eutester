@@ -288,14 +288,17 @@ class Machine:
         except Exception,e:
             pass
 
-    def sys(self, cmd, verbose=True, timeout=120, listformat=True, code=None):
+    def sys(self, cmd, verbose=True, timeout=120, listformat=True, code=None, net_namespace=None):
         '''
         Issues a command against the ssh connection to this instance
         Returns a list of the lines from stdout+stderr as a result of the command
         '''
+        if net_namespace is not None:
+            cmd = 'ip netns exec {0} {1}'.format(net_namespace, cmd)
         return self.ssh.sys(cmd, verbose=verbose, timeout=timeout,listformat=listformat, code=code)
     
-    def cmd(self, cmd, verbose=True, timeout=120, listformat=False, cb=None, cbargs=[]):
+    def cmd(self, cmd, verbose=True, timeout=120, listformat=False, net_namespace=None,
+            cb=None, cbargs=[]):
         '''
         Issues a command against the ssh connection to this instance
         returns dict containing:
@@ -308,14 +311,19 @@ class Machine:
         verbose - optional - boolean flag to enable debug
         timeout - optional - command timeout in seconds 
         listformat -optional - specifies returned output in list of lines, or single string buffer
+        net_namespace - optional - issue command in the network namespace provided.
         cb - optional - call back function, accepting string buffer, returning true false see sshconnection for more info
         '''
+        if net_namespace is not None:
+            cmd = 'ip netns exec {0} {1}'.format(net_namespace, cmd)
         if (self.ssh is not None):
-            return self.ssh.cmd(cmd, verbose=verbose, timeout=timeout, listformat=listformat, cb=cb, cbargs=cbargs)
+            return self.ssh.cmd(cmd, verbose=verbose, timeout=timeout, listformat=listformat,
+                                cb=cb, cbargs=cbargs)
         else:
             raise Exception("Euinstance ssh connection is None")
         
-    def sys_until_found(self, cmd, regex, verbose=True, timeout=120, listformat=True):
+    def sys_until_found(self, cmd, regex, verbose=True, timeout=120, listformat=True,
+                        net_namespace=None):
         '''
         Run a command until output of command satisfies/finds regex or EOF is found. 
         returns dict containing:
@@ -330,7 +338,8 @@ class Machine:
         timeout - optional - command timeout in seconds 
         listformat -optional - specifies returned output in list of lines, or single string buffer 
         '''
-        return self.cmd(cmd, verbose=verbose,timeout=timeout,listformat=listformat,cb=self.str_found_cb, cbargs=[regex, verbose])
+        return self.cmd(cmd, verbose=verbose, timeout=timeout, listformat=listformat,
+                        net_namespace=net_namespace, cb=self.str_found_cb, cbargs=[regex, verbose])
         
         
     def str_found_cb(self,buf,regex,verbose,search=True):
@@ -567,18 +576,22 @@ class Machine:
     def chown(self, user, path):
         self.sys("chwon "+ user + ":" + user + " " + path)
 
-    def ping_check(self,host):
-        out = self.ping_cmd(host)
+    def ping_check(self,host, verbose=True, net_namespace=None):
+        out = self.ping_cmd(host, verbose=verbose, net_namespace=net_namespace)
         self.debug('Ping attempt to host:'+str(host)+", status code:"+str(out['status']))
         if out['status'] != 0:
             raise Exception('Ping returned error:'+str(out['status'])+' to host:'+str(host))
     
-    def ping_cmd(self, host, count=2, pingtimeout=10, commandtimeout=120, listformat=False, verbose=True):
+    def ping_cmd(self, host, count=2, pingtimeout=10, commandtimeout=120, listformat=False,
+                 verbose=True, net_namespace=None):
         cmd = 'ping -c ' +str(count)+' -t '+str(pingtimeout)
         if verbose:
             cmd += ' -v '
         cmd = cmd + ' '+ str(host)
-        out = self.cmd(cmd, verbose=verbose, timeout=commandtimeout, listformat=listformat)
+        self.debug('cmd: {0}'.format(cmd))
+        out = self.cmd(cmd, verbose=verbose, timeout=commandtimeout, listformat=listformat,
+                       net_namespace=net_namespace)
+        self.debug('out: {0}'.format(out))
         if verbose:
             #print all returned attributes from ping command dict
             for item in sorted(out):
@@ -586,7 +599,8 @@ class Machine:
         return out
         
         
-    def dump_netfail_info(self,ip=None, mac=None, pass1=None, pass2=None, showpass=True, taillength=50):
+    def dump_netfail_info(self,ip=None, mac=None, pass1=None, pass2=None, showpass=True,
+                          taillength=50, net_namespace=None):
         """
         Debug method to provide potentially helpful info from current machine when debugging connectivity issues.
         """
@@ -594,7 +608,12 @@ class Machine:
                    + ' mac:' + str(mac)
                    + ' pass1:' + self.get_masked_pass(pass1,show=True)
                    + ' pass2:' + self.get_masked_pass(pass2,show=True))
-        self.ping_cmd(ip,verbose=True)
+        self.ping_cmd(ip,verbose=True, net_namespace=net_namespace,count=1)
+        ns_list = self.sys('ip netns list')
+        if net_namespace in ns_list:
+            self.sys('arp -a', net_namespace=net_namespace)
+            self.sys('ifconfig', net_namespace=net_namespace)
+            self.sys('netstat -rn', net_namespace=net_namespace)
         self.sys('arp -a')
         self.sys('dmesg | tail -'+str(taillength))
         self.sys('cat /var/log/messages | tail -'+str(taillength))

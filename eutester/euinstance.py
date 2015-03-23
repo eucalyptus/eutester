@@ -53,9 +53,12 @@ from eutester.euvolume import EuVolume
 from eutester import eulogger
 from eutester.taggedresource import TaggedResource
 from boto.ec2.instance import InstanceState
+from boto.ec2.networkinterface import NetworkInterface
 from random import randint
 import eutester.sshconnection as sshconnection
 from eutester.sshconnection import CommandExitCodeException
+from prettytable import PrettyTable, ALL, HEADER, FRAME, NONE
+from datetime import datetime
 import sys
 import os
 import re
@@ -171,7 +174,12 @@ class EuInstance(Instance, TaggedResource):
                     newins.use_sudo = False
 
         return newins
-    
+
+    @property
+    def age(self):
+        launchtime = self.tester.get_datetime_from_resource_string(self.launch_time)
+        #return the elapsed time in seconds
+        return time.mktime(datetime.utcnow().utctimetuple()) - time.mktime(launchtime.utctimetuple())
 
     def update(self, validate=False, dry_run=False,
                 err_state='terminated', err_code=-1):
@@ -218,66 +226,222 @@ class EuInstance(Instance, TaggedResource):
         for x in xrange(0,int(length)):
             line += "-"
         return "\n" + line + "\n"
-    
-    def printself(self,title=True, footer=True, printmethod=None):
-        instid = 11
-        emi = 13
-        resid = 11
-        laststate =10
-        privaddr = 10
-        age = 13
-        vmtype = 12
-        rootvol = 13
-        cluster = 25
-        pubip = 16
 
+    
+    def printself(self,title=True, footer=True, printmethod=None, printme=True):
+        markup = self.tester.markup
+        # Markup instance state...
+        def state_markup(state):
+            if state == 'running':
+                return markup(state, markups=[1,92])
+            if state == 'terminated':
+                return markup(state, markups=[1,97])
+            if state == 'shutting-down':
+                return markup(state, markups=[1,95])
+            if state == 'pending':
+                return markup(state, markups=[1,93])
+            if state == 'stopped':
+                return markup(state, markups=[1,91])
+            else:
+                return markup(state, markups=[1,91])
+        # Utility method for creating multi line table entries...
+        def multi_line(lines):
+            buf = ""
+            maxlen = 0
+            for line in lines:
+                if len(line) + 2 > maxlen:
+                    maxlen = len(line) + 2
+            for line in lines:
+                buf += str(line).ljust(maxlen) + "\n"
+            buf = buf.rstrip()
+            return (buf, maxlen)
+        bdmvol = self.root_device_type
         if self.bdm_root_vol:
-            bdmvol = self.bdm_root_vol.id
-        else:
-            bdmvol = None
+            bdmvol += ":" + self.bdm_root_vol.id
         reservation_id = None
         if self.reservation:
             reservation_id = self.reservation.id
-        header = ""
+        # Create a multi line field for instance's run info
+        idlist = [markup("{0} {1}".format('ID:', self.id) ,markups=[1,4,94]),
+                         "{0} {1}".format(markup('VMTYPE:'), self.instance_type),
+                         "{0} {1}".format(markup('RES:'),reservation_id),
+                         markup("KEYPAIR:"),
+                         "{0}".format(self.key_name)]
+        id_string, idlen = multi_line(idlist)
+        try:
+            emi = self.tester.get_emi(self.image_id)
+            emi_name = str(emi.name[0:22]) + ".."
+        except:
+            emi_name = ""
+        # Create a multi line field for the instance's image info
+        virt_type = 'PV'
+        if self.virtualization_type == 'hvm':
+            virt_type = 'HVM'
+        emi_string, emilen = multi_line(
+            [markup("{0} {1}".format('EMI:', self.image_id)),
+             "{0} {1}".format(markup('OS:'), self.platform or 'linux'),
+             "{0} {1}".format(markup('VIRT:'), virt_type),
+             "({0})".format(emi_name)])
+
+        # Create a multi line field for the instance's state info
+        if self.age:
+            age = int(self.age)
+        state_string, state_len = multi_line(
+            ["STATE: " + state_markup(self.laststate),
+            "{0} {1}".format(markup('AGE:'), age),
+            "{0} {1}".format(markup("ZONE:"), self.placement),
+            markup('ROOTDEV:'),
+            bdmvol])
+
+        # Create the primary table called pt...
+        netinfo = 'INSTANCE NETWORK INFO:'
+        idheader = 'INSTANCE ID'
+        imageheader = 'INSTANCE IMAGE'
+        stateheader = 'INSTANCE STATE'
+        pt = PrettyTable([idheader, imageheader, stateheader, netinfo])
+        pt.align[netinfo] = 'l'
+        pt.valign[netinfo] = 'm'
+        pt.align[idheader] = 'l'
+        pt.align[imageheader] = 'l'
+        pt.align[stateheader] = 'l'
+        pt.max_width[idheader] = idlen
+        pt.max_width[imageheader] = emilen
+        pt.max_width[stateheader] = state_len
+        pt.padding_width = 0
+        pt.hrules = ALL
+        # PrettyTable headers do not work with ascii markups, so make a sudo header
+        new_header = []
+        for field in pt._field_names:
+            new_header.append(markup(field, markups=[1,4]))
+        pt.add_row(new_header)
+        pt.header = False
+        # Create a subtable 'netpt' to summarize and format the networking portion...
+        # Set the maxwidth of each column so the tables line up when showing multiple instances
+        vpc_col = ('VPC', 4)
+        subnet_col = ('SUBNET', 6)
+        if self.vpc_id:
+            vpc_col = ('VPC', 12)
+            subnet_col = ('SUBNET', 15)
+        secgrp_col = ('SEC GRPS', 11)
+        privaddr_col = ('P', 1)
+        privip_col = ('PRIV IP', 15)
+        pubip_col = ('PUB IP', 15)
+        net_cols = [vpc_col, subnet_col, secgrp_col, privaddr_col, privip_col, pubip_col]
+        # Get the Max width of the main tables network summary column...
+        # Start with 2 to account for beginning and end column borders
+        netinfo_width = 2
+        netinfo_header = []
+        for col in net_cols:
+            netinfo_width += col[1] + 1
+            netinfo_header.append(col[0])
+        pt.max_width[netinfo] = netinfo_width
+        netpt = PrettyTable([vpc_col[0], subnet_col[0], secgrp_col[0], privaddr_col[0],
+                             privip_col[0], pubip_col[0]])
+        netpt.padding_width = 0
+        netpt.vrules = ALL
+        for col in net_cols:
+            netpt.max_width[col[0]] = col[1]
+        sec_grps = []
+        for grp in self.groups:
+            sec_grps.append(str(grp.id))
+        sec_grps = ",".join(sec_grps)
+        private_addressing = "N"
+        if self.private_addressing:
+            private_addressing = "Y"
+        netpt.add_row([str(self.vpc_id).center(vpc_col[1]),
+                       str(self.subnet_id).center(subnet_col[1]),
+                       str(sec_grps).center(secgrp_col[1]),
+                       str(private_addressing).center(privaddr_col[1]),
+                       str(self.private_ip_address).center(privip_col[1]),
+                       str(self.ip_address).center(pubip_col[1])])
+        # To squeeze a potentially long keyname under the network summary table, get the length
+        # and format this column to allow for wrapping a keyname under the table...
+        netbuf = netpt.get_string()
+        # Create the row in the main table...
+        pt.add_row([id_string, emi_string, state_string, netbuf])
+        if printme:
+            printmethod = printmethod or self.debug
+            printmethod("\n" + str(pt) + "\n")
+        return pt
+
+    def show_summary(self, printmethod=None, printme=True):
+        def header(text):
+            return self.tester.markup(text=text, markups=[1,4,94])
+
+        reservation_id = None
+        if self.reservation:
+            reservation_id = self.reservation.id
+        title = header('INSTANCE SUMMARY:"{0}", STATE:"{1}", PUB:"{2}", PRIV:"{3}'
+                       .format(self.id, self.state, self.ip_address, self.private_ip_address))
+        main_pt = PrettyTable([title])
+        main_pt.align[title] = 'l'
+        main_pt.padding_width = 0
+        mainbuf = header("SUMMARY:\n")
+        summary_pt = PrettyTable(['ID', 'RESERVATION', 'AGE', 'VMTYPE', 'CLUSTER', 'VIRT TYPE',
+                                  'REGION', 'KEY'])
+        summary_pt.padding_width = 0
+        summary_pt.add_row([self.id, reservation_id, self.age, self.instance_type,
+                            self.placement, self.virtualization_type, self.region, self.key_name])
+        mainbuf += str(summary_pt) + "\n"
+        mainbuf += header('\nINSTANCE NETWORK INFO:\n')
+        netpt = PrettyTable(['VPC', 'SUBNET', 'PRIV ONLY', 'PRIV DNS', 'PUB DNS'])
+        netpt.padding_width = 0
+        netpt.add_row([self.vpc_id, self.subnet_id, self.private_addressing,
+                       self.private_dns_name, self.public_dns_name])
+        mainbuf += str(netpt) + "\n"
+        mainbuf += header("\nINSTANCE ENI TABLE:\n")
+        mainbuf += str(self.show_enis(printme=False)) + "\n"
+        mainbuf += header("\nINSTANCE SECURITY GROUPS:\n")
+        mainbuf += str(self.tester.show_security_groups_for_instance(self, printme=False)) + "\n"
+        mainbuf += header("\nINSTANCE IMAGE:\n")
+        image = self.tester.get_emi(self.image_id)
+        mainbuf += str(self.tester.show_image(image=image, printme=False)) + "\n"
+        mainbuf += header("\nINSTANCE BLOCK DEVICE MAPPING:\n")
+        mainbuf += str(self.tester.show_block_device_map(self.block_device_mapping,
+                                                          printme=False))
+        main_pt.add_row([mainbuf])
+        if printme:
+            printmethod = printmethod or self.debug
+            printmethod("\n" + str(main_pt) + "\n")
+        return main_pt
+
+    def show_enis(self, printme=True):
         buf = ""
-        if title:
-            header = str('INST_ID').center(instid) +'|' + \
-                     str('EMI').center(emi) + '|' +  \
-                     str('RES_ID').center(resid) + '|' +  \
-                     str('LASTSTATE').center(laststate) + '|' +  \
-                     str('PRIV_ADDR').center(privaddr) + '|' +  \
-                     str('AGE@STATUS').center(age) + '|' +  \
-                     str('VMTYPE').center(vmtype) + '|' +  \
-                     str('ROOT_VOL').center(rootvol) + '|' +  \
-                     str('CLUSTER').center(cluster) + '|' +  \
-                     str('PUB_IP').center(pubip) + '|' +  \
-                     str('PRIV_IP')
-        summary = str(self.id).center(instid) + '|' + \
-                  str(self.image_id).center(emi) + '|' +  \
-                  str(reservation_id).center(resid) + '|' +  \
-                  str(self.laststate).center(laststate) + '|' +  \
-                  str(self.private_addressing).center(privaddr) + '|' + \
-                  str(self.age_at_state).center(age) + '|' +  \
-                  str(self.instance_type).center(vmtype) + '|' +  \
-                  str(bdmvol).center(rootvol) + '|' +  \
-                  str(self.placement).center(cluster) + '|' + \
-                  str(self.ip_address).center(pubip) + '|' + \
-                  str(self.private_ip_address).rstrip()
+        for eni in self.interfaces:
+            if isinstance(eni, NetworkInterface):
+                title = " ENI ID: {0}, DESCRIPTION:{1}".format(eni.id, eni.description)
+                enipt = PrettyTable([title])
+                enipt.align[title] = 'l'
+                enipt.padding_width = 0
+                dot = "?"
+                attached_status = "?"
+                if eni.attachment:
+                    dot = eni.attachment.delete_on_termination
+                    attached_status = eni.attachment.status
+                pt = PrettyTable(['ENI ID', 'PRIV_IP (PRIMARY)', 'PUB IP', 'VPC', 'SUBNET',
+                                  'OWNER', 'DOT', 'STATUS'])
+                pt.padding_width = 0
+                if eni.private_ip_addresses:
+                    private_ips = ",".join(str("{0} ({1})".format(x.private_ip_address,
+                                                                x.primary).center(20))
+                                           for x in eni.private_ip_addresses)
+                else:
+                    private_ips = None
+                pt.add_row([eni.id, private_ips,
+                            getattr(eni, 'publicIp', None),
+                            getattr(eni,'vpc_id', None),
+                            getattr(eni, 'subnet_id', None),
+                            getattr(eni, 'owner_id', None),
+                            dot,
+                            "{0} ({1})".format(eni.status, attached_status)])
+                enipt.add_row([(str(pt))])
+                buf += str(enipt)
+        if printme:
+            self.debug(buf)
+        else:
+            return buf
 
-        length = len(header)
-        if len(summary) > length:
-            length = len(summary)
-        line = self.get_line(length)
-        if title:
-            buf = line + header + line
-        buf += summary
-        if footer:
-            buf += line
-        if printmethod:
-            printmethod(buf)
-        return buf
 
-    
     def reset_ssh_connection(self, timeout=None):
         timeout = timeout or self.timeout
         self.debug('reset_ssh_connection for:'+str(self.id))
@@ -1698,7 +1862,7 @@ class EuInstance(Instance, TaggedResource):
                         raise Exception(str(self.id) + ', Volume ' + str(volume.id) + ':' + str(volume.status)
                                         + ' state did not remain in-use during stop'  )
         self.debug("\n"+ str(self.id) + ": Printing Instance 'attached_vol' list:\n")
-        self.tester.print_euvolume_list(self.attached_vols)
+        self.tester.show_volumes(self.attached_vols)
         msg=""
         start = time.time()
         elapsed = 0
@@ -1963,7 +2127,7 @@ class EuInstance(Instance, TaggedResource):
         Checks current instances meta data against a provided block device map & root_dev, or
         against the current values of the instance; self.block_device_mapping & self.root_device_name
         '''
-        self.tester.print_block_device_map(self.block_device_mapping)
+        self.tester.show_block_device_map(self.block_device_mapping)
         meta_dev_names = self.get_metadata('block-device-mapping')
         meta_devices = {}
         root_dev = root_dev or self.root_device_name

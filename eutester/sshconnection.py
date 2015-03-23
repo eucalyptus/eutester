@@ -648,8 +648,8 @@ class SshConnection():
                 ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
                 try:
                     self.debug("SSH connection attempt(" + str(attempt) +" of " + str(retry) + "), host:'"
-                               + username + "@" + hostname + "', using ipv4:" + str(ip) + ", thru proxy:'"
-                               + str(proxy_ip) + "'")
+                               + str(username) + "@" + str(hostname) + "', using ipv4:" + str(ip) +
+                               ", thru proxy:'" + str(proxy_ip) + "'")
                     if keypath is None and password:
                         self.debug("Using username:"+username+" and password:"+str(self.mask_password(password)),
                                    verbose=verbose)
@@ -666,7 +666,7 @@ class SshConnection():
                         break
                     elif key_files or self.find_keys:
                         self.debug("Using local keys, no keypath/password provided.", verbose=verbose)
-                        ssh._auth(username, password,None,key_files, True, True)
+                        ssh._auth(username, password, None, key_files, True, True)
                         #ssh.connect(ip, port=port, username=username, key_filename=keypath, timeout=timeout)
                         connected = True
 

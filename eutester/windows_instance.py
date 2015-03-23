@@ -52,10 +52,13 @@ from eutester import Eutester
 #from eucaops import Eucaops
 from eutester.euvolume import EuVolume
 from eutester import eulogger
+from eutester.euinstance import EuInstance
 from eutester.taggedresource import TaggedResource
 from boto.ec2.instance import InstanceState
+from boto.ec2.networkinterface import NetworkInterface
 from random import randint
 from datetime import datetime
+from prettytable import PrettyTable
 import winrm_connection
 import socket
 import sys
@@ -382,7 +385,7 @@ class WinInstanceLogicalDisk(WinInstanceDiskType):
         return buf
 
 
-class WinInstance(Instance, TaggedResource):
+class WinInstance(EuInstance, TaggedResource):
     gigabyte = 1073741824
     megabyte = 1048576
 
@@ -518,6 +521,13 @@ class WinInstance(Instance, TaggedResource):
         return ret
 
 
+    @property
+    def age(self):
+        launchtime = self.tester.get_datetime_from_resource_string(self.launch_time)
+        #return the elapsed time in seconds
+        return (time.mktime(datetime.utcnow().utctimetuple()) -
+                time.mktime(launchtime.utctimetuple()))
+
     def update_vm_type_info(self):
         self.vmtype_info =  self.tester.get_vm_type_from_zone(self.placement,self.instance_type)
         return self.vmtype_info
@@ -547,65 +557,6 @@ class WinInstance(Instance, TaggedResource):
         for key in dict:
             buf += str(key).ljust(longest_key) + " -----> :" + str(dict[key]) + "\n"
         printmethod(buf)
-
-    def printself(self,title=True, footer=True, printmethod=None):
-        instid = 11
-        emi = 13
-        resid = 11
-        laststate =10
-        privaddr = 10
-        age = 13
-        vmtype = 12
-        rootvol = 13
-        cluster = 25
-        pubip = 16
-
-        if self.bdm_root_vol:
-            bdmvol = self.bdm_root_vol.id
-        else:
-            bdmvol = None
-        reservation_id = None
-        if self.reservation:
-            reservation_id = self.reservation.id
-        header = ""
-        buf = ""
-        if title:
-            header = str('INST_ID').center(instid) +'|' + \
-                     str('EMI').center(emi) + '|' +  \
-                     str('RES_ID').center(resid) + '|' +  \
-                     str('LASTSTATE').center(laststate) + '|' +  \
-                     str('PRIV_ADDR').center(privaddr) + '|' +  \
-                     str('AGE@STATUS').center(age) + '|' +  \
-                     str('VMTYPE').center(vmtype) + '|' +  \
-                     str('ROOT_VOL').center(rootvol) + '|' +  \
-                     str('CLUSTER').center(cluster) + '|' +  \
-                     str('PUB_IP').center(pubip) + '|' +  \
-                     str('PRIV_IP')
-        summary = str(self.id).center(instid) + '|' + \
-                  str(self.image_id).center(emi) + '|' +  \
-                  str(reservation_id).center(resid) + '|' +  \
-                  str(self.laststate).center(laststate) + '|' +  \
-                  str(self.private_addressing).center(privaddr) + '|' + \
-                  str(self.age_at_state).center(age) + '|' +  \
-                  str(self.instance_type).center(vmtype) + '|' +  \
-                  str(bdmvol).center(rootvol) + '|' +  \
-                  str(self.placement).center(cluster) + '|' + \
-                  str(self.ip_address).center(pubip) + '|' + \
-                  str(self.private_ip_address).rstrip()
-
-        length = len(header)
-        if len(summary) > length:
-            length = len(summary)
-        line = get_line(length)
-        if title:
-            buf = line + header + line
-        buf += summary
-        if footer:
-            buf += line
-        if printmethod:
-            printmethod(buf)
-        return buf
-
 
     def get_password(self,
                      private_key_path=None,
@@ -2036,7 +1987,7 @@ class WinInstance(Instance, TaggedResource):
                         raise Exception(str(self.id) + ', Volume ' + str(volume.id) + ':' + str(volume.status)
                                         + ' state did not remain in-use during stop'  )
         self.debug("\n"+ str(self.id) + ": Printing Instance 'attached_vol' list:\n")
-        self.tester.print_euvolume_list(self.attached_vols)
+        self.tester.show_volumes(self.attached_vols)
         msg=""
         start = time.time()
         elapsed = 0
