@@ -28,34 +28,27 @@ import boto
 from boto.ec2.regioninfo import RegionInfo
 
 EC2RegionData = {
-    'us-east-1' : 'ec2.us-east-1.amazonaws.com',
-    'us-west-1' : 'ec2.us-west-1.amazonaws.com',
-    'eu-west-1' : 'ec2.eu-west-1.amazonaws.com',
-    'ap-northeast-1' : 'ec2.ap-northeast-1.amazonaws.com',
-    'ap-southeast-1' : 'ec2.ap-southeast-1.amazonaws.com'}
+    'us-east-1': 'ec2.us-east-1.amazonaws.com',
+    'us-west-1': 'ec2.us-west-1.amazonaws.com',
+    'eu-west-1': 'ec2.eu-west-1.amazonaws.com',
+    'ap-northeast-1': 'ec2.ap-northeast-1.amazonaws.com',
+    'ap-southeast-1': 'ec2.ap-southeast-1.amazonaws.com'}
+
 
 class STSops(Eutester):
 
-    def __init__(self, endpoint=None, region=None, credpath=None, aws_access_key_id=None, aws_secret_access_key=None):
+    def __init__(self, endpoint=None, region=None, credpath=None, aws_access_key_id=None, aws_secret_access_key=None,
+                 path="/", port=443, is_secure=True, boto_debug=0):
         self.aws_access_key_id = aws_access_key_id
         self.aws_secret_access_key = aws_secret_access_key
         self.user_id = None
         self.account_id = None
+        self.connection = None
         super(STSops, self).__init__(credpath=credpath)
         self.setup_sts_connection(endpoint=endpoint, region=region, aws_access_key_id=self.aws_access_key_id, aws_secret_access_key=self.aws_secret_access_key)
 
-    def get_sts_ip(self):
-        """Parse the eucarc for the TOKEN_URL"""
-        sts_url = self.parse_eucarc("TOKEN_URL")
-        return sts_url.split("/")[2].split(":")[0]
-
-    def get_sts_path(self):
-        """Parse the eucarc for the TOKEN_URL"""
-        sts_url = self.parse_eucarc("TOKEN_URL")
-        sts_path = "/".join(sts_url.split("/")[3:])
-        return sts_path
-
-    def setup_sts_connection(self, endpoint=None, region=None, aws_access_key_id=None, aws_secret_access_key=None, path="/",port=443, is_secure=True, boto_debug=0):
+    def setup_sts_connection(self, endpoint=None, region=None, aws_access_key_id=None, aws_secret_access_key=None,
+                             path="/", port=443, is_secure=True, boto_debug=0):
         sts_region = RegionInfo()
         if region:
             self.debug("Check region: " + str(region))
@@ -65,7 +58,7 @@ class STSops(Eutester):
                 else:
                     sts_region.endpoint = endpoint
             except KeyError:
-                raise Exception( 'Unknown region: %s' % region)
+                raise Exception('Unknown region: %s' % region)
         else:
             sts_region.name = 'eucalyptus'
             if endpoint:
@@ -74,31 +67,31 @@ class STSops(Eutester):
                 sts_region.endpoint = self.get_sts_ip()
 
         try:
-            sts_connection_args = { 'aws_access_key_id' : aws_access_key_id,
-                                    'aws_secret_access_key': aws_secret_access_key,
-                                    'is_secure': is_secure,
-                                    'debug':boto_debug,
-                                    'port' : port,
-                                    'path' : path,
-                                    'region' : sts_region}
+            sts_connection_args = {'aws_access_key_id': aws_access_key_id,
+                                   'aws_secret_access_key': aws_secret_access_key,
+                                   'is_secure': is_secure,
+                                   'debug': boto_debug,
+                                   'port': port,
+                                   'path': path,
+                                   'region': sts_region}
             self.debug("Attempting to create STS connection to " + sts_region.endpoint + ':' + str(port) + path)
-            self.tokens = boto.connect_sts(**sts_connection_args)
+            self.connection = boto.connect_sts(**sts_connection_args)
         except Exception, e:
             self.critical("Was unable to create STS connection because of exception: " + str(e))
 
     def get_session_token( self, duration=None ):
-        '''
+        """
         Get a possibly cached session token, if getting a new token request the given duration
         Options:
             duration - The desired duration for the token in seconds (if issued, None for default duration)
-        '''
-        return self.tokens.get_session_token( duration )
+        """
+        return self.connection.get_session_token( duration )
 
     def issue_session_token( self, duration=None ):
-        '''
+        """
         Get a newly issued session token with the given (or default) duration
         Options:
             duration - The desired duration for the token in seconds (None for default duration)
-        '''
-        return self.tokens.get_session_token( duration, force_new=True )
+        """
+        return self.connection.get_session_token( duration, force_new=True )
 

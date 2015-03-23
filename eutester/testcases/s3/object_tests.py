@@ -29,7 +29,6 @@ from boto.exception import S3ResponseError
 import boto.s3, boto.s3.connection
 import dateutil.parser
 
-
 from eutester.euca.euca_ops import Eucaops
 from eutester.utils.eutestcase import EutesterTestCase
 from eutester.aws.s3.s3ops import S3ops
@@ -407,7 +406,7 @@ class ObjectTestSuite(EutesterTestCase):
         """Test the POST method for putting objects using STS tokens, requires a pre-signed upload policy and url"""
         self.tester.info("Testing POST form upload on bucket with STS token" + self.test_bucket_name)
         self.tester.info("Getting STS credential for test")
-        credentials = self.tester.issue_session_token()
+        credentials = self.tester.token.issue_session_token()
         self.assertIsNotNone(credentials, msg='Could not get credentials')
         self.assertIsNotNone(credentials.access_key, msg='Credentials missing access_key')
         self.assertIsNotNone(credentials.secret_key, msg='Credentials missing secret_key')
@@ -425,10 +424,14 @@ class ObjectTestSuite(EutesterTestCase):
             self.tester.info('Data md5: ' + computed_md5 + ' data length: ' + str(len(computed_md5)))
             self.tester.info('Uploading object ' + self.test_bucket_name + '/' + key + ' via POST with acl : ' + acl)
             response = self.post_object_sts(bucket_name=self.test_bucket_name,
-                                        object_key=key,
-                                        object_data=data,
-                                        acl=acl,
-                                        policy=self.generate_default_policy_b64(self.test_bucket_name, key, acl=acl,token=credentials.session_token), credentials=credentials)
+                                            object_key=key,
+                                            object_data=data,
+                                            acl=acl,
+                                            policy=self.generate_default_policy_b64(self.test_bucket_name,
+                                                                                    key,
+                                                                                    acl=acl,
+                                                                                    token=credentials.session_token),
+                                            credentials=credentials)
 
             self.tester.info('Got response for POST: ' + str(response.status_code) + ': ' + str(response.text))
             assert(response.status_code == 204)
@@ -479,7 +482,6 @@ class ObjectTestSuite(EutesterTestCase):
             assert(fetched_key.etag == computed_md5)
             fetched_content = fetched_key.get_contents_as_string()
             assert(fetched_content == data)
-
 
     def test_object_large_objects(self):
         """Test operations on large objects (>1MB), but not so large that we must use the multi-part upload interface"""
@@ -540,8 +542,8 @@ class ObjectTestSuite(EutesterTestCase):
         self.tester.info("HEAD request...")
         returned_key = self.test_bucket.get_key(keyname)
         download_temp_file = tempfile.NamedTemporaryFile(mode="w+b", prefix="mpu-download")
-        self.tester.info("Downloading object...very mpu");
-        returned_key.get_contents_to_file(download_temp_file);
+        self.tester.info("Downloading object...very mpu")
+        returned_key.get_contents_to_file(download_temp_file)
         self.tester.info("Deleting object...WOW")
         self.test_bucket.delete_key(keyname)
 
@@ -641,7 +643,7 @@ class ObjectTestSuite(EutesterTestCase):
         self.test_bucket.delete_key(key_name=obj_v2.key,version_id=obj_v2.version_id)
         del_obj = self.test_bucket.get_key(keyname,version_id=obj_v2.version_id)
         if del_obj:
-            raise S3ResponseError("Should have gotten 404 not-found error, but got: " + del_obj.key + " instead",404)
+            raise S3ResponseError("Should have gotten 404 not-found error, but got: " + del_obj.key + " instead", 404)
 
         #Show what's on top
         top_obj = self.test_bucket.get_key(keyname)
@@ -696,7 +698,8 @@ class ObjectTestSuite(EutesterTestCase):
                 self.tester.info("Key: " + obj.name + " -- " + obj.version_id + "--" + obj.last_modified)
                 if prev_obj is not None:
                     if self.compare_versions(prev_obj, obj) <= 0:
-                        raise Exception("Version listing not sorted correctly, offending key: " + obj.name + " version: " + obj.version_id + " date: " + obj.last_modified)
+                        raise Exception("Version listing not sorted correctly, offending key: " + obj.name
+                                        + " version: " + obj.version_id + " date: " + obj.last_modified)
                 prev_obj = obj
             else:
                 self.tester.info("Not a key, skipping: " + str(obj))
@@ -861,7 +864,7 @@ class ObjectTestSuite(EutesterTestCase):
         httpMethod = 'PUT'
         presigned_url = ''
         try:
-            self.tester.info('Port = ' + str(self.tester.s3.port))
+            self.tester.info('Port = ' + str(self.tester.s3.connection.port))
             presigned_url = self.tester.s3.generate_url(expires_in=oneMinute, method=httpMethod, bucket=self.test_bucket_name, key=objectKey1, query_auth=True, headers=test_headers, response_headers=None, expires_in_absolute=False)
             self.tester.info('Using presigned url for PUT: ' + presigned_url)
             response = requests.put(url=presigned_url, data='testingcontent123')
@@ -910,23 +913,22 @@ class ObjectTestSuite(EutesterTestCase):
         except Exception as e:
             self.fail("Failed on pre-signed put with url: " + presigned_url + ' with exception: ' + e.message)
 
-
     def test_presigned_url_sts(self):
         """Tests presigned urls using STS session tokens"""
         self.tester.info("Testing presigned url usage with sts session tokens")
         self.test_bucket = self.clear_and_rebuild_bucket(self.test_bucket_name)
         oneMinute = 1 * 60
         objectKey1 = 'presignedurltestobject'
-        credentials = self.tester.get_session_token()
+        credentials = self.tester.token.get_session_token()
         calling_format = boto.s3.connection.OrdinaryCallingFormat()
         s3connection = boto.connect_s3(
             aws_access_key_id=credentials.access_key,
             aws_secret_access_key=credentials.secret_key,
             security_token=credentials.session_token,
-            host=self.tester.s3.host,
-            port=self.tester.s3.port,
-            path=self.tester.s3.path,
-            is_secure=self.tester.s3.is_secure,
+            host=self.tester.s3.connection.host,
+            port=self.tester.s3.connection.port,
+            path=self.tester.s3.connection.path,
+            is_secure=self.tester.s3.connection.is_secure,
             calling_format=calling_format)
 
         #Test PUT
@@ -1007,10 +1009,10 @@ if __name__ == "__main__":
                                    'test_presigned_url_sts']
 
     ### Convert test suite methods to EutesterUnitTest objects
-    unit_list = [ ]
+    unit_list = []
     for test in list:
-        unit_list.append( testcase.create_testunit_by_name(test) )
+        unit_list.append(testcase.create_testunit_by_name(test))
         ### Run the EutesterUnitTest objects
 
-    result = testcase.run_test_case_list(unit_list,clean_on_exit=True)
+    result = testcase.run_test_case_list(unit_list, clean_on_exit=True)
     exit(result)

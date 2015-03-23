@@ -174,18 +174,6 @@ class Eucaops(Eutester):
         #                                   region=region, aws_access_key_id=aws_access_key_id,
         #                                   aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
         #
-        #         if self.credpath and not cw_ip:
-        #             cw_ip = self.get_cw_ip()
-        #         if self.credpath and not cw_path:
-        #             cw_path = self.get_cw_path()
-        #         self.setup_cw_connection(endpoint=cw_ip, path=cw_path, port=port, is_secure=False,
-        #                                  region=region, aws_access_key_id=aws_access_key_id,
-        #                                  aws_secret_access_key=aws_secret_access_key, boto_debug=boto_debug)
-        #
-        #         self.setup_cw_resource_trackers()
-        #     except Exception, e:
-        #         tb = self.get_traceback()
-        #         raise Exception(tb + "\nUnable to create EC2 connection because of: " + str(e) )
 
     def setup_ec2_resource_trackers(self):
         """
@@ -347,6 +335,27 @@ class Eucaops(Eutester):
             return self.cloudwatch
 
     @property
+    def token(self):
+        if self.credpath and not self.sts_ip:
+            self.sts_ip = self.get_sts_ip()
+        if self.credpath and not self.cw_path:
+            self.sts_path = self.get_sts_path()
+        if 'token' not in self.__dict__:
+            ops = STSops(endpoint=self.sts_ip,
+                         path=self.sts_path,
+                         port=8773,
+                         region=self.region,
+                         is_secure=False,
+                         aws_access_key_id=self.aws_access_key_id,
+                         aws_secret_access_key=self.aws_secret_access_key,
+                         boto_debug=self.boto_debug,
+                         credpath=self.credpath)
+            return ops
+        else:
+            return self.token
+
+
+    @property
     def property_manager(self):
         if not self._property_manager:
             if self.clc and self.account_name == 'eucalyptus':
@@ -407,10 +416,7 @@ class Eucaops(Eutester):
         type_state = zones[ zone_index + type_index ].state.split()
         self.debug("Finding available VMs: Partition=" + zone +" Type= " + type + " Number=" +  str(int(type_state[0])) )
         return int(type_state[0])
-        
-    
-    
-            
+
     def modify_property(self, property, value):
         """
         Modify a eucalyptus property through the command line euca-modify-property tool
@@ -448,7 +454,7 @@ class Eucaops(Eutester):
         self.debug("Starting cleanup of artifacts")
         if auto_scaling_groups and self.test_resources["auto-scaling-groups"]:
             try:
-                self.cleanup_autoscaling_groups()
+                self.autoscaling.cleanup_autoscaling_groups()
             except Exception, e:
                 tb = self.get_traceback()
                 failcount +=1
@@ -501,24 +507,24 @@ class Eucaops(Eutester):
             except Exception, e:
                 tb = self.get_traceback()
                 failcount +=1
-                failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
+                failmsg += str(tb) + "\nError#:" + str(failcount)+ ":" + str(e)+"\n"
         if load_balancers and self.test_resources["load_balancers"]:
             try:
                 self.cleanup_load_balancers()
             except Exception, e:
                 tb = self.get_traceback()
                 failcount +=1
-                failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
+                failmsg += str(tb) + "\nError#:" + str(failcount)+ ":" + str(e)+"\n"
 
         if launch_configurations and self.test_resources["launch-configurations"]:
             try:
-                self.cleanup_launch_configs()
+                self.autoscaling.cleanup_launch_configs()
             except Exception, e:
                 tb = self.get_traceback()
                 failcount +=1
-                failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
+                failmsg += str(tb) + "\nError#:" + str(failcount) + ":" + str(e)+"\n"
 
-        for key,array in self.test_resources.iteritems():
+        for key, array in self.test_resources.iteritems():
             for item in array:
                 try:
                     ### SWITCH statement for particulars of removing a certain type of resources
@@ -544,7 +550,7 @@ class Eucaops(Eutester):
             raise Exception(failmsg)
         if launch_configurations and self.test_resources["launch-configurations"]:
             try:
-                self.cleanup_launch_configs()
+                self.autoscaling.cleanup_launch_configs()
             except Exception, e:
                 tb = self.get_traceback()
                 failcount +=1
@@ -672,17 +678,17 @@ class Eucaops(Eutester):
         timeout = min_timeout + (len(volumes) * timeout_per_vol)
         #If detaching wait for detaching to transition to detached...
         if detaching:
-            self.monitor_euvolumes_to_status(detaching, status='available', attached_status=None,timeout=timeout)
+            self.ec2.monitor_euvolumes_to_status(detaching, status='available', attached_status=None,timeout=timeout)
         self.debug('clean_up_volumes: Deleteing volumes now...')
-        self.print_euvolume_list(euvolumes)
+        self.ec2.print_euvolume_list(euvolumes)
         if euvolumes:
-            self.delete_volumes(euvolumes, timeout=timeout)
+            self.ec2.delete_volumes(euvolumes, timeout=timeout)
 
-                    
     def get_current_resources(self,verbose=False):
-        '''Return a dictionary with all known resources the system has. Optional pass the verbose=True flag to print this info to the logs
+        """
+        Return a dictionary with all known resources the system has. Optional pass the verbose=True flag to print this info to the logs
            Included resources are: addresses, images, instances, key_pairs, security_groups, snapshots, volumes, zones
-        '''
+        """
         current_artifacts = dict()
         current_artifacts["addresses"] = self.ec2.get_all_addresses()
         current_artifacts["images"] = self.ec2.get_all_images()

@@ -980,7 +980,7 @@ disable_root: false"""
                 else:
                     instance_debug_str = ""
                 self.debug("Monitoring volume:"+str(vol.id)+". Currently state/attached_state:'"+str(vol.status)
-                            +"/"+str(vol.eutest_attached_status)+"', needed: '"+str(status)+"/"+str(attached_status)+
+                            + "/" + str(vol.eutest_attached_status)+"', needed: '"+str(status)+"/"+str(attached_status)+
                            "'"+instance_debug_str)
                 #fail fast for improper state transitions when attaching:
                 if attached_status and last_attached_status and not vol.eutest_attached_status:
@@ -1022,9 +1022,7 @@ disable_root: false"""
             raise Exception(failmsg)
         return good
 
-
-                
-    def print_euvolume_list(self,euvolumelist=None):
+    def print_euvolume_list(self, euvolumelist=None):
         """
 
         :param euvolumelist: list of euvolume
@@ -1121,7 +1119,6 @@ disable_root: false"""
                 self.test_resources['volumes'].remove(volume)
             return True
 
-
         if volume.status != 'deleted':
             self.fail(str(volume) + " left in " +  volume.status + ',elapsed:'+str(elapsed))
             return False
@@ -1193,7 +1190,6 @@ disable_root: false"""
 
                   errmsg += "ERROR:"+str(volume) + " left in " +  volume.status + ',elapsed:'+str(elapsed) + "\n"
                 raise Exception(errmsg)
-
 
     def delete_all_volumes(self):
         """
@@ -2990,9 +2986,6 @@ disable_root: false"""
             raise Exception(buf)
         self.print_euinstance_list(good)
         return good
-    
-
-
 
     @Eutester.printinfo
     def does_instance_sec_group_allow(self,

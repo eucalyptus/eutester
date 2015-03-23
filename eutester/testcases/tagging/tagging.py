@@ -118,18 +118,18 @@ class TaggingBasics(EutesterTestCase):
         This case was developed to exercise tagging of an instance resource
         """
         self.volume = self.tester.ec2.create_volume(zone=self.zone)
-        tags = { u'name': 'volume-tag-test', u'location' : 'datacenter'}
+        tags = {u'name': 'volume-tag-test', u'location': 'datacenter'}
         self.volume.create_tags(tags)
 
         ### Test Filtering
-        tag_filter = { u'tag:name': u'volume-tag-test'}
+        tag_filter = {u'tag:name': u'volume-tag-test'}
         volumes = self.tester.ec2.connection.get_all_volumes(filters=tag_filter)
         if len(volumes) is 0:
             raise Exception('Filter for instances returned no results ' + str(volumes))
         if len(volumes) is not 1:
             raise Exception('Filter for instances returned too many results ' + str(volumes))
         if volumes[0].id != self.volume.id:
-            raise Exception('Wrong volume ID returned after filtering ' + str(volumes) )
+            raise Exception('Wrong volume ID returned after filtering ' + str(volumes))
 
         ### Test non-tag Filtering
         ### Filters can be found here, most will be tested manually, but a spot check should be added
@@ -137,7 +137,7 @@ class TaggingBasics(EutesterTestCase):
         vol_size = 3
         filter_test_volume_1 = self.tester.ec2.create_volume(zone=self.zone, size=vol_size)
         filter_test_volume_2 = self.tester.ec2.create_volume(zone=self.zone, size=vol_size)
-        size_filter = {u'size': vol_size }
+        size_filter = {u'size': vol_size}
         id_filter = {u'volume-id': self.volume.id}
 
         size_match = self.tester.ec2.connection.get_all_volumes(filters=size_filter)
@@ -147,9 +147,9 @@ class TaggingBasics(EutesterTestCase):
         self.tester.ec2.delete_volume(filter_test_volume_2)
 
         if len(size_match) != 2:
-            raise Exception("Non-tag Filtering of volumes by size: " + str(len(size_match))  + " expected: 2")
+            raise Exception("Non-tag Filtering of volumes by size: " + str(len(size_match)) + " expected: 2")
         if len(id_match) != 1:
-            raise Exception("Non-tag Filtering of volumes by id: " + str(len(id_match))  + " expected: 1")
+            raise Exception("Non-tag Filtering of volumes by id: " + str(len(id_match)) + " expected: 1")
 
         ### Test Deletion
         self.volume.delete_tags(tags)

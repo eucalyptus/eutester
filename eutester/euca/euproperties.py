@@ -199,7 +199,7 @@ class Euproperty_Manager():
         self.property_map = Property_Map()
         self.update_property_list()
         self.tester.property_manager = self
-        self.zones = self.tester.get_zones()
+        self.zones = self.tester.ec2.get_zones()
 
     def get_clc(self):
         return self.tester.service_manager.get_enabled_clc().machine
@@ -400,7 +400,7 @@ class Euproperty_Manager():
         newlist = []
         newprop = None
         self.debug("updating property list...")
-        self.zones = self.tester.get_zones()
+        self.zones = self.tester.ec2.get_zones()
         cmdout = self.work_machine.sys(
             self.cmdpath+'euca-describe-properties -v -U ' +
             str(self.service_url) + ' -I ' + str(self.access_key) +

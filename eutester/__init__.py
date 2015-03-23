@@ -165,6 +165,17 @@ class Eutester(object):
         cw_path = "/".join(cw_url.split("/")[3:])
         return cw_path
 
+    def get_sts_ip(self):
+        """Parse the eucarc for the TOKEN_URL"""
+        sts_url = self.parse_eucarc("TOKEN_URL")
+        return sts_url.split("/")[2].split(":")[0]
+
+    def get_sts_path(self):
+        """Parse the eucarc for the TOKEN_URL"""
+        sts_url = self.parse_eucarc("TOKEN_URL")
+        sts_path = "/".join(sts_url.split("/")[3:])
+        return sts_path
+
     def get_access_key(self):
         if not self.aws_access_key_id:     
             """Parse the eucarc for the EC2_ACCESS_KEY"""

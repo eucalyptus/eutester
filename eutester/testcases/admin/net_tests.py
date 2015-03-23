@@ -105,16 +105,15 @@ test 6 (Multi-zone/cluster env):
 # be run under non-admin if desired.
 
 from paramiko import SSHException
-from eucaops import Eucaops
-from eutester.eutestcase import EutesterTestCase
-from eutester.eutestcase import SkipTestException
-from eutester.euinstance import EuInstance
-from eutester.sshconnection import CommandExitCodeException, SshConnection
+from eutester.euca.euca_ops import Eucaops
+from eutester.utils.eutestcase import EutesterTestCase, SkipTestException
+from eutester.aws.ec2.euinstance import EuInstance
+from eutester.utils.sshconnection import CommandExitCodeException, SshConnection
 import socket
 import time
 import os
 import sys
-import copy
+
 
 class TestZone():
     def __init__(self, zonename):
@@ -122,6 +121,7 @@ class TestZone():
         self.zone = zonename
         self.test_instance_group1 = None
         self.test_instance_group2 = None
+
 
 class Net_Tests(EutesterTestCase):
 
@@ -157,20 +157,20 @@ class Net_Tests(EutesterTestCase):
             self.zones = str(self.args.zone).replace(',',' ')
             self.zones = self.zones.split()
         else:
-            self.zones = self.tester.get_zones()
+            self.zones = self.tester.ec2.get_zones()
         if not self.zones:
             raise Exception('No zones found to run this test?')
         self.debug('Running test against zones:' + ",".join(self.zones))
 
         ### Add and authorize securtiy groups
         self.debug("Creating group1..")
-        self.group1 = self.tester.add_group(str(self.name) + "_group1_" + str(time.time()))
+        self.group1 = self.tester.ec2.add_group(str(self.name) + "_group1_" + str(time.time()))
         self.debug("Authorize ssh for group1 from '0.0.0.0/0'")
-        self.tester.authorize_group(self.group1, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
+        self.tester.ec2.authorize_group(self.group1, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
         #self.tester.authorize_group(self.group1, protocol='icmp',port='-1')
 
         self.debug("Creating group2, will authorize later from rules within test methods..")
-        self.group2 = self.tester.add_group(str(self.name) + "_group2_" + str(time.time()))
+        self.group2 = self.tester.ec2.add_group(str(self.name) + "_group2_" + str(time.time()))
         self.group1_instances = []
         self.group2_instances = []
 
@@ -178,38 +178,34 @@ class Net_Tests(EutesterTestCase):
 
         ### Generate a keypair for the instances
         try:
-            keys = self.tester.get_all_current_local_keys()
+            keys = self.tester.ec2.get_all_current_local_keys()
             if keys:
                 self.keypair = keys[0]
             else:
-                self.keypair = self.tester.add_keypair(str(self.name) + "_key_" + str(time.time()))
+                self.keypair = self.tester.ec2.add_keypair(str(self.name) + "_key_" + str(time.time()))
         except Exception, ke:
             raise Exception("Failed to find/create a keypair, error:" + str(ke))
 
         ### Get an image to work with
         if self.args.emi:
-            self.image = self.tester.get_emi(emi=str(self.args.emi))
+            self.image = self.tester.ec2.get_emi(emi=str(self.args.emi))
         else:
-            self.image = self.tester.get_emi(root_device_type="instance-store", basic_image=True)
+            self.image = self.tester.ec2.get_emi(root_device_type="instance-store", basic_image=True)
         if not self.image:
             raise Exception('couldnt find instance store image')
-
-
-
 
     ######################################################
     #   Test Utility Methods
     ######################################################
-
     def authorize_group_for_instance_list(self, group, instances):
         for instance in instances:
             assert isinstance(instance, EuInstance)
-            self.tester.authorize_group(group, cidr_ip=instance.private_ip_address + "/32")
+            self.tester.ec2.authorize_group(group, cidr_ip=instance.private_ip_address + "/32")
 
     def revoke_group_for_instance_list(self, group, instances):
         for instance in instances:
             assert isinstance(instance, EuInstance)
-            self.tester.revoke(group, cidr_ip=instance.private_ip_address + "/32")
+            self.tester.ec2.revoke(group, cidr_ip=instance.private_ip_address + "/32")
 
     def clean_method(self):
         if self.args.freeze_on_fail:
@@ -322,14 +318,11 @@ class Net_Tests(EutesterTestCase):
                 return True
         return False
 
-
     ################################################################
     #   Test Methods
     ################################################################
-
-
     def test1_create_instance_in_zones_for_security_group1(self, ping_timeout=180, zones=None):
-        '''
+        """
         Definition:
         Create test instances within each zone within security group1. This security group is authorized for
         ssh access from 0.0.0.0/0.
@@ -339,36 +332,36 @@ class Net_Tests(EutesterTestCase):
             -Establish and verify an ssh session directly from the local machine running this test.
             -Place ssh key on instance for later use
             -Add instance to global 'group1_instances'
-        '''
+        """
         if zones and not isinstance(zones, list):
             zones = [zones]
         zones = zones or self.zones
         for zone in zones:
             #Create an instance, monitor it's state but disable the auto network/connect checks till afterward
-            instance = self.tester.run_image(image=self.image,
-                                             keypair=self.keypair,
-                                             group=self.group1,
-                                             zone=zone,
-                                             auto_connect=False,
-                                             monitor_to_running=False)[0]
+            instance = self.tester.ec2.run_image(image=self.image,
+                                                 keypair=self.keypair,
+                                                 group=self.group1,
+                                                 zone=zone,
+                                                 auto_connect=False,
+                                                 monitor_to_running=False)[0]
             self.group1_instances.append(instance)
-        self.tester.monitor_euinstances_to_running(self.group1_instances)
+        self.tester.ec2.monitor_euinstances_to_running(self.group1_instances)
         #Now run the network portion.
         for instance in self.group1_instances:
             self.status('Checking connectivity to:' + str(instance.id) + ":" + str(instance.private_ip_address)+
                         ", zone:" + str(instance.placement) )
             assert isinstance(instance, EuInstance)
             self.debug('Attempting to ping instances private ip from cc...')
-            self.tester.wait_for_result( self.ping_instance_private_ip_from_active_cc,
-                                         result=True,
-                                         timeout=ping_timeout,
-                                         instance=instance)
+            self.tester.wait_for_result(self.ping_instance_private_ip_from_active_cc,
+                                        result=True,
+                                        timeout=ping_timeout,
+                                        instance=instance)
             self.debug('Attempting to ssh to instance from local test machine...')
             self.debug('Check some debug information re this data connection in this security group first...')
-            self.tester.does_instance_sec_group_allow(instance=instance,
-                                                      src_addr=None,
-                                                      protocol='tcp',
-                                                      port=22)
+            self.tester.ec2.does_instance_sec_group_allow(instance=instance,
+                                                          src_addr=None,
+                                                          protocol='tcp',
+                                                          port=22)
             instance.connect_to_instance(timeout=90)
             self.status('SSH connection to instance:' + str(instance.id) +
                         ' successful to public ip:' + str(instance.ip_address) +
@@ -377,10 +370,8 @@ class Net_Tests(EutesterTestCase):
             instance.ssh.sftp_put(instance.keypath, os.path.basename(instance.keypath))
             instance.sys('chmod 0600 ' + os.path.basename(instance.keypath), code=0 )
 
-
-    def test2_create_instance_in_zones_for_security_group2(self, ping_timeout=180,
-                                                           auto_connect=False, zones=None):
-        '''
+    def test2_create_instance_in_zones_for_security_group2(self, ping_timeout=180, auto_connect=False, zones=None):
+        """
         Definition:
         This test attempts to create an instance in each zone within security group2 which should not
         be authorized for any remote access (outside of the CC).
@@ -394,27 +385,27 @@ class Net_Tests(EutesterTestCase):
         :params auto_connect: Boolean. If True will auto ssh to instance(s), if False will
                               use cc/nc as ssh proxy
         :params zones: List of names of Availability zone(s) to create instances in
-        '''
+        """
         if zones and not isinstance(zones, list):
             zones = [zones]
         zones = zones or self.zones
         for zone in self.zones:
-            instance = self.tester.run_image(image=self.image,
+            instance = self.tester.ec2.run_image(image=self.image,
                                              keypair=self.keypair,
                                              group=self.group2,
                                              zone=zone,
                                              auto_connect=auto_connect,
                                              monitor_to_running=False)[0]
             self.group2_instances.append(instance)
-        self.tester.monitor_euinstances_to_running(self.group2_instances)
+        self.tester.ec2.monitor_euinstances_to_running(self.group2_instances)
         for instance in self.group2_instances:
             self.status('Checking connectivity to:' + str(instance.id) + ":" + str(instance.private_ip_address)+
-                        ", zone:" + str(instance.placement) )
+                        ", zone:" + str(instance.placement))
             assert isinstance(instance, EuInstance)
-            self.tester.wait_for_result( self.ping_instance_private_ip_from_active_cc,
-                                         result=True,
-                                         timeout=ping_timeout,
-                                         instance=instance)
+            self.tester.wait_for_result(self.ping_instance_private_ip_from_active_cc,
+                                        result=True,
+                                        timeout=ping_timeout,
+                                        instance=instance)
             if not auto_connect:
                 self.status('Make sure ssh is working through CC path before trying between instances...')
                 instance.proxy_ssh = self.create_ssh_connection_to_instance(instance)
@@ -428,7 +419,6 @@ class Net_Tests(EutesterTestCase):
             instance.proxy_ssh.sftp_put(instance.keypath, os.path.basename(instance.keypath))
             instance.proxy_ssh.sys('chmod 0600 ' + os.path.basename(instance.keypath), code=0 )
             self.status('Done with create instance security group2:' + str(instance.id))
-
 
     def test3_test_ssh_between_instances_in_diff_sec_groups_same_zone(self):
         '''
@@ -467,7 +457,7 @@ class Net_Tests(EutesterTestCase):
                        + str(instance2.id) + '/sec grps(' + str(instance2.security_groups)+")\n"
                        + "Current test run in zone: " + str(zone), linebyline=False )
             self.debug('Check some debug information re this data connection in this security group first...')
-            self.tester.does_instance_sec_group_allow(instance=instance2,
+            self.tester.ec2.does_instance_sec_group_allow(instance=instance2,
                                                       src_addr=instance1.private_ip_address,
                                                       protocol='tcp',
                                                       port=22)
@@ -481,7 +471,7 @@ class Net_Tests(EutesterTestCase):
         self.authorize_group_for_instance_list(self.group2, self.group1_instances)
         check_instance_connectivity()
         self.revoke_group_for_instance_list(self.group2, self.group1_instances)
-        self.tester.authorize_group(self.group2, cidr_ip=None, port=None, src_security_group_name=self.group1.name )
+        self.tester.ec2.authorize_group(self.group2, cidr_ip=None, port=None, src_security_group_name=self.group1.name )
         check_instance_connectivity()
 
     def test4_attempt_unauthorized_ssh_from_test_machine_to_group2(self):
@@ -493,7 +483,7 @@ class Net_Tests(EutesterTestCase):
         for instance in self.group2_instances:
             assert isinstance(instance, EuInstance)
             #Provide some debug information re this data connection in this security group
-            self.tester.does_instance_sec_group_allow(instance=instance, src_addr=None, protocol='tcp',port=22)
+            self.tester.ec2.does_instance_sec_group_allow(instance=instance, src_addr=None, protocol='tcp',port=22)
             try:
                 instance.reset_ssh_connection(timeout=5)
                 raise Exception('Was able to connect to instance: ' + str(instance.id) + ' in security group:'
@@ -546,7 +536,7 @@ class Net_Tests(EutesterTestCase):
                                + "Current test run in zones: " + str(instance1.placement) + "-->" + str(instance2.placement),
                                linebyline=False )
                     self.debug('Check some debug information re this data connection in this security group first...')
-                    self.tester.does_instance_sec_group_allow(instance=instance2,
+                    self.tester.ec2.does_instance_sec_group_allow(instance=instance2,
                                                               src_addr=instance1.private_ip_address,
                                                               protocol='tcp',
                                                               port=22)
@@ -580,7 +570,7 @@ class Net_Tests(EutesterTestCase):
         if len(self.zones) < 2:
             raise SkipTestException('Skipping test5, only a single zone found or provided')
         self.status('Authorizing group2:' + str(self.group2.name) + ' for access from group1:' + str(self.group1.name))
-        self.tester.authorize_group(self.group2, cidr_ip=None, port=None, src_security_group_name=self.group1.name)
+        self.tester.ec2.authorize_group(self.group2, cidr_ip=None, port=None, src_security_group_name=self.group1.name)
 
 
         for zone in self.zones:
@@ -626,7 +616,7 @@ class Net_Tests(EutesterTestCase):
                                + "Current test run in zones: " + str(instance1.placement) + "-->" + str(instance2.placement),
                                linebyline=False )
                     self.debug('Check some debug information re this data connection in this security group first...')
-                    self.tester.does_instance_sec_group_allow(instance=instance2,
+                    self.tester.ec2.does_instance_sec_group_allow(instance=instance2,
                                                               src_addr=instance1.private_ip_address,
                                                               protocol='tcp',
                                                               port=22)
@@ -670,7 +660,6 @@ class Net_Tests(EutesterTestCase):
         if not instances:
             raise ValueError('Could not find instance in group1')
 
-
         # Iterate through all instances and test...
         for instance1 in instances:
             # Make sure we can ssh to this instance (note this may need to be
@@ -678,15 +667,15 @@ class Net_Tests(EutesterTestCase):
             # 'does_instance_sec_group_allow' will set tester.ec2_source_ip to the
             # ip the local machine uses to communicate with the instance.
             if src_cidr_ip is None:
-                if not tester.does_instance_sec_group_allow(instance=instance1,
+                if not tester.ec2.does_instance_sec_group_allow(instance=instance1,
                                                             protocol='tcp',
                                                             port=22):
-                    src_cidr_ip = str(tester.ec2_source_ip) + '/32'
-                    tester.authorize_group(self.group1,
+                    src_cidr_ip = str(tester.ec2.ec2_source_ip) + '/32'
+                    tester.ec2.authorize_group(self.group1,
                                            cidr_ip=src_cidr_ip,
                                            port=22)
             else:
-                tester.authorize_group(self.group1,
+                tester.ec2.authorize_group(self.group1,
                                             cidr_ip=src_cidr_ip,
                                             port=22)
             try:
@@ -703,21 +692,21 @@ class Net_Tests(EutesterTestCase):
 
             #make sure we have an open port range to play with...
             if start is None:
-                for x in xrange(2000,65000):
+                for x in xrange(2000, 65000):
                     if self.is_port_range_in_use_on_instance(instance=instance1,
                                                              start=x,
                                                              end=x+count,
                                                              tcp=True):
-                        x=x+count
+                        x = x + count
                     else:
-                        start=x
+                        start = x
                         break
                 if not start:
                     raise RuntimeError('Free consecutive port range of count:{0} '
                                        'not found on instance:{1}'
                                        .format(count, instance1.id))
             # authorize entire port range...
-            self.tester.authorize_group(self.group1,
+            self.tester.ec2.authorize_group(self.group1,
                                         cidr_ip=src_cidr_ip,
                                         port=start,
                                         end_port=start+count)
@@ -732,7 +721,7 @@ class Net_Tests(EutesterTestCase):
                 test_string = '{0} last port tested[{1}]'.format(time.time(), x)
                 self.debug("Gathering debug information as to whether the "
                            "tester's src ip is authorized for this port test...")
-                if not tester.does_instance_sec_group_allow(
+                if not tester.ec2.does_instance_sec_group_allow(
                         instance=instance1,
                         src_addr=src_cidr_ip.split('/')[0],
                         protocol='tcp',
@@ -748,9 +737,9 @@ class Net_Tests(EutesterTestCase):
                               .format(x, test_file) + '}', code=0, timeout=5)
                 # attempt to connect socket at instance/port and send the
                 # test_string...
-                time.sleep(2) #Allow listener to setup...
+                time.sleep(2)  # Allow listener to setup...
                 done = False
-                attempt =0
+                attempt = 0
                 while not done:
                     try:
                         attempt += 1
@@ -767,7 +756,7 @@ class Net_Tests(EutesterTestCase):
                                        'PORT:"{2}"'.format(instance1.id,
                                                            instance1.ip_address,
                                                            x))
-                            tester.show_security_group(self.group1)
+                            tester.ec2.show_security_group(self.group1)
                             try:
                                 self.debug('Getting netcat info from instance...')
                                 instance1.sys('ps aux | grep netcat', timeout=10)
@@ -814,7 +803,7 @@ class Net_Tests(EutesterTestCase):
                 test_string = '{0} last port tested[{1}]'.format(time.time(), x)
                 self.debug("Gathering debug information as to whether the "
                            "tester's src ip is authorized for this port test...")
-                if tester.does_instance_sec_group_allow(
+                if tester.ec2.does_instance_sec_group_allow(
                         instance=instance1,
                         src_addr=src_cidr_ip.split('/')[0],
                         protocol='tcp',
@@ -844,8 +833,6 @@ class Net_Tests(EutesterTestCase):
                                 .format(x, instance1.id, instance1.ip_address))
         self.status('Add and revoke ports test passed')
 
-
-
     def test8_verify_deleting_of_auth_source_group2(self):
         """
         Definition:
@@ -864,27 +851,27 @@ class Net_Tests(EutesterTestCase):
         if not self.group1_instances:
             raise ValueError('No instances found from group1')
         #Clean out any existing rules in group1
-        self.tester.revoke_all_rules(self.group1)
+        self.tester.ec2.revoke_all_rules(self.group1)
         instance1 = self.group1_instances[0]
         #Add back ssh
-        assert not tester.does_instance_sec_group_allow(instance=instance1,
+        assert not tester.ec2.does_instance_sec_group_allow(instance=instance1,
                                                          protocol='tcp',
                                                          port=22), \
             'Instance: {0}, security group still allows access after ' \
             'revoking all rules'
 
-        tester.authorize_group(self.group1,
-                               cidr_ip=str(tester.ec2_source_ip) + '/32',
+        tester.ec2.authorize_group(self.group1,
+                               cidr_ip=str(tester.ec2.ec2_source_ip) + '/32',
                                port=22)
         for instance in self.group1_instances:
             instance.reset_ssh_connection()
             instance.sys('echo "reset ssh worked"', code=0)
         self.status('Authorizing group2 access to group1...')
-        tester.authorize_group(self.group1,
+        tester.ec2.authorize_group(self.group1,
                                cidr_ip=None,
                                port=None,
                                src_security_group_name=self.group2.name)
-        tester.show_security_group(self.group1)
+        tester.ec2.show_security_group(self.group1)
         for zone in zones:
             for instance in self.group1_instances:
                 if instance.placement == zone.name:
@@ -910,7 +897,7 @@ class Net_Tests(EutesterTestCase):
             #Get the group2 instance from this zone
             allowed = False
 
-            if self.tester.does_instance_sec_group_allow(
+            if self.tester.ec2.does_instance_sec_group_allow(
                     instance=zone.test_instance_group1,
                     src_group=self.group2,
                     protocol='icmp'):
@@ -936,9 +923,9 @@ class Net_Tests(EutesterTestCase):
                 raise
         self.status('Terminating all instances in group2 in order to delete '
                     'security group2')
-        tester.terminate_instances(self.group2_instances)
+        tester.ec2.terminate_instances(self.group2_instances)
         self.group2_instances = []
-        tester.delete_group(self.group2)
+        tester.ec2.delete_group(self.group2)
         self.status('Now confirm that ssh still works for all instances in group1')
         for instance in self.group1_instances:
 
@@ -956,7 +943,7 @@ class Net_Tests(EutesterTestCase):
         -Re-use or create 2 instances within the same security group, same zone
         -For each zone, attempt to ssh to a vm in the same security group same zone
         """
-        self.tester.authorize_group(self.group1, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
+        self.tester.ec2.authorize_group(self.group1, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
         for zone in self.zones:
             instances =[]
             for instance in self.group1_instances:
@@ -995,7 +982,7 @@ class Net_Tests(EutesterTestCase):
         if len(self.zones) < 2:
             raise SkipTestException('Skipping multi-zone test, '
                                     'only a single zone found or provided')
-        self.tester.authorize_group(self.group1, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
+        self.tester.ec2.authorize_group(self.group1, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
         zone_instances = {}
         for zone in self.zones:
             instances =[]
@@ -1032,7 +1019,7 @@ class Net_Tests(EutesterTestCase):
         -Re-use or create 2 instances within the same security group, same zone
         -For each zone, attempt to ssh to a vm in the same security group same zone
         """
-        self.tester.authorize_group(self.group1, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
+        self.tester.ec2.authorize_group(self.group1, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
         for zone in self.zones:
             instances =[]
             for instance in self.group1_instances:
@@ -1073,7 +1060,7 @@ class Net_Tests(EutesterTestCase):
         if len(self.zones) < 2:
             raise SkipTestException('Skipping multi-zone test, '
                                     'only a single zone found or provided')
-        self.tester.authorize_group(self.group1, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
+        self.tester.ec2.authorize_group(self.group1, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
         for zone in self.zones:
             instances =[]
             for instance in self.group1_instances:
@@ -1120,10 +1107,10 @@ class Net_Tests(EutesterTestCase):
         if len(self.zones) < 2:
             raise SkipTestException('Skipping multi-zone test, '
                                     'only a single zone found or provided')
-        self.tester.authorize_group(self.group1, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
+        self.tester.ec2.authorize_group(self.group1, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
         # In case a previous test has deleted group2...
-        self.group2 = self.tester.add_group(self.group2.name)
-        self.tester.authorize_group(self.group2, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
+        self.group2 = self.tester.ec2.add_group(self.group2.name)
+        self.tester.ec2.authorize_group(self.group2, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
         for zone in self.zones:
             instance1 = None
             instances =[]
@@ -1173,10 +1160,10 @@ class Net_Tests(EutesterTestCase):
         if len(self.zones) < 2:
             raise SkipTestException('Skipping multi-zone test, '
                                     'only a single zone found or provided')
-        self.tester.authorize_group(self.group1, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
+        self.tester.ec2.authorize_group(self.group1, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
         # In case a previous test has deleted group2...
-        self.group2 = self.tester.add_group(self.group2.name)
-        self.tester.authorize_group(self.group2, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
+        self.group2 = self.tester.ec2.add_group(self.group2.name)
+        self.tester.ec2.authorize_group(self.group2, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
         for zone in self.zones:
             instance1 = None
             instances =[]
@@ -1217,25 +1204,25 @@ class Net_Tests(EutesterTestCase):
     # add revoke may be covered above...?
     def test_revoke_rules(self):
         assert isinstance(self.tester, Eucaops)
-        revoke_group = self.tester.add_group("revoke-group-" + str(int(time.time())))
-        self.tester.authorize_group(revoke_group, port=22)
+        revoke_group = self.tester.ec2.add_group("revoke-group-" + str(int(time.time())))
+        self.tester.ec2.authorize_group(revoke_group, port=22)
         for zone in self.zones:
-            instance = self.tester.run_image(image=self.image,
+            instance = self.tester.ec2.run_image(image=self.image,
                                                  keypair=self.keypair,
                                                  group=revoke_group,
                                                  zone=zone)[0]
-            self.tester.revoke(revoke_group, port=22)
+            self.tester.ec2.revoke(revoke_group, port=22)
             self.tester.sleep(60)
             try:
                 instance.reset_ssh_connection(timeout=30)
-                self.tester.delete_group(revoke_group)
+                self.tester.ec2.delete_group(revoke_group)
                 raise Exception("Was able to SSH without authorized rule")
             except SSHException, e:
                 self.tester.debug("SSH was properly blocked to the instance")
-            self.tester.authorize_group(revoke_group, port=22)
+            self.tester.ec2.authorize_group(revoke_group, port=22)
             instance.reset_ssh_connection()
-            self.tester.terminate_instances(instance)
-        self.tester.delete_group(revoke_group)
+            self.tester.ec2.terminate_instances(instance)
+        self.tester.ec2.delete_group(revoke_group)
 
 if __name__ == "__main__":
     testcase = Net_Tests()
@@ -1249,28 +1236,27 @@ if __name__ == "__main__":
             testlist.replace(',',' ')
             testlist = testlist.split()
     else:
-        testlist =[
-            'test1_create_instance_in_zones_for_security_group1',
-            'test2_create_instance_in_zones_for_security_group2',
-            'test3_test_ssh_between_instances_in_diff_sec_groups_same_zone',
-            'test4_attempt_unauthorized_ssh_from_test_machine_to_group2',
-            'test5_test_ssh_between_instances_in_same_sec_groups_different_zone',
-            'test7_add_and_revoke_tcp_port_range',
-            'test8_verify_deleting_of_auth_source_group2',
-            'test9_ssh_between_instances_same_group_same_zone_public',
-            'test10_ssh_between_instances_same_group_public_different_zone',
-            'test11_ssh_between_instances_same_group_same_zone_private',
-            'test12_ssh_between_instances_same_group_private_different_zone',
-            'test13_ssh_between_instances_diff_group_private_different_zone',
-            'test14_ssh_between_instances_diff_group_public_different_zone']
+        testlist = ['test1_create_instance_in_zones_for_security_group1',
+                    'test2_create_instance_in_zones_for_security_group2',
+                    'test3_test_ssh_between_instances_in_diff_sec_groups_same_zone',
+                    'test4_attempt_unauthorized_ssh_from_test_machine_to_group2',
+                    'test5_test_ssh_between_instances_in_same_sec_groups_different_zone',
+                    'test7_add_and_revoke_tcp_port_range',
+                    'test8_verify_deleting_of_auth_source_group2',
+                    'test9_ssh_between_instances_same_group_same_zone_public',
+                    'test10_ssh_between_instances_same_group_public_different_zone',
+                    'test11_ssh_between_instances_same_group_same_zone_private',
+                    'test12_ssh_between_instances_same_group_private_different_zone',
+                    'test13_ssh_between_instances_diff_group_private_different_zone',
+                    'test14_ssh_between_instances_diff_group_public_different_zone']
         ### Convert test suite methods to EutesterUnitTest objects
     print 'Got test list:' + str(testlist)
-    unit_list = [ ]
+    unit_list = []
     for test in testlist:
-        unit_list.append( testcase.create_testunit_by_name(test) )
+        unit_list.append(testcase.create_testunit_by_name(test))
 
     ### Run the EutesterUnitTest objects
-    result = testcase.run_test_case_list(unit_list,eof=False,clean_on_exit=True)
+    result = testcase.run_test_case_list(unit_list, eof=False, clean_on_exit=True)
     exit(result)
 
 

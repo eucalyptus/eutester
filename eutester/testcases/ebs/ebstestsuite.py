@@ -1,5 +1,5 @@
 #! ../share/python_lib/matt_dev/bin/python
-'''
+"""
 Test Summary: 
 
 -create a volume (do this first)
@@ -28,8 +28,7 @@ Properties tests:
 
 Cleanup:
 -remove all volumes, instance, and snapshots created during this test
-
-'''
+"""
 import types
 import time
 
@@ -118,9 +117,9 @@ class EbsTestSuite(EutesterTestCase):
             else:
                 self.tester = tester
             if self.emi:
-                self.image = self.tester.get_emi(emi=self.emi)
+                self.image = self.tester.ec2.get_emi(emi=self.emi)
             else:
-                self.image = self.tester.get_emi(root_device_type=self.root_device_type)
+                self.image = self.tester.ec2.get_emi(root_device_type=self.root_device_type)
             #create some zone objects and append them to the zonelist
             if self.zone:
                 self.zone = TestZone(self.zone)
@@ -135,13 +134,13 @@ class EbsTestSuite(EutesterTestCase):
             #Setup our security group for later use
             if self.group:
                 if isinstance(self.group, types.StringType):
-                    self.group = self.tester.add_group(self.group)
+                    self.group = self.tester.ec2.add_group(self.group)
             else:
                 group_name='EbsTestGroup'
                 try:
-                    self.group = self.tester.add_group(group_name,fail_if_exists=False)
-                    self.tester.authorize_group_by_name(self.group.name)
-                    self.tester.authorize_group_by_name(self.group.name,protocol="icmp",port=-1)
+                    self.group = self.tester.ec2.add_group(group_name,fail_if_exists=False)
+                    self.tester.ec2.authorize_group_by_name(self.group.name)
+                    self.tester.ec2.authorize_group_by_name(self.group.name,protocol="icmp",port=-1)
                 except Exception, e:
                     self.debug(self.tester.get_traceback())
                     raise Exception("Error when setting up group:"+str(group_name)+", Error:"+str(e))
@@ -150,11 +149,11 @@ class EbsTestSuite(EutesterTestCase):
         if not self.instance_password:
             try:
                 if not self.keypair:
-                    keys = self.tester.get_all_current_local_keys() 
+                    keys = self.tester.ec2.get_all_current_local_keys()
                     if keys:
                         self.keypair = keys[0]
                     else:
-                        self.keypair = keypair = self.tester.add_keypair('ebs_test_key-' + str(time.time()))
+                        self.keypair = keypair = self.tester.ec2.add_keypair('ebs_test_key-' + str(time.time()))
             except Exception, ke:
                 raise Exception("Failed to find/create a keypair, error:" + str(ke))
         print "###########################################################"
@@ -162,7 +161,7 @@ class EbsTestSuite(EutesterTestCase):
         print "###########################################################"
         
     def setup_testzones(self):
-        for zone in self.tester.get_zones():
+        for zone in self.tester.ec2.get_zones():
                 tzone = TestZone(zone)
                 self.zonelist.append(tzone)
                 self.multicluster=True
@@ -204,7 +203,7 @@ class EbsTestSuite(EutesterTestCase):
             raise Exception("Zone list was empty")
         for testzone in zonelist:
             zone = testzone.name
-            vols = self.tester.create_volumes(zone, size=size, count=volsperzone, snapshot=snapshot,timepergig=timepergig)
+            vols = self.tester.ec2.create_volumes(zone, size=size, count=volsperzone, snapshot=snapshot,timepergig=timepergig)
             for vol in vols:
                 vol.add_tag('ebstestsuite_created')
             testzone.volumes.extend(vols)
@@ -223,7 +222,7 @@ class EbsTestSuite(EutesterTestCase):
             raise Exception("Zone list was empty")
         if image is not None:
             if isinstance(image,types.StringTypes):
-                image = self.tester.get_emi(emi=image)    
+                image = self.tester.ec2.get_emi(emi=image)
         else:
             image = self.image
         if group is None:
@@ -240,7 +239,7 @@ class EbsTestSuite(EutesterTestCase):
             
         for testzone in zonelist:
             zone = testzone.name
-            instances = self.tester.run_image( image=image,
+            instances = self.tester.ec2.run_image( image=image,
                                                 keypair=keyname,
                                                 group=group,
                                                 username=username,
@@ -261,7 +260,7 @@ class EbsTestSuite(EutesterTestCase):
             zonelist = self.zonelist
         for zone in zonelist:
             for instance in zone.instances:
-                self.tester.terminate_single_instance(instance, timeout)
+                self.tester.ec2.terminate_single_instance(instance, timeout)
                 zone.instances.remove(instance)
                 
     def terminate_instances_in_zones_verify_volume_detach(self,zonelist=None,timeout=480):
@@ -345,7 +344,7 @@ class EbsTestSuite(EutesterTestCase):
                             time.sleep(10)
                             self.debug('Monitoring volume post VolumeStateException...')
                             volume.eutest_attached_status = None
-                            self.tester.monitor_euvolumes_to_status([volume],status='in-use',attached_status='attached',timeout=60)
+                            self.tester.ec2.monitor_euvolumes_to_status([volume],status='in-use',attached_status='attached',timeout=60)
                         except Exception, e:
                             self.debug("attach_all_vols_to_instances_in_zones failed to attach volume")
                             raise e
@@ -518,7 +517,7 @@ class EbsTestSuite(EutesterTestCase):
         for zone in zonelist:
             for snap in snaplist:
                 if snap.eutest_volume_zone == zone:
-                    self.tester.delete_snapshot(snap, timeout=timeout)
+                    self.tester.ec2.delete_snapshot(snap, timeout=timeout)
                     snaplist.remove(snap)
         #self.endsuccess()
         
@@ -542,7 +541,7 @@ class EbsTestSuite(EutesterTestCase):
             for volume in zone.volumes:
                 volume.update()
                 if volstate == "all" or volume.status == volstate:
-                    new_snap = self.tester.create_snapshot_from_volume(volume, description="ebstest", wait_on_progress=wait_on_progress)
+                    new_snap = self.tester.ec2.create_snapshot_from_volume(volume, description="ebstest", wait_on_progress=wait_on_progress)
                     new_snap.add_tag('ebstestsuite_created')
                     self.snaps.append(new_snap)
         #self.endsuccess()
@@ -566,7 +565,7 @@ class EbsTestSuite(EutesterTestCase):
                 raise Exception("No Snapshots from this test found in zone:"+str(zone))
             for snap in zonesnaps:
                 self.debug("Creating volume from snap:"+str(snap.id))
-                newvol = self.tester.create_volume(zone.name, size=0, snapshot=snap,timepergig=timepergig)
+                newvol = self.tester.ec2.create_volume(zone.name, size=0, snapshot=snap,timepergig=timepergig)
                 newvol.add_tag('ebstestsuite_created')
                 zone.volumes.append(newvol)
                 snap.eutest_volumes.append(newvol)
@@ -620,7 +619,7 @@ class EbsTestSuite(EutesterTestCase):
                             time.sleep(10)
                             self.debug('Monitoring volume post VolumeStateException...')
                             vol.eutest_attached_status = None
-                            self.tester.monitor_euvolumes_to_status([vol],status='in-use',attached_status='attached',timeout=60)
+                            self.tester.ec2.monitor_euvolumes_to_status([vol],status='in-use',attached_status='attached',timeout=60)
                         except Exception, e:
                             self.debug("Failed to attach volume: " + str(vol.id) + "to instance:" + str())
                             raise e
@@ -646,7 +645,7 @@ class EbsTestSuite(EutesterTestCase):
         for zone in zonelist:
             for snap in self.snaps:
                 if snap.eutest_volume_zone != zone:
-                    newvol = self.tester.create_volume(zone.name,size=0, snapshot=snap, timepergig=timepergig)
+                    newvol = self.tester.ec2.create_volume(zone.name,size=0, snapshot=snap, timepergig=timepergig)
                     newvol.add_tag('ebstestsuite_created')
                     zone.volumes.append(newvol)
                     snap.eutest_volumes.append(newvol)
@@ -689,16 +688,16 @@ class EbsTestSuite(EutesterTestCase):
             if vol.size > volmaxsize:
                 raise Exception("Could not find volume in zone "+str(zone.name)+" <= volmaxsize of:"+str(volmaxsize))
             self.status("Attempting to create "+str(count)+" snapshots in zone:"+str(zone.name)+"...")
-            snaps = self.tester.create_snapshots(vol, count=count, delay=delay, wait_on_progress=poll_progress)
+            snaps = self.tester.ec2.create_snapshots(vol, count=count, delay=delay, wait_on_progress=poll_progress)
             self.debug('Finished creating '+str(count)+' snapshots in zone:'+str(zone.name)+', now creating vols from them')
             try:
                 for snap in snaps:
-                    new_vols = self.tester.create_volumes(zone,snapshot=snap,timepergig=tpg, monitor_to_state=False)
+                    new_vols = self.tester.ec2.create_volumes(zone,snapshot=snap,timepergig=tpg, monitor_to_state=False)
                     for vol in new_vols:
                         vol.add_tag('ebstestsuite_created')
                     createdvols.extend(new_vols)
-                vols.extend(self.tester.monitor_created_euvolumes_to_state(createdvols, timepergig=tpg))
-                self.tester.print_euvolume_list(vols)
+                vols.extend(self.tester.ec2.monitor_created_euvolumes_to_state(createdvols, timepergig=tpg))
+                self.tester.ec2.print_euvolume_list(vols)
                 self.status("Attempting to attach new vols from new snapshots to instance:"+str(instance.id)+" to verify md5s...")
                 for newvol in vols:
                     try:
@@ -709,7 +708,7 @@ class EbsTestSuite(EutesterTestCase):
                         time.sleep(10)
                         self.debug('Monitoring volume post VolumeStateException...')
                         newvol.eutest_attached_status = None
-                        self.tester.monitor_euvolumes_to_status([newvol],status='in-use',attached_status='attached',timeout=60)
+                        self.tester.ec2.monitor_euvolumes_to_status([newvol],status='in-use',attached_status='attached',timeout=60)
                     except Exception, e:
                         self.debug("Failed to attach volume: " + str(newvol.id) + "to instance:" + str())
                         raise e
@@ -728,7 +727,7 @@ class EbsTestSuite(EutesterTestCase):
                 delfail = None  
                 for vol in vols:
                     try:
-                        self.tester.delete_volume(vol,timeout=delete_to)
+                        self.tester.ec2.delete_volume(vol,timeout=delete_to)
                     except Exception, e:
                         delfail = str(vol.id)+" failed to delete, err:"+str(e)
                 if delfail:
@@ -777,12 +776,12 @@ class EbsTestSuite(EutesterTestCase):
             for zone in zonelist:
                 self.status('STARTING ZONE:'+str(zone.name))
                 #Do not set monitor flag in order to quickly request count number of consecutive vols in each zone
-                new_vols = self.tester.create_volumes(zone,snapshot=snap, count=count, monitor_to_state=None, timepergig=tpg)
+                new_vols = self.tester.ec2.create_volumes(zone,snapshot=snap, count=count, monitor_to_state=None, timepergig=tpg)
                 for vol in new_vols:
                     vol.add_tag('ebstestsuite_created')
                 vols.extend(new_vols)
-            vols = self.tester.monitor_created_euvolumes_to_state(vols,timepergig=tpg)
-            self.tester.print_euvolume_list(vols)
+            vols = self.tester.ec2.monitor_created_euvolumes_to_state(vols,timepergig=tpg)
+            self.tester.ec2.print_euvolume_list(vols)
             for zone in zonelist:
                 instance = zone.instances[0]
                 instances.append(instance)
@@ -797,7 +796,7 @@ class EbsTestSuite(EutesterTestCase):
                             time.sleep(10)
                             self.debug('Monitoring volume post VolumeStateException...')
                             newvol.eutest_attached_status = None
-                            self.tester.monitor_euvolumes_to_status([newvol],status='in-use',attached_status='attached',timeout=60)
+                            self.tester.ec2.monitor_euvolumes_to_status([newvol],status='in-use',attached_status='attached',timeout=60)
                         except Exception, e:
                             self.debug("Failed to attach volume: " + str(newvol.id) + "to instance:" + str())
                             raise e
@@ -814,11 +813,11 @@ class EbsTestSuite(EutesterTestCase):
                 for avol in instance.attached_vols:
                     if avol in vols:
                         instance.detach_euvolume(avol)
-            self.tester.print_euvolume_list(vols)
+            self.tester.ec2.print_euvolume_list(vols)
             delfail = None
             for vol in vols:
                 try:
-                    self.tester.delete_volume(vol,timeout=delete_to)
+                    self.tester.ec2.delete_volume(vol,timeout=delete_to)
                 except Exception, e:
                     delfail = str(vol.id)+" failed to delete, err:"+str(e)
             if delfail:
@@ -896,16 +895,16 @@ class EbsTestSuite(EutesterTestCase):
         if not zonelist:
             raise Exception("Zone list was empty")
         for testzone in zonelist:
-            vols = self.tester.create_volumes(testzone, size=size, count=volsperzone)
+            vols = self.tester.ec2.create_volumes(testzone, size=size, count=volsperzone)
             for vol in vols:
                 vol.add_tag('ebstestsuite_created')
             testzone.volumes.extend(vols)
             snapshots = []
             for volume in vols:
-                snapshots.append(self.tester.create_snapshot_from_volume(volume))
+                snapshots.append(self.tester.ec2.create_snapshot_from_volume(volume))
             larger_volumes = []
             for snaphot in snapshots:
-                larger_volume = self.tester.create_volume(testzone, snapshot=snaphot, size=size+1)
+                larger_volume = self.tester.ec2.create_volume(testzone, snapshot=snaphot, size=size+1)
                 larger_volume.add_tag('ebstestsuite_created')
                 larger_volumes.append(larger_volume)
             for volume in larger_volumes:
