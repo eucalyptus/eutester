@@ -706,21 +706,24 @@ class Net_Tests(EutesterTestCase):
                                           'vpc backend')
                         raise ConnectivityErr
 
-                    if self.vpc_backend:
-                            self.dump_vpc_backend_info_for_instance(instance1)
-                            self.dump_vpc_backend_info_for_instance(instance2)
-                            self.errormsg('Could not connect to instance:"{0}"'
-                                          .format(instance.id))
-                            if self.args.allow_vpc_backend_restart:
-                                self.errormsg('Restarting vpc backend on all hosts and '
-                                              'retrying...')
-                                self.vpc_backend.restart_backend()
-                                time.sleep(15)
-                            else:
-                                raise ConnectivityErr
-                    vpc_backend_retries += 1
+                    elif self.vpc_backend:
+                        self.dump_vpc_backend_info_for_instance(instance1)
+                        self.dump_vpc_backend_info_for_instance(instance2)
+                        self.errormsg('Could not connect to instance:"{0}"'
+                                      .format(instance.id))
+                        if self.args.allow_vpc_backend_restart:
+                            self.errormsg('Restarting vpc backend on all hosts and '
+                                          'retrying...')
+                            self.vpc_backend.restart_backend()
+                            vpc_backend_retries += 1
+                            time.sleep(15)
+                        else:
+                            raise ConnectivityErr
+                    else:
+                        raise ConnectivityErr
+
                 else:
-                    if vpc_backend_retries:
+                    if self.vpc_backend and vpc_backend_retries:
                         self.debug('MidoRetries:{0}'.format(vpc_backend_retries))
                         raise MidoError('Connectivity test passed, but only after '
                                         'restarting Midolman.')
