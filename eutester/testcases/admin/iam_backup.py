@@ -44,7 +44,8 @@ class IamBackup(EutesterTestCase):
                 self.tester.debug("Got user name '%s'" % user_name)
                 if user_name != 'admin':
                     self.backup_file.write("euare-usercreate -u %s -p %s\n" % (user_name, user_path))
-                    self.backup_file.write("mkdir $EIAMDIR/%s; cd $EIAMDIR/%s\n" % (user_name, user_name))
+                    self.backup_file.write("mkdir $EIAMDIR/%s/%s; cd $EIAMDIR/%s/%s\n"
+                                           % (account_name, user_name, account_name, user_name))
                     self.backup_file.write("euca-get-credentials -a %s -u %s %s.zip; cd $EIAMDIR/%s\n"
                                            % (account_name, user_name, user_name, account_name))
                     self.tester.debug("Getting policies of user: '%s'" % user_name)

@@ -27,7 +27,7 @@ class CloudWatchBasics(EutesterTestCase):
             self.tester = CWops( credpath=self.args.credpath, region=self.args.region)
         else:
             self.tester = Eucaops(config_file=self.args.config, password=self.args.password, credpath=self.args.credpath)
-        self.start_time =  str(int(time.time()))
+        self.start_time = str(int(time.time()))
         self.zone = self.tester.ec2.get_zones()
         self.namespace = 'Namespace-' + self.start_time
         self.keypair = self.tester.ec2.add_keypair()
@@ -42,7 +42,6 @@ class CloudWatchBasics(EutesterTestCase):
         self.setUpAlarms()
         ### Wait for metrics to populate, timeout 30 minute
         self.tester.wait_for_result(self.IsMetricsListPopulated, result=True, timeout=1800)
-
 
     def clean_method(self):
         self.cleanUpAutoscaling()
@@ -74,9 +73,10 @@ class CloudWatchBasics(EutesterTestCase):
         start = datetime.datetime.utcnow() - datetime.timedelta(seconds=seconds_to_put_data)
         for i in xrange(seconds_to_put_data):
             timestamp = start + datetime.timedelta(seconds=i)
-            self.tester.debug("Adding metric: {metric} to namespace: {namespace} with value {value} at {timestamp}".format(
-                metric=metric_name, namespace = self.namespace, value=metric_data, timestamp=timestamp))
-            self.tester.cloudwatch.put_metric_data(self.namespace, [metric_name],[metric_data],timestamp=timestamp )
+            self.tester.debug("Adding metric: {metric} to namespace: {namespace} with value {value} at {timestamp}"
+                              .format(metric=metric_name, namespace=self.namespace,
+                                      value=metric_data, timestamp=timestamp))
+            self.tester.cloudwatch.put_metric_data(self.namespace, [metric_name],[metric_data],timestamp=timestamp)
             if metric_data == 600 or metric_data == 0:
                 incrementing = not incrementing
             if incrementing:
@@ -205,7 +205,7 @@ class CloudWatchBasics(EutesterTestCase):
         ### setup autoscaling variables:s
         self.debug('Setting up AutoScaling, starting 1 instance')
         self.instance_type = 'm1.small'
-        self.image = self.tester.get_emi(root_device_type='instance-store')
+        self.image = self.tester.ec2.get_emi(root_device_type='instance-store')
         self.launch_config_name='ASConfig'
         self.auto_scaling_group_name ='ASGroup'
         self.exact = 'ExactCapacity'
@@ -265,7 +265,7 @@ class CloudWatchBasics(EutesterTestCase):
         self.debug('AutoScaling setup Complete')
 
     def cleanUpAutoscaling(self):
-        self.tester.autoscaling.delete_all_alarms()
+        self.tester.cloudwatch.delete_all_alarms()
         self.tester.autoscaling.delete_all_policies()
         self.tester.autoscaling.delete_as_group(name=self.auto_scaling_group_name,force=True)
         self.tester.autoscaling.delete_launch_config(self.launch_config_name)

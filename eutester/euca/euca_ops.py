@@ -333,15 +333,15 @@ class Eucaops(Eutester):
         if self.credpath and not self.cw_path:
             self.cw_path = self.get_cw_path()
         if 'cloudwatch' not in self.__dict__:
-            ops = CFNops(endpoint=self.cw_ip,
-                         path=self.cw_path,
-                         port=8773,
-                         region=self.region,
-                         is_secure=False,
-                         aws_access_key_id=self.aws_access_key_id,
-                         aws_secret_access_key=self.aws_secret_access_key,
-                         boto_debug=self.boto_debug,
-                         credpath=self.credpath)
+            ops = CWops(endpoint=self.cw_ip,
+                        path=self.cw_path,
+                        port=8773,
+                        region=self.region,
+                        is_secure=False,
+                        aws_access_key_id=self.aws_access_key_id,
+                        aws_secret_access_key=self.aws_secret_access_key,
+                        boto_debug=self.boto_debug,
+                        credpath=self.credpath)
             return ops
         else:
             return self.cloudwatch
