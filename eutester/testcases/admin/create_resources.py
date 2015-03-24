@@ -118,7 +118,7 @@ class ResourceGeneration(EutesterTestCase):
             instance.attach_volume(volume)
             snapshot = resource_tester.ec2.create_snapshot(volume_id=volume.id)
             volume_from_snap = resource_tester.ec2.create_volume(snapshot=snapshot, zone=zone)
-            bucket = resource_tester.ec2.create_bucket(resource_tester.id_generator(12, string.ascii_lowercase  + string.digits))
+            bucket = resource_tester.s3.create_bucket(resource_tester.id_generator(12, string.ascii_lowercase + string.digits))
             key = resource_tester.s3.upload_object(bucket_name=bucket.name, key_name=resource_tester.id_generator(12, string.ascii_lowercase  + string.digits), contents= resource_tester.id_generator(200))
             if not self.args.no_cleanup:
                 resource_tester.ec2.terminate_instances(reservation)
