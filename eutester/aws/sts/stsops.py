@@ -45,7 +45,14 @@ class STSops(Eutester):
         self.account_id = None
         self.connection = None
         super(STSops, self).__init__(credpath=credpath)
-        self.setup_sts_connection(endpoint=endpoint, region=region, aws_access_key_id=self.aws_access_key_id, aws_secret_access_key=self.aws_secret_access_key)
+        self.setup_sts_connection(endpoint=endpoint,
+                                  path=path,
+                                  port=port,
+                                  region=region,
+                                  is_secure=is_secure,
+                                  aws_access_key_id=self.aws_access_key_id,
+                                  aws_secret_access_key=self.aws_secret_access_key,
+                                  boto_debug=boto_debug)
 
     def setup_sts_connection(self, endpoint=None, region=None, aws_access_key_id=None, aws_secret_access_key=None,
                              path="/", port=443, is_secure=True, boto_debug=0):

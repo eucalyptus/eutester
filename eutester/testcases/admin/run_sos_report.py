@@ -2,9 +2,9 @@
 import os
 import time
 
-from eucaops import Eucaops
-from eutester.eutestcase import EutesterTestCase
-from eutester.machine import Machine
+from eutester.euca.euca_ops import Eucaops
+from eutester.utils.eutestcase import EutesterTestCase
+from eutester.utils.machine import Machine
 
 
 class SOSreport(EutesterTestCase):
@@ -51,8 +51,6 @@ class SOSreport(EutesterTestCase):
         if error_msg:
             raise Exception(error_msg)
 
-
-
     def Download(self):
         error_msg = ""
         for machine in self.tester.get_component_machines():
@@ -69,7 +67,6 @@ class SOSreport(EutesterTestCase):
                 error_msg += 'Error Downloading from:' + str(machine.hostname) + '. Error:' + str(e)
         if error_msg:
             raise Exception(error_msg)
-
 
     def RunAll(self):
         self.Install()

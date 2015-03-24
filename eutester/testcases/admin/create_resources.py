@@ -39,6 +39,7 @@ import string
 from eutester.aws.ec2.euinstance import EuInstance
 from eutester.utils.eutestcase import EutesterTestCase
 
+
 class ResourceGeneration(EutesterTestCase):
     
     def __init__(self):
@@ -47,7 +48,7 @@ class ResourceGeneration(EutesterTestCase):
         self.parser.add_argument("--no-cleanup", action='store_true')
         self.get_args()
         # Setup basic eutester object
-        self.tester = Eucaops( credpath=self.args.credpath, config_file=self.args.config, password=self.args.password)
+        self.tester = Eucaops(credpath=self.args.credpath, config_file=self.args.config, password=self.args.password)
         self.testers = []
 
     def clean_method(self):
@@ -76,7 +77,7 @@ class ResourceGeneration(EutesterTestCase):
                                   " and secret key " + secret_key)
                 new_tester = Eucaops(username=user_name, account=user_account,
                                      aws_access_key_id=access_key, aws_secret_access_key=secret_key,
-                                     ec2_ip=self.tester.ec2.host, ec2_path=self.tester.ec2.path,
+                                     ec2_ip=self.tester.ec2.connection.host, ec2_path=self.tester.ec2.connection.path,
                                      iam_ip=self.tester.iam.connection.host, iam_path=self.tester.iam.connection.path,
                                      s3_ip=self.tester.s3.connection.host, s3_path=self.tester.s3.connection.path,
                                      sts_ip=self.tester.token.connection.host, sts_path=self.tester.token.connection.path,

@@ -118,7 +118,7 @@ class ObjectTestSuite(EutesterTestCase):
 
     def post_object_sts(self, bucket_name=None, object_key=None, object_data=None, policy=None, acl=None, credentials=None):
         """Uploads an object using POST + form upload using an STS token"""
-        self.assertIsNotNone(credentials, msg='Credentials missing')
+        self.assertNotEqual(credentials, None, msg='Credentials missing')
 
         fields = {
             'key': object_key,
@@ -130,8 +130,8 @@ class ObjectTestSuite(EutesterTestCase):
         }
 
         self.tester.info('Fields: ' + str(fields))
-        url = 'http://' + self.tester.s3.host + ':' + str(self.tester.s3.port) \
-              + '/' + self.tester.s3.path + '/' + bucket_name
+        url = 'http://' + self.tester.s3.connection.host + ':' + str(self.tester.s3.connection.port) \
+              + '/' + self.tester.s3.connection.path + '/' + bucket_name
 
         self.tester.debug('Sending POST request to: ' + url)
         response = requests.post(url, data=fields, files={'file': BytesIO(object_data)})
@@ -407,11 +407,11 @@ class ObjectTestSuite(EutesterTestCase):
         self.tester.info("Testing POST form upload on bucket with STS token" + self.test_bucket_name)
         self.tester.info("Getting STS credential for test")
         credentials = self.tester.token.issue_session_token()
-        self.assertIsNotNone(credentials, msg='Could not get credentials')
-        self.assertIsNotNone(credentials.access_key, msg='Credentials missing access_key')
-        self.assertIsNotNone(credentials.secret_key, msg='Credentials missing secret_key')
-        self.assertIsNotNone(credentials.session_token, msg='Credentials missing session_token')
-        self.assertIsNotNone(credentials.expiration, msg='Credentials missing expiration')
+        self.assertNotEqual(credentials, None,msg='Could not get credentials')
+        self.assertNotEqual(credentials.access_key, None, msg='Credentials missing access_key')
+        self.assertNotEqual(credentials.secret_key, None, msg='Credentials missing secret_key')
+        self.assertNotEqual(credentials.session_token, None, msg='Credentials missing session_token')
+        self.assertNotEqual(credentials.expiration, None, msg='Credentials missing expiration')
 
         self.test_bucket = self.clear_and_rebuild_bucket(self.test_bucket_name)
         itr = 1
@@ -522,7 +522,7 @@ class ObjectTestSuite(EutesterTestCase):
         self.test_abort_multipart_upload()
 
     def test_multipart_upload(self):
-        '''Basic multipart upload'''
+        """Basic multipart upload"""
         self.tester.info("Testing multipart upload")
         self.tester.info("Creating random file representing part...")
         temp_file = tempfile.NamedTemporaryFile(mode="w+b", prefix="multipart")
@@ -857,7 +857,7 @@ class ObjectTestSuite(EutesterTestCase):
         """Tests presigned url operations on the service using regular access/secret keys"""
         self.tester.info("Testing presigned url usage with regular access/secret keys")
         self.test_bucket = self.clear_and_rebuild_bucket(self.test_bucket_name)
-        oneMinute = 1 * 60
+        oneMinute = 5 * 60
         objectKey1 = 'presignedurltestobject'
         test_headers = {'x-amz-acl': 'public-read', 'x-amz-meta-key1': 'my blah value'}
         #Test PUT
@@ -865,7 +865,10 @@ class ObjectTestSuite(EutesterTestCase):
         presigned_url = ''
         try:
             self.tester.info('Port = ' + str(self.tester.s3.connection.port))
-            presigned_url = self.tester.s3.generate_url(expires_in=oneMinute, method=httpMethod, bucket=self.test_bucket_name, key=objectKey1, query_auth=True, headers=test_headers, response_headers=None, expires_in_absolute=False)
+            presigned_url = self.tester.s3.connection.generate_url(expires_in=oneMinute, method=httpMethod,
+                                                                   bucket=self.test_bucket_name, key=objectKey1,
+                                                                   query_auth=True, headers=test_headers,
+                                                                   response_headers=None, expires_in_absolute=False)
             self.tester.info('Using presigned url for PUT: ' + presigned_url)
             response = requests.put(url=presigned_url, data='testingcontent123')
             self.tester.info('Response: ' + str(response.status_code) + ' - ' + response.text)
@@ -878,7 +881,10 @@ class ObjectTestSuite(EutesterTestCase):
         httpMethod = 'GET'
         presigned_url = ''
         try:
-            presigned_url = self.tester.s3.generate_url(expires_in=oneMinute, method=httpMethod, bucket=self.test_bucket_name, key=objectKey1, query_auth=True, headers=test_headers, response_headers=None, expires_in_absolute=False)
+            presigned_url = self.tester.s3.connection.generate_url(expires_in=oneMinute, method=httpMethod,
+                                                                   bucket=self.test_bucket_name, key=objectKey1,
+                                                                   query_auth=True, headers=test_headers,
+                                                                   response_headers=None, expires_in_absolute=False)
             self.tester.info('Using GET presigned_url: ' + presigned_url)
             response = requests.get(url=presigned_url)
             self.tester.info('Got response on GET: ' + str(response.status_code) + ' Body: ' + response.text)
@@ -891,7 +897,10 @@ class ObjectTestSuite(EutesterTestCase):
         httpMethod = 'HEAD'
         presigned_url = ''
         try:
-            presigned_url = self.tester.s3.generate_url(expires_in=oneMinute, method=httpMethod, bucket=self.test_bucket_name, key=objectKey1, query_auth=True, headers=test_headers, response_headers=None, expires_in_absolute=False)
+            presigned_url = self.tester.s3.connection.generate_url(expires_in=oneMinute, method=httpMethod,
+                                                        bucket=self.test_bucket_name, key=objectKey1,
+                                                        query_auth=True, headers=test_headers,
+                                                        response_headers=None, expires_in_absolute=False)
             self.tester.info('Using HEAD presigned_url: ' + presigned_url)
             response = requests.head(url=presigned_url)
             self.tester.info('Got response on HEAD: ' + str(response.status_code) + ' Body: ' + response.text)
@@ -904,7 +913,7 @@ class ObjectTestSuite(EutesterTestCase):
         httpMethod = 'DELETE'
         presigned_url = ''
         try:
-            presigned_url = self.tester.s3.generate_url(expires_in=oneMinute, method=httpMethod, bucket=self.test_bucket_name, key=objectKey1, query_auth=True, headers=None, response_headers=None, expires_in_absolute=False)
+            presigned_url = self.tester.s3.connection.generate_url(expires_in=oneMinute, method=httpMethod, bucket=self.test_bucket_name, key=objectKey1, query_auth=True, headers=None, response_headers=None, expires_in_absolute=False)
             self.tester.info('Using DELETE presigned_url: ' + presigned_url)
             response = requests.delete(url=presigned_url)
             self.tester.info('Got response on DELETE: ' + str(response.status_code) + ' Body: ' + response.text)
@@ -935,8 +944,11 @@ class ObjectTestSuite(EutesterTestCase):
         httpMethod = 'PUT'
         presigned_url = ''
         try:
-            self.tester.info('Port = ' + str(self.tester.s3.port))
-            presigned_url = s3connection.generate_url(expires_in=oneMinute, method=httpMethod, bucket=self.test_bucket_name, key=objectKey1, query_auth=True, headers=None, response_headers=None, expires_in_absolute=False)
+            self.tester.info('Port = ' + str(self.tester.s3.connection.port))
+            presigned_url = s3connection.generate_url(expires_in=oneMinute, method=httpMethod,
+                                                      bucket=self.test_bucket_name, key=objectKey1,
+                                                      query_auth=True, headers=None,
+                                                      response_headers=None, expires_in_absolute=False)
             self.tester.info('Using presigned url for PUT: ' + presigned_url)
             response = requests.put(url=presigned_url, data='testingcontent123')
             self.tester.info('Response: ' + str(response.status_code) + ' - ' + response.text)
@@ -949,7 +961,10 @@ class ObjectTestSuite(EutesterTestCase):
         httpMethod = 'GET'
         presigned_url = ''
         try:
-            presigned_url = s3connection.generate_url(expires_in=oneMinute, method=httpMethod, bucket=self.test_bucket_name, key=objectKey1, query_auth=True, headers=None, response_headers=None, expires_in_absolute=False)
+            presigned_url = s3connection.generate_url(expires_in=oneMinute, method=httpMethod,
+                                                      bucket=self.test_bucket_name, key=objectKey1,
+                                                      query_auth=True, headers=None,
+                                                      response_headers=None, expires_in_absolute=False)
             self.tester.info('Using GET presigned_url: ' + presigned_url)
             response = requests.get(url=presigned_url)
             self.tester.info('Got response on GET: ' + str(response.status_code) + ' Body: ' + response.text)
@@ -964,7 +979,10 @@ class ObjectTestSuite(EutesterTestCase):
         httpMethod = 'HEAD'
         presigned_url = ''
         try:
-            presigned_url = s3connection.generate_url(expires_in=oneMinute, method=httpMethod, bucket=self.test_bucket_name, key=objectKey1, query_auth=True, headers=None, response_headers=None, expires_in_absolute=False)
+            presigned_url = s3connection.generate_url(expires_in=oneMinute, method=httpMethod,
+                                                      bucket=self.test_bucket_name, key=objectKey1,
+                                                      query_auth=True, headers=None,
+                                                      response_headers=None, expires_in_absolute=False)
             self.tester.info('Using HEAD presigned_url: ' + presigned_url)
             response = requests.head(url=presigned_url)
             self.tester.info('Got response on HEAD: ' + str(response.status_code) + ' Body: ' + response.text)
@@ -979,7 +997,10 @@ class ObjectTestSuite(EutesterTestCase):
         httpMethod = 'DELETE'
         presigned_url = ''
         try:
-            presigned_url = s3connection.generate_url(expires_in=oneMinute, method=httpMethod, bucket=self.test_bucket_name, key=objectKey1, query_auth=True, headers=None, response_headers=None, expires_in_absolute=False)
+            presigned_url = s3connection.generate_url(expires_in=oneMinute, method=httpMethod,
+                                                      bucket=self.test_bucket_name, key=objectKey1,
+                                                      query_auth=True, headers=None,
+                                                      response_headers=None, expires_in_absolute=False)
             self.tester.info('Using DELETE presigned_url: ' + presigned_url)
             response = requests.delete(url=presigned_url)
             self.tester.info('Got response on DELETE: ' + str(response.status_code) + ' Body: ' + response.text)

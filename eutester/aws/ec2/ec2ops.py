@@ -340,7 +340,7 @@ disable_root: false"""
                    ", dir:"+str(dir)+", exten:"+str(exten)+", encoded:"+str(encoded))
         key = key or self.get_keypair(instance.key_name)
         if private_key_path is None and key is not None:
-            private_key_path = str(self.verify_local_keypath( key.name , dir, exten))
+            private_key_path = str(self.verify_local_keypath(key.name, dir, exten))
         if not private_key_path:
             raise Exception('get_windows_instance_password, keypath not found?')
         encrypted_string = self.connection.get_password_data(instance.id)
@@ -470,8 +470,7 @@ disable_root: false"""
                                                          to_port=end_port,
                                                          cidr_ip=cidr_ip,
                                                          src_security_group_name=src_security_group_name,
-                                                         src_security_group_owner_id=src_security_group_owner_id,
-                                                         )
+                                                         src_security_group_owner_id=src_security_group_owner_id)
             return True
         except self.connection.ResponseError, e:
             if e.code == 'InvalidPermission.Duplicate':
