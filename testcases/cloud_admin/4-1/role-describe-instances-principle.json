@@ -1,0 +1,14 @@
+{
+    "Statement": [
+        {
+            "Action": [
+                "ec2:DescribeInstances"
+            ],
+            "NotPrincipal": {
+                "AWS": "408396244282"
+            },
+            "Effect": "Allow",
+            "Resource": "arn:aws:ec2:*:408396244283:instance/*"
+        }
+    ]
+}
