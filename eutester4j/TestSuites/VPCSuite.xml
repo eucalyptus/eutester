@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="VPC Test Suite">
+    <test name="VPC_Tests">
+        <classes>
+            <class name="com.eucalyptus.tests.awssdk.TestEC2VPCAssociationManagement"/>
+            <class name="com.eucalyptus.tests.awssdk.TestEC2VPCAttributeManagement"/>
+            <class name="com.eucalyptus.tests.awssdk.TestEC2VPCDefaultVPC"/>
+            <class name="com.eucalyptus.tests.awssdk.TestEC2VPCManagement"/>
+            <class name="com.eucalyptus.tests.awssdk.TestEC2VPCNetworkAclEntryManagement"/>
+            <class name="com.eucalyptus.tests.awssdk.TestEC2VPCNetworkInterfaces"/>
+            <class name="com.eucalyptus.tests.awssdk.TestEC2VPCSubnetAvailableAddresses"/>
+            <class name="com.eucalyptus.tests.awssdk.TestEC2VPCValidation"/>
+            <class name="com.eucalyptus.tests.awssdk.TestELBDefaultVPC"/>
+            <class name="com.eucalyptus.tests.awssdk.TestELBVPC"/>
+        </classes>
+    </test>
+</suite>

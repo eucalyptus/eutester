@@ -76,9 +76,9 @@ public class TestIAMRoleManagement {
                                 .withRoleName(roleName));
                 assertThat(getRoleResult.getRole() != null, "Expected role");
                 assertThat(roleName.equals(getRoleResult.getRole().getRoleName()), "Unexpected role name");
-                assertThat("/path".equals(getRoleResult.getRole().getPath()), "Unexpected role path");
+                assertThat("/path/".equals(getRoleResult.getRole().getPath()), "Unexpected role path");
                 assertThat(getRoleResult.getRole().getAssumeRolePolicyDocument() != null &&
-                        getRoleResult.getRole().getAssumeRolePolicyDocument().contains("sts:AssumeRole"), "Expected assume role policy document");
+                        getRoleResult.getRole().getAssumeRolePolicyDocument().contains("AssumeRole"), "Expected assume role policy document");
                 assertThat(getRoleResult.getRole().getArn() != null, "Expected ARN");
                 assertThat(getRoleResult.getRole().getCreateDate() != null, "Expected created date");
             }
@@ -133,9 +133,9 @@ public class TestIAMRoleManagement {
                                 .withRoleName(roleName));
                 assertThat(getRoleResult.getRole() != null, "Expected role");
                 assertThat(roleName.equals(getRoleResult.getRole().getRoleName()), "Unexpected role name");
-                assertThat("/path".equals(getRoleResult.getRole().getPath()), "Unexpected role path");
+                assertThat("/path/".equals(getRoleResult.getRole().getPath()), "Unexpected role path");
                 assertThat(getRoleResult.getRole().getAssumeRolePolicyDocument() != null &&
-                        getRoleResult.getRole().getAssumeRolePolicyDocument().contains("sts:assumerole"), "Expected assume role policy document");
+                        getRoleResult.getRole().getAssumeRolePolicyDocument().contains("assumerole"), "Expected assume role policy document");
                 assertThat(getRoleResult.getRole().getArn() != null, "Expected ARN");
                 assertThat(getRoleResult.getRole().getCreateDate() != null, "Expected created date");
             }

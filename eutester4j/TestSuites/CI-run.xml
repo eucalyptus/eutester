@@ -37,7 +37,6 @@
             <class name="com.eucalyptus.tests.awssdk.CloudWatchGetMetricStatisticsTest"/>
             <class name="com.eucalyptus.tests.awssdk.CloudWatchListMetricsTest"/>
             <class name="com.eucalyptus.tests.awssdk.CloudWatchPutMetricAlarmTest"/>
-            <class name="com.eucalyptus.tests.awssdk.CloudWatchPutMetricDataTest"/>
             <class name="com.eucalyptus.tests.awssdk.CloudWatchStateChangeTest"/>
         </classes>
     </test>

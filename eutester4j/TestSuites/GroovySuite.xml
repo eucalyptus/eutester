@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="Groovy Test Suite">
+    <test name="Groovy_Tests">
+        <classes>
+            <class name="com.eucalyptus.tests.awssdk.TestCFAdministration"/>
+            <class name="com.eucalyptus.tests.awssdk.TestEC2VPCDefaultVPC"/>
+            <class name="com.eucalyptus.tests.awssdk.TestEC2VPCManagement"/>
+            <class name="com.eucalyptus.tests.awssdk.TestELBVPC"/>
+            <class name="com.eucalyptus.tests.awssdk.TestSTSGetAccessToken"/>
+            <class name="com.eucalyptus.tests.awssdk.TestSTSGetImpersonationToken"/>
+        </classes>
+    </test>
+</suite>
