@@ -64,7 +64,7 @@ class CloudFormationTemplateURLTests(EutesterTestCase):
         for url in self.template_urls:
             # get template name from URL, remove file extension and any "-"
             template = os.path.splitext(url.rsplit('/', 1)[1])[0].replace("-", "")
-            self.stack_name = template + str(int(time.time()))
+            self.stack_name = template + str(os.urandom(8).encode('hex'))
             self.template_parameters = [('KeyName', self.keypair.name), ('ImageId', self.tester.get_emi().id)]
             self.tester.create_stack(stack_name=self.stack_name,
                                      template_body=None,
@@ -81,7 +81,7 @@ class CloudFormationTemplateURLTests(EutesterTestCase):
                             self.debug("Stack Resource Status: " + inf.resource_status)
                             stack_status = True
                 return stack_status
-            self.tester.wait_for_result(stack_completed, True, timeout=600)
+            self.tester.wait_for_result(stack_completed, True, timeout=300)
             self.tester.delete_stack(self.stack_name)
 
     def clean_method(self):

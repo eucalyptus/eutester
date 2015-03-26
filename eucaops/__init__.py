@@ -916,7 +916,6 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                                  .format(os.path.dirname(credzippath),
                                          os.path.basename(credzippath),
                                          updatefile), code=0)
-
                 return credzippath
 
     def create_new_user_certs(self, admin_cred_dir, account, user,

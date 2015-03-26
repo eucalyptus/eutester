@@ -9,6 +9,8 @@
             <class name="com.eucalyptus.tests.awssdk.TestIAMInstanceProfiles"/>
             <class name="com.eucalyptus.tests.awssdk.TestIAMRoleManagement"/>
             <class name="com.eucalyptus.tests.awssdk.TestSTSAssumeRole"/>
+            <class name="com.eucalyptus.tests.awssdk.TestSTSGetAccessToken"/>
+            <class name="com.eucalyptus.tests.awssdk.TestSTSGetImpersonationToken"/>
         </classes>
     </test>
 </suite>

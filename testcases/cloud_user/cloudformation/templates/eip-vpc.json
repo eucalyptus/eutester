@@ -1,0 +1,58 @@
+{
+  "Parameters" : {
+    "KeyName" : {
+      "Type" : "String"
+    },
+    "ImageId" : {
+      "Type" : "String"
+    }
+  },
+
+  "Resources":{
+    "Ec2Instance":{
+      "Type":"AWS::EC2::Instance",
+      "Properties":{
+        "ImageId": { "Ref" : "ImageId" },
+        "KeyName" : { "Ref" : "KeyName" },
+        "SecurityGroups":[ { "Ref":"InstanceSecurityGroup" } ],
+        "Tags": [{
+          "Key" : "CFN-INSTANCE",
+          "Value" : "cloudformation instance"
+          }]
+        }
+      },
+      "InstanceSecurityGroup":{
+        "Type":"AWS::EC2::SecurityGroup",
+        "Properties":{
+          "GroupDescription":"Cloudformation Group",
+          "SecurityGroupIngress":[{
+            "IpProtocol":"tcp",
+            "FromPort":"22",
+            "ToPort":"22",
+            "CidrIp":"0.0.0.0/0"
+            }]
+          }
+        },
+        "EIP":{
+          "Type":"AWS::EC2::EIP",
+          "Properties":{
+            "Domain": "vpc"
+          },
+          "EIPAssociation":{
+            "Type":"AWS::EC2::EIPAssociation",
+            "Properties":{
+              "InstanceId":{
+                "Ref":"Ec2Instance"
+              },
+              "EIP":{
+                "Ref":"EIP"
+              },
+              "AllocationId":{
+                "Ref":{"Fn::GetAtt" : ["EIP", "AllocationId"] }
+              }
+            }
+          }
+        }
+      }
+    }
+    

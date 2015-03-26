@@ -3170,7 +3170,7 @@ disable_root: false"""
                   block_device_map=None,
                   user_data=None,
                   private_addressing=False, 
-                  username="root", 
+                  username=None,
                   password=None,
                   subnet_id=None,
                   auto_connect=True,
@@ -3193,7 +3193,8 @@ disable_root: false"""
         :param max: max amount of instances to try to run
         :param user_data: user_data to run instances with
         :param private_addressing: boolean to run instances without public ips
-        :param username: username for connecting ssh to instances
+        :param username: username for connecting ssh to instances.
+                         Default usernames: Linux=root, Windows=Administrator
         :param password: password for connnecting ssh to instances
         :param subnet_id: (VPC MODE) the subnet to create this instances network interface in
         :param auto_connect: boolean flag whether or not ssh connections should be
@@ -3354,7 +3355,8 @@ disable_root: false"""
             self.test_resources["reservations"].append(reservation)
             
             if (len(reservation.instances) < min) or (len(reservation.instances) > max):
-                fail = "Reservation:"+str(reservation.id)+" returned "+str(len(reservation.instances))+\
+                fail = "Reservation:" + str(reservation.id) + " returned " + \
+                       str(len(reservation.instances)) +\
                        " instances, not within min("+str(min)+") and max("+str(max)+")"
             
             if image.root_device_type == 'ebs':
@@ -3364,11 +3366,13 @@ disable_root: false"""
                     self.debug(str(instance.id)+':Converting instance to euinstance type.')
                     #convert to euinstances, connect ssh later...
                     if image.platform == 'windows':
+                        if username is None:
+                            username = 'Administrator'
                         eu_instance = WinInstance.make_euinstance_from_instance(
                             instance,
                             self,
                             keypair=keypair,
-                            username='Administrator',
+                            username=username,
                             password=password,
                             reservation=reservation,
                             private_addressing=private_addressing,
@@ -3376,6 +3380,8 @@ disable_root: false"""
                             cmdstart=cmdstart,
                             auto_connect=False)
                     else:
+                        if username is None:
+                            username = 'root'
                         eu_instance =  EuInstance.make_euinstance_from_instance(
                             instance,
                             self,
@@ -3392,7 +3398,8 @@ disable_root: false"""
                     instances.append(eu_instance)
                 except Exception, e:
                     self.debug(self.get_traceback())
-                    raise Exception("Unable to create Euinstance from " + str(instance)+", err:\n"+str(e))
+                    raise Exception("Unable to create Euinstance from " + str(instance) +
+                                    ", err:\n" + str(e))
             if monitor_to_running:
                 instances = self.monitor_euinstances_to_running(instances, timeout=timeout)
             if return_reservation:
@@ -3401,7 +3408,8 @@ disable_root: false"""
             return instances
         except Exception, e:
             trace = self.get_traceback()
-            self.debug('!!! Run_instance failed, terminating reservation. Error:'+str(e)+"\n"+trace)
+            self.debug('!!! Run_instance failed, terminating reservation. Error:' +
+                       str(e) + "\n"+trace)
             if reservation and clean_on_fail:
                 self.terminate_instances(reservation=reservation)
             raise e 
