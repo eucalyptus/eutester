@@ -47,7 +47,6 @@ class ImageUtils(EutesterTestCase):
     gig = 1073741824
     mb = 1048576
     kb = 1024
-
     def __init__(self,
                  tester=None,
                  config_file=None,
@@ -61,7 +60,7 @@ class ImageUtils(EutesterTestCase):
                  worker_username='root',
                  worker_password=None,
                  worker_machine=None):
-
+        self.setuptestcase()
         if not tester or not isinstance(tester, Eucaops):
             self.debug('Creating Eucaops tester obj from: config_file:"{0}", password:"{1}", '
                        'credpath:"{2}"'.format(config_file, password, credpath))
