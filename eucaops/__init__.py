@@ -353,7 +353,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
             fail_buf += ("value: " + ("None" if value is None else value))
             raise ValueError(fail_buf)
         
-        command = "source " + self.credpath + "/eucarc && " + self.eucapath + \
+        command = "source " + self.credpath + "/eucarc &>/dev/null && " + self.eucapath + \
                   "/usr/sbin/euca-modify-property -p " + property + "=" + value
         if self.clc.found(command, property):
             self.debug("Properly modified property " + property)
@@ -875,7 +875,8 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
             admin_cred_dir = os.path.dirname(credzippath)
             clc_eucarc = os.path.join(admin_cred_dir, 'eucarc')
             # backward compatibility
-            certpath_in_eucarc = self.clc.sys("source {0} && echo $EC2_CERT".format(clc_eucarc))[0]
+            certpath_in_eucarc = self.clc.sys("source {0} &>/dev/null && echo $EC2_CERT"
+                                              .format(clc_eucarc))[0]
             self.debug('Current EC2_CERT path for {0}: {1}'.format(clc_eucarc, certpath_in_eucarc))
             if certpath_in_eucarc and self.get_active_id_for_cert(certpath_in_eucarc):
                 self.debug("Cert/pk already exist and is active in '" +
@@ -931,8 +932,11 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
         if len(admin_certs) > 1:
             if self.force_cert_create:
                 self.debug("Found more than one certs, deleting last cert")
-                self.clc.sys("source {0} && " + "/usr/bin/euare-userdelcert -c {1} --user-name {2}"
-                         .format(eucarcpath, admin_certs[admin_certs.pop()], user), code=0)
+                self.clc.sys("source {0} &>/dev/null && /usr/bin/euare-userdelcert -c {1}"
+                             " --user-name {2}".format(eucarcpath,
+                                                       admin_certs[admin_certs.pop()],
+                                                       user),
+                             code=0)
             else:
                 raise RuntimeWarning('No active certs were found on the clc, and there are 2'
                                      'certs outstanding. Either delete an existing '
@@ -946,7 +950,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
         self.debug('New cert name:{0}, keyname:{1}'.format(os.path.basename(newcertpath),
                                                            os.path.basename(newkeypath)))
 
-        self.clc.sys("source {0} && /usr/bin/euare-usercreatecert --user-name {1}"
+        self.clc.sys("source &>/dev/null {0} && /usr/bin/euare-usercreatecert --user-name {1}"
                      " --out {2} --keyout {3}".format(eucarcpath,
                                                       user,
                                                       newcertpath,
@@ -1109,8 +1113,9 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
         clc_eucarc = os.path.join(admin_cred_dir, 'eucarc')
         local_eucarc = os.path.join(admin_cred_dir,  'eucarc')
         remotecertpath = self.clc.sys('source {0} && echo $EC2_CERT'.format(clc_eucarc))[0]
-        remotekeypath = self.clc.sys('source {0} && echo $EC2_PRIVATE_KEY'.format(clc_eucarc))[0]
-        if not remotecertpath or remotekeypath:
+        remotekeypath = self.clc.sys('source {0} &>/dev/null && echo $EC2_PRIVATE_KEY'
+                                     .format(clc_eucarc))[0]
+        if not remotecertpath or not remotekeypath:
             self.critical('CERT and KEY paths not provided in {0}'.format(clc_eucarc))
             return {}
         localcertpath = os.path.join(admin_cred_dir, os.path.basename(remotecertpath))

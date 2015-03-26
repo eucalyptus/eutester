@@ -62,10 +62,10 @@ class ImageUtils(EutesterTestCase):
                  worker_password=None,
                  worker_machine=None):
 
-        if tester is None:
-            self.tester = Eucaops(config_file=config_file,
-                                  password=password,
-                                  credpath=credpath)
+        if not tester or not isinstance(tester, Eucaops):
+            self.debug('Creating Eucaops tester obj from: config_file:"{0}", password:"{1}", '
+                       'credpath:"{2}"'.format(config_file, password, credpath))
+            self.tester = Eucaops(config_file=config_file, password=password, credpath=credpath)
         else:
             self.tester = tester
         self.tester.exit_on_fail = eof
@@ -266,6 +266,7 @@ class ImageUtils(EutesterTestCase):
         Bundle an image on a 'machine'.
         where credpath to creds on machine
         '''
+        self.status('Starting euca2ools_bundle_image at path:"{0}"'.format(path))
         time_per_gig = time_per_gig or self.time_per_gig
         credpath = machine_credpath or self.credpath
         machine = machine or self.worker_machine
@@ -338,6 +339,7 @@ class ImageUtils(EutesterTestCase):
         Bundle an image on a 'machine'.
         where credpath to creds on machine
         '''
+        self.status('Starting euca2ools_upload_bundle for manifest:"{0}"'.format(manifest))
         machine = machine or self.worker_machine
         credpath = machine_credpath or self.credpath
         cbargs = [timeout, interbundle_timeout, time.time(), 0, True]
@@ -421,6 +423,9 @@ class ImageUtils(EutesterTestCase):
                            platform=None,
                            machine=None,
                            machine_credpath=None):
+        self.status('Starting euca2ools_register for manifest:"{0}", kernel:"{1}", ramdisk:"{2}"'
+                    .format(manifest, kernel,ramdisk))
+
         machine = machine or self.worker_machine
         credpath = machine_credpath or self.credpath
         cmdargs = str(manifest) + " -n " + str(name)

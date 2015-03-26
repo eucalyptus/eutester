@@ -2450,7 +2450,8 @@ disable_root: false"""
         :return: image id
         :raise: Exception if image is not found
         """
-
+        if isinstance(emi, Image):
+            emi = emi.id
         ret_list = []
         if not filters:
             filters = {}
@@ -2482,13 +2483,15 @@ disable_root: false"""
             # If a specific EMI was not provided, set some sane defaults for
             # fetching a test image to work with...
             basic_image = True
-        if name is None and not emi:
+        if name is None and emi is None:
              emi = "mi-"
+        self.debug('Get images using filters:' + str(filters))
         images = self.ec2.get_all_images(filters=filters)
         self.debug("Got " + str(len(images)) + " total images " + str(emi) + ", now filtering..." )
         # Note: the following can likely be removed now that Euca supports filters for requests
         for image in images:
-            if (re.search(emi, image.id) is None) and (re.search(emi, image.name) is None):
+            if isinstance(emi, basestring) and (re.search(emi, str(image.id)) is None) and \
+                    (re.search(emi, str(image.name)) is None):
                 continue
             if (root_device_type is not None) and (image.root_device_type != root_device_type):
                 continue
@@ -2618,7 +2621,7 @@ disable_root: false"""
         buf = "\n"
         if not images:
             try:
-                images = self.get_images(basic_image=basic_image) or []
+                images = self.get_images(emi='',basic_image=basic_image, state=None) or []
             except ResourceNotFoundException, nfe:
                 printmethod("\nNo images found\n")
                 return
@@ -2628,7 +2631,7 @@ disable_root: false"""
 
     def show_image(self, image, verbose=True, printmethod=None,
                    header_markups=[1,4], printme=True):
-        if isinstance(image, str):
+        if isinstance(image, basestring):
             image = self.get_emi(emi=image)
             if not image:
                 raise ResourceNotFoundException('Image:"{0}" not found'.format(image))

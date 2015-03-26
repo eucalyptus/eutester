@@ -569,7 +569,8 @@ class EuserviceManager(object):
         self.node_list = []
         self.tester = tester
         self.debug = tester.debug
-        self.eucaprefix = ". " + self.tester.credpath + "/eucarc && " + self.tester.eucapath
+        self.eucaprefix = ". " + self.tester.credpath + "/eucarc &>/dev/null && " + \
+                          self.tester.eucapath
         if self.tester.clc is None:
             raise AttributeError("Tester object does not have CLC machine to use for SSH")
         self.last_updated = None
@@ -703,26 +704,31 @@ class EuserviceManager(object):
         :returns: 0 - if versions are equal
         :returns: -1 - if version1 is older than version2
         '''
-        ver1 = str(version1).split('.')
-        ver2 = str(version2).split('.')
-        if not ver1 or not ver2:
-            raise Exception('Failed to parse versions from strings:' + str(version1) + ", " + str(version2))
-        while ver1:
-            if not len(ver2):
-                return 1
-            sub_ver1 = int(ver1.pop(0))
-            sub_ver2 = int(ver2.pop(0))
-            if sub_ver1 > sub_ver2:
-                return 1
-            if sub_ver1 < sub_ver2:
-                return -1
-        #version 1 has no additional sub release ids, and until this point ver1 == ver2...
-        while ver2:
-            if int(ver2.pop(0)) != 0:
-                #ver2 has a none '0' sub release id so it is > than ver1
-                return -1
-        #versions are equal
-        return 0
+        try:
+            from distutils.version import StrictVersion
+            return StrictVersion(version1).__cmp__(version2)
+        except ImportError:
+            ver1 = str(version1).split('.')
+            ver2 = str(version2).split('.')
+            if not ver1 or not ver2:
+                raise Exception('Failed to parse versions from strings:' + str(version1) +
+                                ", " + str(version2))
+            while ver1:
+                if not len(ver2):
+                    return 1
+                sub_ver1 = int(ver1.pop(0))
+                sub_ver2 = int(ver2.pop(0))
+                if sub_ver1 > sub_ver2:
+                    return 1
+                if sub_ver1 < sub_ver2:
+                    return -1
+            #version 1 has no additional sub release ids, and until this point ver1 == ver2...
+            while ver2:
+                if int(ver2.pop(0)) != 0:
+                    #ver2 has a none '0' sub release id so it is > than ver1
+                    return -1
+            #versions are equal
+            return 0
 
 
     def populate_nodes(self, enabled_clc=None):

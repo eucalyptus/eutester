@@ -512,9 +512,9 @@ class Machine:
         :return: eucalyptus version string
         """
         try:
-            return self.sys('cat ' + versionpath, code=0)[0]
+            return self.sys('cat ' + versionpath + " | grep '[0-9]'", code=0)[0]
         except Exception, e:
-            return self.sys('cat /opt/eucalyptus' + versionpath, code=0)[0]
+            return self.sys('cat /opt/eucalyptus' + versionpath + " | grep '[0-9]'", code=0)[0]
 
 
 
