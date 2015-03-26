@@ -158,6 +158,7 @@ class Load_Pv_image(EutesterTestCase):
         another host is not provided.
         The image is bundled, uploaded and registered using euca2ools on the worker machine.
         """
+        size = None
         image_utils = self.image_utils
         kernelfilepath = self.args.kernelfilepath
         kernel_image_url = self.args.kernel_image_url
@@ -186,9 +187,8 @@ class Load_Pv_image(EutesterTestCase):
                 return self.eki
         if not kernelfilepath:
             destpath = self.args.destpath
-            image_utils.wget_image(url=self.args.kernel_image_url,
-                                   destpath=destpath)
-            kernelfilepath = os.path.join(destpath, filename)
+            size, kernelfilepath = image_utils.wget_image(url=self.args.kernel_image_url,
+                                                          destpath=destpath)
         manifest = image_utils.euca2ools_bundle_image(path=kernelfilepath)
         upmanifest = image_utils.euca2ools_upload_bundle(manifest=manifest,
                                                          bucketname=imagename + '_eutester_pv')
@@ -199,6 +199,8 @@ class Load_Pv_image(EutesterTestCase):
                                 'Fix the test?'
         # Add some tags to inform the cloud admin/users where this image came from...
         image.add_tag(key='Created by eutester load_pv_image test')
+        if size is not None:
+            image.add_tag(key='size', value=str(size))
         if kernel_image_url:
             image.add_tag(key='source', value=kernel_image_url)
         image.update()
@@ -215,6 +217,7 @@ class Load_Pv_image(EutesterTestCase):
         another host is not provided.
         The image is bundled, uploaded and registered using euca2ools on the worker machine.
         """
+        size = None
         image_utils = self.image_utils
         ramdisk_image_url = self.args.ramdisk_image_url
         ramdiskfilepath = self.args.ramdiskfilepath
@@ -243,9 +246,8 @@ class Load_Pv_image(EutesterTestCase):
                 return self.eri
         if not ramdiskfilepath:
             destpath = self.args.destpath
-            image_utils.wget_image(url=self.args.kernel_image_url,
-                                   destpath=destpath)
-            ramdiskfilepath = os.path.join(destpath, filename)
+            size, ramdiskfilepath = image_utils.wget_image(url=self.args.kernel_image_url,
+                                                           destpath=destpath)
         manifest = image_utils.euca2ools_bundle_image(path=ramdiskfilepath)
         upmanifest = image_utils.euca2ools_upload_bundle(manifest=manifest,
                                                          bucketname=imagename + '_eutester_pv')
@@ -256,6 +258,8 @@ class Load_Pv_image(EutesterTestCase):
                                 'Fix the test?'
         # Add some tags to inform the cloud admin/users where this image came from...
         image.add_tag(key='Created by eutester load_pv_image test')
+        if size is not None:
+            image.add_tag(key='size', value=str(size))
         if ramdisk_image_url:
             image.add_tag(key='source', value=ramdisk_image_url)
         image.update()
@@ -272,6 +276,7 @@ class Load_Pv_image(EutesterTestCase):
         another host is not provided.
         The image is bundled, uploaded and registered using euca2ools on the worker machine.
         """
+        size = None
         image_utils = self.image_utils
         diskfilepath = self.args.diskfilepath
         disk_image_url = self.args.disk_image_url
@@ -279,9 +284,8 @@ class Load_Pv_image(EutesterTestCase):
         imagename = filename[0:20] + '_by_eutester'
         if not diskfilepath:
             destpath = self.args.destpath
-            image_utils.wget_image(url=self.args.disk_image_url,
-                                   destpath=destpath)
-            diskfilepath = os.path.join(destpath, filename)
+            size, diskfilepath = image_utils.wget_image(url=self.args.disk_image_url,
+                                                        destpath=destpath)
         try:
             self.tester.get_emi(emi='', filters={'name':imagename}, state=None)
         except ResourceNotFoundException:
@@ -317,6 +321,8 @@ class Load_Pv_image(EutesterTestCase):
                                 'Fix the test?'
         # Add some tags to inform the cloud admin/users where this image came from...
         image.add_tag(key='Created by eutester load_pv_image test')
+        if size is not None:
+            image.add_tag(key='size', value=str(size))
         if disk_image_url:
             image.add_tag(key='source', value=disk_image_url)
         image.update()

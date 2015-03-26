@@ -639,10 +639,17 @@ class Machine:
                           timeout=300):
         self.debug('wget_remote_image, url:'+str(url)+", path:"+str(path))
         cmd = 'wget '
-        if path:
-            cmd = cmd + " -P " + str(path)
-        if dest_file_name:
-            cmd = cmd + " -O " + str(dest_file_name)
+        dest_file_name = dest_file_name or os.path.basename(url)
+        path = path or ''
+        dest_file = os.path.join(path, dest_file_name)
+
+        # It seems -P and -O conflict, removing -P and updating the use of -O w/ a full path
+        # if path:
+        #    cmd = cmd + " -P " + str(path)
+        # Use -O instead of redirect '>' to destfile so the test can get the status updates
+        # of wget progress...
+        if dest_file:
+            cmd = cmd + " -O " + str(dest_file)
         if user:
             cmd = cmd + " --user " + str(user)
         if password:
@@ -654,10 +661,17 @@ class Machine:
         ret = self.cmd(cmd, timeout=timeout, cb=self.wget_status_cb )
         if ret['status'] != 0:
             raise Exception('wget_remote_image failed with status:'+str(ret['status']))
-        self.debug('wget_remote_image succeeded')
+        # If the wget_status_cb method returned a string that contains our filename, use
+        # that string as the returned path for where the file was saved to
+        ret_search = re.match("^\S*dest_file\S*$", ret['output'])
+        if ret_search:
+            dest_file = str(ret_search.group())
+        self.debug('wget_remote_image succeeded, saved to:' + str(dest_file))
+        return str(dest_file)
     
     def wget_status_cb(self, buf):
         ret = sshconnection.SshCbReturn(stop=False)
+        ret.buf = ''
         try:
             buf = buf.strip()
             val = buf.split()[0] 
@@ -667,14 +681,21 @@ class Machine:
                     sys.stdout.flush()
                     self.wget_last_status = val
                 else:
+                    # Grab the saved location and save it as the only returned item in the
+                    # command's 'output' buffer.
+                    dest_search = re.search('Saving\s*to:\s*“.*”', buf)
+                    if dest_search:
+                        line = str(dest_search.group()).decode('ascii', 'ignore')
+                        splitline = line.split(':')
+                        if len(splitline) > 1:
+                            ret.buf = str(splitline[1].strip())
                     print buf
         except Exception, e:
             pass
         finally:
             return ret
 
-            
-        
+
     def get_df_info(self, path=None, verbose=True):
         """
         Return df's output in dict format for a given path.

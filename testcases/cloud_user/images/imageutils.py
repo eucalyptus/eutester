@@ -169,14 +169,14 @@ class ImageUtils(EutesterTestCase):
         timeout = size * time_per_gig
         self.debug('wget_image: ' + str(url) + ' to destpath' +
                    str(destpath) + ' on machine:' + str(machine.hostname))
-        machine.wget_remote_image(url,
-                                  path=destpath,
-                                  dest_file_name=dest_file_name,
-                                  user=user,
-                                  password=password,
-                                  retryconn=retryconn,
-                                  timeout=timeout)
-        return size
+        saved_location = machine.wget_remote_image(url,
+                                                   path=destpath,
+                                                   dest_file_name=dest_file_name,
+                                                   user=user,
+                                                   password=password,
+                                                   retryconn=retryconn,
+                                                   timeout=timeout)
+        return (size, saved_location)
 
 
     def get_manifest_obj(self, path, machine=None, local=False, timeout=30):
