@@ -23,8 +23,7 @@ import static com.eucalyptus.tests.awssdk.Eutester4j.minimalInit
  */
 class TestEC2VPCNetworkAclEntryManagement {
 
-    private final String host;
-    private final AWSCredentialsProvider credentials
+  private final AWSCredentialsProvider credentials
 
 
   public static void main( String[] args ) throws Exception {

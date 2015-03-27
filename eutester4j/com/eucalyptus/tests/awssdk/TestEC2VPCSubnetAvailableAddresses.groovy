@@ -10,7 +10,7 @@ import com.amazonaws.services.ec2.model.*
 import org.testng.annotations.Test;
 
 import static com.eucalyptus.tests.awssdk.Eutester4j.ACCESS_KEY
-import static com.eucalyptus.tests.awssdk.Eutester4j.HOST_IP
+import static com.eucalyptus.tests.awssdk.Eutester4j.EC2_ENDPOINT
 import static com.eucalyptus.tests.awssdk.Eutester4j.SECRET_KEY
 import static com.eucalyptus.tests.awssdk.Eutester4j.minimalInit
 
@@ -23,7 +23,6 @@ import static com.eucalyptus.tests.awssdk.Eutester4j.minimalInit
  */
 class TestEC2VPCSubnetAvailableAddresses {
 
-  private final String host
   private final AWSCredentialsProvider credentials
 
   public static void main( String[] args ) throws Exception {
@@ -32,14 +31,7 @@ class TestEC2VPCSubnetAvailableAddresses {
 
   public TestEC2VPCSubnetAvailableAddresses() {
     minimalInit()
-
     this.credentials = new StaticCredentialsProvider( new BasicAWSCredentials( ACCESS_KEY, SECRET_KEY ) )
-  }
-
-  private String cloudUri( String servicePath ) {
-    URI.create( "http://" + host + ":8773/" )
-        .resolve( servicePath )
-        .toString()
   }
 
   private AmazonEC2 getEC2Client( final AWSCredentialsProvider credentials ) {
