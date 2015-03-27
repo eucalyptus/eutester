@@ -20,6 +20,7 @@ import org.testng.annotations.Test;
 
 import static com.eucalyptus.tests.awssdk.Eutester4j.ACCESS_KEY
 import static com.eucalyptus.tests.awssdk.Eutester4j.HOST_IP
+import static com.eucalyptus.tests.awssdk.Eutester4j.EC2_ENDPOINT
 import static com.eucalyptus.tests.awssdk.Eutester4j.SECRET_KEY
 import static com.eucalyptus.tests.awssdk.Eutester4j.minimalInit
 
@@ -32,7 +33,7 @@ import static com.eucalyptus.tests.awssdk.Eutester4j.minimalInit
  */
 class TestEC2VPCResourceConditionPolicy {
 
-  private final String host
+  private final String host;
   private final AWSCredentialsProvider credentials
 
   public static void main( String[] args ) throws Exception {
@@ -41,7 +42,7 @@ class TestEC2VPCResourceConditionPolicy {
 
   public TestEC2VPCResourceConditionPolicy() {
     minimalInit()
-
+    this.host=HOST_IP
     this.credentials = new StaticCredentialsProvider( new BasicAWSCredentials( ACCESS_KEY, SECRET_KEY ) )
   }
 

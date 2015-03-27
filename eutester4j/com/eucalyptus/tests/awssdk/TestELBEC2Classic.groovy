@@ -43,7 +43,7 @@ class TestELBEC2Classic {
 
   public TestELBEC2Classic( ) {
     minimalInit()
-
+    this.host=HOST_IP
     this.credentials = new StaticCredentialsProvider( new BasicAWSCredentials( ACCESS_KEY, SECRET_KEY ) )
   }
 
@@ -56,7 +56,7 @@ class TestELBEC2Classic {
   private AmazonEC2 getEC2Client( final AWSCredentialsProvider credentials ) {
     final AmazonEC2 ec2 = new AmazonEC2Client( credentials )
     if ( host ) {
-      ec2.setEndpoint( EC2_ENDPOINT )
+      ec2.setEndpoint( cloudUri( "/services/compute" ) )
     } else {
       ec2.setRegion(Region.getRegion( Regions.US_WEST_1 ) )
     }
