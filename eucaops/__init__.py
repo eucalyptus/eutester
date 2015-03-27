@@ -787,7 +787,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                 self.sys("echo 'export EC2_PRIVATE_KEY=${EUCA_KEY_DIR}/euca2-pk.pem' >> " + admin_cred_dir + "/eucarc")
 
     def setup_user_certs(self, admin_cred_dir, account, user):
-        admin_certs = self.sys("source " + admin_cred_dir + "/eucarc" + " && " + "/usr/bin/euare-userlistcerts | grep -v Active")
+        admin_certs = self.sys("source " + admin_cred_dir + "/eucarc" + " && " + "/usr/bin/euare-userlistcerts | sed '/Active/ { N; d; }'")
         if len(admin_certs) > 1:
             self.debug("Found more than one certs, deleting last cert")
             self.sys("source " + admin_cred_dir + "/eucarc" + " && " + "/usr/bin/euare-userdelcert -c " + admin_certs[len(admin_certs)-1] + " --user-name " + user)

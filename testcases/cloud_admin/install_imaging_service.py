@@ -218,13 +218,13 @@ class ConfigureImagingService(EutesterTestCase):
         eucalyptus imaging service.
         """
         self.clc.add_repo(url=self.args.img_repo, name="EucaImagingService")
-        self.clc.install("eucalyptus-imaging-worker-image", nogpg=True,
+        self.clc.install("eucalyptus-service-image", nogpg=True,
                          timeout=300)
         self.clc.sys("export EUCALYPTUS=" + str(self.tester.eucapath) +
                      " && source " + self.tester.credpath  +
                      "/eucarc && euca-install-imaging-worker --install-default",
                      code=0)
-        self.tester.property_manager.show_all_imaging_properties()
+        #self.tester.property_manager.show_all_imaging_properties()
 
 
     def configure_properties(self):
@@ -282,7 +282,7 @@ if __name__ == "__main__":
     ### Use the list of tests passed from config/command line to determine
     # what subset of tests to run
     ### or use a predefined list
-    list = testcase.args.tests or ["configure_service", "configure_properties"]
+    list = testcase.args.tests or ["configure_service"]
 
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
