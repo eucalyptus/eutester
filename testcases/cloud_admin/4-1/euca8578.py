@@ -30,9 +30,9 @@ class Euca(unittest.TestCase):
         self.condition_policy = """{
         "Statement": [
            {
-             "Effect": "Allow",
+             "Effect": "Limit",
              "Resource": "*",
-             "Action": ["*"],
+             "Action": ["ec2:RunInstances"],
              "Condition": { "NumericLessThanEquals": { "ec2:quota-vminstancenumber": "0"} }
            }
         ]}"""
@@ -54,8 +54,8 @@ class Euca(unittest.TestCase):
         self.tester.authorize_group(self.group)
 
     def test(self):
-        self.account = "test-acct"
-        self.group = "test-group"
+        self.account ="test-acct-x"
+        self.group = "test-group-x"
         self.tester.create_account(self.account)
         self.tester.create_group(self.group, "/", self.account)
         # This should now attach without "Error in uploaded policy: net.sf.json.JSONException: Invalid value for ec2:quota-vminstancenumber: 0"
