@@ -44,7 +44,7 @@ class TestELBDefaultVPC {
 
   public TestELBDefaultVPC() {
     minimalInit()
-    this.host = HOST_IP
+    this.host=HOST_IP
     this.credentials = new StaticCredentialsProvider( new BasicAWSCredentials( ACCESS_KEY, SECRET_KEY ) )
   }
 
