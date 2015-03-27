@@ -62,6 +62,7 @@ class TimeoutFunctionException(Exception):
 class Eutester(object):
 
     _force_ascii_markup = False
+    _ansi_high_intensity_support = False
 
     def __init__(self, credpath=None):
         """This class is intended to setup boto connections for the various services that the *ops classes will use.
@@ -230,25 +231,41 @@ class Eutester(object):
         return False
 
     @classmethod
-    def markup(cls, text, markups=[1], resetvalue="\033[0m", force=None):
+    def markup(cls, text, markups=[1], resetvalue="\033[0m", force=None, allow_nonstandard=None):
         """
-        Convenience method for using ansci markup. Attempts to check if terminal supports
+        Convenience method for using ansi markup. Attempts to check if terminal supports
         ansi escape sequences for text markups. If so will return a marked up version of the
         text supplied using the markups provided.
         Some example markeups: 1 = bold, 4 = underline, 94 = blue or markups=[1, 4, 94]
         :param text: string/buffer to be marked up
-        :markups: a value or list of values representing ansi codes.
-        :resetvalue: string used to reset the terminal, default: "\33[0m"
+        :param markups: a value or list of values representing ansi codes.
+        :param resetvalue: string used to reset the terminal, default: "\33[0m"
+        :param force: boolean, if set will add escape sequences regardless of tty. Defaults to the
+                      class attr '_force_ascii_markup'
+        :param allow_nonstandard: boolean, if True all markup values will be used. If false
+                                  the method will attempt to remap the markup value to a
+                                  standard ansi value to support tools such as Jenkins, etc.
+                                  Defaults to the class attr '_ansi_high_intensity_support'.
+        returns a string with the provided 'text' formatted within ansi escape sequences
         """
+        if not isinstance(markups, list):
+            markups = [markups]
         if force is None:
             force = cls._force_ascii_markup
+        if allow_nonstandard is None:
+            allow_nonstandard = cls._ansi_high_intensity_support
         if not force:
             if not (hasattr(sys.stdout, 'isatty') and sys.stdout.isatty()):
                 return text
-        buf = ""
+        if not allow_nonstandard:
+            newmarkups = []
+            for markup in markups:
+                if markup > 90:
+                    newmarkups.append(markup-60)
+                else:
+                    newmarkups.append(markup)
+            markups = newmarkups
         lines = []
-        if not isinstance(markups, list):
-            markups = [markups]
         markupvalues=";".join(str(x) for x in markups)
         for line in text.splitlines():
             lines.append("\033[{0}m{1}\033[0m".format(markupvalues, line))

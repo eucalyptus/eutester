@@ -85,7 +85,7 @@ class TestColor():
                     'whiteonblue' : '\33[1;37;44m', #get_color(fmt=bold, fg=37,bg=44)
                     'whiteongreen' : '\33[1;37;42m',
                     'red' : '\33[31m', #TestColor.get_color(fg=31)
-                    'failred' : '\033[101m', #TestColor.get_color(fg=101) 
+                    'failred' : '\033[31m', #TestColor.get_color(fg=31)
                     'blueongrey' : '\33[1;34;47m', #TestColor.get_color(fmt=bold, fg=34, bg=47)#'\33[1;34;47m'
                     'redongrey' : '\33[1;31;47m', #TestColor.get_color(fmt=bold, fg=31, bg=47)#'\33[1;31;47m'
                     'blinkwhiteonred' : '\33[1;5;37;41m', #TestColor.get_color(fmt=[bold,blink],fg=37,bg=41)#
