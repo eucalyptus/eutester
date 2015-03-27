@@ -683,7 +683,7 @@ class Machine:
                 else:
                     # Grab the saved location and save it as the only returned item in the
                     # command's 'output' buffer.
-                    dest_search = re.search('Saving\s*to:\s*“.*”', buf)
+                    dest_search = re.search('Saving\s*to:\s*".*"', buf)
                     if dest_search:
                         line = str(dest_search.group()).decode('ascii', 'ignore')
                         splitline = line.split(':')
