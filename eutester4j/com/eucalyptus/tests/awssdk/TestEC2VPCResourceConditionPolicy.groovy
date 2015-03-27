@@ -41,7 +41,7 @@ class TestEC2VPCResourceConditionPolicy {
 
   public TestEC2VPCResourceConditionPolicy() {
     minimalInit()
-    this.host = HOST_IP
+
     this.credentials = new StaticCredentialsProvider( new BasicAWSCredentials( ACCESS_KEY, SECRET_KEY ) )
   }
 
@@ -53,7 +53,7 @@ class TestEC2VPCResourceConditionPolicy {
 
   private AmazonEC2 getEC2Client( final AWSCredentialsProvider credentials ) {
     final AmazonEC2 ec2 = new AmazonEC2Client( credentials )
-    ec2.setEndpoint( cloudUri( "/services/compute" ) )
+    ec2.setEndpoint( EC2_ENDPOINT )
     ec2
   }
 

@@ -281,7 +281,7 @@ class TestEC2VPCSecurityGroupEgressRules {
             // Attempt to clean up anything we created
             cleanupTasks.reverseEach { Runnable cleanupTask ->
                 try {
-//                    cleanupTask.run()
+                    cleanupTask.run()
                 } catch (Exception e) {
                     // Some not-found errors are expected here so may need to be suppressed
                     e.printStackTrace()

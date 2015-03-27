@@ -19,10 +19,11 @@ import com.amazonaws.services.elasticloadbalancing.model.Listener
 import com.amazonaws.services.elasticloadbalancing.model.LoadBalancerAttributes
 import com.amazonaws.services.elasticloadbalancing.model.ModifyLoadBalancerAttributesRequest
 
-import org.testng.annotations.Test;
+import org.testng.annotations.Test
 
-import static com.eucalyptus.tests.awssdk.Eutester4j.minimalInit;
 import static com.eucalyptus.tests.awssdk.Eutester4j.HOST_IP;
+import static com.eucalyptus.tests.awssdk.Eutester4j.minimalInit;
+import static com.eucalyptus.tests.awssdk.Eutester4j.EC2_ENDPOINT;
 import static com.eucalyptus.tests.awssdk.Eutester4j.ACCESS_KEY;
 import static com.eucalyptus.tests.awssdk.Eutester4j.SECRET_KEY;
 
@@ -40,7 +41,7 @@ class TestELBAttributes {
 
   public TestELBAttributes(){
     minimalInit()
-    this.host = HOST_IP
+    this.host=HOST_IP
     this.credentials = new StaticCredentialsProvider( new BasicAWSCredentials( ACCESS_KEY, SECRET_KEY ) )
   }
 
