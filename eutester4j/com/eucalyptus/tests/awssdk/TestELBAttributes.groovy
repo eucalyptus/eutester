@@ -23,7 +23,6 @@ import org.testng.annotations.Test
 
 import static com.eucalyptus.tests.awssdk.Eutester4j.HOST_IP;
 import static com.eucalyptus.tests.awssdk.Eutester4j.minimalInit;
-import static com.eucalyptus.tests.awssdk.Eutester4j.EC2_ENDPOINT;
 import static com.eucalyptus.tests.awssdk.Eutester4j.ACCESS_KEY;
 import static com.eucalyptus.tests.awssdk.Eutester4j.SECRET_KEY;
 

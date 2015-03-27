@@ -23,7 +23,6 @@ import static com.eucalyptus.tests.awssdk.Eutester4j.minimalInit
  */
 class TestEC2VPCValidation {
 
-  private final String host
   private final AWSCredentialsProvider credentials
 
   public static void main( String[] args ) throws Exception {
@@ -34,12 +33,6 @@ class TestEC2VPCValidation {
     minimalInit()
 
     this.credentials = new StaticCredentialsProvider( new BasicAWSCredentials( ACCESS_KEY, SECRET_KEY ) )
-  }
-
-  private String cloudUri( String servicePath ) {
-    URI.create( "http://" + host + ":8773/" )
-        .resolve( servicePath )
-        .toString()
   }
 
   private AmazonEC2 getEC2Client( final AWSCredentialsProvider credentials ) {

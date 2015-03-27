@@ -1,7 +1,8 @@
 package com.eucalyptus.tests.awssdk
 
-import com.amazonaws.auth.AWSCredentials
+import com.amazonaws.auth.AWSCredentialsProvider
 import com.amazonaws.auth.BasicAWSCredentials
+import com.amazonaws.internal.StaticCredentialsProvider
 import com.amazonaws.services.autoscaling.AmazonAutoScaling
 import com.amazonaws.services.autoscaling.AmazonAutoScalingClient
 import com.amazonaws.services.autoscaling.model.CreateAutoScalingGroupRequest
@@ -25,6 +26,13 @@ import com.amazonaws.services.ec2.model.DescribeImagesRequest
 import com.amazonaws.services.ec2.model.DetachInternetGatewayRequest
 import com.amazonaws.services.ec2.model.Filter
 
+import org.testng.annotations.Test;
+
+import static com.eucalyptus.tests.awssdk.Eutester4j.ACCESS_KEY
+import static com.eucalyptus.tests.awssdk.Eutester4j.HOST_IP
+import static com.eucalyptus.tests.awssdk.Eutester4j.SECRET_KEY
+import static com.eucalyptus.tests.awssdk.Eutester4j.minimalInit
+
 /**
  * This application tests Auto Scaling use of EC2 VPC functionality.
  *
@@ -35,44 +43,33 @@ import com.amazonaws.services.ec2.model.Filter
 class TestAutoscalingEC2VPC {
 
   private final String host;
-  private final String accessKey;
-  private final String secretKey;
+  private final AWSCredentialsProvider credentials
 
   public static void main( String[] args ) throws Exception {
-    final TestAutoscalingEC2VPC test =  new TestAutoscalingEC2VPC(
-        '10.111.5.64',
-        'AKI4YB4UYR1BRFUYPGHO',
-        'JbvmaFyUjehb56LOV0lmcUe3Tbc2LM5nIyWO6wDP'
-    );
+    final TestAutoscalingEC2VPC test =  new TestAutoscalingEC2VPC();
     test.test();
   }
 
-  public TestAutoscalingEC2VPC( final String host,
-                                final String accessKey,
-                                final String secretKey ) {
-    this.host = host;
-    this.accessKey = accessKey;
-    this.secretKey = secretKey;
-  }
-
-  private AWSCredentials credentials() {
-    return new BasicAWSCredentials( accessKey, secretKey );
+  public TestAutoscalingEC2VPC() {
+    minimalInit()
+    this.host = HOST_IP;
+    this.credentials = new StaticCredentialsProvider( new BasicAWSCredentials( ACCESS_KEY, SECRET_KEY ) )
   }
 
   private String cloudUri( String servicePath ) {
     URI.create( "http://" + host + ":8773/" )
-        .resolve( servicePath )
-        .toString()
+            .resolve( servicePath )
+            .toString()
   }
 
   private AmazonAutoScaling getAutoScalingClient( ) {
-    final AmazonAutoScaling asc = new AmazonAutoScalingClient( credentials( ) )
+    final AmazonAutoScaling asc = new AmazonAutoScalingClient( credentials )
     asc.setEndpoint( cloudUri( "/services/AutoScaling/" ) )
     asc
   }
 
   private AmazonEC2 getEc2Client( ) {
-    final AmazonEC2 ec2 = new AmazonEC2Client( credentials() )
+    final AmazonEC2 ec2 = new AmazonEC2Client( credentials )
     ec2.setEndpoint( cloudUri( "/services/compute/" ) )
     ec2
   }
@@ -90,15 +87,16 @@ class TestAutoscalingEC2VPC {
     System.out.println( text )
   }
 
+  @Test
   public void test() throws Exception{
     final AmazonEC2 ec2 = getEc2Client()
 
     // Find an image to use
     final String imageId = ec2.describeImages( new DescribeImagesRequest(
-        filters: [
-            new Filter( name: "image-type", values: ["machine"] ),
-            new Filter( name: "root-device-type", values: ["instance-store"] ),
-        ]
+            filters: [
+                    new Filter( name: "image-type", values: ["machine"] ),
+                    new Filter( name: "root-device-type", values: ["instance-store"] ),
+            ]
     ) ).with {
       images?.getAt( 0 )?.imageId
     }
@@ -121,7 +119,7 @@ class TestAutoscalingEC2VPC {
         // Create VPC to use
         print('Creating VPC')
         final String vpcId = createVpc(new CreateVpcRequest(
-            cidrBlock: '10.0.0.0/24'
+                cidrBlock: '10.0.0.0/24'
         )).with {
           vpc?.vpcId
         }
@@ -145,14 +143,14 @@ class TestAutoscalingEC2VPC {
 
         print("Attaching internet gateway ${internetGatewayId} to vpc ${vpcId}")
         attachInternetGateway(new AttachInternetGatewayRequest(
-            internetGatewayId: internetGatewayId,
-            vpcId: vpcId
+                internetGatewayId: internetGatewayId,
+                vpcId: vpcId
         ))
         cleanupTasks.add {
           print("Detaching internet gateway ${internetGatewayId} from vpc ${vpcId}")
           detachInternetGateway(new DetachInternetGatewayRequest(
-              internetGatewayId: internetGatewayId,
-              vpcId: vpcId
+                  internetGatewayId: internetGatewayId,
+                  vpcId: vpcId
           ))
         }
         vpcId
@@ -176,9 +174,9 @@ class TestAutoscalingEC2VPC {
         final String securityGroupName = namePrefix + "EC2VPCTest"
         print( "Creating a security group for test use: " + securityGroupName )
         final String groupId = ec2.createSecurityGroup( new CreateSecurityGroupRequest(
-            groupName: securityGroupName,
-            description: securityGroupName,
-            vpcId: vpcId
+                groupName: securityGroupName,
+                description: securityGroupName,
+                vpcId: vpcId
         ) ).with {
           groupId
         }
@@ -201,23 +199,23 @@ class TestAutoscalingEC2VPC {
         // Create launch configuration
         print( "Creating launch configuration: " + configName )
         createLaunchConfiguration( new CreateLaunchConfigurationRequest(
-            launchConfigurationName: configName,
-            imageId: imageId,
-            keyName: keyName,
-            securityGroups: [ groupId ],
-            instanceType: instanceType( ),
-            associatePublicIpAddress: true
+                launchConfigurationName: configName,
+                imageId: imageId,
+                keyName: keyName,
+                securityGroups: [ groupId ],
+                instanceType: instanceType( ),
+                associatePublicIpAddress: true
         ) )
 
         print( "Verifying launch configuration public IP address association setting" )
         describeLaunchConfigurations( new DescribeLaunchConfigurationsRequest(
-            launchConfigurationNames: [ configName ]
+                launchConfigurationNames: [ configName ]
         ) ).with {
           assertThat( launchConfigurations != null && launchConfigurations.size()==1,
-              "Expected one launch configuration, but was: ${launchConfigurations?.size()}")
+                  "Expected one launch configuration, but was: ${launchConfigurations?.size()}")
           launchConfigurations[0].with {
             assertThat( associatePublicIpAddress,
-                "Expected associatePublicIpAddress true, but was: ${associatePublicIpAddress}" )
+                    "Expected associatePublicIpAddress true, but was: ${associatePublicIpAddress}" )
           }
         }
 
@@ -226,31 +224,31 @@ class TestAutoscalingEC2VPC {
         cleanupTasks.add{
           print( "Deleting group: " + groupName )
           deleteAutoScalingGroup( new DeleteAutoScalingGroupRequest(
-              autoScalingGroupName: groupName,
-              forceDelete: true
+                  autoScalingGroupName: groupName,
+                  forceDelete: true
           ) )
         }
 
         // Create scaling group
         print( "Creating auto scaling group: " + groupName )
         createAutoScalingGroup( new CreateAutoScalingGroupRequest(
-            autoScalingGroupName: groupName,
-            launchConfigurationName: configName,
-            desiredCapacity: 0,
-            minSize: 0,
-            maxSize: 0,
-            VPCZoneIdentifier: subnetId
+                autoScalingGroupName: groupName,
+                launchConfigurationName: configName,
+                desiredCapacity: 0,
+                minSize: 0,
+                maxSize: 0,
+                VPCZoneIdentifier: subnetId
         ) )
 
         print( "Verifying auto scaling group vpc zone identifier setting" )
         describeAutoScalingGroups( new DescribeAutoScalingGroupsRequest(
-            autoScalingGroupNames: [ groupName ]
+                autoScalingGroupNames: [ groupName ]
         ) ).with {
           assertThat( autoScalingGroups != null && autoScalingGroups.size()==1,
-              "Expected one auto scaling group, but was: ${autoScalingGroups?.size()}")
+                  "Expected one auto scaling group, but was: ${autoScalingGroups?.size()}")
           autoScalingGroups[0].with {
             assertThat( VPCZoneIdentifier == subnetId,
-                "Expected vpc zone identifier ${subnetId}, but was: ${VPCZoneIdentifier}" )
+                    "Expected vpc zone identifier ${subnetId}, but was: ${VPCZoneIdentifier}" )
           }
         }
       }

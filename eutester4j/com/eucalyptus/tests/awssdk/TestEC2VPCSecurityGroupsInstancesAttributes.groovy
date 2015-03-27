@@ -30,7 +30,10 @@ import com.amazonaws.services.ec2.model.*
 
 import org.testng.annotations.Test
 
-import static com.eucalyptus.tests.awssdk.Eutester4j.*
+import static com.eucalyptus.tests.awssdk.Eutester4j.ACCESS_KEY
+import static com.eucalyptus.tests.awssdk.Eutester4j.HOST_IP
+import static com.eucalyptus.tests.awssdk.Eutester4j.SECRET_KEY
+import static com.eucalyptus.tests.awssdk.Eutester4j.minimalInit
 
 /**
  * This application tests EC2 VPC security group functionality.
@@ -44,30 +47,31 @@ import static com.eucalyptus.tests.awssdk.Eutester4j.*
  */
 class TestEC2VPCSecurityGroupsInstancesAttributes {
 
-//  private final String host
+  private final String host
   private final AWSCredentialsProvider credentials
   private final List<String> imageOwners
 
   public static void main( String[] args ) throws Exception {
-    new TestEC2VPCSecurityGroupsInstancesAttributes( null ).test( )
+    new TestEC2VPCSecurityGroupsInstancesAttributes( ).test( )
   }
 
-  public TestEC2VPCSecurityGroupsInstancesAttributes(List<String> imageOwners ) {
+  public TestEC2VPCSecurityGroupsInstancesAttributes() {
       minimalInit()
+      this.host=HOST_IP
       this.credentials = new StaticCredentialsProvider(new BasicAWSCredentials(ACCESS_KEY, SECRET_KEY))
-    this.imageOwners = imageOwners
+      this.imageOwners = imageOwners
   }
 
-//  private String cloudUri( String servicePath ) {
-//    URI.create( "http://" + host + ":8773/" )
-//        .resolve( servicePath )
-//        .toString()
-//  }
+  private String cloudUri( String servicePath ) {
+    URI.create( "http://" + host + ":8773/" )
+        .resolve( servicePath )
+        .toString()
+  }
 
   private AmazonEC2 getEC2Client( final AWSCredentialsProvider credentials ) {
     final AmazonEC2 ec2 = new AmazonEC2Client( credentials )
     if ( host ) {
-      ec2.setEndpoint( EC2_ENDPOINT )
+      ec2.setEndpoint( cloudUri("/services/compute") )
     } else {
       ec2.setRegion( com.amazonaws.regions.Region.getRegion( Regions.US_WEST_1 ) )
     }
@@ -83,7 +87,8 @@ class TestEC2VPCSecurityGroupsInstancesAttributes {
   private void print( String text ) {
     System.out.println( text )
   }
-    @Test
+
+  @Test
   public void test( ) throws Exception {
     final AmazonEC2 ec2 = getEC2Client( credentials )
 
@@ -98,8 +103,6 @@ class TestEC2VPCSecurityGroupsInstancesAttributes {
                 new Filter( name: "root-device-type", values: ["instance-store"] ),
                 new Filter( name: "is-public", values: ["true"] ),
                 new Filter( name: "virtualization-type", values: ["hvm"] ),
-//                new Filter( name: "description", values: ["*Linux*"] ),
-//                new Filter( name: "name", values: ["amzn-*"] ),
             ]
         ) ).with {
           images?.getAt( 0 )?.with {
