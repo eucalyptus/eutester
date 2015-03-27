@@ -184,6 +184,8 @@ class EutesterTestUnit():
         self.result=EutesterTestResult.not_run
         self.time_to_run=0
         if self.kwargs.get('html_anchors', False):
+            if not 'html_anchors' in self.method_possible_args:
+                self.kwargs.pop('html_anchors')
             self.anchor_id = str(str(time.ctime())
                                 + self.name
                                 + "_"
@@ -693,7 +695,7 @@ class EutesterTestCase(unittest.TestCase):
     def startmsg(self,msg=""):
         self.status(msg, traceback=3,testcolor=TestColor.get_canned_color('whiteonblue'))
         
-    def endsuccess(self,msg=""):
+    def endtestunit(self,msg=""):
         msg = "- UNIT ENDED - " + msg
         self.status(msg, traceback=2,a=1, testcolor=TestColor.get_canned_color('whiteongreen'))
 
@@ -801,7 +803,7 @@ class EutesterTestCase(unittest.TestCase):
                     else:
                         self.endfailure(str(test.name))
                 else:
-                    self.endsuccess(str(test.name))
+                    self.endtestunit(str(test.name))
                 self.debug(self.print_test_list_short_stats(list))
                         
         finally:

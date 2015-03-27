@@ -95,9 +95,6 @@ class Load_Pv_image(EutesterTestCase):
                                      help='Password needed to retrieve remote url', default=None)
         self.parser.add_argument('--urluser',dest='wget_user',
                                      help='Username needed to retrieve remote url', default=None)
-        self.parser.add_argument('--gigtime',dest='time_per_gig',
-                                     help='Time allowed per gig size of image to be used',
-                                     default=300)
         self.parser.add_argument('--interbundletime',dest='inter_bundle_timeout',
                                      help='Inter-bundle timeout', default=120)
         self.parser.add_argument('--bucket',dest='bucketname', help='bucketname', default=None)
@@ -111,6 +108,10 @@ class Load_Pv_image(EutesterTestCase):
         self.parser.add_argument('--time_per_gig',
                                      help='Time allowed per image size in GB before timing out. '
                                           'Default:300 seconds', default=300)
+        self.parser.add_argument('--remove_created_images',
+                                     help='Flag if set will attempt to deregister'
+                                          'images this test created, default:False',
+                                     action='store_true', default=False)
 
         self.get_args()
         if (not self.args.disk_image_url and not self.args.diskfilepath) or \
@@ -138,6 +139,7 @@ class Load_Pv_image(EutesterTestCase):
             self.tester = Eucaops(config_file=self.args.config_file, password=self.args.password)
         else:
             self.tester = tester
+        self.tester._force_ascii_markup = self.args.use_color
         self.args.tester = self.tester
         # Allow __init__ to get args from __init__'s kwargs or through command line parser...
         for kw in kwargs:
@@ -187,7 +189,7 @@ class Load_Pv_image(EutesterTestCase):
                 return self.eki
         if not kernelfilepath:
             destpath = self.args.destpath
-            size, kernelfilepath = image_utils.wget_image(url=self.args.kernel_image_url,
+            size, kernelfilepath = image_utils.wget_image(url=kernel_image_url,
                                                           destpath=destpath)
         manifest = image_utils.euca2ools_bundle_image(path=kernelfilepath)
         upmanifest = image_utils.euca2ools_upload_bundle(manifest=manifest,
@@ -246,7 +248,7 @@ class Load_Pv_image(EutesterTestCase):
                 return self.eri
         if not ramdiskfilepath:
             destpath = self.args.destpath
-            size, ramdiskfilepath = image_utils.wget_image(url=self.args.kernel_image_url,
+            size, ramdiskfilepath = image_utils.wget_image(url=ramdisk_image_url,
                                                            destpath=destpath)
         manifest = image_utils.euca2ools_bundle_image(path=ramdiskfilepath)
         upmanifest = image_utils.euca2ools_upload_bundle(manifest=manifest,
@@ -284,7 +286,7 @@ class Load_Pv_image(EutesterTestCase):
         imagename = filename[0:20] + '_by_eutester'
         if not diskfilepath:
             destpath = self.args.destpath
-            size, diskfilepath = image_utils.wget_image(url=self.args.disk_image_url,
+            size, diskfilepath = image_utils.wget_image(url=disk_image_url,
                                                         destpath=destpath)
         try:
             self.tester.get_emi(emi='', filters={'name':imagename}, state=None)
@@ -382,10 +384,11 @@ class Load_Pv_image(EutesterTestCase):
         else:
             self.keypair_name = "load_pv_test_keypair" + str(int(time.time()))
             self.keypair = self.tester.add_keypair(self.keypair_name)
-        tester = self.tester
-        assert isinstance(tester, Eucaops)
         try:
-            instance = tester.run_image(image=self.emi, keypair=self.keypair, group=self.group)[0]
+            size = int(self.emi.tags.get('size', 0)) * int(self.args.time_per_gig)
+            timeout = size or 300
+            instance = self.tester.run_image(image=self.emi, keypair=self.keypair,
+                                             group=self.group, timeout=timeout)[0]
             instance.sys('uptime', code=0)
             self.status("Run new PV image PASSED")
         finally:
@@ -397,12 +400,12 @@ class Load_Pv_image(EutesterTestCase):
         """
         Description:
         Attempts to clean up resources/artifacts created during this test.
-        At the time this was written, this method did not clean up the images created in this
+        This method will not clean up the images created in this
         test. Will attempt to delete/terminate instances, keypairs, etc..
         """
         tester = self.tester
         assert isinstance(tester, Eucaops)
-        tester.cleanup_artifacts()
+        tester.cleanup_artifacts(images=self.args.remove_created_images)
 
 if __name__ == "__main__":
     testcase = Load_Pv_image()

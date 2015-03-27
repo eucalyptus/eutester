@@ -256,7 +256,7 @@ class EbsTestSuite(EutesterTestCase):
             for inst in instances:
                 testzone.instances.append(inst)
             self.debug('Created instance: ' + str(inst.id)+" in zone:"+str(zone))
-        #self.endsuccess()
+        #self.endtestunit()
     
     def terminate_test_instances_for_zones(self, zonelist=None, timeout=480):
         if zonelist is None:
@@ -303,7 +303,7 @@ class EbsTestSuite(EutesterTestCase):
                         except Exception, e:
                             #If it failed were good
                             self.debug("negative_attach_in_use_volume_in_zones Passed. Could not attach in-use volume")
-                            #self.endsuccess()
+                            #self.endtestunit()
                             pass
                         else:
                             #The operation did fail, but this test did
@@ -413,7 +413,7 @@ class EbsTestSuite(EutesterTestCase):
                 raise Exception("No instances in zone:"+str(zone.name))
             for instance in zone.instances:
                 instance.reboot_instance_and_verify(waitconnect=waitconnect, timeout=timeout, checkvolstatus=True)
-        #self.endsuccess()
+        #self.endtestunit()
         
     def detach_volumes_in_zones(self,zonelist=None, timeout=480, volcount=1, eof=False):
         """
@@ -480,7 +480,7 @@ class EbsTestSuite(EutesterTestCase):
                 for vol in instance.attached_vols:
                     instance.detach_euvolume(vol, waitfordev=False)
                 instance.start_instance_and_verify(checkvolstatus=True)
-        #self.endsuccess()
+        #self.endtestunit()
     
     def delete_volumes_in_zones(self, zonelist=None, timeout=60):
         """
@@ -503,7 +503,7 @@ class EbsTestSuite(EutesterTestCase):
                     self.debug("failed to delete volume:"+str(volume.id))
                 else:
                     zone.volumes.remove(volume)
-        #self.endsuccess()
+        #self.endtestunit()
         
         
     def delete_snapshots_in_zones(self, zonelist=None,snaplist=None, timeout=300):
@@ -522,7 +522,7 @@ class EbsTestSuite(EutesterTestCase):
                 if snap.eutest_volume_zone == zone:
                     self.tester.delete_snapshot(snap, timeout=timeout)
                     snaplist.remove(snap)
-        #self.endsuccess()
+        #self.endtestunit()
         
                 
         
@@ -547,7 +547,7 @@ class EbsTestSuite(EutesterTestCase):
                     new_snap = self.tester.create_snapshot_from_volume(volume, description="ebstest", wait_on_progress=wait_on_progress)
                     new_snap.add_tag('ebstestsuite_created')
                     self.snaps.append(new_snap)
-        #self.endsuccess()
+        #self.endtestunit()
         
         
     def create_vols_from_snap_in_same_zone(self, zonelist=None,timepergig=300):
@@ -572,7 +572,7 @@ class EbsTestSuite(EutesterTestCase):
                 newvol.add_tag('ebstestsuite_created')
                 zone.volumes.append(newvol)
                 snap.eutest_volumes.append(newvol)
-        #self.endsuccess()
+        #self.endtestunit()
         
     def get_snaps_from_zone(self,snaplist, zone):
         retlist = []
@@ -633,7 +633,7 @@ class EbsTestSuite(EutesterTestCase):
                             raise Exception("Volume:"+str(vol.id)+" MD5:"+str(vol.md5)+" != Snap:"+str(snap.id)+" MD5:"+str(snap.eutest_volume_md5))
                         self.debug("Successfully verified volume:"+str(vol.id)+" to snapshot:"+str(snap.id))
                         i += 1
-        #self.endsuccess()
+        #self.endtestunit()
         
     def create_vols_from_snap_in_different_zone(self,zonelist=None, timepergig=300):
         """
@@ -652,7 +652,7 @@ class EbsTestSuite(EutesterTestCase):
                     newvol.add_tag('ebstestsuite_created')
                     zone.volumes.append(newvol)
                     snap.eutest_volumes.append(newvol)
-        #self.endsuccess()
+        #self.endtestunit()
         
     
     def consecutive_snapshot_to_vol_verify_md5s(self,
@@ -1008,7 +1008,7 @@ class EbsTestSuite(EutesterTestCase):
         for x in xrange(0,count):
             self.startmsg("test attempt("+str(x)+")")
             self.restart_clc_makevol()
-            self.endsuccess("test attempt("+str(x)+")")
+            self.endtestunit("test attempt("+str(x)+")")
     
     
     

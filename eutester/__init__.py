@@ -60,6 +60,9 @@ class TimeoutFunctionException(Exception):
 
 
 class Eutester(object):
+
+    _force_ascii_markup = False
+
     def __init__(self, credpath=None):
         """This class is intended to setup boto connections for the various services that the *ops classes will use.
         :param credpath: Path to a valid eucarc file.
@@ -227,7 +230,7 @@ class Eutester(object):
         return False
 
     @classmethod
-    def markup(cls, text, markups=[1], resetvalue="\033[0m"):
+    def markup(cls, text, markups=[1], resetvalue="\033[0m", force=None):
         """
         Convenience method for using ansci markup. Attempts to check if terminal supports
         ansi escape sequences for text markups. If so will return a marked up version of the
@@ -237,8 +240,11 @@ class Eutester(object):
         :markups: a value or list of values representing ansi codes.
         :resetvalue: string used to reset the terminal, default: "\33[0m"
         """
-        if not (hasattr(sys.stdout, 'isatty') and sys.stdout.isatty()):
-            return text
+        if force is None:
+            force = cls._force_ascii_markup
+        if not force:
+            if not (hasattr(sys.stdout, 'isatty') and sys.stdout.isatty()):
+                return text
         buf = ""
         lines = []
         if not isinstance(markups, list):

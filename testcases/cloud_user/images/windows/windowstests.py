@@ -275,7 +275,7 @@ class WindowsTests(EutesterTestCase):
                 testzone.volumes.append(vol)
                 self.debug('create_vols_per_zone created  vol('+str(x)+') zone:'+str(zone)+' vol:'+str(vol.id))
             
-        self.endsuccess() 
+        self.endtestunit()
     
     def create_windows_emi_from_url(self,
                                       url=None, 

@@ -363,7 +363,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
     def cleanup_artifacts(self,instances=True, snapshots=True, volumes=True,
                           load_balancers=True, ip_addresses=True,
                           auto_scaling_groups=True, launch_configurations=True,
-                          keypairs=True):
+                          keypairs=True, images=True):
         """
         Description: Attempts to remove artifacts created during and through this
         eutester's lifespan.
@@ -443,13 +443,15 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                 failcount +=1
                 failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
 
+
         for key,array in self.test_resources.iteritems():
             for item in array:
                 try:
                     ### SWITCH statement for particulars of removing a certain type of resources
                     self.debug("Deleting " + str(item))
                     if isinstance(item, Image):
-                        item.deregister()
+                        if images:
+                            item.deregister()
                     elif isinstance(item,Reservation):
                         continue
                     else:
