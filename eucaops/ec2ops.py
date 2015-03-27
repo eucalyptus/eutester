@@ -2632,7 +2632,7 @@ disable_root: false"""
     def show_image(self, image, verbose=True, printmethod=None,
                    header_markups=[1,4], printme=True):
         if isinstance(image, basestring):
-            image = self.get_emi(emi=image)
+            image = self.get_emi(emi=image, state=None)
             if not image:
                 raise ResourceNotFoundException('Image:"{0}" not found'.format(image))
         if not isinstance(image, Image):
