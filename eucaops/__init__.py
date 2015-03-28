@@ -57,6 +57,7 @@ from eutester import eulogger
 from eutester.sshconnection import CommandExitCodeException
 import re
 import os
+from socket import error as socketerror
 
 class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
     
@@ -66,7 +67,8 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                  ec2_ip=None, ec2_path=None, iam_ip=None, iam_path=None, s3_ip=None, s3_path=None,
                  as_ip=None, as_path=None, elb_ip=None, elb_path=None, cw_ip=None, cw_path=None,
                  cfn_ip=None, cfn_path=None, sts_ip=None, sts_path=None, force_cert_create=False,
-                 port=8773, download_creds=True, boto_debug=0, debug_method=None, region=None):
+                 port=8773, download_creds=True, boto_debug=0, debug_method=None, region=None,
+                 ssh_proxy=None):
         self.config_file = config_file 
         self.APIVersion = APIVersion
         self.eucapath = "/opt/eucalyptus"
@@ -96,6 +98,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
         self.force_cert_create = force_cert_create
         self._property_manager = None
         self.cred_zipfile = None
+        self.ssh_proxy = None #SshConnection obj to be used as a default ssh proxy
 
         if self.config_file is not None:
             ## read in the config file
@@ -674,6 +677,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
         """
         config_hash = {}
         machines = []
+        machine_dicts = []
         f = None
         try:
             #f = open(filepath, 'r')
@@ -689,36 +693,76 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
             re_machine_line = re.compile(".*\[.*]")
             if re_machine_line.match(line):
                 machine_details = line.split(None, 5)
-                machine_dict = {}
-                machine_dict["hostname"] = machine_details[0]
-                machine_dict["distro"] = machine_details[1]
-                machine_dict["distro_ver"] = machine_details[2]
-                machine_dict["arch"] = machine_details[3]
-                machine_dict["source"] = machine_details[4]
-                machine_dict["components"] = map(str.lower, machine_details[5].strip('[]').split())
+                new_machine_dict = {}
+                new_machine_dict["hostname"] = machine_details[0]
+                new_machine_dict["distro"] = machine_details[1]
+                new_machine_dict["distro_ver"] = machine_details[2]
+                new_machine_dict["arch"] = machine_details[3]
+                new_machine_dict["source"] = machine_details[4]
+                new_machine_dict["components"] = map(str.lower, machine_details[5].strip('[]').split())
+                machine_dicts.append(new_machine_dict)
 
-                ### ADD the machine to the array of machine
-                cloud_machine = Machine(machine_dict["hostname"],
-                                        distro = machine_dict["distro"], 
-                                        distro_ver = machine_dict["distro_ver"], 
-                                        arch = machine_dict["arch"], 
-                                        source = machine_dict["source"], 
-                                        components = machine_dict["components"],
-                                        connect = True,
-                                        password = self.password,
-                                        keypath = self.keypath,
-                                        username = username
-                                        )
-                machines.append(cloud_machine)
-                
-            ### LOOK for network mode in config file if not found then set it unknown
-            for param in ["network", "managed_ips", "subnet_ip"]:
-                try:
-                    if re.search("^" + param + ".*$", line, re.IGNORECASE):
-                        config_hash[param] = " ".join(line.split()[1:])
-                except:
-                    self.debug("Could not find " + param + " type setting to None")
-                    config_hash[param] = None
+        def create_cloud_machine(machine_dict, ssh_proxy=None):
+            ### ADD the machine to the array of machine
+            try:
+                self.test_port_status(machine_dict["hostname"], 22, tcp=True)
+                proxy_host = None
+                proxy_username = None
+                proxy_password = None
+                proxy_keypath = None
+            except socketerror, se:
+                self.debug(self.markup('Could not connect to:"{0}", err:"{1}"'
+                           .format(machine_dict["hostname"], se), [1,31]))
+                if ssh_proxy:
+                    self.debug('Attempting ssh proxy connection now...\n'
+                               'Using proxy host:"{0}"'.format(ssh_proxy.hostname))
+                    proxy_host = ssh_proxy.hostname
+                    proxy_username = ssh_proxy.username
+                    proxy_password = ssh_proxy.password
+                    proxy_keypath = ssh_proxy.keypath
+                else:
+                    self.critical('SSH port test to host:"{0}" failed and no proxy defined '
+                              'for use'.format(machine_dict["hostname"]))
+
+            cloud_machine = Machine(machine_dict["hostname"],
+                                    distro = machine_dict["distro"],
+                                    distro_ver = machine_dict["distro_ver"],
+                                    arch = machine_dict["arch"],
+                                    source = machine_dict["source"],
+                                    components = machine_dict["components"],
+                                    connect = True,
+                                    password = self.password,
+                                    keypath = self.keypath,
+                                    username = username,
+                                    ssh_proxy_host=proxy_host,
+                                    ssh_proxy_keypath=proxy_keypath,
+                                    ssh_proxy_username=proxy_username,
+                                    ssh_proxy_password=proxy_password
+                                    )
+            if proxy_host:
+                self.debug(self.markup('Machine at:"{0}" successfully create using ssh proxy'
+                           .format(machine_dict["hostname"]),[1,32]))
+            return cloud_machine
+
+        # Create the CLC first in order to use it as an ssh proxy if one was not provided..
+        for machine_dict in machine_dicts:
+            if 'clc' in machine_dict['components']:
+                clc = create_cloud_machine(machine_dict, self.ssh_proxy)
+                machine_dicts.remove(machine_dict)
+                machines.append(clc)
+        # Now create the other machine objects...
+        for machine_dict in machine_dicts:
+            cloud_machine = create_cloud_machine(machine_dict, self.ssh_proxy or clc)
+            machines.append(cloud_machine)
+
+        ### LOOK for network mode in config file if not found then set it unknown
+        for param in ["network", "managed_ips", "subnet_ip"]:
+            try:
+                if re.search("^" + param + ".*$", line, re.IGNORECASE):
+                    config_hash[param] = " ".join(line.split()[1:])
+            except:
+                self.debug("Could not find " + param + " type setting to None")
+                config_hash[param] = None
         #f.close()   
         config_hash["machines"] = machines 
         return config_hash
@@ -1021,7 +1065,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
             rec = "r"
         else:
             rec = ""
-        certfiles = machine.sys('grep "{0}" -l{1} {2}*'.format('^-*BEGIN CERTIFICATE', rec, dir))
+        certfiles = machine.sys('grep "{0}" -l{1} {2}*.pem'.format('^-*BEGIN CERTIFICATE', rec, dir))
         for f in certfiles:
             if self.get_active_id_for_cert(f, machine=machine):
                 dir = os.path.dirname(f)

@@ -1153,31 +1153,28 @@ class EuInstance(Instance, TaggedResource):
         #write the volume id into the volume for starters
         ddcmd = 'echo '+str(euvolume.id)+' | dd of='+str(voldev)
         dd_res_for_id = self.dd_monitor(ddcmd=ddcmd, timeout=timeout, sync=False)
-        len_remaining = length - int(dd_res_for_id['dd_bytes'])
-        self.debug('length remaining to write after adding volumeid:' + str(len_remaining))
-        if len_remaining <= 0:
-            self.sys('sync')
-            return dd_res_for_id
-        ddbs = 1024
-        if len_remaining < ddbs:
-            ddbs = len_remaining
-        if not length:
-            return self.dd_monitor(ddif=str(srcdev),
-                                   ddof=str(voldev),
-                                   ddbs=fsize,
-                                   ddseek=int(dd_res_for_id['dd_bytes']),
-                                   timeout=timeout)
-        else:
+        if length is not None:
+            len_remaining = length - int(dd_res_for_id['dd_bytes'])
+            self.debug('length remaining to write after adding volumeid:' + str(len_remaining))
+            if len_remaining <= 0:
+                self.sys('sync')
+                return dd_res_for_id
+            ddbs = 1024
+            if len_remaining < ddbs:
+                ddbs = len_remaining
             return self.dd_monitor(ddif=str(srcdev),
                                    ddof=str(voldev),
                                    ddbs=ddbs,
                                    ddbytes=len_remaining,
                                    ddseek=int(dd_res_for_id['dd_bytes']),
                                    timeout=timeout)
+        else:
+            return self.dd_monitor(ddif=str(srcdev),
+                                   ddof=str(voldev),
+                                   ddbs=fsize,
+                                   ddseek=int(dd_res_for_id['dd_bytes']),
+                                   timeout=timeout)
 
-                
-            
-    
     def time_dd(self,ddcmd, timeout=90, poll_interval=1, tmpfile=None):
         '''
         (Added for legacy support, use dd_monitor instead) Executes dd command on instance, parses and returns stats on dd outcome

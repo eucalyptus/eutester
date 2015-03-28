@@ -94,7 +94,11 @@ class Machine:
                  username="root", 
                  timeout=120,
                  retry=2,
-                 debugmethod=None, 
+                 debugmethod=None,
+                 ssh_proxy_host=None,
+                 ssh_proxy_username=None,
+                 ssh_proxy_password=None,
+                 ssh_proxy_keypath=None,
                  verbose = True ):
         
         self.hostname = hostname
@@ -106,6 +110,10 @@ class Machine:
         self.password = password
         self.keypath = keypath
         self.username = username
+        self.ssh_proxy_host=ssh_proxy_host
+        self.ssh_proxy_username=ssh_proxy_username
+        self.ssh_proxy_password=ssh_proxy_password
+        self.ssh_proxy_keypath=ssh_proxy_keypath
         self.timeout = timeout
         self.retry = retry
         self.debugmethod = debugmethod
@@ -183,6 +191,10 @@ class Machine:
                     timeout=self.timeout,
                     retry=self.retry,
                     debugmethod=self.debugmethod,
+                    proxy=self.ssh_proxy_host,
+                    proxy_username=self.ssh_proxy_username,
+                    proxy_password=self.ssh_proxy_password,
+                    proxy_keypath=self.ssh_proxy_keypath,
                     verbose=True)
         return self._ssh
 
