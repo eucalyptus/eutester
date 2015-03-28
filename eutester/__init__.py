@@ -72,6 +72,10 @@ class Eutester(object):
         :rtype: :class:`eutester.Eutester` or ``None``
         :returns: A Eutester object with all connections that were able to be created. Currently EC2, S3, IAM, and STS.
         """
+
+        ### Globals for display
+        self.markup = self.__markup
+
         ### Default values for configuration
         self.credpath = credpath
         
@@ -273,6 +277,15 @@ class Eutester(object):
         if text.endswith('\n') and not buf.endswith('\n'):
             buf += '\n'
         return buf
+
+    def __markup(self, text, markups=[1], resetvalue="\033[0m", force=None,
+                 allow_nonstandard=None):
+        if force is None:
+            force = self._force_ascii_markup
+        if allow_nonstandard is None:
+            allow_nonstandard = self._ansi_high_intensity_support
+        return Eutester.markup(text, markups=markups, resetvalue=resetvalue, force=force,
+                               allow_nonstandard=allow_nonstandard)
 
     def scan_port_range(self, ip, start, stop, timeout=1, tcp=True):
         '''
