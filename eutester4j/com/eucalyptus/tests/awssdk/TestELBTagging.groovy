@@ -7,40 +7,42 @@ import com.amazonaws.regions.Region
 import com.amazonaws.regions.Regions
 import com.amazonaws.services.ec2.AmazonEC2
 import com.amazonaws.services.ec2.AmazonEC2Client
-import com.amazonaws.services.ec2.model.*
+import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesResult
 import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancing
 import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancingClient
-import com.amazonaws.services.elasticloadbalancing.model.ConnectionSettings
+import com.amazonaws.services.elasticloadbalancing.model.AddTagsRequest
 import com.amazonaws.services.elasticloadbalancing.model.CreateLoadBalancerRequest
 import com.amazonaws.services.elasticloadbalancing.model.DeleteLoadBalancerRequest
-import com.amazonaws.services.elasticloadbalancing.model.DescribeLoadBalancerAttributesRequest
+import com.amazonaws.services.elasticloadbalancing.model.DescribeLoadBalancersRequest
 import com.amazonaws.services.elasticloadbalancing.model.DescribeLoadBalancersResult
+import com.amazonaws.services.elasticloadbalancing.model.DescribeTagsRequest
 import com.amazonaws.services.elasticloadbalancing.model.Listener
-import com.amazonaws.services.elasticloadbalancing.model.LoadBalancerAttributes
-import com.amazonaws.services.elasticloadbalancing.model.ModifyLoadBalancerAttributesRequest
+import com.amazonaws.services.elasticloadbalancing.model.RemoveTagsRequest
+import com.amazonaws.services.elasticloadbalancing.model.Tag
+import com.amazonaws.services.elasticloadbalancing.model.TagKeyOnly
 
-import org.testng.annotations.Test
+import org.testng.annotations.Test;
 
-import static com.eucalyptus.tests.awssdk.Eutester4j.HOST_IP;
-import static com.eucalyptus.tests.awssdk.Eutester4j.minimalInit;
-import static com.eucalyptus.tests.awssdk.Eutester4j.ACCESS_KEY;
-import static com.eucalyptus.tests.awssdk.Eutester4j.SECRET_KEY;
+import static com.eucalyptus.tests.awssdk.Eutester4j.ACCESS_KEY
+import static com.eucalyptus.tests.awssdk.Eutester4j.HOST_IP
+import static com.eucalyptus.tests.awssdk.Eutester4j.SECRET_KEY
+import static com.eucalyptus.tests.awssdk.Eutester4j.minimalInit
 
 /**
  *
  */
-class TestELBAttributes {
+class TestELBTagging {
 
   private final String host;
   private final AWSCredentialsProvider credentials;
 
   public static void main( String[] args ) throws Exception {
-    new TestELBAttributes( ).ELBAttributesTest( )
+    new TestELBTagging( ).ELBTaggingTest( )
   }
 
-  public TestELBAttributes(){
+  public TestELBTagging( ) {
     minimalInit()
-    this.host=HOST_IP
+    this.host = HOST_IP
     this.credentials = new StaticCredentialsProvider( new BasicAWSCredentials( ACCESS_KEY, SECRET_KEY ) )
   }
 
@@ -81,7 +83,7 @@ class TestELBAttributes {
   }
 
   @Test
-  public void ELBAttributesTest( ) throws Exception {
+  public void ELBTaggingTest( ) throws Exception {
     final AmazonEC2 ec2 = getEC2Client( credentials )
 
     // Find an AZ to use
@@ -109,7 +111,12 @@ class TestELBAttributes {
                 instancePort: 9999,
                 instanceProtocol: 'HTTP'
             ) ],
-            availabilityZones: [ availabilityZone ]
+            availabilityZones: [ availabilityZone ],
+            tags: [
+                new Tag( key: 'one', value: '1' ),
+                new Tag( key: 'two', value: '2' ),
+                new Tag( key: 'three', value: '3' ),
+            ]
         ) )
         cleanupTasks.add {
           print( "Deleting load balancer: ${loadBalancerName}" )
@@ -117,46 +124,58 @@ class TestELBAttributes {
         }
 
         println( "Created load balancer: ${loadBalancerName}" )
-        final DescribeLoadBalancersResult loadBalancersResult = describeLoadBalancers( )
-        println( loadBalancersResult.toString( ) )
-
-        println( "Describing load balancer attributes" )
-        describeLoadBalancerAttributes( new DescribeLoadBalancerAttributesRequest(
-          loadBalancerName: loadBalancerName
+        describeLoadBalancers( new DescribeLoadBalancersRequest(
+          loadBalancerNames: [ loadBalancerName ]
         ) ).with {
-          println( loadBalancerAttributes.toString( ) )
-          loadBalancerAttributes.with {
-            connectionSettings.with {
-              assertThat( 60 == idleTimeout, "Expected default idle timeout 60, but was: ${idleTimeout}" )
-            }
+          println( loadBalancerDescriptions.toString( ) )
+        }
+
+        print( "Describing tags for load balancer: ${loadBalancerName}" )
+        describeTags( new DescribeTagsRequest( loadBalancerNames: [ loadBalancerName ] ) ).with {
+          println( tagDescriptions.toString( ) )
+          assertThat( tagDescriptions.size( ) == 1, "Expected one load balancer, but was: ${tagDescriptions.size( )}" )
+          tagDescriptions.get( 0 ).with {
+            assertThat( loadBalancerName == getLoadBalancerName( ), "Unexpected load balancer name: ${getLoadBalancerName( )}" )
+            assertThat( tags.size( ) == 3, "Expected three tags, but was: ${tags.size( )}")
           }
         }
 
-        println( "Modifying load balancer attributes" )
-        modifyLoadBalancerAttributes( new ModifyLoadBalancerAttributesRequest(
-          loadBalancerName: loadBalancerName,
-          loadBalancerAttributes: new LoadBalancerAttributes(
-            connectionSettings: new ConnectionSettings(
-              idleTimeout: 1000
-            )
-          )
-        )).with {
-          loadBalancerAttributes.with {
-            connectionSettings.with {
-              assertThat( 1000 == idleTimeout, "Expected idle timeout 1000, but was: ${idleTimeout}" )
-            }
+        print( "Adding tags for load balancer: ${loadBalancerName}" )
+        addTags( new AddTagsRequest(
+          loadBalancerNames: [ loadBalancerName ],
+          tags: [
+              new Tag( key: 'four', value: '4' ),
+              new Tag( key: 'five', value: '5' ),
+          ]
+        ))
+
+        print( "Describing tags for load balancer: ${loadBalancerName}" )
+        describeTags( new DescribeTagsRequest( loadBalancerNames: [ loadBalancerName ] ) ).with {
+          println( tagDescriptions.toString( ) )
+          assertThat( tagDescriptions.size( ) == 1, "Expected one load balancer, but was: ${tagDescriptions.size( )}" )
+          tagDescriptions.get( 0 ).with {
+            assertThat( loadBalancerName == getLoadBalancerName( ), "Unexpected load balancer name: ${getLoadBalancerName( )}" )
+            assertThat( tags.size( ) == 5, "Expected five tags, but was: ${tags.size( )}")
           }
         }
 
-        println( "Describing load balancer attributes" )
-        describeLoadBalancerAttributes( new DescribeLoadBalancerAttributesRequest(
-            loadBalancerName: loadBalancerName
-        ) ).with {
-          println( loadBalancerAttributes.toString( ) )
-          loadBalancerAttributes.with {
-            connectionSettings.with {
-              assertThat( 1000 == idleTimeout, "Expected idle timeout 1000, but was: ${idleTimeout}" )
-            }
+        print( "Removing tags for load balancer: ${loadBalancerName}" )
+        removeTags( new RemoveTagsRequest(
+            loadBalancerNames: [ loadBalancerName ],
+            tags: [
+                new TagKeyOnly( key: 'one' ),
+                new TagKeyOnly( key: 'three' ),
+                new TagKeyOnly( key: 'five' ),
+            ]
+        ))
+
+        print( "Describing tags for load balancer: ${loadBalancerName}" )
+        describeTags( new DescribeTagsRequest( loadBalancerNames: [ loadBalancerName ] ) ).with {
+          println( tagDescriptions.toString( ) )
+          assertThat( tagDescriptions.size( ) == 1, "Expected one load balancer, but was: ${tagDescriptions.size( )}" )
+          tagDescriptions.get( 0 ).with {
+            assertThat( loadBalancerName == getLoadBalancerName( ), "Unexpected load balancer name: ${getLoadBalancerName( )}" )
+            assertThat( tags.size( ) == 2, "Expected two tags, but was: ${tags.size( )}")
           }
         }
       }

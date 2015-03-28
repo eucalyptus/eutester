@@ -205,8 +205,12 @@ class Eutester4j {
         }
         print("Getting cloud information from " + CREDPATH);
         EC2_ENDPOINT = parseEucarc(CREDPATH, "EC2_URL") + "/";
-        HOST_IP=EC2_ENDPOINT.substring(7, EC2_ENDPOINT.length()-23);
-        print("HOST IP = " + HOST_IP);
+        if (EC2_ENDPOINT.length() > 50 ) {
+            HOST_IP = EC2_ENDPOINT.substring(15, EC2_ENDPOINT.length()-41);
+        }else {
+            HOST_IP = EC2_ENDPOINT.substring(7, EC2_ENDPOINT.length()-23);
+        }
+        print("HOST = " + HOST_IP);
         SECRET_KEY = parseEucarc(CREDPATH, "EC2_SECRET_KEY").replace("'", "");
         ACCESS_KEY = parseEucarc(CREDPATH, "EC2_ACCESS_KEY").replace("'", "");
         print("Cloud Discovery Complete");

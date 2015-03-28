@@ -1,3 +1,4 @@
+[![Stories in Ready](https://badge.waffle.io/eucalyptus/eutester.png?label=ready&title=Ready)](https://waffle.io/eucalyptus/eutester)
 Eutester
 ======================
 
