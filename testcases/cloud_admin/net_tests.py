@@ -106,7 +106,7 @@ test 6 (Multi-zone/cluster env):
 
 from paramiko import SSHException
 from eucaops import Eucaops
-from eutester import WaitForResultException
+from eutester import Eutester, WaitForResultException
 from eutester.eutestcase import EutesterTestCase
 from eutester.eutestcase import SkipTestException
 from eutester.euinstance import EuInstance
@@ -171,6 +171,7 @@ class Net_Tests(EutesterTestCase):
             print 'Setting kwarg:'+str(kw)+" to "+str(kwargs[kw])
             self.set_arg(kw ,kwargs[kw])
         self.show_args()
+        Eutester._EUTESTER_FORCE_ANSI_ESCAPE = self.args.use_color
         ### Create the Eucaops object, by default this will be Eucalyptus/Admin and have ssh
         ### access to components
         if not tester and not self.args.config:

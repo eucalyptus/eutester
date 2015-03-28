@@ -36,7 +36,7 @@ import time
 import os
 
 from eucaops import Eucaops
-from eutester import euinstance
+from eutester import euinstance, Eutester
 from eutester.eutestcase import EutesterTestCase
 from eucaops import ec2ops
 from eutester.eutestcase import TestColor
@@ -110,43 +110,43 @@ class EbsTestSuite(EutesterTestCase):
                 print 'Setting local value:' + str(key) + ", value:" + str(self.args.__dict__[key])
                 setattr(self,key, self.args.__dict__[key])
 
+        Eutester._EUTESTER_FORCE_ANSI_ESCAPE = self.args.use_color
+        self.show_args()
+        self.multicluster = False
+        self.zonelist = []
+        self.snaps = []
+        if tester is None:
+            self.tester = Eucaops( config_file=self.configfile,password=self.password,credpath=self.credpath)
         else:
-            self.show_args()
-            self.multicluster = False
-            self.zonelist = []
-            self.snaps = []
-            if tester is None:
-                self.tester = Eucaops( config_file=self.configfile,password=self.password,credpath=self.credpath)
-            else:
-                self.tester = tester
-            if self.emi:
-                self.image = self.tester.get_emi(emi=self.emi)
-            else:
-                self.image = self.tester.get_emi(root_device_type=self.root_device_type)
-            #create some zone objects and append them to the zonelist
-            if self.zone:
-                self.zone = TestZone(self.zone)
-                self.zonelist.append(self.zone)
-            else:
-                self.setup_testzones()
+            self.tester = tester
+        if self.emi:
+            self.image = self.tester.get_emi(emi=self.emi)
+        else:
+            self.image = self.tester.get_emi(root_device_type=self.root_device_type)
+        #create some zone objects and append them to the zonelist
+        if self.zone:
+            self.zone = TestZone(self.zone)
+            self.zonelist.append(self.zone)
+        else:
+            self.setup_testzones()
 
-            #If the list of volumes passed in looks good, sort them into the zones
-            if self.volumes_list_check(self.volumes):
-                self.sort_volumes(self.volumes)
+        #If the list of volumes passed in looks good, sort them into the zones
+        if self.volumes_list_check(self.volumes):
+            self.sort_volumes(self.volumes)
 
-            #Setup our security group for later use
-            if self.group:
-                if isinstance(self.group, types.StringType):
-                    self.group = self.tester.add_group(self.group)
-            else:
-                group_name='EbsTestGroup'
-                try:
-                    self.group = self.tester.add_group(group_name,fail_if_exists=False)
-                    self.tester.authorize_group_by_name(self.group.name)
-                    self.tester.authorize_group_by_name(self.group.name,protocol="icmp",port=-1)
-                except Exception, e:
-                    self.debug(self.tester.get_traceback())
-                    raise Exception("Error when setting up group:"+str(group_name)+", Error:"+str(e))
+        #Setup our security group for later use
+        if self.group:
+            if isinstance(self.group, types.StringType):
+                self.group = self.tester.add_group(self.group)
+        else:
+            group_name='EbsTestGroup'
+            try:
+                self.group = self.tester.add_group(group_name,fail_if_exists=False)
+                self.tester.authorize_group_by_name(self.group.name)
+                self.tester.authorize_group_by_name(self.group.name,protocol="icmp",port=-1)
+            except Exception, e:
+                self.debug(self.tester.get_traceback())
+                raise Exception("Error when setting up group:"+str(group_name)+", Error:"+str(e))
 
         #Setup the keypairs for later use
         if not self.instance_password:

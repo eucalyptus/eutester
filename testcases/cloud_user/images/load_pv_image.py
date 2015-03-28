@@ -33,6 +33,7 @@
 from eutester.eutestcase import EutesterTestCase
 from testcases.cloud_user.images.imageutils import ImageUtils
 from eucaops import Eucaops
+from eutester import Eutester
 from eucaops.ec2ops import ResourceNotFoundException
 import os
 import time
@@ -139,7 +140,7 @@ class Load_Pv_image(EutesterTestCase):
             self.tester = Eucaops(config_file=self.args.config_file, password=self.args.password)
         else:
             self.tester = tester
-        self.tester._force_ascii_markup = self.args.use_color
+        Eutester._EUTESTER_FORCE_ANSI_ESCAPE = self.args.use_color
         self.args.tester = self.tester
         # Allow __init__ to get args from __init__'s kwargs or through command line parser...
         for kw in kwargs:

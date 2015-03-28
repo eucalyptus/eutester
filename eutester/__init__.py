@@ -61,8 +61,13 @@ class TimeoutFunctionException(Exception):
 
 class Eutester(object):
 
-    _force_ascii_markup = False
-    _ansi_high_intensity_support = False
+    # Force ansi escape sequences (markup) in output.
+    # This can also be set as an env var
+    _EUTESTER_FORCE_ANSI_ESCAPE = False
+    # Allow ansi color codes outside the standard range. For example some systems support
+    # a high intensity color range from 90-109.
+    # This can also be set as an env var
+    _EUTESTER_NON_STANDARD_ANSI_SUPPORT = False
 
     def __init__(self, credpath=None):
         """This class is intended to setup boto connections for the various services that the *ops classes will use.
@@ -72,9 +77,6 @@ class Eutester(object):
         :rtype: :class:`eutester.Eutester` or ``None``
         :returns: A Eutester object with all connections that were able to be created. Currently EC2, S3, IAM, and STS.
         """
-
-        ### Globals for display
-        self.markup = self.__markup
 
         ### Default values for configuration
         self.credpath = credpath
@@ -245,19 +247,31 @@ class Eutester(object):
         :param markups: a value or list of values representing ansi codes.
         :param resetvalue: string used to reset the terminal, default: "\33[0m"
         :param force: boolean, if set will add escape sequences regardless of tty. Defaults to the
-                      class attr '_force_ascii_markup'
+                      class attr '_EUTESTER_FORCE_ANSI_ESCAPE' or the env variable:
+                      'EUTESTER_FORCE_ANSI_ESCAPE' if it is set.
         :param allow_nonstandard: boolean, if True all markup values will be used. If false
                                   the method will attempt to remap the markup value to a
                                   standard ansi value to support tools such as Jenkins, etc.
-                                  Defaults to the class attr '_ansi_high_intensity_support'.
+                                  Defaults to the class attr '._EUTESTER_NON_STANDARD_ANSI_SUPPORT'
+                                  or the environment variable 'EUTESTER_NON_STANDARD_ANSI_SUPPORT'
+                                  if set.
         returns a string with the provided 'text' formatted within ansi escape sequences
         """
         if not isinstance(markups, list):
             markups = [markups]
         if force is None:
-            force = cls._force_ascii_markup
+            force = os.environ.get('EUTESTER_FORCE_ANSI_ESCAPE', cls._EUTESTER_FORCE_ANSI_ESCAPE)
+            if str(force).upper() == 'TRUE':
+                force = True
+            else:
+                force = False
         if allow_nonstandard is None:
-            allow_nonstandard = cls._ansi_high_intensity_support
+            allow_nonstandard = os.environ.get('EUTESTER_NON_STANDARD_ANSI_SUPPORT',
+                                               cls._EUTESTER_NON_STANDARD_ANSI_SUPPORT)
+            if str(allow_nonstandard).upper() == 'TRUE':
+                allow_nonstandard = True
+            else:
+                allow_nonstandard = False
         if not force:
             if not (hasattr(sys.stdout, 'isatty') and sys.stdout.isatty()):
                 return text
@@ -277,15 +291,6 @@ class Eutester(object):
         if text.endswith('\n') and not buf.endswith('\n'):
             buf += '\n'
         return buf
-
-    def __markup(self, text, markups=[1], resetvalue="\033[0m", force=None,
-                 allow_nonstandard=None):
-        if force is None:
-            force = self._force_ascii_markup
-        if allow_nonstandard is None:
-            allow_nonstandard = self._ansi_high_intensity_support
-        return Eutester.markup(text, markups=markups, resetvalue=resetvalue, force=force,
-                               allow_nonstandard=allow_nonstandard)
 
     def scan_port_range(self, ip, start, stop, timeout=1, tcp=True):
         '''

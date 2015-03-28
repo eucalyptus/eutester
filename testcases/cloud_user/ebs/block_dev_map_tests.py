@@ -52,6 +52,7 @@ and /dev/sdj to an empty EBS volume that is 100 GiB in size. The output is the I
 '''
 
 from eucaops import Eucaops
+from eutester import Eutester
 from eutester.eutestcase import EutesterTestCase
 from argparse import ArgumentError
 
@@ -131,6 +132,7 @@ class Block_Device_Mapping_Tests(EutesterTestCase):
             print 'Setting kwarg:'+str(kw)+" to "+str(kwargs[kw])
             self.set_arg(kw ,kwargs[kw])
         self.show_args()
+        Eutester._EUTESTER_FORCE_ANSI_ESCAPE = self.args.use_color
         #if self.args.config:
         #    setattr(self.args, 'config_file',self.args.config)
         # Setup basic eutester object

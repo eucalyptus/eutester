@@ -511,10 +511,12 @@ class EutesterTestCase(unittest.TestCase):
     def disable_color(self):
         self.set_arg('use_color', False)
         self.use_color = False
+        os.environ['EUTESTER_FORCE_ANSI_ESCAPE'] = 'False'
     
     def enable_color(self):
         self.set_arg('use_color', True)
         self.use_color = True
+        os.environ['EUTESTER_FORCE_ANSI_ESCAPE'] = 'True'
         
 
     def setup_debugmethod(self, testcasename=None, log_level=None, logfile=None, logfile_level=None):
