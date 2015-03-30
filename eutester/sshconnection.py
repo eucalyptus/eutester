@@ -97,10 +97,31 @@ import types
 import sys
 import termios
 import tty
+from paramiko.sftp_client import SFTPClient
 import eucaops
 
 
+class SFTPifc(SFTPClient):
 
+    def debug(self, msg, verbose=True):
+        print (str(msg))
+
+    def get(self, remotepath, localpath, callback=None):
+        try:
+            super(SFTPifc, self).get(remotepath, localpath, callback=callback)
+        except Exception, ge:
+            self.debug('Error during sftp get. Remote:"{0}", Local:"{1}"'
+                       .format(remotepath, localpath))
+            raise type(ge)('Error during sftp get. Remotepath:"{0}", Localpath:"{1}".\n Err:{2}'
+                           .format(remotepath, localpath, str(ge)))
+
+    def put(self, localpath, remotepath, callback=None, confirm=True):
+        try:
+            super(SFTPifc, self).put(localpath=localpath, remotepath=remotepath,
+                                     callback=callback, confirm=confirm)
+        except Exception, pe:
+            raise type(pe)('Error during sftp put. Remotepath:"{0}", Localpath:"{1}".\n Err:{2}'
+                           .format(remotepath, localpath, str(pe)))
 
 class SshCbReturn():
     def __init__(self, stop=False, statuscode=-1, settimer=0, buf=None, sendstring=None, nextargs=None, nextcb=None, removecb=False):
@@ -942,11 +963,12 @@ class SshConnection():
 
     def open_sftp(self, transport=None):
         transport = transport or self.connection._transport
-        self.sftp = paramiko.SFTPClient.from_transport(transport)
+        sftp = SFTPifc.from_transport(transport)
+        sftp.debug = self.debug
+        return sftp
 
     def close_sftp(self):
         self.sftp.close()
-
 
 
     def sftp_put(self,localfilepath,remotefilepath):

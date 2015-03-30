@@ -118,7 +118,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
             ### Need to create service manager for user if we have an ssh connection and password
             clc_array = self.get_component_machines("clc")
             self.clc = clc_array[0]
-            self.sftp = self.clc.ssh.connection.open_sftp()
+            self.sftp = self.clc.ssh.open_sftp()
             downloaded_creds = False
             if self.download_creds:
                 if self.credpath is None:
@@ -126,7 +126,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                     ### if that fails we've hit a terminal condition
                     try:
                         self.debug("Attempting to get credentials and setup sftp")
-                        self.sftp = self.clc.ssh.connection.open_sftp()
+                        self.sftp = self.clc.ssh.open_sftp()
                         self.credpath = self.get_credentials(account,user)
                         self.debug("Successfully downloaded and synced credentials")
                     except Exception, e:
@@ -139,7 +139,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                             raise Exception(str(tb) + "\nCould not get credentials from first CLC "
                                                       "and no other to try")
                         self.swap_clc()
-                        self.sftp = self.clc.ssh.connection.open_sftp()
+                        self.sftp = self.clc.ssh.open_sftp()
                         self.get_credentials(account, user)
                         downloaded_creds = True
                         
