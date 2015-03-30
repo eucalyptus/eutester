@@ -1157,7 +1157,8 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                    admin_cred_dir + "/")
         clc_eucarc = os.path.join(admin_cred_dir, 'eucarc')
         local_eucarc = os.path.join(admin_cred_dir,  'eucarc')
-        remotecertpath = self.clc.sys('source {0} && echo $EC2_CERT'.format(clc_eucarc))[0]
+        remotecertpath = self.clc.sys('source {0} &>/dev/null && echo $EC2_CERT'
+                                      .format(clc_eucarc))[0]
         remotekeypath = self.clc.sys('source {0} &>/dev/null && echo $EC2_PRIVATE_KEY'
                                      .format(clc_eucarc))[0]
         if not remotecertpath or not remotekeypath:
