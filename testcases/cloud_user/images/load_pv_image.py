@@ -192,7 +192,8 @@ class Load_Pv_image(EutesterTestCase):
             destpath = self.args.destpath
             size, kernelfilepath = image_utils.wget_image(url=kernel_image_url,
                                                           destpath=destpath)
-        manifest = image_utils.euca2ools_bundle_image(path=kernelfilepath)
+        manifest = image_utils.euca2ools_bundle_image(path=kernelfilepath,
+                                                      destination=self.args.destpath)
         upmanifest = image_utils.euca2ools_upload_bundle(manifest=manifest,
                                                          bucketname=imagename + '_eutester_pv')
         eki = image_utils.euca2ools_register(manifest = upmanifest, name= imagename)
@@ -251,7 +252,8 @@ class Load_Pv_image(EutesterTestCase):
             destpath = self.args.destpath
             size, ramdiskfilepath = image_utils.wget_image(url=ramdisk_image_url,
                                                            destpath=destpath)
-        manifest = image_utils.euca2ools_bundle_image(path=ramdiskfilepath)
+        manifest = image_utils.euca2ools_bundle_image(path=ramdiskfilepath,
+                                                      destination=self.args.destpath)
         upmanifest = image_utils.euca2ools_upload_bundle(manifest=manifest,
                                                          bucketname=imagename + '_eutester_pv')
         eri = image_utils.euca2ools_register(manifest = upmanifest, name= imagename)
@@ -307,7 +309,8 @@ class Load_Pv_image(EutesterTestCase):
                     imagename = newname
                     self.debug('Found an unused image name. Using name:"{0}"'.format(imagename))
                     break
-        manifest = image_utils.euca2ools_bundle_image(path=diskfilepath)
+        manifest = image_utils.euca2ools_bundle_image(path=diskfilepath,
+                                                      destination=self.args.destpath)
         upmanifest = image_utils.euca2ools_upload_bundle(manifest=manifest,
                                                          bucketname=imagename + '_eutester_pv')
         emi = image_utils.euca2ools_register(manifest = upmanifest,
