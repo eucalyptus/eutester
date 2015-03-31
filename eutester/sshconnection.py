@@ -965,6 +965,7 @@ class SshConnection():
         transport = transport or self.connection._transport
         sftp = SFTPifc.from_transport(transport)
         sftp.debug = self.debug
+        self.sftp = sftp
         return sftp
 
     def close_sftp(self):
