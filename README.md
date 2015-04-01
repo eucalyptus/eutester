@@ -97,7 +97,7 @@ The basic constructor can be used for 2 different connections:
     Required arguments: root password, config file with topology information
     Optional arguments: credential path so that new credentials are not created
 
-        tester = Eucaops(password="foobar",  config_file="/root/input/2b_tested.lst")
+        tester = Eucaops(password="my_password",  config_file="config_file")
         
         # Get all instances
         tester.ec2.get_instances()
