@@ -215,7 +215,7 @@ disable_root: false"""
             pass
         
         if not key:
-            self.debug( 'Creating keypair: %s' % key_name)
+            self.debug('Creating keypair: %s' % key_name)
             # Create an SSH key to use when logging into instances.
             key = self.connection.create_key_pair(key_name)
             # AWS will store the public key but the private key is
@@ -224,22 +224,22 @@ disable_root: false"""
             # your private key.
             key.save(self.key_dir)
             #Add the fingerprint header to file
-            keyfile = open(self.key_dir+key.name+'.pem','r')
+            keyfile = open(self.key_dir + key.name + '.pem', 'r')
             data = keyfile.read()
             keyfile.close()
-            keyfile = open(self.key_dir+key.name+'.pem','w')
-            keyfile.write('KEYPAIR '+str(key.name)+' '+str(key.fingerprint)+"\n")
+            keyfile = open(self.key_dir+key.name+'.pem', 'w')
+            keyfile.write('KEYPAIR ' + str(key.name) + ' '+str(key.fingerprint)+"\n")
             keyfile.write(data)
             keyfile.close()
             
             self.test_resources["keypairs"].append(key)
             return key
         else:
-            self.debug(  "Key " + key_name + " already exists")
+            self.debug("Key " + key_name + " already exists")
             
             
             
-    def verify_local_keypath(self,keyname, path=None, exten=".pem"):
+    def verify_local_keypath(self, keyname, path=None, exten=".pem"):
         """
         Convenience function to verify if a given ssh key 'keyname' exists on the local server at 'path'
 
@@ -259,7 +259,7 @@ disable_root: false"""
     
     
     @Eutester.printinfo
-    def get_all_current_local_keys(self,path=None, exten=".pem"):
+    def get_all_current_local_keys(self, path=None, exten=".pem"):
         """
         Convenience function to provide a list of all keys in the local dir at 'path' that exist on the server to help
         avoid producing additional keys in test dev.
@@ -272,7 +272,7 @@ disable_root: false"""
         keys = self.connection.get_all_key_pairs()
         keyfile = None
         for k in keys:
-            self.debug('Checking local path:'+str(path)+" for keyfile: "+str(k.name)+str(exten))
+            self.debug('Checking local path:' + str(path) + " for keyfile: " + str(k.name) + str(exten))
             try:
                 #will raise exception if keypath is not found
                 keypath = self.verify_local_keypath(k.name, path, exten)

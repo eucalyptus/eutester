@@ -58,6 +58,7 @@ from eutester.utils import eulogger
 import re
 import os
 
+
 class Eucaops(Eutester):
     
     def __init__(self, config_file=None, password=None, keypath=None, credpath=None, aws_access_key_id=None,
@@ -190,6 +191,7 @@ class Eucaops(Eutester):
         self.test_resources["launch-configurations"] = []
         self.test_resources["conversion-tasks"] = []
         self.test_resources["load_balancers"] = []
+        self.test_resources["iam_accounts"] = []
 
     @property
     def ec2(self):
@@ -445,6 +447,7 @@ class Eucaops(Eutester):
                           ip_addresses=True,
                           auto_scaling_groups=True,
                           launch_configurations=True,
+                          iam_accounts=True,
                           keypairs=True):
         """
         Description: Attempts to remove artifacts created during and through this eutester's lifespan.
@@ -513,15 +516,15 @@ class Eucaops(Eutester):
                 self.cleanup_load_balancers()
             except Exception, e:
                 tb = self.get_traceback()
-                failcount +=1
-                failmsg += str(tb) + "\nError#:" + str(failcount)+ ":" + str(e)+"\n"
+                failcount += 1
+                failmsg += str(tb) + "\nError#:" + str(failcount) + ":" + str(e)+"\n"
 
         if launch_configurations and self.test_resources["launch-configurations"]:
             try:
                 self.autoscaling.cleanup_launch_configs()
             except Exception, e:
                 tb = self.get_traceback()
-                failcount +=1
+                failcount += 1
                 failmsg += str(tb) + "\nError#:" + str(failcount) + ":" + str(e)+"\n"
 
         for key, array in self.test_resources.iteritems():
@@ -531,11 +534,12 @@ class Eucaops(Eutester):
                     self.debug("Deleting " + str(item))
                     if isinstance(item, Image):
                         item.deregister()
-                    elif isinstance(item,Reservation):
+                    elif isinstance(item, Reservation):
                         continue
                     else:
                         try:
-                            item.delete()
+                            if not isinstance(item, str):
+                                item.delete()
                         except EC2ResponseError as ec2re:
                             if ec2re.status == 400:
                                 self.debug('Resource not found assuming it is'
@@ -555,6 +559,11 @@ class Eucaops(Eutester):
                 tb = self.get_traceback()
                 failcount +=1
                 failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
+        if iam_accounts and self.test_resources["iam_accounts"]:
+            try:
+                for account_name in self.test_resources["iam_accounts"]:
+                    self.iam.delete_account(account_name=account_name, recursive=True)
+            except: pass
 
     def cleanup_load_balancers(self, lbs=None):
         """

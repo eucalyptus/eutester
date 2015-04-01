@@ -29,9 +29,10 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 # Author: vic.iglesias@eucalyptus.com
-from eutester import Eutester
+
 import re
 import boto
+from eutester import Eutester
 
 
 class IAMops(Eutester):
@@ -76,9 +77,10 @@ class IAMops(Eutester):
         """
         self.debug("Creating account: " + account_name)
         params = {'AccountName': account_name}
+        self.test_resource["iam_accounts"].append(account_name)
         self.connection.get_response('CreateAccount', params)
     
-    def delete_account(self,account_name,recursive=False):
+    def delete_account(self, account_name, recursive=False):
         """
         Delete an account with the given name
 
@@ -106,7 +108,7 @@ class IAMops(Eutester):
         else:
             re_meth = re.match
         self.debug('Attempting to fetch all accounts matching- account_id:'+str(account_id)+' account_name:'+str(account_name))
-        response = self.connection.get_response('ListAccounts',{}, list_marker='Accounts')
+        response = self.connection.get_response('ListAccounts', {}, list_marker='Accounts')
         retlist = []
         for account in response['list_accounts_response']['list_accounts_result']['accounts']:
             if account_name is not None and not re_meth( account_name, account['account_name']):
@@ -116,7 +118,7 @@ class IAMops(Eutester):
             retlist.append(account)
         return retlist
              
-    def create_user(self, user_name,path="/", delegate_account=None):
+    def create_user(self, user_name, path="/", delegate_account=None):
         """
         Create a user
 

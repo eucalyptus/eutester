@@ -33,6 +33,7 @@
 """
 Create resources (keypairs,groups, volumes,snapshots, buckets) for each user in the cloud. 
 """
+
 from eutester.euca.euca_ops import Eucaops
 import re
 import string

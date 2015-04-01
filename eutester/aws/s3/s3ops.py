@@ -29,6 +29,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 # Author: vic.iglesias@eucalyptus.com
+
 from boto.s3.bucket import Bucket
 
 from eutester import Eutester
@@ -41,6 +42,7 @@ from boto.exception import S3ResponseError
 from boto.s3.deletemarker import DeleteMarker
 import boto.s3
 
+
 class S3opsException(Exception):
     """Exception raised for errors that occur when running S3 operations.
 
@@ -52,6 +54,7 @@ class S3opsException(Exception):
     
     def __str__(self):
         print self.msg
+
 
 class S3ops(Eutester):
     s3_groups = {
