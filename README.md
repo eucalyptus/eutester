@@ -44,25 +44,10 @@ Eutester vs. Eucalyptus compatibility matrix:
 A new version of Eutester is released with every new version of Eucalyptus and the
 compatibility matrix goes as the following pattern: 
 
-| Eutester Version | Eucalyptus Version |
-|------------------|--------------------|
-| 1.2.0            | 4.2.0              |
-| 1.2.1            | 4.2.1              |
-| 1.3.0            | 4.3.0              |
-| 1.3.1            | 4.3.1              |
-| 2.0.0            | 5.0.0              |
-| u.y.y            | x.y.y              |
-
-
-For developers and testers, the compatibility matrix is little different than using
-Eucalyptus from official release. In this case Eutester will use the same branch names
-as Eucalyptus:
-
-| Eutester Branch | Eucalyptus Branch |
-| ----------------|-------------------|
-| master          | master            |
-| maint-4.1       | maint-4.1         |
-| maint-4.2       | maint-4.2         |
+| Branch    | Eutester Version | Eucalyptus Version |
+|-----------|------------------|--------------------|
+| master    | 1.0.0            | 4.2.0              |
+| maint-4.1 | 0.0.x            | 4.1.x              |
 
 
 Main Classes
@@ -113,7 +98,7 @@ The basic constructor can be used for 2 different connections:
 
         tester = Eucaops(credpath="~/.eucarc")
         tester.ec2.run_image(image) ## run an m1.small instance using image
-        
+
             
  
 Config file
