@@ -3,7 +3,6 @@
 import os
 import time
 import random
-from boto.ec2.connection import EC2Connection
 from eutester.euca.euca_ops import Eucaops
 from eutester.utils.eutestcase import EutesterTestCase
 
