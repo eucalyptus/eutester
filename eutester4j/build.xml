@@ -15,6 +15,12 @@
     <!--youare sdk location link-->
     <property name="YouAre" value="https://github.com/tbeckham/you-are-sdk/releases/download/alpha2/YouAreSDK.jar"/>
 
+    <!-- bootstrap ivy -->
+    <target name="bootstrap-ivy" description="Install ivy">
+        <mkdir dir="${user.home}/.ant/lib"/>
+        <get dest="${user.home}/.ant/lib/ivy.jar" src="http://search.maven.org/remotecontent?filepath=org/apache/ivy/ivy/2.3.0/ivy-2.3.0.jar"/>
+    </target>
+
     <!-- download testng and AWS JAVA SDK -->
     <target name="download-deps">
         <mkdir dir="${deps.dir}"/>
