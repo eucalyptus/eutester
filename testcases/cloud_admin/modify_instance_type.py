@@ -26,12 +26,19 @@ class instance_type():  # mimicing a struct, I think this is the preferred way i
 class InstanceTypeOps(EutesterTestCase):
     _known_types = []
 
-    def __init__(self, credpath=None, region=None, config_file=None, password=None, emi=None, zone=None,
+    def __init__(self, name="InstanceTypeOps", credpath=None, region=None, config_file=None, password=None, emi=None, zone=None,
                   user_data=None, instance_user=None, **kwargs):
 
+        super(InstanceTypeOps, self).__init__(name=name)
+        self.get_args()
+        self.show_args()
+        for kw in kwargs:
+            print 'Setting kwarg:'+str(kw)+" to "+str(kwargs[kw])
+            self.set_arg(kw ,kwargs[kw])
+        self.show_args()
         self.setuptestcase()
         self.setup_parser()
-        self.get_args()
+        #self.get_args()
         # Setup basic eutester object
         self.tester = Eucaops(config_file=self.args.config_file,
                                   password=self.args.password,
@@ -143,6 +150,16 @@ class InstanceTypeOps(EutesterTestCase):
 
 if __name__ == "__main__":
     testcase = InstanceTypeOps()
+
+    #### Adds argparse to testcase and adds some defaults args
+    testcase.setup_parser()
+
+    ### Get all cli arguments and any config arguments and merge them
+    testcase.get_args()
+
+    ### Instantiate an object of your test suite class using args found from above
+    instancetypeops = testcase.do_with_args(InstanceTypeOps)
+
     ### Use the list of tests passed from config/command line to determine what subset of tests to run
     ### or use a predefined list
     list = testcase.args.tests or ["Modify"]
@@ -150,7 +167,7 @@ if __name__ == "__main__":
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
     for test in list:
-        unit_list.append( testcase.create_testunit_by_name(test) )
+        unit_list.append( instancetypeops.create_testunit_by_name(test) )
 
     ### Run the EutesterUnitTest objects
     result = testcase.run_test_case_list(unit_list,clean_on_exit=True)
