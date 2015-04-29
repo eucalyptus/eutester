@@ -5,14 +5,13 @@
 from eucaops import Eucaops
 from eutester.eutestcase import EutesterTestCase
 
-import subprocess
-import sys
-import os
 import re
 import random
 
 class instance_type():  # mimicing a struct, I think this is the preferred way in python
 
+    # shaon pointed out that I should be using Vm_Type instead of my own class
+    # but can't figure that out right now - 4.28.2015 mbacchi
     def __init__(self, name=None, cpus=None, mem=None, disk=None):
         self.name = name
         self.cpus = cpus
@@ -43,6 +42,7 @@ class InstanceTypeOps(EutesterTestCase):
         self.tester = Eucaops(config_file=self.args.config_file,
                                   password=self.args.password,
                                   credpath=self.args.credpath)
+
         self.PopulateInstanceTypes()
         #print "Now printing _my_types after populating:"    # DEBUG
         #for i in InstanceTypeOps._known_types:
@@ -51,69 +51,62 @@ class InstanceTypeOps(EutesterTestCase):
     def clean_method(self):
         pass
 
+    def check_output_type(self, arg=None):
+        """
+        :param arg: argument must be a list or it will assert
+        :return: assert if not list
+        """
+        assert type(arg) != None, "Output from self.sys() empty!"
+        try:
+            not isinstance(arg, basestring)
+        except TypeError:
+            AssertionError("Output from self.sys() should be list!")
+        #print "Output type checks out correctly!"    # DEBUG
+
     def DescribeInstanceTypes(self, item=None):
-        print "in DescribeInstanceTypes function Running /usr/bin/euca-describe-instance-types"
+
         if item is None:
-            cmd = ['/usr/bin/euca-describe-instance-types']
+            cmd = "source " + self.tester.credpath + "/eucarc && /usr/bin/euca-describe-instance-types"
         else:
-            cmd = ['/usr/bin/euca-describe-instance-types', item]
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=4096)
-        output, unused_err = process.communicate()
-        retcode = process.poll()
-        if retcode:
-            error = subprocess.CalledProcessError(retcode, 'euca-describe-instance-types')
-            error.output = output
-            raise error
-        output.split("\n")
+            cmd = "source " + self.tester.credpath + "/eucarc && /usr/bin/euca-describe-instance-types " + item
+
+        print "in DescribeInstanceTypes function Running " + cmd
+
+        output = self.tester.sys(cmd)
+
+        self.check_output_type(output)
+
         return output
 
     def ModifyInstanceType(self, item=None):
-        print "in ModifyInstanceType function Running /usr/bin/euca-modify-instance-type"
+
         if item is None:
             raise ValueError("Incorrect number of arguments, must pass cmd to ModifyInstanceType()")
         else:
-            cmd = ['/usr/bin/euca-modify-instance-type']
-            for i in item:
-                #print "adding " + i + " to cmd list"    # DEBUG
-                cmd.append(i)
+            cmd = "source " + self.tester.credpath + "/eucarc && /usr/bin/euca-modify-instance-type " + ' '.join(item)
 
-        print "cmd is: "    # DEBUG
-        print cmd[0:]    # DEBUG
 
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        output, unused_err = process.communicate()
-        retcode = process.poll()
-        if retcode:
-            error = subprocess.CalledProcessError(retcode, 'euca-modify-instance-type')
-            error.output = output
-            raise error
-        output.split("\n")
+        print "in ModifyInstanceType function Running " + cmd
+        output = self.tester.sys(cmd)
+        self.check_output_type(output)
         return output
 
     def PopulateInstanceTypes(self):
         print "Populating cluster Instance Types..."
-        #process = subprocess.Popen('/usr/bin/euca-describe-instance-types', stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=4096)
-        #output, unused_err = process.communicate()
-        #retcode = process.poll()
-        #if retcode:
-            #error = subprocess.CalledProcessError(retcode, 'euca-describe-instance-types')
-            #error.output = output
-            #raise error
-        #output.split("\n")
         output = self.DescribeInstanceTypes()
-        for row in output.splitlines():
-            print "Got output: " + row    # DEBUG
-            items = re.split("\s+", row)[1:5]
-            if items[1] != "CPUs":   # ignore the heading line
-                InstanceTypeOps._known_types.append(instance_type(name=items[0],cpus=int(items[1]),
+
+        for row in output:
+            #print "Got output: " + row    # DEBUG
+            if "INSTANCETYPE" in row:
+                items = re.split("\s+", row)[1:5]
+                if items[1] != "CPUs":   # ignore the heading line
+                    InstanceTypeOps._known_types.append(instance_type(name=items[0],cpus=int(items[1]),
                                                                   mem=int(items[2]),disk=int(items[3])))
 
     def Modify(self):
         """
         performs euca_modify_instance_type command
         """
-        #print "random entry from _known_types is:"    # DEBUG
-        #print(random.choice(InstanceTypeOps._known_types).p())  # print the random item chosen
         mychoice = random.choice(InstanceTypeOps._known_types)
         print "Randomly chose instance type \"" + mychoice.name + "\" from list, we will now "\
               + "execute \'euca-modify-instance-type\' command to double memory from \""\
@@ -122,30 +115,34 @@ class InstanceTypeOps(EutesterTestCase):
                 str(mychoice.mem*2),
                 mychoice.name]
         output = self.ModifyInstanceType(myargs)
-        for row in output.splitlines():    # DEBUG
+        for row in output:    # DEBUG
             print "Got output: " + row    # DEBUG
 
         # check the value is correct
         output = self.DescribeInstanceTypes(mychoice.name)
-        for row in output.splitlines():
+        for row in output:
             print "Got output: " + row    # DEBUG
-            items = re.split("\s+", row)[1:5]
-            if items[1] != "CPUs":   # ignore the heading line
-                print "memory is now: " + str(items[2])    # DEBUG
+            if "INSTANCETYPE" in row:
+                items = re.split("\s+", row)[1:5]
+                if items[1] != "CPUs":   # ignore the heading line
+                    print "memory is now: " + str(items[2])    # DEBUG
+
         # put it back together correctly
         newargs = ['--memory',
                 str(mychoice.mem),
                 mychoice.name]
         output = self.ModifyInstanceType(newargs)
-        for row in output.splitlines():
+        for row in output:
             print "Got output: " + row    # DEBUG
+
         print "after fixing the memory:"    # DEBUG
         output = self.DescribeInstanceTypes(mychoice.name)
-        for row in output.splitlines():
+        for row in output:
             print "Got output: " + row    # DEBUG
-            items = re.split("\s+", row)[1:5]
-            if items[1] != "CPUs":   # ignore the heading line
-                print "memory is once again: " + str(items[2])    # DEBUG
+            if "INSTANCETYPE" in row:
+                items = re.split("\s+", row)[1:5]
+                if items[1] != "CPUs":   # ignore the heading line
+                    print "memory is once again: " + str(items[2])    # DEBUG
 
 
 if __name__ == "__main__":
