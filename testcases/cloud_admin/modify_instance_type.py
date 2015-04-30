@@ -1,7 +1,10 @@
 #!/usr/bin/env python
 #
 # Description: Test the euca-modify-instance-type command works properly.
-
+#
+# NOTE: This testcase DOES NOT work with credentials file (credpath and eucarc) it only
+#       allows password/config_data for the time being.
+#
 from eucaops import Eucaops
 from eutester.eutestcase import EutesterTestCase
 
@@ -40,8 +43,8 @@ class InstanceTypeOps(EutesterTestCase):
         #self.get_args()
         # Setup basic eutester object
         self.tester = Eucaops(config_file=self.args.config_file,
-                                  password=self.args.password,
-                                  credpath=self.args.credpath)
+                                  password=self.args.password)
+                                  # credpath=self.args.credpath)  # <- credpath disabled since not functioning for these commands
 
         self.PopulateInstanceTypes()
         #print "Now printing _my_types after populating:"    # DEBUG
