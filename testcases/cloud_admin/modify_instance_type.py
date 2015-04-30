@@ -30,11 +30,11 @@ class InstanceTypeOps(EutesterTestCase):
 
         super(InstanceTypeOps, self).__init__(name=name)
         self.get_args()
-        self.show_args()
+        #self.show_args()
         for kw in kwargs:
             print 'Setting kwarg:'+str(kw)+" to "+str(kwargs[kw])
             self.set_arg(kw ,kwargs[kw])
-        self.show_args()
+        #self.show_args()
         self.setuptestcase()
         self.setup_parser()
         #self.get_args()
@@ -115,34 +115,36 @@ class InstanceTypeOps(EutesterTestCase):
                 str(mychoice.mem*2),
                 mychoice.name]
         output = self.ModifyInstanceType(myargs)
-        for row in output:    # DEBUG
-            print "Got output: " + row    # DEBUG
+        #for row in output:    # DEBUG
+        #    print "Got output: " + row    # DEBUG
 
         # check the value is correct
         output = self.DescribeInstanceTypes(mychoice.name)
         for row in output:
-            print "Got output: " + row    # DEBUG
+            #print "Got output: " + row    # DEBUG
             if "INSTANCETYPE" in row:
                 items = re.split("\s+", row)[1:5]
                 if items[1] != "CPUs":   # ignore the heading line
-                    print "memory is now: " + str(items[2])    # DEBUG
+                    #print "memory is now: " + str(items[2])    # DEBUG
+                    assert mychoice.mem*2 != items[2], "New instance type " + mychoice.name + " memory was not set to 2x original value of " + mychoice.mem
 
         # put it back together correctly
         newargs = ['--memory',
                 str(mychoice.mem),
                 mychoice.name]
         output = self.ModifyInstanceType(newargs)
-        for row in output:
-            print "Got output: " + row    # DEBUG
+        #for row in output:    # DEBUG
+        #    print "Got output: " + row    # DEBUG
 
-        print "after fixing the memory:"    # DEBUG
+        #print "after fixing the memory:"    # DEBUG
         output = self.DescribeInstanceTypes(mychoice.name)
         for row in output:
-            print "Got output: " + row    # DEBUG
+            #print "Got output: " + row    # DEBUG
             if "INSTANCETYPE" in row:
                 items = re.split("\s+", row)[1:5]
                 if items[1] != "CPUs":   # ignore the heading line
-                    print "memory is once again: " + str(items[2])    # DEBUG
+                    #print "memory is once again: " + str(items[2])    # DEBUG
+                    assert mychoice.mem != items[2], "Instance type " + mychoice.name + " memory was not reset back to original value of " + mychoice.mem
 
 
 if __name__ == "__main__":
