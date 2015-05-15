@@ -85,7 +85,7 @@ class TestColor():
                     'whiteonblue' : '\33[1;37;44m', #get_color(fmt=bold, fg=37,bg=44)
                     'whiteongreen' : '\33[1;37;42m',
                     'red' : '\33[31m', #TestColor.get_color(fg=31)
-                    'failred' : '\033[101m', #TestColor.get_color(fg=101) 
+                    'failred' : '\033[31m', #TestColor.get_color(fg=31)
                     'blueongrey' : '\33[1;34;47m', #TestColor.get_color(fmt=bold, fg=34, bg=47)#'\33[1;34;47m'
                     'redongrey' : '\33[1;31;47m', #TestColor.get_color(fmt=bold, fg=31, bg=47)#'\33[1;31;47m'
                     'blinkwhiteonred' : '\33[1;5;37;41m', #TestColor.get_color(fmt=[bold,blink],fg=37,bg=41)#
@@ -184,6 +184,8 @@ class EutesterTestUnit():
         self.result=EutesterTestResult.not_run
         self.time_to_run=0
         if self.kwargs.get('html_anchors', False):
+            if not 'html_anchors' in self.method_possible_args:
+                self.kwargs.pop('html_anchors')
             self.anchor_id = str(str(time.ctime())
                                 + self.name
                                 + "_"
@@ -509,10 +511,12 @@ class EutesterTestCase(unittest.TestCase):
     def disable_color(self):
         self.set_arg('use_color', False)
         self.use_color = False
+        os.environ['EUTESTER_FORCE_ANSI_ESCAPE'] = 'False'
     
     def enable_color(self):
         self.set_arg('use_color', True)
         self.use_color = True
+        os.environ['EUTESTER_FORCE_ANSI_ESCAPE'] = 'True'
         
 
     def setup_debugmethod(self, testcasename=None, log_level=None, logfile=None, logfile_level=None):
@@ -693,7 +697,7 @@ class EutesterTestCase(unittest.TestCase):
     def startmsg(self,msg=""):
         self.status(msg, traceback=3,testcolor=TestColor.get_canned_color('whiteonblue'))
         
-    def endsuccess(self,msg=""):
+    def endtestunit(self,msg=""):
         msg = "- UNIT ENDED - " + msg
         self.status(msg, traceback=2,a=1, testcolor=TestColor.get_canned_color('whiteongreen'))
 
@@ -801,7 +805,7 @@ class EutesterTestCase(unittest.TestCase):
                     else:
                         self.endfailure(str(test.name))
                 else:
-                    self.endsuccess(str(test.name))
+                    self.endtestunit(str(test.name))
                 self.debug(self.print_test_list_short_stats(list))
                         
         finally:
@@ -1092,7 +1096,7 @@ class EutesterTestCase(unittest.TestCase):
         
         
     
-    def create_testunit_by_name(self, name, obj=None, eof=True, autoarg=True, *args,**kwargs ):
+    def create_testunit_by_name(self, name, obj=None, eof=False, autoarg=True, *args,**kwargs ):
         '''
         Description: Attempts to match a method name contained with object 'obj', and create a EutesterTestUnit object from that method and the provided
         positional as well as keyword arguments provided. 
@@ -1109,12 +1113,10 @@ class EutesterTestCase(unittest.TestCase):
         :type kwargs: keyword arguments
         :param kwargs: None or more keyword arguements to be passed to method to be run
         '''
-        eof=False
-        autoarg=True
+        autoarg=autoarg
         obj = obj or self
         meth = getattr(obj,name)
         methvars = self.get_meth_arg_names(meth)
-
 
         
         #Pull out value relative to this method, leave in any that are intended to be passed through

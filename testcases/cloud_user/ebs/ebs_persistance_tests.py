@@ -309,9 +309,9 @@ class Ebs_Persistance_Tests(EutesterTestCase):
     def print_all_test_resources(self):
         self.status('Printing test resources prior to service interruption...',
                     testcolor=TestColor.get_canned_color('whiteonblue'))
-        self.tester.print_euinstance_list(self.instances)
-        self.tester.print_euvolume_list(self.volumes)
-        self.tester.print_eusnapshot_list(self.snapshots)
+        self.tester.show_instances(self.instances)
+        self.tester.show_volumes(self.volumes)
+        self.tester.show_snapshots(self.snapshots)
 
     def reboot_sc_machine_verify_post_reboot(self, timeout = 600):
         """
@@ -433,7 +433,7 @@ class Ebs_Persistance_Tests(EutesterTestCase):
         check_instances = check_instances or self.instances
         write_length = 10000
         errmsg = ""
-        self.tester.print_euvolume_list(check_vols)
+        self.tester.show_volumes(check_vols)
 
         for vol in check_vols:
             vol.update()
@@ -533,7 +533,7 @@ class Ebs_Persistance_Tests(EutesterTestCase):
             vol.update()
         availvols = copy.copy(vols)
         self.status('Attempting to attach the following volumes:',testcolor=TestColor.get_canned_color('whiteonblue'))
-        self.tester.print_euvolume_list(availvols)
+        self.tester.show_volumes(availvols)
         #Iterate through the volumes, and attach them all to at least one instance in each zone.
         for instance in self.instances:
             if not availvols:
@@ -564,7 +564,7 @@ class Ebs_Persistance_Tests(EutesterTestCase):
                         errmsg += str(instance.id) +"Volume:" + str(vol.id) \
                               + " error when attaching and comparing md5, err:" + str(e)
         self.status('Volume status post attachment operation:',testcolor=TestColor.get_canned_color('whiteonblue'))
-        self.tester.print_euvolume_list(vols)
+        self.tester.show_volumes(vols)
         if errmsg:
             raise Exception(errmsg)
 

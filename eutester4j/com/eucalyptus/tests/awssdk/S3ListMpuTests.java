@@ -155,7 +155,7 @@ public class S3ListMpuTests {
 	@AfterClass
 	public void teardown() throws Exception {
 		print("*** POST SUITE CLEANUP ***");
-		// Eutester4j.deleteAccount(account);
+		Eutester4j.deleteAccount(account);
 		s3 = null;
 	}
 
