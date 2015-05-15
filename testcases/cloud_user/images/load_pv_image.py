@@ -39,7 +39,7 @@ import os
 import time
 
 
-class Load_Pv_image(EutesterTestCase):
+class Load_Pv_Image(EutesterTestCase):
 
     def __init__(self, tester=None, **kwargs):
         self.emi = None
@@ -192,7 +192,8 @@ class Load_Pv_image(EutesterTestCase):
             destpath = self.args.destpath
             size, kernelfilepath = image_utils.wget_image(url=kernel_image_url,
                                                           destpath=destpath)
-        manifest = image_utils.euca2ools_bundle_image(path=kernelfilepath)
+        manifest = image_utils.euca2ools_bundle_image(path=kernelfilepath,
+                                                      destination=self.args.destpath)
         upmanifest = image_utils.euca2ools_upload_bundle(manifest=manifest,
                                                          bucketname=imagename + '_eutester_pv')
         eki = image_utils.euca2ools_register(manifest = upmanifest, name= imagename)
@@ -251,7 +252,8 @@ class Load_Pv_image(EutesterTestCase):
             destpath = self.args.destpath
             size, ramdiskfilepath = image_utils.wget_image(url=ramdisk_image_url,
                                                            destpath=destpath)
-        manifest = image_utils.euca2ools_bundle_image(path=ramdiskfilepath)
+        manifest = image_utils.euca2ools_bundle_image(path=ramdiskfilepath,
+                                                      destination=self.args.destpath)
         upmanifest = image_utils.euca2ools_upload_bundle(manifest=manifest,
                                                          bucketname=imagename + '_eutester_pv')
         eri = image_utils.euca2ools_register(manifest = upmanifest, name= imagename)
@@ -307,14 +309,16 @@ class Load_Pv_image(EutesterTestCase):
                     imagename = newname
                     self.debug('Found an unused image name. Using name:"{0}"'.format(imagename))
                     break
-        manifest = image_utils.euca2ools_bundle_image(path=diskfilepath)
+        manifest = image_utils.euca2ools_bundle_image(path=diskfilepath,
+                                                      destination=self.args.destpath)
         upmanifest = image_utils.euca2ools_upload_bundle(manifest=manifest,
                                                          bucketname=imagename + '_eutester_pv')
         emi = image_utils.euca2ools_register(manifest = upmanifest,
                                                   name= imagename,
                                                   kernel=self.eki.id,
                                                   ramdisk=self.eri.id,
-                                                  description='"created by eutester load_pv_image test"',
+                                                  description='"created by eutester '
+                                                              'load_pv_image test"',
                                                   virtualization_type='paravirtual',
                                                   arch='x86_64'
                                                   )
@@ -323,7 +327,7 @@ class Load_Pv_image(EutesterTestCase):
         assert image.id == emi, 'Image retrieved from system did not match the test image id. ' \
                                 'Fix the test?'
         # Add some tags to inform the cloud admin/users where this image came from...
-        image.add_tag(key='Created by eutester load_pv_image test')
+        image.add_tag(key='eutester-created', value='Created by eutester load_pv_image test')
         if size is not None:
             image.add_tag(key='size', value=str(size))
         if disk_image_url:
@@ -409,7 +413,7 @@ class Load_Pv_image(EutesterTestCase):
         tester.cleanup_artifacts(images=self.args.remove_created_images)
 
 if __name__ == "__main__":
-    testcase = Load_Pv_image()
+    testcase = Load_Pv_Image()
     # Create a single testcase to wrap and run the image creation tasks.
     test1 = testcase.create_testunit_from_method(testcase.do_kernel_image)
     test2 = testcase.create_testunit_from_method(testcase.do_ramdisk_image)

@@ -475,11 +475,13 @@ class EuInstance(Instance, TaggedResource):
         return res
 
 
-    def connect_to_instance(self, timeout=60):
+    def connect_to_instance(self, connect_timeout=30, timeout=120):
         '''
         Attempts to connect to an instance via ssh.
-        timeout - optional - time in seconds to wait for connection
-                  before failure
+        param connect_timeout: optional. SshConnection timeout in seconds  used per connection
+                               attempt. Default 30
+        param timeout: optional. Overall time in seconds to wait for all connections
+                       before failure
         '''
         self.debug("Attempting to reconnect_to_instance:" + self.id)
         attempts = 0
@@ -494,7 +496,7 @@ class EuInstance(Instance, TaggedResource):
                 attempts += 1
                 try:
                     self.update()
-                    self.reset_ssh_connection()
+                    self.reset_ssh_connection(timeout=connect_timeout)
                     self.debug('Try some sys...')
                     self.sys("")
                 except Exception, se:
