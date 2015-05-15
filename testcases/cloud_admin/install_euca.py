@@ -340,14 +340,14 @@ class Install(EutesterTestCase):
             self.tester = Eucaops(config_file=self.args.config_file, password=self.args.password)
         self.tester.modify_property("bootstrap.webservices.use_dns_delegation", "true")
         self.tester.modify_property("bootstrap.webservices.use_instance_dns", "true")
-        enabled_clc = self.tester.service_manager.get_enabled_clc()
+        enabled_ufs = self.tester.service_manager.get_enabled_osg()
         if self.args.dnsdomain:
             self.tester.modify_property("system.dns.dnsdomain", self.args.dnsdomain)
         else:
-            hostname = enabled_clc.machine.sys('hostname')[0].split(".")[0]
+            hostname = enabled_ufs.machine.sys('hostname')[0].split(".")[0]
             domain = hostname + ".autoqa.qa1.eucalyptus-systems.com"
             self.tester.modify_property("system.dns.dnsdomain", domain)
-        self.tester.modify_property("system.dns.nameserveraddress", enabled_clc.hostname)
+        self.tester.modify_property("system.dns.nameserveraddress", enabled_ufs.hostname)
 
     def clean_method(self):
         pass
