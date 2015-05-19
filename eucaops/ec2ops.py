@@ -3713,7 +3713,7 @@ disable_root: false"""
         """
         # To allow easy updating of a group (since group.update() is not implemented at this time),
         # handle SecurityGroup arg type for either kwargs...
-        names = None
+        names = ['verbose']
         ids = None
         if isinstance(id, SecurityGroup) or isinstance(id, BotoGroup):
             id = id.id
@@ -3724,7 +3724,7 @@ disable_root: false"""
         if id:
             ids = [id]
         if name:
-            names = [name]
+            names.append(name)
         groups = self.ec2.get_all_security_groups(groupnames=names, group_ids=ids)
         for group in groups:
             if not id or (id and group.id == id):
