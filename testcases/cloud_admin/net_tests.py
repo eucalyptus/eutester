@@ -243,7 +243,7 @@ class Net_Tests(EutesterTestCase):
                 self._vpc_backend = Midget(vpc_backend_host, tester=self.tester)
             except ImportError as IE:
                 self._vpc_backend = None
-                self.errmsg('Not Creating VPC backend debug interface, err:"{0}"'.format(str(IE)))
+                self.errormsg('Not Creating VPC backend debug interface, err:"{0}"'.format(str(IE)))
             except Exception as VBE:
                 self._vpc_backend = None
                 self.errormsg('FYI... Failed to create vpc backend interface, err:\n{0}'
