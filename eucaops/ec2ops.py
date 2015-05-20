@@ -744,7 +744,13 @@ disable_root: false"""
             return main_pt
 
     def get_supported_platforms(self):
-        attr = self.ec2.describe_account_attributes(attribute_names='supported-platforms')
+        try:
+            attr = self.ec2.describe_account_attributes(attribute_names='supported-platforms')
+        except Exception as E:
+            self.debug(self.markup("{0}\nFailed to get 'supported-platforms' from "
+                                   "cloud, err:'{1}'".format(self.get_traceback(),str(E))),
+                       markups=[1, 31])
+            pass
         if attr:
             return attr[0].attribute_values
         return []
