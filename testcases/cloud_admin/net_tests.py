@@ -241,10 +241,15 @@ class Net_Tests(EutesterTestCase):
             try:
                 from eutester.midget import Midget
                 self._vpc_backend = Midget(vpc_backend_host, tester=self.tester)
-            except:
-                self.debug('FYI... Failed to create vpc backend interface, err:\n{0}'
-                           .format(self.tester.get_traceback()))
-                pass
+            except ImportError as IE:
+                self._vpc_backend = None
+                self.errormsg('Not Creating VPC backend debug interface, err:"{0}"'.format(str(IE)))
+            except Exception as VBE:
+                self._vpc_backend = None
+                self.errormsg('FYI... Failed to create vpc backend interface, err:\n{0}'
+                            '\nUnable to get VPC backend debug. Ignoring Error:"{1}"'
+                            .format(self.tester.get_traceback(), str(VBE)), linebyline=False)
+                return None
         return self._vpc_backend
 
     ######################################################
@@ -544,7 +549,8 @@ class Net_Tests(EutesterTestCase):
                                                       protocol='tcp',
                                                       port=22)
             try:
-                instance.connect_to_instance(timeout=90)
+                start = time.time()
+                instance.connect_to_instance(timeout=120)
             except Exception, ConnectErr:
                 if self.vpc_backend:
                     self.errormsg('{0}\n{1}\nFailed to connect to instance:"{2}", dumping info '
@@ -559,7 +565,7 @@ class Net_Tests(EutesterTestCase):
                     else:
                         raise ConnectErr
                     try:
-                        instance.connect_to_instance(timeout=90)
+                        instance.connect_to_instance(timeout=120)
                         self.status('Connect to instance:"{0}" succeeded'.format(instance.id))
                         self.errormsg('SSH succeeded after restarting Midolman, dumping post restart '
                                   'Midolman info for instance...')
@@ -573,9 +579,13 @@ class Net_Tests(EutesterTestCase):
                         raise type(SE)(str(SE.message) + '\nCould not ssh to instance:"{0}", '
                                                          'restarting backend did not help, '
                                                          'err on 2nd attempt'.format(instance.id))
-            self.status('SSH connection to instance:' + str(instance.id) +
-                        ' successful to public ip:' + str(instance.ip_address) +
-                        ', zone:' + str(instance.placement))
+            if instance.ssh:
+                self.status('SSH connection to instance:' + str(instance.id) +
+                            ' successful to public ip:' + str(instance.ip_address) +
+                            ', zone:' + str(instance.placement))
+            else:
+                raise RuntimeError('intance:{0} ssh is none, failed to connect after {1} seconds?'
+                                   .format(instance.id, int(time.time()-start)))
             instance.sys('uname -a', code=0)
             instance.ssh.sftp_put(instance.keypath, os.path.basename(instance.keypath))
             instance.sys('chmod 0600 ' + os.path.basename(instance.keypath), code=0 )
