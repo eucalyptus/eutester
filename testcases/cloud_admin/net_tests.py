@@ -246,7 +246,7 @@ class Net_Tests(EutesterTestCase):
                 self.errmsg('Not Creating VPC backend debug interface, err:"{0}"'.format(str(IE)))
             except Exception as VBE:
                 self._vpc_backend = None
-                self.errmsg('FYI... Failed to create vpc backend interface, err:\n{0}'
+                self.errormsg('FYI... Failed to create vpc backend interface, err:\n{0}'
                             '\nUnable to get VPC backend debug. Ignoring Error:"{1}"'
                             .format(self.tester.get_traceback(), str(VBE)), linebyline=False)
                 return None
