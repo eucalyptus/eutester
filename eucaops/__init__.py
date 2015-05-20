@@ -707,11 +707,11 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
         def create_cloud_machine(machine_dict, ssh_proxy=None):
             ### ADD the machine to the array of machine
             try:
-                self.test_port_status(machine_dict["hostname"], 22, tcp=True)
                 proxy_host = None
                 proxy_username = None
                 proxy_password = None
                 proxy_keypath = None
+                self.test_port_status(machine_dict["hostname"], 22, tcp=True)
             except socketerror, se:
                 self.debug(self.markup('Could not connect to:"{0}", err:"{1}"'
                            .format(machine_dict["hostname"], se), [1,31]))
