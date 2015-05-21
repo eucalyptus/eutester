@@ -747,10 +747,17 @@ disable_root: false"""
         try:
             attr = self.ec2.describe_account_attributes(attribute_names='supported-platforms')
         except Exception as E:
-            self.debug(self.markup("{0}\nFailed to get 'supported-platforms' from "
-                                   "cloud, err:'{1}'".format(self.get_traceback(),str(E))),
-                       markups=[1, 31])
-            pass
+            try:
+                prop = self.property_manager.get_property_by_string('one.cluster.networkmode')
+                if prop and prop.value:
+                    return [prop.value]
+            except Exception as E:
+                try:
+                    err = "{0}\nFailed to get 'supported-platforms' fromcloud, err:'{1}'"\
+                          .format(self.get_traceback(),str(E))
+                    self.debug(self.markup(err, markups=[1, 31]))
+                except:
+                    pass
         if attr:
             return attr[0].attribute_values
         return []
