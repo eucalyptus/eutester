@@ -44,6 +44,7 @@ import sys
 import traceback
 import StringIO
 import eulogger
+import hashlib
 import types
 import operator
 import fcntl
@@ -59,6 +60,15 @@ class TimeoutFunctionException(Exception):
 
 
 class Eutester(object):
+
+    # Force ansi escape sequences (markup) in output.
+    # This can also be set as an env var
+    _EUTESTER_FORCE_ANSI_ESCAPE = False
+    # Allow ansi color codes outside the standard range. For example some systems support
+    # a high intensity color range from 90-109.
+    # This can also be set as an env var
+    _EUTESTER_NON_STANDARD_ANSI_SUPPORT = False
+
     def __init__(self, credpath=None):
         """This class is intended to setup boto connections for the various services that the *ops classes will use.
         :param credpath: Path to a valid eucarc file.
@@ -67,6 +77,7 @@ class Eutester(object):
         :rtype: :class:`eutester.Eutester` or ``None``
         :returns: A Eutester object with all connections that were able to be created. Currently EC2, S3, IAM, and STS.
         """
+
         ### Default values for configuration
         self.credpath = credpath
         
@@ -87,6 +98,36 @@ class Eutester(object):
             self.aws_secret_access_key = self.get_secret_key()
             self.account_id = self.get_account_id()
             self.user_id = self.get_user_id()
+
+    @property
+    def ec2_certpath(self):
+        try:
+            return  self.parse_eucarc('EC2_CERT')
+        except ValueError:
+             return None
+
+    @property
+    def ec2_cert(self):
+        certpath = self.ec2_certpath
+        if certpath and os.path.exists(certpath):
+            out = self.local('cat {0}'.format(certpath))
+            return str("\n".join(out)).strip()
+        return None
+
+    @property
+    def ec2_private_key_path(self):
+        try:
+            return self.parse_eucarc('EC2_PRIVATE_KEY')
+        except ValueError:
+            return None
+
+    @property
+    def ec2_private_key(self):
+        keypath = self.ec2_private_key_path
+        if keypath and os.path.exists(keypath):
+            out = self.local('cat {0}'.format(keypath))
+            return "\n".join(out)
+        return None
 
     def get_access_key(self):
         if not self.aws_access_key_id:     
@@ -110,7 +151,7 @@ class Eutester(object):
         if not self.user_id:
             self.user_id = self.parse_eucarc("EC2_USER_ID")
         """Parse the eucarc for the EC2_ACCOUNT_NUMBER"""
-        return self.user_id 
+        return self.user_id
 
     def get_port(self):
         """Parse the eucarc for the EC2_ACCOUNT_NUMBER"""
@@ -119,29 +160,44 @@ class Eutester(object):
 
     def parse_eucarc(self, field):
         if self.credpath is None:
-            raise ValueError('Credpath has not been set yet. '
-                             'Please set credpath or provide '
-                             'configuration file')
-        with open( self.credpath + "/eucarc") as eucarc:
-            for line in eucarc.readlines():
-                if re.search(field, line):
-                    return line.split("=")[1].strip().strip("'")
-            raise Exception("Unable to find " +  field + " id in eucarc")
-    
+            raise RuntimeError('Credpath has not been set yet. '
+                               'Please set credpath or provide '
+                               'configuration file')
+        cmd = 'source {0}/eucarc &> /dev/null && echo ${1}'.format(self.credpath, field)
+        out = self.local(cmd)
+        if out[0]:
+            return out[0]
+        else:
+            if out:
+                out = "\n".join(out)
+            self.critical('Failed to find field: {0},\nCommand:{1}\nReturned:\n"{2}"'
+                          .format(field, cmd, out))
+            try:
+                catcmd = 'cat {0}/eucarc | grep {1}'.format(self.credpath, field)
+                catout = self.local(catcmd)
+                catout = "\n".join(catout)
+            except Exception, ce:
+                catout = "Command failed:{0}, err:{1}".format(catcmd, ce)
+            self.critical("Unable to find {0} id in eucarc. {1}:\n{2}\n"
+                          .format(field, catcmd, catout))
+            raise ValueError("Unable to find " +  field + " id in eucarc")
+
     def handle_timeout(self, signum, frame): 
         raise TimeoutFunctionException()
 
-    def local(self, cmd):
+    def local(self, cmd, shell=True):
         """
         Run a command on the localhost
         :param cmd: str representing the command to be run
         :return: :raise: CalledProcessError on non-zero return code
         """
-        args = cmd.split()
-        process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=4096)
+        args = cmd
+        process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                   bufsize=4096, shell=shell)
         output, unused_err = process.communicate()
         retcode = process.poll()
         if retcode:
+            self.debug('CMD:"{0}"\nOUTPUT:\n{1}'.format(cmd, str(output)))
             error = subprocess.CalledProcessError(retcode, cmd)
             error.output = output
             raise error
@@ -180,7 +236,62 @@ class Eutester(object):
         self.critical("Was unable to ping address")
         return False
 
-    
+    @classmethod
+    def markup(cls, text, markups=[1], resetvalue="\033[0m", force=None, allow_nonstandard=None):
+        """
+        Convenience method for using ansi markup. Attempts to check if terminal supports
+        ansi escape sequences for text markups. If so will return a marked up version of the
+        text supplied using the markups provided.
+        Some example markeups: 1 = bold, 4 = underline, 94 = blue or markups=[1, 4, 94]
+        :param text: string/buffer to be marked up
+        :param markups: a value or list of values representing ansi codes.
+        :param resetvalue: string used to reset the terminal, default: "\33[0m"
+        :param force: boolean, if set will add escape sequences regardless of tty. Defaults to the
+                      class attr '_EUTESTER_FORCE_ANSI_ESCAPE' or the env variable:
+                      'EUTESTER_FORCE_ANSI_ESCAPE' if it is set.
+        :param allow_nonstandard: boolean, if True all markup values will be used. If false
+                                  the method will attempt to remap the markup value to a
+                                  standard ansi value to support tools such as Jenkins, etc.
+                                  Defaults to the class attr '._EUTESTER_NON_STANDARD_ANSI_SUPPORT'
+                                  or the environment variable 'EUTESTER_NON_STANDARD_ANSI_SUPPORT'
+                                  if set.
+        returns a string with the provided 'text' formatted within ansi escape sequences
+        """
+        if not isinstance(markups, list):
+            markups = [markups]
+        if force is None:
+            force = os.environ.get('EUTESTER_FORCE_ANSI_ESCAPE', cls._EUTESTER_FORCE_ANSI_ESCAPE)
+            if str(force).upper() == 'TRUE':
+                force = True
+            else:
+                force = False
+        if allow_nonstandard is None:
+            allow_nonstandard = os.environ.get('EUTESTER_NON_STANDARD_ANSI_SUPPORT',
+                                               cls._EUTESTER_NON_STANDARD_ANSI_SUPPORT)
+            if str(allow_nonstandard).upper() == 'TRUE':
+                allow_nonstandard = True
+            else:
+                allow_nonstandard = False
+        if not force:
+            if not (hasattr(sys.stdout, 'isatty') and sys.stdout.isatty()):
+                return text
+        if not allow_nonstandard:
+            newmarkups = []
+            for markup in markups:
+                if markup > 90:
+                    newmarkups.append(markup-60)
+                else:
+                    newmarkups.append(markup)
+            markups = newmarkups
+        lines = []
+        markupvalues=";".join(str(x) for x in markups)
+        for line in text.splitlines():
+            lines.append("\033[{0}m{1}\033[0m".format(markupvalues, line))
+        buf = "\n".join(lines)
+        if text.endswith('\n') and not buf.endswith('\n'):
+            buf += '\n'
+        return buf
+
     def scan_port_range(self, ip, start, stop, timeout=1, tcp=True):
         '''
         Attempts to connect to ports, returns list of ports which accepted a connection
@@ -457,10 +568,29 @@ class Eutester(object):
         self.debug(  str(callback.func_name) + ' returned: "' + str(current_state) + '" after '
                     + str(elapsed/60) + " minutes " + str(elapsed%60) + " seconds.")
         if not oper(current_state,result):
-            raise Exception( str(callback.func_name) + " did not return " + str(operator.ne.__name__) +
+            raise WaitForResultException( str(callback.func_name) + " did not return " + str(operator.ne.__name__) +
                              "(" + str(result) + ") true after elapsed:"+str(elapsed))
         return current_state
 
+    def get_md5_for_file(self, filepath, machine=None):
+        if machine:
+            machinename = machine.hostname
+            out = machine.sys('md5sum {0}'.format(filepath), code=0)
+            md5string = str(out[0]).split()[0]
+        else:
+            machinename = 'local'
+            # If a machine wasn't provided try local...
+            md5 = hashlib.md5()
+            length = md5.block_size * 128
+            with open(filepath, "rb") as f:
+                while True:
+                    buf = f.read(length)
+                    if not buf:
+                        break
+                    md5.update(buf)
+            md5string = str(md5.hexdigest())
+        self.debug('MD5 for {0} on {1} is: "{2}"'.format(filepath, machinename, md5string))
+        return md5string
 
     @classmethod
     def get_traceback(cls):
@@ -481,6 +611,11 @@ class Eutester(object):
 
 
 
-    
+class WaitForResultException(Exception):
+    def __init__(self, value):
+        self.value = value
+
+    def __str__(self):
+        return repr(self.value)
 
 

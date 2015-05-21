@@ -476,6 +476,8 @@ public class S3BucketACLTests {
 		try {
 			AccessControlList acl = new AccessControlList();
 			acl.getGrants().add(new Grant(GroupGrantee.AuthenticatedUsers, Permission.ReadAcp));
+			acl.getGrants().add(new Grant(GroupGrantee.AuthenticatedUsers, Permission.Write));
+			acl.getGrants().add(new Grant(GroupGrantee.LogDelivery, Permission.Write));
 			acl.getGrants().add(new Grant(GroupGrantee.AllUsers, Permission.FullControl));
 			acl.getGrants().add(new Grant(new CanonicalGrantee(ownerId), Permission.FullControl));
 			createBucketWithACL(bucketName, acl);

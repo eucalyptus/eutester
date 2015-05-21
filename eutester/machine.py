@@ -94,7 +94,11 @@ class Machine:
                  username="root", 
                  timeout=120,
                  retry=2,
-                 debugmethod=None, 
+                 debugmethod=None,
+                 ssh_proxy_host=None,
+                 ssh_proxy_username=None,
+                 ssh_proxy_password=None,
+                 ssh_proxy_keypath=None,
                  verbose = True ):
         
         self.hostname = hostname
@@ -106,6 +110,10 @@ class Machine:
         self.password = password
         self.keypath = keypath
         self.username = username
+        self.ssh_proxy_host=ssh_proxy_host
+        self.ssh_proxy_username=ssh_proxy_username
+        self.ssh_proxy_password=ssh_proxy_password
+        self.ssh_proxy_keypath=ssh_proxy_keypath
         self.timeout = timeout
         self.retry = retry
         self.debugmethod = debugmethod
@@ -183,6 +191,10 @@ class Machine:
                     timeout=self.timeout,
                     retry=self.retry,
                     debugmethod=self.debugmethod,
+                    proxy=self.ssh_proxy_host,
+                    proxy_username=self.ssh_proxy_username,
+                    proxy_password=self.ssh_proxy_password,
+                    proxy_keypath=self.ssh_proxy_keypath,
                     verbose=True)
         return self._ssh
 
@@ -288,14 +300,17 @@ class Machine:
         except Exception,e:
             pass
 
-    def sys(self, cmd, verbose=True, timeout=120, listformat=True, code=None):
+    def sys(self, cmd, verbose=True, timeout=120, listformat=True, code=None, net_namespace=None):
         '''
         Issues a command against the ssh connection to this instance
         Returns a list of the lines from stdout+stderr as a result of the command
         '''
+        if net_namespace is not None:
+            cmd = 'ip netns exec {0} {1}'.format(net_namespace, cmd)
         return self.ssh.sys(cmd, verbose=verbose, timeout=timeout,listformat=listformat, code=code)
     
-    def cmd(self, cmd, verbose=True, timeout=120, listformat=False, cb=None, cbargs=[]):
+    def cmd(self, cmd, verbose=True, timeout=120, listformat=False, net_namespace=None,
+            cb=None, cbargs=[]):
         '''
         Issues a command against the ssh connection to this instance
         returns dict containing:
@@ -308,14 +323,19 @@ class Machine:
         verbose - optional - boolean flag to enable debug
         timeout - optional - command timeout in seconds 
         listformat -optional - specifies returned output in list of lines, or single string buffer
+        net_namespace - optional - issue command in the network namespace provided.
         cb - optional - call back function, accepting string buffer, returning true false see sshconnection for more info
         '''
+        if net_namespace is not None:
+            cmd = 'ip netns exec {0} {1}'.format(net_namespace, cmd)
         if (self.ssh is not None):
-            return self.ssh.cmd(cmd, verbose=verbose, timeout=timeout, listformat=listformat, cb=cb, cbargs=cbargs)
+            return self.ssh.cmd(cmd, verbose=verbose, timeout=timeout, listformat=listformat,
+                                cb=cb, cbargs=cbargs)
         else:
             raise Exception("Euinstance ssh connection is None")
         
-    def sys_until_found(self, cmd, regex, verbose=True, timeout=120, listformat=True):
+    def sys_until_found(self, cmd, regex, verbose=True, timeout=120, listformat=True,
+                        net_namespace=None):
         '''
         Run a command until output of command satisfies/finds regex or EOF is found. 
         returns dict containing:
@@ -330,7 +350,8 @@ class Machine:
         timeout - optional - command timeout in seconds 
         listformat -optional - specifies returned output in list of lines, or single string buffer 
         '''
-        return self.cmd(cmd, verbose=verbose,timeout=timeout,listformat=listformat,cb=self.str_found_cb, cbargs=[regex, verbose])
+        return self.cmd(cmd, verbose=verbose, timeout=timeout, listformat=listformat,
+                        net_namespace=net_namespace, cb=self.str_found_cb, cbargs=[regex, verbose])
         
         
     def str_found_cb(self,buf,regex,verbose,search=True):
@@ -503,9 +524,9 @@ class Machine:
         :return: eucalyptus version string
         """
         try:
-            return self.sys('cat ' + versionpath, code=0)[0]
+            return self.sys('cat ' + versionpath + " | grep '[0-9]'", code=0)[0]
         except Exception, e:
-            return self.sys('cat /opt/eucalyptus' + versionpath, code=0)[0]
+            return self.sys('cat /opt/eucalyptus' + versionpath + " | grep '[0-9]'", code=0)[0]
 
 
 
@@ -567,18 +588,22 @@ class Machine:
     def chown(self, user, path):
         self.sys("chwon "+ user + ":" + user + " " + path)
 
-    def ping_check(self,host):
-        out = self.ping_cmd(host)
+    def ping_check(self,host, verbose=True, net_namespace=None):
+        out = self.ping_cmd(host, verbose=verbose, net_namespace=net_namespace)
         self.debug('Ping attempt to host:'+str(host)+", status code:"+str(out['status']))
         if out['status'] != 0:
             raise Exception('Ping returned error:'+str(out['status'])+' to host:'+str(host))
     
-    def ping_cmd(self, host, count=2, pingtimeout=10, commandtimeout=120, listformat=False, verbose=True):
+    def ping_cmd(self, host, count=2, pingtimeout=10, commandtimeout=120, listformat=False,
+                 verbose=True, net_namespace=None):
         cmd = 'ping -c ' +str(count)+' -t '+str(pingtimeout)
         if verbose:
             cmd += ' -v '
         cmd = cmd + ' '+ str(host)
-        out = self.cmd(cmd, verbose=verbose, timeout=commandtimeout, listformat=listformat)
+        self.debug('cmd: {0}'.format(cmd))
+        out = self.cmd(cmd, verbose=verbose, timeout=commandtimeout, listformat=listformat,
+                       net_namespace=net_namespace)
+        self.debug('out: {0}'.format(out))
         if verbose:
             #print all returned attributes from ping command dict
             for item in sorted(out):
@@ -586,7 +611,8 @@ class Machine:
         return out
         
         
-    def dump_netfail_info(self,ip=None, mac=None, pass1=None, pass2=None, showpass=True, taillength=50):
+    def dump_netfail_info(self,ip=None, mac=None, pass1=None, pass2=None, showpass=True,
+                          taillength=50, net_namespace=None):
         """
         Debug method to provide potentially helpful info from current machine when debugging connectivity issues.
         """
@@ -594,7 +620,12 @@ class Machine:
                    + ' mac:' + str(mac)
                    + ' pass1:' + self.get_masked_pass(pass1,show=True)
                    + ' pass2:' + self.get_masked_pass(pass2,show=True))
-        self.ping_cmd(ip,verbose=True)
+        self.ping_cmd(ip,verbose=True, net_namespace=net_namespace,count=1)
+        ns_list = self.sys('ip netns list')
+        if net_namespace in ns_list:
+            self.sys('arp -a', net_namespace=net_namespace)
+            self.sys('ifconfig', net_namespace=net_namespace)
+            self.sys('netstat -rn', net_namespace=net_namespace)
         self.sys('arp -a')
         self.sys('dmesg | tail -'+str(taillength))
         self.sys('cat /var/log/messages | tail -'+str(taillength))
@@ -620,10 +651,17 @@ class Machine:
                           timeout=300):
         self.debug('wget_remote_image, url:'+str(url)+", path:"+str(path))
         cmd = 'wget '
-        if path:
-            cmd = cmd + " -P " + str(path)
-        if dest_file_name:
-            cmd = cmd + " -O " + str(dest_file_name)
+        dest_file_name = dest_file_name or os.path.basename(url)
+        path = path or ''
+        dest_file = os.path.join(path, dest_file_name)
+
+        # It seems -P and -O conflict, removing -P and updating the use of -O w/ a full path
+        # if path:
+        #    cmd = cmd + " -P " + str(path)
+        # Use -O instead of redirect '>' to destfile so the test can get the status updates
+        # of wget progress...
+        if dest_file:
+            cmd = cmd + " -O " + str(dest_file)
         if user:
             cmd = cmd + " --user " + str(user)
         if password:
@@ -635,10 +673,17 @@ class Machine:
         ret = self.cmd(cmd, timeout=timeout, cb=self.wget_status_cb )
         if ret['status'] != 0:
             raise Exception('wget_remote_image failed with status:'+str(ret['status']))
-        self.debug('wget_remote_image succeeded')
+        # If the wget_status_cb method returned a string that contains our filename, use
+        # that string as the returned path for where the file was saved to
+        ret_search = re.match("^\S*dest_file\S*$", ret['output'])
+        if ret_search:
+            dest_file = str(ret_search.group())
+        self.debug('wget_remote_image succeeded, saved to:' + str(dest_file))
+        return str(dest_file)
     
     def wget_status_cb(self, buf):
         ret = sshconnection.SshCbReturn(stop=False)
+        ret.buf = ''
         try:
             buf = buf.strip()
             val = buf.split()[0] 
@@ -648,14 +693,21 @@ class Machine:
                     sys.stdout.flush()
                     self.wget_last_status = val
                 else:
+                    # Grab the saved location and save it as the only returned item in the
+                    # command's 'output' buffer.
+                    dest_search = re.search('Saving\s*to:\s*".*"', buf)
+                    if dest_search:
+                        line = str(dest_search.group()).decode('ascii', 'ignore')
+                        splitline = line.split(':')
+                        if len(splitline) > 1:
+                            ret.buf = str(splitline[1].strip())
                     print buf
         except Exception, e:
             pass
         finally:
             return ret
 
-            
-        
+
     def get_df_info(self, path=None, verbose=True):
         """
         Return df's output in dict format for a given path.

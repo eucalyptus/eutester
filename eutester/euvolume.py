@@ -37,6 +37,7 @@ Place holder for volume test specific convenience methods+objects to extend boto
 '''
 from boto.ec2.volume import Volume
 from eutester.taggedresource import TaggedResource
+from prettytable import PrettyTable, ALL
 import eucaops
 import time
 
@@ -75,7 +76,7 @@ class EuVolume(Volume, TaggedResource):
         if newvol.tags.has_key(newvol.tag_md5len_key):
             newvol.md5len = newvol.tags[newvol.tag_md5len_key]
         newvol.set_attached_status()
-
+        newvol.update()
         return newvol
     
     def update(self):
@@ -105,18 +106,19 @@ class EuVolume(Volume, TaggedResource):
             self.eutest_attached_status = None
             self.eutest_attached_instance_id = None
 
-    def printself(self,title=True, footer=True, printmethod=None):
-        buf = "\n"
-        if title:
-            buf += str("-----------------------------------------------------------------------------------------------------------------------------------------------\n")
-            buf += str('VOL_ID').ljust(15)+'|'+str('ORDER').center(5)+'|'+str('LASTSTATUS').center(10)+'|'+str('TESTSTATUS').center(10)+'|'+str('AGE@STATUS').center(15)+'|'+str('SIZE').center(4)+'|'+str('FROM_SNAP').center(15)+'|'+str('MD5_SUM').center(33)+'|'+str('MD5LEN').center(6)+'|'+str('ZONE').center(15)+'|'+str('INSTANCE')+'\n'
-            buf += str("-----------------------------------------------------------------------------------------------------------------------------------------------\n")
-        buf += str(self.id).ljust(15)+'|'+str(self.eutest_createorder).center(5)+'|'+str(self.eutest_laststatus).center(10)+'|'+str(self.status).center(10)+'|'+str(self.eutest_ageatstatus).center(15)+'|'+str(self.size).center(4)+'|'+str(self.snapshot_id).center(15)+'|'+str(self.md5).center(33)+'|'+str(self.md5len).center(6)+'|'+str(self.zone).center(15)+'|'+str(self.attach_data.instance_id).rstrip()+"\n"
-        if footer:
-            buf += str("-----------------------------------------------------------------------------------------------------------------------------------------------")
-        if printmethod:
-            printmethod(buf)
-        return buf
+    def printself(self, printmethod=None, printme=True):
+        pt = PrettyTable(['VOL_ID', 'ORDER', 'TESTSTATUS', 'AGE', 'SIZE',
+                          'SRC_SNAP', 'MD5/(LEN)', 'ZONE', 'INSTANCE'])
+        pt.padding_width=0
+        pt.add_row([self.id, self.eutest_createorder, self.eutest_laststatus or self.status,
+                    self.eutest_ageatstatus, self.size, self.snapshot_id,
+                    "{0}/({1})".format(self.md5, self.md5len), self.zone,
+                   self.attach_data.instance_id])
+        if printme:
+            printmethod = printmethod or self.debug
+            printmethod(str(pt))
+        else:
+            return pt
 
     def update_volume_attach_info_tags(self, md5=None, md5len=None, instance_id=None, guestdev=None):
         md5 = md5 or self.md5

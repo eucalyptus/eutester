@@ -97,10 +97,31 @@ import types
 import sys
 import termios
 import tty
+from paramiko.sftp_client import SFTPClient
 import eucaops
 
 
+class SFTPifc(SFTPClient):
 
+    def debug(self, msg, verbose=True):
+        print (str(msg))
+
+    def get(self, remotepath, localpath, callback=None):
+        try:
+            super(SFTPifc, self).get(remotepath, localpath, callback=callback)
+        except Exception, ge:
+            self.debug('Error during sftp get. Remote:"{0}", Local:"{1}"'
+                       .format(remotepath, localpath))
+            raise type(ge)('Error during sftp get. Remotepath:"{0}", Localpath:"{1}".\n Err:{2}'
+                           .format(remotepath, localpath, str(ge)))
+
+    def put(self, localpath, remotepath, callback=None, confirm=True):
+        try:
+            super(SFTPifc, self).put(localpath=localpath, remotepath=remotepath,
+                                     callback=callback, confirm=confirm)
+        except Exception, pe:
+            raise type(pe)('Error during sftp put. Remotepath:"{0}", Localpath:"{1}".\n Err:{2}'
+                           .format(remotepath, localpath, str(pe)))
 
 class SshCbReturn():
     def __init__(self, stop=False, statuscode=-1, settimer=0, buf=None, sendstring=None, nextargs=None, nextcb=None, removecb=False):
@@ -648,8 +669,8 @@ class SshConnection():
                 ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
                 try:
                     self.debug("SSH connection attempt(" + str(attempt) +" of " + str(retry) + "), host:'"
-                               + username + "@" + hostname + "', using ipv4:" + str(ip) + ", thru proxy:'"
-                               + str(proxy_ip) + "'")
+                               + str(username) + "@" + str(hostname) + "', using ipv4:" + str(ip) +
+                               ", thru proxy:'" + str(proxy_ip) + "'")
                     if keypath is None and password:
                         self.debug("Using username:"+username+" and password:"+str(self.mask_password(password)),
                                    verbose=verbose)
@@ -666,7 +687,7 @@ class SshConnection():
                         break
                     elif key_files or self.find_keys:
                         self.debug("Using local keys, no keypath/password provided.", verbose=verbose)
-                        ssh._auth(username, password,None,key_files, True, True)
+                        ssh._auth(username, password, None, key_files, True, True)
                         #ssh.connect(ip, port=port, username=username, key_filename=keypath, timeout=timeout)
                         connected = True
 
@@ -942,11 +963,13 @@ class SshConnection():
 
     def open_sftp(self, transport=None):
         transport = transport or self.connection._transport
-        self.sftp = paramiko.SFTPClient.from_transport(transport)
+        sftp = SFTPifc.from_transport(transport)
+        sftp.debug = self.debug
+        self.sftp = sftp
+        return sftp
 
     def close_sftp(self):
         self.sftp.close()
-
 
 
     def sftp_put(self,localfilepath,remotefilepath):

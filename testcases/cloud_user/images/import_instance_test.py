@@ -55,11 +55,17 @@ class ImportInstanceTests(EutesterTestCase):
         self.setup_parser(testname='import_instance_tests',
                               description='Runs tests against import instance'
                                           'conversion tasks',
-                              emi=False)
+                              emi=False,
+                              instance_user=False)
 
         self.parser.add_argument('--url',
                                  help='URL containing remote image to create '
                                       'import instance task from',
+                                 default=None)
+
+        self.parser.add_argument('--instance-user', dest='instance_user',
+                                 help='Username used for ssh or winrm login. '
+                                      'Defaults; Linux:"root", Windows:"Administrator"',
                                  default=None)
         self.parser.add_argument('--workerip',dest='worker_machine',
                                  help='The ip/hostname of the machine that the '
@@ -170,9 +176,19 @@ class ImportInstanceTests(EutesterTestCase):
                 raise ArgumentError(None,'Required URL not provided')
             else:
                 self.url = self.args.url
-
+        self.imagelocation = None
         self.args.worker_password = self.args.worker_password or self.args.password
         self.args.worker_keypath = self.args.worker_keypath or self.args.keypair
+        # Format platform case sensitive arg.
+        if str(self.args.platform).upper().strip() == "WINDOWS":
+            self.args.platform = "Windows"
+        elif str(self.args.platform).upper().strip() == "LINUX":
+            self.args.platform = "Linux"
+        if self.args.instance_user is None:
+            if self.args.platform == "Windows":
+                self.args.instance_user = 'Administrator'
+            else:
+                self.args.instance_user = 'root'
         self.latest_task_dict = None
         #Create an ImageUtils helper from the arguments provided in this self...
         self.img_utils = self.do_with_args(ImageUtils)
@@ -212,6 +228,12 @@ class ImportInstanceTests(EutesterTestCase):
         #authorize group for ssh and icmp
         tester.authorize_group(self.group)
         tester.authorize_group(self.group, protocol='icmp', port='-1')
+        if self.args.platform == 'Windows':
+            tester.authorize_group(self.group, protocol='tcp', port='3389')
+            tester.authorize_group(self.group, protocol='tcp', port='80')
+            tester.authorize_group(self.group, protocol='tcp', port='443')
+            tester.authorize_group(self.group, protocol='tcp', port='5985')
+            tester.authorize_group(self.group, protocol='tcp', port='5986')
         return self.group
 
     def get_keypair(self):
@@ -265,7 +287,12 @@ class ImportInstanceTests(EutesterTestCase):
     def get_import_bucket_to_use(self, bucketname=None):
         bucketname = bucketname or self.args.bucketname
         if not bucketname:
-            bucketname = 'import_instance_test_bucket'
+            if self.imagelocation or self.url:
+                location = self.imagelocation or self.url
+                image_name = os.path.basename(location)[0:15]
+            else:
+                image_name = str(self.args.platform or 'test')
+            bucketname = 'eutester_import_' + str(image_name)
         self.bucket = self.tester.s3.create_bucket(bucketname).name
 
     def test1_basic_create_import_instance(self,
@@ -339,8 +366,13 @@ class ImportInstanceTests(EutesterTestCase):
             username = self.args.instance_user
             euinst = tester.convert_instance_to_euisntance(instance=inst,
                                                            keypair=self.keypair,
-                                                           username=username)
+                                                           username=username,
+                                                           auto_connect=False)
             tester.monitor_euinstances_to_running(euinst)
+            if euinst.platform == 'windows':
+                euinst.connect_to_instance(wait_for_boot=180, timeout=300)
+            else:
+                euinst.connect_to_instance()
         else:
             raise RuntimeError('Instance:"{0}" not found from task:"{1}"'
                             .format(task.instanceid, task.id))
@@ -363,6 +395,26 @@ class ImportInstanceTests(EutesterTestCase):
         params = self.latest_task_dict['params']
         task = self.latest_task_dict['task']
         return self.validate_params_against_task(params=params, task=task)
+
+    def test3_make_image_public(self):
+        if not self.latest_task_dict:
+            raise RuntimeError('Dict for latest task not found to validate?')
+        task = self.latest_task_dict['task']
+        emi = self.tester.get_emi(emi=task.image_id)
+        emi.set_launch_permissions(group_names=['all'])
+
+    def test4_tag_image(self):
+        if not self.latest_task_dict:
+            raise RuntimeError('Dict for latest task not found to validate?')
+        task = self.latest_task_dict['task']
+        emi = self.tester.get_emi(emi=task.image_id)
+        try:
+            if self.url:
+                emi.add_tag('source', value=(str(self.url)))
+            emi.add_tag('eutester-created', value="import-instance-test")
+        except Exception, te:
+            self.debug('Could not add tags to image:' + str(emi.id) +
+                       ", err:" + str(te))
 
     def validate_params_against_task(self, params, task):
         assert isinstance(params, types.DictionaryType)
@@ -496,7 +548,9 @@ if __name__ == "__main__":
         list = testcase.args.tests.splitlines(',')
     else:
         list = ['test1_basic_create_import_instance',
-                'test2_validate_params_against_task']
+                'test2_validate_params_against_task',
+                'test3_make_image_public',
+                'test4_tag_image']
 
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
