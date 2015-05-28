@@ -54,6 +54,7 @@ from eutester import eulogger
 from eutester.taggedresource import TaggedResource
 from boto.ec2.instance import InstanceState
 from boto.ec2.networkinterface import NetworkInterface
+from boto.exception import EC2ResponseError
 from random import randint
 import eutester.sshconnection as sshconnection
 from eutester.sshconnection import CommandExitCodeException
@@ -1887,7 +1888,11 @@ class EuInstance(Instance, TaggedResource):
                             ", after elapsed:" + str(elapsed))
         if check_vols:
             for volume in self.attached_vols:
-                volume.update
+                try:
+                    volume.update()
+                except EC2ResponseError as ER:
+                    if ER.status == 400 and ER.error_code == 'InvalidVolume.NotFound':
+                        volume.status = 'deleted'
                 if volume.status != 'in-use':
                     raise Exception(str(self.id) + ', Volume ' + str(volume.id) + ':' +
                                     str(volume.status) +
@@ -1909,7 +1914,11 @@ class EuInstance(Instance, TaggedResource):
         self.debug(self.id+" Attempting to start instance...")
         if checkvolstatus:
             for volume in self.attached_vols:
-                volume.update
+                try:
+                    volume.update()
+                except EC2ResponseError as ER:
+                    if ER.status == 400 and ER.error_code == 'InvalidVolume.NotFound':
+                        volume.status = 'deleted'
                 if checkvolstatus:
                     if volume.status != 'in-use':
                         raise Exception(str(self.id) + ', Volume ' + str(volume.id) + ':' +

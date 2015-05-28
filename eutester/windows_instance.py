@@ -56,6 +56,7 @@ from eutester.euinstance import EuInstance
 from eutester.taggedresource import TaggedResource
 from boto.ec2.instance import InstanceState
 from boto.ec2.networkinterface import NetworkInterface
+from boto.exception import EC2ResponseError
 from random import randint
 from datetime import datetime
 from prettytable import PrettyTable
@@ -1729,7 +1730,11 @@ class WinInstance(EuInstance, TaggedResource):
         :param volume: volume obj.
         :returns boolean
         '''
-        volume.update()
+        try:
+            volume.update()
+        except EC2ResponseError as ER:
+            if ER.status == 400 and ER.error_code == 'InvalidVolume.NotFound':
+                volume.status = 'deleted'
         if hasattr(volume, 'attach_data') and volume.attach_data and (volume.attach_data.instance_id == self.id):
             self.debug('Volume:' + str(volume.id) + " is attached to this instance: " + str(self.id) + " per cloud perspective")
             return True
@@ -1952,7 +1957,11 @@ class WinInstance(EuInstance, TaggedResource):
                             ", after elapsed:" + str(elapsed))
         if check_vols:
             for volume in self.attached_vols:
-                volume.update
+                try:
+                    volume.update()
+                except EC2ResponseError as ER:
+                    if ER.status == 400 and ER.error_code == 'InvalidVolume.NotFound':
+                        volume.status = 'deleted'
                 if volume.status != 'in-use':
                     raise Exception(str(self.id) + ', Volume ' +
                                     str(volume.id) + ':' + str(volume.status)
@@ -1981,7 +1990,11 @@ class WinInstance(EuInstance, TaggedResource):
         self.debug(self.id+" Attempting to start instance...")
         if checkvolstatus:
             for volume in self.attached_vols:
-                volume.update
+                try:
+                    volume.update()
+                except EC2ResponseError as ER:
+                    if ER.status == 400 and ER.error_code == 'InvalidVolume.NotFound':
+                        volume.status = 'deleted'
                 if checkvolstatus:
                     if volume.status != 'in-use':
                         raise Exception(str(self.id) + ', Volume ' + str(volume.id) + ':' + str(volume.status)

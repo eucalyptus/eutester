@@ -40,6 +40,7 @@ from eutester import euinstance, Eutester
 from eutester.eutestcase import EutesterTestCase
 from eucaops import ec2ops
 from eutester.eutestcase import TestColor
+from boto.exception import EC2ResponseError
 
 class TestZone():
     def __init__(self, partition):
@@ -281,7 +282,7 @@ class EbsTestSuite(EutesterTestCase):
                 instance.terminate_and_verify(verify_vols=True,timeout=timeout)
                 zone.instances.remove(instance)
 
-    def negative_attach_in_use_volume_in_zones(self,zonelist=None,timeout=480):
+    def negative_attach_in_use_volume_in_zones(self, zonelist=None, timeout=480):
         """
         Description:
                     Iterates though zones and attempts to attach already attached volumes to instances within each zone.  
@@ -497,7 +498,11 @@ class EbsTestSuite(EutesterTestCase):
                 elapsed = 0
                 volume.delete()
                 while (volume.status != "deleted") and (elapsed < timeout):
-                    volume.update()
+                    try:
+                        volume.update()
+                    except EC2ResponseError as ER:
+                        if ER.status == 400 and ER.error_code == 'InvalidVolume.NotFound':
+                             volume.status = 'deleted'
                     elapsed = int(time.time()-start)
                 if volume.status != "deleted":
                     self.debug("failed to delete volume:"+str(volume.id))
@@ -993,7 +998,11 @@ class EbsTestSuite(EutesterTestCase):
                 start = time.time()
                 elapsed = 0
                 while ( volume.status == "deleted") and (elapsed < 100 ):
-                    volume.update()
+                    try:
+                        volume.update()
+                    except EC2ResponseError as ER:
+                        if ER.status == 400 and ER.error_code == 'InvalidVolume.NotFound':
+                            volume.status = 'deleted'
                     elapsed = int(time.time()- start)
                     self.debug("Waiting for volume:"+str(volume)+" to delete. elapsed:"+str(elapsed))
                     time.sleep(5)

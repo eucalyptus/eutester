@@ -1490,7 +1490,7 @@ disable_root: false"""
                     volumes = self.ec2.get_all_volumes([volume.id])
                 except EC2ResponseError as ER:
                     if ER.status == 400 and ER.error_code == 'InvalidVolume.NotFound':
-                        self.status = 'deleted'
+                        volumes = []
                 if len(volumes) == 1:
                     volume = volumes[0]
                     #previous_status = volume.status
@@ -1520,12 +1520,12 @@ disable_root: false"""
                     volumes = self.ec2.get_all_volumes([volume.id])
                 except EC2ResponseError as ER:
                     if ER.status == 400 and ER.error_code == 'InvalidVolume.NotFound':
-                        volume.status = 'deleted'
+                        volumes = []
                 if len(volumes) == 1:
                     volume = volumes[0]
                 elif len(volumes) == 0:
                     vollist.remove(volume)
-                    self.debug("Volume no longer found")
+                    self.debug("{0}: Volume no longer found".format(volume.id))
                     continue
                 self.debug(str(volume) + " in " + volume.status)
                 if volume and volume.status == "deleted" and volume in vollist:
