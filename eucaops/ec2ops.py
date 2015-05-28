@@ -1478,7 +1478,11 @@ disable_root: false"""
                 self.debug( "Sending delete for volume: " +  str(volume.id))
                 if volume in self.test_resources['volumes']:
                     self.test_resources['volumes'].remove(volume)
-                volumes = self.ec2.get_all_volumes([volume.id])
+                try:
+                    volumes = self.ec2.get_all_volumes([volume.id])
+                except EC2ResponseError as ER:
+                    if ER.status == 400 and ER.error_code == 'InvalidVolume.NotFound':
+                        self.status = 'deleted'
                 if len(volumes) == 1:
                     volume = volumes[0]
                     #previous_status = volume.status
@@ -1504,7 +1508,11 @@ disable_root: false"""
         elapsed = 0
         while vollist and elapsed < timeout:
             for volume in vollist:
-                volumes = self.ec2.get_all_volumes([volume.id])
+                try:
+                    volumes = self.ec2.get_all_volumes([volume.id])
+                except EC2ResponseError as ER:
+                    if ER.status == 400 and ER.error_code == 'InvalidVolume.NotFound':
+                        volume.status = 'deleted'
                 if len(volumes) == 1:
                     volume = volumes[0]
                 elif len(volumes) == 0:
@@ -1512,7 +1520,7 @@ disable_root: false"""
                     self.debug("Volume no longer found")
                     continue
                 self.debug(str(volume) + " in " + volume.status)
-                if volume and volume.status == "deleted"and volume in vollist:
+                if volume and volume.status == "deleted" and volume in vollist:
                     vollist.remove(volume)
                     if volume in self.test_resources['volumes']:
                         self.test_resources['volumes'].remove(volume)
