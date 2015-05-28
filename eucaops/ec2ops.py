@@ -1347,7 +1347,11 @@ disable_root: false"""
                 self.debug("object not of type EuVolume. Found type:"+str(type(volume)))
                 volume = EuVolume.make_euvol_from_vol(volume=volume, tester=self)
             else:
-                volume.update()
+                try:
+                    volume.update()
+                except EC2ResponseError as ER:
+                    if ER.status == 400 and ER.error_code == 'InvalidVolume.NotFound':
+                        volume.status = 'deleted'
             euvolumes.append(volume)
         if not euvolumes:
             return
@@ -1428,7 +1432,11 @@ disable_root: false"""
         start = time.time()
         elapsed = 0
         volume_id = volume.id
-        volume.update()
+        try:
+            volume.update()
+        except EC2ResponseError as ER:
+            if ER.status == 400 and ER.error_code == 'InvalidVolume.NotFound':
+                volume.status = 'deleted'
         while elapsed < timeout:
             try:
                 chk_volume = self.get_volume(volume_id=volume_id)
@@ -1652,7 +1660,11 @@ disable_root: false"""
         :rtype: integer
         :returns: The number of seconds elapsed since this volume was created.
         """
-        volume.update()
+        try:
+            volume.update()
+        except EC2ResponseError as ER:
+            if ER.status == 400 and ER.error_code == 'InvalidVolume.NotFound':
+                volume.status = 'deleted'
         #get timestamp from attach_data
         create_time = cls.get_datetime_from_resource_string(volume.create_time)
         #return the elapsed time in seconds
