@@ -111,7 +111,11 @@ from eutester.eutestcase import EutesterTestCase
 from eutester.eutestcase import SkipTestException
 from eutester.euinstance import EuInstance
 from boto.ec2.instance import Instance
-from eutester.sshconnection import CommandExitCodeException, SshConnection
+from eutester.sshconnection import (
+    CommandExitCodeException,
+    CommandTimeoutException,
+    SshConnection
+)
 import socket
 import json
 import time
@@ -1281,10 +1285,20 @@ class Net_Tests(EutesterTestCase):
             instance1.sys('chmod 0600 testkey.pem')
             testphrase = "pubsamezone_test_from_instance1_{0}".format(instance1.id)
             testfile = 'testfile.txt'
-            instance1.sys("ssh -o StrictHostKeyChecking=no -i testkey.pem root@{0} "
-                          "\'echo {1} > {2}; hostname; ifconfig; pwd; ls\'"
-                          .format(instance2.ip_address, testphrase, testfile), code=0, timeout=10)
-            instance2.sys('hostname; ifconfig; pwd; ls; cat {0} | grep {1}'.format(testfile, testphrase), code=0)
+            retry = 2
+            for x in xrange(0, retry):
+                try:
+                    instance1.sys("ssh -o StrictHostKeyChecking=no -i testkey.pem root@{0} "
+                                  "\'echo {1} > {2}; hostname; ifconfig; pwd; ls\'"
+                                  .format(instance2.ip_address, testphrase, testfile),
+                                  code=0, timeout=20)
+                    break
+                except (CommandTimeoutException, CommandExitCodeException) as CE:
+                    self.status('First attempt to connect between instances failed:' + str(CE))
+                    if x:
+                        raise
+            instance2.sys('hostname; ifconfig; pwd; ls; cat {0} | grep {1}'
+                          .format(testfile, testphrase), code=0)
 
     def test10_ssh_between_instances_same_group_public_different_zone(self):
         """
