@@ -472,9 +472,9 @@ class Net_Tests(EutesterTestCase):
         else:
             args += 'u'
         if ipv4:
-            args += '4'
+            args += 'A inet'
         else:
-            args += '6'
+            args += 'A inet6'
         use = instance.sys("netstat " + str(args) + " | awk '$6 ==" +
                            ' "LISTEN" && $4 ~ ".' + str(port) +
                            '"' + "' | grep LISTEN")
@@ -993,14 +993,22 @@ class Net_Tests(EutesterTestCase):
             try:
                 instance1.sys('which netcat', code=0)
             except CommandExitCodeException:
-                try:
-                    instance1.sys('apt-get install netcat -y', code=0)
-                except CommandExitCodeException:
+                got_it = False
+                for pkg in ['nc', 'netcat']:
                     try:
-                        instance1.sys('yum install netcat -y', code=0)
-                    except:
-                        self.debug('could install netcat on this instance')
-                        raise
+                        instance1.sys('apt-get install {0} -y'.format(pkg), code=0)
+                        got_it = True
+                        break
+                    except CommandExitCodeException:
+                        try:
+                            instance1.sys('yum install {0} -y'.format(pkg), code=0)
+                            got_it = True
+                            break
+                        except CommandExitCodeException:
+                            self.debug('could install "{0}" on this instance'.format(pkg))
+                if not got_it:
+                        raise RuntimeError('Could not install netcat on: {0}'.format(instance1))
+                instance1.netcat_name = pkg
 
             #make sure we have an open port range to play with...
             if start is None:
@@ -1044,9 +1052,11 @@ class Net_Tests(EutesterTestCase):
                                              x))
                 # start up netcat, sleep to allow nohup to work before quiting
                 # the shell...
-                instance1.sys('killall -9 netcat 2> /dev/null', timeout=5)
-                instance1.sys('{' + ' ( nohup netcat -k -l {0} > {1} ) &  sleep 1; '
-                              .format(x, test_file) + '}', code=0, timeout=5)
+                instance1.sys('killall -9 {0} 2> /dev/null'.format(instance1.netcat_name),
+                              timeout=5)
+                instance1.sys('{' + ' ( nohup {0} -k -l {1} > {2} ) &  sleep 1; '
+                              .format(instance1.netcat_name, x, test_file) + '}',
+                              code=0, timeout=5)
                 # attempt to connect socket at instance/port and send the
                 # test_string...
                 time.sleep(2) #Allow listener to setup...
@@ -1071,7 +1081,8 @@ class Net_Tests(EutesterTestCase):
                             tester.show_security_group(self.group1)
                             try:
                                 self.debug('Getting netcat info from instance...')
-                                instance1.sys('ps aux | grep netcat', timeout=10)
+                                instance1.sys('ps aux | grep {0}'.format(instance1.netcat_name),
+                                              timeout=10)
                             except CommandExitCodeException:
                                 pass
                             self.debug('Iptables info from Euca network component '
@@ -1125,9 +1136,11 @@ class Net_Tests(EutesterTestCase):
                                              src_cidr_ip,
                                              x))
                 try:
-                    instance1.sys('killall -9 netcat 2> /dev/null', timeout=5)
-                    instance1.sys('{' + ' ( nohup netcat -k -l {0} > {1} ) &  sleep 1; '
-                              .format(x, test_file) + '}', code=0, timeout=5)
+                    instance1.sys('killall -9 {0} 2> /dev/null'.format(instance1.netcat_name),
+                                  timeout=5)
+                    instance1.sys('{' + ' ( nohup {0} -k -l {1} > {2} ) &  sleep 1; '
+                              .format(instance1.netcat_name, x, test_file) + '}',
+                                  code=0, timeout=5)
                     tester.test_port_status(ip=instance1.ip_address,
                                             port=x,
                                             tcp=True,
