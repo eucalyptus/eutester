@@ -938,8 +938,6 @@ class Net_Tests(EutesterTestCase):
                                   + " ' uname -a'", code=0)
                     self.debug('Ssh between instances passed')
 
-
-
     def test7_add_and_revoke_tcp_port_range(self,
                                             start=None,
                                             src_cidr_ip='0.0.0.0/0',
@@ -978,6 +976,7 @@ class Net_Tests(EutesterTestCase):
             # adjusted for windows access
             # 'does_instance_sec_group_allow' will set tester.ec2_source_ip to the
             # ip the local machine uses to communicate with the instance.
+            instance1.netcat_name = 'netcat'
             if src_cidr_ip is None:
                 if not tester.does_instance_sec_group_allow(instance=instance1,
                                                             protocol='tcp',
@@ -991,7 +990,7 @@ class Net_Tests(EutesterTestCase):
                                             cidr_ip=src_cidr_ip,
                                             port=22)
             try:
-                instance1.sys('which netcat', code=0)
+                instance1.sys('which {0}'.format(instance1.netcat_name), code=0)
             except CommandExitCodeException:
                 got_it = False
                 for pkg in ['nc', 'netcat']:
@@ -1195,6 +1194,11 @@ class Net_Tests(EutesterTestCase):
         self.tester.show_security_group(self.group1)
         self.status('Test ssh access from this testing machine to each instance in group1...')
         for instance in self.group1_instances:
+            try:
+                instance.printself()
+                tester.does_instance_sec_group_allow(instance=instance, protocol='tcp', port=22)
+            except:
+                pass
             instance.connect_to_instance()
             instance.sys('echo "reset ssh worked"', code=0)
         self.status('Authorizing group2 access to group1...')
