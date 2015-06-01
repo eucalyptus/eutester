@@ -1194,6 +1194,11 @@ class Net_Tests(EutesterTestCase):
         self.tester.show_security_group(self.group1)
         self.status('Test ssh access from this testing machine to each instance in group1...')
         for instance in self.group1_instances:
+            try:
+                instance.printself()
+                tester.does_instance_sec_group_allow(instance=instance, protocol='tcp', port=22)
+            except:
+                pass
             instance.connect_to_instance()
             instance.sys('echo "reset ssh worked"', code=0)
         self.status('Authorizing group2 access to group1...')
