@@ -1311,7 +1311,8 @@ class Net_Tests(EutesterTestCase):
                                   code=0, timeout=20)
                     break
                 except (CommandTimeoutException, CommandExitCodeException) as CE:
-                    self.status('First attempt to connect between instances failed:' + str(CE))
+                    self.status('Attempt #{0} to connect between instances failed:"{1}'
+                                .format(x, str(CE)))
                     if x:
                         raise
             instance2.sys('hostname; ifconfig; pwd; ls; cat {0} | grep {1}'
