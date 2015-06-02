@@ -34,7 +34,7 @@ class SOSreport(EutesterTestCase):
             if machine.distro.name is "vmware":
                 continue
             machine.install("sos")
-            machine.install("eucalyptus-sos-plugins")
+            machine.sys("yum install -y --nogpg eucalyptus-sos-plugins")
 
     def Run(self):
         error_msg = ""
