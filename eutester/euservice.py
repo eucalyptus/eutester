@@ -92,7 +92,7 @@ class log_marker:
 
 
 
-class Eunode:
+class Eunode(object):
     def __init__(self,
                  tester,
                  hostname,
@@ -147,14 +147,14 @@ class Eunode:
             print(msg)
 
 
-    def sys(self, cmd, code=None):
+    def sys(self, cmd, code=None, verbose=True):
         """
         Command to be executed via ssh on remote eunode machine
         :param cmd: string - command to be executed
         :param code: int - optional exit code used to determine pass fail of remote command.
         :return: list of lines from remote cmd's output
         """
-        return self.machine.sys(cmd,code=code)
+        return self.machine.sys(cmd,code=code, verbose=verbose)
 
     def stop(self):
         self.sys(self.tester.eucapath + "/etc/init.d/eucalyptus-nc stop", code=0)

@@ -4283,7 +4283,7 @@ disable_root: false"""
 
 
 
-    def get_console_output(self, instance):
+    def get_console_output(self, instance, print_debug=True):
         """
         Retrieve console output from an instance
 
@@ -4295,7 +4295,8 @@ disable_root: false"""
         if isinstance(instance, Instance):
             instance = instance.id
         output = self.ec2.get_console_output(instance_id=instance)
-        self.debug(output.output)
+        if print_debug:
+            self.debug(output.output)
         return output
 
 
