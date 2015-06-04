@@ -541,9 +541,39 @@ class EuInstance(Instance, TaggedResource):
         except Exception as AE:
             self.log.debug('Failed to get arp info:' + str(AE))
         try:
-            self.tester.get_console_output(self)
+            output = self.tester.get_console_output(self)
+            if output:
+                ci_lines = []
+                if not isinstance(output, list):
+                    output = str(output).splitlines()
+                for line in output:
+                    if re.search('(ci-info)*(cloud-init)*', line):
+                        ci_lines.append(line)
+                self.debug('Console "ci-info" Output:\n{0}'.format("\n".join(ci_lines)))
         except Exception as CE:
             self.log.debug('Failed to get console output:' + str(CE))
+        try:
+            node = None
+            node = self.tester.service_manager.get_all_node_controllers(instance_id=self.id)
+        except:
+            pass
+        try:
+            nodes = self.tester.service_manager.get_all_node_controllers()
+            if node and node in nodes:
+                nodes.remove(node)
+            self.debug('Ip addrs for node:"{0}" which is hosting:"{1}"...'
+                       .format(node.hostname, self.id))
+            node.sys('ip addr list')
+            for node in nodes:
+                try:
+                    self.debug('Node "NOT" hosting instance:"{0}"...'.format(self.id))
+                    node.sys('ip addr list')
+                except:
+                    pass
+        except:
+            pass
+
+
 
     def has_sudo(self):
         try:
