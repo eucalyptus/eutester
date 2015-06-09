@@ -530,6 +530,10 @@ class EuInstance(Instance, TaggedResource):
         # - iptables info
         # - route info
         # - instance xml
+        self.debug(self.tester.markup('Dumping Connection debug info for Instance:"{0}, pub:{1}, '
+                                      'priv:{2}"'
+                                      .format(self.id, self.ip_address, self.private_ip_address),
+                   markups=[1, 4, 95]))
         try:
             # Show local ARP info...
             arp_out = "\nLocal ARP cache for instance ip: " \
@@ -578,8 +582,8 @@ class EuInstance(Instance, TaggedResource):
             self.debug('Failed gathering ip addr list debug info from all nodes, err: "{0}"'
                        .format(IPL))
             pass
-
-
+        self.debug(self.tester.markup('DONE Dumping Connection debug info for Instance:"{0}"'
+                                      .format(self.id), markups=[1, 4, 95]))
 
     def has_sudo(self):
         try:
