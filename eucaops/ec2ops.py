@@ -2171,6 +2171,7 @@ disable_root: false"""
             for snap in check_state_list:
                 try:
                     snap_id = self.get_snapshot(snap.id)
+                    snap.update()
                     if not snap_id:
                         self.debug("Get Snapshot not found, assuming it's "
                                    "already deleted:" + str(snap.id))
@@ -2183,7 +2184,6 @@ disable_root: false"""
                                    ", err:" + str(ec2e))
                         delete_me.append(snap)
                 else:
-                    snap.update()
                     self.debug("Checking snapshot:" + str(snap.id) +
                                " status:"+str(snap.status))
                     for v_state in valid_delete_states:
@@ -2234,6 +2234,7 @@ disable_root: false"""
             waiting_list = copy.copy(delete_me)
             for snapshot in waiting_list:
                 try:
+                    get_snapshot = None
                     snapshot.update()
                     get_snapshot = self.ec2.get_all_snapshots(
                         snapshot_ids=[snapshot.id])
