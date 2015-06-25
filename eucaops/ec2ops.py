@@ -5182,7 +5182,10 @@ disable_root: false"""
                 ## Debian based Linux
                 instance.sys("apt-get update", code=0)
                 instance.sys("apt-get install -y apache2", code=0)
-                instance.sys("echo \"" + instance.id +"\" > /var/www/" + filename)
+                try:
+                    instance.sys("echo \"" + instance.id +"\" > /var/www/html/" + filename, code=0)
+                except:
+                    instance.sys("echo \"" + instance.id +"\" > /var/www/" + filename, code=0)
                 instance.sys("echo \"CookieTracking on\" >> /etc/apache2/apache2.conf")
                 instance.sys("echo CookieName " + cookiename +" >> /etc/apache2/apache2.conf")
             except eutester.sshconnection.CommandExitCodeException, e:
