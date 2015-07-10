@@ -5167,7 +5167,6 @@ disable_root: false"""
         if error_msg:
             raise Exception(error_msg)
 
-
     def create_web_servers(self, keypair, group, zone, port=80, count=2, image=None, filename="test-file", cookiename="test-cookie"):
         if not image:
             image = self.get_emi(root_device_type="instance-store", not_location="loadbalancer", not_platform="windows")
@@ -5182,12 +5181,14 @@ disable_root: false"""
                 ## Debian based Linux
                 instance.sys("apt-get update", code=0)
                 instance.sys("apt-get install -y apache2", code=0)
+                instance.sys("ln -s /etc/apache2/mods-available/usertrack.load /etc/apache2/mods-enabled/usertrack.load")
                 try:
                     instance.sys("echo \"" + instance.id +"\" > /var/www/html/" + filename, code=0)
                 except:
                     instance.sys("echo \"" + instance.id +"\" > /var/www/" + filename, code=0)
                 instance.sys("echo \"CookieTracking on\" >> /etc/apache2/apache2.conf")
                 instance.sys("echo CookieName " + cookiename +" >> /etc/apache2/apache2.conf")
+                instance.sys("service apache2 restart")
             except eutester.sshconnection.CommandExitCodeException, e:
                 ### Enterprise Linux
                 instance.sys("yum install -y httpd", code=0)
