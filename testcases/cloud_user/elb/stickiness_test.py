@@ -129,8 +129,10 @@ class StickinessBasics(EutesterTestCase):
         self.tester.set_lb_policy(lb_name=self.load_balancer.name, lb_port=80, policy_name=acpolicy)
         self.debug("Testing App Cookie stickiness")
         responses = self.GenerateRequests()
-        host = responses[0]
-        for response in responses:
+        # since we use the same cookie name on the backing elb instances, the first contacts with the ELB can possibly
+        # result in hitting different back ends. After the first 2 calls they should all ony go to 1 backend.
+        host = responses[2]
+        for response in responses[2:]:
             if response != host:
                 raise Exception(
                     "Expected same response due to app cookie stickiness policy. Got initial response: " + host +
