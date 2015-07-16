@@ -5188,7 +5188,19 @@ disable_root: false"""
                     instance.sys("echo \"" + instance.id +"\" > /var/www/" + filename, code=0)
                 instance.sys("echo \"CookieTracking on\" >> /etc/apache2/apache2.conf")
                 instance.sys("echo CookieName " + cookiename +" >> /etc/apache2/apache2.conf")
-                instance.sys("service apache2 restart")
+                '''
+                SSH connects stdin, stdout and stderr of the remote shell to your local terminal, so you can interact
+                with the command that's running on the remote side. As a side effect, it will keep running until these
+                connections have been closed, which happens only when the remote command and all its children (!) have
+                terminated (because the children, which is what "&" starts, inherit std* from their parent process
+                and keep it open).
+
+                via https://serverfault.com/questions/36419/using-ssh-to-remotely-start-a-process
+
+                And I have stolen a little bit extra from our dd wrapper. see:
+                https://github.com/bigschwan/adminapi/blob/master/cloud_utils/system_utils/machine.py#L1090
+                '''
+                instance.sys("nohup service apache2 restart  2>  /tmp/apacheRestart & echo $! && sleep 2")
             except eutester.sshconnection.CommandExitCodeException, e:
                 ### Enterprise Linux
                 instance.sys("yum install -y httpd", code=0)
