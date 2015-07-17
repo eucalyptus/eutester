@@ -301,7 +301,7 @@ class ELBops(Eutester):
 
     def add_lb_listener(self, lb_name, listener):
         self.debug("adding listener")
-        self.elb.create_load_balancer_listeners(name=lb_name, listeners=[listener])
+        self.elb.create_load_balancer_listeners(name=lb_name, complex_listeners=[listener])
 
     def remove_lb_listener(self, lb_name, port):
         self.debug("removing listener")
