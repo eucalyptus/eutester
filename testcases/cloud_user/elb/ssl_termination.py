@@ -41,7 +41,6 @@ import random
 
 class SSLTermination(EutesterTestCase):
     def __init__(self, extra_args= None):
-        self.cert_name = "elb-ssl-test-"+str(int(time.time()))
         self.setuptestcase()
         self.setup_parser()
         if extra_args:
@@ -51,44 +50,63 @@ class SSLTermination(EutesterTestCase):
 
         # Setup basic eutester object
         if self.args.region:
-            self.tester = ELBops( credpath=self.args.credpath, region=self.args.region)
+            self.tester = ELBops(credpath=self.args.credpath, region=self.args.region)
         else:
-            self.tester = Eucaops( credpath=self.args.credpath, config_file=self.args.config,password=self.args.password)
-        self.tester.poll_count = 120
+            self.tester = Eucaops(credpath=self.args.credpath, config_file=self.args.config,password=self.args.password)
 
-        ### Add and authorize a group for the instance
-        self.group = self.tester.add_group(group_name="group-" + str(int(time.time())))
+        # test resource hash
+        self.test_hash = str(int(time.time()))
+
+        # test resources dir
+        self.resource_dir = "./testcases/cloud_user/elb/test_data"
+
+        # User data file
+        self.user_data = self.resource_dir+"/webserver_user_data.sh"
+
+        # Add and authorize a group for the instances
+        self.group = self.tester.add_group(group_name="group-" + self.test_hash)
         self.tester.authorize_group_by_name(group_name=self.group.name)
-        self.tester.authorize_group_by_name(group_name=self.group.name, port=-1, protocol="icmp" )
-        ### Generate a keypair for the instance
-        self.keypair = self.tester.add_keypair("keypair-" + str(int(time.time())))
+        self.tester.authorize_group_by_name(group_name=self.group.name, port=-1, protocol="icmp")
+        self.tester.authorize_group_by_name(group_name=self.group.name, port=80, protocol="tcp")
+        self.tester.authorize_group_by_name(group_name=self.group.name, port=443, protocol="tcp")
+
+        # Generate a keypair for the instances
+        self.keypair = self.tester.add_keypair("keypair-" + self.test_hash)
         self.keypath = '%s/%s.pem' % (os.curdir, self.keypair.name)
 
-        ### Get an image
+        # Get an image
         self.image = self.args.emi
         if not self.image:
             self.image = self.tester.get_emi()
 
-        ### Populate available zones
+        # Populate available zones
         zones = self.tester.ec2.get_all_zones()
         self.zone = random.choice(zones).name
 
+        # create base load balancer
         self.load_balancer_port = 80
-
-        (self.web_servers, self.filename) = self.tester.create_web_servers(keypair=self.keypair,
-                                                                          group=self.group,
-                                                                          zone=self.zone,
-                                                                          port=self.load_balancer_port,
-                                                                          filename='instance-name',
-                                                                          image=self.image,
-                                                                          count=1)
-
         self.load_balancer = self.tester.create_load_balancer(zones=[self.zone],
-                                                              name="test-" + str(int(time.time())),
+                                                              name="elb-" + self.test_hash,
                                                               load_balancer_port=self.load_balancer_port)
         assert isinstance(self.load_balancer, LoadBalancer)
-        self.tester.register_lb_instances(self.load_balancer.name,
-                                          self.web_servers.instances)
+
+        # create autoscaling group of webservers that register to the load balancer
+        self.count = 1
+        (self.web_servers) = self.tester.create_as_webservers(name=self.test_hash,
+                                                              keypair=self.keypair.name,
+                                                              group=self.group.name,
+                                                              zone=self.zone,
+                                                              image=self.image.id,
+                                                              count=self.count,
+                                                              user_data=self.user_data,
+                                                              load_balancer=self.load_balancer.name)
+
+        # web servers scaling group
+        self.asg = self.tester.describe_as_group(name="asg-"+self.test_hash)
+
+        # wait until scaling instances are InService with the load balancer before continuing - 5 min timeout
+        assert self.tester.wait_for_result(self.tester.wait_for_lb_instances, True, timeout=300,
+                                           lb=self.load_balancer.name, number=self.count)
 
     def ssl_termination(self):
         """
@@ -98,27 +116,50 @@ class SSLTermination(EutesterTestCase):
         """
         self.debug("ELB SSl test")
 
-        """get ELB ip info and setup url"""
+        # get ELB ip info and setup url (also verifies DNS lookup)
         dns = self.tester.service_manager.get_enabled_dns()
         lb_ip = dns.resolve(self.load_balancer.dns_name)
         lb_url = "https://{0}/instance-name".format(lb_ip)
 
-        """upload server certificate"""
-        self.tester.add_server_cert(cert_name=self.cert_name)
+        # upload server certificate
+        frontend_cert_name = "elb-ssl-test-"+str(int(time.time()))
+        self.tester.add_server_cert(cert_name=frontend_cert_name)
 
-        """create a new listener on HTTPS port 443 and remove listener on port 80"""
-        cert_arn = self.tester.get_server_cert(self.cert_name).arn
-        listener = (443, 80, "HTTPS", "HTTP", cert_arn)
-        self.tester.add_lb_listener(lb_name=self.load_balancer.name, listener=listener)
+        # remove listener on port 80 and create a new listener on HTTPS port 443
         self.tester.remove_lb_listener(lb_name=self.load_balancer.name, port=self.load_balancer_port)
+        self.update_listener(lb_port=443,
+                             lb_protocol="HTTPS",
+                             instance_port=80,
+                             instance_protocol="HTTP",
+                             cert=frontend_cert_name)
 
-        """perform https requests to LB"""
+        # perform https requests to LB
         self.tester.sleep(10)
         self.tester.generate_http_requests(url=lb_url, count=10)
 
+    def update_listener(self, lb_port, lb_protocol, instance_port, instance_protocol, cert):
+        self.debug("Configuring ELB listener")
+        # get the arn of the certificate
+        cert_arn = self.tester.get_server_cert(cert).arn
+
+        # remove any existing listener on the port and create a new listener with backend authentication
+        self.debug("Attempting to remove any listener already existing for port " + str(lb_port))
+        self.tester.remove_lb_listener(lb_name=self.load_balancer.name, port=lb_port)
+        listener = (lb_port, instance_port, lb_protocol, instance_protocol, cert_arn)
+        self.tester.add_lb_listener(lb_name=self.load_balancer.name, listener=listener)
+        self.debug("Listener: " + str(self.tester.describe_lb_listeners(self.load_balancer.name)))
+        return
+
     def clean_method(self):
-        self.tester.delete_server_cert(self.cert_name)
-        self.tester.cleanup_artifacts()
+        try:
+            self.tester.delete_all_server_certs()
+        except:
+            self.debug("Delete certificates went awry")
+        finally:
+            self.tester.cleanup_artifacts()
+            if self.tester.test_resources["security-groups"]:
+                for group in self.tester.test_resources["security-groups"]:
+                    self.tester.wait_for_result(self.tester.gracefully_delete_group, True, timeout=60, group=group)
 
 if __name__ == "__main__":
     testcase = SSLTermination()

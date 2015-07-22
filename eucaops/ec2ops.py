@@ -467,6 +467,15 @@ disable_root: false"""
             return False
         return True
 
+    def gracefully_delete_group(self, group):
+        try:
+            if group.delete():
+                self.debug("Deleted group " + group.name)
+                return True
+        except EC2ResponseError, ec2re:
+            self.debug(ec2re.error_message)
+            return False
+
     def check_group(self, group_name):
         """
         Check if a group with group_name exists in the system

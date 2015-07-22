@@ -38,6 +38,7 @@ from boto.ec2.autoscale import Tag
 from boto.ec2.autoscale import LaunchConfiguration
 from boto.ec2.autoscale import AutoScalingGroup
 from boto.ec2.regioninfo import RegionInfo
+from boto.exception import BotoServerError
 
 from eutester import Eutester
 
@@ -150,6 +151,8 @@ class ASops(Eutester):
         self.test_resources["keypairs"] = []
         self.test_resources["security-groups"] = []
         self.test_resources["images"] = []
+        self.test_resources["launch-configurations"] = []
+        self.test_resources["auto-scaling-groups"] = []
 
     def create_launch_config(self, name, image_id, key_name=None, security_groups=None, user_data=None,
                              instance_type=None, kernel_id=None, ramdisk_id=None, block_device_mappings=None,
@@ -177,6 +180,8 @@ class ASops(Eutester):
         self.autoscale.create_launch_configuration(lc)
         if len(self.describe_launch_config([name])) != 1:
             raise Exception('Launch Config not created')
+        launch_config = self.describe_launch_config([name])[0]
+        self.test_resources["launch-configurations"].append(launch_config)
         self.debug('SUCCESS: Created Launch Config: ' +
                    self.describe_launch_config([name])[0].name)
 
@@ -226,7 +231,7 @@ class ASops(Eutester):
         self.autoscale.create_auto_scaling_group(as_group)
 
         as_group = self.describe_as_group(group_name)
-
+        self.test_resources["auto-scaling-groups"].append(as_group)
         self.debug("SUCCESS: Created Auto Scaling Group: " + as_group.name)
         return as_group
 
@@ -249,13 +254,13 @@ class ASops(Eutester):
     def delete_as_group(self, name=None, force=None):
         self.debug("Deleting Auto Scaling Group: " + name)
         self.debug("Forcing: " + str(force))
-        # self.autoscale.set_desired_capacity(group_name=names, desired_capacity=0)
         self.autoscale.delete_auto_scaling_group(name=name, force_delete=force)
         try:
             self.describe_as_group([name])
             raise Exception('Auto Scaling Group not deleted')
         except:
             self.debug('SUCCESS: Deleted Auto Scaling Group: ' + name)
+        return
 
     def create_as_policy(self, name, adjustment_type, scaling_adjustment, as_name, cooldown=None):
         """
@@ -293,19 +298,11 @@ class ASops(Eutester):
         self.debug("Deleting Policy: " + policy_name + " from group: " + autoscale_group)
         self.autoscale.delete_policy(policy_name=policy_name, autoscale_group=autoscale_group)
 
-    def cleanup_autoscaling_groups(self, asg_list = None):
-        """
-        This will attempt to delete auto scaling groups listed in test_resources['auto-scaling-groups']
-        """
-        ### clear all ASGs
-        if not asg_list:
-            auto_scaling_groups=self.test_resources['auto-scaling-groups']
-        else:
-            auto_scaling_groups = asg_list
-        for asg in auto_scaling_groups:
-            self.debug("Found Auto Scaling Group: " + asg.name)
-            self.delete_as_group(name=asg.name, force=True)
-
+    def delete_autoscaling_groups(self, auto_scaling_groups):
+            for asg in auto_scaling_groups:
+                self.debug("Found Auto Scaling Group: " + asg.name)
+                self.wait_for_result(self.gracefully_delete_auto_scaling_group, True, asg=asg)
+                self.test_resources['auto-scaling-groups'].remove(asg)
 
 
     def delete_all_autoscaling_groups(self):
@@ -321,18 +318,12 @@ class ASops(Eutester):
             for asg in self.describe_as_group():
                 self.debug("Found Auto Scaling Group: " + asg.name)
 
-    def cleanup_launch_configs(self):
-        """
-        This will attempt to delete launch configs listed in test_resources['launch-configurations']
-        """
-        launch_configurations=self.test_resources['launch-configurations']
+    def delete_launch_configs(self, launch_configs):
+        for lc in launch_configs:
+            self.debug("Found Launch Config:" + lc.name)
+            self.delete_launch_config(lc.name)
+            self.test_resources['launch-configurations'].remove(lc)
 
-        if not launch_configurations:
-            self.debug("Launch configuration list is empty")
-        else:
-            for lc in launch_configurations:
-                self.debug("Found Launch Config:" + lc.name)
-                self.delete_launch_config(lc.name)
 
     def delete_all_launch_configs(self):
         ### clear all LCs
@@ -426,7 +417,7 @@ class ASops(Eutester):
         asg = self.describe_as_group(group_name)
         instances = asg.instances
         if not instances:
-            self.debug("No instances in ASG")
+            self.debug("No instances in scaling group: " + group_name)
             return False
         if len(asg.instances) != number:
             self.debug("Instances not yet allocated")
@@ -440,3 +431,32 @@ class ASops(Eutester):
             else:
                 self.debug("Instance: " + str(instance) + " now running")
         return True
+
+    def gracefully_delete_auto_scaling_group(self, asg=None):
+            assert isinstance(asg, AutoScalingGroup)
+            try:
+                self.delete_as_group(name=asg.name, force=True)
+
+            except BotoServerError, e:
+                if e.status == 400 and e.reason == "ScalingActivityInProgress":
+                    return False
+            return True
+
+    def create_as_webservers(self, name, keypair, group, zone, user_data=None, count=2, image=None, load_balancer=None):
+        lc_name = "lc-"+name
+        asg_name = "asg-"+name
+        self.create_launch_config(name=lc_name,
+                                  image_id=image,
+                                  instance_type="t1.micro",
+                                  key_name=keypair,
+                                  security_groups=[group],
+                                  user_data=open(user_data).read(),
+                                  instance_monitoring=True)
+        self.create_as_group(group_name=asg_name,
+                             launch_config=lc_name,
+                             availability_zones=[zone],
+                             min_size=0,
+                             max_size=5,
+                             desired_capacity=count,
+                             load_balancers=[load_balancer])
+        return
