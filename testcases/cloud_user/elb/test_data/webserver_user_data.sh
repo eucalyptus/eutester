@@ -52,7 +52,7 @@ F3cpgmrg8e2tnHu6YAjkjQHbqSsUvxuG1R2fXj5uF+Q7ug==
 -----END CERTIFICATE-----' > /etc/ssl/certs/ssl-cert-snakeoil.pem
 
   # enable ssl
-  ln -s  /etc/apache2/sites-available/default-ssl /etc/apache2/sites-enabled/000-ssl
+  a2ensite default-ssl
   a2enmod ssl
 
   # create a target that returns the instance name
