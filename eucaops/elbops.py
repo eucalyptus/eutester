@@ -40,7 +40,7 @@ import cookielib
 from eutester import Eutester
 from boto.ec2.elb.listener import Listener
 from boto.ec2.elb.healthcheck import HealthCheck
-from os.path import join, abspath
+from os.path import join
 
 ELBRegionData = {
     'us-east-1': 'elasticloadbalancing.us-east-1.amazonaws.com',
@@ -165,11 +165,11 @@ class ELBops(Eutester):
         self.debug(
             "Creating ELB Listener for protocol " + protocol + " and port " + str(load_balancer_port) + "->" + str(
                 instance_port))
-        listner = Listener(load_balancer=load_balancer,
+        listener = Listener(load_balancer=load_balancer,
                            protocol=protocol,
                            load_balancer_port=load_balancer_port,
                            instance_port=instance_port)
-        return listner
+        return listener
 
     def create_healthcheck(self, target="HTTP:80/instance-name", interval=5, timeout=2, healthy_threshold=2,
                            unhealthy_threshold=10):
@@ -290,6 +290,12 @@ class ELBops(Eutester):
                                              lb_port=lb_port,
                                              policies=policy_name)
 
+    def set_lb_policy_for_back_end_server(self, lb_name, instance_port, policy_name=None):
+        self.debug("Set backend server policy " + str(policy_name) + " for " + lb_name)
+        self.elb.set_lb_policies_of_backend_server(lb_name=lb_name,
+                                                   instance_port=instance_port,
+                                                   policies=policy_name)
+
     def delete_lb_policy(self, lb_name, policy_name):
         self.debug("Deleting lb policy " + str(policy_name) + " from " + str(lb_name))
         self.elb.delete_lb_policy(lb_name=lb_name,
@@ -356,3 +362,13 @@ class ELBops(Eutester):
             else:
                 self.debug("Instance: " + instance.instance_id + " now " + instance.state)
         return True
+
+    def update_listener(self, lb, lb_port, lb_protocol, instance_port, instance_protocol, cert_arn=None):
+        self.debug("Configuring ELB listener")
+        # remove any existing listener on the port and create a new listener with backend authentication
+        self.debug("Attempting to remove any listener already existing for port " + str(lb_port))
+        self.remove_lb_listener(lb_name=lb.name, port=lb_port)
+        listener = (lb_port, instance_port, lb_protocol, instance_protocol, cert_arn)
+        self.add_lb_listener(lb_name=lb.name, listener=listener)
+        self.debug("Listener: " + str(self.describe_lb_listeners(lb.name)))
+        return

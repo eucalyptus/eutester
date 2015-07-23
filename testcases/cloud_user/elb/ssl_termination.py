@@ -32,7 +32,9 @@
 #
 
 import os
+from os.path import join
 import time
+from urllib2 import HTTPError
 from eucaops import Eucaops
 from eucaops import ELBops
 from boto.ec2.elb import LoadBalancer
@@ -110,7 +112,7 @@ class SSLTermination(EutesterTestCase):
 
     def ssl_termination(self):
         """
-        This will test ELB with HTTPS listener.
+        This will test ELB with HTTPS listener for the front end elb connection.
 
         @raise Exception:
         """
@@ -125,30 +127,199 @@ class SSLTermination(EutesterTestCase):
         frontend_cert_name = "elb-ssl-test-"+str(int(time.time()))
         self.tester.add_server_cert(cert_name=frontend_cert_name)
 
-        # remove listener on port 80 and create a new listener on HTTPS port 443
-        self.tester.remove_lb_listener(lb_name=self.load_balancer.name, port=self.load_balancer_port)
-        self.update_listener(lb_port=443,
-                             lb_protocol="HTTPS",
-                             instance_port=80,
-                             instance_protocol="HTTP",
-                             cert=frontend_cert_name)
+        # remove any existing listeners
+        self.remove_all_listeners(lb_name=self.load_balancer.name)
+
+        # get the arn of the certificate
+        frontend_cert_arn = self.tester.get_server_cert(frontend_cert_name).arn
+
+        self.tester.update_listener(lb=self.load_balancer,
+                                    lb_port=443,
+                                    lb_protocol="HTTPS",
+                                    instance_port=80,
+                                    instance_protocol="HTTP",
+                                    cert_arn=frontend_cert_arn)
 
         # perform https requests to LB
         self.tester.sleep(10)
         self.tester.generate_http_requests(url=lb_url, count=10)
 
-    def update_listener(self, lb_port, lb_protocol, instance_port, instance_protocol, cert):
-        self.debug("Configuring ELB listener")
-        # get the arn of the certificate
-        cert_arn = self.tester.get_server_cert(cert).arn
+    def end_to_end_ssl_termination(self):
+        """
+        Test for
+        https://eucalyptus.atlassian.net/browse/EUCA-10477
 
-        # remove any existing listener on the port and create a new listener with backend authentication
-        self.debug("Attempting to remove any listener already existing for port " + str(lb_port))
-        self.tester.remove_lb_listener(lb_name=self.load_balancer.name, port=lb_port)
-        listener = (lb_port, instance_port, lb_protocol, instance_protocol, cert_arn)
-        self.tester.add_lb_listener(lb_name=self.load_balancer.name, listener=listener)
-        self.debug("Listener: " + str(self.tester.describe_lb_listeners(self.load_balancer.name)))
-        return
+        This will test ELB end to end encryption.
+
+        @raise Exception:
+        """
+        self.debug("ELB End To End SSl test")
+
+        # get ELB url
+        lb_url = "https://"+self.load_balancer.dns_name+"/instance-name"
+
+        # upload server certificate
+        frontend_cert_name = "elb-e2e-ssl-test-"+str(int(time.time()))
+        self.tester.add_server_cert(cert_name=frontend_cert_name)
+
+        # get the arn of the certificate
+        frontend_cert_arn = self.tester.get_server_cert(frontend_cert_name).arn
+
+        # remove any existing listeners
+        self.remove_all_listeners(lb_name=self.load_balancer.name)
+
+        # update listener
+        self.tester.update_listener(lb=self.load_balancer,
+                                    lb_port=443,
+                                    lb_protocol="HTTPS",
+                                    instance_port=443,
+                                    instance_protocol="HTTPS",
+                                    cert_arn=frontend_cert_arn)
+
+        # ssl certfile
+        cert_file = "ssl_server_certs_basics.crt"
+
+        # PublicKeyPolicy
+        cert_body = open(join(self.resource_dir, cert_file)).read()
+        publickey_policy_attributes = {'PublicKey': cert_body}
+        publickey_policy_name = "snakecert"
+        self.tester.create_lb_policy(lb_name=self.load_balancer.name,
+                                     policy_name=publickey_policy_name,
+                                     policy_type="PublicKeyPolicyType",
+                                     policy_attributes=publickey_policy_attributes)
+
+        # BackendServerAuthenticationPolicy
+        backend_policy_attributes = {'PublicKeyPolicyName': publickey_policy_name}
+        backend_policy_name = "snakeauth"
+        self.tester.create_lb_policy(lb_name=self.load_balancer.name,
+                                     policy_name=backend_policy_name,
+                                     policy_type="BackendServerAuthenticationPolicyType",
+                                     policy_attributes=backend_policy_attributes)
+
+        self.tester.set_lb_policy_for_back_end_server(lb_name=self.load_balancer.name,
+                                                      instance_port=443,
+                                                      policy_name=backend_policy_name)
+
+        # perform https requests to LB
+        self.tester.sleep(15)
+        self.tester.generate_http_requests(url=lb_url, count=10)
+
+    def only_back_end_authentication(self):
+        """
+        Test for
+        https://eucalyptus.atlassian.net/browse/EUCA-10477
+
+        This will test HTTP connection to ELB front end with back end encryption of traffic to the registered instances.
+
+        @raise Exception:
+        """
+        self.debug("ELB Back End SSl test")
+
+        # get ELB url
+        lb_url = "http://"+self.load_balancer.dns_name+"/instance-name"
+
+        # remove any existing listeners
+        self.remove_all_listeners(lb_name=self.load_balancer.name)
+
+        # update listener
+        self.tester.update_listener(lb=self.load_balancer,
+                                    lb_port=80,
+                                    lb_protocol="HTTP",
+                                    instance_port=443,
+                                    instance_protocol="HTTPS")
+
+        # ssl certfile
+        cert_file = "ssl_server_certs_basics.crt"
+
+        # PublicKeyPolicy
+        cert_body = open(join(self.resource_dir, cert_file)).read()
+        publickey_policy_attributes = {'PublicKey': cert_body}
+        publickey_policy_name = "snakecert-backend-only"
+        self.tester.create_lb_policy(lb_name=self.load_balancer.name,
+                                     policy_name=publickey_policy_name,
+                                     policy_type="PublicKeyPolicyType",
+                                     policy_attributes=publickey_policy_attributes)
+
+        # BackendServerAuthenticationPolicy
+        backend_policy_attributes = {'PublicKeyPolicyName': publickey_policy_name}
+        backend_policy_name = "snakeauth-back-end-only"
+        self.tester.create_lb_policy(lb_name=self.load_balancer.name,
+                                     policy_name=backend_policy_name,
+                                     policy_type="BackendServerAuthenticationPolicyType",
+                                     policy_attributes=backend_policy_attributes)
+
+        self.tester.set_lb_policy_for_back_end_server(lb_name=self.load_balancer.name,
+                                                      instance_port=443,
+                                                      policy_name=backend_policy_name)
+
+        # perform https requests to LB
+        self.tester.sleep(15)
+        self.tester.generate_http_requests(url=lb_url, count=10)
+
+    def invalid_backend_authentication(self):
+        """
+        Test for
+        https://eucalyptus.atlassian.net/browse/EUCA-10477
+
+        This is a negative test for ELB backend auth. Policy has invalid cert for backend authentication. We expect an
+        HTTP 503 error returned
+
+        @raise Exception:
+        """
+        self.debug("ELB Back End SSl Negative test")
+
+        # get ELB url
+        lb_url = "http://"+self.load_balancer.dns_name+"/instance-name"
+
+        # remove any existing listeners
+        self.remove_all_listeners(lb_name=self.load_balancer.name)
+
+        # update listener
+        self.tester.update_listener(lb=self.load_balancer,
+                                    lb_port=80,
+                                    lb_protocol="HTTP",
+                                    instance_port=443,
+                                    instance_protocol="HTTPS")
+
+        # ssl certfile
+        cert_file = "bad_cert.crt"
+
+        # PublicKeyPolicy
+        cert_body = open(join(self.resource_dir, cert_file)).read()
+        publickey_policy_attributes = {'PublicKey': cert_body}
+        publickey_policy_name = "snakecertBAD"
+        self.tester.create_lb_policy(lb_name=self.load_balancer.name,
+                                     policy_name=publickey_policy_name,
+                                     policy_type="PublicKeyPolicyType",
+                                     policy_attributes=publickey_policy_attributes)
+
+        # BackendServerAuthenticationPolicy
+        backend_policy_attributes = {'PublicKeyPolicyName': publickey_policy_name}
+        backend_policy_name = "snakeauthBAD"
+        self.tester.create_lb_policy(lb_name=self.load_balancer.name,
+                                     policy_name=backend_policy_name,
+                                     policy_type="BackendServerAuthenticationPolicyType",
+                                     policy_attributes=backend_policy_attributes)
+
+        self.tester.set_lb_policy_for_back_end_server(lb_name=self.load_balancer.name,
+                                                      instance_port=443,
+                                                      policy_name=backend_policy_name)
+
+        # perform https requests to LB
+        self.tester.sleep(15)
+        got_expected_error = False
+        try:
+            self.tester.generate_http_requests(url=lb_url, count=10)
+        except HTTPError as e:
+            self.debug("PASSED, received expected error: " + str(e.getcode()) + " " + e.msg)
+            got_expected_error = True
+
+        assert got_expected_error, "Did not get expected HTTP 503 ERROR response"
+
+    def remove_all_listeners(self, lb_name):
+        for listener in self.tester.describe_lb_listeners(lb_name):
+            self.debug("Found existing listener: " + str(listener))
+            self.tester.remove_lb_listener(lb_name=lb_name, port=listener.load_balancer_port)
 
     def clean_method(self):
         try:
@@ -165,7 +336,8 @@ if __name__ == "__main__":
     testcase = SSLTermination()
     ### Use the list of tests passed from config/command line to determine what subset of tests to run
     ### or use a predefined list
-    list = testcase.args.tests or ["ssl_termination"]
+    list = testcase.args.tests or ["ssl_termination", "end_to_end_ssl_termination", "only_back_end_authentication",
+                                   "invalid_backend_authentication"]
 
     ### Convert test suite methods to Eutester UnitTest objects
     unit_list = [ ]
