@@ -300,11 +300,11 @@ class ELBops(Eutester):
         return lbs[0].policies
 
     def add_lb_listener(self, lb_name, listener):
-        self.debug("adding listener")
+        self.debug("adding new listener")
         self.elb.create_load_balancer_listeners(name=lb_name, complex_listeners=[listener])
 
     def remove_lb_listener(self, lb_name, port):
-        self.debug("removing listener")
+        self.debug("removing listener for port " + str(port))
         self.elb.delete_load_balancer_listeners(name=lb_name, ports=[port])
 
     def add_server_cert(self, cert_name, cert_dir="./testcases/cloud_user/elb/test_data", 
@@ -313,3 +313,46 @@ class ELBops(Eutester):
         cert_body = open(join(cert_dir, cert_file)).read()
         cert_key = open(join(cert_dir, key_file)).read()
         self.upload_server_cert(cert_name=cert_name, cert_body=cert_body, private_key=cert_key)
+
+    def describe_lb_healthchecks(self, lb):
+        lbs = self.elb.get_all_load_balancers(load_balancer_names=[lb])
+        return lbs[0].health_check
+
+    def describe_lb_listeners(self, lb):
+        lbs = self.elb.get_all_load_balancers(load_balancer_names=[lb])
+        return lbs[0].listeners
+
+    def describe_lb_instances(self, lb):
+        lbs = self.elb.get_all_load_balancers(load_balancer_names=[lb])
+        return lbs[0].instances
+
+    def describe_lb_instance_health(self, lb):
+        instances = self.elb.describe_instance_health(load_balancer_name=lb)
+        return instances
+
+    def wait_for_lb_instances(self, lb, number=1):
+        '''
+        This will wait for all instances registered to a load balancer to actuall become registered (this could take
+        time in such as the case of autoscaling group registering scaling instances to an elb) This will also wait for
+        registered instances to become InService with the load balancer. After this passes, the load balancer *should*
+        be functional.
+
+        :param lb: load balancer to check
+        :param number: how many instances should be registered to the load balancer
+        :return: True when all instances are InService
+        '''
+        self.debug("Waiting for " + str(number) + " instances to be healthy")
+        instances = self.describe_lb_instance_health(lb)
+        if not instances:
+            self.debug("No instances registered with load balancer: " + lb)
+            return False
+        if len(instances) != number:
+            self.debug("Not all instances registered yet")
+            return False
+        for instance in instances:
+            if instance.state != "InService":
+                self.debug("Instance: " + instance.instance_id + " still in " + instance.state + " state")
+                return False
+            else:
+                self.debug("Instance: " + instance.instance_id + " now " + instance.state)
+        return True
