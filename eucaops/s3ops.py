@@ -132,8 +132,8 @@ class S3ops(Eutester):
                 bucket = self.s3.create_bucket(bucket_name)
             except self.s3.provider.storage_create_error, e:
                 raise S3opsException( 'Bucket (%s) is owned by another user' % bucket_name )
-            if not self.get_bucket_by_name(bucket.name):
-                raise S3opsException("Bucket could not be found after creation")
+            # will raise an exception if bucket is not found
+            bucket = self.s3.get_bucket(bucket_name)
         self.test_resources["buckets"].append(bucket)
         self.debug("Created bucket: " + bucket_name)
         return bucket
