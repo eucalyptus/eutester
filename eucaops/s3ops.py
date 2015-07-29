@@ -112,7 +112,7 @@ class S3ops(Eutester):
         s3_path = "/".join(s3_url.split("/")[3:])
         return s3_path
 
-    def create_bucket(self,bucket_name):
+    def create_bucket(self, bucket_name):
         """
         Create a bucket.  If the bucket already exists and you have
         access to it, no error will be returned by AWS.
@@ -124,18 +124,24 @@ class S3ops(Eutester):
         # bucket exists and we have access to it or None.
         bucket = self.get_bucket_by_name(bucket_name)
         if bucket:
-            self.debug( 'Bucket (%s) already exists' % bucket_name )
+            self.debug('Bucket (%s) already exists' % bucket_name)
         else:
                 # Let's try to create the bucket.  This will fail if
                 # the bucket has already been created by someone else.
             try:
                 bucket = self.s3.create_bucket(bucket_name)
             except self.s3.provider.storage_create_error, e:
-                raise S3opsException( 'Bucket (%s) is owned by another user' % bucket_name )
-            # will raise an exception if bucket is not found
-            bucket = self.s3.get_bucket(bucket_name)
+                raise S3opsException('Bucket (%s) is owned by another user' % bucket_name)
+
+            def does_bucket_exist():
+                try:
+                    self.s3.get_bucket(bucket_name)
+                    return True
+                except S3ResponseError:
+                    return False
+            self.wait_for_result(does_bucket_exist, True, timeout=120, poll_wait=5)
+            self.debug("Created bucket: " + bucket_name)
         self.test_resources["buckets"].append(bucket)
-        self.debug("Created bucket: " + bucket_name)
         return bucket
     
     def delete_bucket(self, bucket):
@@ -152,8 +158,14 @@ class S3ops(Eutester):
         except self.s3.provider.storage_create_error, e:
                 raise S3opsException( 'Bucket (%s) is owned by another user' % bucket_name )
         ### Check if the bucket still exists
-        if self.get_bucket_by_name(bucket_name):
-            raise S3opsException('Bucket (%s) still exists after delete operation'  % bucket_name )
+
+        def does_bucket_exist():
+            try:
+                self.s3.get_bucket(bucket_name)
+                return True
+            except S3ResponseError:
+                return False
+        self.wait_for_result(does_bucket_exist, False, timeout=120, poll_wait=5)
     
     def get_bucket_by_name(self, bucket_name):
         """
@@ -565,5 +577,3 @@ class S3ops(Eutester):
             self.debug("\n{0}\n".format(str(main_table)))
         else:
             return main_table
-
-
