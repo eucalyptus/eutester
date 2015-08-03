@@ -858,6 +858,14 @@ class ObjectTestSuite(EutesterTestCase):
         #Test PUT
         httpMethod = 'PUT'
         presigned_url = ''
+
+        def key_exists():
+            found_key = self.test_bucket.get_key('presignedurltestobject')
+            if found_key:
+                return True
+            else:
+                return False
+
         try:
             self.tester.info('Port = ' + str(self.tester.s3.port))
             presigned_url = self.tester.s3.generate_url(expires_in=oneMinute, method=httpMethod, bucket=self.test_bucket_name, key=objectKey1, query_auth=True, headers=test_headers, response_headers=None, expires_in_absolute=False)
@@ -868,6 +876,8 @@ class ObjectTestSuite(EutesterTestCase):
                 raise Exception('Error response from server: ' + str(response.status_code))
         except Exception as e:
             self.fail("Failed on pre-signed put with url: " + presigned_url + ' with: ' + e.message)
+
+        self.tester.wait_for_result(key_exists, True, timeout=60, poll_wait=5)
 
         #Test GET
         httpMethod = 'GET'
