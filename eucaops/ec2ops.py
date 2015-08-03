@@ -37,6 +37,7 @@ import socket
 import hmac
 import hashlib
 import base64
+import json
 import time
 import types
 import traceback
@@ -910,6 +911,27 @@ disable_root: false"""
             printmethod( "\n" + str(ret_buf) + "\n")
         else:
             return ret_buf
+
+    def get_backend_vpc_gateways(self):
+        propname = 'cloud.network.network_configuration'
+        prop = self.property_manager.get_property_by_string(propname)
+        if not prop:
+            raise ValueError('get_backend_vpc_gateways: Property not found: {0}'.format(propname))
+        value = json.loads(prop.value)
+        try:
+            midocfg = value['Mido']
+            # Note these property is expected to change to a list in the near future but
+            # the format is not yet known...
+            gwhost = midocfg['GatewayHost']
+            if gwhost:
+                return [str(gwhost)]
+            else:
+                return None
+        except KeyError:
+            self.debug('get_backend_vpc_gateways: VPC cloud config not found in '
+                       'network_configuration')
+        return None
+
 
     def terminate_single_instance(self, instance, timeout=300 ):
         """

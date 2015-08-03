@@ -118,7 +118,8 @@ class TaggingBasics(EutesterTestCase):
         This case was developed to exercise tagging of an instance resource
         """
         self.volume = self.tester.create_volume(zone=self.zone)
-        tags = { u'name': 'volume-tag-test', u'location' : 'datacenter'}
+        tag_id = 'volume-tag-test-' + str(int(time.time()))
+        tags = { u'name': tag_id, u'location' : 'datacenter'}
         self.volume.create_tags(tags)
 
         ### Test Filtering
@@ -146,10 +147,22 @@ class TaggingBasics(EutesterTestCase):
         self.tester.delete_volume(filter_test_volume_1)
         self.tester.delete_volume(filter_test_volume_2)
 
-        if len(size_match) != 2:
-            raise Exception("Non-tag Filtering of volumes by size: " + str(len(size_match))  + " expected: 2")
+        for sz_vol in size_match:
+            if sz_vol.size != vol_size:
+                try:
+                    self.debug('Size filter returned the following volumes:{0}'.format(size_match))
+                except:
+                    pass
+                raise Exception('Filtering of volumes by size:"{0}" returned a volume of '
+                                'wrong size. vol:{1}, size:{2}'
+                                .format(vol_size, sz_vol, sz_vol.size ))
         if len(id_match) != 1:
-            raise Exception("Non-tag Filtering of volumes by id: " + str(len(id_match))  + " expected: 1")
+            try:
+                self.debug('Id filter returned the following volumes:{0}'.format(id_match))
+            except:
+                pass
+            raise Exception("Filtering of volumes by id:'{0}' returned {1} volumes, expected 1"
+                            .format(self.volume.id, len(id_match or [])))
 
         ### Test Deletion
         self.volume.delete_tags(tags)
