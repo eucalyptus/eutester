@@ -3233,7 +3233,7 @@ disable_root: false"""
                   clean_on_fail=True,
                   monitor_to_running = True,
                   return_reservation=False,
-                  assign_public_ip=True,
+                  auto_create_eni=True,
                   network_interfaces=None,
                   timeout=480,
                   boto_debug_level=2,
@@ -3260,9 +3260,10 @@ disable_root: false"""
         :param monitor_to_running: boolean flag whether or not to monitor instances to a
                                   running state
         :pararm block_device_map: block device map obj
-        :param assign_public_ip: flag to indicate whether this method should auto create and assign
+        :param auto_create_eni: flag to indicate whether this method should auto create and assign
                         an elastic network interfaces to associate w/ a public ip. This
-                        is only used for non-default VPC and subnets.
+                        is only used for VPC where subnets default behavior does not match the
+                        requested private/public addressing.
         :param network_interfaces: A boto NetworkInterfaceCollection type obj.
                        This obj contains a list of existing boto NetworkInterface
                        or NetworkInterfaceSpecification objs.
@@ -3282,7 +3283,7 @@ disable_root: false"""
                 raise Exception("emi is None. run_instance could not auto find an emi?")
             if not user_data:
                 user_data = self.enable_root_user_data
-            if private_addressing is True:
+            if private_addressing is True and not self.vpc_supported():
                 addressing_type = "private"
                 connect = False
             else:
@@ -3334,7 +3335,9 @@ disable_root: false"""
                                   'contain this info')
                 secgroups = None
                 subnet_id = None
-            elif assign_public_ip:
+            elif auto_create_eni:
+                #  Attempts to create an ENI only if the ip request does not match the default
+                # behavior of the subnet running these instanes.
                 subnet = None
                 if subnet_id:
                     # No network_interfaces were provided, check to see if this subnet already
@@ -3361,13 +3364,13 @@ disable_root: false"""
                     # Default subnets or subnets whos attributes have been modified to
                     # provide a public ip should automatically provide an ENI and public ip
                     # association, skip if this is true...
-                    if not subnet.mapPublicIpOnLaunch:
-                        eni = NetworkInterfaceSpecification(device_index=0,
-                                                            subnet_id=subnet_id,
-                                                            groups=secgroups,
-                                                            delete_on_termination=True,
-                                                            description='eutester_auto_assigned',
-                                                            associate_public_ip_address=True)
+                    if subnet.mapPublicIpOnLaunch != private_addressing:
+                        eni = NetworkInterfaceSpecification(
+                            device_index=0, subnet_id=subnet_id,
+                            groups=secgroups,
+                            delete_on_termination=True,
+                            description='eutester_auto_assigned',
+                            associate_public_ip_address=(not private_addressing))
                         network_interfaces = NetworkInterfaceCollection(eni)
                         # sec group  and subnet info is now passed via the eni(s),
                         # not to the run request
