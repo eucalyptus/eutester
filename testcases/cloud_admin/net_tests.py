@@ -426,7 +426,7 @@ class Net_Tests(EutesterTestCase):
                                       instance.private_ip_address,
                                       proxy_machine.hostname))
                 self.errormsg('Ping failure. Fetching network debug info from internal host...')
-                proxy_machine.machine.dump_netfail_info(ip=instance.private_ip_address,
+                proxy_machine.dump_netfail_info(ip=instance.private_ip_address,
                                                         net_namespace=net_namespace)
                 self.errormsg('Done dumping network debug info from the "internal euca proxy host" @ '
                               '{0} '
