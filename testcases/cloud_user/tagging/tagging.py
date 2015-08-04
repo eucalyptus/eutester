@@ -123,14 +123,17 @@ class TaggingBasics(EutesterTestCase):
         self.volume.create_tags(tags)
 
         ### Test Filtering
-        tag_filter = { u'tag:name': u'volume-tag-test'}
+        tag_filter = { u'tag:name': tag_id}
         volumes = self.tester.ec2.get_all_volumes(filters=tag_filter)
         if len(volumes) is 0:
-            raise Exception('Filter for instances returned no results ' + str(volumes))
+            raise Exception('Filter for volumes returned no results:"{0}", filter:"{1}"'
+                            .format(volumes, tag_filter))
         if len(volumes) is not 1:
-            raise Exception('Filter for instances returned too many results ' + str(volumes))
+            raise Exception('Filter for volumes returned too many results:"{0}", filter:"{1}"'
+                            .format(volumes, tag_filter))
         if volumes[0].id != self.volume.id:
-            raise Exception('Wrong volume ID returned after filtering ' + str(volumes) )
+            raise Exception('Wrong volume ID returned after filtering:"{0}", filter:"{1}"'
+                            .format(volumes, tag_filter))
 
         ### Test non-tag Filtering
         ### Filters can be found here, most will be tested manually, but a spot check should be added
