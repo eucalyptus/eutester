@@ -287,19 +287,23 @@ class Net_Tests(EutesterTestCase):
     def is_vpc_mode(self):
         return 'VPC' in self.tester.get_supported_platforms()
 
-    def get_proxy_machine(self, instance):
+    def get_proxy_machine(self, instance, use_mido_gw=False):
         if self.is_vpc_mode():
-            gw_hosts = self.tester.get_backend_vpc_gateways()
-            if not gw_hosts:
-                raise ValueError('No backend VPC gateways were found?')
+            if use_mido_gw:
+                gw_hosts = self.tester.get_backend_vpc_gateways()
+                if not gw_hosts:
+                    raise ValueError('No backend VPC gateways were found?')
 
-            # pick single gw host and ip for lookup purposes
-            gw_host_ip = self.tester.clc.ssh.get_ipv4_lookup(gw_hosts[0])
-            if not gw_host_ip:
-                raise RuntimeError('Failed to lookup ipv4 address for host:"{0}"'
-                                   .format(gw_hosts[0]))
-            gw_host_ip = gw_host_ip[0]
-            gw_machine = self.tester.get_machine_by_ip(gw_host_ip)
+                # pick single gw host and ip for lookup purposes
+                gw_host_ip = self.tester.clc.ssh.get_ipv4_lookup(gw_hosts[0])
+                if not gw_host_ip:
+                    raise RuntimeError('Failed to lookup ipv4 address for host:"{0}"'
+                                       .format(gw_hosts[0]))
+                gw_host_ip = gw_host_ip[0]
+                gw_machine = self.tester.get_machine_by_ip(gw_host_ip)
+            else:
+                gw_machine = self.tester.clc
+                gw_host_ip = self.tester.clc.hostname
             if not gw_machine:
                 raise ValueError('Failed to lookup vpc backend proxy machine by ip:"{0}"'
                                  .format(gw_host_ip))
