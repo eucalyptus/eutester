@@ -2859,6 +2859,9 @@ disable_root: false"""
 
         :return: boto.ec2.address object allocated
         """
+        if domain and domain != 'vpc':
+            self.logger.log.warn('Valid domain values are "vpc" and "None", got:"{0}'
+                                 .format(domain))
         try:
             self.debug("Allocating an address")
             address = self.ec2.allocate_address(domain=domain)
