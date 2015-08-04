@@ -3108,6 +3108,7 @@ disable_root: false"""
                      monitoring_enabled=False,
                      timeout=600):
         """
+        (Use run_image instead)
         Run instance/s and wait for them to go to the running state
 
         :param image: Image object to use, default is pick the first emi found in the system
@@ -3278,8 +3279,10 @@ disable_root: false"""
         :return: list of euinstances
         """
         reservation = None
+        instances = []
+        addressing_type = None
+        secgroups = None
         try:
-            instances = []
             if not isinstance(image, Image):
                 image = self.get_emi(emi=str(image))
             if image is None:
@@ -3287,18 +3290,15 @@ disable_root: false"""
             if not user_data:
                 user_data = self.enable_root_user_data
             if private_addressing is True:
-                addressing_type = "private"
+                if not self.vpc_supported():
+                    addressing_type = "private"
                 auto_connect = False
-            if self.vpc_supported():
-                addressing_type = None
-
             #In the case a keypair object was passed instead of the keypair name
             if keypair:
                 if isinstance(keypair, KeyPair):
                     keypair = keypair.name
 
             # Format the provided security group arg, and store it for debug purposes.
-            secgroups = None
             if group:
                 secgroups = []
                 if isinstance(group, list):
