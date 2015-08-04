@@ -37,6 +37,7 @@ import socket
 import hmac
 import hashlib
 import base64
+import json
 import time
 import types
 import traceback
@@ -910,6 +911,27 @@ disable_root: false"""
             printmethod( "\n" + str(ret_buf) + "\n")
         else:
             return ret_buf
+
+    def get_backend_vpc_gateways(self):
+        propname = 'cloud.network.network_configuration'
+        prop = self.property_manager.get_property_by_string(propname)
+        if not prop:
+            raise ValueError('get_backend_vpc_gateways: Property not found: {0}'.format(propname))
+        value = json.loads(prop.value)
+        try:
+            midocfg = value['Mido']
+            # Note these property is expected to change to a list in the near future but
+            # the format is not yet known...
+            gwhost = midocfg['GatewayHost']
+            if gwhost:
+                return [str(gwhost)]
+            else:
+                return None
+        except KeyError:
+            self.debug('get_backend_vpc_gateways: VPC cloud config not found in '
+                       'network_configuration')
+        return None
+
 
     def terminate_single_instance(self, instance, timeout=300 ):
         """
@@ -2837,6 +2859,9 @@ disable_root: false"""
 
         :return: boto.ec2.address object allocated
         """
+        if domain and domain != 'vpc':
+            self.logger.log.warn('Valid domain values are "vpc" and "None", got:"{0}'
+                                 .format(domain))
         try:
             self.debug("Allocating an address")
             address = self.ec2.allocate_address(domain=domain)
@@ -2880,7 +2905,7 @@ disable_root: false"""
 
         poll_count = 15
         ### Ensure instance gets correct address
-        while instance.ip_address not in address.public_ip:
+        while not instance.ip_address or str(instance.ip_address) not in address.public_ip:
             if elapsed > timeout:
                 raise Exception('Address ' + str(address) + ' did not associate with instance after:'+str(elapsed)+" seconds")
             self.debug('Instance {0} has IP {1} attached instead of {2}'.format(instance.id, instance.ip_address, address.public_ip) )
@@ -3211,7 +3236,7 @@ disable_root: false"""
                   clean_on_fail=True,
                   monitor_to_running = True,
                   return_reservation=False,
-                  assign_public_ip=True,
+                  auto_create_eni=True,
                   network_interfaces=None,
                   timeout=480,
                   boto_debug_level=2,
@@ -3238,9 +3263,10 @@ disable_root: false"""
         :param monitor_to_running: boolean flag whether or not to monitor instances to a
                                   running state
         :pararm block_device_map: block device map obj
-        :param assign_public_ip: flag to indicate whether this method should auto create and assign
+        :param auto_create_eni: flag to indicate whether this method should auto create and assign
                         an elastic network interfaces to associate w/ a public ip. This
-                        is only used for non-default VPC and subnets.
+                        is only used for VPC where subnets default behavior does not match the
+                        requested private/public addressing.
         :param network_interfaces: A boto NetworkInterfaceCollection type obj.
                        This obj contains a list of existing boto NetworkInterface
                        or NetworkInterfaceSpecification objs.
@@ -3262,8 +3288,8 @@ disable_root: false"""
                 user_data = self.enable_root_user_data
             if private_addressing is True:
                 addressing_type = "private"
-                connect = False
-            else:
+                auto_connect = False
+            if self.vpc_supported():
                 addressing_type = None
 
             #In the case a keypair object was passed instead of the keypair name
@@ -3312,7 +3338,9 @@ disable_root: false"""
                                   'contain this info')
                 secgroups = None
                 subnet_id = None
-            elif assign_public_ip:
+            elif auto_create_eni:
+                #  Attempts to create an ENI only if the ip request does not match the default
+                # behavior of the subnet running these instances.
                 subnet = None
                 if subnet_id:
                     # No network_interfaces were provided, check to see if this subnet already
@@ -3339,13 +3367,13 @@ disable_root: false"""
                     # Default subnets or subnets whos attributes have been modified to
                     # provide a public ip should automatically provide an ENI and public ip
                     # association, skip if this is true...
-                    if not subnet.mapPublicIpOnLaunch:
-                        eni = NetworkInterfaceSpecification(device_index=0,
-                                                            subnet_id=subnet_id,
-                                                            groups=secgroups,
-                                                            delete_on_termination=True,
-                                                            description='eutester_auto_assigned',
-                                                            associate_public_ip_address=True)
+                    if subnet.mapPublicIpOnLaunch == private_addressing:
+                        eni = NetworkInterfaceSpecification(
+                            device_index=0, subnet_id=subnet_id,
+                            groups=secgroups,
+                            delete_on_termination=True,
+                            description='eutester_auto_assigned',
+                            associate_public_ip_address=(not private_addressing))
                         network_interfaces = NetworkInterfaceCollection(eni)
                         # sec group  and subnet info is now passed via the eni(s),
                         # not to the run request

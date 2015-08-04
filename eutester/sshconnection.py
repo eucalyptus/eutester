@@ -709,7 +709,7 @@ class SshConnection():
             #self.debug("Returning ssh connection to: "+ hostname)
         return ssh
 
-    def get_ipv4_lookup(self, hostname, port=22,verbose=False):
+    def get_ipv4_lookup(self, hostname, port=22, verbose=False):
         """
         Do an ipv4 lookup of 'hostname' and return list of any resolved ip addresses
 

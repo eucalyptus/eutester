@@ -114,7 +114,7 @@ from boto.ec2.instance import Instance
 from eutester.sshconnection import (
     CommandExitCodeException,
     CommandTimeoutException,
-    SshConnection
+    SshConnection,
 )
 import socket
 import json
@@ -287,11 +287,27 @@ class Net_Tests(EutesterTestCase):
     def is_vpc_mode(self):
         return 'VPC' in self.tester.get_supported_platforms()
 
-    def get_proxy_machine(self, instance):
+    def get_proxy_machine(self, instance, use_mido_gw=False):
         if self.is_vpc_mode():
-            clc_service = self.tester.service_manager.get_all_cloud_controllers()[0]
-            proxy_machine = copy.copy(clc_service)
-            return proxy_machine
+            if use_mido_gw:
+                gw_hosts = self.tester.get_backend_vpc_gateways()
+                if not gw_hosts:
+                    raise ValueError('No backend VPC gateways were found?')
+
+                # pick single gw host and ip for lookup purposes
+                gw_host_ip = self.tester.clc.ssh.get_ipv4_lookup(gw_hosts[0])
+                if not gw_host_ip:
+                    raise RuntimeError('Failed to lookup ipv4 address for host:"{0}"'
+                                       .format(gw_hosts[0]))
+                gw_host_ip = gw_host_ip[0]
+                gw_machine = self.tester.get_machine_by_ip(gw_host_ip)
+            else:
+                gw_machine = self.tester.clc
+                gw_host_ip = self.tester.clc.hostname
+            if not gw_machine:
+                raise ValueError('Failed to lookup vpc backend proxy machine by ip:"{0}"'
+                                 .format(gw_host_ip))
+            return gw_machine
         prop = self.tester.property_manager.get_property('networkmode',
                                                          'cluster',
                                                          instance.placement)
@@ -311,7 +327,15 @@ class Net_Tests(EutesterTestCase):
         :param ssh_to_instance: boolean. If true will attempt to ssh from clc to instance for each
                                 command.
         """
-        vpc_proxy_ssh = copy.copy(self.tester.clc.ssh)
+        gw_machine = self.get_proxy_machine(instance=instance)
+        self.debug('Using "{0}" as the internal proxy machine for instance:{1}'
+                   .format(gw_machine.hostname, instance))
+        if gw_machine:
+            vpc_proxy_ssh = gw_machine.ssh
+        else:
+            raise ValueError('Could not find eutester machine for ip: "{0}"'
+                             .format(gw_machine.hostname))
+
         if instance.keypath:
             keyname= '{0}_{1}'.format(instance.id, os.path.basename(instance.keypath))
             try:
@@ -321,12 +345,10 @@ class Net_Tests(EutesterTestCase):
         if not hasattr(vpc_proxy_ssh, 'orig_cmd_method'):
             vpc_proxy_ssh.orig_cmd_method = vpc_proxy_ssh.cmd
             def newcmd(cmd, **kwargs):
-                ssh_cmd = 'ip netns {0} ssh -o StrictHostKeyChecking=no -n -i {1} {2}@{3} "{4}"'\
-                    .format(instance.vpc_id,
-                            keyname,
-                            instance.username,
-                            instance.private_ip_address,
-                            cmd)
+                ssh_cmd = ('ip netns {0} ssh -o StrictHostKeyChecking=no -n -i {1} {2}@{3} "{4}"'
+                           .format(instance.vpc_id, keyname, instance.username,
+                                   instance.private_ip_address,
+                                   cmd))
                 return vpc_proxy_ssh.orig_cmd_method(cmd, **kwargs)
             vpc_proxy_ssh.cmd = newcmd
         return vpc_proxy_ssh
@@ -408,7 +430,7 @@ class Net_Tests(EutesterTestCase):
                                       instance.private_ip_address,
                                       proxy_machine.hostname))
                 self.errormsg('Ping failure. Fetching network debug info from internal host...')
-                proxy_machine.machine.dump_netfail_info(ip=instance.private_ip_address,
+                proxy_machine.dump_netfail_info(ip=instance.private_ip_address,
                                                         net_namespace=net_namespace)
                 self.errormsg('Done dumping network debug info from the "internal euca proxy host" @ '
                               '{0} '
@@ -453,7 +475,7 @@ class Net_Tests(EutesterTestCase):
                                                      net_namespace=None):
         assert isinstance(instance, EuInstance)
         try:
-            proxy_machine.machine.ping_check(instance.private_ip_address,
+            proxy_machine.ping_check(instance.private_ip_address,
                                              net_namespace=net_namespace)
             return True
         except Exception, PE:
