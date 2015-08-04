@@ -3283,10 +3283,10 @@ disable_root: false"""
                 raise Exception("emi is None. run_instance could not auto find an emi?")
             if not user_data:
                 user_data = self.enable_root_user_data
-            if private_addressing is True and not self.vpc_supported():
+            if private_addressing is True:
                 addressing_type = "private"
-                connect = False
-            else:
+                auto_connect = False
+            if self.vpc_supported():
                 addressing_type = None
 
             #In the case a keypair object was passed instead of the keypair name
@@ -3337,7 +3337,7 @@ disable_root: false"""
                 subnet_id = None
             elif auto_create_eni:
                 #  Attempts to create an ENI only if the ip request does not match the default
-                # behavior of the subnet running these instanes.
+                # behavior of the subnet running these instances.
                 subnet = None
                 if subnet_id:
                     # No network_interfaces were provided, check to see if this subnet already
@@ -3364,7 +3364,7 @@ disable_root: false"""
                     # Default subnets or subnets whos attributes have been modified to
                     # provide a public ip should automatically provide an ENI and public ip
                     # association, skip if this is true...
-                    if subnet.mapPublicIpOnLaunch != private_addressing:
+                    if subnet.mapPublicIpOnLaunch == private_addressing:
                         eni = NetworkInterfaceSpecification(
                             device_index=0, subnet_id=subnet_id,
                             groups=secgroups,
