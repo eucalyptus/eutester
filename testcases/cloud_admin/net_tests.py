@@ -475,7 +475,7 @@ class Net_Tests(EutesterTestCase):
                                                      net_namespace=None):
         assert isinstance(instance, EuInstance)
         try:
-            proxy_machine.machine.ping_check(instance.private_ip_address,
+            proxy_machine.ping_check(instance.private_ip_address,
                                              net_namespace=net_namespace)
             return True
         except Exception, PE:
