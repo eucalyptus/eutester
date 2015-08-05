@@ -410,7 +410,8 @@ class InstanceBasics(EutesterTestCase):
         if self.reservation:
             for instance in self.reservation.instances:
                 if instance.ip_address == instance.private_ip_address:
-                    self.tester.debug("WARNING: System or Static mode detected, skipping PrivateIPAddressing")
+                    self.tester.debug("WARNING: System or Static mode detected, skipping "
+                                      "PrivateIPAddressing")
                     return self.reservation
             self.tester.terminate_instances(self.reservation)
             self.set_reservation(None)
@@ -424,18 +425,20 @@ class InstanceBasics(EutesterTestCase):
             self.tester.sleep(30)
             instance.update()
             self.debug('Attempting to ping associated IP:"{0}"'.format(address.public_ip))
-            self.assertTrue(self.tester.ping(instance.ip_address), "Could not ping instance with new IP")
+            self.assertTrue(self.tester.ping(instance.ip_address),
+                            "Could not ping instance with new IP")
             address.disassociate()
             self.tester.sleep(30)
             instance.update()
             self.debug('Confirming disassociated IP:"{0}" is no longer in use'
                        .format(address.public_ip))
             self.assertFalse(self.tester.ping(address.public_ip, poll_count=3),
-                             "Was able to ping address that should no long be associated with an "
-                             "instance")
+                             "Was able to ping address:'{0}' that should no long be associated "
+                             "with an instance".format(address.public_ip))
             address.release()
-            if instance.ip_address != "0.0.0.0" and instance.ip_address != instance.private_ip_address:
-                self.fail("Instance received a new public IP: " + instance.ip_address)
+            if (instance.ip_address != "0.0.0.0" and
+                        instance.ip_address != instance.private_ip_address):
+                self.fail("Instance received a new public IP:'{0}'".format(instance.ip_address))
         self.tester.terminate_instances(reservation)
         self.set_reservation(reservation)
         return reservation
