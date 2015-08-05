@@ -362,7 +362,7 @@ class Net_Tests(EutesterTestCase):
         elapsed = 0
         next_retry_time = 10
         start = time.time()
-        proxy_keypath=proxy_machine.machine.ssh.keypath or None
+        proxy_keypath=proxy_machine.ssh.keypath or None
         while not ssh and attempts < retry:
             attempts += 1
             elapsed = int(time.time()-start)
@@ -373,8 +373,8 @@ class Net_Tests(EutesterTestCase):
                 ssh = SshConnection(host=instance.private_ip_address,
                                 keypath=instance.keypath,
                                 proxy=proxy_machine.hostname,
-                                proxy_username=proxy_machine.machine.ssh.username,
-                                proxy_password=proxy_machine.machine.ssh.password,
+                                proxy_username=proxy_machine.ssh.username,
+                                proxy_password=proxy_machine.ssh.password,
                                 proxy_keypath=proxy_keypath)
             except Exception, ce:
                 tb = self.tester.get_traceback()
@@ -400,11 +400,11 @@ class Net_Tests(EutesterTestCase):
         cc = self.tester.service_manager.get_all_cluster_controllers(partition=instance.placement,
                                                                      use_cached_list= use_cached_list,
                                                                      state='ENABLED')[0]
-        return cc
+        return cc.machine
 
     def get_active_nc_for_instance(self,instance):
         nc = self.tester.service_manager.get_all_node_controllers(instance_id=instance.id, use_cached_list=False).pop()
-        return nc
+        return nc.machine
 
     def ping_instance_private_ip_from_euca_internal(self, instance, ping_timeout=120):
         assert isinstance(instance, EuInstance)
@@ -1110,7 +1110,7 @@ class Net_Tests(EutesterTestCase):
                                        'responsible for this instance/security '
                                        'group...')
                             proxy_machine = self.get_proxy_machine(instance1)
-                            proxy_machine.machine.sys('iptables-save', timeout=10)
+                            proxy_machine.sys('iptables-save', timeout=10)
 
                         except:
                             self.debug('Error when fetching debug output for '
