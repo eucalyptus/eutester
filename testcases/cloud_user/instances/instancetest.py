@@ -427,6 +427,8 @@ class InstanceBasics(EutesterTestCase):
             self.debug('Attempting to ping associated IP:"{0}"'.format(address.public_ip))
             self.assertTrue(self.tester.ping(instance.ip_address),
                             "Could not ping instance with new IP")
+            self.debug('Disassociating address:{0} from instance:{1}'.format(address.public_ip,
+                                                                             instance.id))
             address.disassociate()
             self.tester.sleep(30)
             instance.update()
@@ -436,9 +438,11 @@ class InstanceBasics(EutesterTestCase):
                              "Was able to ping address:'{0}' that should no long be associated "
                              "with an instance".format(address.public_ip))
             address.release()
-            if (instance.ip_address != "0.0.0.0" and
-                        instance.ip_address != instance.private_ip_address):
-                self.fail("Instance received a new public IP:'{0}'".format(instance.ip_address))
+            if instance.ip_address:
+                if (instance.ip_address != "0.0.0.0" and
+                            instance.ip_address != instance.private_ip_address):
+                    self.fail("Instance:'{0}' received a new public IP:'{0}' after disassociate"
+                              .format(instance.id, instance.ip_address))
         self.tester.terminate_instances(reservation)
         self.set_reservation(reservation)
         return reservation
