@@ -103,25 +103,24 @@ test 6 (Multi-zone/cluster env):
 # CC only provides additional point of debug so can be removed from test for non-euca testing
 #todo: Allow test to run with an admin and non-admin account, so debug can be provided through admin and test can
 # be run under non-admin if desired.
-
+from boto.ec2.instance import Instance
+from boto.exception import EC2ResponseError
 from paramiko import SSHException
 from eucaops import Eucaops
 from eutester import Eutester, WaitForResultException
 from eutester.eutestcase import EutesterTestCase
 from eutester.eutestcase import SkipTestException
 from eutester.euinstance import EuInstance
-from boto.ec2.instance import Instance
 from eutester.sshconnection import (
     CommandExitCodeException,
     CommandTimeoutException,
     SshConnection,
 )
+import re
 import socket
-import json
 import time
 import os
 import sys
-import copy
 
 class TestZone():
     def __init__(self, zonename):
@@ -165,6 +164,8 @@ class Net_Tests(EutesterTestCase):
         self.parser.add_argument("--subnetid", dest='subnet_id', default=None,
                                  help="(VPC mode only) The subnet in which to create an "
                                       "instances network interface in ")
+        self.parser.add_argument("--exclude", dest='exclude', default=None,
+                                 help="list of tests to exclude, not run")
 
 
         self._vpc_backend = None
@@ -202,20 +203,13 @@ class Net_Tests(EutesterTestCase):
         self.debug('Running test against zones:' + ",".join(self.zones))
         self.subnet_id = self.args.subnet_id
 
-        ### Add and authorize security groups
-        self.debug("Creating group1..")
-        self.group1 = self.tester.add_group(str(self.name) + "_group1_" + str(time.time()))
-        self.debug("Authorize ssh for group1 from '0.0.0.0/0'")
-        self.tester.authorize_group(self.group1, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
-        self.tester.authorize_group(self.group1, protocol='icmp',port='-1')
-
-        self.debug("Creating group2, will authorize later from rules within test methods..")
-        self.group2 = self.tester.add_group(str(self.name) + "_group2_" + str(time.time()))
-        self.tester.authorize_group(self.group2, protocol='icmp',port='-1')
+        self.group1 = None
+        self.group2 = None
         self.group1_instances = []
         self.group2_instances = []
 
-
+        # Create the base security groups for use in testing
+        self.setup_test_security_groups()
 
         ### Generate a keypair for the instances
         try:
@@ -259,6 +253,41 @@ class Net_Tests(EutesterTestCase):
     ######################################################
     #   Test Utility Methods
     ######################################################
+
+    def setup_test_security_groups(self):
+        ### Add and authorize security groups
+        group1 = self.group1
+        group2 = self.group2
+        if self.group1:
+            try:
+                self.group1 = self.tester.get_security_group(id=self.group1.id)
+            except EC2ResponseError as ER:
+                if ER.status == 400:
+                    self.group1 = None
+                else:
+                    raise ER
+        if self.group2:
+            try:
+                self.group2 = self.tester.get_security_group(id=self.group2.id)
+            except EC2ResponseError as ER:
+                if ER.status == 400:
+                    self.group2 = None
+                else:
+                    raise ER
+        if not self.group1:
+            self.debug("Creating group1..")
+            self.group1 = self.tester.add_group(str(self.name) + "_group1_" + str(time.time()))
+            self.debug("Authorize ssh for group1 from '0.0.0.0/0'")
+            self.tester.authorize_group(self.group1, port=22, protocol='tcp',
+                                        cidr_ip='0.0.0.0/0')
+            self.tester.authorize_group(self.group1, protocol='icmp',port='-1',
+                                        cidr_ip='0.0.0.0/0')
+
+        if  not self.group2:
+            self.debug("Creating group2, will authorize later from rules within test methods..")
+            self.group2 = self.tester.add_group(str(self.name) + "_group2_" + str(time.time()))
+            self.tester.authorize_group(self.group2, protocol='icmp', port='-1',
+                                        cidr_ip='0.0.0.0/0')
 
     def authorize_group_for_instance_list(self, group, instances):
         for instance in instances:
@@ -1194,10 +1223,25 @@ class Net_Tests(EutesterTestCase):
             zones.append(TestZone(zone))
         tester = self.tester
         assert isinstance(tester, Eucaops)
-        if not self.group1:
-            raise ValueError('Group1 not found for this test')
-        if not self.group1_instances:
-            raise ValueError('No instances found from group1')
+        # Make sure the groups are created. 
+        self.setup_test_security_groups()
+        self.tester.authorize_group(self.group2, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
+        for zone in self.zones:
+            instances_group1 = []
+            instances_group2 = []
+            for instance in self.group1_instances:
+                if instance.placement == zone:
+                    assert isinstance(instance, EuInstance)
+                    instances_group1.append(instance)
+            if len(instances_group1) < 1:
+                self.test1_create_instance_in_zones_for_security_group1(zones=[zone])
+            for instance in self.group2_instances:
+                if instance.placement == zone:
+                    assert isinstance(instance, EuInstance)
+                    instances_group2.append(instance)
+            if len(instances_group2) < 1:
+                self.test2_create_instance_in_zones_for_security_group2(zones=[zone])
+
         self.status('Clean out any existing rules in group1...')
         self.tester.revoke_all_rules(self.group1)
         self.tester.show_security_group(self.group1)
@@ -1210,7 +1254,8 @@ class Net_Tests(EutesterTestCase):
             'revoking all rules'
         self.status('Authorize group1 access from group testing machine ssh (tcp/22)...')
         tester.authorize_group(self.group1,
-                               cidr_ip=str(tester.ec2_source_ip) + '/32',
+                               # cidr_ip=str(tester.ec2_source_ip) + '/32',
+                               cidr_ip='0.0.0.0/32', # open to 0/0 to avoid nat issues
                                protocol='tcp',
                                port=22)
         self.tester.show_security_group(self.group1)
@@ -1229,6 +1274,11 @@ class Net_Tests(EutesterTestCase):
                                port=-1,
                                protocol='icmp',
                                src_security_group_name=self.group2.name)
+        # For debug purposes allow ssh from anywhere here...
+        tester.authorize_group(self.group1,
+                               cidr_ip=None,
+                               port=22,
+                               protocol='tcp')
         tester.show_security_group(self.group1)
         for zone in zones:
             for instance in self.group1_instances:
@@ -1287,7 +1337,10 @@ class Net_Tests(EutesterTestCase):
         tester.delete_group(self.group2)
         self.status('Now confirm that ssh still works for all instances in group1')
         for instance in self.group1_instances:
-
+            self.tester.show_security_groups_for_instance(instance)
+            self.debug('Attempting to connect to instance from source IP: "{0}"'
+                       .format(self.tester.ec2_source_ip))
+            instance.connect_to_instance(timeout=300)
             instance.sys('echo "Getting hostname from {0}"; hostname'
                          .format(instance.id), code=0)
         self.status('Passed. Group1 ssh working after deleting src group which '
@@ -1624,17 +1677,20 @@ class Net_Tests(EutesterTestCase):
         self.tester.delete_group(revoke_group)
 
 
-    def _run_suite(self, testlist=[], basic_only=False):
+    def _run_suite(self, testlist=None, basic_only=False, exclude=None):
         # The first tests will have the End On Failure flag set to true. If these tests fail
         # the remaining tests will not be attempted.
         unit_list = []
+        testlist = testlist or []
+        exclude = exclude or []
+        if exclude:
+            exclude = re.sub('[",]', " ", str(exclude)).split()
         if testlist:
-
             if not isinstance(testlist, list):
                 testlist.replace(',',' ')
                 testlist = testlist.split()
             for test in testlist:
-                unit_list.append( nettests.create_testunit_by_name(test))
+                unit_list.append(nettests.create_testunit_by_name(test))
         else:
             unit_list =[
                 self.create_testunit_by_name('test1_create_instance_in_zones_for_security_group1',
@@ -1657,6 +1713,9 @@ class Net_Tests(EutesterTestCase):
                              'test12_ssh_between_instances_same_group_private_different_zone',
                              'test13_ssh_between_instances_diff_group_private_different_zone',
                              'test14_ssh_between_instances_diff_group_public_different_zone']
+            for test in exclude:
+                if test in testlist:
+                    testlist.remove(test)
             for test in testlist:
                 unit_list.append(self.create_testunit_by_name(test))
         self.status('Got running the following list of tests:' + str(testlist))
@@ -1668,5 +1727,6 @@ class Net_Tests(EutesterTestCase):
 
 if __name__ == "__main__":
     nettests = Net_Tests()
-    exit(nettests._run_suite(testlist=nettests.args.tests, basic_only=nettests.args.basic_only))
+    exit(nettests._run_suite(testlist=nettests.args.tests, basic_only=nettests.args.basic_only,
+                             exclude=nettests.args.exclude))
 
