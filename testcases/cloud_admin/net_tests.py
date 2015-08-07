@@ -1223,7 +1223,9 @@ class Net_Tests(EutesterTestCase):
             zones.append(TestZone(zone))
         tester = self.tester
         assert isinstance(tester, Eucaops)
-        # Make sure the groups are created. 
+        # Make sure the groups are created.
+        self.status('Checking and/or create test security groups, and at least one instance'
+                    'running in them per zone...')
         self.setup_test_security_groups()
         self.tester.authorize_group(self.group2, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
         for zone in self.zones:
@@ -1242,7 +1244,7 @@ class Net_Tests(EutesterTestCase):
             if len(instances_group2) < 1:
                 self.test2_create_instance_in_zones_for_security_group2(zones=[zone])
 
-        self.status('Clean out any existing rules in group1...')
+        self.status('Clean out any existing rules in group1 to start with a clean group...')
         self.tester.revoke_all_rules(self.group1)
         self.tester.show_security_group(self.group1)
         instance1 = self.group1_instances[0]
@@ -1255,9 +1257,10 @@ class Net_Tests(EutesterTestCase):
         self.status('Authorize group1 access from group testing machine ssh (tcp/22)...')
         tester.authorize_group(self.group1,
                                # cidr_ip=str(tester.ec2_source_ip) + '/32',
-                               cidr_ip='0.0.0.0/32', # open to 0/0 to avoid nat issues
+                               cidr_ip='0.0.0.0/0', # open to 0/0 to avoid nat issues
                                protocol='tcp',
                                port=22)
+        self.tester.authorize_group(self.group1, port=-1, protocol='icmp', cidr_ip='0.0.0.0/0')
         self.tester.show_security_group(self.group1)
         self.status('Test ssh access from this testing machine to each instance in group1...')
         for instance in self.group1_instances:
@@ -1279,15 +1282,29 @@ class Net_Tests(EutesterTestCase):
                                cidr_ip=None,
                                port=22,
                                protocol='tcp')
+        self.status('Sleeping for 10 seconds to allow rule/network'
+                            ' to set...')
+        time.sleep(10)
         tester.show_security_group(self.group1)
+        self.status('Checking auth from group2 to group1 instances...')
+        self.debug('Check some debug information re this data connection in this security '
+                   'group first...')
         for zone in zones:
             for instance in self.group1_instances:
                 if instance.placement == zone.name:
                     zone.test_instance_group1 = instance
+                    if not zone.test_instance_group1.ssh:
+                        self.status('Instance in group1 did not have an ssh connection, '
+                                    'trying to setup ssh now...')
+                        zone.test_instance_group1.connect_to_instance()
                     break
             for instance in self.group2_instances:
                 if instance.placement == zone.name:
                     zone.test_instance_group2 = instance
+                    if not zone.test_instance_group2.ssh:
+                        self.status('Instance in group1 did not have an ssh connection, '
+                                    'trying to setup ssh now...')
+                        zone.test_instance_group2.connect_to_instance()
                     break
             if not zone.test_instance_group1:
                 raise ValueError('Could not find instances in sec group1'
@@ -1296,13 +1313,10 @@ class Net_Tests(EutesterTestCase):
                 raise ValueError('Could not find instances in sec group2'
                                  'group for zone:' + str(zone.name))
 
-        self.status('Checking auth from group2 to group1 instances...')
-        self.debug('Check some debug information re this data '
-                   'connection in this security group first...')
-        assert isinstance(zone.test_instance_group1, EuInstance)
-        assert isinstance(zone.test_instance_group2, EuInstance)
+            assert isinstance(zone.test_instance_group1, EuInstance)
+            assert isinstance(zone.test_instance_group2, EuInstance)
         for zone in zones:
-            #Get the group2 instance from this zone
+            #Make sure the instance in group1 has allowed icmp access from group2
             allowed = False
 
             if self.tester.does_instance_sec_group_allow(
@@ -1311,18 +1325,15 @@ class Net_Tests(EutesterTestCase):
                     protocol='icmp',
                     port='-1'):
                 allowed = True
-                break
             if not allowed:
                 raise ValueError('Group2 instance not allowed in group1'
                                  ' after authorizing group2')
-            self.status('Sleeping for 10 seconds to allow rule/network'
-                        ' to set...')
-            time.sleep(10)
+
             self.status('Attempting to ping group1 instance from group2 '
                         'instance using their private IPs')
             try:
-                zone.test_instance_group2.proxy_ssh.verbose = True
-                zone.test_instance_group2.proxy_ssh.sys(
+                zone.test_instance_group2.ssh.verbose = True
+                zone.test_instance_group2.sys(
                     'ping -c 1 {0}'
                     .format(zone.test_instance_group1.private_ip_address),
                     code=0,verbose=True)

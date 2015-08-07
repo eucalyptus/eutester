@@ -596,7 +596,7 @@ class EuserviceManager(object):
         good_clc_hosts = []
         describe_services = []
         services = []
-        clc_hostnames = ""
+        clc_hostname = ""
         err_msg = ""
         dbg_msg = ""
 
@@ -608,69 +608,72 @@ class EuserviceManager(object):
         if partition is None:
             partition = ""
         #Check each CLC to make sure the eucalyptus-cloud service is running on that machine
-        if attempt_both:
-            clc_machines =self.tester.get_component_machines("clc")
-        else:
-            clc_machines =[self.tester.clc]
-
-        for clc_machine in clc_machines:
-            clc_hostnames += clc_machine.hostname + ","
-            if clc_machine.get_eucalyptus_cloud_is_running_status():
-                #Add to front of check list if this is the current tester clc, otherwise append to end.
-                if clc_machine == self.tester.clc:
-                    good_clc_hosts.insert(0,clc_machine)
-                else:
-                    good_clc_hosts.append(clc_machine)
+        clc_machine =self.tester.clc
+        clc_hostname += clc_machine.hostname
+        if clc_machine.get_eucalyptus_cloud_is_running_status():
+            #Add to front of check list if this is the current tester clc, otherwise append to end.
+            if clc_machine == self.tester.clc:
+                good_clc_hosts.insert(0,clc_machine)
             else:
-                self.debug('Eucalyptus cloud was not found running on CLC:'+str(clc_machine.hostname))
+                good_clc_hosts.append(clc_machine)
+        else:
+            self.debug('Eucalyptus cloud was not found running on CLC:'+str(clc_machine.hostname))
 
-        for clc_host in good_clc_hosts:
-            dbg_msg += clc_host.hostname + ", "
-        self.debug("Checking the following CLCs for services/status: " + str(dbg_msg) + "...")
-        while good_clc_hosts and not describe_services:
-            clc_process_uptimes = []
+        self.debug("Checking the following CLCs for services/status: " + str(clc_machine.hostname) + "...")
+        clc = clc_machine
+        process_uptime = None
+        clc_retry = 0
+        while not describe_services and clc_retry < 2:
             process_uptime = None
-            for clc in good_clc_hosts:
-                try:
-                    #Save proess uptime for potential debug if request fails.
-                    process_uptime = self.tester.clc.get_eucalyptus_cloud_process_uptime()
-                    #Store all CLC's process uptimes in list, compare for youngest later...
-                    clc_process_uptimes.append(process_uptime)
-                    out = clc.sys(self.eucaprefix + "/usr/sbin/euca-describe-services " + str(type), code=0,timeout=15)
-                    for line in out:
-                        if re.search("SERVICE.+"+str(partition), line):
-                            describe_services.append(line)
-                    if not describe_services:
-                        raise IndexError("Did not receive proper response from describe services when looking for " + str(type))
-                    else:
-                        #if the check was successful, we may need to swap the tester's primary clc
-                        if clc != self.tester.clc:
-                            self.tester.swap_clc()
+            clc_retry += 1
+            try:
+                #Save proess uptime for potential debug if request fails.
+                process_uptime = self.tester.clc.get_eucalyptus_cloud_process_uptime()
+                #Store all CLC's process uptimes in list, compare for youngest later...
+                for x in xrange(0, 2):
+                    out = clc.sys('{0}/usr/sbin/euca-describe-services {1} | while read line; do echo $line; done; echo "Done"'
+                                  .format(self.eucaprefix, str(type)), code=0,timeout=15)
+                    if str(out[-1]).startswith("Done"):
                         break
-                except Exception, e:
-                    self.debug("Did not get a valid response from clc:" + str(clc.hostname) +", err:" +str(e))
-                    err_msg += str(e) + "\n"
-                    # Check to make sure the CLC process is evening running on this machine, and if the youngest CLC process
-                    # has been up for a reasonable amount of time to sync and/or service requests.
+                    # Something err'd in the cmd output, try again...
+                    time.sleep(1)
+                for line in out:
+                    if re.search("SERVICE.+"+str(partition), line):
+                        describe_services.append(line)
+                if not describe_services:
+                    raise IndexError("Did not receive proper response from describe services when looking for " + str(type))
+            except Exception, e:
+                self.debug("Did not get a valid response from clc:" + str(clc.hostname) +", err:" +str(e))
+                err_msg += str(e) + "\n"
+                # Check to make sure the CLC process is evening running on this machine, and if the youngest CLC process
+                # has been up for a reasonable amount of time to sync and/or service requests.
+                try:
                     is_running = self.tester.clc.get_eucalyptus_cloud_is_running_status()
-                    if not is_running:
-                        good_clc_hosts.remove(self.tester.clc)
-                        err_msg += "Error in service request on CLC:" + str(self.tester.clc.hostname) \
-                                   + ". PID uptime:" + str(process_uptime) + "/" + str(allow_clc_start_time) \
-                                   + ", service_running:"+ str(is_running) + "\n"
+                except:
+                    is_running = 'unknown'
+                if not is_running:
+                    err_msg += "Error in service request on CLC:" + str(self.tester.clc.hostname) \
+                               + ". PID uptime:" + str(process_uptime) + "/" + str(allow_clc_start_time) \
+                               + ", service_running:"+ str(is_running) + "\n"
             #If we've checked both CLCs and still don't have a valid response to parse, 'and' the youngest CLC
             #process uptime has exceeed 'allow_clc_start_time' then raise error.
-            if not good_clc_hosts or \
-                    not clc_process_uptimes or \
-                    (not describe_services and min(clc_process_uptimes) > allow_clc_start_time):
-                raise Exception("Could not get services from " + str(clc_hostnames)
+            if not clc_machine or \
+                    not process_uptime or \
+                    (not describe_services and (process_uptime > allow_clc_start_time)):
+                raise Exception("Could not get services from " + str(clc_hostname)
                                 + ", after clc process uptime of at least "
                                 + str(allow_clc_start_time) + "\nErrors:"+str(err_msg))
             if not describe_services:
                 time.sleep(poll_interval)
-        #Create euservice objects from command output and return list of euservices.
-        for service_line in describe_services:
-            services.append(Euservice.create_service(service_line, self.tester))
+            #Create euservice objects from command output and return list of euservices.
+            for service_line in describe_services:
+                new_service = Euservice.create_service(service_line, self.tester)
+                if new_service.type == 'eucalyptus':
+                    got_clc = True
+                services.append(new_service)
+            self.debug('Got CLC flag: {0}'.format(got_clc))
+            if got_clc:
+                return services
         return services
 
     def print_services_list(self, services=None):
@@ -744,6 +747,8 @@ class EuserviceManager(object):
         #to avoid update() loop allow enabled_clc to be provided as arg
         clc = enabled_clc or self.get_enabled_clc()
         clc_version = clc.machine.get_eucalyptus_version()
+        if not str(clc_version).startswith('3'):
+            return self.populate_nodes_3_3(enabled_clc)
         if self.compare_versions(clc_version,'3.3') >= 0:
             try:
                 return self.populate_nodes_3_3(enabled_clc)
@@ -1190,7 +1195,7 @@ class EuserviceManager(object):
             if (time.time() - self.last_updated) < 1:
                 return
         self.reset()
-        services = self.get(name)
+        services = self.get(type=name)
         self.all_services = services
         for current_euservice in services:
             ### If this is system wide component add it to the base level array
@@ -1353,9 +1358,23 @@ class EuserviceManager(object):
             time.sleep(15)
 
 
-
-    def get_enabled_clc(self):
-        clc = self.get_enabled(self.clcs)
+    def get_enabled_clc(self, max_retry=2):
+        for x in xrange(0, max_retry):
+            error = None
+            clc = None
+            tb = None
+            try:
+                self.debug('Attempting to get enabled CLCs, attempt:{0}/{1}'.format(x, max_retry))
+                if not self.clcs:
+                    self.update()
+                clc = self.get_enabled(self.clcs)
+            except Exception as CE:
+                tb = self.tester.get_traceback()
+                error = str(CE)
+            if clc:
+                break
+            self.debug('{0}\nAttempt:"{1}/{2}". Err fetching CLC:"{3}"'
+                       .format(tb, x, max_retry, error))
         if clc is None or len(clc) == 0:
             raise Exception("Neither CLC is enabled")
         else:

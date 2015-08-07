@@ -3831,6 +3831,8 @@ disable_root: false"""
                 if (to_port == 0 ) or (to_port == -1) or \
                         (port >= from_port and port <= to_port):
                     for grant in rule.grants:
+                        grantgroupid = (getattr(grant, 'groupId', None) or
+                                        getattr(grant, 'group_id', None))
                         if src_addr and grant.cidr_ip:
                             if self.is_address_in_network(src_addr, str(grant)):
                                 self.debug('sec_group DOES allow: group:"{0}"'
@@ -3843,7 +3845,7 @@ disable_root: false"""
                         if src_group:
                             src_group_id = str(src_group.name) + \
                                            "-" + (src_group.owner_id)
-                            if ( src_group.id == grant.groupId ) or \
+                            if ( src_group.id == grantgroupid ) or \
                                     ( grant.group_id == src_group_id ):
                                 self.debug('sec_group DOES allow: group:"{0}"'
                                            ', src_group:"{1}"/"{2}", '
