@@ -56,7 +56,7 @@ class AutoScalingBasics(EutesterTestCase):
         ### Add and authorize a group for the instance
         self.group = self.tester.add_group(group_name="group-" + str(time.time()))
         self.tester.authorize_group_by_name(group_name=self.group.name )
-        self.tester.authorize_group_by_name(group_name=self.group.name, port=-1, protocol="icmp")
+        self.tester.authorize_group_by_name(group_name=self.group.name, port=-1, protocol="icmp" )
 
         ### Generate a keypair for the instance
         self.keypair = self.tester.add_keypair( "keypair-" + str(time.time()))
@@ -69,10 +69,10 @@ class AutoScalingBasics(EutesterTestCase):
         self.asg = None
 
     def clean_method(self):
+        if self.asg:
+            self.tester.wait_for_result(self.gracefully_delete, True)
+            self.tester.delete_as_group(self.asg.name, force=True)
         self.tester.cleanup_artifacts()
-        if self.tester.test_resources["security-groups"]:
-            for group in self.tester.test_resources["security-groups"]:
-                self.tester.wait_for_result(self.tester.gracefully_delete_group, True, timeout=60, group=group)
 
     def AutoScalingBasics(self):
         ### create launch configuration
