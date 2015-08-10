@@ -670,7 +670,10 @@ class EuserviceManager(object):
                 time.sleep(poll_interval)
         #Create euservice objects from command output and return list of euservices.
         for service_line in describe_services:
-            services.append(Euservice.create_service(service_line, self.tester))
+            # Skip service account lines. This is a bit of a hack.
+            if not service_line.lstrip().startswith('SERVICEACCOUNT'):
+                services.append(Euservice.create_service(service_line, self.tester))
+
         return services
 
     def print_services_list(self, services=None):
