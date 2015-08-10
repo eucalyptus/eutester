@@ -37,7 +37,6 @@
             <class name="com.eucalyptus.tests.awssdk.CloudWatchGetMetricStatisticsTest"/>
             <class name="com.eucalyptus.tests.awssdk.CloudWatchListMetricsTest"/>
             <class name="com.eucalyptus.tests.awssdk.CloudWatchPutMetricAlarmTest"/>
-            <class name="com.eucalyptus.tests.awssdk.CloudWatchPutMetricDataTest"/>
             <class name="com.eucalyptus.tests.awssdk.CloudWatchStateChangeTest"/>
         </classes>
     </test>
@@ -57,12 +56,16 @@
     </test>
     <test name="Walrus_Tests">
         <classes>
-            <class name="com.eucalyptus.tests.awssdk.BasicWalrusTest"/>
             <class name="com.eucalyptus.tests.awssdk.S3BucketCannedACLTests"/>
             <class name="com.eucalyptus.tests.awssdk.S3BucketTests"/>
-            <class name="com.eucalyptus.tests.awssdk.S3ObjectTests"/>
+            <class name="com.eucalyptus.tests.awssdk.S3CopyObjectTests"/>
+            <class name="com.eucalyptus.tests.awssdk.S3ListMpuTests"/>
+            <class name="com.eucalyptus.tests.awssdk.S3ListObjectsTests"/>
+            <class name="com.eucalyptus.tests.awssdk.S3ListVersionsTests"/>
+            <class name="com.eucalyptus.tests.awssdk.S3MultiPartUploadTests" />
+            <class name="com.eucalyptus.tests.awssdk.S3ObjectCannedACLAcrossAccountsTests"/>
             <class name="com.eucalyptus.tests.awssdk.S3ObjectCannedACLTests"/>
-            <class name="com.eucalyptus.tests.awssdk.S3ObjectLifecycleTests"/>
+            <class name="com.eucalyptus.tests.awssdk.S3ObjectTests"/>
         </classes>
     </test>
 </suite>

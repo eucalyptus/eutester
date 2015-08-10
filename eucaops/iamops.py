@@ -642,16 +642,24 @@ class IAMops(Eutester):
         return cert
 
     def delete_server_cert(self, cert_name):
-        self.debug("deleting server certificate: " + cert_name)
+        self.debug("Deleting server certificate: " + cert_name)
         self.euare.delete_server_cert(cert_name)
-        if (cert_name) in str(self.euare.list_server_certs()):
+        certs = self.list_server_certs()
+        if certs and cert_name in certs[0].values():
             raise Exception("certificate " + cert_name + " not deleted.")
 
+    def delete_all_server_certs(self):
+        self.debug("Deleting all server certificates")
+        certs = self.list_server_certs()
+        for cert in certs:
+            self.delete_server_cert(cert['server_certificate_name'])
+        return
+
     def list_server_certs(self, path_prefix='/', marker=None, max_items=None):
-        self.debug("listing server certificates")
+        self.debug("Listing server certificates")
         certs = self.euare.list_server_certs(path_prefix=path_prefix, marker=marker, max_items=max_items)
         self.debug(certs)
-        return certs
+        return certs['list_server_certificates_response']['list_server_certificates_result']['server_certificate_metadata_list']
 
     def create_login_profile(self, user_name, password, delegate_account=None):
         self.debug("Creating login profile for: " + user_name + " with password: " + password)

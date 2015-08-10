@@ -77,7 +77,7 @@ public class TestEC2DescribeInstanceStatus {
 			});
 
 			// Wait for instance
-			final long timeout = TimeUnit.MINUTES.toMillis(10);
+			final long timeout = TimeUnit.MINUTES.toMillis(15);
 			waitForInstance(ec2, timeout, instanceId, "pending");
 			final String az = waitForInstance(ec2, timeout, instanceId,
 					"running");

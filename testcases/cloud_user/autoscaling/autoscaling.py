@@ -56,7 +56,7 @@ class AutoScalingBasics(EutesterTestCase):
         ### Add and authorize a group for the instance
         self.group = self.tester.add_group(group_name="group-" + str(time.time()))
         self.tester.authorize_group_by_name(group_name=self.group.name )
-        self.tester.authorize_group_by_name(group_name=self.group.name, port=-1, protocol="icmp" )
+        self.tester.authorize_group_by_name(group_name=self.group.name, port=-1, protocol="icmp")
 
         ### Generate a keypair for the instance
         self.keypair = self.tester.add_keypair( "keypair-" + str(time.time()))
@@ -64,15 +64,15 @@ class AutoScalingBasics(EutesterTestCase):
 
         self.image = self.args.emi
         if not self.image:
-            self.image = self.tester.get_emi(root_device_type="instance-store")
+            self.image = self.tester.get_emi()
         self.address = None
         self.asg = None
 
     def clean_method(self):
-        if self.asg:
-            self.tester.wait_for_result(self.gracefully_delete, True)
-            self.tester.delete_as_group(self.asg.name, force=True)
         self.tester.cleanup_artifacts()
+        if self.tester.test_resources["security-groups"]:
+            for group in self.tester.test_resources["security-groups"]:
+                self.tester.wait_for_result(self.tester.gracefully_delete_group, True, timeout=60, group=group)
 
     def AutoScalingBasics(self):
         ### create launch configuration
@@ -260,12 +260,13 @@ class AutoScalingBasics(EutesterTestCase):
                                     desired_capacity=1)
 
         assert isinstance(self.asg, AutoScalingGroup)
+        self.tester.wait_for_result(self.tester.wait_for_instances, True, timeout=360, group_name=self.asg.name)
+
         self.tester.update_as_group(group_name=self.asg.name,
                                     launch_config=second_launch_config,
                                     availability_zones=self.tester.get_zones(),
                                     min_size=1,
                                     max_size=4)
-        self.tester.wait_for_result(self.tester.wait_for_instances, True, timeout=360, group_name=self.asg.name)
         ### Set desired capacity
         new_desired = 2
         self.asg.set_capacity(new_desired)

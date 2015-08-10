@@ -9,12 +9,10 @@ import static org.testng.AssertJUnit.assertTrue;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -148,28 +146,28 @@ public class S3CopyObjectTests {
 			// Copy object into the same bucket and verify the ACL
 			String destKey = eucaUUID();
 			copyObject(ownerNameA, s3ClientA, new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey), md5);
-			verifyObjectACL(s3ClientA, sourceBucket, destKey, CannedAccessControlList.Private, ownerIdA, ownerNameA, ownerIdA);
+			S3Utils.verifyObjectACL(s3ClientA, ownerNameA, sourceBucket, destKey, CannedAccessControlList.Private, ownerIdA, ownerIdA);
 
 			// Copy object into the same bucket with canned ACL AuthenticatedRead and verify the ACL
 			destKey = eucaUUID();
 			copyObject(ownerNameA, s3ClientA,
 					new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey)
 							.withCannedAccessControlList(CannedAccessControlList.AuthenticatedRead), md5);
-			verifyObjectACL(s3ClientA, sourceBucket, destKey, CannedAccessControlList.AuthenticatedRead, ownerIdA, ownerNameA, ownerIdA);
+			S3Utils.verifyObjectACL(s3ClientA, ownerNameA, sourceBucket, destKey, CannedAccessControlList.AuthenticatedRead, ownerIdA, ownerIdA);
 
 			// Copy object into the same bucket with canned ACL BucketOwnerFullControl and verify the ACL
 			destKey = eucaUUID();
 			copyObject(ownerNameA, s3ClientA,
 					new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey)
 							.withCannedAccessControlList(CannedAccessControlList.BucketOwnerFullControl), md5);
-			verifyObjectACL(s3ClientA, sourceBucket, destKey, CannedAccessControlList.BucketOwnerFullControl, ownerIdA, ownerNameA, ownerIdA);
+			S3Utils.verifyObjectACL(s3ClientA, ownerNameA, sourceBucket, destKey, CannedAccessControlList.BucketOwnerFullControl, ownerIdA, ownerIdA);
 
 			// Copy object into the same bucket with canned ACL BucketOwnerRead and verify the ACL
 			destKey = eucaUUID();
 			copyObject(ownerNameA, s3ClientA,
 					new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey).withCannedAccessControlList(CannedAccessControlList.BucketOwnerRead),
 					md5);
-			verifyObjectACL(s3ClientA, sourceBucket, destKey, CannedAccessControlList.BucketOwnerRead, ownerIdA, ownerNameA, ownerIdA);
+			S3Utils.verifyObjectACL(s3ClientA, ownerNameA, sourceBucket, destKey, CannedAccessControlList.BucketOwnerRead, ownerIdA, ownerIdA);
 
 			// Copy object into the same bucket with canned ACL LogDeliveryWrite and verify the ACL
 			destKey = eucaUUID();
@@ -178,26 +176,26 @@ public class S3CopyObjectTests {
 					s3ClientA,
 					new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey).withCannedAccessControlList(CannedAccessControlList.LogDeliveryWrite),
 					md5);
-			verifyObjectACL(s3ClientA, sourceBucket, destKey, CannedAccessControlList.LogDeliveryWrite, ownerIdA, ownerNameA, ownerIdA);
+			S3Utils.verifyObjectACL(s3ClientA, ownerNameA, sourceBucket, destKey, CannedAccessControlList.LogDeliveryWrite, ownerIdA, ownerIdA);
 
 			// Copy object into the same bucket with canned ACL Private and verify the ACL
 			destKey = eucaUUID();
 			copyObject(ownerNameA, s3ClientA,
 					new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey).withCannedAccessControlList(CannedAccessControlList.Private), md5);
-			verifyObjectACL(s3ClientA, sourceBucket, destKey, CannedAccessControlList.Private, ownerIdA, ownerNameA, ownerIdA);
+			S3Utils.verifyObjectACL(s3ClientA, ownerNameA, sourceBucket, destKey, CannedAccessControlList.Private, ownerIdA, ownerIdA);
 
 			// Copy object into the same bucket with canned ACL PublicRead and verify the ACL
 			destKey = eucaUUID();
 			copyObject(ownerNameA, s3ClientA,
 					new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey).withCannedAccessControlList(CannedAccessControlList.PublicRead), md5);
-			verifyObjectACL(s3ClientA, sourceBucket, destKey, CannedAccessControlList.PublicRead, ownerIdA, ownerNameA, ownerIdA);
+			S3Utils.verifyObjectACL(s3ClientA, ownerNameA, sourceBucket, destKey, CannedAccessControlList.PublicRead, ownerIdA, ownerIdA);
 
 			// Copy object into the same bucket with canned ACL PublicReadWrite and verify the ACL
 			destKey = eucaUUID();
 			copyObject(ownerNameA, s3ClientA,
 					new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey).withCannedAccessControlList(CannedAccessControlList.PublicReadWrite),
 					md5);
-			verifyObjectACL(s3ClientA, sourceBucket, destKey, CannedAccessControlList.PublicReadWrite, ownerIdA, ownerNameA, ownerIdA);
+			S3Utils.verifyObjectACL(s3ClientA, ownerNameA, sourceBucket, destKey, CannedAccessControlList.PublicReadWrite, ownerIdA, ownerIdA);
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run oneUserSameBucket");
@@ -223,54 +221,54 @@ public class S3CopyObjectTests {
 			// Copy object into the different bucket and verify the ACL
 			String destKey = eucaUUID();
 			copyObject(ownerNameA, s3ClientA, new CopyObjectRequest(sourceBucket, sourceKey, destBucket, destKey), md5);
-			verifyObjectACL(s3ClientA, destBucket, destKey, CannedAccessControlList.Private, ownerIdA, ownerNameA, ownerIdA);
+			S3Utils.verifyObjectACL(s3ClientA, ownerNameA, destBucket, destKey, CannedAccessControlList.Private, ownerIdA, ownerIdA);
 
 			// Copy object into a different bucket with canned ACL AuthenticatedRead and verify the ACL
 			destKey = eucaUUID();
 			copyObject(ownerNameA, s3ClientA,
 					new CopyObjectRequest(sourceBucket, sourceKey, destBucket, destKey).withCannedAccessControlList(CannedAccessControlList.AuthenticatedRead),
 					md5);
-			verifyObjectACL(s3ClientA, destBucket, destKey, CannedAccessControlList.AuthenticatedRead, ownerIdA, ownerNameA, ownerIdA);
+			S3Utils.verifyObjectACL(s3ClientA, ownerNameA, destBucket, destKey, CannedAccessControlList.AuthenticatedRead, ownerIdA, ownerIdA);
 
 			// Copy object into a different bucket with canned ACL BucketOwnerFullControl and verify the ACL
 			destKey = eucaUUID();
 			copyObject(ownerNameA, s3ClientA,
 					new CopyObjectRequest(sourceBucket, sourceKey, destBucket, destKey)
 							.withCannedAccessControlList(CannedAccessControlList.BucketOwnerFullControl), md5);
-			verifyObjectACL(s3ClientA, destBucket, destKey, CannedAccessControlList.BucketOwnerFullControl, ownerIdA, ownerNameA, ownerIdA);
+			S3Utils.verifyObjectACL(s3ClientA, ownerNameA, destBucket, destKey, CannedAccessControlList.BucketOwnerFullControl, ownerIdA, ownerIdA);
 
 			// Copy object into a different bucket with canned ACL BucketOwnerRead and verify the ACL
 			destKey = eucaUUID();
 			copyObject(ownerNameA, s3ClientA,
 					new CopyObjectRequest(sourceBucket, sourceKey, destBucket, destKey).withCannedAccessControlList(CannedAccessControlList.BucketOwnerRead),
 					md5);
-			verifyObjectACL(s3ClientA, destBucket, destKey, CannedAccessControlList.BucketOwnerRead, ownerIdA, ownerNameA, ownerIdA);
+			S3Utils.verifyObjectACL(s3ClientA, ownerNameA, destBucket, destKey, CannedAccessControlList.BucketOwnerRead, ownerIdA, ownerIdA);
 
 			// Copy object into a different bucket with canned ACL LogDeliveryWrite and verify the ACL
 			destKey = eucaUUID();
 			copyObject(ownerNameA, s3ClientA,
 					new CopyObjectRequest(sourceBucket, sourceKey, destBucket, destKey).withCannedAccessControlList(CannedAccessControlList.LogDeliveryWrite),
 					md5);
-			verifyObjectACL(s3ClientA, destBucket, destKey, CannedAccessControlList.LogDeliveryWrite, ownerIdA, ownerNameA, ownerIdA);
+			S3Utils.verifyObjectACL(s3ClientA, ownerNameA, destBucket, destKey, CannedAccessControlList.LogDeliveryWrite, ownerIdA, ownerIdA);
 
 			// Copy object into a different bucket with canned ACL Private and verify the ACL
 			destKey = eucaUUID();
 			copyObject(ownerNameA, s3ClientA,
 					new CopyObjectRequest(sourceBucket, sourceKey, destBucket, destKey).withCannedAccessControlList(CannedAccessControlList.Private), md5);
-			verifyObjectACL(s3ClientA, destBucket, destKey, CannedAccessControlList.Private, ownerIdA, ownerNameA, ownerIdA);
+			S3Utils.verifyObjectACL(s3ClientA, ownerNameA, destBucket, destKey, CannedAccessControlList.Private, ownerIdA, ownerIdA);
 
 			// Copy object into a different bucket with canned ACL PublicRead and verify the ACL
 			destKey = eucaUUID();
 			copyObject(ownerNameA, s3ClientA,
 					new CopyObjectRequest(sourceBucket, sourceKey, destBucket, destKey).withCannedAccessControlList(CannedAccessControlList.PublicRead), md5);
-			verifyObjectACL(s3ClientA, destBucket, destKey, CannedAccessControlList.PublicRead, ownerIdA, ownerNameA, ownerIdA);
+			S3Utils.verifyObjectACL(s3ClientA, ownerNameA, destBucket, destKey, CannedAccessControlList.PublicRead, ownerIdA, ownerIdA);
 
 			// Copy object into a different bucket with canned ACL PublicReadWrite and verify the ACL
 			destKey = eucaUUID();
 			copyObject(ownerNameA, s3ClientA,
 					new CopyObjectRequest(sourceBucket, sourceKey, destBucket, destKey).withCannedAccessControlList(CannedAccessControlList.PublicReadWrite),
 					md5);
-			verifyObjectACL(s3ClientA, destBucket, destKey, CannedAccessControlList.PublicReadWrite, ownerIdA, ownerNameA, ownerIdA);
+			S3Utils.verifyObjectACL(s3ClientA, ownerNameA, destBucket, destKey, CannedAccessControlList.PublicReadWrite, ownerIdA, ownerIdA);
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run oneUserDifferentBuckets");
@@ -293,28 +291,28 @@ public class S3CopyObjectTests {
 			// Copy object into the same bucket and verify the ACL
 			String destKey = eucaUUID();
 			copyObject(ownerNameB, s3ClientB, new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey), md5);
-			verifyObjectACL(s3ClientB, sourceBucket, destKey, CannedAccessControlList.Private, ownerIdB, ownerNameB, ownerIdA);
+			S3Utils.verifyObjectACL(s3ClientB, ownerNameB, sourceBucket, destKey, CannedAccessControlList.Private, ownerIdB, ownerIdA);
 
 			// Copy object into the same bucket with canned ACL AuthenticatedRead and verify the ACL
 			destKey = eucaUUID();
 			copyObject(ownerNameB, s3ClientB,
 					new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey)
 							.withCannedAccessControlList(CannedAccessControlList.AuthenticatedRead), md5);
-			verifyObjectACL(s3ClientB, sourceBucket, destKey, CannedAccessControlList.AuthenticatedRead, ownerIdB, ownerNameB, ownerIdA);
+			S3Utils.verifyObjectACL(s3ClientB, ownerNameB, sourceBucket, destKey, CannedAccessControlList.AuthenticatedRead, ownerIdB, ownerIdA);
 
 			// Copy object into the same bucket with canned ACL BucketOwnerFullControl and verify the ACL
 			destKey = eucaUUID();
 			copyObject(ownerNameB, s3ClientB,
 					new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey)
 							.withCannedAccessControlList(CannedAccessControlList.BucketOwnerFullControl), md5);
-			verifyObjectACL(s3ClientB, sourceBucket, destKey, CannedAccessControlList.BucketOwnerFullControl, ownerIdB, ownerNameB, ownerIdA);
+			S3Utils.verifyObjectACL(s3ClientB, ownerNameB, sourceBucket, destKey, CannedAccessControlList.BucketOwnerFullControl, ownerIdB, ownerIdA);
 
 			// Copy object into the same bucket with canned ACL BucketOwnerRead and verify the ACL
 			destKey = eucaUUID();
 			copyObject(ownerNameB, s3ClientB,
 					new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey).withCannedAccessControlList(CannedAccessControlList.BucketOwnerRead),
 					md5);
-			verifyObjectACL(s3ClientB, sourceBucket, destKey, CannedAccessControlList.BucketOwnerRead, ownerIdB, ownerNameB, ownerIdA);
+			S3Utils.verifyObjectACL(s3ClientB, ownerNameB, sourceBucket, destKey, CannedAccessControlList.BucketOwnerRead, ownerIdB, ownerIdA);
 
 			// Copy object into the same bucket with canned ACL LogDeliveryWrite and verify the ACL
 			destKey = eucaUUID();
@@ -323,29 +321,114 @@ public class S3CopyObjectTests {
 					s3ClientB,
 					new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey).withCannedAccessControlList(CannedAccessControlList.LogDeliveryWrite),
 					md5);
-			verifyObjectACL(s3ClientB, sourceBucket, destKey, CannedAccessControlList.LogDeliveryWrite, ownerIdB, ownerNameB, ownerIdA);
+			S3Utils.verifyObjectACL(s3ClientB, ownerNameB, sourceBucket, destKey, CannedAccessControlList.LogDeliveryWrite, ownerIdB, ownerIdA);
 
 			// Copy object into the same bucket with canned ACL Private and verify the ACL
 			destKey = eucaUUID();
 			copyObject(ownerNameB, s3ClientB,
 					new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey).withCannedAccessControlList(CannedAccessControlList.Private), md5);
-			verifyObjectACL(s3ClientB, sourceBucket, destKey, CannedAccessControlList.Private, ownerIdB, ownerNameB, ownerIdA);
+			S3Utils.verifyObjectACL(s3ClientB, ownerNameB, sourceBucket, destKey, CannedAccessControlList.Private, ownerIdB, ownerIdA);
 
 			// Copy object into the same bucket with canned ACL PublicRead and verify the ACL
 			destKey = eucaUUID();
 			copyObject(ownerNameB, s3ClientB,
 					new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey).withCannedAccessControlList(CannedAccessControlList.PublicRead), md5);
-			verifyObjectACL(s3ClientB, sourceBucket, destKey, CannedAccessControlList.PublicRead, ownerIdB, ownerNameB, ownerIdA);
+			S3Utils.verifyObjectACL(s3ClientB, ownerNameB, sourceBucket, destKey, CannedAccessControlList.PublicRead, ownerIdB, ownerIdA);
 
 			// Copy object into the same bucket with canned ACL PublicReadWrite and verify the ACL
 			destKey = eucaUUID();
 			copyObject(ownerNameB, s3ClientB,
 					new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey).withCannedAccessControlList(CannedAccessControlList.PublicReadWrite),
 					md5);
-			verifyObjectACL(s3ClientB, sourceBucket, destKey, CannedAccessControlList.PublicReadWrite, ownerIdB, ownerNameB, ownerIdA);
+			S3Utils.verifyObjectACL(s3ClientB, ownerNameB, sourceBucket, destKey, CannedAccessControlList.PublicReadWrite, ownerIdB, ownerIdA);
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run multipleUsersSameBucket");
+		}
+	}
+
+	@Test
+	public void nonCannedACLInHeader() throws Exception {
+		testInfo(this.getClass().getSimpleName() + " - nonCannedACLInHeader");
+		try {
+			// Construct acl equivalent to canned acl PublicReadWrite
+			AccessControlList acl = new AccessControlList();
+			acl.getGrants().add(new Grant(GroupGrantee.AllUsers, Permission.Read));
+			acl.getGrants().add(new Grant(GroupGrantee.AllUsers, Permission.Write));
+
+			// Create bucket with acl equivalent of Canned ACL PublicReadWrite as account A admin
+			createBucketWithACL(ownerNameA, s3ClientA, sourceBucket, acl);
+
+			// Construct acl equivalent to canned acl authenticated-read
+			acl = new AccessControlList();
+			acl.getGrants().add(new Grant(GroupGrantee.AuthenticatedUsers, Permission.Read));
+
+			// Put object with acl equivalent of Canned ACL AuthenticatedRead in source bucket as account A admin
+			putObject(ownerNameA, s3ClientA, new PutObjectRequest(sourceBucket, sourceKey, fileToPut).withAccessControlList(acl), md5);
+
+			// As account B admin
+			Grant ownerGrant = new Grant(new CanonicalGrantee(ownerIdB), Permission.FullControl);
+
+			// Copy object into the same bucket with acl equivalent of canned ACL AuthenticatedRead and verify the ACL
+			acl = new AccessControlList();
+			acl.getGrants().add(new Grant(GroupGrantee.AuthenticatedUsers, Permission.Read));
+			String destKey = eucaUUID();
+			copyObject(ownerNameB, s3ClientB, new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey).withAccessControlList(acl), md5);
+			acl.getGrants().add(ownerGrant);
+			S3Utils.verifyObjectACL(s3ClientB, ownerNameB, sourceBucket, destKey, acl, ownerIdB);
+
+			// Copy object into the same bucket with acl equivalent of canned ACL BucketOwnerFullControl and verify the ACL
+			acl = new AccessControlList();
+			acl.getGrants().add(new Grant(new CanonicalGrantee(ownerIdA), Permission.FullControl));
+			destKey = eucaUUID();
+			copyObject(ownerNameB, s3ClientB, new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey).withAccessControlList(acl), md5);
+			acl.getGrants().add(ownerGrant);
+			S3Utils.verifyObjectACL(s3ClientB, ownerNameB, sourceBucket, destKey, acl, ownerIdB);
+
+			// Copy object into the same bucket with acl equivalent of canned ACL BucketOwnerRead and verify the ACL
+			acl = new AccessControlList();
+			acl.getGrants().add(new Grant(new CanonicalGrantee(ownerIdA), Permission.Read));
+			destKey = eucaUUID();
+			copyObject(ownerNameB, s3ClientB, new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey).withAccessControlList(acl), md5);
+			acl.getGrants().add(ownerGrant);
+			S3Utils.verifyObjectACL(s3ClientB, ownerNameB, sourceBucket, destKey, acl, ownerIdB);
+
+			// Copy object into the same bucket with acl equivalent of canned ACL LogDeliveryWrite and verify the ACL
+			acl = new AccessControlList();
+			acl.getGrants().add(new Grant(GroupGrantee.LogDelivery, Permission.Write));
+			acl.getGrants().add(new Grant(GroupGrantee.LogDelivery, Permission.ReadAcp));
+			destKey = eucaUUID();
+			copyObject(ownerNameB, s3ClientB, new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey).withAccessControlList(acl), md5);
+			acl.getGrants().add(ownerGrant);
+			S3Utils.verifyObjectACL(s3ClientB, ownerNameB, sourceBucket, destKey, acl, ownerIdB);
+
+			// Copy object into the same bucket with acl equivalent of canned ACL Private and verify the ACL
+			acl = new AccessControlList();
+			acl.getGrants().add(ownerGrant);
+			destKey = eucaUUID();
+			copyObject(ownerNameB, s3ClientB,
+					new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey).withCannedAccessControlList(CannedAccessControlList.Private), md5);
+			S3Utils.verifyObjectACL(s3ClientB, ownerNameB, sourceBucket, destKey, acl, ownerIdB);
+
+			// Copy object into the same bucket with acl equivalent of canned ACL PublicRead and verify the ACL
+			acl = new AccessControlList();
+			acl.getGrants().add(new Grant(GroupGrantee.AllUsers, Permission.Read));
+			destKey = eucaUUID();
+			copyObject(ownerNameB, s3ClientB, new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey).withAccessControlList(acl), md5);
+			acl.getGrants().add(ownerGrant);
+			S3Utils.verifyObjectACL(s3ClientB, ownerNameB, sourceBucket, destKey, acl, ownerIdB);
+
+			// Copy object into the same bucket with acl equivalent of canned ACL PublicReadWrite and verify the ACL
+			acl = new AccessControlList();
+			acl.getGrants().add(new Grant(GroupGrantee.AllUsers, Permission.Read));
+			acl.getGrants().add(new Grant(GroupGrantee.AllUsers, Permission.Write));
+			destKey = eucaUUID();
+			copyObject(ownerNameB, s3ClientB, new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey).withAccessControlList(acl), md5);
+			acl.getGrants().add(ownerGrant);
+			S3Utils.verifyObjectACL(s3ClientB, ownerNameB, sourceBucket, destKey, acl, ownerIdB);
+		} catch (AmazonServiceException ase) {
+			printException(ase);
+			assertThat(false, "Failed to run nonCannedACLInHeader");
 		}
 	}
 
@@ -369,54 +452,54 @@ public class S3CopyObjectTests {
 			// Copy object into the same bucket and verify the ACL
 			String destKey = eucaUUID();
 			copyObject(ownerNameB, s3ClientB, new CopyObjectRequest(sourceBucket, sourceKey, destBucket, destKey), md5);
-			verifyObjectACL(s3ClientB, destBucket, destKey, CannedAccessControlList.Private, ownerIdB, ownerNameB, ownerIdB);
+			S3Utils.verifyObjectACL(s3ClientB, ownerNameB, destBucket, destKey, CannedAccessControlList.Private, ownerIdB, ownerIdB);
 
 			// Copy object into the same bucket with canned ACL AuthenticatedRead and verify the ACL
 			destKey = eucaUUID();
 			copyObject(ownerNameB, s3ClientB,
 					new CopyObjectRequest(sourceBucket, sourceKey, destBucket, destKey).withCannedAccessControlList(CannedAccessControlList.AuthenticatedRead),
 					md5);
-			verifyObjectACL(s3ClientB, destBucket, destKey, CannedAccessControlList.AuthenticatedRead, ownerIdB, ownerNameB, ownerIdB);
+			S3Utils.verifyObjectACL(s3ClientB, ownerNameB, destBucket, destKey, CannedAccessControlList.AuthenticatedRead, ownerIdB, ownerIdB);
 
 			// Copy object into the same bucket with canned ACL BucketOwnerFullControl and verify the ACL
 			destKey = eucaUUID();
 			copyObject(ownerNameB, s3ClientB,
 					new CopyObjectRequest(sourceBucket, sourceKey, destBucket, destKey)
 							.withCannedAccessControlList(CannedAccessControlList.BucketOwnerFullControl), md5);
-			verifyObjectACL(s3ClientB, destBucket, destKey, CannedAccessControlList.BucketOwnerFullControl, ownerIdB, ownerNameB, ownerIdB);
+			S3Utils.verifyObjectACL(s3ClientB, ownerNameB, destBucket, destKey, CannedAccessControlList.BucketOwnerFullControl, ownerIdB, ownerIdB);
 
 			// Copy object into the same bucket with canned ACL BucketOwnerRead and verify the ACL
 			destKey = eucaUUID();
 			copyObject(ownerNameB, s3ClientB,
 					new CopyObjectRequest(sourceBucket, sourceKey, destBucket, destKey).withCannedAccessControlList(CannedAccessControlList.BucketOwnerRead),
 					md5);
-			verifyObjectACL(s3ClientB, destBucket, destKey, CannedAccessControlList.BucketOwnerRead, ownerIdB, ownerNameB, ownerIdB);
+			S3Utils.verifyObjectACL(s3ClientB, ownerNameB, destBucket, destKey, CannedAccessControlList.BucketOwnerRead, ownerIdB, ownerIdB);
 
 			// Copy object into the same bucket with canned ACL LogDeliveryWrite and verify the ACL
 			destKey = eucaUUID();
 			copyObject(ownerNameB, s3ClientB,
 					new CopyObjectRequest(sourceBucket, sourceKey, destBucket, destKey).withCannedAccessControlList(CannedAccessControlList.LogDeliveryWrite),
 					md5);
-			verifyObjectACL(s3ClientB, destBucket, destKey, CannedAccessControlList.LogDeliveryWrite, ownerIdB, ownerNameB, ownerIdB);
+			S3Utils.verifyObjectACL(s3ClientB, ownerNameB, destBucket, destKey, CannedAccessControlList.LogDeliveryWrite, ownerIdB, ownerIdB);
 
 			// Copy object into the same bucket with canned ACL Private and verify the ACL
 			destKey = eucaUUID();
 			copyObject(ownerNameB, s3ClientB,
 					new CopyObjectRequest(sourceBucket, sourceKey, destBucket, destKey).withCannedAccessControlList(CannedAccessControlList.Private), md5);
-			verifyObjectACL(s3ClientB, destBucket, destKey, CannedAccessControlList.Private, ownerIdB, ownerNameB, ownerIdB);
+			S3Utils.verifyObjectACL(s3ClientB, ownerNameB, destBucket, destKey, CannedAccessControlList.Private, ownerIdB, ownerIdB);
 
 			// Copy object into the same bucket with canned ACL PublicRead and verify the ACL
 			destKey = eucaUUID();
 			copyObject(ownerNameB, s3ClientB,
 					new CopyObjectRequest(sourceBucket, sourceKey, destBucket, destKey).withCannedAccessControlList(CannedAccessControlList.PublicRead), md5);
-			verifyObjectACL(s3ClientB, destBucket, destKey, CannedAccessControlList.PublicRead, ownerIdB, ownerNameB, ownerIdB);
+			S3Utils.verifyObjectACL(s3ClientB, ownerNameB, destBucket, destKey, CannedAccessControlList.PublicRead, ownerIdB, ownerIdB);
 
 			// Copy object into the same bucket with canned ACL PublicReadWrite and verify the ACL
 			destKey = eucaUUID();
 			copyObject(ownerNameB, s3ClientB,
 					new CopyObjectRequest(sourceBucket, sourceKey, destBucket, destKey).withCannedAccessControlList(CannedAccessControlList.PublicReadWrite),
 					md5);
-			verifyObjectACL(s3ClientB, destBucket, destKey, CannedAccessControlList.PublicReadWrite, ownerIdB, ownerNameB, ownerIdB);
+			S3Utils.verifyObjectACL(s3ClientB, ownerNameB, destBucket, destKey, CannedAccessControlList.PublicReadWrite, ownerIdB, ownerIdB);
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run multipleUsersDifferentBuckets1");
@@ -443,57 +526,90 @@ public class S3CopyObjectTests {
 			// Copy object into the same bucket and verify the ACL
 			String destKey = eucaUUID();
 			copyObject(ownerNameB, s3ClientB, new CopyObjectRequest(sourceBucket, sourceKey, destBucket, destKey), md5);
-			verifyObjectACL(s3ClientB, destBucket, destKey, CannedAccessControlList.Private, ownerIdB, ownerNameB, ownerIdA);
+			S3Utils.verifyObjectACL(s3ClientB, ownerNameB, destBucket, destKey, CannedAccessControlList.Private, ownerIdB, ownerIdA);
 
 			// Copy object into the same bucket with canned ACL AuthenticatedRead and verify the ACL
 			destKey = eucaUUID();
 			copyObject(ownerNameB, s3ClientB,
 					new CopyObjectRequest(sourceBucket, sourceKey, destBucket, destKey).withCannedAccessControlList(CannedAccessControlList.AuthenticatedRead),
 					md5);
-			verifyObjectACL(s3ClientB, destBucket, destKey, CannedAccessControlList.AuthenticatedRead, ownerIdB, ownerNameB, ownerIdA);
+			S3Utils.verifyObjectACL(s3ClientB, ownerNameB, destBucket, destKey, CannedAccessControlList.AuthenticatedRead, ownerIdB, ownerIdA);
 
 			// Copy object into the same bucket with canned ACL BucketOwnerFullControl and verify the ACL
 			destKey = eucaUUID();
 			copyObject(ownerNameB, s3ClientB,
 					new CopyObjectRequest(sourceBucket, sourceKey, destBucket, destKey)
 							.withCannedAccessControlList(CannedAccessControlList.BucketOwnerFullControl), md5);
-			verifyObjectACL(s3ClientB, destBucket, destKey, CannedAccessControlList.BucketOwnerFullControl, ownerIdB, ownerNameB, ownerIdA);
+			S3Utils.verifyObjectACL(s3ClientB, ownerNameB, destBucket, destKey, CannedAccessControlList.BucketOwnerFullControl, ownerIdB, ownerIdA);
 
 			// Copy object into the same bucket with canned ACL BucketOwnerRead and verify the ACL
 			destKey = eucaUUID();
 			copyObject(ownerNameB, s3ClientB,
 					new CopyObjectRequest(sourceBucket, sourceKey, destBucket, destKey).withCannedAccessControlList(CannedAccessControlList.BucketOwnerRead),
 					md5);
-			verifyObjectACL(s3ClientB, destBucket, destKey, CannedAccessControlList.BucketOwnerRead, ownerIdB, ownerNameB, ownerIdA);
+			S3Utils.verifyObjectACL(s3ClientB, ownerNameB, destBucket, destKey, CannedAccessControlList.BucketOwnerRead, ownerIdB, ownerIdA);
 
 			// Copy object into the same bucket with canned ACL LogDeliveryWrite and verify the ACL
 			destKey = eucaUUID();
 			copyObject(ownerNameB, s3ClientB,
 					new CopyObjectRequest(sourceBucket, sourceKey, destBucket, destKey).withCannedAccessControlList(CannedAccessControlList.LogDeliveryWrite),
 					md5);
-			verifyObjectACL(s3ClientB, destBucket, destKey, CannedAccessControlList.LogDeliveryWrite, ownerIdB, ownerNameB, ownerIdA);
+			S3Utils.verifyObjectACL(s3ClientB, ownerNameB, destBucket, destKey, CannedAccessControlList.LogDeliveryWrite, ownerIdB, ownerIdA);
 
 			// Copy object into the same bucket with canned ACL Private and verify the ACL
 			destKey = eucaUUID();
 			copyObject(ownerNameB, s3ClientB,
 					new CopyObjectRequest(sourceBucket, sourceKey, destBucket, destKey).withCannedAccessControlList(CannedAccessControlList.Private), md5);
-			verifyObjectACL(s3ClientB, destBucket, destKey, CannedAccessControlList.Private, ownerIdB, ownerNameB, ownerIdA);
+			S3Utils.verifyObjectACL(s3ClientB, ownerNameB, destBucket, destKey, CannedAccessControlList.Private, ownerIdB, ownerIdA);
 
 			// Copy object into the same bucket with canned ACL PublicRead and verify the ACL
 			destKey = eucaUUID();
 			copyObject(ownerNameB, s3ClientB,
 					new CopyObjectRequest(sourceBucket, sourceKey, destBucket, destKey).withCannedAccessControlList(CannedAccessControlList.PublicRead), md5);
-			verifyObjectACL(s3ClientB, destBucket, destKey, CannedAccessControlList.PublicRead, ownerIdB, ownerNameB, ownerIdA);
+			S3Utils.verifyObjectACL(s3ClientB, ownerNameB, destBucket, destKey, CannedAccessControlList.PublicRead, ownerIdB, ownerIdA);
 
 			// Copy object into the same bucket with canned ACL PublicReadWrite and verify the ACL
 			destKey = eucaUUID();
 			copyObject(ownerNameB, s3ClientB,
 					new CopyObjectRequest(sourceBucket, sourceKey, destBucket, destKey).withCannedAccessControlList(CannedAccessControlList.PublicReadWrite),
 					md5);
-			verifyObjectACL(s3ClientB, destBucket, destKey, CannedAccessControlList.PublicReadWrite, ownerIdB, ownerNameB, ownerIdA);
+			S3Utils.verifyObjectACL(s3ClientB, ownerNameB, destBucket, destKey, CannedAccessControlList.PublicReadWrite, ownerIdB, ownerIdA);
 		} catch (AmazonServiceException ase) {
 			printException(ase);
 			assertThat(false, "Failed to run multipleUsersDifferentBuckets2");
+		}
+	}
+
+	@Test
+	public void accessDeniedCheck() throws Exception {
+		testInfo(this.getClass().getSimpleName() + " - accessDeniedCheck");
+		try {
+			// Create bucket with Canned ACL Private as account A admin
+			createBucketWithCannedACL(ownerNameA, s3ClientA, sourceBucket, CannedAccessControlList.Private);
+
+			// Put object with Canned ACL PublicRead in source bucket as account A admin
+			putObject(ownerNameA, s3ClientA, new PutObjectRequest(sourceBucket, sourceKey, fileToPut).withCannedAcl(CannedAccessControlList.PublicRead), md5);
+
+			// Create bucket with Canned ACL LogDeliveryWrite as account A admin
+			String destBucket = eucaUUID();
+			createBucketWithCannedACL(ownerNameA, s3ClientA, destBucket, CannedAccessControlList.LogDeliveryWrite);
+
+			// As account B admin copy object into the same bucket and verify the error
+			boolean error = false;
+			try {
+				String destKey = eucaUUID();
+				copyObject(ownerNameB, s3ClientB, new CopyObjectRequest(sourceBucket, sourceKey, destBucket, destKey), md5);
+			} catch (AmazonServiceException ase) {
+				error = true;
+				printException(ase);
+				assertTrue("Expected 403 error but got " + ase.getStatusCode(), ase.getStatusCode() == 403);
+				assertTrue("Expected S3 error AccessDenied but got " + ase.getErrorCode(), ase.getErrorCode().equals("AccessDenied"));
+			} finally {
+				assertTrue("Expected 403 AccessDenied error", error);
+			}
+		} catch (AmazonServiceException ase) {
+			printException(ase);
+			assertThat(false, "Failed to run accessDeniedCheck");
 		}
 	}
 
@@ -512,7 +628,7 @@ public class S3CopyObjectTests {
 			String destKey = eucaUUID();
 			copyObject(ownerNameA, s3ClientA,
 					new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey).withMatchingETagConstraint(putResult.getETag()), md5);
-			verifyObjectACL(s3ClientA, sourceBucket, destKey, CannedAccessControlList.Private, ownerIdA, ownerNameA, ownerIdA);
+			S3Utils.verifyObjectACL(s3ClientA, ownerNameA, sourceBucket, destKey, CannedAccessControlList.Private, ownerIdA, ownerIdA);
 
 			// Try to copy object with matching etag constraint but supply with non-matching etag
 			destKey = eucaUUID();
@@ -525,7 +641,7 @@ public class S3CopyObjectTests {
 			destKey = eucaUUID();
 			copyObject(ownerNameA, s3ClientA, new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey).withNonmatchingETagConstraint(eucaUUID()),
 					md5);
-			verifyObjectACL(s3ClientA, sourceBucket, destKey, CannedAccessControlList.Private, ownerIdA, ownerNameA, ownerIdA);
+			S3Utils.verifyObjectACL(s3ClientA, ownerNameA, sourceBucket, destKey, CannedAccessControlList.Private, ownerIdA, ownerIdA);
 
 			// Try to copy object with non-matching etag constraint but supply with matching etag
 			destKey = eucaUUID();
@@ -558,7 +674,7 @@ public class S3CopyObjectTests {
 			// Copy object with modified since date set to before the source object was created
 			String destKey = eucaUUID();
 			copyObject(ownerNameB, s3ClientB, new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey).withModifiedSinceConstraint(beforePut), md5);
-			verifyObjectACL(s3ClientB, sourceBucket, destKey, CannedAccessControlList.Private, ownerIdB, ownerNameB, ownerIdB);
+			S3Utils.verifyObjectACL(s3ClientB, ownerNameB, sourceBucket, destKey, CannedAccessControlList.Private, ownerIdB, ownerIdB);
 
 			// Try to copy object with modified since constraint but supply with timestamp after the source object was created
 			destKey = eucaUUID();
@@ -571,7 +687,7 @@ public class S3CopyObjectTests {
 			destKey = eucaUUID();
 			copyObject(ownerNameB, s3ClientB, new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey).withUnmodifiedSinceConstraint(afterPut),
 					md5);
-			verifyObjectACL(s3ClientB, sourceBucket, destKey, CannedAccessControlList.Private, ownerIdB, ownerNameB, ownerIdB);
+			S3Utils.verifyObjectACL(s3ClientB, ownerNameB, sourceBucket, destKey, CannedAccessControlList.Private, ownerIdB, ownerIdB);
 
 			// Try to copy object with unmodified since constraint but supply with timestamp before the source object was created
 			destKey = eucaUUID();
@@ -621,7 +737,7 @@ public class S3CopyObjectTests {
 		}
 	}
 
-	@Test(enabled = false)
+	@Test
 	public void metadataDirective_SameObject() throws Exception {
 		testInfo(this.getClass().getSimpleName() + " - metadataDirective_SameObject");
 		try {
@@ -690,14 +806,14 @@ public class S3CopyObjectTests {
 			copyObject(ownerNameA, s3ClientA,
 					new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey).withSourceVersionId(putResult1.getVersionId())
 							.withCannedAccessControlList(CannedAccessControlList.LogDeliveryWrite), newMd5);
-			verifyObjectACL(s3ClientA, sourceBucket, destKey, CannedAccessControlList.LogDeliveryWrite, ownerIdA, ownerNameA, ownerIdA);
+			S3Utils.verifyObjectACL(s3ClientA, ownerNameA, sourceBucket, destKey, CannedAccessControlList.LogDeliveryWrite, ownerIdA, ownerIdA);
 
 			// Copy object from second version
 			destKey = eucaUUID();
 			copyObject(ownerNameA, s3ClientA,
 					new CopyObjectRequest(sourceBucket, sourceKey, sourceBucket, destKey).withSourceVersionId(putResult2.getVersionId())
 							.withCannedAccessControlList(CannedAccessControlList.PublicRead), md5);
-			verifyObjectACL(s3ClientA, sourceBucket, destKey, CannedAccessControlList.PublicRead, ownerIdA, ownerNameA, ownerIdA);
+			S3Utils.verifyObjectACL(s3ClientA, ownerNameA, sourceBucket, destKey, CannedAccessControlList.PublicRead, ownerIdA, ownerIdA);
 
 		} catch (AmazonServiceException ase) {
 			printException(ase);
@@ -715,6 +831,20 @@ public class S3CopyObjectTests {
 	private void createBucketWithCannedACL(final String accountName, final AmazonS3 s3, final String bucketName, CannedAccessControlList cannedACL) {
 		print(accountName + ": Creating bucket " + bucketName + " with canned ACL " + cannedACL);
 		Bucket bucket = s3.createBucket(new CreateBucketRequest(bucketName).withCannedAcl(cannedACL));
+		cleanupTasks.add(new Runnable() {
+			@Override
+			public void run() {
+				print(accountName + ": Deleting bucket " + bucketName);
+				s3.deleteBucket(bucketName);
+			}
+		});
+		assertTrue("Invalid reference to bucket", bucket != null);
+		assertTrue("Mismatch in bucket names. Expected bucket name to be " + bucketName + ", but got " + bucket.getName(), bucketName.equals(bucket.getName()));
+	}
+
+	private void createBucketWithACL(final String accountName, final AmazonS3 s3, final String bucketName, AccessControlList acl) {
+		print(accountName + ": Creating bucket " + bucketName + " with canned acl " + acl);
+		Bucket bucket = s3.createBucket(new CreateBucketRequest(bucketName).withAccessControlList(acl));
 		cleanupTasks.add(new Runnable() {
 			@Override
 			public void run() {
@@ -826,172 +956,6 @@ public class S3CopyObjectTests {
 						"Expected metadata value for key " + entry.getKey() + " to be " + entry.getValue() + " but got "
 								+ metadata.getUserMetadata().get(entry.getKey()), metadata.getUserMetadata().get(entry.getKey()).equals(entry.getValue()));
 			}
-		}
-	}
-
-	private void verifyObjectACL(AmazonS3 s3Client, String bucket, String key, CannedAccessControlList cannedACL, String objectOwnerId, String objectOwnerName,
-			String bucketOwnerId) throws Exception {
-		print(objectOwnerName + ": Getting ACL for object " + key + " in bucket " + bucket);
-		AccessControlList acl = s3Client.getObjectAcl(bucket, key);
-		assertTrue("Expected owner of the ACL to be " + objectOwnerId + ", but found " + acl.getOwner().getId(), objectOwnerId.equals(acl.getOwner().getId()));
-		Iterator<Grant> iterator = acl.getGrants().iterator();
-
-		switch (cannedACL) {
-			case AuthenticatedRead:
-				assertTrue("Mismatch in number of ACLs associated with the object. Expected 2 but got " + acl.getGrants().size(), acl.getGrants().size() == 2);
-				while (iterator.hasNext()) {
-					Grant grant = iterator.next();
-					if (grant.getGrantee() instanceof CanonicalGrantee) {
-						assertTrue("Expected grantee to be object owner " + acl.getOwner().getId() + ", but found " + grant.getGrantee().getIdentifier(), grant
-								.getGrantee().getIdentifier().equals(acl.getOwner().getId()));
-						assertTrue("Expected object owner to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(), grant
-								.getPermission().equals(Permission.FullControl));
-					} else {
-						assertTrue("Grantee of type GroupGrantee not found", grant.getGrantee() instanceof GroupGrantee);
-						assertTrue("Expected grantee to be " + GroupGrantee.AuthenticatedUsers + ", but found " + ((GroupGrantee) grant.getGrantee()),
-								((GroupGrantee) grant.getGrantee()).equals(GroupGrantee.AuthenticatedUsers));
-						assertTrue(
-								"Expected " + GroupGrantee.AuthenticatedUsers + " to have " + Permission.Read.toString() + " privilege, but found "
-										+ grant.getPermission(), grant.getPermission().equals(Permission.Read));
-					}
-				}
-				break;
-
-			case BucketOwnerFullControl:
-				if (objectOwnerId.equals(bucketOwnerId)) {
-					assertTrue("Mismatch in number of ACLs associated with the object. Expected 1 but got " + acl.getGrants().size(),
-							acl.getGrants().size() == 1);
-					while (iterator.hasNext()) {
-						Grant grant = iterator.next();
-						assertTrue("Grantee is not of type CanonicalGrantee", grant.getGrantee() instanceof CanonicalGrantee);
-						assertTrue("Expected grantee to be object owner " + acl.getOwner().getId() + ", but found " + grant.getGrantee().getIdentifier(), grant
-								.getGrantee().getIdentifier().equals(acl.getOwner().getId()));
-						assertTrue("Expected object owner to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(), grant
-								.getPermission().equals(Permission.FullControl));
-					}
-				} else {
-					assertTrue("Mismatch in number of ACLs associated with the object. Expected 2 but got " + acl.getGrants().size(),
-							acl.getGrants().size() == 2);
-					while (iterator.hasNext()) {
-						Grant grant = iterator.next();
-						assertTrue("Grantee is not of type CanonicalGrantee", grant.getGrantee() instanceof CanonicalGrantee);
-						assertTrue("Expected grantee to be object owner " + acl.getOwner().getId() + " or bucket owner " + bucketOwnerId + ", but found "
-								+ grant.getGrantee().getIdentifier(), (grant.getGrantee().getIdentifier().equals(acl.getOwner().getId()) || grant.getGrantee()
-								.getIdentifier().equals(bucketOwnerId)));
-						assertTrue("Expected object and bucket owners to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(),
-								grant.getPermission().equals(Permission.FullControl));
-					}
-				}
-				break;
-
-			case BucketOwnerRead:
-				if (objectOwnerId.equals(bucketOwnerId)) {
-					assertTrue("Mismatch in number of ACLs associated with the object. Expected 1 but got " + acl.getGrants().size(),
-							acl.getGrants().size() == 1);
-					while (iterator.hasNext()) {
-						Grant grant = iterator.next();
-						assertTrue("Grantee is not of type CanonicalGrantee", grant.getGrantee() instanceof CanonicalGrantee);
-						assertTrue("Expected grantee to be object owner " + acl.getOwner().getId() + ", but found " + grant.getGrantee().getIdentifier(), grant
-								.getGrantee().getIdentifier().equals(acl.getOwner().getId()));
-						assertTrue("Expected object owner to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(), grant
-								.getPermission().equals(Permission.FullControl));
-					}
-				} else {
-					assertTrue("Mismatch in number of ACLs associated with the object. Expected 2 but got " + acl.getGrants().size(),
-							acl.getGrants().size() == 2);
-					while (iterator.hasNext()) {
-						Grant grant = iterator.next();
-						assertTrue("Grantee is not of type CanonicalGrantee", grant.getGrantee() instanceof CanonicalGrantee);
-						assertTrue("Expected grantee to be object owner " + acl.getOwner().getId() + " or bucket owner " + bucketOwnerId + ", but found "
-								+ grant.getGrantee().getIdentifier(), (grant.getGrantee().getIdentifier().equals(acl.getOwner().getId()) || grant.getGrantee()
-								.getIdentifier().equals(bucketOwnerId)));
-						if (grant.getGrantee().getIdentifier().equals(bucketOwnerId)) {
-							assertTrue("Expected bucket owner to have " + Permission.Read + " privilege, but found " + grant.getPermission(), grant
-									.getPermission().equals(Permission.Read));
-						} else {
-							assertTrue("Expected object owner to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(), grant
-									.getPermission().equals(Permission.FullControl));
-						}
-					}
-				}
-				break;
-
-			case LogDeliveryWrite:
-				assertTrue("Mismatch in number of ACLs associated with the object. Expected 3 but got " + acl.getGrants().size(), acl.getGrants().size() == 3);
-				while (iterator.hasNext()) {
-					Grant grant = iterator.next();
-					if (grant.getGrantee() instanceof CanonicalGrantee) {
-						assertTrue("Expected grantee to be object owner " + acl.getOwner().getId() + ", but found " + grant.getGrantee().getIdentifier(), grant
-								.getGrantee().getIdentifier().equals(acl.getOwner().getId()));
-						assertTrue("Expected object owner to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(), grant
-								.getPermission().equals(Permission.FullControl));
-					} else {
-						assertTrue("Grantee of type GroupGrantee not found", grant.getGrantee() instanceof GroupGrantee);
-						assertTrue("Expected grantee to be " + GroupGrantee.LogDelivery + ", but found " + ((GroupGrantee) grant.getGrantee()),
-								((GroupGrantee) grant.getGrantee()).equals(GroupGrantee.LogDelivery));
-						assertTrue(
-								"Expected " + GroupGrantee.LogDelivery + " to have " + Permission.Write.toString() + " or "
-										+ grant.getPermission().equals(Permission.ReadAcp) + " privileges, but found " + grant.getPermission(), grant
-										.getPermission().equals(Permission.Write) || grant.getPermission().equals(Permission.ReadAcp));
-					}
-				}
-				break;
-
-			case Private:
-				assertTrue("Mismatch in number of ACLs associated with the object. Expected 1 but got " + acl.getGrants().size(), acl.getGrants().size() == 1);
-				while (iterator.hasNext()) {
-					Grant grant = iterator.next();
-					assertTrue("Grantee is not of type CanonicalGrantee", grant.getGrantee() instanceof CanonicalGrantee);
-					assertTrue("Expected grantee to be object owner " + acl.getOwner().getId() + ", but found " + grant.getGrantee().getIdentifier(), grant
-							.getGrantee().getIdentifier().equals(acl.getOwner().getId()));
-					assertTrue("Expected object owner to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(), grant
-							.getPermission().equals(Permission.FullControl));
-				}
-				break;
-
-			case PublicRead:
-				assertTrue("Mismatch in number of ACLs associated with the object. Expected 2 but got " + acl.getGrants().size(), acl.getGrants().size() == 2);
-				while (iterator.hasNext()) {
-					Grant grant = iterator.next();
-					if (grant.getGrantee() instanceof CanonicalGrantee) {
-						assertTrue("Expected grantee to be object owner " + acl.getOwner().getId() + ", but found " + grant.getGrantee().getIdentifier(), grant
-								.getGrantee().getIdentifier().equals(acl.getOwner().getId()));
-						assertTrue("Expected object owner to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(), grant
-								.getPermission().equals(Permission.FullControl));
-					} else {
-						assertTrue("Grantee of type GroupGrantee not found", grant.getGrantee() instanceof GroupGrantee);
-						assertTrue("Expected grantee to be " + GroupGrantee.AllUsers + ", but found " + ((GroupGrantee) grant.getGrantee()),
-								((GroupGrantee) grant.getGrantee()).equals(GroupGrantee.AllUsers));
-						assertTrue(
-								"Expected " + GroupGrantee.AllUsers + " to have " + Permission.Read.toString() + " privilege, but found "
-										+ grant.getPermission(), grant.getPermission().equals(Permission.Read));
-					}
-				}
-				break;
-
-			case PublicReadWrite:
-				assertTrue("Mismatch in number of ACLs associated with the object. Expected 3 but got " + acl.getGrants().size(), acl.getGrants().size() == 3);
-				while (iterator.hasNext()) {
-					Grant grant = iterator.next();
-					if (grant.getGrantee() instanceof CanonicalGrantee) {
-						assertTrue("Expected grantee to be object owner " + acl.getOwner().getId() + ", but found " + grant.getGrantee().getIdentifier(), grant
-								.getGrantee().getIdentifier().equals(acl.getOwner().getId()));
-						assertTrue("Expected object owner to have " + Permission.FullControl + " privilege, but found " + grant.getPermission(), grant
-								.getPermission().equals(Permission.FullControl));
-					} else {
-						assertTrue("Grantee of type GroupGrantee not found", grant.getGrantee() instanceof GroupGrantee);
-						assertTrue("Expected grantee to be " + GroupGrantee.AllUsers + ", but found " + ((GroupGrantee) grant.getGrantee()),
-								((GroupGrantee) grant.getGrantee()).equals(GroupGrantee.AllUsers));
-						assertTrue("Expected " + GroupGrantee.AllUsers + " to have " + Permission.Read.toString() + " or " + Permission.Write.toString()
-								+ " privileges, but found " + grant.getPermission(), grant.getPermission().equals(Permission.Read)
-								|| grant.getPermission().equals(Permission.Write));
-					}
-				}
-				break;
-
-			default:
-				assertThat(false, "Unknown canned ACL");
-				break;
 		}
 	}
 }

@@ -1,0 +1,155 @@
+{
+
+    "AWSTemplateFormatVersion":"2010-09-09",
+
+    "Description":"Deploy CoreOS Cluster",
+
+    "Parameters": {
+        "CoreOSImageId": {
+            "Description":"CoreOS Image Id",
+            "Type":"String",
+            "NoEcho":"True"
+        },
+
+        "UserKeyPair": {
+            "Description":"User Key Pair",
+            "Type":"String",
+            "NoEcho":"True"
+        },
+
+        "ClusterSize": {
+            "Description":"Desired CoreOS Cluster Size",
+            "Type":"Number",
+            "NoEcho":"True"
+        },
+
+        "VmType": {
+            "Description":"Desired VM Type for Instances",
+            "Type":"String",
+            "NoEcho":"True"
+        },
+
+        "AcctId": {
+            "Description":"IAM Account Id of User",
+            "Type":"String",
+            "NoEcho":"True"
+        }
+    },
+
+    "Resources" : {
+        "CoreOsGroup" : {
+            "Type" : "AWS::AutoScaling::AutoScalingGroup",
+            "Properties" : {
+                "AvailabilityZones" : [ "<availability-zone>" ],
+                "LaunchConfigurationName" : { "Ref" : "CoreOsLaunchConfig" },
+                "MinSize" : { "Ref" : "ClusterSize" },
+                "MaxSize" : { "Ref" : "ClusterSize" } 
+            }
+        },
+
+        "CoreOsLaunchConfig" : {
+            "Type" : "AWS::AutoScaling::LaunchConfiguration",
+            "Properties": {
+                "ImageId" : { "Ref":"CoreOSImageId" },
+                "InstanceType" : { "Ref" : "VmType" },
+                "UserData" : { "Fn::Base64" : { "Fn::Join" : ["",[
+                    "#cloud-config","\n",
+                    "coreos:","\n",
+                    "  etcd:","\n",
+                    "    discovery: https://discovery.etcd.io/<token>","\n",
+                    "    addr: $private_ipv4:4001","\n",
+                    "    peer-addr: $private_ipv4:7001","\n",
+                    "  units:","\n",
+                    "    - name: format-ephemeral.service","\n",
+                    "      command: start","\n",
+                    "      content: |","\n",
+                    "        [Unit]","\n",
+                    "        Description=Formats the ephemeral drive","\n",
+                    "        [Service]","\n",
+                    "        Type=oneshot","\n",
+                    "        RemainAfterExit=yes","\n",
+                    "        ExecStart=/usr/sbin/wipefs -f /dev/vdb","\n",
+                    "        ExecStart=/usr/sbin/mkfs.btrfs -f /dev/vdb","\n",
+                    "    - name: var-lib-docker.mount","\n",
+                    "      command: start","\n",
+                    "      content: |","\n",
+                    "        [Unit]","\n",
+                    "        Description=Mount ephemeral to /var/lib/docker","\n",
+                    "        Requires=format-ephemeral.service","\n",
+                    "        Before=docker.service","\n",
+                    "        [Mount]","\n",
+                    "        What=/dev/vdb","\n",
+                    "        Where=/var/lib/docker","\n",
+                    "        Type=btrfs","\n",
+                    "    - name: etcd.service","\n",
+                    "      command: start","\n",
+                    "    - name: fleet.service","\n",
+                    "      command: start","\n" ]]}
+                },
+                "SecurityGroups" : [
+                    { "Ref" : "CoreOsSecurityGroup" }
+                ],
+                "KeyName" : { "Ref" : "UserKeyPair" }
+            }
+        },
+
+        "CoreOsSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+                "Properties": {
+                    "GroupDescription" : "Security Group for CoreOS Cluster",
+                    "SecurityGroupIngress" : [
+                        {
+                            "IpProtocol" : "tcp",
+                            "FromPort" : "22",
+                            "ToPort" : "22",
+                            "CidrIp" : "0.0.0.0/0"
+                        }
+                    ]
+                }
+        },
+
+        "CoreOsSecurityGroupIngress1": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+                "Properties": {
+                    "IpProtocol" : "tcp",
+                    "FromPort" : "4001",
+                    "ToPort" : "4001",
+                    "GroupName": {
+                        "Ref": "CoreOsSecurityGroup"
+                    },
+                    "SourceSecurityGroupName" : {
+                        "Ref" : "CoreOsSecurityGroup"
+                    },
+                    "SourceSecurityGroupOwnerId" : {
+                        "Ref" : "AcctId"
+                    }
+                }
+        },
+
+        "CoreOsSecurityGroupIngress2": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+                "Properties": {
+                    "IpProtocol" : "tcp",
+                    "FromPort" : "7001",
+                    "ToPort" : "7001",
+                    "SourceSecurityGroupName" : {
+                        "Ref" : "CoreOsSecurityGroup"
+                    },
+                    "GroupName": {
+                        "Ref": "CoreOsSecurityGroup"
+                    },
+                    "SourceSecurityGroupOwnerId" : {
+                        "Ref" : "AcctId"
+                    }
+                }
+        }
+
+    },
+
+    "Outputs" : {
+        "AutoScalingGroup" : {
+            "Description" : "AutoScaling Group Name",
+            "Value" : { "Ref" : "CoreOsGroup" }
+        }
+    }
+}

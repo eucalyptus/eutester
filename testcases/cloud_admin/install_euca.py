@@ -289,6 +289,11 @@ class Install(EutesterTestCase):
             ### Setup IP forwarding
             cc.sys("sysctl -w net.ipv4.ip_forward=1")
 
+            ### Make sure conflicting dhcpd server is not running on Nodes by deleting
+            ### hypervisor's default network
+            for node in self.tester.service_manager.get_all_node_controllers():
+                node.sys('virsh net-destroy default')
+
             ### add private interface subnet on NC bridges
             ip_index = 2
             for nc in self.tester.get_component_machines("nc"):
@@ -335,14 +340,14 @@ class Install(EutesterTestCase):
             self.tester = Eucaops(config_file=self.args.config_file, password=self.args.password)
         self.tester.modify_property("bootstrap.webservices.use_dns_delegation", "true")
         self.tester.modify_property("bootstrap.webservices.use_instance_dns", "true")
-        enabled_clc = self.tester.service_manager.get_enabled_clc()
+        enabled_dns = self.tester.service_manager.get_enabled_dns()
         if self.args.dnsdomain:
             self.tester.modify_property("system.dns.dnsdomain", self.args.dnsdomain)
         else:
-            hostname = enabled_clc.machine.sys('hostname')[0].split(".")[0]
+            hostname = self.tester.get_machine_by_ip(enabled_dns.hostname).sys('hostname')[0].split(".")[0]
             domain = hostname + ".autoqa.qa1.eucalyptus-systems.com"
             self.tester.modify_property("system.dns.dnsdomain", domain)
-        self.tester.modify_property("system.dns.nameserveraddress", enabled_clc.hostname)
+        self.tester.modify_property("system.dns.nameserveraddress", enabled_dns.hostname)
 
     def clean_method(self):
         pass

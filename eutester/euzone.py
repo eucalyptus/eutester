@@ -38,6 +38,7 @@ Place holder for availability zone test specific convenience methods+objects to 
 import eutester
 from boto.ec2.zone import Zone
 import re
+import time
 
 class Vm_Type():
     def __init__(self, name,free,max, cpu, ram, disk):
@@ -57,18 +58,34 @@ class EuZone(Zone):
         newzone = EuZone(zone.connection)
         newzone.__dict__ = zone.__dict__
         newzone.tester = tester
+        newzone._vm_types = None
+        newzone._vm_types_last_updated = 0
+        newzone._vm_update_interval = 5
         newzone.vm_types = newzone.get_all_vm_type_info()
         return newzone
+
+    @property
+    def vm_types(self):
+        if not self._vm_types or \
+            (time.time() - self._vm_types_last_updated > self._vm_update_interval):
+            self._get_all_vm_type_info()
+        return self._vm_types
+
+    @vm_types.setter
+    def vm_types(self, value):
+        self._vm_types = value
+        self._vm_types_last_updated = time.time()
 
     def debug(self,msg):
         self.tester.debug(msg)
 
     def update(self):
-        super(EuZone, self).update()
         self.vm_types = self.get_all_vm_type_info()
 
-    @eutester.Eutester.printinfo
     def get_all_vm_type_info(self):
+        return self.vm_types
+
+    def _get_all_vm_type_info(self):
         vm_types = []
         get_zone = [str(self.name)]
         get_zone.append('verbose')
@@ -100,6 +117,7 @@ class EuZone(Zone):
                 else:
                     if not re.search('vm types', zone.name) and  zone.name != self.name:
                         break
+        self.vm_types = vm_types
         return vm_types
 
     @eutester.Eutester.printinfo

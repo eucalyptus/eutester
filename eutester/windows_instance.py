@@ -52,9 +52,13 @@ from eutester import Eutester
 #from eucaops import Eucaops
 from eutester.euvolume import EuVolume
 from eutester import eulogger
+from eutester.euinstance import EuInstance
 from eutester.taggedresource import TaggedResource
+from boto.ec2.instance import InstanceState
+from boto.ec2.networkinterface import NetworkInterface
 from random import randint
 from datetime import datetime
+from prettytable import PrettyTable
 import winrm_connection
 import socket
 import sys
@@ -64,6 +68,7 @@ import time
 import copy
 import types
 import operator
+get_line = Eutester.get_line
 
 
 class WinInstanceDiskType():
@@ -133,11 +138,6 @@ class WinInstanceDiskType():
     def get_summary(self, printheader=True, printmethod=None):
         raise Exception('Method not implemented')
 
-    def get_line(self, length):
-        line = ""
-        for x in xrange(0,int(length)):
-            line += "-"
-        return "\n" + line + "\n"
 
     def print_self_full(self, printmethod=None):
         '''
@@ -265,7 +265,7 @@ class WinInstanceDiskDrive(WinInstanceDiskType):
         length = len(header)
         if len(summary) > length:
             length = len(summary)
-        line = self.get_line(length)
+        line = get_line(length)
         if printheader:
             buf += line + header + line
         buf += summary + line
@@ -330,7 +330,7 @@ class WinInstanceDiskPartition(WinInstanceDiskType):
         length = len(header)
         if len(summary) > length:
             length = len(summary)
-        line = self.get_line(length)
+        line = get_line(length)
         if printheader:
             buf += line + header + line
         buf += summary + line
@@ -376,7 +376,7 @@ class WinInstanceLogicalDisk(WinInstanceDiskType):
         length = len(header)
         if len(summary) > length:
             length = len(summary)
-        line = self.get_line(length)
+        line = get_line(length)
         if printheader:
             buf += line + header + line
         buf += summary + line
@@ -385,8 +385,7 @@ class WinInstanceLogicalDisk(WinInstanceDiskType):
         return buf
 
 
-
-class WinInstance(Instance, TaggedResource):
+class WinInstance(EuInstance, TaggedResource):
     gigabyte = 1073741824
     megabyte = 1048576
 
@@ -412,7 +411,6 @@ class WinInstance(Instance, TaggedResource):
                                       rootfs_device = "sda",
                                       block_device_prefix = "sd",
                                       bdm_root_vol = None,
-                                      attached_vols = [],
                                       virtio_blk = True,
                                       cygwin_path = None,
                                       disk_update_interval=10,
@@ -439,6 +437,7 @@ class WinInstance(Instance, TaggedResource):
         newins.tester = tester
         newins.winrm_port = winrm_port
         newins.rdp_port = rdp_port
+        newins.bdm_root_vol = None
         newins.winrm_protocol = winrm_protocol
         newins.debugmethod = debugmethod
         if newins.debugmethod is None:
@@ -453,11 +452,10 @@ class WinInstance(Instance, TaggedResource):
                 keyname = keypair.name
             newins.keypath = keypath or os.getcwd() + "/" + keyname + ".pem"
         newins.keypair = keypair
-
         newins.password = password
         newins.username = username
         newins.verbose = verbose
-        newins.attached_vols=attached_vols
+        newins.attached_vols=[]
         newins.timeout = timeout
         newins.virtio_blk  = virtio_blk
         newins.disk_update_interval = disk_update_interval
@@ -488,16 +486,47 @@ class WinInstance(Instance, TaggedResource):
                 volume = newins.tester.get_volume(volume_id = newins.block_device_mapping.get(newins.root_device_name).volume_id)
                 newins.bdm_root_vol = EuVolume.make_euvol_from_vol(volume, tester=newins.tester,cmdstart=newins.cmdstart)
             except:pass
-        else:
-            newins.bdm_root_vol = None
         newins.winrm = None
         if newins.auto_connect and newins.state == 'running':
             newins.connect_to_instance(timeout=timeout)
         return newins
 
-    def update(self):
-        super(WinInstance, self).update()
+    def update(self, validate=False, dry_run=False,
+               err_state='terminated', err_code=-1):
+        ret = None
+        tb = ""
+        retries = 2
+        for x in xrange(0, retries):
+            try:
+                #send with validation True, fail later...
+                ret = super(WinInstance, self).update(validate=True,
+                                                      dry_run=dry_run)
+                break
+            except ValueError:
+                if validate:
+                    raise
+                tb = self.tester.get_traceback()
+                self.debug('Failed to update instance. Attempt:{0}/{1}'
+                           .format(x, retries))
+        if not ret:
+            failmsg = 'Failed to update instance. Instance may no longer ' \
+                      'be present on system"{0}"'.format(self.id)
+            self.debug('{0}\n{1}'.format(tb, failmsg))
+            self.debug('{0} setting fake state to:"{1}"'.format(self.id,
+                                                                err_state))
+            state = InstanceState(name=err_state, code=err_code)
+            self._state = state
+            ret = self.state
         self.set_last_status()
+        return ret
+
+
+    @property
+    def age(self):
+        launchtime = self.tester.get_datetime_from_resource_string(self.launch_time)
+        #return the elapsed time in seconds
+        return (time.mktime(datetime.utcnow().utctimetuple()) -
+                time.mktime(launchtime.utctimetuple()))
 
     def update_vm_type_info(self):
         self.vmtype_info =  self.tester.get_vm_type_from_zone(self.placement,self.instance_type)
@@ -529,105 +558,51 @@ class WinInstance(Instance, TaggedResource):
             buf += str(key).ljust(longest_key) + " -----> :" + str(dict[key]) + "\n"
         printmethod(buf)
 
-    def printself(self,title=True, footer=True, printmethod=None):
-        instid = 11
-        emi = 13
-        resid = 11
-        laststate =10
-        privaddr = 10
-        age = 13
-        vmtype = 12
-        rootvol = 13
-        cluster = 25
-        pubip = 16
-
-        if self.bdm_root_vol:
-            bdmvol = self.bdm_root_vol.id
-        else:
-            bdmvol = None
-        reservation_id = None
-        if self.reservation:
-            reservation_id = self.reservation.id
-        header = ""
-        buf = ""
-        if title:
-            header = str('INST_ID').center(instid) +'|' + \
-                     str('EMI').center(emi) + '|' +  \
-                     str('RES_ID').center(resid) + '|' +  \
-                     str('LASTSTATE').center(laststate) + '|' +  \
-                     str('PRIV_ADDR').center(privaddr) + '|' +  \
-                     str('AGE@STATUS').center(age) + '|' +  \
-                     str('VMTYPE').center(vmtype) + '|' +  \
-                     str('ROOT_VOL').center(rootvol) + '|' +  \
-                     str('CLUSTER').center(cluster) + '|' +  \
-                     str('PUB_IP').center(pubip) + '|' +  \
-                     str('PRIV_IP')
-        summary = str(self.id).center(instid) + '|' + \
-                  str(self.image_id).center(emi) + '|' +  \
-                  str(reservation_id).center(resid) + '|' +  \
-                  str(self.laststate).center(laststate) + '|' +  \
-                  str(self.private_addressing).center(privaddr) + '|' + \
-                  str(self.age_at_state).center(age) + '|' +  \
-                  str(self.instance_type).center(vmtype) + '|' +  \
-                  str(bdmvol).center(rootvol) + '|' +  \
-                  str(self.placement).center(cluster) + '|' + \
-                  str(self.ip_address).center(pubip) + '|' + \
-                  str(self.private_ip_address).rstrip()
-
-        length = len(header)
-        if len(summary) > length:
-            length = len(summary)
-        line = self.get_line(length)
-        if title:
-            buf = line + header + line
-        buf += summary
-        if footer:
-            buf += line
-        if printmethod:
-            printmethod(buf)
-        return buf
-
-
-    def get_line(self, length):
-        line = ""
-        for x in xrange(0,int(length)):
-            line += "-"
-        return "\n" + line + "\n"
-
-    def get_password(self, private_key_path=None, key=None, dir=None, exten=".pem", encoded=True):
+    def get_password(self,
+                     private_key_path=None,
+                     key=None,
+                     dir=None,
+                     exten=".pem",
+                     encoded=True,
+                     force_update=False):
         '''
         :param private_key_path: private key file used to decrypt password
         :param key: name of private key
         :param dir: Path to private key
         :param exten: extension of private key
-        :param encoded: boolean of whether string returned from server is Base64 encoded
+        :param encoded: boolean of whether string returned from server is
+                        Base64 encoded
         :return: decrypted password
         '''
-        if self.password is None:
-            self.password = self.tester.get_windows_instance_password(self,
-                                                                      private_key_path=private_key_path,
-                                                                      key=key,
-                                                                      dir=dir,
-                                                                      exten=exten,
-                                                                      encoded=encoded)
+        if self.password is None or force_update:
+            self.password = self.tester.get_windows_instance_password(
+                self,
+                private_key_path=private_key_path,
+                key=key,
+                dir=dir,
+                exten=exten,
+                encoded=encoded)
         return self.password
 
 
     def reset_ssh_connection(self, timeout=None):
-        # todo: Remove ssh reference from this method, use something like reset_instance_connection, etc..
-        self.debug('Note ssh not implemented at this time, using winrm for shell access instead...')
+        # todo: Remove ssh reference from this method, use something like
+        # reset_instance_connection, etc..
+        self.debug('Note ssh not implemented at this time, using winrm for '
+                   'shell access instead...')
         return self.reset_winrm_connection(timeout=timeout)
 
     def reset_winrm_connection(self, timeout=None, force=False):
         # todo:
         timeout = timeout or self.timeout
         self.debug('reset_winrm_connection for:'+str(self.id))
-        if self.password is None:
-            self.get_password()
+        self.get_password(force_update=True)
         if self.username is None or self.password is None:
             #Allow but warn here as this may be a valid negative test
-            self.debug('Warning username and/or password were None in winrm connnection?')
-        #Create a new winrm interface if this is a new instance or an attribute has changed...
+            self.debug('Warning username and/or password were None in '
+                       'winrm connnection?')
+        # Create a new winrm interface if this is a new instance or
+        # an attribute has changed...
         try:
             #Check the port in order to provide debug if the connection fails
             self.test_port_status(port=self.winrm_port, ip=self.ip_address)
@@ -638,14 +613,15 @@ class WinInstance(Instance, TaggedResource):
                          self.winrm.password == self.password):
             if self.winrm:
                 self.winrm.close_shell()
-            self.winrm = winrm_connection.Winrm_Connection(hostname = self.ip_address,
-                                                           username = self.username,
-                                                           password = self.password,
-                                                           port = self.winrm_port,
-                                                           protocol = self.winrm_protocol,
-                                                           debug_method = self.debug,
-                                                           verbose=True
-                                                           )
+            self.winrm = winrm_connection.Winrm_Connection(
+                hostname = self.ip_address,
+                username = self.username,
+                password = self.password,
+                port = self.winrm_port,
+                protocol = self.winrm_protocol,
+                debug_method = self.debug,
+                verbose=True
+                )
 
 
     def get_reservation(self):
@@ -654,19 +630,26 @@ class WinInstance(Instance, TaggedResource):
             res = self.tester.get_reservation_for_instance(self)
         except Exception, e:
             self.update()
-            self.debug('Could not get reservation for instance in state:' + str(self.state) + ", err:" + str(e))
+            self.debug('Could not get reservation for instance in state:' +
+                       str(self.state) + ", err:" + str(e))
         return res
 
 
     def connect_to_instance(self, wait_for_boot=180, timeout=120):
         '''
         Attempts to connect to an instance via ssh.
-        wait_for_boot=time to wait, allowing guest to boot before attempting to poll for ports active status
-        timeout - optional - time in seconds to wait when polling port(s) status(s) before failure
+        :params wait_for_boot: time to wait, allowing guest to boot before
+                               attempting to poll for ports active status
+        :params timeout: -optional - time in seconds to wait when polling
+                         port(s) status(s) before failure
 
         '''
+        self.debug("{0}connect_to_instance starting.\nwait_for_boot:{1} "
+                   "seconds\ntimeout from boot:{2}{3}"
+                   .format(get_line(), wait_for_boot, timeout, get_line()))
         try:
-            self.poll_for_port_status_with_boot_delay(waitforboot=wait_for_boot, timeout=timeout)
+            self.poll_for_port_status_with_boot_delay(waitforboot=wait_for_boot,
+                                                      timeout=timeout)
         except Exception, e:
             self.debug('Warning failed to poll port status:' + str(e))
         self.debug("Attempting to create connection to instance:" + self.id)
@@ -685,9 +668,11 @@ class WinInstance(Instance, TaggedResource):
                 self.sys("whoami")
             except Exception, se:
                 tb = self.tester.get_traceback()
-                self.debug('Caught exception attempting to connect winrm shell:\n'+ str(tb) + str(se))
+                self.debug('Caught exception attempting to connect '
+                           'winrm shell:\n'+ str(tb) + str(se))
                 elapsed = int(time.time()-start)
-                self.debug('connect_to_instance: Attempts:'+str(attempts)+', elapsed:'+str(elapsed)+'/'+str(timeout))
+                self.debug('connect_to_instance: Attempts:' + str(attempts) +
+                           ', elapsed:'+str(elapsed)+'/'+str(timeout))
                 if self.winrm is not None:
                     self.winrm.close_shell()
                     self.winrm = None
@@ -697,13 +682,42 @@ class WinInstance(Instance, TaggedResource):
                 break
         elapsed = int(time.time()-start)
         if self.winrm is None:
-            raise Exception(str(self.id)+":Failed establishing management connection to instance, elapsed:"+str(elapsed)+
-                            "/"+str(timeout))
+            self.get_connection_debug()
+            raise RuntimeError(str(self.id) +
+                               ":Failed establishing management connection to "
+                               "instance, elapsed:" + str(elapsed) +
+                               "/" + str(timeout))
+        self.debug('Connect_to_instance updating attached volumes/disk '
+                   'info for vols: ' + str(self.attached_vols))
         if self.brief:
             self.update_system_info()
         else:
             self.update_system_and_disk_info()
             self.init_attached_volumes()
+        self.debug("{0}connect_to_instance completed{1}"
+                   .format(get_line(), get_line()))
+
+    def get_connection_debug(self):
+        # Add network debug/diag info here...
+        # First show arp cache from local machine
+        # todo Consider getting info from relevant euca components:
+        # - iptables info
+        # - route info
+        # - instance xml
+        try:
+            # Show local ARP info...
+            arp_out = "\nLocal ARP cache for instance ip: " \
+                      + str(self.ip_address) + "\n"
+            arp_fd = os.popen('arp ' + str(self.ip_address))
+            for line in arp_fd:
+                arp_out += line
+            self.debug(arp_out)
+        except Exception as AE:
+            self.log.debug('Failed to get arp info:' + str(AE))
+        try:
+            self.tester.get_console_output(self)
+        except Exception as CE:
+            self.log.debug('Failed to get console output:' + str(CE))
 
     def update_root_device_diskdrive(self):
         if not self.root_device_type == 'ebs':
@@ -722,7 +736,12 @@ class WinInstance(Instance, TaggedResource):
                     volume.guestdev = disk.deviceid
                     volume.md5len = 1024
                     volume.md5 = self.get_dev_md5(disk.cygwin_scsi_drive, volume.md5len)
-                    self.attached_vols.append(volume)
+                    if not self.get_volume_from_attached_list_by_id(volume.id):
+                        self.debug("{0} updating with root vol:{1}{2}"
+                                   .format(get_line(),
+                                           volume.id,
+                                           get_line()))
+                        self.attached_vols.append(volume)
                     disk.update_md5_info_from_ebs()
                     return
 
@@ -851,13 +870,19 @@ class WinInstance(Instance, TaggedResource):
         raise Exception('test_poll_for_ports_status:'+str(ip)+':'+str(port)+' FAILED after attempts:'+str(attempt)+', elapsed:'+str(elapsed)+' seconds')
 
     def init_attached_volumes(self):
+        self.debug('init_attahced_volumes... attached_vols: ' + str(self.attached_vols))
         syncdict = self.sync_attached_volumes_with_clouds_view()
         if syncdict['errors']:
             errmsg = 'Errors syncing guest volumes with cloud at init:' + ",".join(str(e) for e in syncdict['errors'])
             errmsg += 'Failed to sync guest volumes with cloud at init:' + ",".join(str(x) for x in syncdict['badvols'])
+            self.debug(errmsg)
+            time.sleep(60)
             raise Exception(errmsg)
 
     def sync_attached_volumes_with_clouds_view(self):
+        self.debug(get_line() +
+                   "Starting sync_attached_volumes_with_clouds_view"
+                   + get_line() )
         badvols = []
         errors = []
         ret = {'errors':errors, 'badvols':badvols}
@@ -865,6 +890,8 @@ class WinInstance(Instance, TaggedResource):
         cloud_volumes = self.tester.get_volumes(attached_instance=self.id)
         #Make a copy of a list of volumes this instance thinks are currenlty attached
         locallist = copy.copy(self.attached_vols)
+        self.debug('Cloud list:' + str(cloud_volumes))
+        self.debug('Local list:' + str(locallist))
 
         for vol in cloud_volumes:
             for local_vol in locallist:
@@ -880,6 +907,9 @@ class WinInstance(Instance, TaggedResource):
         for local_vol in locallist:
             badvols.append(local_vol)
             errors.append(local_vol.id + ' Error unattached volume found in guests attach list. \n')
+        self.debug(get_line() +
+                   "Finishing sync_attached_volumes_with_clouds_view"
+                   + get_line() )
         return ret
 
 
@@ -936,8 +966,7 @@ class WinInstance(Instance, TaggedResource):
         if cygpath is None:
             raise Exception('Could not find cygwin path on guest for curl?')
         curl = cygpath + 'bin\curl.exe --connect-timeout ' + str(connect_timeout) + ' '
-        return self.sys(curl + str(url), code=0, timeout=timeout)
-
+        return self.sys(curl + str(url), code=0, timeout=connect_timeout)
 
 
 
@@ -1252,7 +1281,6 @@ class WinInstance(Instance, TaggedResource):
             if re.search('vol-', disk.serialnumber):
                 use_serial = True
                 break
-
         attached_dev = None
         start= time.time()
         elapsed = 0
@@ -1290,6 +1318,7 @@ class WinInstance(Instance, TaggedResource):
                         self.debug("Volume:"+str(euvolume.id)+"found guest device by diff:"+str(euvolume.guestdev))
                     if attached_dev:
                         euvolume.guestdev = attached_dev
+                        attached_vol = self.get_volume_from_attached_list_by_id(euvolume.id)
                         self.attached_vols.append(euvolume)
                         self.debug(euvolume.id+": Requested dev:"+str(euvolume.attach_data.device)+", attached to guest device:"+str(euvolume.guestdev))
                         break
@@ -1711,13 +1740,12 @@ class WinInstance(Instance, TaggedResource):
 
 
     def update_volume_guest_info(self, volume, md5=None, md5len=None, guestdev=None):
+        self.debug("{0} update_volume_guest_info: {1} {2}"
+                   .format(get_line(), volume, get_line()))
         if not self.is_volume_attached_to_this_instance(volume):
             raise Exception('Volume not attached to this instance')
         disk = None
-        attached_volume = self.get_volume_from_attached_list_by_id(volume.id)
-        if attached_volume:
-            volume = attached_volume
-        else:
+        if not self.get_volume_from_attached_list_by_id(volume.id):
             self.attached_vols.append(volume)
         volume.guestdev = guestdev or volume.guestdev
         if md5:
@@ -1892,7 +1920,114 @@ class WinInstance(Instance, TaggedResource):
         return uptime
 
 
+    def stop_instance_and_verify(self, timeout=200, state='stopped',
+                                 failstate='terminated', check_vols=True):
+        '''
+        Attempts to stop instance and verify the state has gone to
+        stopped state
+        :param timeout; -optional-time to wait on instance to go to state 'state' before failing
+        :param state: -optional-the expected state to signify success, default is stopped
+        :param failstate: -optional-a state transition that indicates failure, default is terminated
+        '''
+        self.debug(self.id+" Attempting to stop instance...")
+        start = time.time()
+        elapsed = 0
+        self.stop()
+        while (elapsed < timeout):
+            time.sleep(2)
+            self.update()
+            if self.state == state:
+                break
+            if self.state == failstate:
+                raise Exception(str(self.id) + " instance went to state:" +
+                                str(self.state) + " while stopping")
+            elapsed = int(time.time()- start)
+            if elapsed % 10 == 0 :
+                self.debug(str(self.id) + " wait for stop, in state:" +
+                           str(self.state) + ",time remaining:" +
+                           str(elapsed) + "/" + str(timeout) )
+        if self.state != state:
+            raise Exception(self.id + " state: " + str(self.state) +
+                            " expected:" + str(state) +
+                            ", after elapsed:" + str(elapsed))
+        if check_vols:
+            for volume in self.attached_vols:
+                volume.update
+                if volume.status != 'in-use':
+                    raise Exception(str(self.id) + ', Volume ' +
+                                    str(volume.id) + ':' + str(volume.status)
+                                    + ' state did not remain in-use '
+                                      'during stop')
+        self.debug(self.id + " stop_instance_and_verify Success")
 
+
+    def start_instance_and_verify(self, timeout=300, state = 'running',
+                                  failstates=['terminated'], failfasttime=30,
+                                  connect=True, checkvolstatus=True):
+        '''
+        Attempts to start instance and verify state, and reconnects ssh session
+        :param timeout: -optional-time to wait on instance to go to state
+                        'state' before failing
+        :param state: -optional-the expected state to signify success,
+                        default is running
+        :param failstate: -optional-a state transition that indicates failure,
+                          default is terminated
+        :param connect: -optional - boolean to indicate whether an ssh
+                        session should be established once the expected state
+                        has been reached
+        :param checkvolstatus: -optional -boolean to be used to check volume
+                               status post start up
+        '''
+        self.debug(self.id+" Attempting to start instance...")
+        if checkvolstatus:
+            for volume in self.attached_vols:
+                volume.update
+                if checkvolstatus:
+                    if volume.status != 'in-use':
+                        raise Exception(str(self.id) + ', Volume ' + str(volume.id) + ':' + str(volume.status)
+                                        + ' state did not remain in-use during stop'  )
+        self.debug("\n"+ str(self.id) + ": Printing Instance 'attached_vol' list:\n")
+        self.tester.show_volumes(self.attached_vols)
+        msg=""
+        start = time.time()
+        elapsed = 0
+        self.update()
+        #Add fail fast states...
+        if self.state == 'stopped':
+            failstates.extend(['stopped','stopping'])
+        self.start()
+
+        while (elapsed < timeout):
+            elapsed = int(time.time()- start)
+            self.update()
+            self.debug(str(self.id) + " wait for start, in state:" +
+                       str(self.state) + ",time remaining:" + str(elapsed) +
+                       "/"+str(timeout) )
+            if self.state == state:
+                break
+            if elapsed >= failfasttime:
+                for failstate in failstates:
+                    if self.state == failstate:
+                        raise Exception(str(self.id) +
+                                        " instance went to state:" +
+                                        str(self.state) + " while starting")
+            time.sleep(10)
+        if self.state != state:
+            raise Exception(self.id + " not in " + str(state) +
+                            " state after elapsed:" + str(elapsed))
+        else:
+            self.debug(self.id + " went to state:" + str(state))
+            if connect:
+                self.connect_to_instance(timeout=timeout)
+            if checkvolstatus:
+                badvols= self.get_unsynced_volumes(check_md5=True)
+                if badvols != []:
+                    for vol in badvols:
+                        msg = msg + "\nVolume:" + vol.id + " Local Dev:" +\
+                              vol.guestdev
+                    raise Exception("Missing volumes post reboot:" + str(msg) +
+                                    "\n")
+        self.debug(self.id+" start_instance_and_verify Success")
 
 
 

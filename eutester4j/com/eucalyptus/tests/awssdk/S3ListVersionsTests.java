@@ -11,6 +11,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
@@ -44,21 +45,6 @@ import com.amazonaws.util.Md5Utils;
  * 
  * <p>All tests are passing after the commit 2841c3707b6b918bd84b2e849d107d154ad2a2e2</p>
  * 
- * <li>All tests failed against Walrus due to <a href="https://eucalyptus.atlassian.net/browse/EUCA-7855">EUCA-7855</a> unless the owner canonical ID
- * verification is commented out</li>
- * 
- * <li>{@link #deleteMarker()} fails against Walrus due to <a href="https://eucalyptus.atlassian.net/browse/EUCA-7818">EUCA-7818</a></li>
- * 
- * <li>{@link #keyMarker()} fails against Walrus due to <a href="https://eucalyptus.atlassian.net/browse/EUCA-7985">EUCA-7985</a></li>
- * 
- * <li>{@link #keyMarkerVersionIdMarker()} fails against Walrus due to <a href="https://eucalyptus.atlassian.net/browse/EUCA-7985">EUCA-7985</a> and <a
- * href="https://eucalyptus.atlassian.net/browse/EUCA-7986">EUCA-7986</a></li>
- * 
- * <li>{@link #delimiterAndPrefix()} fails against Walrus due to <a href="https://eucalyptus.atlassian.net/browse/EUCA-7991">EUCA-7991</a></li>
- * 
- * <li>{@link #maxKeysSingleKeyMultipleUploads()} fails against Walrus due to <a href="https://eucalyptus.atlassian.net/browse/EUCA-7985">EUCA-7985</a> and <a
- * href="https://eucalyptus.atlassian.net/browse/EUCA-7986">EUCA-7986</a></li>
- * 
  * @author Swathi Gangisetty
  * 
  */
@@ -74,7 +60,7 @@ public class S3ListVersionsTests {
 	private static AmazonS3 s3 = null;
 	private static String account = null;
 	private static String VALID_CHARS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-	private static int DEFAULT_MAX_KEYS = 1000;
+	private static final int DEFAULT_MAX_KEYS = 1000;
 
 	@BeforeClass
 	public void init() throws Exception {
@@ -249,10 +235,6 @@ public class S3ListVersionsTests {
 	 * 
 	 * <p>This test uploads an object using the same key multiple times, deletes the object without specifying the version and repeats the upload step again.
 	 * After each action, the test fetches the version information for the bucket and verifies it for chronological ordering of versions and delete markers.</p>
-	 * 
-	 * <p>Test failed against Walrus. Walrus does not list the delete marker after the object is deleted without specifying the version.</p>
-	 * 
-	 * @see <a href="https://eucalyptus.atlassian.net/browse/EUCA-7818">EUCA-7818</a>
 	 */
 	@Test
 	public void deleteMarker() throws Exception {
@@ -371,11 +353,70 @@ public class S3ListVersionsTests {
 	}
 
 	/**
+	 * <p>Test for verifying that a unique delete marker is returned every time an object is deleted, irrespective of the number of times the object is deleted,
+	 * in a bucket with versioning state set to enabled or suspended</p>
+	 */
+	@Test
+	public void uniqueDeleteMarker() throws Exception {
+		testInfo(this.getClass().getSimpleName() + " - uniqueDeleteMarker");
+		try {
+			String key = eucaUUID();
+			LinkedList<KeyEntry> history = new LinkedList<KeyEntry>();
+
+			// Put object
+			history.addFirst(new KeyEntry(putObject(bucketName, key, fileToPut), Element.VERSION_ENTRY));
+
+			// Generate non-null versioned delete markers
+			history.addFirst(new KeyEntry(deleteObject(bucketName, key), Element.DELETE_MARKER));
+			history.addFirst(new KeyEntry(deleteObject(bucketName, key), Element.DELETE_MARKER));
+
+			// Compare list versions with history and verify that they match
+			VersionListing versions = listVersions(bucketName, key, null, null, null, null, false);
+			compare(history, versions);
+
+			// Suspend versioning
+			print("Suspending versioning");
+			s3.setBucketVersioningConfiguration(new SetBucketVersioningConfigurationRequest(bucketName, new BucketVersioningConfiguration()
+					.withStatus(BucketVersioningConfiguration.SUSPENDED)));
+			print("Versioning state: " + s3.getBucketVersioningConfiguration(bucketName).getStatus());
+
+			// Generate null versioned delete markers
+			history.addFirst(new KeyEntry(deleteObject(bucketName, key), Element.DELETE_MARKER));
+
+			// Compare list versions with history and verify that they match
+			versions = listVersions(bucketName, key, null, null, null, null, false);
+			compare(history, versions);
+
+			Date timestamp1 = versions.getVersionSummaries().get(0).getLastModified();
+
+			// Generate null versioned delete markers
+			history.remove();
+			history.addFirst(new KeyEntry(deleteObject(bucketName, key), Element.DELETE_MARKER));
+
+			// Compare list versions with history and verify that they match
+			versions = listVersions(bucketName, key, null, null, null, null, false);
+			compare(history, versions);
+
+			Date timestamp2 = versions.getVersionSummaries().get(0).getLastModified();
+
+			assertTrue("Expected unique null versioned delete markers but got the same time stamp for both delete markers", !timestamp1.equals(timestamp2));
+		} catch (AmazonServiceException ase) {
+			printException(ase);
+			assertThat(false, "Failed to run uniqueDeleteMarker");
+		} finally {
+			for (S3VersionSummary version : listVersions(bucketName, null, null, null, null, null, false).getVersionSummaries()) {
+				try {
+					print("Deleting object " + version.getKey() + ", version " + version.getVersionId());
+					s3.deleteVersion(bucketName, version.getKey(), version.getVersionId());
+				} catch (AmazonServiceException ase) {
+					printException(ase);
+				}
+			}
+		}
+	}
+
+	/**
 	 * <p>Test for listing and verifying object versions using key-marker and no version-id-marker.</p>
-	 * 
-	 * <p>Test failed against Walrus. Results returned by Walrus are inclusive of the key-marker where as S3's results are exclusive</p>
-	 * 
-	 * @see <a href="https://eucalyptus.atlassian.net/browse/EUCA-7985">EUCA-7985</a>
 	 */
 	@Test
 	public void keyMarker() throws Exception {
@@ -441,12 +482,6 @@ public class S3ListVersionsTests {
 
 	/**
 	 * <p>Test for listing and verifying object versions using key-marker and version-id-marker.</p>
-	 * 
-	 * <p>Test failed against Walrus. Results returned by Walrus are inclusive of the version summary that matches the key-marker and version-id-marker pair
-	 * where as S3's results are exclusive. Version ID marker is missing in the response</p>
-	 * 
-	 * @see <a href="https://eucalyptus.atlassian.net/browse/EUCA-7985">EUCA-7985</a>
-	 * @see <a href="https://eucalyptus.atlassian.net/browse/EUCA-7986">EUCA-7986</a>
 	 */
 	@Test
 	public void keyMarkerVersionIdMarker() throws Exception {
@@ -602,11 +637,6 @@ public class S3ListVersionsTests {
 
 	/**
 	 * Test for verifying the common prefixes, delimiter and version information
-	 * 
-	 * Test fails against Walrus, prefixes in the common prefix list are incorrectly represented. The prefix part is not included, only the portion from prefix
-	 * to the first occurrence of the delimiter is returned
-	 * 
-	 * @see <a href="https://eucalyptus.atlassian.net/browse/EUCA-7991">EUCA-7991</a>
 	 */
 	@Test
 	public void delimiterAndPrefix() throws Exception {
@@ -723,13 +753,6 @@ public class S3ListVersionsTests {
 
 	/**
 	 * Test for verifying paginated listing of versions
-	 * 
-	 * <p>Test failed against Walrus. Results returned by Walrus are inclusive of the version summary that matches the key-marker and version-id-marker pair
-	 * where as S3's results are exclusive. Version ID marker is missing in the response</p>
-	 * 
-	 * @see <a href="https://eucalyptus.atlassian.net/browse/EUCA-7985">EUCA-7985</a>
-	 * @see <a href="https://eucalyptus.atlassian.net/browse/EUCA-7986">EUCA-7986</a>
-	 * 
 	 */
 	@Test
 	public void maxKeysSingleKeyMultipleUploads() throws Exception {
@@ -973,12 +996,6 @@ public class S3ListVersionsTests {
 
 	/**
 	 * Test for verifying paginated listing of common prefixes
-	 * 
-	 * Test fails against Walrus, prefixes in the common prefix list are incorrectly represented. Results returned by Walrus are inclusive of the key that
-	 * matches the key-marker where as S3's results are exclusive.
-	 * 
-	 * @see <a href="https://eucalyptus.atlassian.net/browse/EUCA-8113">EUCA-8112</a>
-	 * @see <a href="https://eucalyptus.atlassian.net/browse/EUCA-8112">EUCA-8113</a>
 	 */
 	@Test
 	public void delimiterPrefixAndMaxKeys() throws Exception {

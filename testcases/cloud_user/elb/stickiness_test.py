@@ -55,44 +55,61 @@ class StickinessBasics(EutesterTestCase):
         else:
             self.tester = Eucaops(credpath=self.args.credpath, config_file=self.args.config,
                                   password=self.args.password)
-        self.tester.poll_count = 120
+        # test resource hash
+        self.test_hash = str(int(time.time()))
 
-        ### Add and authorize a group for the instance
-        self.group = self.tester.add_group(group_name="group-" + str(int(time.time())))
+        # Add and authorize a group for the instances
+        self.group = self.tester.add_group(group_name="group-" + self.test_hash)
         self.tester.authorize_group_by_name(group_name=self.group.name)
         self.tester.authorize_group_by_name(group_name=self.group.name, port=-1, protocol="icmp")
-        ### Generate a keypair for the instance
-        self.keypair = self.tester.add_keypair("keypair-" + str(int(time.time())))
+        self.tester.authorize_group_by_name(group_name=self.group.name, port=80, protocol="tcp")
+
+        # Generate a keypair for the instances
+        self.keypair = self.tester.add_keypair("keypair-" + self.test_hash)
         self.keypath = '%s/%s.pem' % (os.curdir, self.keypair.name)
 
-        ### Get an image
+        # User data file
+        self.user_data = "./testcases/cloud_user/elb/test_data/webserver_user_data.sh"
+
+        # Get an image
         self.image = self.args.emi
         if not self.image:
             self.image = self.tester.get_emi()
 
-        ### Populate available zones
+        # Populate available zones
         zones = self.tester.ec2.get_all_zones()
         self.zone = random.choice(zones).name
 
+        # create base load balancer
         self.load_balancer_port = 80
-
-        (self.web_servers, self.filename) = self.tester.create_web_servers(keypair=self.keypair,
-                                                                           group=self.group,
-                                                                           zone=self.zone,
-                                                                           port=self.load_balancer_port,
-                                                                           filename='instance-name',
-                                                                           image=self.image)
-
         self.load_balancer = self.tester.create_load_balancer(zones=[self.zone],
-                                                              name="test-" + str(int(time.time())),
+                                                              name="elb-" + self.test_hash,
                                                               load_balancer_port=self.load_balancer_port)
         assert isinstance(self.load_balancer, LoadBalancer)
-        self.tester.register_lb_instances(self.load_balancer.name,
-                                          self.web_servers.instances)
 
+        # create autoscaling group of webservers that register to the load balancer
+        self.count = 2
+        (self.web_servers) = self.tester.create_as_webservers(name=self.test_hash,
+                                                              keypair=self.keypair.name,
+                                                              group=self.group.name,
+                                                              zone=self.zone,
+                                                              image=self.image.id,
+                                                              count=self.count,
+                                                              user_data=self.user_data,
+                                                              load_balancer=self.load_balancer.name)
+
+        # web servers scaling group
+        self.asg = self.tester.describe_as_group(name="asg-"+self.test_hash)
+
+        # wait until scaling instances are InService with the load balancer before continuing - 5 min timeout
+        assert self.tester.wait_for_result(self.tester.wait_for_lb_instances, True, timeout=300,
+                                           lb=self.load_balancer.name, number=self.count)
 
     def clean_method(self):
         self.tester.cleanup_artifacts()
+        if self.tester.test_resources["security-groups"]:
+            for group in self.tester.test_resources["security-groups"]:
+                self.tester.wait_for_result(self.tester.gracefully_delete_group, True, timeout=60, group=group)
 
     def GenerateRequests(self):
         """
@@ -104,17 +121,14 @@ class StickinessBasics(EutesterTestCase):
         lb_url = "http://{0}:{1}/instance-name".format(lb_ip, self.load_balancer_port)
         return self.tester.generate_http_requests(url=lb_url, count=100, worker_threads=1)
 
-    def session_affinity_test(self):
+    def lb_cookie_session_affinity_test(self):
         lbpolicy = "LB-Policy"
         self.tester.create_lb_cookie_stickiness_policy(cookie_expiration_period=300,
                                                        lb_name=self.load_balancer.name,
                                                        policy_name=lbpolicy)
-        acpolicy = "AC-Policy"
-        self.tester.create_app_cookie_stickiness_policy(name="test-cookie",
-                                                        lb_name=self.load_balancer.name,
-                                                        policy_name=acpolicy)
-        """test lb stickiness"""
+        # test lb stickiness
         self.tester.sleep(2)
+        self.debug("Testing LB cookie stickiness")
         self.tester.set_lb_policy(lb_name=self.load_balancer.name, lb_port=80, policy_name=lbpolicy)
         responses = self.GenerateRequests()
         host = responses[0]
@@ -123,24 +137,32 @@ class StickinessBasics(EutesterTestCase):
                 raise Exception(
                     "Expected same response due to load balancer stickiness policy. Got initial response: " + host +
                     " subsequent response: " + response)
+        return
 
-        """test app cookie stickiness"""
+    def app_cookie_session_affinity_test(self):
+        acpolicy = "AC-Policy"
+        self.tester.create_app_cookie_stickiness_policy(name="test-cookie",
+                                                        lb_name=self.load_balancer.name,
+                                                        policy_name=acpolicy)
+        # test app cookie stickiness
         self.tester.set_lb_policy(lb_name=self.load_balancer.name, lb_port=80, policy_name=acpolicy)
+        self.debug("Testing App Cookie stickiness")
         responses = self.GenerateRequests()
-        host = responses[0]
-        for response in responses:
+        # since we use the same cookie name on the backing elb instances, the first contacts with the ELB can possibly
+        # result in hitting different back ends. After the first 2 calls they should all ony go to 1 backend.
+        host = responses[2]
+        for response in responses[2:]:
             if response != host:
                 raise Exception(
                     "Expected same response due to app cookie stickiness policy. Got initial response: " + host +
                     " subsequent response: " + response)
         return
 
-
 if __name__ == "__main__":
     testcase = StickinessBasics()
     ### Use the list of tests passed from config/command line to determine what subset of tests to run
     ### or use a predefined list
-    list = testcase.args.tests or ["session_affinity_test"]
+    list = testcase.args.tests or ["lb_cookie_session_affinity_test","app_cookie_session_affinity_test"]
 
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = []

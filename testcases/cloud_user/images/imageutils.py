@@ -47,7 +47,6 @@ class ImageUtils(EutesterTestCase):
     gig = 1073741824
     mb = 1048576
     kb = 1024
-
     def __init__(self,
                  tester=None,
                  config_file=None,
@@ -61,11 +60,11 @@ class ImageUtils(EutesterTestCase):
                  worker_username='root',
                  worker_password=None,
                  worker_machine=None):
-
-        if tester is None:
-            self.tester = Eucaops(config_file=config_file,
-                                  password=password,
-                                  credpath=credpath)
+        self.setuptestcase()
+        if not tester or not isinstance(tester, Eucaops):
+            self.debug('Creating Eucaops tester obj from: config_file:"{0}", password:"{1}", '
+                       'credpath:"{2}"'.format(config_file, password, credpath))
+            self.tester = Eucaops(config_file=config_file, password=password, credpath=credpath)
         else:
             self.tester = tester
         self.tester.exit_on_fail = eof
@@ -170,14 +169,14 @@ class ImageUtils(EutesterTestCase):
         timeout = size * time_per_gig
         self.debug('wget_image: ' + str(url) + ' to destpath' +
                    str(destpath) + ' on machine:' + str(machine.hostname))
-        machine.wget_remote_image(url,
-                                  path=destpath,
-                                  dest_file_name=dest_file_name,
-                                  user=user,
-                                  password=password,
-                                  retryconn=retryconn,
-                                  timeout=timeout)
-        return size
+        saved_location = machine.wget_remote_image(url,
+                                                   path=destpath,
+                                                   dest_file_name=dest_file_name,
+                                                   user=user,
+                                                   password=password,
+                                                   retryconn=retryconn,
+                                                   timeout=timeout)
+        return (size, saved_location)
 
 
     def get_manifest_obj(self, path, machine=None, local=False, timeout=30):
@@ -266,6 +265,7 @@ class ImageUtils(EutesterTestCase):
         Bundle an image on a 'machine'.
         where credpath to creds on machine
         '''
+        self.status('Starting euca2ools_bundle_image at path:"{0}"'.format(path))
         time_per_gig = time_per_gig or self.time_per_gig
         credpath = machine_credpath or self.credpath
         machine = machine or self.worker_machine
@@ -338,6 +338,7 @@ class ImageUtils(EutesterTestCase):
         Bundle an image on a 'machine'.
         where credpath to creds on machine
         '''
+        self.status('Starting euca2ools_upload_bundle for manifest:"{0}"'.format(manifest))
         machine = machine or self.worker_machine
         credpath = machine_credpath or self.credpath
         cbargs = [timeout, interbundle_timeout, time.time(), 0, True]
@@ -421,6 +422,9 @@ class ImageUtils(EutesterTestCase):
                            platform=None,
                            machine=None,
                            machine_credpath=None):
+        self.status('Starting euca2ools_register for manifest:"{0}", kernel:"{1}", ramdisk:"{2}"'
+                    .format(manifest, kernel,ramdisk))
+
         machine = machine or self.worker_machine
         credpath = machine_credpath or self.credpath
         cmdargs = str(manifest) + " -n " + str(name)
@@ -610,6 +614,8 @@ class ImageUtils(EutesterTestCase):
                                 s3_url=None,
                                 ec2_url=None,
                                 image_size=None,
+                                user_data=None,
+                                user_data_file=None,
                                 private_addr=None,
                                 shutdown_behavior=None,
                                 owner_sak=None,
@@ -617,8 +623,15 @@ class ImageUtils(EutesterTestCase):
                                 security_token=None,
                                 machine=None,
                                 machine_credpath=None,
-                                misc=None):
+                                misc=None,
+                                time_per_gig=90):
         machine = machine or self.worker_machine
+        try:
+            file_size = machine.get_file_size(import_file)
+            gb = file_size/self.gig or 1
+            timeout = gb * time_per_gig
+        except:
+            timeout = 300
         credpath = machine_credpath or self.credpath
         cmdargs = str(import_file) + " -b " + str(bucket) + \
                   " -z " + str(zone) + " -f " + str(format) + \
@@ -648,6 +661,10 @@ class ImageUtils(EutesterTestCase):
             cmdargs += " -U " + str(ec2_url)
         if image_size:
             cmdargs += " --image-size " + str(image_size)
+        if user_data:
+            cmdargs += ' --user-data "' + str(user_data) +'"'
+        if user_data_file:
+            cmdargs += " --user-data-file " + str(user_data_file)
         if private_addr:
             cmdargs += " --private-ip-address"
         if shutdown_behavior:
@@ -676,7 +693,7 @@ class ImageUtils(EutesterTestCase):
                 owner_akid = self.tester.get_access_key()
                 cmdargs += " -o " + str(owner_akid)
             cmd += str(cmdargs)
-        out = machine.sys(cmd=cmd, code=0)
+        out = machine.sys(cmd=cmd, timeout=timeout, code=0)
         taskid = None
         for line in out:
             lre = re.search('import-i-\w{8}', line)

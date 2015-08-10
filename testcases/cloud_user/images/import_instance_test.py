@@ -41,6 +41,7 @@ from testcases.cloud_user.images.conversiontask import ConversionTask
 from boto.exception import S3ResponseError
 from subprocess import CalledProcessError
 from argparse import ArgumentError
+from base64 import b64decode
 import os
 import time
 import types
@@ -54,11 +55,17 @@ class ImportInstanceTests(EutesterTestCase):
         self.setup_parser(testname='import_instance_tests',
                               description='Runs tests against import instance'
                                           'conversion tasks',
-                              emi=False)
+                              emi=False,
+                              instance_user=False)
 
         self.parser.add_argument('--url',
                                  help='URL containing remote image to create '
                                       'import instance task from',
+                                 default=None)
+
+        self.parser.add_argument('--instance-user', dest='instance_user',
+                                 help='Username used for ssh or winrm login. '
+                                      'Defaults; Linux:"root", Windows:"Administrator"',
                                  default=None)
         self.parser.add_argument('--workerip',dest='worker_machine',
                                  help='The ip/hostname of the machine that the '
@@ -135,6 +142,12 @@ class ImportInstanceTests(EutesterTestCase):
                                       'time per gig of image size. '
                                       'Default:600 seconds',
                                  default=600)
+        self.parser.add_argument('--task_user_data',
+                                 help='user data to provide to import instance'
+                                      'task request. '
+                                      'Default:"#cloud-config\ndisable_root: '
+                                      'false"',
+                                 default='#cloud-config\ndisable_root: false')
         self.parser.add_argument('--no_clean_on_exit',
                                  help='Disable cleanup method upon exit to '
                                       'leave test resources behind',
@@ -157,14 +170,25 @@ class ImportInstanceTests(EutesterTestCase):
                                 'or config_file and password was provided, err:' + str(e))
             #replace default eutester debugger with eutestcase's for more verbosity...
             self.tester.debug = lambda msg: self.debug(msg, traceback=2, linebyline=False)
+        self.set_arg('tester', self.tester)
         if not self.url:
             if not self.args.url:
                 raise ArgumentError(None,'Required URL not provided')
             else:
                 self.url = self.args.url
-
+        self.imagelocation = None
         self.args.worker_password = self.args.worker_password or self.args.password
         self.args.worker_keypath = self.args.worker_keypath or self.args.keypair
+        # Format platform case sensitive arg.
+        if str(self.args.platform).upper().strip() == "WINDOWS":
+            self.args.platform = "Windows"
+        elif str(self.args.platform).upper().strip() == "LINUX":
+            self.args.platform = "Linux"
+        if self.args.instance_user is None:
+            if self.args.platform == "Windows":
+                self.args.instance_user = 'Administrator'
+            else:
+                self.args.instance_user = 'root'
         self.latest_task_dict = None
         #Create an ImageUtils helper from the arguments provided in this self...
         self.img_utils = self.do_with_args(ImageUtils)
@@ -204,6 +228,12 @@ class ImportInstanceTests(EutesterTestCase):
         #authorize group for ssh and icmp
         tester.authorize_group(self.group)
         tester.authorize_group(self.group, protocol='icmp', port='-1')
+        if self.args.platform == 'Windows':
+            tester.authorize_group(self.group, protocol='tcp', port='3389')
+            tester.authorize_group(self.group, protocol='tcp', port='80')
+            tester.authorize_group(self.group, protocol='tcp', port='443')
+            tester.authorize_group(self.group, protocol='tcp', port='5985')
+            tester.authorize_group(self.group, protocol='tcp', port='5986')
         return self.group
 
     def get_keypair(self):
@@ -257,7 +287,12 @@ class ImportInstanceTests(EutesterTestCase):
     def get_import_bucket_to_use(self, bucketname=None):
         bucketname = bucketname or self.args.bucketname
         if not bucketname:
-            bucketname = 'import_instance_test_bucket'
+            if self.imagelocation or self.url:
+                location = self.imagelocation or self.url
+                image_name = os.path.basename(location)[0:15]
+            else:
+                image_name = str(self.args.platform or 'test')
+            bucketname = 'eutester_import_' + str(image_name)
         self.bucket = self.tester.s3.create_bucket(bucketname).name
 
     def test1_basic_create_import_instance(self,
@@ -312,7 +347,8 @@ class ImportInstanceTests(EutesterTestCase):
                   'arch':self.args.arch,
                   'keypair':self.keyname,
                   'group':self.groupname,
-                  'platform':self.args.platform}
+                  'platform':self.args.platform,
+                  'user_data':self.args.task_user_data}
         task = img_utils.euca2ools_import_instance(**params)
         assert isinstance(task,ConversionTask)
         tester.monitor_conversion_tasks(task,
@@ -330,8 +366,13 @@ class ImportInstanceTests(EutesterTestCase):
             username = self.args.instance_user
             euinst = tester.convert_instance_to_euisntance(instance=inst,
                                                            keypair=self.keypair,
-                                                           username=username)
+                                                           username=username,
+                                                           auto_connect=False)
             tester.monitor_euinstances_to_running(euinst)
+            if euinst.platform == 'windows':
+                euinst.connect_to_instance(wait_for_boot=180, timeout=300)
+            else:
+                euinst.connect_to_instance()
         else:
             raise RuntimeError('Instance:"{0}" not found from task:"{1}"'
                             .format(task.instanceid, task.id))
@@ -354,6 +395,26 @@ class ImportInstanceTests(EutesterTestCase):
         params = self.latest_task_dict['params']
         task = self.latest_task_dict['task']
         return self.validate_params_against_task(params=params, task=task)
+
+    def test3_make_image_public(self):
+        if not self.latest_task_dict:
+            raise RuntimeError('Dict for latest task not found to validate?')
+        task = self.latest_task_dict['task']
+        emi = self.tester.get_emi(emi=task.image_id)
+        emi.set_launch_permissions(group_names=['all'])
+
+    def test4_tag_image(self):
+        if not self.latest_task_dict:
+            raise RuntimeError('Dict for latest task not found to validate?')
+        task = self.latest_task_dict['task']
+        emi = self.tester.get_emi(emi=task.image_id)
+        try:
+            if self.url:
+                emi.add_tag('source', value=(str(self.url)))
+            emi.add_tag('eutester-created', value="import-instance-test")
+        except Exception, te:
+            self.debug('Could not add tags to image:' + str(emi.id) +
+                       ", err:" + str(te))
 
     def validate_params_against_task(self, params, task):
         assert isinstance(params, types.DictionaryType)
@@ -456,6 +517,24 @@ class ImportInstanceTests(EutesterTestCase):
         if err_msg:
             raise Exception("Failures in param validation detected:n\n"
                             + str(err_msg))
+        try:
+            if hasattr(task, 'instanceid') and task.instanceid and \
+                    params.has_key('user_data'):
+                user_data = params['user_data']
+                self.debug('Checking task for user_data: ' + str(user_data))
+                ins_attr = self.tester.ec2.get_instance_attribute(
+                    task.instanceid, 'userData')
+                if 'userData' in ins_attr:
+                    ins_user_data = b64decode(ins_attr['userData'])
+                else:
+                    ins_user_data = None
+                self.assertEquals(user_data, ins_user_data)
+        except Exception as e:
+            err_msg += str(e) + "\n"
+
+        if err_msg:
+            raise Exception("Failures in param validation detected:n\n"
+                            + str(err_msg))
 
 
     def clean_method(self):
@@ -469,7 +548,9 @@ if __name__ == "__main__":
         list = testcase.args.tests.splitlines(',')
     else:
         list = ['test1_basic_create_import_instance',
-                'test2_validate_params_against_task']
+                'test2_validate_params_against_task',
+                'test3_make_image_public',
+                'test4_tag_image']
 
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]

@@ -54,42 +54,62 @@ class LoadBalancing(EutesterTestCase):
             self.tester = ELBops( credpath=self.args.credpath, region=self.args.region)
         else:
             self.tester = Eucaops( credpath=self.args.credpath, config_file=self.args.config,password=self.args.password)
-        self.tester.poll_count = 120
 
-        ### Add and authorize a group for the instance
-        self.group = self.tester.add_group(group_name="group-" + str(int(time.time())))
-        self.tester.authorize_group_by_name(group_name=self.group.name )
-        self.tester.authorize_group_by_name(group_name=self.group.name, port=-1, protocol="icmp" )
-        ### Generate a keypair for the instance
-        self.keypair = self.tester.add_keypair( "keypair-" + str(int(time.time())))
+        # test resource hash
+        self.test_hash = str(int(time.time()))
+
+        # Add and authorize a group for the instances
+        self.group = self.tester.add_group(group_name="group-" + self.test_hash)
+        self.tester.authorize_group_by_name(group_name=self.group.name)
+        self.tester.authorize_group_by_name(group_name=self.group.name, port=-1, protocol="icmp")
+        self.tester.authorize_group_by_name(group_name=self.group.name, port=80, protocol="tcp")
+
+        # Generate a keypair for the instances
+        self.keypair = self.tester.add_keypair("keypair-" + self.test_hash)
         self.keypath = '%s/%s.pem' % (os.curdir, self.keypair.name)
-        ### Get an image
+
+        # User data file
+        self.user_data = "./testcases/cloud_user/elb/test_data/webserver_user_data.sh"
+
+        # Get an image
         self.image = self.args.emi
         if not self.image:
-            self.image = self.tester.get_emi(root_device_type="instance-store", not_platform="windows")
+            self.image = self.tester.get_emi()
 
-        ### Populate available zones
+        # Populate available zones
         zones = self.tester.ec2.get_all_zones()
         self.zone = random.choice(zones).name
 
+        # create base load balancer
         self.load_balancer_port = 80
-
-        (self.web_servers, self.filename) = self.tester.create_web_servers(keypair=self.keypair,
-                                                                          group=self.group,
-                                                                          zone=self.zone,
-                                                                          port=self.load_balancer_port,
-                                                                          filename='instance-name',
-                                                                          image=self.image)
-
         self.load_balancer = self.tester.create_load_balancer(zones=[self.zone],
-                                                              name="test-" + str(int(time.time())),
+                                                              name="elb-" + self.test_hash,
                                                               load_balancer_port=self.load_balancer_port)
         assert isinstance(self.load_balancer, LoadBalancer)
-        self.tester.register_lb_instances(self.load_balancer.name,
-                                          self.web_servers.instances)
+
+        # create autoscaling group of webservers that register to the load balancer
+        self.count = 2
+        (self.web_servers) = self.tester.create_as_webservers(name=self.test_hash,
+                                                              keypair=self.keypair.name,
+                                                              group=self.group.name,
+                                                              zone=self.zone,
+                                                              image=self.image.id,
+                                                              count=self.count,
+                                                              user_data=self.user_data,
+                                                              load_balancer=self.load_balancer.name)
+
+        # web servers scaling group
+        self.asg = self.tester.describe_as_group(name="asg-"+self.test_hash)
+
+        # wait until scaling instances are InService with the load balancer before continuing - 5 min timeout
+        assert self.tester.wait_for_result(self.tester.wait_for_lb_instances, True, timeout=300,
+                                           lb=self.load_balancer.name, number=self.count)
 
     def clean_method(self):
         self.tester.cleanup_artifacts()
+        if self.tester.test_resources["security-groups"]:
+            for group in self.tester.test_resources["security-groups"]:
+                self.tester.wait_for_result(self.tester.gracefully_delete_group, True, timeout=60, group=group)
 
     def GenerateRequests(self):
         """

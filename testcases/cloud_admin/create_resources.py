@@ -104,13 +104,13 @@ class ResourceGeneration(EutesterTestCase):
             instance = reservation.instances[0]
             assert isinstance(instance, EuInstance)
             if not instance.ip_address == instance.private_ip_address:
-                self.tester.show_all_addresses_verbose()
+                self.tester.show_addresses(None, True)
                 address = resource_tester.allocate_address()
                 resource_tester.associate_address(instance=instance, address=address)
                 resource_tester.disassociate_address_from_instance(instance)
                 if not self.args.no_cleanup:
                     resource_tester.release_address(address)
-            self.tester.sleep(5)
+            self.tester.sleep(20)
             instance.update()
             instance.reset_ssh_connection()
             volume = resource_tester.create_volume(size=1, zone=zone)

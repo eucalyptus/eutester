@@ -97,10 +97,31 @@ import types
 import sys
 import termios
 import tty
+from paramiko.sftp_client import SFTPClient
 import eucaops
 
 
+class SFTPifc(SFTPClient):
 
+    def debug(self, msg, verbose=True):
+        print (str(msg))
+
+    def get(self, remotepath, localpath, callback=None):
+        try:
+            super(SFTPifc, self).get(remotepath, localpath, callback=callback)
+        except Exception, ge:
+            self.debug('Error during sftp get. Remote:"{0}", Local:"{1}"'
+                       .format(remotepath, localpath))
+            raise type(ge)('Error during sftp get. Remotepath:"{0}", Localpath:"{1}".\n Err:{2}'
+                           .format(remotepath, localpath, str(ge)))
+
+    def put(self, localpath, remotepath, callback=None, confirm=True):
+        try:
+            super(SFTPifc, self).put(localpath=localpath, remotepath=remotepath,
+                                     callback=callback, confirm=confirm)
+        except Exception, pe:
+            raise type(pe)('Error during sftp put. Remotepath:"{0}", Localpath:"{1}".\n Err:{2}'
+                           .format(remotepath, localpath, str(pe)))
 
 class SshCbReturn():
     def __init__(self, stop=False, statuscode=-1, settimer=0, buf=None, sendstring=None, nextargs=None, nextcb=None, removecb=False):
@@ -342,7 +363,9 @@ class SshConnection():
             enable_debug=False,
             cb=None, cbargs=[],
             invoke_shell=False,
-            get_pty=True):
+            get_pty=True,
+            shell_delay=2,
+            shell_return='\r'):
         """ 
         Runs a command 'cmd' within an ssh connection. 
         Upon success returns dict representing outcome of the command.
@@ -390,18 +413,27 @@ class SshConnection():
                 self.debug("SSH transport was None, attempting to restablish ssh to: "+str(self.host))
                 self.refresh_connection()
                 tran = self.connection.get_transport()
+
             chan = tran.open_session()
-            chan.settimeout(timeout)
-            chan.setblocking(0)
-            if get_pty:
-                chan.get_pty()
-            if invoke_shell:
-                chan.invoke_shell()
-                chan.sendall(cmd)
-            else:
-                chan.exec_command(cmd)
-            output = None
-            fd = chan.fileno()
+            try:
+                chan.settimeout(timeout)
+                if get_pty or invoke_shell:
+                    chan.get_pty()
+                chan.setblocking(0)
+                if invoke_shell:
+                    self.debug('Invoking shell...')
+                    chan.invoke_shell()
+                    time.sleep(shell_delay)
+                    cmd = cmd.rstrip() + shell_return
+                    chan.send(cmd)
+                else:
+                    chan.exec_command(cmd)
+                output = None
+                fd = chan.fileno()
+            except:
+                if chan:
+                    chan.close()
+                raise
             cmdstart = start = time.time()
             newdebug = "\n"
             while not chan.closed:
@@ -411,7 +443,7 @@ class SshConnection():
                 except select.error:
                     break
                 elapsed = int(time.time() - start)
-                if elapsed >= timeout:
+                if elapsed >= timeout and len(rl) < 1:
                     raise CommandTimeoutException(
                         "SSH Command timer fired after " + str(int(elapsed)) + " seconds. Cmd:'" + str(cmd) + "'")
                 if len(rl) > 0:
@@ -637,8 +669,8 @@ class SshConnection():
                 ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
                 try:
                     self.debug("SSH connection attempt(" + str(attempt) +" of " + str(retry) + "), host:'"
-                               + username + "@" + hostname + "', using ipv4:" + str(ip) + ", thru proxy:'"
-                               + str(proxy_ip) + "'")
+                               + str(username) + "@" + str(hostname) + "', using ipv4:" + str(ip) +
+                               ", thru proxy:'" + str(proxy_ip) + "'")
                     if keypath is None and password:
                         self.debug("Using username:"+username+" and password:"+str(self.mask_password(password)),
                                    verbose=verbose)
@@ -655,7 +687,7 @@ class SshConnection():
                         break
                     elif key_files or self.find_keys:
                         self.debug("Using local keys, no keypath/password provided.", verbose=verbose)
-                        ssh._auth(username, password,None,key_files, True, True)
+                        ssh._auth(username, password, None, key_files, True, True)
                         #ssh.connect(ip, port=port, username=username, key_filename=keypath, timeout=timeout)
                         connected = True
 
@@ -825,6 +857,53 @@ class SshConnection():
         debug('Ending buf:"' + str(ret.buf) + '"')
         return ret
 
+    def expect_prompt_cb(self,
+                         buf,
+                         command=None,
+                         prompt_match="^\w+(>|#|\$)",
+                         verbose=None):
+        prompt = prompt_match + "\s*$"
+        start_match = None
+        if command is not None:
+            start_match = prompt + "\s*" + command + "\s*$"
+        if verbose is None:
+            verbose = self.verbose
+        ret = SshCbReturn(stop=False)
+        ret.buf = buf
+        #newbuf = None
+        def debug(msg, ssh=self):
+            if verbose:
+                ssh.debug(msg)
+        debug('Starting expect_prompt_cb, prompt:' + str(prompt))
+        debug('Starting buf:"' + str(buf) + '"')
+        #Create a callback return obj for the cmd() loop to consume...
+
+        lines = buf.splitlines()
+
+        #See if we have a prompt for password, assume we only have one match and were blocking waiting on password input
+        for line in lines:
+            self.debug('line:' + str(line))
+            if re.search(prompt, line):
+                debug('Got prompt match in buffer. start_match:{0}, Line:"{1}"'.format(start_match, line))
+                if start_match:
+                    if re.search(start_match, line):
+                        self.debug('Found match for start_match:{0}, line:{1}'.format(start_match, line))
+                        command = None
+                        start_match = None
+                else:
+                    ret.removecb = True
+                    ret.stop = True
+                    debug('Ending buf:"' + str(ret.buf) + '"')
+                    return ret
+            else:
+                debug('\nPrompt not found, continuing...')
+        ret.removecb = False
+        ret.nextargs = [command, prompt_match, verbose]
+        #debug('Ending buf:"' + str(ret.buf) + '"')
+        return ret
+
+
+
 
     def start_interactive(self, timeout=180):
         '''
@@ -884,11 +963,13 @@ class SshConnection():
 
     def open_sftp(self, transport=None):
         transport = transport or self.connection._transport
-        self.sftp = paramiko.SFTPClient.from_transport(transport)
+        sftp = SFTPifc.from_transport(transport)
+        sftp.debug = self.debug
+        self.sftp = sftp
+        return sftp
 
     def close_sftp(self):
         self.sftp.close()
-
 
 
     def sftp_put(self,localfilepath,remotefilepath):

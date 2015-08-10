@@ -1,0 +1,73 @@
+{
+
+    "AWSTemplateFormatVersion" : "2010-09-09",
+
+    "Description" : "Cloudformation Example => Run instance with userdata in security group",
+
+    "Parameters": {
+        "UbuntuImageId": {
+            "Description":"Ubuntu Image id",
+            "Type":"String",
+            "NoEcho":"False"
+        },
+
+        "UserKeyPair": {
+            "Description":"User Key Pair",
+            "Type":"String",
+            "NoEcho":"True"
+        }
+    },
+
+    "Resources" : {
+        "DockerSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+                "Properties": {
+                    "GroupDescription" : "Security Group with Ingress Rule for DockerInstance",
+                    "SecurityGroupIngress" : [
+                        {
+                            "IpProtocol" : "tcp",
+                            "FromPort" : "22",
+                            "ToPort" : "22",
+                            "CidrIp" : "0.0.0.0/0"
+                        }
+                    ]
+                }
+        },
+
+        "DockerInstance": {
+            "Type": "AWS::EC2::Instance",
+                "Properties": {
+                    "ImageId" : { "Ref":"UbuntuImageId" },
+                    "InstanceType" : "m1.xlarge",
+                    "UserData" : { "Fn::Base64" : "#include https://get.docker.io" },
+                    "SecurityGroups" : [
+                        { "Ref" : "DockerSecurityGroup" }
+                    ],
+            "KeyName" : { "Ref" : "UserKeyPair" }
+            }
+        },
+
+        "MyEBSVolume1" : {
+            "Type" : "AWS::EC2::Volume",
+                "Properties" : {
+                    "Size" : "10",
+                    "AvailabilityZone" : "one"
+            }
+        }
+    },
+
+    "Outputs" : {
+        "InstanceId" : {
+            "Description" : "InstanceId of the newly created EC2 instance",
+            "Value" : { "Ref" : "DockerInstance" }
+        },
+        "AZ" : {
+            "Description" : "Availability Zone of the newly created EC2 instance",
+            "Value" : { "Fn::GetAtt" : [ "DockerInstance", "AvailabilityZone" ] }
+        },
+        "PublicIP" : {
+            "Description" : "Public IP address of the newly created EC2 instance",
+            "Value" : { "Fn::GetAtt" : [ "DockerInstance", "PublicIp" ] }
+        }
+    }
+}
