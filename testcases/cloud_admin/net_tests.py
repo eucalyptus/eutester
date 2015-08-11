@@ -241,7 +241,7 @@ class Net_Tests(EutesterTestCase):
                 self._vpc_backend = Midget(vpc_backend_host, tester=self.tester)
             except ImportError as IE:
                 self._vpc_backend = None
-                self.errormsg('Not Creating VPC backend debug interface, err:"{0}"'.format(str(IE)))
+                self.errormsg('Not Creating VPC backend DEBUG interface, err:"{0}"'.format(str(IE)))
             except Exception as VBE:
                 self._vpc_backend = None
                 self.errormsg('FYI... Failed to create vpc backend interface, err:\n{0}'
@@ -1227,6 +1227,7 @@ class Net_Tests(EutesterTestCase):
         self.status('Checking and/or create test security groups, and at least one instance'
                     'running in them per zone...')
         self.setup_test_security_groups()
+        self.tester.authorize_group(self.group1, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
         self.tester.authorize_group(self.group2, port=22, protocol='tcp', cidr_ip='0.0.0.0/0')
         for zone in self.zones:
             instances_group1 = []
@@ -1296,6 +1297,10 @@ class Net_Tests(EutesterTestCase):
                     if not zone.test_instance_group1.ssh:
                         self.status('Instance in group1 did not have an ssh connection, '
                                     'trying to setup ssh now...')
+                        self.tester.show_security_groups_for_instance(zone.test_instance_group1)
+                        self.debug('ssh connect using instance:"{0}", keypath:"{1}"'
+                                   .format(zone.test_instance_group1,
+                                           zone.test_instance_group1.keypath))
                         zone.test_instance_group1.connect_to_instance()
                     break
             for instance in self.group2_instances:
@@ -1304,6 +1309,10 @@ class Net_Tests(EutesterTestCase):
                     if not zone.test_instance_group2.ssh:
                         self.status('Instance in group1 did not have an ssh connection, '
                                     'trying to setup ssh now...')
+                        self.tester.show_security_groups_for_instance(zone.test_instance_group2)
+                        self.debug('ssh connect using instance:"{0}", keypath:"{1}"'
+                                   .format(zone.test_instance_group2,
+                                           zone.test_instance_group2.keypath))
                         zone.test_instance_group2.connect_to_instance()
                     break
             if not zone.test_instance_group1:

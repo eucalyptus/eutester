@@ -2815,10 +2815,13 @@ disable_root: false"""
                     else:
                         raise ValueError('Show_addresses(). Got unknown address type: {0}:{1}'
                                          .format(address, type(address)))
-                if get_addresses and verbose:
-                    get_addresses.append('verbose')
-                ad_list = show_addresses.extend(self.ec2.get_all_addresses(
-                    addresses=get_addresses))
+
+                if get_addresses:
+                    if verbose:
+                        get_addresses.append('verbose')
+                    self.debug('Getting address objs from addresses:{0}'.format(get_addresses))
+                    get_addresses = self.ec2.get_all_addresses(addresses=get_addresses)
+                ad_list = show_addresses + get_addresses
             else:
                 if verbose:
                     get_addresses = ['verbose']
@@ -2832,7 +2835,10 @@ disable_root: false"""
                 if ad.region:
                     region = ad.region.name
                 account_name = ""
-                match = re.findall('\(arn:*.*\)', ad.instance_id)
+                if ad.instance_id:
+                    match = re.findall('\(arn:*.*\)', ad.instance_id)
+                else:
+                    match = None
                 if match:
                     try:
                         match = match[0]
