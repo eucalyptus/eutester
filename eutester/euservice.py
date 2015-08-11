@@ -667,10 +667,11 @@ class EuserviceManager(object):
                 time.sleep(poll_interval)
             #Create euservice objects from command output and return list of euservices.
             for service_line in describe_services:
-                new_service = Euservice.create_service(service_line, self.tester)
-                if new_service.type == 'eucalyptus':
-                    got_clc = True
-                services.append(new_service)
+                if not service_line.lstrip().startswith('SERVICEACCOUNT'):
+                    new_service = Euservice.create_service(service_line, self.tester)
+                    if new_service.type == 'eucalyptus':
+                        got_clc = True
+                    services.append(new_service)
             self.debug('Got CLC flag: {0}'.format(got_clc))
             if got_clc:
                 return services

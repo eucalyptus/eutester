@@ -468,6 +468,15 @@ disable_root: false"""
             return False
         return True
 
+    def gracefully_delete_group(self, group):
+        try:
+            if group.delete():
+                self.debug("Deleted group " + group.name)
+                return True
+        except EC2ResponseError, ec2re:
+            self.debug(ec2re.error_message)
+            return False
+
     def check_group(self, group_name):
         """
         Check if a group with group_name exists in the system
@@ -5237,7 +5246,6 @@ disable_root: false"""
                     .format(str(tb), getattr(task, 'id', 'UNKOWN_ID'), str(TE))
         if error_msg:
             raise Exception(error_msg)
-
 
     def create_web_servers(self, keypair, group, zone, port=80, count=2, image=None, filename="test-file", cookiename="test-cookie"):
         if not image:
