@@ -9,6 +9,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 import threading
 from eucaops import Eucaops
+from eutester import WaitForResultException
 from eutester.euinstance import EuInstance
 from eutester.eutestcase import EutesterTestCase
 from eucaops import EC2ops
@@ -434,9 +435,14 @@ class InstanceBasics(EutesterTestCase):
             instance.update()
             self.debug('Confirming disassociated IP:"{0}" is no longer in use'
                        .format(address.public_ip))
-            self.assertFalse(self.tester.ping(address.public_ip, poll_count=3),
-                             "Was able to ping address:'{0}' that should no long be associated "
-                             "with an instance".format(address.public_ip))
+            def wait_for_ping():
+                return self.tester.ping(address.public_ip, poll_count=1)
+            try:
+                self.tester.wait_for_result(callback=wait_for_ping, result=False)
+            except WaitForResultException as WE:
+                self.errormsg("Was able to ping address:'{0}' that should no long be associated "
+                              "with an instance".format(address.public_ip))
+                raise WE
             address.release()
             if instance.ip_address:
                 if (instance.ip_address != "0.0.0.0" and
