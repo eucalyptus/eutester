@@ -12,8 +12,8 @@
             <class name="com.eucalyptus.tests.awssdk.S3ListObjectsTests"/>
             <class name="com.eucalyptus.tests.awssdk.S3ListVersionsTests"/>
             <class name="com.eucalyptus.tests.awssdk.S3MultiPartUploadTests" />
-            <class name="com.eucalyptus.tests.awssdk.S3ObjectACLAcrossAccountsTests"/>
-            <class name="com.eucalyptus.tests.awssdk.S3ObjectACLTests"/>
+            <class name="com.eucalyptus.tests.awssdk.S3ObjectCannedACLAcrossAccountsTests"/>
+            <class name="com.eucalyptus.tests.awssdk.S3ObjectCannedACLTests"/>
             <class name="com.eucalyptus.tests.awssdk.S3ObjectLifecycleTests"/>
             <class name="com.eucalyptus.tests.awssdk.S3ObjectTests"/>
         </classes>

@@ -37,6 +37,7 @@ import socket
 import hmac
 import hashlib
 import base64
+import json
 import time
 import types
 import traceback
@@ -467,6 +468,15 @@ disable_root: false"""
             return False
         return True
 
+    def gracefully_delete_group(self, group):
+        try:
+            if group.delete():
+                self.debug("Deleted group " + group.name)
+                return True
+        except EC2ResponseError, ec2re:
+            self.debug(ec2re.error_message)
+            return False
+
     def check_group(self, group_name):
         """
         Check if a group with group_name exists in the system
@@ -744,7 +754,20 @@ disable_root: false"""
             return main_pt
 
     def get_supported_platforms(self):
-        attr = self.ec2.describe_account_attributes(attribute_names='supported-platforms')
+        try:
+            attr = self.ec2.describe_account_attributes(attribute_names='supported-platforms')
+        except Exception as E:
+            try:
+                prop = self.property_manager.get_property_by_string('one.cluster.networkmode')
+                if prop and prop.value:
+                    return [prop.value]
+            except Exception as E:
+                try:
+                    err = "{0}\nFailed to get 'supported-platforms' fromcloud, err:'{1}'"\
+                          .format(self.get_traceback(),str(E))
+                    self.debug(self.markup(err, markups=[1, 31]))
+                except:
+                    pass
         if attr:
             return attr[0].attribute_values
         return []
@@ -897,6 +920,27 @@ disable_root: false"""
             printmethod( "\n" + str(ret_buf) + "\n")
         else:
             return ret_buf
+
+    def get_backend_vpc_gateways(self):
+        propname = 'cloud.network.network_configuration'
+        prop = self.property_manager.get_property_by_string(propname)
+        if not prop:
+            raise ValueError('get_backend_vpc_gateways: Property not found: {0}'.format(propname))
+        value = json.loads(prop.value)
+        try:
+            midocfg = value['Mido']
+            # Note these property is expected to change to a list in the near future but
+            # the format is not yet known...
+            gwhost = midocfg['GatewayHost']
+            if gwhost:
+                return [str(gwhost)]
+            else:
+                return None
+        except KeyError:
+            self.debug('get_backend_vpc_gateways: VPC cloud config not found in '
+                       'network_configuration')
+        return None
+
 
     def terminate_single_instance(self, instance, timeout=300 ):
         """
@@ -1334,7 +1378,11 @@ disable_root: false"""
                 self.debug("object not of type EuVolume. Found type:"+str(type(volume)))
                 volume = EuVolume.make_euvol_from_vol(volume=volume, tester=self)
             else:
-                volume.update()
+                try:
+                    volume.update()
+                except EC2ResponseError as ER:
+                    if ER.status == 400 and ER.error_code == 'InvalidVolume.NotFound':
+                        volume.status = 'deleted'
             euvolumes.append(volume)
         if not euvolumes:
             return
@@ -1415,7 +1463,11 @@ disable_root: false"""
         start = time.time()
         elapsed = 0
         volume_id = volume.id
-        volume.update()
+        try:
+            volume.update()
+        except EC2ResponseError as ER:
+            if ER.status == 400 and ER.error_code == 'InvalidVolume.NotFound':
+                volume.status = 'deleted'
         while elapsed < timeout:
             try:
                 chk_volume = self.get_volume(volume_id=volume_id)
@@ -1465,7 +1517,11 @@ disable_root: false"""
                 self.debug( "Sending delete for volume: " +  str(volume.id))
                 if volume in self.test_resources['volumes']:
                     self.test_resources['volumes'].remove(volume)
-                volumes = self.ec2.get_all_volumes([volume.id])
+                try:
+                    volumes = self.ec2.get_all_volumes([volume.id])
+                except EC2ResponseError as ER:
+                    if ER.status == 400 and ER.error_code == 'InvalidVolume.NotFound':
+                        volumes = []
                 if len(volumes) == 1:
                     volume = volumes[0]
                     #previous_status = volume.status
@@ -1491,15 +1547,19 @@ disable_root: false"""
         elapsed = 0
         while vollist and elapsed < timeout:
             for volume in vollist:
-                volumes = self.ec2.get_all_volumes([volume.id])
+                try:
+                    volumes = self.ec2.get_all_volumes([volume.id])
+                except EC2ResponseError as ER:
+                    if ER.status == 400 and ER.error_code == 'InvalidVolume.NotFound':
+                        volumes = []
                 if len(volumes) == 1:
                     volume = volumes[0]
                 elif len(volumes) == 0:
                     vollist.remove(volume)
-                    self.debug("Volume no longer found")
+                    self.debug("{0}: Volume no longer found".format(volume.id))
                     continue
                 self.debug(str(volume) + " in " + volume.status)
-                if volume and volume.status == "deleted"and volume in vollist:
+                if volume and volume.status == "deleted" and volume in vollist:
                     vollist.remove(volume)
                     if volume in self.test_resources['volumes']:
                         self.test_resources['volumes'].remove(volume)
@@ -1631,7 +1691,11 @@ disable_root: false"""
         :rtype: integer
         :returns: The number of seconds elapsed since this volume was created.
         """
-        volume.update()
+        try:
+            volume.update()
+        except EC2ResponseError as ER:
+            if ER.status == 400 and ER.error_code == 'InvalidVolume.NotFound':
+                volume.status = 'deleted'
         #get timestamp from attach_data
         create_time = cls.get_datetime_from_resource_string(volume.create_time)
         #return the elapsed time in seconds
@@ -2138,6 +2202,7 @@ disable_root: false"""
             for snap in check_state_list:
                 try:
                     snap_id = self.get_snapshot(snap.id)
+                    snap.update()
                     if not snap_id:
                         self.debug("Get Snapshot not found, assuming it's "
                                    "already deleted:" + str(snap.id))
@@ -2150,7 +2215,6 @@ disable_root: false"""
                                    ", err:" + str(ec2e))
                         delete_me.append(snap)
                 else:
-                    snap.update()
                     self.debug("Checking snapshot:" + str(snap.id) +
                                " status:"+str(snap.status))
                     for v_state in valid_delete_states:
@@ -2201,6 +2265,7 @@ disable_root: false"""
             waiting_list = copy.copy(delete_me)
             for snapshot in waiting_list:
                 try:
+                    get_snapshot = None
                     snapshot.update()
                     get_snapshot = self.ec2.get_all_snapshots(
                         snapshot_ids=[snapshot.id])
@@ -2759,10 +2824,13 @@ disable_root: false"""
                     else:
                         raise ValueError('Show_addresses(). Got unknown address type: {0}:{1}'
                                          .format(address, type(address)))
-                if get_addresses and verbose:
-                    get_addresses.append('verbose')
-                ad_list = show_addresses.extend(self.ec2.get_all_addresses(
-                    addresses=get_addresses))
+
+                if get_addresses:
+                    if verbose:
+                        get_addresses.append('verbose')
+                    self.debug('Getting address objs from addresses:{0}'.format(get_addresses))
+                    get_addresses = self.ec2.get_all_addresses(addresses=get_addresses)
+                ad_list = show_addresses + get_addresses
             else:
                 if verbose:
                     get_addresses = ['verbose']
@@ -2776,7 +2844,10 @@ disable_root: false"""
                 if ad.region:
                     region = ad.region.name
                 account_name = ""
-                match = re.findall('\(arn:*.*\)', ad.instance_id)
+                if ad.instance_id:
+                    match = re.findall('\(arn:*.*\)', ad.instance_id)
+                else:
+                    match = None
                 if match:
                     try:
                         match = match[0]
@@ -2803,6 +2874,9 @@ disable_root: false"""
 
         :return: boto.ec2.address object allocated
         """
+        if domain and domain != 'vpc':
+            self.logger.log.warn('Valid domain values are "vpc" and "None", got:"{0}'
+                                 .format(domain))
         try:
             self.debug("Allocating an address")
             address = self.ec2.allocate_address(domain=domain)
@@ -2846,7 +2920,7 @@ disable_root: false"""
 
         poll_count = 15
         ### Ensure instance gets correct address
-        while instance.ip_address not in address.public_ip:
+        while not instance.ip_address or str(instance.ip_address) not in address.public_ip:
             if elapsed > timeout:
                 raise Exception('Address ' + str(address) + ' did not associate with instance after:'+str(elapsed)+" seconds")
             self.debug('Instance {0} has IP {1} attached instead of {2}'.format(instance.id, instance.ip_address, address.public_ip) )
@@ -3049,6 +3123,7 @@ disable_root: false"""
                      monitoring_enabled=False,
                      timeout=600):
         """
+        (Use run_image instead)
         Run instance/s and wait for them to go to the running state
 
         :param image: Image object to use, default is pick the first emi found in the system
@@ -3177,7 +3252,7 @@ disable_root: false"""
                   clean_on_fail=True,
                   monitor_to_running = True,
                   return_reservation=False,
-                  assign_public_ip=True,
+                  auto_create_eni=True,
                   network_interfaces=None,
                   timeout=480,
                   boto_debug_level=2,
@@ -3204,9 +3279,10 @@ disable_root: false"""
         :param monitor_to_running: boolean flag whether or not to monitor instances to a
                                   running state
         :pararm block_device_map: block device map obj
-        :param assign_public_ip: flag to indicate whether this method should auto create and assign
+        :param auto_create_eni: flag to indicate whether this method should auto create and assign
                         an elastic network interfaces to associate w/ a public ip. This
-                        is only used for non-default VPC and subnets.
+                        is only used for VPC where subnets default behavior does not match the
+                        requested private/public addressing.
         :param network_interfaces: A boto NetworkInterfaceCollection type obj.
                        This obj contains a list of existing boto NetworkInterface
                        or NetworkInterfaceSpecification objs.
@@ -3218,8 +3294,10 @@ disable_root: false"""
         :return: list of euinstances
         """
         reservation = None
+        instances = []
+        addressing_type = None
+        secgroups = None
         try:
-            instances = []
             if not isinstance(image, Image):
                 image = self.get_emi(emi=str(image))
             if image is None:
@@ -3227,18 +3305,15 @@ disable_root: false"""
             if not user_data:
                 user_data = self.enable_root_user_data
             if private_addressing is True:
-                addressing_type = "private"
-                connect = False
-            else:
-                addressing_type = None
-
+                if not self.vpc_supported():
+                    addressing_type = "private"
+                auto_connect = False
             #In the case a keypair object was passed instead of the keypair name
             if keypair:
                 if isinstance(keypair, KeyPair):
                     keypair = keypair.name
 
             # Format the provided security group arg, and store it for debug purposes.
-            secgroups = None
             if group:
                 secgroups = []
                 if isinstance(group, list):
@@ -3278,7 +3353,9 @@ disable_root: false"""
                                   'contain this info')
                 secgroups = None
                 subnet_id = None
-            elif assign_public_ip:
+            elif auto_create_eni:
+                #  Attempts to create an ENI only if the ip request does not match the default
+                # behavior of the subnet running these instances.
                 subnet = None
                 if subnet_id:
                     # No network_interfaces were provided, check to see if this subnet already
@@ -3305,13 +3382,13 @@ disable_root: false"""
                     # Default subnets or subnets whos attributes have been modified to
                     # provide a public ip should automatically provide an ENI and public ip
                     # association, skip if this is true...
-                    if not subnet.mapPublicIpOnLaunch:
-                        eni = NetworkInterfaceSpecification(device_index=0,
-                                                            subnet_id=subnet_id,
-                                                            groups=secgroups,
-                                                            delete_on_termination=True,
-                                                            description='eutester_auto_assigned',
-                                                            associate_public_ip_address=True)
+                    if subnet.mapPublicIpOnLaunch == private_addressing:
+                        eni = NetworkInterfaceSpecification(
+                            device_index=0, subnet_id=subnet_id,
+                            groups=secgroups,
+                            delete_on_termination=True,
+                            description='eutester_auto_assigned',
+                            associate_public_ip_address=(not private_addressing))
                         network_interfaces = NetworkInterfaceCollection(eni)
                         # sec group  and subnet info is now passed via the eni(s),
                         # not to the run request
@@ -3713,7 +3790,7 @@ disable_root: false"""
         """
         # To allow easy updating of a group (since group.update() is not implemented at this time),
         # handle SecurityGroup arg type for either kwargs...
-        names = None
+        names = ['verbose']
         ids = None
         if isinstance(id, SecurityGroup) or isinstance(id, BotoGroup):
             id = id.id
@@ -3724,7 +3801,7 @@ disable_root: false"""
         if id:
             ids = [id]
         if name:
-            names = [name]
+            names.append(name)
         groups = self.ec2.get_all_security_groups(groupnames=names, group_ids=ids)
         for group in groups:
             if not id or (id and group.id == id):
@@ -3769,6 +3846,8 @@ disable_root: false"""
                 if (to_port == 0 ) or (to_port == -1) or \
                         (port >= from_port and port <= to_port):
                     for grant in rule.grants:
+                        grantgroupid = (getattr(grant, 'groupId', None) or
+                                        getattr(grant, 'group_id', None))
                         if src_addr and grant.cidr_ip:
                             if self.is_address_in_network(src_addr, str(grant)):
                                 self.debug('sec_group DOES allow: group:"{0}"'
@@ -3781,7 +3860,7 @@ disable_root: false"""
                         if src_group:
                             src_group_id = str(src_group.name) + \
                                            "-" + (src_group.owner_id)
-                            if ( src_group.id == grant.groupId ) or \
+                            if ( src_group.id == grantgroupid ) or \
                                     ( grant.group_id == src_group_id ):
                                 self.debug('sec_group DOES allow: group:"{0}"'
                                            ', src_group:"{1}"/"{2}", '
@@ -4250,7 +4329,7 @@ disable_root: false"""
 
 
 
-    def get_console_output(self, instance):
+    def get_console_output(self, instance, print_debug=True):
         """
         Retrieve console output from an instance
 
@@ -4262,7 +4341,8 @@ disable_root: false"""
         if isinstance(instance, Instance):
             instance = instance.id
         output = self.ec2.get_console_output(instance_id=instance)
-        self.debug(output.output)
+        if print_debug:
+            self.debug(output.output)
         return output
 
 
@@ -5167,7 +5247,6 @@ disable_root: false"""
         if error_msg:
             raise Exception(error_msg)
 
-
     def create_web_servers(self, keypair, group, zone, port=80, count=2, image=None, filename="test-file", cookiename="test-cookie"):
         if not image:
             image = self.get_emi(root_device_type="instance-store", not_location="loadbalancer", not_platform="windows")
@@ -5182,12 +5261,26 @@ disable_root: false"""
                 ## Debian based Linux
                 instance.sys("apt-get update", code=0)
                 instance.sys("apt-get install -y apache2", code=0)
+                instance.sys("ln -s /etc/apache2/mods-available/usertrack.load /etc/apache2/mods-enabled/usertrack.load")
                 try:
                     instance.sys("echo \"" + instance.id +"\" > /var/www/html/" + filename, code=0)
                 except:
                     instance.sys("echo \"" + instance.id +"\" > /var/www/" + filename, code=0)
                 instance.sys("echo \"CookieTracking on\" >> /etc/apache2/apache2.conf")
                 instance.sys("echo CookieName " + cookiename +" >> /etc/apache2/apache2.conf")
+                '''
+                SSH connects stdin, stdout and stderr of the remote shell to your local terminal, so you can interact
+                with the command that's running on the remote side. As a side effect, it will keep running until these
+                connections have been closed, which happens only when the remote command and all its children (!) have
+                terminated (because the children, which is what "&" starts, inherit std* from their parent process
+                and keep it open).
+
+                via https://serverfault.com/questions/36419/using-ssh-to-remotely-start-a-process
+
+                And I have stolen a little bit extra from our dd wrapper. see:
+                https://github.com/bigschwan/adminapi/blob/master/cloud_utils/system_utils/machine.py#L1090
+                '''
+                instance.sys("nohup service apache2 restart  2>  /tmp/apacheRestart & echo $! && sleep 2")
             except eutester.sshconnection.CommandExitCodeException, e:
                 ### Enterprise Linux
                 instance.sys("yum install -y httpd", code=0)

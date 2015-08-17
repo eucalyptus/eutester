@@ -439,7 +439,6 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                 tb = self.get_traceback()
                 failcount +=1
                 failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
-
         if launch_configurations:
             try:
                 self.cleanup_launch_configs()
@@ -447,7 +446,6 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                 tb = self.get_traceback()
                 failcount +=1
                 failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
-
 
         for key,array in self.test_resources.iteritems():
             for item in array:
@@ -476,13 +474,6 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
             failmsg += "\nFound " + str(failcount) + " number of errors while cleaning up. " \
                                                      "See above"
             raise Exception(failmsg)
-        if launch_configurations:
-            try:
-                self.cleanup_launch_configs()
-            except Exception, e:
-                tb = self.get_traceback()
-                failcount +=1
-                failmsg += str(tb) + "\nError#:"+ str(failcount)+ ":" + str(e)+"\n"
 
     def cleanup_load_balancers(self, lbs=None):
         """
@@ -496,6 +487,31 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                 self.delete_load_balancers(self.test_resources['load_balancers'])
             except KeyError:
                 self.debug("No loadbalancers to delete")
+
+    def cleanup_autoscaling_groups(self, asg_list=None):
+        """
+        This will attempt to delete auto scaling groups listed in test_resources['auto-scaling-groups']
+        """
+        ### clear all ASGs
+        if asg_list:
+            self.delete_autoscaling_groups(asg_list)
+        else:
+            try:
+                self.delete_autoscaling_groups(self.test_resources['auto-scaling-groups'])
+            except KeyError:
+                self.debug("Auto scaling group list is empty")
+
+    def cleanup_launch_configs(self, lc_list=None):
+        """
+        This will attempt to delete launch configs listed in test_resources['launch-configurations']
+        """
+        if lc_list:
+            self.delete_launch_configs(lc_list)
+        else:
+            try:
+                self.delete_launch_configs(self.test_resources['launch-configurations'])
+            except KeyError:
+                self.debug("Launch configuration list is empty")
 
     def cleanup_addresses(self, ips=None):
         """
@@ -511,7 +527,6 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
 
         while addresses:
             self.release_address(addresses.pop())
-
 
     def cleanup_test_snapshots(self,snaps=None, clean_images=False, add_time_per_snap=10,
                                wait_for_valid_state=120, base_timeout=180):
@@ -541,9 +556,6 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                                         base_timeout=base_timeout,
                                         add_time_per_snap=add_time_per_snap,
                                         wait_for_valid_state=wait_for_valid_state)
-
-
-
 
     def clean_up_test_volumes(self, volumes=None, min_timeout=180, timeout_per_vol=30):
         """
@@ -627,7 +639,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
         if euvolumes:
             self.delete_volumes(euvolumes, timeout=timeout)
 
-                    
+
     def get_current_resources(self,verbose=False):
         '''
         Return a dictionary with all known resources the system has. Optional pass the verbose=True
@@ -707,11 +719,11 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
         def create_cloud_machine(machine_dict, ssh_proxy=None):
             ### ADD the machine to the array of machine
             try:
-                self.test_port_status(machine_dict["hostname"], 22, tcp=True)
                 proxy_host = None
                 proxy_username = None
                 proxy_password = None
                 proxy_keypath = None
+                self.test_port_status(machine_dict["hostname"], 22, tcp=True)
             except socketerror, se:
                 self.debug(self.markup('Could not connect to:"{0}", err:"{1}"'
                            .format(machine_dict["hostname"], se), [1,31]))

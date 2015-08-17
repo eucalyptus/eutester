@@ -36,6 +36,7 @@ Place holder for volume test specific convenience methods+objects to extend boto
 
 '''
 from boto.ec2.volume import Volume
+from boto.exception import EC2ResponseError
 from eutester.taggedresource import TaggedResource
 from prettytable import PrettyTable, ALL
 import eucaops
@@ -80,7 +81,11 @@ class EuVolume(Volume, TaggedResource):
         return newvol
     
     def update(self):
-        super(EuVolume, self).update()
+        try:
+            super(EuVolume, self).update()
+        except EC2ResponseError as ER:
+            if ER.status == 400 and ER.error_code == 'InvalidVolume.NotFound':
+                self.status = 'deleted'
         if (self.tags.has_key(self.tag_md5_key) and (self.md5 != self.tags[self.tag_md5_key])) or \
             (self.tags.has_key(self.tag_md5len_key) and (self.md5len != self.tags[self.tag_md5len_key])):
             self.update_volume_attach_info_tags()

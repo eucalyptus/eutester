@@ -9,6 +9,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 import threading
 from eucaops import Eucaops
+from eutester import WaitForResultException
 from eutester.euinstance import EuInstance
 from eutester.eutestcase import EutesterTestCase
 from eucaops import EC2ops
@@ -145,7 +146,10 @@ class InstanceBasics(EutesterTestCase):
             if instance.ip_address == instance.private_ip_address:
                 self.tester.debug("WARNING: System or Static mode detected, skipping ElasticIps")
                 return reservation
-            self.address = self.tester.allocate_address(domain=instance.vpc_id)
+            domain = None
+            if instance.vpc_id:
+                domain = 'vpc' # Set domain to 'vpc' for use with instance in a VPC
+            self.address = self.tester.allocate_address(domain=domain)
             self.assertTrue(self.address, 'Unable to allocate address')
             self.tester.associate_address(instance, self.address)
             instance.update()
@@ -407,7 +411,8 @@ class InstanceBasics(EutesterTestCase):
         if self.reservation:
             for instance in self.reservation.instances:
                 if instance.ip_address == instance.private_ip_address:
-                    self.tester.debug("WARNING: System or Static mode detected, skipping PrivateIPAddressing")
+                    self.tester.debug("WARNING: System or Static mode detected, skipping "
+                                      "PrivateIPAddressing")
                     return self.reservation
             self.tester.terminate_instances(self.reservation)
             self.set_reservation(None)
@@ -421,18 +426,29 @@ class InstanceBasics(EutesterTestCase):
             self.tester.sleep(30)
             instance.update()
             self.debug('Attempting to ping associated IP:"{0}"'.format(address.public_ip))
-            self.assertTrue(self.tester.ping(instance.ip_address), "Could not ping instance with new IP")
+            self.assertTrue(self.tester.ping(instance.ip_address),
+                            "Could not ping instance with new IP")
+            self.debug('Disassociating address:{0} from instance:{1}'.format(address.public_ip,
+                                                                             instance.id))
             address.disassociate()
             self.tester.sleep(30)
             instance.update()
             self.debug('Confirming disassociated IP:"{0}" is no longer in use'
                        .format(address.public_ip))
-            self.assertFalse(self.tester.ping(address.public_ip, poll_count=3),
-                             "Was able to ping address that should no long be associated with an "
-                             "instance")
+            def wait_for_ping():
+                return self.tester.ping(address.public_ip, poll_count=1)
+            try:
+                self.tester.wait_for_result(callback=wait_for_ping, result=False)
+            except WaitForResultException as WE:
+                self.errormsg("Was able to ping address:'{0}' that should no long be associated "
+                              "with an instance".format(address.public_ip))
+                raise WE
             address.release()
-            if instance.ip_address != "0.0.0.0" and instance.ip_address != instance.private_ip_address:
-                self.fail("Instance received a new public IP: " + instance.ip_address)
+            if instance.ip_address:
+                if (instance.ip_address != "0.0.0.0" and
+                            instance.ip_address != instance.private_ip_address):
+                    self.fail("Instance:'{0}' received a new public IP:'{0}' after disassociate"
+                              .format(instance.id, instance.ip_address))
         self.tester.terminate_instances(reservation)
         self.set_reservation(reservation)
         return reservation

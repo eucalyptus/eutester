@@ -54,6 +54,7 @@ from eutester import eulogger
 from eutester.taggedresource import TaggedResource
 from boto.ec2.instance import InstanceState
 from boto.ec2.networkinterface import NetworkInterface
+from boto.exception import EC2ResponseError
 from random import randint
 import eutester.sshconnection as sshconnection
 from eutester.sshconnection import CommandExitCodeException
@@ -529,6 +530,10 @@ class EuInstance(Instance, TaggedResource):
         # - iptables info
         # - route info
         # - instance xml
+        self.debug(self.tester.markup('Dumping Connection debug info for Instance:"{0}, pub:{1}, '
+                                      'priv:{2}"'
+                                      .format(self.id, self.ip_address, self.private_ip_address),
+                   markups=[1, 4, 95]))
         try:
             # Show local ARP info...
             arp_out = "\nLocal ARP cache for instance ip: " \
@@ -538,11 +543,47 @@ class EuInstance(Instance, TaggedResource):
                 arp_out += line
             self.debug(arp_out)
         except Exception as AE:
-            self.log.debug('Failed to get arp info:' + str(AE))
+            self.debug('Failed to get arp info:' + str(AE))
         try:
-            self.tester.get_console_output(self)
+            c_output = self.tester.get_console_output(self, print_debug=False)
+            if c_output:
+                output = c_output.output
+                ci_lines = []
+                if not isinstance(output, list):
+                    output = str(output).splitlines()
+                for line in output:
+                    if re.search('ci-info|cloud-init', line):
+                        ci_lines.append(line)
+                for x in ci_lines:
+                    self.debug("Console ci-info '{0}':".format(x))
         except Exception as CE:
-            self.log.debug('Failed to get console output:' + str(CE))
+            self.debug('Failed to get console output:' + str(CE))
+        try:
+            node = None
+            node = self.tester.service_manager.get_all_node_controllers(instance_id=self.id)[0]
+            node.sys('ip addr list')
+        except Exception as NE:
+            self.debug('Was unable to gather debug for the node hosting this VM, err: {0}'
+                       .format(NE))
+            pass
+        try:
+            nodes = self.tester.service_manager.get_all_node_controllers()
+            if node and (node in nodes):
+                nodes.remove(node)
+            self.debug('Ip addrs for node:"{0}" which is hosting:"{1}"...'
+                       .format(node.hostname, self.id))
+            for node in nodes:
+                try:
+                    self.debug('Node "NOT" hosting instance:"{0}"...'.format(self.id))
+                    node.sys('ip addr list')
+                except:
+                    pass
+        except Exception as IPL:
+            self.debug('Failed gathering ip addr list debug info from all nodes, err: "{0}"'
+                       .format(IPL))
+            pass
+        self.debug(self.tester.markup('DONE Dumping Connection debug info for Instance:"{0}"'
+                                      .format(self.id), markups=[1, 4, 95]))
 
     def has_sudo(self):
         try:
@@ -1887,7 +1928,11 @@ class EuInstance(Instance, TaggedResource):
                             ", after elapsed:" + str(elapsed))
         if check_vols:
             for volume in self.attached_vols:
-                volume.update
+                try:
+                    volume.update()
+                except EC2ResponseError as ER:
+                    if ER.status == 400 and ER.error_code == 'InvalidVolume.NotFound':
+                        volume.status = 'deleted'
                 if volume.status != 'in-use':
                     raise Exception(str(self.id) + ', Volume ' + str(volume.id) + ':' +
                                     str(volume.status) +
@@ -1909,7 +1954,11 @@ class EuInstance(Instance, TaggedResource):
         self.debug(self.id+" Attempting to start instance...")
         if checkvolstatus:
             for volume in self.attached_vols:
-                volume.update
+                try:
+                    volume.update()
+                except EC2ResponseError as ER:
+                    if ER.status == 400 and ER.error_code == 'InvalidVolume.NotFound':
+                        volume.status = 'deleted'
                 if checkvolstatus:
                     if volume.status != 'in-use':
                         raise Exception(str(self.id) + ', Volume ' + str(volume.id) + ':' +
