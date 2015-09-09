@@ -420,19 +420,21 @@ class Euproperty_Manager():
             except Exception, e:
                 self.debug('Error processing property line: ' + propstring)
                 raise e
-            if not newprop in newlist:
+            if newprop and not newprop in newlist:
                 newlist.append(newprop)
         if property_name:
             for newprop in newlist:
-                for oldprop in self.properties:
-                    if oldprop.property_string == newprop.property_string:
-                        oldprop = newprop
-                        self.create_dynamic_property_map_from_property(newprop)
+                if newprop:
+                    for oldprop in self.properties:
+                        if oldprop.property_string == newprop.property_string:
+                            oldprop = newprop
+                            self.create_dynamic_property_map_from_property(newprop)
         else:
             self.properties = newlist
             self.property_map = Property_Map()
             for prop in self.properties:
-                self.create_dynamic_property_map_from_property(prop)
+                if prop:
+                    self.create_dynamic_property_map_from_property(prop)
         return newlist
 
     def parse_euproperty_description(self, propstring):
