@@ -993,7 +993,8 @@ class Net_Tests(EutesterTestCase):
                                             start=None,
                                             src_cidr_ip='0.0.0.0/0',
                                             count=10,
-                                            instances=None):
+                                            instances=None,
+                                            retry_interval=15):
         '''
         Definition:
         Attempts to add a range of ports to a security group and test
@@ -1080,6 +1081,7 @@ class Net_Tests(EutesterTestCase):
                                         cidr_ip=src_cidr_ip,
                                         port=start,
                                         end_port=start+count)
+            auth_starttime = time.time()
             # test entire port range is accessible from this machine
             test_file = 'eutester_port_test.txt'
             #Allow some delay for the rule to be applied in the network...
@@ -1122,7 +1124,9 @@ class Net_Tests(EutesterTestCase):
                                                 verbose=True)
                         done = True
                     except socket.error as SE:
-                        self.debug('Failed to poll port status on attempt {0}'.format(attempt))
+                        self.debug('Failed to poll port status on attempt {0}, elapsed since auth '
+                                   'request:"{1}"'
+                                   .format(attempt, int(time.time()-auth_starttime)))
                         try:
                             self.debug('Failed to connect to "{0}":IP:"{1}":'
                                        'PORT:"{2}"'.format(instance1.id,
@@ -1147,6 +1151,9 @@ class Net_Tests(EutesterTestCase):
                                        str(tester.get_traceback()))
                         if attempt >= 2:
                             raise SE
+                        self.debug('Sleeping {0} seconds before next attempt:({1}/{2})'
+                                   .format(retry_interval, attempt, '2'))
+                        time.sleep(retry_interval)
                 # Since no socket errors were encountered assume we connected,
                 # check file on instance to make sure we didn't connect somewhere
                 # else like the CC...
