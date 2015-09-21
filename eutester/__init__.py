@@ -163,7 +163,7 @@ class Eutester(object):
             raise RuntimeError('Credpath has not been set yet. '
                                'Please set credpath or provide '
                                'configuration file')
-        cmd = 'source {0}/eucarc &> /dev/null && echo ${1}'.format(self.credpath, field)
+        cmd = 'bash -c \'source {0}/eucarc &> /dev/null && echo ${1}\''.format(self.credpath, field)
         out = self.local(cmd)
         if out[0]:
             return out[0]
