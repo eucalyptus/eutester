@@ -606,27 +606,32 @@ class Euproperty_Manager():
         self.debug('Setting property(' + property.property_string +
                    ') to value:' + str(value))
         if reset_to_default:
-            ret_string = self.work_machine.sys(
+            output = self.work_machine.sys(
                 self.cmdpath + 'euca-modify-property -U ' +
                 str(self.service_url) + ' -I ' + str(self.access_key) +
                 ' -S ' + str(self.secret_key) + ' -r ' +
-                str(property.property_string), code=0)[0]
+                str(property.property_string), code=0)
         else:
-            ret_string = self.work_machine.sys(
+            output = self.work_machine.sys(
                 self.cmdpath + 'euca-modify-property -U ' +
                 str(self.service_url) + ' -I '+str(self.access_key) + ' -S ' +
                 str(self.secret_key) + ' -p ' +
                 str(property.property_string) + '=' + str(value),
-                code=0)[0]
-        if ret_string:
-            ret_value = str(ret_string).split()[2]
-        else:
+                code=0)
+        ret_value = None
+        if output:
+            for line in output:
+                line = line.strip()
+                if re.search('^PROPERTY', line):
+                    ret_value = str(line).split()[2]
+                    break
+        if ret_value is None:
             raise EupropertiesException("set_property output from modify "
                                         "was None")
         #Confirm property value was set
         if not reset_to_default and (ret_value != value) and\
                 not (not value and ret_value == '{}'):
-            ret_string = "\n".join(str(x) for x in ret_string)
+            ret_string = "\n".join(str(x) for x in output)
             raise EupropertiesException(
                 "set property(" + property.property_string + ") to value(" +
                 str(value) + ") failed.Ret Value (" + str(ret_value) +

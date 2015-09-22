@@ -31,6 +31,7 @@
 # Author: matt.clark@eucalyptus.com
 
 import sys
+import time
 from boto.resultset import ResultSet
 from boto.ec2.tag import Tag
 from boto.ec2.ec2object import TaggedEC2Object, EC2Object
@@ -153,20 +154,23 @@ class ConversionTask(TaggedEC2Object):
             self.update(updatedtask=task)
         return task
 
-    def update(self, updatedtask=None):
+    def update(self, updatedtask=None, retries=2):
         params = {}
         params['ConversionTaskId'] = str(self.conversiontaskid)
-        if not updatedtask:
-            updatedtask = self.connection.get_object('DescribeConversionTasks',
-                                                     params,
-                                                     ConversionTask,
-                                                     verb='POST')
-        if updatedtask:
-            self.__dict__.update(updatedtask.__dict__)
-        else:
-            print sys.stderr, 'Update. Failed to find task:"{0}"'\
-                .format(str(self.conversiontaskid))
+        for retry in xrange(0, retries):
+            if not updatedtask:
+                updatedtask = self.connection.get_object('DescribeConversionTasks',
+                                                         params,
+                                                         ConversionTask,
+                                                         verb='POST')
+            if updatedtask:
+                if updatedtask.id:
+                    self.__dict__.update(updatedtask.__dict__)
+                    return
+            print sys.stderr, 'Update. Failed to find task:"{0}", after "{1}/{2}" attempts'\
+                .format(str(self.conversiontaskid), retry, retries)
             self.notfound = True
+            time.sleep(1)
 
     def startElement(self, name, attrs, connection):
         ename = name.replace('euca:','')
