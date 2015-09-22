@@ -40,7 +40,7 @@ import cookielib
 from eutester import Eutester
 from boto.ec2.elb.listener import Listener
 from boto.ec2.elb.healthcheck import HealthCheck
-from os.path import join, abspath
+from os.path import join
 
 ELBRegionData = {
     'us-east-1': 'elasticloadbalancing.us-east-1.amazonaws.com',
@@ -165,11 +165,11 @@ class ELBops(Eutester):
         self.debug(
             "Creating ELB Listener for protocol " + protocol + " and port " + str(load_balancer_port) + "->" + str(
                 instance_port))
-        listner = Listener(load_balancer=load_balancer,
+        listener = Listener(load_balancer=load_balancer,
                            protocol=protocol,
                            load_balancer_port=load_balancer_port,
                            instance_port=instance_port)
-        return listner
+        return listener
 
     def create_healthcheck(self, target="HTTP:80/instance-name", interval=5, timeout=2, healthy_threshold=2,
                            unhealthy_threshold=10):
@@ -290,6 +290,12 @@ class ELBops(Eutester):
                                              lb_port=lb_port,
                                              policies=policy_name)
 
+    def set_lb_policy_for_back_end_server(self, lb_name, instance_port, policy_name=None):
+        self.debug("Set backend server policy " + str(policy_name) + " for " + lb_name)
+        self.elb.set_lb_policies_of_backend_server(lb_name=lb_name,
+                                                   instance_port=instance_port,
+                                                   policies=policy_name)
+
     def delete_lb_policy(self, lb_name, policy_name):
         self.debug("Deleting lb policy " + str(policy_name) + " from " + str(lb_name))
         self.elb.delete_lb_policy(lb_name=lb_name,
@@ -301,10 +307,10 @@ class ELBops(Eutester):
 
     def add_lb_listener(self, lb_name, listener):
         self.debug("adding listener")
-        self.elb.create_load_balancer_listeners(name=lb_name, listeners=[listener])
+        self.elb.create_load_balancer_listeners(name=lb_name, complex_listeners=[listener])
 
     def remove_lb_listener(self, lb_name, port):
-        self.debug("removing listener")
+        self.debug("removing listener for port " + str(port))
         self.elb.delete_load_balancer_listeners(name=lb_name, ports=[port])
 
     def add_server_cert(self, cert_name, cert_dir="./testcases/cloud_user/elb/test_data", 
@@ -313,3 +319,56 @@ class ELBops(Eutester):
         cert_body = open(join(cert_dir, cert_file)).read()
         cert_key = open(join(cert_dir, key_file)).read()
         self.upload_server_cert(cert_name=cert_name, cert_body=cert_body, private_key=cert_key)
+
+    def describe_lb_healthchecks(self, lb):
+        lbs = self.elb.get_all_load_balancers(load_balancer_names=[lb])
+        return lbs[0].health_check
+
+    def describe_lb_listeners(self, lb):
+        lbs = self.elb.get_all_load_balancers(load_balancer_names=[lb])
+        return lbs[0].listeners
+
+    def describe_lb_instances(self, lb):
+        lbs = self.elb.get_all_load_balancers(load_balancer_names=[lb])
+        return lbs[0].instances
+
+    def describe_lb_instance_health(self, lb):
+        instances = self.elb.describe_instance_health(load_balancer_name=lb)
+        return instances
+
+    def wait_for_lb_instances(self, lb, number=1):
+        '''
+        This will wait for all instances registered to a load balancer to actuall become registered (this could take
+        time in such as the case of autoscaling group registering scaling instances to an elb) This will also wait for
+        registered instances to become InService with the load balancer. After this passes, the load balancer *should*
+        be functional.
+
+        :param lb: load balancer to check
+        :param number: how many instances should be registered to the load balancer
+        :return: True when all instances are InService
+        '''
+        self.debug("Waiting for " + str(number) + " instances to be healthy")
+        instances = self.describe_lb_instance_health(lb)
+        if not instances:
+            self.debug("No instances registered with load balancer: " + lb)
+            return False
+        if len(instances) != number:
+            self.debug("Not all instances registered yet")
+            return False
+        for instance in instances:
+            if instance.state != "InService":
+                self.debug("Instance: " + instance.instance_id + " still in " + instance.state + " state")
+                return False
+            else:
+                self.debug("Instance: " + instance.instance_id + " now " + instance.state)
+        return True
+
+    def update_listener(self, lb, lb_port, lb_protocol, instance_port, instance_protocol, cert_arn=None):
+        self.debug("Configuring ELB listener")
+        # remove any existing listener on the port and create a new listener with backend authentication
+        self.debug("Attempting to remove any listener already existing for port " + str(lb_port))
+        self.remove_lb_listener(lb_name=lb.name, port=lb_port)
+        listener = (lb_port, instance_port, lb_protocol, instance_protocol, cert_arn)
+        self.add_lb_listener(lb_name=lb.name, listener=listener)
+        self.debug("Listener: " + str(self.describe_lb_listeners(lb.name)))
+        return

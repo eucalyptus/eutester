@@ -34,7 +34,7 @@ class SOSreport(EutesterTestCase):
             if machine.distro.name is "vmware":
                 continue
             machine.install("sos")
-            machine.sys("yum install -y " + self.args.package_url)
+            machine.sys("yum install -y --nogpg eucalyptus-sos-plugins")
 
     def Run(self):
         error_msg = ""
@@ -44,7 +44,7 @@ class SOSreport(EutesterTestCase):
                 if machine.distro.name is "vmware":
                     continue
                 machine.sys("mkdir -p " + self.args.remote_dir)
-                machine.sys("sosreport --batch --skip-plugins=emc --tmp-dir " + self.args.remote_dir + " --ticket-number " + str(self.args.ticket_number),
+                machine.sys("sosreport --batch --tmp-dir " + self.args.remote_dir + " --ticket-number " + str(self.args.ticket_number),
                             code=0, timeout=self.args.timeout)
             except Exception, e:
                 error_msg += 'Error running SOS report on:' + str(machine.hostname) + '. Error:' + str(e)
