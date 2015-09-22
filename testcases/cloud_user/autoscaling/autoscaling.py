@@ -175,6 +175,7 @@ class AutoScalingBasics(EutesterTestCase):
         activities = self.asg.get_activities()
         for activity in activities:
             assert isinstance(activity,Activity)
+            self.debug(str(activity))
             if activity.progress != 100:
                 return False
         return True
