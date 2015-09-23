@@ -173,6 +173,9 @@ class AutoScalingBasics(EutesterTestCase):
 
     def scaling_activities_complete(self):
         activities = self.asg.get_activities()
+        if not activities:
+            self.debug('Expected there to be activities but found none.')
+            return False
         for activity in activities:
             assert isinstance(activity,Activity)
             self.debug(str(activity))
