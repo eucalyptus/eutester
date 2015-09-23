@@ -178,7 +178,7 @@ class AutoScalingBasics(EutesterTestCase):
         for activity in activities:
             assert isinstance(activity,Activity)
             self.debug(str(activity))
-            if activity.progress != 100:
+            if activity.status_code != 'Successful':
                 return False
         return True
 
