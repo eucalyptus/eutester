@@ -127,7 +127,6 @@ class AutoScalingBasics(EutesterTestCase):
         self.debug("**** Created Auto Scaling Policies: " + self.up_policy_name + " " + self.down_policy_name + " " +
                    self.exact_policy_name)
 
-        self.tester.wait_for_result(self.scaling_activities_complete, True, timeout=180)
         ### Test Execute ChangeInCapacity Auto Scaling Policy
         self.tester.execute_as_policy(policy_name=self.up_policy_name,
                                       as_group=self.auto_scaling_group_name,
@@ -173,9 +172,13 @@ class AutoScalingBasics(EutesterTestCase):
 
     def scaling_activities_complete(self):
         activities = self.asg.get_activities()
+        if not activities:
+            self.debug('Expected there to be activities but found none.')
+            return False
         for activity in activities:
             assert isinstance(activity,Activity)
-            if activity.progress != 100:
+            self.debug(str(activity))
+            if activity.status_code != 'Successful':
                 return False
         return True
 

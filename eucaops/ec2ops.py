@@ -4692,7 +4692,7 @@ disable_root: false"""
         self.debug("bundle_instance_monitor_and_register:" + str(bundle_task.id)
                    + " monitored to completed, now get manifest and register...")
         manifest = self.get_manifest_string_from_bundle_task(bundle_task)
-        image = self.register_manifest(manifest, virtualization_type=instance.virtualization_type)
+        image = self.register_manifest(manifest, name="bun-image-"+str(time.time()), virtualization_type=instance.virtualization_type)
         self.debug("bundle_instance_monitor_and_register:" + str(bundle_task.id)
                    + ", registered as image:" + str(image.id))
         self.debug("bundle_instance_monitor_and_register:" + str(bundle_task.id)
@@ -4985,6 +4985,14 @@ disable_root: false"""
         while checking_list and elapsed < timeout:
             for task in checking_list:
                 task.update()
+                #notfound flag is set if task is not found during update()
+                if task.notfound:
+                    err_msg = 'Task "{0}" not found after elapsed:"{1}"'\
+                        .format(task.conversiontaskid, elapsed)
+                    err_buf += "\n" + err_msg
+                    self.debug(err_msg)
+                    done_list.append(task)
+                    continue
                 self.debug(task)
                 #If the task volume is present add it to the resources list.
                 found = False
@@ -5010,14 +5018,7 @@ disable_root: false"""
                             ins = ins[0]
                             if not ins in self.test_resources['reservations']:
                                 self.test_resources['reservations'].append(ins)
-                #notfound flag is set if task is not found during update()
-                if task.notfound:
-                    err_msg = 'Task "{0}" not found after elapsed:"{1}"'\
-                        .format(task.conversiontaskid, elapsed)
-                    err_buf += "\n" + err_msg
-                    self.debug(err_msg)
-                    done_list.append(task)
-                    continue
+
                 self.debug('Monitoring task:"{0}:{1}", elapsed:'
                            '"{2}/{3}"'
                            .format(task.conversiontaskid,
