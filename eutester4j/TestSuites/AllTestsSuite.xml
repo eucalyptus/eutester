@@ -6,7 +6,7 @@
         <suite-file path="CloudWatchSuite.xml" />
         <suite-file path="AutoScalingSuite.xml" />
         <suite-file path="IAMSuite.xml" />
-        <suite-file path="WalrusSuite.xml" />
+        <suite-file path="S3Suite.xml" />
         <suite-file path="ELBSuite.xml" />
         <suite-file path="JCloudsSuite.xml" />
     </suite-files>
