@@ -138,10 +138,10 @@ class ImageCreator(EutesterTestCase):
 if __name__ == "__main__":
     testcase = ImageCreator()
     ### Either use the list of tests passed from config/command line to determine what subset of tests to run
-    list = [ "CreateImage"]
+    testlist = [ "CreateImage"]
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
-    for test in list:
+    for test in testlist:
         unit_list.append( testcase.create_testunit_by_name(test) )
         ### Run the EutesterUnitTest objects
 

@@ -545,16 +545,16 @@ class ImportInstanceTests(EutesterTestCase):
 if __name__ == "__main__":
     testcase = ImportInstanceTests()
     if testcase.args.tests:
-        list = testcase.args.tests.splitlines(',')
+        testlist = testcase.args.tests.splitlines(',')
     else:
-        list = ['test1_basic_create_import_instance',
+        testlist = ['test1_basic_create_import_instance',
                 'test2_validate_params_against_task',
                 'test3_make_image_public',
                 'test4_tag_image']
 
     ### Convert test suite methods to EutesterUnitTest objects
     unit_list = [ ]
-    for test in list:
+    for test in testlist:
         unit_list.append(testcase.create_testunit_by_name(test))
     if testcase.args.no_clean_on_exit:
         clean_on_exit = False
