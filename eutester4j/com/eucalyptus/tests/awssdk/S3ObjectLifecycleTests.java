@@ -62,444 +62,411 @@
 
 package com.eucalyptus.tests.awssdk;
 
-import com.amazonaws.AmazonServiceException;
-import com.amazonaws.ClientConfiguration;
-import com.amazonaws.auth.AWSCredentials;
-import com.amazonaws.auth.BasicAWSCredentials;
-import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.AmazonS3Client;
-import com.amazonaws.services.s3.S3ClientOptions;
-import com.amazonaws.services.s3.model.Bucket;
-import com.amazonaws.services.s3.model.BucketLifecycleConfiguration;
-import com.google.common.collect.Lists;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeClass;
-import org.testng.annotations.BeforeMethod;
-import org.testng.annotations.Test;
+import static com.eucalyptus.tests.awssdk.Eutester4j.assertThat;
+import static com.eucalyptus.tests.awssdk.Eutester4j.eucaUUID;
+import static com.eucalyptus.tests.awssdk.Eutester4j.initS3ClientWithNewAccount;
+import static com.eucalyptus.tests.awssdk.Eutester4j.print;
+import static com.eucalyptus.tests.awssdk.Eutester4j.testInfo;
+import static org.testng.AssertJUnit.assertTrue;
+import static org.testng.AssertJUnit.fail;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-import static com.eucalyptus.tests.awssdk.Eutester4j.ACCESS_KEY;
-import static com.eucalyptus.tests.awssdk.Eutester4j.S3_ENDPOINT;
-import static com.eucalyptus.tests.awssdk.Eutester4j.SECRET_KEY;
-import static com.eucalyptus.tests.awssdk.Eutester4j.assertThat;
-import static com.eucalyptus.tests.awssdk.Eutester4j.eucaUUID;
-import static com.eucalyptus.tests.awssdk.Eutester4j.initS3Client;
-import static com.eucalyptus.tests.awssdk.Eutester4j.print;
-import static com.eucalyptus.tests.awssdk.Eutester4j.s3;
-import static com.eucalyptus.tests.awssdk.Eutester4j.testInfo;
-import static org.testng.AssertJUnit.assertTrue;
-import static org.testng.AssertJUnit.fail;
+import org.testng.annotations.AfterClass;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeClass;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
+
+import com.amazonaws.AmazonServiceException;
+import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.model.Bucket;
+import com.amazonaws.services.s3.model.BucketLifecycleConfiguration;
+import com.google.common.collect.Lists;
 
 /**
- * <p>This class contains tests for object lifecycle configuration on S3 buckets.</p>
+ * <p>
+ * This class contains tests for object lifecycle configuration on S3 buckets.
+ * </p>
  *
  * @author Wes Wannemacher (wes.wannemacher@eucalyptus.com)
  *
  */
 public class S3ObjectLifecycleTests {
 
-    private static String bucketName = null;
-    private static List<Runnable> cleanupTasks = null;
+  private static String bucketName = null;
+  private static List<Runnable> cleanupTasks = null;
+  private static AmazonS3 s3 = null;
+  private static String account = null;
 
-    @BeforeClass
-    public void init() throws Exception {
-        print("*** PRE SUITE SETUP ***");
-        initS3Client();
+  @BeforeClass
+  public void init() throws Exception {
+    print("### PRE SUITE SETUP - " + this.getClass().getSimpleName());
+    try {
+      account = this.getClass().getSimpleName().toLowerCase();
+      s3 = initS3ClientWithNewAccount(account, "admin");
+    } catch (Exception e) {
+      try {
+        teardown();
+      } catch (Exception ie) {
+      }
+      throw e;
     }
+  }
 
-    @BeforeMethod
-    public void setup() throws Exception {
-        print("*** PRE TEST SETUP ***");
-        bucketName = eucaUUID();
-        cleanupTasks = new ArrayList<Runnable>();
-        print("Creating bucket " + bucketName);
-        Bucket bucket = s3.createBucket(bucketName);
-        cleanupTasks.add(new Runnable() {
-            @Override
-            public void run() {
-                print("Deleting bucket " + bucketName);
-                s3.deleteBucket(bucketName);
-            }
-        });
+  @AfterClass
+  public void teardown() throws Exception {
+    print("### POST SUITE CLEANUP - " + this.getClass().getSimpleName());
+    Eutester4j.deleteAccount(account);
+    s3 = null;
+  }
 
-        assertTrue("Invalid reference to bucket", bucket != null);
-        assertTrue("Mismatch in bucket names. Expected bucket name to be " + bucketName + ", but got " + bucket.getName(), bucketName.equals(bucket.getName()));
+  @BeforeMethod
+  public void setup() throws Exception {
+    bucketName = eucaUUID();
+    cleanupTasks = new ArrayList<Runnable>();
+    Bucket bucket = S3Utils.createBucket(s3, account, bucketName, S3Utils.BUCKET_CREATION_RETRIES);
+    cleanupTasks.add(new Runnable() {
+      @Override
+      public void run() {
+        print("Deleting bucket " + bucketName);
+        s3.deleteBucket(bucketName);
+      }
+    });
+
+    assertTrue("Invalid reference to bucket", bucket != null);
+    assertTrue("Mismatch in bucket names. Expected bucket name to be " + bucketName + ", but got " + bucket.getName(),
+        bucketName.equals(bucket.getName()));
+  }
+
+  @AfterMethod
+  public void cleanup() throws Exception {
+    Collections.reverse(cleanupTasks);
+    for (final Runnable cleanupTask : cleanupTasks) {
+      try {
+        cleanupTask.run();
+      } catch (Exception e) {
+        print("Unable to run clean up task: " + e);
+      }
     }
+  }
 
-    @AfterMethod
-    public void cleanup() throws Exception {
-        print("*** POST TEST CLEANUP ***");
-        Collections.reverse(cleanupTasks);
-        for (final Runnable cleanupTask : cleanupTasks) {
-            try {
-                cleanupTask.run();
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
+  @Test
+  public void lifecycleBasics() throws Exception {
+    testInfo(this.getClass().getSimpleName() + " - lifecycleBasics");
+    try {
+
+      print("retrieving initial lifecycle configuration");
+      BucketLifecycleConfiguration initial = s3.getBucketLifecycleConfiguration(bucketName);
+      assertTrue("did not expect any data in initial lifecycle configuration", initial == null || initial.getRules() == null
+          || initial.getRules().size() == 0);
+
+      print("creating a lifecycle configuration with only one rule: id => basicTest, prefix => foo");
+      BucketLifecycleConfiguration lifecycle = new BucketLifecycleConfiguration();
+      BucketLifecycleConfiguration.Rule lifecycleRule =
+          new BucketLifecycleConfiguration.Rule().withId("basicTest").withPrefix("foo").withExpirationInDays(2)
+              .withStatus(BucketLifecycleConfiguration.ENABLED.toString());
+      List<BucketLifecycleConfiguration.Rule> rules = Lists.newArrayList();
+      rules.add(lifecycleRule);
+      lifecycle.setRules(rules);
+
+      print("setting lifecycle configuration on bucket " + bucketName);
+      s3.setBucketLifecycleConfiguration(bucketName, lifecycle);
+
+      print("attempting to retrieve lifecycle configuration for bucket " + bucketName);
+      BucketLifecycleConfiguration retrieved = s3.getBucketLifecycleConfiguration(bucketName);
+
+      print("comparing retrieved lifecycle configuration to what was sent");
+      assertTrue("expected the same number of rules", retrieved.getRules().size() == lifecycle.getRules().size());
+
+      print("deleting lifecycle configuration");
+      s3.deleteBucketLifecycleConfiguration(bucketName);
+    } catch (AmazonServiceException ase) {
+      printException(ase);
+      assertThat(false, "Failed to run bucketBasics");
     }
+  }
 
-    @Test
-    public void lifecycleBasics() throws Exception {
-        testInfo(this.getClass().getSimpleName() + " - lifecycleBasics");
-        try {
+  @Test
+  public void largeLifecycle() throws Exception {
+    final int numRules = 1000; // at 934, request gets chunked
 
-            print("retrieving initial lifecycle configuration");
-            BucketLifecycleConfiguration initial = s3.getBucketLifecycleConfiguration(bucketName);
-            assertTrue("did not expect any data in initial lifecycle configuration",
-                    initial == null || initial.getRules() == null || initial.getRules().size() == 0);
+    testInfo(this.getClass().getSimpleName() + " - largeLifecycle");
+    try {
+      print("creating a lifecycle configuration with " + numRules + " rules");
 
-            print("creating a lifecycle configuration with only one rule: id => basicTest, prefix => foo");
-            BucketLifecycleConfiguration lifecycle = new BucketLifecycleConfiguration();
-            BucketLifecycleConfiguration.Rule lifecycleRule = new BucketLifecycleConfiguration.Rule()
-                    .withId("basicTest")
-                    .withPrefix("foo")
-                    .withExpirationInDays(2)
-                    .withStatus(BucketLifecycleConfiguration.ENABLED.toString());
-            List<BucketLifecycleConfiguration.Rule> rules = Lists.newArrayList();
-            rules.add(lifecycleRule);
-            lifecycle.setRules(rules);
+      List<BucketLifecycleConfiguration.Rule> rules = Lists.newArrayList();
+      for (int idx = 1; idx <= numRules; idx++) {
+        BucketLifecycleConfiguration.Rule lifecycleRule =
+            new BucketLifecycleConfiguration.Rule().withId("" + idx).withPrefix("" + idx).withExpirationInDays(idx)
+                .withStatus(BucketLifecycleConfiguration.ENABLED.toString());
+        rules.add(lifecycleRule);
+      }
 
-            print("setting lifecycle configuration on bucket " + bucketName);
-            s3.setBucketLifecycleConfiguration(bucketName, lifecycle);
+      BucketLifecycleConfiguration lifecycle = new BucketLifecycleConfiguration();
+      lifecycle.setRules(rules);
 
-            print("attempting to retrieve lifecycle configuration for bucket " + bucketName);
-            BucketLifecycleConfiguration retrieved = s3.getBucketLifecycleConfiguration(bucketName);
+      print("setting lifecycle configuration on bucket " + bucketName);
+      s3.setBucketLifecycleConfiguration(bucketName, lifecycle);
 
-            print("comparing retrieved lifecycle configuration to what was sent");
-            assertTrue("expected the same number of rules",
-                    retrieved.getRules().size() == lifecycle.getRules().size());
+      print("attempting to retrieve lifecycle configuration for bucket " + bucketName);
+      BucketLifecycleConfiguration retrieved = s3.getBucketLifecycleConfiguration(bucketName);
 
-            print("deleting lifecycle configuration");
-            s3.deleteBucketLifecycleConfiguration(bucketName);
+      print("comparing retrieved lifecycle configuration to what was sent");
+      assertTrue("expected the same number of rules", retrieved.getRules().size() == lifecycle.getRules().size());
+
+      // the following is weird only because we started with 1 up above... an expiration of 0 (zero) days
+      // doesn't make much sense, so we have to accomodate with a 1-based index
+      boolean matches[] = new boolean[numRules + 1];
+      matches[0] = true;
+      for (int idx = 1; idx < matches.length; idx++) {
+        matches[idx] = false;
+      }
+      for (BucketLifecycleConfiguration.Rule retrievedRule : retrieved.getRules()) {
+        Integer ruleId = Integer.parseInt(retrievedRule.getId());
+        Integer prefix = Integer.parseInt(retrievedRule.getPrefix());
+        if (retrievedRule.getStatus().equals(BucketLifecycleConfiguration.ENABLED.toString())
+            && retrievedRule.getExpirationInDays() == ruleId.intValue() && ruleId.intValue() == prefix.intValue()) { // looks valid so far
+
+          if (matches[ruleId.intValue()]) { // shouldn't be already true?!
+            fail("found a duplicate rule in retrieved rules, rule id is " + ruleId.intValue());
+          } else {
+            matches[ruleId.intValue()] = true;
+          }
+        } else {
+          fail("found rule with id - " + retrievedRule.getId() + ", prefix - " + retrievedRule.getPrefix() + ", status - "
+              + retrievedRule.getStatus() + ", and expiration days - " + retrievedRule.getExpirationInDays());
         }
-        catch (AmazonServiceException ase) {
-            printException(ase);
-            assertThat(false, "Failed to run bucketBasics");
-        }
+      }
+
+      for (int idx = 0; idx < matches.length; idx++) {
+        assertTrue("did not find an enabled rule with expiration days, prefix and id - " + idx, matches[idx]);
+      }
+
+      print("deleting lifecycle configuration");
+      s3.deleteBucketLifecycleConfiguration(bucketName);
+    } catch (AmazonServiceException ase) {
+      printException(ase);
+      assertThat(false, "Failed to run largeLifecycle");
     }
+  }
 
-    @Test
-    public void largeLifecycle() throws Exception {
-        final int numRules = 1000; // at 934, request gets chunked
+  @Test
+  public void tooLargeLifecycle() throws Exception {
+    final int numRules = 1001;
 
-        testInfo(this.getClass().getSimpleName() + " - largeLifecycle");
-        try {
-            print("creating a lifecycle configuration with " + numRules + " rules");
+    testInfo(this.getClass().getSimpleName() + " - largeLifecycle");
+    try {
+      print("creating a lifecycle configuration with " + numRules + " rules");
 
-            List<BucketLifecycleConfiguration.Rule> rules = Lists.newArrayList();
-            for (int idx = 1; idx <= numRules; idx++) {
-                BucketLifecycleConfiguration.Rule lifecycleRule = new BucketLifecycleConfiguration.Rule()
-                        .withId("" + idx)
-                        .withPrefix("" + idx)
-                        .withExpirationInDays(idx)
-                        .withStatus(BucketLifecycleConfiguration.ENABLED.toString());
-                rules.add(lifecycleRule);
-            }
+      List<BucketLifecycleConfiguration.Rule> rules = Lists.newArrayList();
+      for (int idx = 1; idx <= numRules; idx++) {
+        BucketLifecycleConfiguration.Rule lifecycleRule =
+            new BucketLifecycleConfiguration.Rule().withId("" + idx).withPrefix("" + idx).withExpirationInDays(idx)
+                .withStatus(BucketLifecycleConfiguration.ENABLED.toString());
+        rules.add(lifecycleRule);
+      }
 
-            BucketLifecycleConfiguration lifecycle = new BucketLifecycleConfiguration();
-            lifecycle.setRules(rules);
+      BucketLifecycleConfiguration lifecycle = new BucketLifecycleConfiguration();
+      lifecycle.setRules(rules);
 
-            print("setting lifecycle configuration on bucket " + bucketName);
-            s3.setBucketLifecycleConfiguration(bucketName, lifecycle);
+      boolean exceptionCaught = false;
+      print("setting lifecycle configuration on bucket " + bucketName);
+      try {
+        s3.setBucketLifecycleConfiguration(bucketName, lifecycle);
+      } catch (Exception ex) {
+        exceptionCaught = true;
+      }
+      assertTrue("expected an exception to be thrown because the lifecycle was too large", exceptionCaught);
 
-            print("attempting to retrieve lifecycle configuration for bucket " + bucketName);
-            BucketLifecycleConfiguration retrieved = s3.getBucketLifecycleConfiguration(bucketName);
+      print("attempting to retrieve lifecycle configuration for bucket " + bucketName);
+      BucketLifecycleConfiguration retrieved = s3.getBucketLifecycleConfiguration(bucketName);
 
-            print("comparing retrieved lifecycle configuration to what was sent");
-            assertTrue("expected the same number of rules",
-                    retrieved.getRules().size() == lifecycle.getRules().size());
+      print("checking that lifecycle is still empty");
+      assertTrue("expected empty lifecycle", retrieved == null || retrieved.getRules() == null || retrieved.getRules().size() == 0);
 
-            // the following is weird only because we started with 1 up above... an expiration of 0 (zero) days
-            // doesn't make much sense, so we have to accomodate with a 1-based index
-            boolean matches[] = new boolean[numRules + 1];
-            matches[0] = true;
-            for (int idx = 1; idx < matches.length; idx++) {
-                matches[idx] = false;
-            }
-            for (BucketLifecycleConfiguration.Rule retrievedRule : retrieved.getRules()) {
-                Integer ruleId = Integer.parseInt( retrievedRule.getId() );
-                Integer prefix = Integer.parseInt( retrievedRule.getPrefix() );
-                if ( retrievedRule.getStatus().equals(BucketLifecycleConfiguration.ENABLED.toString())
-                        && retrievedRule.getExpirationInDays() == ruleId.intValue()
-                        && ruleId.intValue() == prefix.intValue()) { // looks valid so far
-
-                    if ( matches[ruleId.intValue()] ) { // shouldn't be already true?!
-                        fail("found a duplicate rule in retrieved rules, rule id is " + ruleId.intValue());
-                    }
-                    else {
-                        matches[ruleId.intValue()] = true;
-                    }
-                }
-                else {
-                    fail("found rule with id - " + retrievedRule.getId() +
-                            ", prefix - " + retrievedRule.getPrefix() +
-                            ", status - " + retrievedRule.getStatus() +
-                            ", and expiration days - " + retrievedRule.getExpirationInDays());
-                }
-            }
-
-            for (int idx = 0; idx < matches.length; idx++) {
-                assertTrue("did not find an enabled rule with expiration days, prefix and id - " + idx,
-                        matches[idx]);
-            }
-
-            print("deleting lifecycle configuration");
-            s3.deleteBucketLifecycleConfiguration(bucketName);
-        }
-        catch (AmazonServiceException ase) {
-            printException(ase);
-            assertThat(false, "Failed to run largeLifecycle");
-        }
+      print("deleting lifecycle configuration");
+      s3.deleteBucketLifecycleConfiguration(bucketName);
+    } catch (AmazonServiceException ase) {
+      printException(ase);
+      assertThat(false, "Failed to run largeLifecycle");
     }
+  }
 
-    @Test
-    public void tooLargeLifecycle() throws Exception {
-        final int numRules = 1001;
+  @Test
+  public void replaceLifecycle() throws Exception {
+    final int numRules = 20;
 
-        testInfo(this.getClass().getSimpleName() + " - largeLifecycle");
-        try {
-            print("creating a lifecycle configuration with " + numRules + " rules");
+    testInfo(this.getClass().getSimpleName() + " - largeLifecycle");
+    try {
+      print("creating a lifecycle configuration with " + numRules + " rules");
 
-            List<BucketLifecycleConfiguration.Rule> rules = Lists.newArrayList();
-            for (int idx = 1; idx <= numRules; idx++) {
-                BucketLifecycleConfiguration.Rule lifecycleRule = new BucketLifecycleConfiguration.Rule()
-                        .withId("" + idx)
-                        .withPrefix("" + idx)
-                        .withExpirationInDays(idx)
-                        .withStatus(BucketLifecycleConfiguration.ENABLED.toString());
-                rules.add(lifecycleRule);
-            }
+      List<BucketLifecycleConfiguration.Rule> rules = Lists.newArrayList();
+      for (int idx = 1; idx <= numRules; idx++) {
+        BucketLifecycleConfiguration.Rule lifecycleRule =
+            new BucketLifecycleConfiguration.Rule().withId("" + idx).withPrefix("" + idx).withExpirationInDays(idx)
+                .withStatus(BucketLifecycleConfiguration.ENABLED.toString());
+        rules.add(lifecycleRule);
+      }
 
-            BucketLifecycleConfiguration lifecycle = new BucketLifecycleConfiguration();
-            lifecycle.setRules(rules);
+      BucketLifecycleConfiguration lifecycle = new BucketLifecycleConfiguration();
+      lifecycle.setRules(rules);
 
-            boolean exceptionCaught = false;
-            print("setting lifecycle configuration on bucket " + bucketName);
-            try {
-                s3.setBucketLifecycleConfiguration(bucketName, lifecycle);
-            }
-            catch (Exception ex) {
-                exceptionCaught = true;
-            }
-            assertTrue("expected an exception to be thrown because the lifecycle was too large", exceptionCaught);
+      print("setting lifecycle configuration on bucket " + bucketName);
+      s3.setBucketLifecycleConfiguration(bucketName, lifecycle);
 
-            print("attempting to retrieve lifecycle configuration for bucket " + bucketName);
-            BucketLifecycleConfiguration retrieved = s3.getBucketLifecycleConfiguration(bucketName);
+      print("attempting to retrieve lifecycle configuration for bucket " + bucketName);
+      BucketLifecycleConfiguration retrieved = s3.getBucketLifecycleConfiguration(bucketName);
 
-            print("checking that lifecycle is still empty");
-            assertTrue("expected empty lifecycle",
-                    retrieved == null || retrieved.getRules() == null || retrieved.getRules().size() == 0);
+      print("checking that lifecycle is correct");
+      boolean matches[] = new boolean[numRules + 1];
+      matches[0] = true;
+      for (int idx = 1; idx < matches.length; idx++) {
+        matches[idx] = false;
+      }
+      for (BucketLifecycleConfiguration.Rule retrievedRule : retrieved.getRules()) {
+        Integer ruleId = Integer.parseInt(retrievedRule.getId());
+        Integer prefix = Integer.parseInt(retrievedRule.getPrefix());
+        if (retrievedRule.getStatus().equals(BucketLifecycleConfiguration.ENABLED.toString())
+            && retrievedRule.getExpirationInDays() == ruleId.intValue() && ruleId.intValue() == prefix.intValue()) { // looks valid so far
 
-            print("deleting lifecycle configuration");
-            s3.deleteBucketLifecycleConfiguration(bucketName);
+          if (matches[ruleId.intValue()]) { // shouldn't be already true?!
+            fail("found a duplicate rule in retrieved rules, rule id is " + ruleId.intValue());
+          } else {
+            matches[ruleId.intValue()] = true;
+          }
+        } else {
+          fail("found rule with id - " + retrievedRule.getId() + ", prefix - " + retrievedRule.getPrefix() + ", status - "
+              + retrievedRule.getStatus() + ", and expiration days - " + retrievedRule.getExpirationInDays());
         }
-        catch (AmazonServiceException ase) {
-            printException(ase);
-            assertThat(false, "Failed to run largeLifecycle");
+      }
+
+      for (int idx = 0; idx < matches.length; idx++) {
+        assertTrue("did not find an enabled rule with expiration days, prefix and id - " + idx, matches[idx]);
+      }
+
+      // now let's replace it with a new configuration
+      rules = Lists.newArrayList();
+      for (int idx = numRules; idx <= numRules + numRules; idx++) {
+        BucketLifecycleConfiguration.Rule lifecycleRule =
+            new BucketLifecycleConfiguration.Rule().withId("" + idx).withPrefix("" + idx).withExpirationInDays(idx)
+                .withStatus(BucketLifecycleConfiguration.ENABLED.toString());
+        rules.add(lifecycleRule);
+      }
+
+      lifecycle = new BucketLifecycleConfiguration();
+      lifecycle.setRules(rules);
+
+      print("setting lifecycle configuration on bucket " + bucketName);
+      s3.setBucketLifecycleConfiguration(bucketName, lifecycle);
+
+      print("attempting to retrieve lifecycle configuration for bucket " + bucketName);
+      retrieved = s3.getBucketLifecycleConfiguration(bucketName);
+      print("checking that lifecycle is correct");
+      matches = new boolean[numRules + 1];
+      for (int idx = 0; idx < matches.length; idx++) {
+        matches[idx] = false;
+      }
+      for (BucketLifecycleConfiguration.Rule retrievedRule : retrieved.getRules()) {
+        Integer ruleId = Integer.parseInt(retrievedRule.getId());
+        Integer prefix = Integer.parseInt(retrievedRule.getPrefix());
+        if (retrievedRule.getStatus().equals(BucketLifecycleConfiguration.ENABLED.toString())
+            && retrievedRule.getExpirationInDays() == ruleId.intValue() && ruleId.intValue() == prefix.intValue()) { // looks valid so far
+
+          if (matches[ruleId.intValue() - numRules]) { // shouldn't be already true?!
+            fail("found a duplicate rule in retrieved rules, rule id is " + ruleId.intValue());
+          } else {
+            matches[ruleId.intValue() - numRules] = true;
+          }
+        } else {
+          fail("found rule with id - " + retrievedRule.getId() + ", prefix - " + retrievedRule.getPrefix() + ", status - "
+              + retrievedRule.getStatus() + ", and expiration days - " + retrievedRule.getExpirationInDays());
         }
+      }
+
+      print("deleting lifecycle configuration");
+      s3.deleteBucketLifecycleConfiguration(bucketName);
+    } catch (AmazonServiceException ase) {
+      printException(ase);
+      assertThat(false, "Failed to run largeLifecycle");
     }
+  }
 
-    @Test
-    public void replaceLifecycle() throws Exception {
-        final int numRules = 20;
+  @Test
+  public void deletedBucket() throws Exception {
+    final int numRules = 20;
 
-        testInfo(this.getClass().getSimpleName() + " - largeLifecycle");
-        try {
-            print("creating a lifecycle configuration with " + numRules + " rules");
+    testInfo(this.getClass().getSimpleName() + " - largeLifecycle");
+    try {
+      print("creating a lifecycle configuration with " + numRules + " rules");
 
-            List<BucketLifecycleConfiguration.Rule> rules = Lists.newArrayList();
-            for (int idx = 1; idx <= numRules; idx++) {
-                BucketLifecycleConfiguration.Rule lifecycleRule = new BucketLifecycleConfiguration.Rule()
-                        .withId("" + idx)
-                        .withPrefix("" + idx)
-                        .withExpirationInDays(idx)
-                        .withStatus(BucketLifecycleConfiguration.ENABLED.toString());
-                rules.add(lifecycleRule);
-            }
+      List<BucketLifecycleConfiguration.Rule> rules = Lists.newArrayList();
+      for (int idx = 1; idx <= numRules; idx++) {
+        BucketLifecycleConfiguration.Rule lifecycleRule =
+            new BucketLifecycleConfiguration.Rule().withId("" + idx).withPrefix("" + idx).withExpirationInDays(idx)
+                .withStatus(BucketLifecycleConfiguration.ENABLED.toString());
+        rules.add(lifecycleRule);
+      }
 
-            BucketLifecycleConfiguration lifecycle = new BucketLifecycleConfiguration();
-            lifecycle.setRules(rules);
+      BucketLifecycleConfiguration lifecycle = new BucketLifecycleConfiguration();
+      lifecycle.setRules(rules);
 
-            print("setting lifecycle configuration on bucket " + bucketName);
-            s3.setBucketLifecycleConfiguration(bucketName, lifecycle);
+      print("setting lifecycle configuration on bucket " + bucketName);
+      s3.setBucketLifecycleConfiguration(bucketName, lifecycle);
 
-            print("attempting to retrieve lifecycle configuration for bucket " + bucketName);
-            BucketLifecycleConfiguration retrieved = s3.getBucketLifecycleConfiguration(bucketName);
+      print("attempting to retrieve lifecycle configuration for bucket " + bucketName);
+      BucketLifecycleConfiguration retrieved = s3.getBucketLifecycleConfiguration(bucketName);
 
-            print("checking that lifecycle is correct");
-            boolean matches[] = new boolean[numRules + 1];
-            matches[0] = true;
-            for (int idx = 1; idx < matches.length; idx++) {
-                matches[idx] = false;
-            }
-            for (BucketLifecycleConfiguration.Rule retrievedRule : retrieved.getRules()) {
-                Integer ruleId = Integer.parseInt( retrievedRule.getId() );
-                Integer prefix = Integer.parseInt( retrievedRule.getPrefix() );
-                if ( retrievedRule.getStatus().equals(BucketLifecycleConfiguration.ENABLED.toString())
-                        && retrievedRule.getExpirationInDays() == ruleId.intValue()
-                        && ruleId.intValue() == prefix.intValue()) { // looks valid so far
+      print("checking that lifecycle is correct");
+      boolean matches[] = new boolean[numRules + 1];
+      matches[0] = true;
+      for (int idx = 1; idx < matches.length; idx++) {
+        matches[idx] = false;
+      }
+      for (BucketLifecycleConfiguration.Rule retrievedRule : retrieved.getRules()) {
+        Integer ruleId = Integer.parseInt(retrievedRule.getId());
+        Integer prefix = Integer.parseInt(retrievedRule.getPrefix());
+        if (retrievedRule.getStatus().equals(BucketLifecycleConfiguration.ENABLED.toString())
+            && retrievedRule.getExpirationInDays() == ruleId.intValue() && ruleId.intValue() == prefix.intValue()) { // looks valid so far
 
-                    if ( matches[ruleId.intValue()] ) { // shouldn't be already true?!
-                        fail("found a duplicate rule in retrieved rules, rule id is " + ruleId.intValue());
-                    }
-                    else {
-                        matches[ruleId.intValue()] = true;
-                    }
-                }
-                else {
-                    fail("found rule with id - " + retrievedRule.getId() +
-                            ", prefix - " + retrievedRule.getPrefix() +
-                            ", status - " + retrievedRule.getStatus() +
-                            ", and expiration days - " + retrievedRule.getExpirationInDays());
-                }
-            }
-
-            for (int idx = 0; idx < matches.length; idx++) {
-                assertTrue("did not find an enabled rule with expiration days, prefix and id - " + idx,
-                        matches[idx]);
-            }
-
-            // now let's replace it with a new configuration
-            rules = Lists.newArrayList();
-            for (int idx = numRules; idx <= numRules + numRules; idx++) {
-                BucketLifecycleConfiguration.Rule lifecycleRule = new BucketLifecycleConfiguration.Rule()
-                        .withId("" + idx)
-                        .withPrefix("" + idx)
-                        .withExpirationInDays(idx)
-                        .withStatus(BucketLifecycleConfiguration.ENABLED.toString());
-                rules.add(lifecycleRule);
-            }
-
-            lifecycle = new BucketLifecycleConfiguration();
-            lifecycle.setRules(rules);
-
-            print("setting lifecycle configuration on bucket " + bucketName);
-            s3.setBucketLifecycleConfiguration(bucketName, lifecycle);
-
-            print("attempting to retrieve lifecycle configuration for bucket " + bucketName);
-            retrieved = s3.getBucketLifecycleConfiguration(bucketName);
-            print("checking that lifecycle is correct");
-            matches = new boolean[numRules + 1];
-            for (int idx = 0; idx < matches.length; idx++) {
-                matches[idx] = false;
-            }
-            for (BucketLifecycleConfiguration.Rule retrievedRule : retrieved.getRules()) {
-                Integer ruleId = Integer.parseInt( retrievedRule.getId() );
-                Integer prefix = Integer.parseInt( retrievedRule.getPrefix() );
-                if ( retrievedRule.getStatus().equals(BucketLifecycleConfiguration.ENABLED.toString())
-                        && retrievedRule.getExpirationInDays() == ruleId.intValue()
-                        && ruleId.intValue() == prefix.intValue()) { // looks valid so far
-
-                    if ( matches[ruleId.intValue() - numRules] ) { // shouldn't be already true?!
-                        fail("found a duplicate rule in retrieved rules, rule id is " + ruleId.intValue());
-                    }
-                    else {
-                        matches[ruleId.intValue() - numRules] = true;
-                    }
-                }
-                else {
-                    fail("found rule with id - " + retrievedRule.getId() +
-                            ", prefix - " + retrievedRule.getPrefix() +
-                            ", status - " + retrievedRule.getStatus() +
-                            ", and expiration days - " + retrievedRule.getExpirationInDays());
-                }
-            }
-
-            print("deleting lifecycle configuration");
-            s3.deleteBucketLifecycleConfiguration(bucketName);
+          if (matches[ruleId.intValue()]) { // shouldn't be already true?!
+            fail("found a duplicate rule in retrieved rules, rule id is " + ruleId.intValue());
+          } else {
+            matches[ruleId.intValue()] = true;
+          }
+        } else {
+          fail("found rule with id - " + retrievedRule.getId() + ", prefix - " + retrievedRule.getPrefix() + ", status - "
+              + retrievedRule.getStatus() + ", and expiration days - " + retrievedRule.getExpirationInDays());
         }
-        catch (AmazonServiceException ase) {
-            printException(ase);
-            assertThat(false, "Failed to run largeLifecycle");
-        }
+      }
+
+      for (int idx = 0; idx < matches.length; idx++) {
+        assertTrue("did not find an enabled rule with expiration days, prefix and id - " + idx, matches[idx]);
+      }
+
+      print("deleting bucket and re-creating");
+      s3.deleteBucket(bucketName);
+
+      s3.createBucket(bucketName);
+      print("attempting to retrieve lifecycle configuration for bucket " + bucketName);
+      retrieved = s3.getBucketLifecycleConfiguration(bucketName);
+      assertTrue("did not expect a lifecycle to exist on the bucket since the bucket was deleted and recreated",
+          retrieved == null || retrieved.getRules() == null || retrieved.getRules().size() == 0);
+
+    } catch (AmazonServiceException ase) {
+      printException(ase);
+      assertThat(false, "Failed to run largeLifecycle");
     }
+  }
 
-    @Test
-    public void deletedBucket() throws Exception {
-        final int numRules = 20;
-
-        testInfo(this.getClass().getSimpleName() + " - largeLifecycle");
-        try {
-            print("creating a lifecycle configuration with " + numRules + " rules");
-
-            List<BucketLifecycleConfiguration.Rule> rules = Lists.newArrayList();
-            for (int idx = 1; idx <= numRules; idx++) {
-                BucketLifecycleConfiguration.Rule lifecycleRule = new BucketLifecycleConfiguration.Rule()
-                        .withId("" + idx)
-                        .withPrefix("" + idx)
-                        .withExpirationInDays(idx)
-                        .withStatus(BucketLifecycleConfiguration.ENABLED.toString());
-                rules.add(lifecycleRule);
-            }
-
-            BucketLifecycleConfiguration lifecycle = new BucketLifecycleConfiguration();
-            lifecycle.setRules(rules);
-
-            print("setting lifecycle configuration on bucket " + bucketName);
-            s3.setBucketLifecycleConfiguration(bucketName, lifecycle);
-
-            print("attempting to retrieve lifecycle configuration for bucket " + bucketName);
-            BucketLifecycleConfiguration retrieved = s3.getBucketLifecycleConfiguration(bucketName);
-
-            print("checking that lifecycle is correct");
-            boolean matches[] = new boolean[numRules + 1];
-            matches[0] = true;
-            for (int idx = 1; idx < matches.length; idx++) {
-                matches[idx] = false;
-            }
-            for (BucketLifecycleConfiguration.Rule retrievedRule : retrieved.getRules()) {
-                Integer ruleId = Integer.parseInt( retrievedRule.getId() );
-                Integer prefix = Integer.parseInt( retrievedRule.getPrefix() );
-                if ( retrievedRule.getStatus().equals(BucketLifecycleConfiguration.ENABLED.toString())
-                        && retrievedRule.getExpirationInDays() == ruleId.intValue()
-                        && ruleId.intValue() == prefix.intValue()) { // looks valid so far
-
-                    if ( matches[ruleId.intValue()] ) { // shouldn't be already true?!
-                        fail("found a duplicate rule in retrieved rules, rule id is " + ruleId.intValue());
-                    }
-                    else {
-                        matches[ruleId.intValue()] = true;
-                    }
-                }
-                else {
-                    fail("found rule with id - " + retrievedRule.getId() +
-                            ", prefix - " + retrievedRule.getPrefix() +
-                            ", status - " + retrievedRule.getStatus() +
-                            ", and expiration days - " + retrievedRule.getExpirationInDays());
-                }
-            }
-
-            for (int idx = 0; idx < matches.length; idx++) {
-                assertTrue("did not find an enabled rule with expiration days, prefix and id - " + idx,
-                        matches[idx]);
-            }
-
-            print("deleting bucket and re-creating");
-            s3.deleteBucket(bucketName);
-
-            s3.createBucket(bucketName);
-            print("attempting to retrieve lifecycle configuration for bucket " + bucketName);
-            retrieved = s3.getBucketLifecycleConfiguration(bucketName);
-            assertTrue("did not expect a lifecycle to exist on the bucket since the bucket was deleted and recreated",
-                    retrieved == null || retrieved.getRules() == null || retrieved.getRules().size() == 0);
-
-        }
-        catch (AmazonServiceException ase) {
-            printException(ase);
-            assertThat(false, "Failed to run largeLifecycle");
-        }
-    }
-
-    private void printException(AmazonServiceException ase) {
-        ase.printStackTrace();
-        print("Caught Exception: " + ase.getMessage());
-        print("HTTP Status Code: " + ase.getStatusCode());
-        print("Amazon Error Code: " + ase.getErrorCode());
-        print("Request ID: " + ase.getRequestId());
-    }
+  private void printException(AmazonServiceException ase) {
+    ase.printStackTrace();
+    print("Caught Exception: " + ase.getMessage());
+    print("HTTP Status Code: " + ase.getStatusCode());
+    print("Amazon Error Code: " + ase.getErrorCode());
+    print("Request ID: " + ase.getRequestId());
+  }
 
 }

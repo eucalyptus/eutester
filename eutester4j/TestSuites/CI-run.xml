@@ -54,18 +54,19 @@
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingELBReferenceValidation"/>
         </classes>>
     </test>
-    <!--<test name="Walrus_Tests">-->
-        <!--<classes>-->
-            <!--<class name="com.eucalyptus.tests.awssdk.S3BucketCannedACLTests"/>-->
-            <!--<class name="com.eucalyptus.tests.awssdk.S3BucketTests"/>-->
-            <!--<class name="com.eucalyptus.tests.awssdk.S3CopyObjectTests"/>-->
-            <!--<class name="com.eucalyptus.tests.awssdk.S3ListMpuTests"/>-->
-            <!--<class name="com.eucalyptus.tests.awssdk.S3ListObjectsTests"/>-->
-            <!--<class name="com.eucalyptus.tests.awssdk.S3ListVersionsTests"/>-->
-            <!--<class name="com.eucalyptus.tests.awssdk.S3MultiPartUploadTests" />-->
-            <!--<class name="com.eucalyptus.tests.awssdk.S3ObjectCannedACLAcrossAccountsTests"/>-->
-            <!--<class name="com.eucalyptus.tests.awssdk.S3ObjectCannedACLTests"/>-->
-            <!--<class name="com.eucalyptus.tests.awssdk.S3ObjectTests"/>-->
-        <!--</classes>-->
-    <!--</test>-->
+    <test name="S3_Tests">
+        <classes>
+            <class name="com.eucalyptus.tests.awssdk.S3BucketACLTests"/>
+            <class name="com.eucalyptus.tests.awssdk.S3BucketTests"/>
+            <class name="com.eucalyptus.tests.awssdk.S3CopyObjectTests"/>
+            <class name="com.eucalyptus.tests.awssdk.S3ListMpuTests"/>
+            <class name="com.eucalyptus.tests.awssdk.S3ListObjectsTests"/>
+            <class name="com.eucalyptus.tests.awssdk.S3ListVersionsTests"/>
+            <class name="com.eucalyptus.tests.awssdk.S3MultiPartUploadTests" />
+            <class name="com.eucalyptus.tests.awssdk.S3ObjectACLAcrossAccountsTests"/>
+            <class name="com.eucalyptus.tests.awssdk.S3ObjectACLTests"/>
+            <class name="com.eucalyptus.tests.awssdk.S3ObjectLifecycleTests"/>
+            <class name="com.eucalyptus.tests.awssdk.S3ObjectTests"/>
+        </classes>
+    </test>
 </suite>
