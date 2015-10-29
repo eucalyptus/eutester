@@ -13,6 +13,7 @@
             <class name="com.eucalyptus.tests.awssdk.S3ObjectACLAcrossAccountsTests"/>
             <class name="com.eucalyptus.tests.awssdk.S3ObjectACLTests"/>
             <class name="com.eucalyptus.tests.awssdk.S3ObjectLifecycleTests"/>
+            <class name="com.eucalyptus.tests.awssdk.S3ObjectMultiDeleteTests"/>
             <class name="com.eucalyptus.tests.awssdk.S3ObjectTests"/>
         </classes>
     </test>
