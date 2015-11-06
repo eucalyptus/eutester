@@ -132,6 +132,7 @@ public class S3MultiPartUploadTests {
   private static AmazonS3 s3 = null;
   private static String account = null;
   private static String ownerName = null;
+  private static Owner owner = null;
   private static String ownerId = null;
   byte[] randomBytes;
 
@@ -151,7 +152,7 @@ public class S3MultiPartUploadTests {
 
     // s3 = getS3Client("awsrc_euca");
 
-    Owner owner = s3.getS3AccountOwner();
+    owner = s3.getS3AccountOwner();
     ownerName = owner.getDisplayName();
     ownerId = owner.getId();
 
@@ -1010,6 +1011,140 @@ public class S3MultiPartUploadTests {
     } catch (AmazonServiceException ase) {
       printException(ase);
       assertThat(false, "Failed to run copyObject");
+    }
+  }
+
+  /**
+   * Test to verify: <li>only the initiator of an upload can upload a part and complete the mpu</li><li>both initiator of upload and bucket owner can
+   * abort the upload</li><li>other accounts even with FULL_CONTROL ACL over the bucket cannot upload part, complete mpu or abort mpu</li>
+   */
+  @Test
+  public void mpuTasksDifferentAccount() throws Exception {
+    testInfo(this.getClass().getSimpleName() + " - mpuTasksDifferentAccount");
+    String accountB = null;
+    String accountC = null;
+    AmazonS3 s3ClientB = null;
+    AmazonS3 s3ClientC = null;
+    Owner ownerB = null;
+    Owner ownerC = null;
+
+    try {
+      accountB = this.getClass().getSimpleName().toLowerCase() + 'b';
+      s3ClientB = initS3ClientWithNewAccount(accountB, "admin");
+      ownerB = s3ClientB.getS3AccountOwner();
+
+      accountC = this.getClass().getSimpleName().toLowerCase() + 'c';
+      s3ClientC = initS3ClientWithNewAccount(accountC, "admin");
+      ownerC = s3ClientC.getS3AccountOwner();
+
+      /* Configure bucket ACL to allow FULL_CONTROL to account B and account C */
+      AccessControlList acl = new AccessControlList();
+      acl.setOwner(owner);
+      acl.grantPermission(new CanonicalGrantee(ownerB.getId()), Permission.FullControl);
+      acl.grantPermission(new CanonicalGrantee(ownerC.getId()), Permission.FullControl);
+      print(account + ": Setting acl on bucket " + bucketName + " to " + acl);
+      s3.setBucketAcl(bucketName, acl);
+
+      final String key = eucaUUID();
+      List<PartETag> partETags = Lists.newArrayList();
+      long partSize = randomBytes.length;
+
+      // Inititate mpu as account B
+      print(accountB + ": Initiating multipart upload for object " + key + " in bucket " + bucketName);
+      final InitiateMultipartUploadResult initiateMpuResult = s3ClientB.initiateMultipartUpload(new InitiateMultipartUploadRequest(bucketName, key));
+
+      // Upload a few parts as account B
+      int partNumber;
+      for (partNumber = 1; partNumber <= 2; partNumber++) {
+        print(accountB + ": Uploading part of size " + partSize + " bytes for object " + key + ", upload ID " + initiateMpuResult.getUploadId()
+            + ", part number " + partNumber);
+        partETags.add(s3ClientB.uploadPart(
+            new UploadPartRequest().withBucketName(bucketName).withKey(key).withUploadId(initiateMpuResult.getUploadId()).withPartNumber(partNumber)
+                .withInputStream(new ByteArrayInputStream(randomBytes)).withPartSize(partSize)).getPartETag());
+      }
+
+      // Try uploading part as account C
+      boolean caughtError = false;
+      try {
+        print(accountC + ": Uploading part of size " + partSize + " bytes for object " + key + ", upload ID " + initiateMpuResult.getUploadId()
+            + ", part number " + partNumber);
+        s3ClientC.uploadPart(
+            new UploadPartRequest().withBucketName(bucketName).withKey(key).withUploadId(initiateMpuResult.getUploadId()).withPartNumber(partNumber)
+                .withInputStream(new ByteArrayInputStream(randomBytes)).withPartSize(partSize)).getPartETag();
+      } catch (AmazonServiceException ase) {
+        caughtError = true;
+        assertTrue("Expected HTTP status code to be 403 but got " + ase.getStatusCode(), ase.getStatusCode() == 403);
+        assertTrue("Expected AccessDenied error code but got " + ase.getErrorCode(), ase.getErrorCode().equals("AccessDenied"));
+      } finally {
+        assertTrue("Expected 403 AccessDenied response", caughtError);
+      }
+
+      // Try completing mpu as account C
+      caughtError = false;
+      try {
+        print(accountC + ": Completing multipart upload for object " + key + ", upload ID " + initiateMpuResult.getUploadId());
+        s3ClientC.completeMultipartUpload(new CompleteMultipartUploadRequest(bucketName, key, initiateMpuResult.getUploadId(), partETags));
+      } catch (AmazonServiceException ase) {
+        caughtError = true;
+        assertTrue("Expected HTTP status code to be 403 but got " + ase.getStatusCode(), ase.getStatusCode() == 403);
+        assertTrue("Expected AccessDenied error code but got " + ase.getErrorCode(), ase.getErrorCode().equals("AccessDenied"));
+      } finally {
+        assertTrue("Expected 403 AccessDenied response", caughtError);
+      }
+
+      // Try aborting mpu as account C
+      caughtError = false;
+      try {
+        print(accountC + ": Aborting multipart upload for object " + key + ", upload ID " + initiateMpuResult.getUploadId());
+        s3ClientC.abortMultipartUpload(new AbortMultipartUploadRequest(bucketName, key, initiateMpuResult.getUploadId()));
+      } catch (AmazonServiceException ase) {
+        caughtError = true;
+        assertTrue("Expected HTTP status code to be 403 but got " + ase.getStatusCode(), ase.getStatusCode() == 403);
+        assertTrue("Expected AccessDenied error code but got " + ase.getErrorCode(), ase.getErrorCode().equals("AccessDenied"));
+      } finally {
+        assertTrue("Expected 403 AccessDenied response", caughtError);
+      }
+
+      // Try uploading part as bucket owner account A
+      caughtError = false;
+      try {
+        print(account + ": Uploading part of size " + partSize + " bytes for object " + key + ", upload ID " + initiateMpuResult.getUploadId()
+            + ", part number " + partNumber);
+        s3.uploadPart(
+            new UploadPartRequest().withBucketName(bucketName).withKey(key).withUploadId(initiateMpuResult.getUploadId()).withPartNumber(partNumber)
+                .withInputStream(new ByteArrayInputStream(randomBytes)).withPartSize(partSize)).getPartETag();
+      } catch (AmazonServiceException ase) {
+        caughtError = true;
+        assertTrue("Expected HTTP status code to be 403 but got " + ase.getStatusCode(), ase.getStatusCode() == 403);
+        assertTrue("Expected AccessDenied error code but got " + ase.getErrorCode(), ase.getErrorCode().equals("AccessDenied"));
+      } finally {
+        assertTrue("Expected 403 AccessDenied response", caughtError);
+      }
+
+      // Try completing mpu as bucket owner account A
+      caughtError = false;
+      try {
+        print(account + ": Completing multipart upload for object " + key + ", upload ID " + initiateMpuResult.getUploadId());
+        s3.completeMultipartUpload(new CompleteMultipartUploadRequest(bucketName, key, initiateMpuResult.getUploadId(), partETags));
+      } catch (AmazonServiceException ase) {
+        caughtError = true;
+        assertTrue("Expected HTTP status code to be 403 but got " + ase.getStatusCode(), ase.getStatusCode() == 403);
+        assertTrue("Expected AccessDenied error code but got " + ase.getErrorCode(), ase.getErrorCode().equals("AccessDenied"));
+      } finally {
+        assertTrue("Expected 403 AccessDenied response", caughtError);
+      }
+
+      // Abort multipart upload as bucket owner account B
+      print(account + ": Aborting multipart upload for object " + key + ", upload ID " + initiateMpuResult.getUploadId());
+      s3.abortMultipartUpload(new AbortMultipartUploadRequest(bucketName, key, initiateMpuResult.getUploadId()));
+    } catch (AmazonServiceException ase) {
+      printException(ase);
+      assertThat(false, "Failed to run mpuTasksDifferentAccount");
+    } finally {
+      Eutester4j.deleteAccount(accountB);
+      Eutester4j.deleteAccount(accountC);
+      s3ClientB = null;
+      s3ClientC = null;
     }
   }
 }

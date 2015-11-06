@@ -30,9 +30,13 @@ import org.testng.annotations.Test;
 
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.model.AccessControlList;
 import com.amazonaws.services.s3.model.Bucket;
 import com.amazonaws.services.s3.model.BucketVersioningConfiguration;
+import com.amazonaws.services.s3.model.CanonicalGrantee;
 import com.amazonaws.services.s3.model.ListVersionsRequest;
+import com.amazonaws.services.s3.model.Owner;
+import com.amazonaws.services.s3.model.Permission;
 import com.amazonaws.services.s3.model.PutObjectResult;
 import com.amazonaws.services.s3.model.S3VersionSummary;
 import com.amazonaws.services.s3.model.SetBucketVersioningConfigurationRequest;
@@ -60,6 +64,7 @@ public class S3ListVersionsTests {
   private static File fileToPut = new File("test.dat");
   private static long size = 0;
   private static String md5 = null;
+  private static Owner owner = null;
   private static String ownerID = null;
   private static AmazonS3 s3 = null;
   private static String account = null;
@@ -79,7 +84,8 @@ public class S3ListVersionsTests {
       }
       throw e;
     }
-    ownerID = s3.getS3AccountOwner().getId();
+    owner = s3.getS3AccountOwner();
+    ownerID = owner.getId();
     md5 = BinaryUtils.toHex(Md5Utils.computeMD5Hash(new FileInputStream(fileToPut)));
     size = fileToPut.length();
   }
@@ -157,12 +163,12 @@ public class S3ListVersionsTests {
         putObject(bucketName, key, fileToPut, versionIdList);
 
         // List the object versions and verify them against the put object results
-        versions = listVersions(bucketName, null, null, null, null, null, false);
+        versions = listVersions(s3, account, bucketName, null, null, null, null, null, false);
         verifyVersionSummaries(key, versionIdList, versions.getVersionSummaries());
       }
 
       // List the object versions using a prefix and verify them against the put object results
-      versions = listVersions(bucketName, null, null, null, null, null, false);
+      versions = listVersions(s3, account, bucketName, key, null, null, null, null, false);
       verifyVersionSummaries(key, versionIdList, versions.getVersionSummaries());
     } catch (AmazonServiceException ase) {
       printException(ase);
@@ -205,7 +211,7 @@ public class S3ListVersionsTests {
         }
 
         // List the object versions and verify them against the put object results
-        versions = listVersions(bucketName, key, null, null, null, null, false);
+        versions = listVersions(s3, account, bucketName, key, null, null, null, null, false);
         verifyVersionSummaries(key, partialVersionIdList, versions.getVersionSummaries());
 
         // Reverse the version ID list and add it to the map
@@ -219,7 +225,7 @@ public class S3ListVersionsTests {
       }
 
       // List versions and verify the results
-      versions = listVersions(bucketName, null, null, null, null, null, false);
+      versions = listVersions(s3, account, bucketName, null, null, null, null, null, false);
       assertTrue("Expected version summary list to be of size " + idCount + ", but got a list of size " + versions.getVersionSummaries().size(),
           versions.getVersionSummaries().size() == idCount);
       Iterator<S3VersionSummary> summaryIterator = versions.getVersionSummaries().iterator();
@@ -268,7 +274,7 @@ public class S3ListVersionsTests {
         putObject(bucketName, key, fileToPut, versionIdList);
       }
       // List the object versions and verify them against the put object results
-      versions = listVersions(bucketName, null, null, null, null, null, false);
+      versions = listVersions(s3, account, bucketName, null, null, null, null, null, false);
       verifyVersionSummaries(key, versionIdList, versions.getVersionSummaries());
 
       // Delete the object without specifying the version
@@ -276,7 +282,7 @@ public class S3ListVersionsTests {
       s3.deleteObject(bucketName, key);
 
       // List versions and verify the results for delete marker
-      versions = listVersions(bucketName, null, null, null, null, null, false);
+      versions = listVersions(s3, account, bucketName, null, null, null, null, null, false);
       assertTrue("Expected version summary list to be of size " + (versionIdList.size() + 1) + ", but got a list of size "
           + versions.getVersionSummaries().size() + ". Delete marker might be missing",
           versions.getVersionSummaries().size() == (versionIdList.size() + 1));
@@ -330,7 +336,7 @@ public class S3ListVersionsTests {
       }
 
       // List versions and verify it
-      versions = listVersions(bucketName, null, null, null, null, null, false);
+      versions = listVersions(s3, account, bucketName, null, null, null, null, null, false);
       assertTrue("Expected version summary list to be of size " + (versionIdList.size() + deleteMarkers.size()) + ", but got a list of size "
           + versions.getVersionSummaries().size() + ". Delete marker might be missing",
           versions.getVersionSummaries().size() == (versionIdList.size() + deleteMarkers.size()));
@@ -387,7 +393,7 @@ public class S3ListVersionsTests {
       history.addFirst(new KeyEntry(deleteObject(bucketName, key), Element.DELETE_MARKER));
 
       // Compare list versions with history and verify that they match
-      VersionListing versions = listVersions(bucketName, key, null, null, null, null, false);
+      VersionListing versions = listVersions(s3, account, bucketName, key, null, null, null, null, false);
       compare(history, versions);
 
       // Suspend versioning
@@ -400,7 +406,7 @@ public class S3ListVersionsTests {
       history.addFirst(new KeyEntry(deleteObject(bucketName, key), Element.DELETE_MARKER));
 
       // Compare list versions with history and verify that they match
-      versions = listVersions(bucketName, key, null, null, null, null, false);
+      versions = listVersions(s3, account, bucketName, key, null, null, null, null, false);
       compare(history, versions);
 
       Date timestamp1 = versions.getVersionSummaries().get(0).getLastModified();
@@ -410,7 +416,7 @@ public class S3ListVersionsTests {
       history.addFirst(new KeyEntry(deleteObject(bucketName, key), Element.DELETE_MARKER));
 
       // Compare list versions with history and verify that they match
-      versions = listVersions(bucketName, key, null, null, null, null, false);
+      versions = listVersions(s3, account, bucketName, key, null, null, null, null, false);
       compare(history, versions);
 
       Date timestamp2 = versions.getVersionSummaries().get(0).getLastModified();
@@ -420,7 +426,7 @@ public class S3ListVersionsTests {
       printException(ase);
       assertThat(false, "Failed to run uniqueDeleteMarker");
     } finally {
-      for (S3VersionSummary version : listVersions(bucketName, null, null, null, null, null, false).getVersionSummaries()) {
+      for (S3VersionSummary version : listVersions(s3, account, bucketName, null, null, null, null, null, false).getVersionSummaries()) {
         try {
           print("Deleting object " + version.getKey() + ", version " + version.getVersionId());
           s3.deleteVersion(bucketName, version.getKey(), version.getVersionId());
@@ -460,7 +466,7 @@ public class S3ListVersionsTests {
         }
 
         // List the object versions and verify them against the put object results
-        versions = listVersions(bucketName, key, null, null, null, null, false);
+        versions = listVersions(s3, account, bucketName, key, null, null, null, null, false);
         verifyVersionSummaries(key, partialVersionIdList, versions.getVersionSummaries());
 
         // Reverse the version ID list and add it to the map
@@ -476,7 +482,7 @@ public class S3ListVersionsTests {
         NavigableMap<String, List<String>> tailMap = keyVersionMap.tailMap(keyMarker, false);
 
         // List the versions using the key marker and verify
-        versions = listVersions(bucketName, null, keyMarker, null, null, null, false);
+        versions = listVersions(s3, account, bucketName, null, keyMarker, null, null, null, false);
         assertTrue("Expected version summary list to be of size " + (tailMap.size() * uploads) + ", but got a list of size "
             + versions.getVersionSummaries().size(), versions.getVersionSummaries().size() == (tailMap.size() * uploads));
         Iterator<S3VersionSummary> summaryIterator = versions.getVersionSummaries().iterator();
@@ -532,7 +538,7 @@ public class S3ListVersionsTests {
             partialVersionIdList.size() == uploads);
 
         // List the object versions and verify them against the put object results
-        versions = listVersions(bucketName, key, null, null, null, null, false);
+        versions = listVersions(s3, account, bucketName, key, null, null, null, null, false);
         verifyVersionSummaries(key, partialVersionIdList, versions.getVersionSummaries());
 
         // Reverse the version ID list and add it to the map
@@ -552,7 +558,7 @@ public class S3ListVersionsTests {
           List<String> tailList = mapEntry.getValue().subList(i + 1, uploads);
 
           // List the versions using the key marker and verify
-          versions = listVersions(bucketName, null, mapEntry.getKey(), mapEntry.getValue().get(i), null, null, false);
+          versions = listVersions(s3, account, bucketName, null, mapEntry.getKey(), mapEntry.getValue().get(i), null, null, false);
           assertTrue("Expected version summary list to be of size " + ((tailMap.size() * uploads) + (uploads - i - 1)) + ", but got a list of size "
               + versions.getVersionSummaries().size(), versions.getVersionSummaries().size() == ((tailMap.size() * uploads) + (uploads - i - 1)));
 
@@ -628,7 +634,7 @@ public class S3ListVersionsTests {
               partialVersionIdList.size() == uploads);
 
           // List the object versions and verify them against the put object results
-          versions = listVersions(bucketName, key, null, null, null, null, false);
+          versions = listVersions(s3, account, bucketName, key, null, null, null, null, false);
           verifyVersionSummaries(key, partialVersionIdList, versions.getVersionSummaries());
 
           // Reverse the version ID list and add it to the map
@@ -641,7 +647,7 @@ public class S3ListVersionsTests {
         prefixKeyVersionMap.put(prefix, keyVersionMap);
       }
 
-      versions = listVersions(bucketName, null, null, null, delimiter, null, false);
+      versions = listVersions(s3, account, bucketName, null, null, null, delimiter, null, false);
       assertTrue("Expected to not get any version summaries but got a list of size " + versions.getVersionSummaries().size(), versions
           .getVersionSummaries().size() == 0);
       assertTrue("Expected common prefixes list to be of size " + prefixKeyVersionMap.size() + ", but got a list of size "
@@ -697,7 +703,7 @@ public class S3ListVersionsTests {
               partialVersionIdList.size() == uploads);
 
           // List the object versions and verify them against the put object results
-          versions = listVersions(bucketName, key, null, null, null, null, false);
+          versions = listVersions(s3, account, bucketName, key, null, null, null, null, false);
           verifyVersionSummaries(key, partialVersionIdList, versions.getVersionSummaries());
 
           // Reverse the version ID list and add it to the map
@@ -716,7 +722,7 @@ public class S3ListVersionsTests {
       for (int k = 0; k < uploads; k++) {
         putObject(bucketName, key, fileToPut, partialVersionIdList);
       }
-      versions = listVersions(bucketName, key, null, null, null, null, false);
+      versions = listVersions(s3, account, bucketName, key, null, null, null, null, false);
       verifyVersionSummaries(key, partialVersionIdList, versions.getVersionSummaries());
 
       // Reverse the version ID list and add it to the map
@@ -726,7 +732,7 @@ public class S3ListVersionsTests {
       keyVersionMap.put(key, partialVersionIdList);
 
       // List versions and verify the results
-      versions = listVersions(bucketName, null, null, null, null, null, false);
+      versions = listVersions(s3, account, bucketName, null, null, null, null, null, false);
       assertTrue("Expected version summary list to be of size " + (keyVersionMap.size() * uploads) + ", but got a list of size "
           + versions.getVersionSummaries().size(), versions.getVersionSummaries().size() == (keyVersionMap.size() * uploads));
       Iterator<S3VersionSummary> summaryIterator = versions.getVersionSummaries().iterator();
@@ -742,7 +748,7 @@ public class S3ListVersionsTests {
       }
 
       // List the versions with prefix and delimiter and verify again
-      versions = listVersions(bucketName, outerPrefix, null, null, delimiter, null, false);
+      versions = listVersions(s3, account, bucketName, outerPrefix, null, null, delimiter, null, false);
       assertTrue("Expected version summaries list to be of size " + uploads + "but got a list of size " + versions.getVersionSummaries().size(),
           versions.getVersionSummaries().size() == uploads);
       assertTrue("Expected common prefixes list to be of size " + commonPrefixes.size() + ", but got a list of size "
@@ -797,10 +803,10 @@ public class S3ListVersionsTests {
 
       for (int i = 1; i <= multiplier; i++) {
         if (i != multiplier) {
-          versions = listVersions(bucketName, null, nextKeyMarker, nextVersionIdMarker, null, maxKeys, true);
+          versions = listVersions(s3, account, bucketName, null, nextKeyMarker, nextVersionIdMarker, null, maxKeys, true);
           assertTrue("Invalid next-version-ID-marker, expected it to contain next version ID but got null", versions.getNextVersionIdMarker() != null);
         } else {
-          versions = listVersions(bucketName, null, nextKeyMarker, nextVersionIdMarker, null, maxKeys, false);
+          versions = listVersions(s3, account, bucketName, null, nextKeyMarker, nextVersionIdMarker, null, maxKeys, false);
         }
 
         assertTrue("Expected version summaries list to be of size " + maxKeys + "but got a list of size " + versions.getVersionSummaries().size(),
@@ -884,10 +890,10 @@ public class S3ListVersionsTests {
 
       for (int i = 1; i <= counter; i++) {
         if (i != counter) {
-          versions = listVersions(bucketName, null, nextKeyMarker, nextVersionIdMarker, null, maxKeys, true);
+          versions = listVersions(s3, account, bucketName, null, nextKeyMarker, nextVersionIdMarker, null, maxKeys, true);
           assertTrue("Invalid next-version-ID-marker, expected it to contain next version ID but got null", versions.getNextVersionIdMarker() != null);
         } else {
-          versions = listVersions(bucketName, null, nextKeyMarker, nextVersionIdMarker, null, maxKeys, false);
+          versions = listVersions(s3, account, bucketName, null, nextKeyMarker, nextVersionIdMarker, null, maxKeys, false);
         }
 
         assertTrue("Expected version summaries list to be of size " + maxKeys + "but got a list of size " + versions.getVersionSummaries().size(),
@@ -962,10 +968,10 @@ public class S3ListVersionsTests {
 
       for (int i = 1; i <= multiplier; i++) {
         if (i != multiplier) {
-          versions = listVersions(bucketName, null, nextKeyMarker, nextVersionIdMarker, null, maxKeys, true);
+          versions = listVersions(s3, account, bucketName, null, nextKeyMarker, nextVersionIdMarker, null, maxKeys, true);
           assertTrue("Invalid next-version-ID-marker, expected it to contain next version ID but got null", versions.getNextVersionIdMarker() != null);
         } else {
-          versions = listVersions(bucketName, null, nextKeyMarker, nextVersionIdMarker, null, maxKeys, false);
+          versions = listVersions(s3, account, bucketName, null, nextKeyMarker, nextVersionIdMarker, null, maxKeys, false);
         }
 
         assertTrue("Expected version summaries list to be of size " + maxKeys + "but got a list of size " + versions.getVersionSummaries().size(),
@@ -1002,7 +1008,7 @@ public class S3ListVersionsTests {
       printException(ase);
       assertThat(false, "Failed to run maxKeysMultipleKeysSingleUpload");
     } finally {
-      for (S3VersionSummary version : listVersions(bucketName, null, null, null, null, null, false).getVersionSummaries()) {
+      for (S3VersionSummary version : listVersions(s3, account, bucketName, null, null, null, null, null, false).getVersionSummaries()) {
         try {
           print(account + ": Deleting object " + version.getKey() + ", version " + version.getVersionId());
           s3.deleteVersion(bucketName, version.getKey(), version.getVersionId());
@@ -1055,7 +1061,7 @@ public class S3ListVersionsTests {
               partialVersionIdList.size() == uploads);
 
           // List the object versions and verify them against the put object results
-          versions = listVersions(bucketName, key, null, null, null, null, false);
+          versions = listVersions(s3, account, bucketName, key, null, null, null, null, false);
           verifyVersionSummaries(key, partialVersionIdList, versions.getVersionSummaries());
         }
 
@@ -1069,11 +1075,11 @@ public class S3ListVersionsTests {
 
       for (int i = 1; i <= multiplier; i++) {
         if (i != multiplier) {
-          versions = listVersions(bucketName, null, nextKeyMarker, nextVersionIdMarker, delimiter, maxKeys, true);
+          versions = listVersions(s3, account, bucketName, null, nextKeyMarker, nextVersionIdMarker, delimiter, maxKeys, true);
           assertTrue("Invalid next-version-ID-marker, expected null but got " + versions.getNextVersionIdMarker(),
               versions.getNextVersionIdMarker() == null);
         } else {
-          versions = listVersions(bucketName, null, nextKeyMarker, nextVersionIdMarker, delimiter, maxKeys, false);
+          versions = listVersions(s3, account, bucketName, null, nextKeyMarker, nextVersionIdMarker, delimiter, maxKeys, false);
         }
 
         assertTrue("Expected to not get any version summaries but got a list of size " + versions.getVersionSummaries().size(), versions
@@ -1119,7 +1125,7 @@ public class S3ListVersionsTests {
       history.addFirst(new KeyEntry(deleteObject(bucketName, key), Element.DELETE_MARKER));
       history.addFirst(new KeyEntry(putObject(bucketName, key, fileToPut), Element.VERSION_ENTRY));
 
-      VersionListing versions = listVersions(bucketName, key, null, null, null, null, false);
+      VersionListing versions = listVersions(s3, account, bucketName, key, null, null, null, null, false);
       compare(history, versions);
 
       // Suspend versioning
@@ -1129,17 +1135,17 @@ public class S3ListVersionsTests {
       print(account + ": Versioning state: " + s3.getBucketVersioningConfiguration(bucketName).getStatus());
 
       history.addFirst(new KeyEntry(deleteObject(bucketName, key), Element.DELETE_MARKER));
-      versions = listVersions(bucketName, key, null, null, null, null, false);
+      versions = listVersions(s3, account, bucketName, key, null, null, null, null, false);
       compare(history, versions);
       history.remove();
 
       history.addFirst(new KeyEntry(putObject(bucketName, key, fileToPut), Element.VERSION_ENTRY));
-      versions = listVersions(bucketName, key, null, null, null, null, false);
+      versions = listVersions(s3, account, bucketName, key, null, null, null, null, false);
       compare(history, versions);
       history.remove();
 
       history.addFirst(new KeyEntry(deleteObject(bucketName, key), Element.DELETE_MARKER));
-      versions = listVersions(bucketName, key, null, null, null, null, false);
+      versions = listVersions(s3, account, bucketName, key, null, null, null, null, false);
       compare(history, versions);
 
       // Enable versioning
@@ -1149,11 +1155,11 @@ public class S3ListVersionsTests {
       print(account + ": Versioning state: " + s3.getBucketVersioningConfiguration(bucketName).getStatus());
 
       history.addFirst(new KeyEntry(putObject(bucketName, key, fileToPut), Element.VERSION_ENTRY));
-      versions = listVersions(bucketName, key, null, null, null, null, false);
+      versions = listVersions(s3, account, bucketName, key, null, null, null, null, false);
       compare(history, versions);
 
       history.addFirst(new KeyEntry(deleteObject(bucketName, key), Element.DELETE_MARKER));
-      versions = listVersions(bucketName, key, null, null, null, null, false);
+      versions = listVersions(s3, account, bucketName, key, null, null, null, null, false);
       compare(history, versions);
 
       // Suspend versioning
@@ -1167,17 +1173,17 @@ public class S3ListVersionsTests {
       history.remove(new KeyEntry("null", Element.VERSION_ENTRY));
 
       history.addFirst(new KeyEntry(putObject(bucketName, key, fileToPut), Element.VERSION_ENTRY));
-      versions = listVersions(bucketName, key, null, null, null, null, false);
+      versions = listVersions(s3, account, bucketName, key, null, null, null, null, false);
       compare(history, versions);
       history.remove();
 
       history.addFirst(new KeyEntry(deleteObject(bucketName, key), Element.DELETE_MARKER));
-      versions = listVersions(bucketName, key, null, null, null, null, false);
+      versions = listVersions(s3, account, bucketName, key, null, null, null, null, false);
       compare(history, versions);
       history.remove();
 
       history.addFirst(new KeyEntry(putObject(bucketName, key, fileToPut), Element.VERSION_ENTRY));
-      versions = listVersions(bucketName, key, null, null, null, null, false);
+      versions = listVersions(s3, account, bucketName, key, null, null, null, null, false);
       compare(history, versions);
 
       // Enable versioning
@@ -1187,17 +1193,17 @@ public class S3ListVersionsTests {
       print(account + ": Versioning state: " + s3.getBucketVersioningConfiguration(bucketName).getStatus());
 
       history.addFirst(new KeyEntry(deleteObject(bucketName, key), Element.DELETE_MARKER));
-      versions = listVersions(bucketName, key, null, null, null, null, false);
+      versions = listVersions(s3, account, bucketName, key, null, null, null, null, false);
       compare(history, versions);
 
       history.addFirst(new KeyEntry(putObject(bucketName, key, fileToPut), Element.VERSION_ENTRY));
-      versions = listVersions(bucketName, key, null, null, null, null, false);
+      versions = listVersions(s3, account, bucketName, key, null, null, null, null, false);
       compare(history, versions);
     } catch (AmazonServiceException ase) {
       printException(ase);
       assertThat(false, "Failed to run toggleVersioning");
     } finally {
-      for (S3VersionSummary version : listVersions(bucketName, null, null, null, null, null, false).getVersionSummaries()) {
+      for (S3VersionSummary version : listVersions(s3, account, bucketName, null, null, null, null, null, false).getVersionSummaries()) {
         try {
           print(account + ": Deleting object " + version.getKey() + ", version " + version.getVersionId());
           s3.deleteVersion(bucketName, version.getKey(), version.getVersionId());
@@ -1220,7 +1226,7 @@ public class S3ListVersionsTests {
       history.addFirst(new KeyEntry(deleteObject(bucketName, key), Element.DELETE_MARKER));
       history.addFirst(new KeyEntry(putObject(bucketName, key, fileToPut), Element.VERSION_ENTRY));
 
-      VersionListing versions = listVersions(bucketName, key, null, null, null, null, false);
+      VersionListing versions = listVersions(s3, account, bucketName, key, null, null, null, null, false);
       compare(history, versions);
 
       // Suspend versioning
@@ -1230,17 +1236,17 @@ public class S3ListVersionsTests {
       print(account + ": Versioning state: " + s3.getBucketVersioningConfiguration(bucketName).getStatus());
 
       history.addFirst(new KeyEntry(putObject(bucketName, key, fileToPut), Element.VERSION_ENTRY));
-      versions = listVersions(bucketName, key, null, null, null, null, false);
+      versions = listVersions(s3, account, bucketName, key, null, null, null, null, false);
       compare(history, versions);
       history.remove();
 
       history.addFirst(new KeyEntry(deleteObject(bucketName, key), Element.DELETE_MARKER));
-      versions = listVersions(bucketName, key, null, null, null, null, false);
+      versions = listVersions(s3, account, bucketName, key, null, null, null, null, false);
       compare(history, versions);
       history.remove();
 
       history.addFirst(new KeyEntry(putObject(bucketName, key, fileToPut), Element.VERSION_ENTRY));
-      versions = listVersions(bucketName, key, null, null, null, null, false);
+      versions = listVersions(s3, account, bucketName, key, null, null, null, null, false);
       compare(history, versions);
 
       // AmazonS3 s3clientA = getS3Client("awsrc_mcflurry");
@@ -1276,7 +1282,7 @@ public class S3ListVersionsTests {
       history.addFirst(new KeyEntry(putObject(bucketName, key, fileToPut), Element.VERSION_ENTRY));
       history.addFirst(new KeyEntry(deleteObject(bucketName, key), Element.DELETE_MARKER));
 
-      VersionListing versions = listVersions(bucketName, key, null, null, null, null, false);
+      VersionListing versions = listVersions(s3, account, bucketName, key, null, null, null, null, false);
       compare(history, versions);
 
       boolean error = false;
@@ -1303,12 +1309,12 @@ public class S3ListVersionsTests {
         assertTrue("Expected error code to be BucketNotEmpty, but got " + ase.getErrorCode(), ase.getErrorCode().equals("BucketNotEmpty"));
       }
       assertTrue("Expected bucket delete to fail", error);
-      versions = listVersions(bucketName, null, null, null, null, null, false);
+      versions = listVersions(s3, account, bucketName, null, null, null, null, null, false);
     } catch (AmazonServiceException ase) {
       printException(ase);
       assertThat(false, "Failed to run deleteBucketWithDeleteMarker");
     } finally {
-      for (S3VersionSummary version : listVersions(bucketName, null, null, null, null, null, false).getVersionSummaries()) {
+      for (S3VersionSummary version : listVersions(s3, account, bucketName, null, null, null, null, null, false).getVersionSummaries()) {
         try {
           print(account + ": Deleting object " + version.getKey() + ", version " + version.getVersionId());
           s3.deleteVersion(bucketName, version.getKey(), version.getVersionId());
@@ -1316,6 +1322,151 @@ public class S3ListVersionsTests {
           printException(ase);
         }
       }
+    }
+  }
+
+  /**
+   * Test to verify ACL privileges required to list versions in a bucket. ACL privileges to list versions is the same as listing objects - account
+   * listing versions must READ or FULL_CONTROL on bucket
+   * 
+   */
+  @Test
+  public void listVersionsDifferentAccount() throws Exception {
+    testInfo(this.getClass().getSimpleName() + " - listVersionsDifferentAccount");
+    String accountB = null;
+    AmazonS3 s3ClientB = null;
+    Owner ownerB = null;
+
+    try {
+      accountB = this.getClass().getSimpleName().toLowerCase() + 'b';
+      s3ClientB = initS3ClientWithNewAccount(accountB, "admin");
+      ownerB = s3ClientB.getS3AccountOwner();
+
+      final String key = eucaUUID();
+      LinkedList<String> versionIdList = new LinkedList<String>();
+      int uploads = 3 + random.nextInt(8);// 3-10 uploads
+      print("Number of uploads: " + uploads);
+      VersionListing versions = null;
+
+      /* Upload an object multiple times */
+      for (int i = 0; i < uploads; i++) {
+        putObject(bucketName, key, fileToPut, versionIdList);
+      }
+
+      /* Configure bucket ACL to allow account B READ */
+      AccessControlList acl = new AccessControlList();
+      acl.setOwner(owner);
+      acl.grantPermission(new CanonicalGrantee(ownerB.getId()), Permission.Read);
+      print(account + ": Setting acl on bucket " + bucketName + " to " + acl);
+      s3.setBucketAcl(bucketName, acl);
+
+      /* List the object versions as account B and verify them against the put object results */
+      versions = listVersions(s3ClientB, accountB, bucketName, null, null, null, null, null, false);
+      verifyVersionSummaries(key, versionIdList, versions.getVersionSummaries());
+
+      /* Configure bucket ACL to allow account B FULL_CONTROL */
+      acl.revokeAllPermissions(new CanonicalGrantee(ownerB.getId()));
+      acl.grantPermission(new CanonicalGrantee(ownerB.getId()), Permission.FullControl);
+      print(account + ": Setting acl on bucket " + bucketName + " to " + acl);
+      s3.setBucketAcl(bucketName, acl);
+
+      /* List the object versions as account B and verify them against the put object results */
+      versions = listVersions(s3ClientB, accountB, bucketName, null, null, null, null, null, false);
+      verifyVersionSummaries(key, versionIdList, versions.getVersionSummaries());
+
+      /* Configure bucket ACL to allow account B WRITE */
+      acl.revokeAllPermissions(new CanonicalGrantee(ownerB.getId()));
+      acl.grantPermission(new CanonicalGrantee(ownerB.getId()), Permission.Write);
+      print(account + ": Setting acl on bucket " + bucketName + " to " + acl);
+      s3.setBucketAcl(bucketName, acl);
+
+      /* Verify account B cannot list versions */
+      boolean caughtError = false;
+      try {
+        listVersions(s3ClientB, accountB, bucketName, null, null, null, null, null, false);
+      } catch (AmazonServiceException ase) {
+        caughtError = true;
+        assertTrue("Expected HTTP status code to be 403 but got " + ase.getStatusCode(), ase.getStatusCode() == 403);
+        assertTrue("Expected AccessDenied error code but got " + ase.getErrorCode(), ase.getErrorCode().equals("AccessDenied"));
+      } finally {
+        assertTrue("Expected 403 AccessDenied response", caughtError);
+      }
+
+      /* Configure bucket ACL to revoke access to account B */
+      acl.revokeAllPermissions(new CanonicalGrantee(ownerB.getId()));
+      acl.grantPermission(new CanonicalGrantee(ownerID), Permission.FullControl);
+      print(account + ": Setting acl on bucket " + bucketName + " to " + acl);
+      s3.setBucketAcl(bucketName, acl);
+
+      /* Verify account B cannot list versions */
+      caughtError = false;
+      try {
+        listVersions(s3ClientB, accountB, bucketName, null, null, null, null, null, false);
+      } catch (AmazonServiceException ase) {
+        caughtError = true;
+        assertTrue("Expected HTTP status code to be 403 but got " + ase.getStatusCode(), ase.getStatusCode() == 403);
+        assertTrue("Expected AccessDenied error code but got " + ase.getErrorCode(), ase.getErrorCode().equals("AccessDenied"));
+      } finally {
+        assertTrue("Expected 403 AccessDenied response", caughtError);
+      }
+    } catch (AmazonServiceException ase) {
+      printException(ase);
+      assertThat(false, "Failed to run listVersionsDifferentAccount");
+    } finally {
+      Eutester4j.deleteAccount(accountB);
+      s3ClientB = null;
+    }
+  }
+
+  @Test
+  public void deleteVersionNonBucketOwnerAccount() throws Exception {
+    testInfo(this.getClass().getSimpleName() + " - deleteVersionNonBucketOwnerAccount");
+    String accountC = null;
+    AmazonS3 s3ClientC = null;
+    Owner ownerC = null;
+
+    try {
+      accountC = this.getClass().getSimpleName().toLowerCase() + 'c';
+      s3ClientC = initS3ClientWithNewAccount(accountC, "admin");
+      ownerC = s3ClientC.getS3AccountOwner();
+
+      final String key = eucaUUID();
+      LinkedList<String> versionIdList = new LinkedList<String>();
+      int uploads = 3 + random.nextInt(8);// 3-10 uploads
+      print("Number of uploads: " + uploads);
+
+      /* Upload an object multiple times */
+      for (int i = 0; i < uploads; i++) {
+        putObject(bucketName, key, fileToPut, versionIdList);
+      }
+
+      /* Configure bucket ACL to allow account C FULL_CONTROL */
+      AccessControlList acl = new AccessControlList();
+      acl.setOwner(owner);
+      acl.grantPermission(new CanonicalGrantee(ownerC.getId()), Permission.FullControl);
+      print(account + ": Setting acl on bucket " + bucketName + " to " + acl);
+      s3.setBucketAcl(bucketName, acl);
+
+      /* Verify account C cannot delete versions */
+      for (String versionId : versionIdList) {
+        boolean caughtError = false;
+        try {
+          print(accountC + ": Trying to delete object " + key + ", version " + versionId + ", bucket " + bucketName);
+          s3ClientC.deleteVersion(bucketName, key, versionId);
+        } catch (AmazonServiceException ase) {
+          caughtError = true;
+          assertTrue("Expected HTTP status code to be 403 but got " + ase.getStatusCode(), ase.getStatusCode() == 403);
+          assertTrue("Expected AccessDenied error code but got " + ase.getErrorCode(), ase.getErrorCode().equals("AccessDenied"));
+        } finally {
+          assertTrue("Expected 403 AccessDenied response", caughtError);
+        }
+      }
+    } catch (AmazonServiceException ase) {
+      printException(ase);
+      assertThat(false, "Failed to run deleteVersionNonBucketOwnerAccount");
+    } finally {
+      Eutester4j.deleteAccount(accountC);
+      s3ClientC = null;
     }
   }
 
@@ -1358,7 +1509,7 @@ public class S3ListVersionsTests {
         }
 
         // // List the object versions and verify them against the put object results
-        // versions = listVersions(bucketName, key, null, null, null, null, false);
+        // versions = listVersions(s3, account, bucketName, key, null, null, null, null, false);
         // verifyVersionSummaries(key, partialVersionIdList, versions.getVersionSummaries());
 
         // Reverse the version ID list and add it to the map
@@ -1369,11 +1520,11 @@ public class S3ListVersionsTests {
       }
 
       List<String> versionIdList = keyVersionMap.get(key);
-      versions = listVersions(bucketName, null, key, versionIdList.get(1), null, null, false);
+      versions = listVersions(s3, account, bucketName, null, key, versionIdList.get(1), null, null, false);
       s3.deleteVersion(bucketName, key, versionIdList.get(1));
-      versions = listVersions(bucketName, null, key, "uS9AJ_SGUh0xgRfsRV0okMOf1rRGloee", null, null, false);
+      versions = listVersions(s3, account, bucketName, null, key, "uS9AJ_SGUh0xgRfsRV0okMOf1rRGloee", null, null, false);
 
-      // versions = listVersions(bucketName, null, null, null, null, null, false);
+      // versions = listVersions(s3, account, bucketName, null, null, null, null, null, false);
       // for(S3VersionSummary sum : versions.getVersionSummaries()){
       // s3.deleteVersion(bucketName, sum.getKey(), sum.getVersionId());
       // }
@@ -1388,7 +1539,7 @@ public class S3ListVersionsTests {
 
   // @Test
   public void cleanupmess() {
-    VersionListing versions = listVersions("3fc48edc955b2cf4", null, null, null, null, null, false);
+    VersionListing versions = listVersions(s3, account, "3fc48edc955b2cf4", null, null, null, null, null, false);
     for (S3VersionSummary version : versions.getVersionSummaries()) {
       print(account + ": Deleting object " + version.getKey() + ", version " + version.getVersionId());
       s3.deleteVersion("3fc48edc955b2cf4", version.getKey(), version.getVersionId());
@@ -1408,7 +1559,7 @@ public class S3ListVersionsTests {
     putObject(bucketName, "foo/dan/crazy", fileToPut, versionIdList);
     putObject(bucketName, "foo/crap", fileToPut, versionIdList);
 
-    VersionListing versions = listVersions(bucketName, "foo/", null, null, "/", null, false);
+    VersionListing versions = listVersions(s3, account, bucketName, "foo/", null, null, "/", null, false);
     print(account + ": Common prefixes: " + versions.getCommonPrefixes());
   }
 
@@ -1550,7 +1701,7 @@ public class S3ListVersionsTests {
   private String deleteObject(String bucketName, String key) {
     print(account + ": Deleting object " + key + " in bucket " + bucketName);
     s3.deleteObject(bucketName, key);
-    VersionListing versions = listVersions(bucketName, key, null, null, null, null, false);
+    VersionListing versions = listVersions(s3, account, bucketName, key, null, null, null, null, false);
     S3VersionSummary deleteMarker = versions.getVersionSummaries().get(0);
     assertTrue("Invalid version summary", deleteMarker != null);
     assertTrue("Expected version element to be a delete marker", deleteMarker.isDeleteMarker());
@@ -1582,10 +1733,10 @@ public class S3ListVersionsTests {
     }
   }
 
-  private VersionListing listVersions(String bucketName, String prefix, String keyMarker, String versionIdMarker, String delimiter, Integer maxKeys,
-      boolean isTruncated) {
+  private VersionListing listVersions(AmazonS3 s3, String accountName, String bucketName, String prefix, String keyMarker, String versionIdMarker,
+      String delimiter, Integer maxKeys, boolean isTruncated) {
 
-    StringBuilder sb = new StringBuilder("List object versions using bucket=" + bucketName);
+    StringBuilder sb = new StringBuilder(accountName + ": List object versions using bucket=" + bucketName);
 
     ListVersionsRequest request = new ListVersionsRequest();
     request.setBucketName(bucketName);

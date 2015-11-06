@@ -93,22 +93,27 @@ import org.testng.annotations.Test;
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.services.identitymanagement.model.GetUserResult;
 import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.model.AccessControlList;
 import com.amazonaws.services.s3.model.Bucket;
+import com.amazonaws.services.s3.model.CanonicalGrantee;
 import com.amazonaws.services.s3.model.InitiateMultipartUploadRequest;
 import com.amazonaws.services.s3.model.ListMultipartUploadsRequest;
 import com.amazonaws.services.s3.model.MultipartUpload;
 import com.amazonaws.services.s3.model.MultipartUploadListing;
+import com.amazonaws.services.s3.model.Owner;
+import com.amazonaws.services.s3.model.Permission;
 import com.github.sjones4.youcan.youare.YouAre;
 
 public class S3ListMpuTests {
   String bucketName = null;
   List<Runnable> cleanupTasks = null;
-  private static AmazonS3 s3 = null;
-  private static String account = null;
-  private static String accountId = null;
-  private static YouAre userIam = null;
-  private static String userName = null;
-  private static String userArn = null;
+  private static AmazonS3 s3ClientA = null;
+  private static String accountA = null;
+  private static String accountIdA = null;
+  private static Owner ownerA = null;
+  private static YouAre userIamA = null;
+  private static String userNameA = null;
+  private static String userArnA = null;
   private static Random random = new Random();
 
   private static final int DEFAULT_MAX_KEYS = 1000;
@@ -117,16 +122,17 @@ public class S3ListMpuTests {
   public void init() throws Exception {
     print("### PRE SUITE SETUP - " + this.getClass().getSimpleName());
     try {
-      account = this.getClass().getSimpleName().toLowerCase();
-      s3 = initS3ClientWithNewAccount(account, "admin");
-      accountId = s3.getS3AccountOwner().getId();
+      accountA = this.getClass().getSimpleName().toLowerCase() + 'a';
+      s3ClientA = initS3ClientWithNewAccount(accountA, "admin");
+      ownerA = s3ClientA.getS3AccountOwner();
+      accountIdA = ownerA.getId();
 
       // Get the user details
-      Map<String, String> keyMap = getUserKeys(account, "admin");
-      userIam = getYouAreClient(keyMap.get("ak"), keyMap.get("sk"), IAM_ENDPOINT);
-      GetUserResult getUserResult = userIam.getUser();
-      userName = getUserResult.getUser().getUserName();
-      userArn = getUserResult.getUser().getArn();
+      Map<String, String> keyMap = getUserKeys(accountA, "admin");
+      userIamA = getYouAreClient(keyMap.get("ak"), keyMap.get("sk"), IAM_ENDPOINT);
+      GetUserResult getUserResult = userIamA.getUser();
+      userNameA = getUserResult.getUser().getUserName();
+      userArnA = getUserResult.getUser().getArn();
     } catch (Exception e) {
       try {
         teardown();
@@ -153,20 +159,20 @@ public class S3ListMpuTests {
   @AfterClass
   public void teardown() throws Exception {
     print("### POST SUITE CLEANUP - " + this.getClass().getSimpleName());
-    Eutester4j.deleteAccount(account);
-    s3 = null;
+    Eutester4j.deleteAccount(accountA);
+    s3ClientA = null;
   }
 
   @BeforeMethod
   public void setup() throws Exception {
     bucketName = eucaUUID();
     cleanupTasks = new ArrayList<Runnable>();
-    Bucket bucket = S3Utils.createBucket(s3, account, bucketName, S3Utils.BUCKET_CREATION_RETRIES);
+    Bucket bucket = S3Utils.createBucket(s3ClientA, accountA, bucketName, S3Utils.BUCKET_CREATION_RETRIES);
     cleanupTasks.add(new Runnable() {
       @Override
       public void run() {
-        print(account + ": Deleting bucket " + bucketName);
-        s3.deleteBucket(bucketName);
+        print(accountA + ": Deleting bucket " + bucketName);
+        s3ClientA.deleteBucket(bucketName);
       }
     });
 
@@ -197,10 +203,10 @@ public class S3ListMpuTests {
       print("Number of uploads for the same key: " + numUploads);
 
       // Initiate a bunch of mpus
-      List<String> uploadIdList = initiateMpusForKey(key, bucketName, numUploads);
+      List<String> uploadIdList = initiateMpusForKey(s3ClientA, accountA, key, bucketName, numUploads);
 
       // Verify the entire mpu listing
-      MultipartUploadListing listing = listMpu(bucketName, null, null, null, null, null, false);
+      MultipartUploadListing listing = listMpu(s3ClientA, accountA, bucketName, null, null, null, null, null, false);
       assertTrue("Expected " + numUploads + " mpu listings, but got " + listing.getMultipartUploads().size(), numUploads == listing
           .getMultipartUploads().size());
       for (int i = 0; i < numUploads; i++) {
@@ -229,7 +235,7 @@ public class S3ListMpuTests {
       print("Number of uploads per key: " + numUploads);
 
       // Generate some mpus
-      TreeMap<String, List<String>> keyUploadIdMap = initiateMpusForMultipleKeys(numKeys, numUploads, new String());
+      TreeMap<String, List<String>> keyUploadIdMap = initiateMpusForMultipleKeys(s3ClientA, accountA, numKeys, numUploads, new String());
 
       // Starting with every key in the ascending order, list the mpus using that key as the key marker and verify that the results.
       for (String keyMarker : keyUploadIdMap.keySet()) {
@@ -238,7 +244,7 @@ public class S3ListMpuTests {
         NavigableMap<String, List<String>> tailMap = keyUploadIdMap.tailMap(keyMarker, false);
 
         // List mpus using the key marker and verify
-        MultipartUploadListing listing = listMpu(bucketName, keyMarker, null, null, null, null, false);
+        MultipartUploadListing listing = listMpu(s3ClientA, accountA, bucketName, keyMarker, null, null, null, null, false);
         assertTrue("Expected " + (tailMap.size() * numUploads) + " mpu listings, but got " + listing.getMultipartUploads().size(),
             (tailMap.size() * numUploads) == listing.getMultipartUploads().size());
 
@@ -274,7 +280,7 @@ public class S3ListMpuTests {
       print("Number of uploads per key: " + numUploads);
 
       // Generate some mpus
-      TreeMap<String, List<String>> keyUploadIdMap = initiateMpusForMultipleKeys(numKeys, numUploads, new String());
+      TreeMap<String, List<String>> keyUploadIdMap = initiateMpusForMultipleKeys(s3ClientA, accountA, numKeys, numUploads, new String());
 
       // Starting with every key and upload ID in the ascending order, list the mpus using the pair and verify that the results.
       for (Map.Entry<String, List<String>> mapEntry : keyUploadIdMap.entrySet()) {
@@ -287,7 +293,8 @@ public class S3ListMpuTests {
           List<String> tailList = mapEntry.getValue().subList(i + 1, numUploads);
 
           // List mpus using the key marker and upload ID marker and verify
-          MultipartUploadListing listing = listMpu(bucketName, mapEntry.getKey(), mapEntry.getValue().get(i), null, null, null, false);
+          MultipartUploadListing listing =
+              listMpu(s3ClientA, accountA, bucketName, mapEntry.getKey(), mapEntry.getValue().get(i), null, null, null, false);
           assertTrue("Expected " + ((tailMap.size() * numUploads) + (numUploads - i - 1)) + " mpu listings, but got "
               + listing.getMultipartUploads().size(), ((tailMap.size() * numUploads) + (numUploads - i - 1)) == listing.getMultipartUploads().size());
 
@@ -329,11 +336,11 @@ public class S3ListMpuTests {
       print("Number of uploads per key: " + numUploads);
 
       // Generate some mpus
-      TreeMap<String, List<String>> keyUploadIdMap = initiateMpusForMultipleKeys(numKeys, numUploads, new String());
+      TreeMap<String, List<String>> keyUploadIdMap = initiateMpusForMultipleKeys(s3ClientA, accountA, numKeys, numUploads, new String());
 
       // Using each key as the prefix in the listing, verify the listing for that specific key
       for (Entry<String, List<String>> mapEntry : keyUploadIdMap.entrySet()) {
-        MultipartUploadListing listing = listMpu(bucketName, null, null, mapEntry.getKey(), null, null, false);
+        MultipartUploadListing listing = listMpu(s3ClientA, accountA, bucketName, null, null, mapEntry.getKey(), null, null, false);
         assertTrue("Expected " + numUploads + " mpu listings, but got " + listing.getMultipartUploads().size(), numUploads == listing
             .getMultipartUploads().size());
         for (int i = 0; i < numUploads; i++) {
@@ -346,7 +353,7 @@ public class S3ListMpuTests {
       }
 
       // Verify the entire mpu listing
-      MultipartUploadListing listing = listMpu(bucketName, null, null, null, null, null, false);
+      MultipartUploadListing listing = listMpu(s3ClientA, accountA, bucketName, null, null, null, null, null, false);
       assertTrue("Expected " + (numKeys * numUploads) + " mpu listings, but got " + listing.getMultipartUploads().size(),
           (numKeys * numUploads) == listing.getMultipartUploads().size());
 
@@ -387,17 +394,17 @@ public class S3ListMpuTests {
         String prefix = UUID.randomUUID().toString().replaceAll("-", "") + delimiter;
 
         // Generate some mpus for keys starting with prefix
-        TreeMap<String, List<String>> keyUploadIdMap = initiateMpusForMultipleKeys(numKeys, numUploads - 1, prefix);
+        TreeMap<String, List<String>> keyUploadIdMap = initiateMpusForMultipleKeys(s3ClientA, accountA, numKeys, numUploads - 1, prefix);
 
         // Generate some mpus for a key that is just the prefix
-        keyUploadIdMap.put(prefix, initiateMpusForKey(prefix, bucketName, numUploads));
+        keyUploadIdMap.put(prefix, initiateMpusForKey(s3ClientA, accountA, prefix, bucketName, numUploads));
 
         // Put the prefix and key-uploadId into the map
         prefixKeyUploadIdMap.put(prefix, keyUploadIdMap);
       }
 
       // Using the delimiter verify the mpu listing for common prefixes
-      MultipartUploadListing listing = listMpu(bucketName, null, null, null, delimiter, null, false);
+      MultipartUploadListing listing = listMpu(s3ClientA, accountA, bucketName, null, null, null, delimiter, null, false);
       assertTrue("Expected no multipart uploads but got some", listing.getMultipartUploads() == null || listing.getMultipartUploads().isEmpty());
       assertTrue("Expected " + numPrefixes + " common prefixes but got " + listing.getCommonPrefixes().size(),
           listing.getCommonPrefixes().size() == numPrefixes);
@@ -414,7 +421,7 @@ public class S3ListMpuTests {
       // Using both prefix and delimiter, verify that mpu listing contains only one common prefix
       for (String prefix : prefixKeyUploadIdMap.keySet()) {
         // Remove the delimiter from the prefix before listing
-        listing = listMpu(bucketName, null, null, new String(prefix).replaceAll(delimiter, ""), delimiter, null, false);
+        listing = listMpu(s3ClientA, accountA, bucketName, null, null, new String(prefix).replaceAll(delimiter, ""), delimiter, null, false);
         assertTrue("Expected 1 common prefix but got " + listing.getCommonPrefixes().size(), listing.getCommonPrefixes().size() == 1);
         assertTrue("Expected common prefix to be " + prefix + ", but got " + listing.getCommonPrefixes().get(0),
             StringUtils.equals(listing.getCommonPrefixes().get(0), prefix));
@@ -441,7 +448,7 @@ public class S3ListMpuTests {
       print("Number of mpus per listing: " + maxUploads);
 
       // Generate some mpus
-      TreeMap<String, List<String>> keyUploadIdMap = initiateMpusForMultipleKeys(numKeys, numUploads, new String());
+      TreeMap<String, List<String>> keyUploadIdMap = initiateMpusForMultipleKeys(s3ClientA, accountA, numKeys, numUploads, new String());
 
       Iterator<String> keyIterator = keyUploadIdMap.keySet().iterator();
       String key = keyIterator.next();
@@ -454,11 +461,11 @@ public class S3ListMpuTests {
 
       for (int i = 1; i <= counter; i++) {
         if (i != counter) {
-          listing = listMpu(bucketName, nextKeyMarker, nextUploadIdMarker, null, null, maxUploads, true);
+          listing = listMpu(s3ClientA, accountA, bucketName, nextKeyMarker, nextUploadIdMarker, null, null, maxUploads, true);
           assertTrue("Expected " + maxUploads + " mpu listings, but got " + listing.getMultipartUploads().size(), maxUploads == listing
               .getMultipartUploads().size());
         } else {
-          listing = listMpu(bucketName, nextKeyMarker, nextUploadIdMarker, null, null, maxUploads, false);
+          listing = listMpu(s3ClientA, accountA, bucketName, nextKeyMarker, nextUploadIdMarker, null, null, maxUploads, false);
           assertTrue("Expected " + totalUploads + " mpu listings, but got " + listing.getMultipartUploads().size(), totalUploads == listing
               .getMultipartUploads().size());
         }
@@ -484,7 +491,106 @@ public class S3ListMpuTests {
     }
   }
 
-  private TreeMap<String, List<String>> initiateMpusForMultipleKeys(int numKeys, int numUploads, String prefix) {
+  /**
+   * Test to verify ACL privileges required to list multipart uploads in a bucket. ACL privileges to list uploads is the same as listing objects or
+   * versions - account listing multipart uploads must have READ or FULL_CONTROL on bucket
+   */
+  @Test
+  public void listUploadsMultipleAccounts() throws Exception {
+    testInfo(this.getClass().getSimpleName() + " - listUploadsMultipleAccounts");
+    String accountB = null;
+    String accountC = null;
+    AmazonS3 s3ClientB = null;
+    AmazonS3 s3ClientC = null;
+    Owner ownerB = null;
+    Owner ownerC = null;
+
+    try {
+      accountB = this.getClass().getSimpleName().toLowerCase() + 'b';
+      s3ClientB = initS3ClientWithNewAccount(accountB, "admin");
+      ownerB = s3ClientB.getS3AccountOwner();
+
+      accountC = this.getClass().getSimpleName().toLowerCase() + 'c';
+      s3ClientC = initS3ClientWithNewAccount(accountC, "admin");
+      ownerC = s3ClientC.getS3AccountOwner();
+
+      /* Configure bucket ACL to allow FULL_CONTROL to account B and READ to account C */
+      AccessControlList acl = new AccessControlList();
+      acl.setOwner(ownerA);
+      acl.grantPermission(new CanonicalGrantee(ownerB.getId()), Permission.FullControl);
+      acl.grantPermission(new CanonicalGrantee(ownerC.getId()), Permission.Read);
+      print(accountA + ": Setting acl on bucket " + bucketName + " to " + acl);
+      s3ClientA.setBucketAcl(bucketName, acl);
+
+      String key = UUID.randomUUID().toString().replaceAll("-", "");
+      int numUploads = 3 + random.nextInt(3);// 3-5 uploads
+
+      print("Number of uploads for the same key: " + numUploads);
+
+      /* Initiate a bunch of mpus as account B */
+      List<String> uploadIdList = initiateMpusForKey(s3ClientB, accountB, key, bucketName, numUploads);
+
+      /* Verify bucket owning account A can list the uploads */
+      MultipartUploadListing listing = listMpu(s3ClientA, accountA, bucketName, null, null, null, null, null, false);
+      assertTrue("Expected " + numUploads + " mpu listings, but got " + listing.getMultipartUploads().size(), numUploads == listing
+          .getMultipartUploads().size());
+      for (int i = 0; i < numUploads; i++) {
+        MultipartUpload mpu = listing.getMultipartUploads().get(i);
+        assertTrue("Expected key to be " + key + ", but got " + mpu.getKey(), mpu.getKey().equals(key));
+        assertTrue("Expected upload ID to be " + uploadIdList.get(i) + ", but got " + mpu.getUploadId(), mpu.getUploadId()
+            .equals(uploadIdList.get(i)));
+      }
+
+      /* Verify mpu initiating account B can list the uploads */
+      listing = listMpu(s3ClientB, accountB, bucketName, null, null, null, null, null, false);
+      assertTrue("Expected " + numUploads + " mpu listings, but got " + listing.getMultipartUploads().size(), numUploads == listing
+          .getMultipartUploads().size());
+      for (int i = 0; i < numUploads; i++) {
+        MultipartUpload mpu = listing.getMultipartUploads().get(i);
+        assertTrue("Expected key to be " + key + ", but got " + mpu.getKey(), mpu.getKey().equals(key));
+        assertTrue("Expected upload ID to be " + uploadIdList.get(i) + ", but got " + mpu.getUploadId(), mpu.getUploadId()
+            .equals(uploadIdList.get(i)));
+      }
+
+      /* Verify account C with READ on bucket can list the uploads */
+      listing = listMpu(s3ClientC, accountC, bucketName, null, null, null, null, null, false);
+      assertTrue("Expected " + numUploads + " mpu listings, but got " + listing.getMultipartUploads().size(), numUploads == listing
+          .getMultipartUploads().size());
+      for (int i = 0; i < numUploads; i++) {
+        MultipartUpload mpu = listing.getMultipartUploads().get(i);
+        assertTrue("Expected key to be " + key + ", but got " + mpu.getKey(), mpu.getKey().equals(key));
+        assertTrue("Expected upload ID to be " + uploadIdList.get(i) + ", but got " + mpu.getUploadId(), mpu.getUploadId()
+            .equals(uploadIdList.get(i)));
+      }
+
+      /* Configure bucket ACL to allow FULL_CONTROL to account B */
+      acl.revokeAllPermissions(new CanonicalGrantee(ownerC.getId()));
+      print(accountA + ": Setting acl on bucket " + bucketName + " to " + acl);
+      s3ClientA.setBucketAcl(bucketName, acl);
+
+      /* Verify account C cannot list uploads */
+      boolean caughtError = false;
+      try {
+        listing = listMpu(s3ClientC, accountC, bucketName, null, null, null, null, null, false);
+      } catch (AmazonServiceException ase) {
+        caughtError = true;
+        assertTrue("Expected HTTP status code to be 403 but got " + ase.getStatusCode(), ase.getStatusCode() == 403);
+        assertTrue("Expected AccessDenied error code but got " + ase.getErrorCode(), ase.getErrorCode().equals("AccessDenied"));
+      } finally {
+        assertTrue("Expected 403 AccessDenied response", caughtError);
+      }
+    } catch (AmazonServiceException ase) {
+      printException(ase);
+      assertThat(false, "Failed to run listUploadsMultipleAccounts");
+    } finally {
+      Eutester4j.deleteAccount(accountB);
+      Eutester4j.deleteAccount(accountC);
+      s3ClientB = null;
+      s3ClientC = null;
+    }
+  }
+
+  private TreeMap<String, List<String>> initiateMpusForMultipleKeys(AmazonS3 s3, String accountName, int numKeys, int numUploads, String prefix) {
     TreeMap<String, List<String>> keyUploadIdMap = new TreeMap<String, List<String>>();
 
     // Cycle through a bunch of different keys
@@ -492,19 +598,19 @@ public class S3ListMpuTests {
       String key = prefix + UUID.randomUUID().toString().replaceAll("-", "");
 
       // Add the key and upload ID list to the treemap
-      keyUploadIdMap.put(key, initiateMpusForKey(key, bucketName, numUploads));
+      keyUploadIdMap.put(key, initiateMpusForKey(s3, accountA, key, bucketName, numUploads));
     }
     assertTrue("Expected " + numKeys + " keys, but got " + keyUploadIdMap.size(), numKeys == keyUploadIdMap.size());
 
     return keyUploadIdMap;
   }
 
-  private List<String> initiateMpusForKey(String key, String bucketName, int numUploads) {
+  private List<String> initiateMpusForKey(AmazonS3 s3, String accountName, String key, String bucketName, int numUploads) {
     List<String> uploadIdList = new ArrayList<String>();
 
     // Initiate a bunch of mpus
     for (int j = 0; j < numUploads; j++) {
-      print(account + ": Initiating multipart upload for object " + key + " in bucket " + bucketName);
+      print(accountName + ": Initiating multipart upload for object " + key + " in bucket " + bucketName);
       uploadIdList.add(s3.initiateMultipartUpload(new InitiateMultipartUploadRequest(bucketName, key)).getUploadId());
     }
     // Sort the upload IDs lexicographically
@@ -514,22 +620,22 @@ public class S3ListMpuTests {
   }
 
   private void verifyCommonElements(MultipartUpload mpu) {
-    assertTrue("Expected initiator ID to be " + userArn + ", but got " + mpu.getInitiator().getId(),
-        StringUtils.equals(mpu.getInitiator().getId(), userArn));
-    assertTrue("Expected initiator name to be " + userName + ", but got " + mpu.getInitiator().getDisplayName(),
-        StringUtils.equals(mpu.getInitiator().getDisplayName(), userName));
-    assertTrue("Expected account ID to be " + accountId + ", but got " + mpu.getOwner().getId(),
-        StringUtils.equals(mpu.getOwner().getId(), accountId));
-    assertTrue("Expected account ID to be " + account + ", but got " + mpu.getOwner().getDisplayName(),
-        StringUtils.equals(mpu.getOwner().getDisplayName(), account));
+    assertTrue("Expected initiator ID to be " + userArnA + ", but got " + mpu.getInitiator().getId(),
+        StringUtils.equals(mpu.getInitiator().getId(), userArnA));
+    assertTrue("Expected initiator name to be " + userNameA + ", but got " + mpu.getInitiator().getDisplayName(),
+        StringUtils.equals(mpu.getInitiator().getDisplayName(), userNameA));
+    assertTrue("Expected account ID to be " + accountIdA + ", but got " + mpu.getOwner().getId(),
+        StringUtils.equals(mpu.getOwner().getId(), accountIdA));
+    assertTrue("Expected account ID to be " + accountA + ", but got " + mpu.getOwner().getDisplayName(),
+        StringUtils.equals(mpu.getOwner().getDisplayName(), accountA));
     assertTrue("Expected storage class to be STANDARD, but got " + mpu.getStorageClass(), StringUtils.equals(mpu.getStorageClass(), "STANDARD"));
   }
 
-  private MultipartUploadListing listMpu(String bucketName, String keyMarker, String uploadIdMarker, String prefix, String delimiter,
-      Integer maxUploads, boolean isTruncated) {
+  private MultipartUploadListing listMpu(AmazonS3 s3, String accountName, String bucketName, String keyMarker, String uploadIdMarker, String prefix,
+      String delimiter, Integer maxUploads, boolean isTruncated) {
 
     ListMultipartUploadsRequest request = new ListMultipartUploadsRequest(bucketName);
-    StringBuilder sb = new StringBuilder(account + ": List multipart uploads using bucket=" + bucketName);
+    StringBuilder sb = new StringBuilder(accountName + ": List multipart uploads using bucket=" + bucketName);
 
     if (keyMarker != null) {
       request.setKeyMarker(keyMarker);
