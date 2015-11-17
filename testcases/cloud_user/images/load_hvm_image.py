@@ -81,8 +81,8 @@ for x in range(retries + 1):
                 testcase.debug("Retrying to resolve " + str(testcase.args.url) + " and got: " + str(e.reason))
             elif hasattr(e, 'code'):
                 testcase.debug("Retrying to resolve " + str(testcase.args.url) + " and got: " + str(e.code))
-                time.sleep(retry_delay)
-                continue
+            time.sleep(retry_delay)
+            continue
         else:
             if hasattr(e, 'reason'):
                 raise AssertionError("INVALID URL: " + str(testcase.args.url) + "  " + str(e.reason))
