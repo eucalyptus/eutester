@@ -281,34 +281,59 @@ class BucketTestSuite(EutesterTestCase):
         
         
     def test_bucket_location(self):        
-        test_bucket = self.bucket_prefix + "location_test_bucket"
-        self.tester.info('Starting bucket location test using bucket: ' + test_bucket)
+        """Tests the ability to create a bucket in a specific region"""
+        if self.args.endpoint:
+            self.tester.info('WARNING: The following AWS tests will correctly fail if we are testing against any region')
+            self.tester.info('besides us-east-1 (endpoint s3.amazonaws.com), because the expected results are for us-east-1.')
+        test_bucket = self.bucket_prefix + ".undefined-location-test"
+        self.tester.debug('Starting test of bucket creation with no location defined, using bucket: ' + test_bucket)
+        # If testing against any region besides us-east-1, the location
+        # parameter cannot be blank which means us-east-1.
         self.tester.s3.create_bucket(test_bucket)
-        
         bucket = self.tester.s3.get_bucket(test_bucket)
-        if bucket != None and (bucket.get_location() == Location.DEFAULT or bucket.get_location() == 'US'):
+        if bucket != None and (bucket.get_location() == Location.DEFAULT):
+            self.tester.debug('Bucket location is correct: US East 1 (default)')
             self.tester.s3.delete_bucket(test_bucket)
         else:
             bucket.delete()
-            self.fail("Bucket location test failed, could not get bucket or location is not 'US'")        
+            self.fail("Bucket location test failed, could not get bucket or location is not US East 1 (default)")        
         
-        test_bucket = self.bucket_prefix + "eu_location_test"
-        bucket = self.tester.s3.create_bucket(test_bucket,location=Location.EU)
-        self.buckets_used.add(test_bucket)
-        if bucket == None:
-            self.fail("Bucket creation at location EU failed")
+        test_bucket = self.bucket_prefix + ".us-east-location-test"
+        self.tester.debug('Starting test of bucket creation defining US East (default) location, using bucket: ' + test_bucket)
+        self.tester.s3.create_bucket(test_bucket,location=Location.DEFAULT)
+        bucket = self.tester.s3.get_bucket(test_bucket)
+        if bucket != None and (bucket.get_location() == Location.DEFAULT):
+            self.tester.debug('Bucket location is correct: US East 1 (default)')
+            self.tester.s3.delete_bucket(test_bucket)
         else:
-            loc = bucket.get_location()
+            bucket.delete()
+            self.fail("Bucket location test failed, could not get bucket or location is not US East 1 (default)")        
+ 
+        if self.args.endpoint:
+            # Skip the test for creating a bucket in a different region, 
+            # if testing against AWS. In AWS, if we create a bucket in another
+            # region, we can only delete it if we set up a new connection
+            # to that region and then delete it. New connections are outside
+            # the scope of these bucket tests.
+            self.tester.info('Skipping AWS location-specific bucket creation test.')
+        else:
+            test_bucket = self.bucket_prefix + ".eu-location-test"
+            self.tester.debug('Starting test of bucket creation defining EU location, using bucket: ' + test_bucket)
+            bucket = self.tester.s3.create_bucket(test_bucket,location=Location.EU)
+            self.buckets_used.add(test_bucket)
+            if bucket == None:
+                self.fail("Bucket creation at location EU failed")
+            else:
+                loc = bucket.get_location()
             
-        if loc == Location.EU:
-            print "Got correct bucket location, EU"
-            bucket.delete()
-        else:                        
-            print "Incorrect bucket location, failing"
-            bucket.delete()
-            self.fail("Bucket location incorrect, expected: EU, got: " + loc)
-        
-        self.buckets_used.remove(test_bucket)
+            if loc == Location.EU:
+                self.tester.debug('Bucket location is correct: EU')
+                bucket.delete()
+            else:                        
+                bucket.delete()
+                self.fail("Bucket location incorrect, expected: EU, got: " + loc)
+            self.buckets_used.remove(test_bucket)
+        self.tester.debug( "Bucket location test: PASSED"  )    
         pass
         
     def test_bucket_logging(self):
