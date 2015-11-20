@@ -52,13 +52,18 @@ class BucketTestSuite(EutesterTestCase):
         self.buckets_used.add(test_bucket)
         self.tester.debug("Starting get/put/delete bucket test using bucket name: " + test_bucket)
  
+        if self.args.endpoint:
+            # If testing against any region besides us-east-1, the location
+            # parameter of a create bucket request cannot be blank (us-east-1).
+            self.tester.info('WARNING: The following AWS tests will correctly fail if we are testing against any region')
+            self.tester.info('besides us-east-1 (endpoint s3.amazonaws.com), because the expected results are for us-east-1.')
         try :
             bucket = self.tester.s3.create_bucket(test_bucket)                
             if bucket == None:
                 self.tester.s3.delete_bucket(test_bucket)
                 self.fail(test_bucket + " was not created correctly")
         except (S3ResponseError, S3CreateError) as e:
-            self.fail(test_bucket + " create caused exception: " + e)
+            self.fail(test_bucket + " create caused exception: " + str(e))
         
         try :    
             bucket = self.tester.s3.get_bucket(test_bucket)
@@ -67,7 +72,7 @@ class BucketTestSuite(EutesterTestCase):
                 self.fail(test_bucket +" was not fetched by get_bucket call")
         except S3ResponseError as e:
             self.tester.s3.delete_bucket(test_bucket)
-            self.fail("Exception getting bucket" + e)
+            self.fail("Exception getting bucket" + str(e))
             
         
         self.tester.s3.delete_bucket(test_bucket)        
@@ -283,12 +288,12 @@ class BucketTestSuite(EutesterTestCase):
     def test_bucket_location(self):        
         """Tests the ability to create a bucket in a specific region"""
         if self.args.endpoint:
+            # If testing against any region besides us-east-1, the location
+            # parameter of a create bucket request cannot be blank (us-east-1).
             self.tester.info('WARNING: The following AWS tests will correctly fail if we are testing against any region')
             self.tester.info('besides us-east-1 (endpoint s3.amazonaws.com), because the expected results are for us-east-1.')
         test_bucket = self.bucket_prefix + ".undefined-location-test"
         self.tester.debug('Starting test of bucket creation with no location defined, using bucket: ' + test_bucket)
-        # If testing against any region besides us-east-1, the location
-        # parameter cannot be blank which means us-east-1.
         self.tester.s3.create_bucket(test_bucket)
         bucket = self.tester.s3.get_bucket(test_bucket)
         if bucket != None and (bucket.get_location() == Location.DEFAULT):
@@ -315,7 +320,7 @@ class BucketTestSuite(EutesterTestCase):
             # region, we can only delete it if we set up a new connection
             # to that region and then delete it. New connections are outside
             # the scope of these bucket tests.
-            self.tester.info('Skipping AWS location-specific bucket creation test.')
+            self.tester.info('Skipping AWS test of bucket creation in a non-default region (EU).')
         else:
             test_bucket = self.bucket_prefix + ".eu-location-test"
             self.tester.debug('Starting test of bucket creation defining EU location, using bucket: ' + test_bucket)
@@ -417,9 +422,9 @@ class BucketTestSuite(EutesterTestCase):
         self.tester.info('Testing bucket versioning using bucket:' + test_bucket)
         version_bucket = self.tester.s3.create_bucket(test_bucket)
         self.buckets_used.add(test_bucket)
-        version_status = version_bucket.get_versioning_status().get("Versioning")
-        
+
         #Test the default setup after bucket creation. Should be disabled.
+        version_status = version_bucket.get_versioning_status().get("Versioning")
         if version_status != None:
             version_bucket.delete()            
             self.fail("Expected versioning disabled (empty), found: " + str(version_status))
@@ -428,6 +433,10 @@ class BucketTestSuite(EutesterTestCase):
         
         #Turn on versioning, confirm that it is 'Enabled'
         version_bucket.configure_versioning(True)        
+        #When testing against AWS, the versioning status seems to be eventually consistent.
+        #Setting it and immediately getting it sometimes returns the wrong value.
+        if self.args.endpoint:
+            time.sleep(5)
         version_status = version_bucket.get_versioning_status().get("Versioning")
         if version_status == None or version_status != "Enabled":
             version_bucket.delete()
@@ -439,6 +448,8 @@ class BucketTestSuite(EutesterTestCase):
         
         #Turn off/suspend versioning, confirm.
         version_bucket.configure_versioning(False)
+        if self.args.endpoint:
+            time.sleep(5)
         version_status = version_bucket.get_versioning_status().get("Versioning")
         if version_status == None or version_status != "Suspended":
             version_bucket.delete()
@@ -449,7 +460,10 @@ class BucketTestSuite(EutesterTestCase):
         
         self.tester.info("Versioning of bucket is set to: " + version_status)        
         
+        #Turn on versioning again, confirm.
         version_bucket.configure_versioning(True)
+        if self.args.endpoint:
+            time.sleep(5)
         version_status = version_bucket.get_versioning_status().get("Versioning")
         if version_status == None or version_status != "Enabled":
             version_bucket.delete()
