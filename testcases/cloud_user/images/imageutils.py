@@ -108,7 +108,7 @@ class ImageUtils(EutesterTestCase):
                                   keypath=self.worker_keypath)
             return new_machine
 
-    def getHttpRemoteImageSize(url, unit=None, maxredirect=5):
+    def getHttpRemoteImageSize(self, url, unit=None, maxredirect=5):
         return ImageUtils._getHttpRemoteImageSize(url, unit=unit, maxredirect=maxredirect)
 
     @staticmethod
