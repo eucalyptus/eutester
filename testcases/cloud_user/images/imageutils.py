@@ -108,35 +108,64 @@ class ImageUtils(EutesterTestCase):
                                   keypath=self.worker_keypath)
             return new_machine
 
-    def getHttpRemoteImageSize(self, url, unit=None):
-            '''
-            Get the remote file size from the http header of the url given
-            Returns size in GB unless unit is given.
-            '''
-            unit = unit or self.__class__.gig
+    def getHttpRemoteImageSize(url, unit=None, maxredirect=5):
+        return ImageUtils._getHttpRemoteImageSize(url, unit=unit, maxredirect=maxredirect)
+
+    @staticmethod
+    def _getHttpRemoteImageSize(url, unit=None, maxredirect=5, debug=None):
+        '''
+        Get the remote file size from the http header of the url given
+        Returns size in GB unless unit is given.
+        '''
+        unit = unit or 1073741824
+        if debug is None:
+            def printdebug(msg):
+                print msg
+            debug = printdebug
+
+        def get_location(url, depth, maxdepth):
+            if depth > maxdepth:
+                raise ValueError('Max redirects limit has been reached:{0}/{1}'
+                                 .format(depth, maxdepth))
+            conn = None
             try:
                 url = url.replace('http://', '')
                 host = url.split('/')[0]
                 path = url.replace(host, '')
-                self.debug("get_remote_file, host(" + host + ") path(" +
-                           path + ")")
+                debug("get_remote_file, host(" + host + ") path(" + path + ")")
                 conn = httplib.HTTPConnection(host)
                 conn.request("HEAD", path)
                 res = conn.getresponse()
-                fbytes = int(res.getheader('content-length'))
-                self.debug("content-length:" + str(fbytes))
-                if fbytes == 0:
-                    rfsize = 0
+                location = res.getheader('location')
+                if location and location != url:
+                    depth += 1
+                    debug('Redirecting: depth:{0}, url:{1}'.format(depth, location))
+                    return get_location(location, depth=depth,maxdepth=maxdepth)
                 else:
-                    rfsize = (((fbytes/unit) + 1) or 1)
-                self.debug("Remote file size: " + str(rfsize) + "g")
-            except Exception, e:
-                self.debug("Failed to get remote file size...")
-                raise e
+                    content_length = res.getheader('content-length')
+                    if content_length is None:
+                        raise ValueError('No content-length header found for url:{0}'
+                                         .format(url))
+                    fbytes = int(content_length)
+                    return fbytes
+            except Exception as HE:
+                debug('Failed to fetch content-length header from url:{0}'.format(url))
+                raise HE
             finally:
                 if conn:
                     conn.close()
-            return rfsize
+        try:
+            fbytes = get_location(url, depth=0, maxdepth=maxredirect)
+            debug("content-length:" + str(fbytes))
+            if fbytes == 0:
+                rfsize = 0
+            else:
+                rfsize = (((fbytes/unit) + 1) or 1)
+            debug("Remote file size: " + str(rfsize) + "g")
+        except Exception, e:
+            debug("Failed to get remote file size...")
+            raise e
+        return rfsize
 
     def wget_image(self,
                    url,
