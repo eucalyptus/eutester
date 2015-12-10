@@ -3,6 +3,8 @@
 <!--<project name="Eutester4J" basedir="." default="clean-build">-->
 <project name="Eutester4J" basedir="." default="clean-build" xmlns:ivy="antlib:org.apache.ivy.ant">
 
+	<!-- These properties' default values can be overridden on the ant command line, e.g: -->
+	<!-- ant clean-build -Deucarc=/my/path/to/eucarc -Dtests=CI-run.xml -->
     <property name="src.dir" value="com/eucalyptus/tests/awssdk"/>
     <property name="build.dir" value="build"/>
     <property name="classes.dir" value="${build.dir}/classes"/>
@@ -58,8 +60,12 @@
         <gunzip src="zerofile.gz" dest="${classes.dir}" />
     </target>
 
-    <!-- compile all and run tests per AllTestsSuite.xml -->
-    <target name="runTestNG" depends="compile">
+    <!-- Run the tests defined by ${tests}, WITHOUT doing any of the dependent tasks -->
+    <!-- Only do this if you're sure all dependencies are there and nothing needs to be recompiled! -->
+	<!-- TODO: Have the other tasks check to see if they need to run, or what (if anything) -->
+	<!-- needs to be recompiled, to speed up the process. Then we could do away with this target -->
+	<!-- and roll it back into runTestNG. -->
+    <target name="test-only">
         <taskdef name="testng" classname="org.testng.TestNGAntTask">
             <classpath>
                 <fileset dir="${deps.dir}">
@@ -75,6 +81,9 @@
             <jvmarg value="-Dcom.amazonaws.regions.RegionUtils.fileOverride=${endpoints}"/>
         </testng>
     </target>
+
+    <!-- compile all and run the tests defined by ${tests} -->
+    <target name="runTestNG" depends="compile, test-only"/>
 
     <!-- clean, build and run tests -->
     <target name="clean-build" depends="clean, runTestNG"/>
