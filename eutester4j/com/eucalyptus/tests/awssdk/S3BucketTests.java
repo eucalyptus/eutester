@@ -178,17 +178,6 @@ public class S3BucketTests {
 
     error = false;
     try {
-      print(account + ": Fetching bucket cors for " + bucketName);
-      s3.getBucketCrossOriginConfiguration(bucketName);
-    } catch (AmazonServiceException ase) {
-      verifyException(ase);
-      error = true;
-    } finally {
-      assertTrue("Expected to receive a 501 NotImplemented error but did not", error);
-    }
-
-    error = false;
-    try {
       print(account + ": Fetching bucket policy for " + bucketName);
       s3.getBucketPolicy(bucketName);
     } catch (AmazonServiceException ase) {

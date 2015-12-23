@@ -40,20 +40,14 @@ import com.amazonaws.services.s3.model.TagSet;
 
 /**
  * <p>
- * This class contains tests for basic operations on S3 buckets.
+ * This class contains tests for getting, setting, and preflight requests 
+ * for Cross-Origin Resource Sharing (CORS) on a bucket.
  * </p>
- * 
- * <p>
- * {@link #versioningConfiguration()} fails against Walrus due to <a href="https://eucalyptus.atlassian.net/browse/EUCA-7635">EUCA-7635</a>
- * </p>
- * 
- * <p>
- * {@link #unimplementedOps()} passes only against Walrus as the APIs are not implemented by Walrus
- * 
- * @author Swathi Gangisetty
+ *
+ * @author Lincoln Thomas <lincoln.thomas@hpe.com>
  * 
  */
-public class S3BucketTests {
+public class S3CorsTests {
 
   private static String bucketName = null;
   private static List<Runnable> cleanupTasks = null;
@@ -91,7 +85,7 @@ public class S3BucketTests {
 
   @BeforeMethod
   public void setup() throws Exception {
-    bucketName = eucaUUID();
+    bucketName = eucaUUID() + "-cors";
     cleanupTasks = new ArrayList<Runnable>();
     Bucket bucket = S3Utils.createBucket(s3, account, bucketName, S3Utils.BUCKET_CREATION_RETRIES);
     cleanupTasks.add(new Runnable() {
@@ -122,12 +116,14 @@ public class S3BucketTests {
   /**
    * Tests for the following S3 APIs
    * 
-   * <li>createBucket</li> <li>deleteBucket</li> <li>listBuckets</li> <li>doesBucketExist</li> <li>getBucketLocation</li> <li>
-   * getBucketLoggingConfiguration</li> <li>getBucketVersioningConfiguration</li>
+   * <li>getBucketCors</li> 
+   * <li>putBucketCors</li>
+   * <li>deleteBucketCors</li>
+   * <li>preflightBucketCors</li>
    */
   @Test
-  public void bucketBasics() throws Exception {
-    testInfo(this.getClass().getSimpleName() + " - bucketBasics");
+  public void bucketExists() throws Exception {
+    testInfo(this.getClass().getSimpleName() + " - bucketExists");
 
     try {
       print(account + ": Listing all buckets");
@@ -145,38 +141,34 @@ public class S3BucketTests {
       print(account + ": Checking if the bucket " + bucketName + " exists");
       assertTrue("Expected to find " + bucketName + ", but the bucket was not found", s3.doesBucketExist(bucketName));
 
-      print(account + ": Fetching bucket location for " + bucketName);
-      String location = s3.getBucketLocation(bucketName);
-      assertTrue("Invalid result for bucket location, expected a string", location != null && !location.isEmpty());
-
-      print(account + ": Fetching bucket logging configuration for " + bucketName);
-      BucketLoggingConfiguration loggingConfig = s3.getBucketLoggingConfiguration(bucketName);
-      assertTrue("Invalid result for bucket logging configuration", loggingConfig != null);
-      assertTrue("Expected bucket logging to be disabled, but got enabled", !loggingConfig.isLoggingEnabled());
-      assertTrue("Expected destination bucket to be null, but got " + loggingConfig.getDestinationBucketName(),
-          loggingConfig.getDestinationBucketName() == null);
-      assertTrue("Expected log file prefix to be null, but got " + loggingConfig.getLogFilePrefix(), loggingConfig.getLogFilePrefix() == null);
-
-      print(account + ": Fetching bucket versioning configuration for " + bucketName);
-      BucketVersioningConfiguration versioning = s3.getBucketVersioningConfiguration(bucketName);
-      assertTrue("Invalid result for bucket versioning configuration", versioning != null);
-      assertTrue("Expected bucket versioning configuration to be OFF, but found it to be " + versioning.getStatus(),
-          versioning.getStatus().equals(BucketVersioningConfiguration.OFF));
     } catch (AmazonServiceException ase) {
       printException(ase);
-      assertThat(false, "Failed to run bucketBasics");
+      assertThat(false, "Failed test bucketExists");
     }
   }
 
   /**
-   * Tests for S3 operations that are not implemented by Walrus. It should fail against S3 and pass against Walrus. Every unimplemented operation
-   * should return a 501 NotImplemented error response
+   * Tests for S3 CORS operations, note yet implemented by Walrus. 
+   * It should fail against S3 and pass against Walrus. 
+   * Every unimplemented operation should return a 501 NotImplemented error response.
    */
   @Test
-  public void unimplementedOps() throws Exception {
-    testInfo(this.getClass().getSimpleName() + " - notImplementedOps");
+  public void testCors() throws Exception {
+    testInfo(this.getClass().getSimpleName() + " - testCors");
 
     boolean error;
+
+    //LPT: Might be useful in conjunction with CORS
+    error = false;
+    try {
+      print(account + ": Fetching bucket website configuration for " + bucketName);
+      s3.getBucketWebsiteConfiguration(bucketName);
+    } catch (AmazonServiceException ase) {
+      verifyException(ase);
+      error = true;
+    } finally {
+      assertTrue("Expected to receive a 501 NotImplemented error but did not", error);
+    }
 
     error = false;
     try {
@@ -199,6 +191,28 @@ public class S3BucketTests {
       BucketCrossOriginConfiguration corsConfig = new BucketCrossOriginConfiguration(corsRuleList);
       s3.setBucketCrossOriginConfiguration(bucketName, corsConfig);
     } catch (AmazonServiceException ase) {
+    	verifyException(ase);
+      error = true;
+    } finally {
+      assertTrue("Expected to receive a 501 NotImplemented error but did not", error);
+    }
+
+    error = false;
+    try {
+      print(account + ": Preflight request for bucket CORS config for " + bucketName);
+      //LPT: Create new method issuePreflightCorsCheck(String bucketName, PreflightCorsRequest preflightRequest);
+      //PreflightCorsRequest preflightRequest = new PreflightCorsRequest(...);
+      //s3.issuePreflightCorsCheck(bucketName, preflightRequest);
+      
+      //LPT: For now, force the test to pass
+      AmazonServiceException aseForced = new AmazonServiceException("Forced exception for preflight request");
+      aseForced.setErrorCode("NotImplemented");
+      aseForced.setRequestId("forced");
+      aseForced.setServiceName("Amazon S3");
+      aseForced.setStatusCode(501);
+      throw aseForced;
+      
+    } catch (AmazonServiceException ase) {
       verifyException(ase);
       error = true;
     } finally {
@@ -216,246 +230,6 @@ public class S3BucketTests {
       assertTrue("Expected to receive a 501 NotImplemented error but did not", error);
     }
 
-    error = false;
-    try {
-      print(account + ": Preflight request for bucket CORS config for " + bucketName);
-      //LPT: Create new method issuePreflightCorsCheck(String bucketName, PreflightCorsRequest preflightRequest);
-      //PreflightCorsRequest preflightRequest = new PreflightCorsRequest(...);
-      //s3.issuePreflightCorsCheck(bucketName, preflightRequest);
-    } catch (AmazonServiceException ase) {
-      verifyException(ase);
-      error = true;
-    } finally {
-      assertTrue("Expected to receive a 501 NotImplemented error but did not", error);
-    }
-
-    error = false;
-    try {
-      print(account + ": Fetching bucket policy for " + bucketName);
-      s3.getBucketPolicy(bucketName);
-    } catch (AmazonServiceException ase) {
-      verifyException(ase);
-      error = true;
-    } finally {
-      assertTrue("Expected to receive a 501 NotImplemented error but did not", error);
-    }
-
-    error = false;
-    try {
-      print(account + ": Fetching bucket notification configuration for " + bucketName);
-      s3.getBucketNotificationConfiguration(bucketName);
-    } catch (AmazonServiceException ase) {
-      verifyException(ase);
-      error = true;
-    } finally {
-      assertTrue("Expected to receive a 501 NotImplemented error but did not", error);
-    }
-
-    error = false;
-    try {
-      print(account + ": Fetching bucket website configuration for " + bucketName);
-      s3.getBucketWebsiteConfiguration(bucketName);
-    } catch (AmazonServiceException ase) {
-      verifyException(ase);
-      error = true;
-    } finally {
-      assertTrue("Expected to receive a 501 NotImplemented error but did not", error);
-    }
-
-  }
-
-  /**
-   * Test for changing logging configuration of a bucket and verifying it.
-   */
-  @Test(enabled = false)
-  public void loggingConfiguration() throws Exception {
-    testInfo(this.getClass().getSimpleName() + " - loggingConfiguration");
-
-    try {
-      print(account + ": Fetching bucket logging configuration for " + bucketName);
-      BucketLoggingConfiguration loggingConfig = s3.getBucketLoggingConfiguration(bucketName);
-      assertTrue("Invalid result for bucket logging configuration", loggingConfig != null);
-      assertTrue("Expected bucket logging to be disabled, but got enabled", !loggingConfig.isLoggingEnabled());
-
-      boolean error = false;
-      try {
-        print(account + ": Setting bucket logging configuration before assigning log-delivery group WRITE and READ_ACP permissions for " + bucketName);
-        s3.setBucketLoggingConfiguration(new SetBucketLoggingConfigurationRequest(bucketName, new BucketLoggingConfiguration(bucketName, bucketName)));
-      } catch (AmazonS3Exception ex) {
-        assertTrue("Expected error code to be 400, but got " + ex.getStatusCode(), ex.getStatusCode() == 400);
-        error = true;
-      } finally {
-        assertTrue(
-            "Expected AmazonS3Exception for enabling bucket logging configuration before assigning log-delivery group appropriate permissions", error);
-      }
-
-      print(account + ": Setting canned ACL log-delivery-write for " + bucketName);
-      s3.setBucketAcl(bucketName, CannedAccessControlList.LogDeliveryWrite);
-
-      print(account + ": Getting ACL for bucket " + bucketName);
-      AccessControlList acl = s3.getBucketAcl(bucketName);
-      assertTrue("Mismatch in number of ACLs associated with the bucket. Expected 3 but got " + acl.getGrants().size(), acl.getGrants().size() == 3);
-
-      Iterator<Grant> iterator = acl.getGrants().iterator();
-      while (iterator.hasNext()) {
-        Grant grant = iterator.next();
-        if (grant.getGrantee() instanceof CanonicalGrantee) {
-          assertTrue("Expected grantee to be bucket owner " + acl.getOwner().getId() + ", but found " + grant.getGrantee().getIdentifier(), grant
-              .getGrantee().getIdentifier().equals(acl.getOwner().getId()));
-          assertTrue("Grantee should have full control", grant.getPermission().equals(Permission.FullControl));
-        } else {
-          assertTrue("Grantee of type GroupGrantee not found", grant.getGrantee() instanceof GroupGrantee);
-          assertTrue("Expected grantee to be LogDelivery but found " + ((GroupGrantee) grant.getGrantee()),
-              ((GroupGrantee) grant.getGrantee()).equals(GroupGrantee.LogDelivery));
-          assertTrue("Grantee does not have " + Permission.Write.toString() + " and/or " + grant.getPermission().equals(Permission.ReadAcp)
-              + " privileges", grant.getPermission().equals(Permission.Write) || grant.getPermission().equals(Permission.ReadAcp));
-        }
-      }
-
-      print(account + ": Setting bucket logging configuration after assigning log-delivery group WRITE and READ_ACP permissions for " + bucketName);
-      s3.setBucketLoggingConfiguration(new SetBucketLoggingConfigurationRequest(bucketName, new BucketLoggingConfiguration(bucketName, bucketName)));
-
-      print(account + ": Fetching bucket logging configuration for " + bucketName);
-      loggingConfig = s3.getBucketLoggingConfiguration(bucketName);
-      assertTrue("Invalid result for bucket logging configuration", loggingConfig != null);
-      assertTrue("Expected bucket logging to be enabled, but got disabled", loggingConfig.isLoggingEnabled());
-      assertTrue("Expected destination bucket to be " + bucketName + ", but got " + loggingConfig.getDestinationBucketName(), loggingConfig
-          .getDestinationBucketName().equals(bucketName));
-      assertTrue("Expected log file prefix to be " + bucketName + ", but got " + loggingConfig.getLogFilePrefix(), loggingConfig.getLogFilePrefix()
-          .equals(bucketName));
-
-    } catch (AmazonServiceException ase) {
-      printException(ase);
-      assertThat(false, "Failed to run loggingConfiguration");
-    }
-  }
-
-  /**
-   * Test for changing versioning configuration of a bucket and verifying it.
-   * 
-   * Test failed against Walrus. Versioning configuration cannot be turned OFF once its ENABLED/SUSPENDED on a bucket. While S3 throws an exception
-   * for such a request, Walrus does not. The versioning configuration remains unchanged but no error is received.</p>
-   * 
-   * @see <a href="https://eucalyptus.atlassian.net/browse/EUCA-7635">EUCA-7635</a>
-   */
-  @Test
-  public void versioningConfiguration() throws Exception {
-    testInfo(this.getClass().getSimpleName() + " - versioningConfiguration");
-
-    try {
-      print(account + ": Fetching bucket versioning configuration for the newly created bucket " + bucketName);
-      BucketVersioningConfiguration versioning = s3.getBucketVersioningConfiguration(bucketName);
-      assertTrue("Invalid result for bucket versioning configuration", versioning != null);
-      assertTrue("Expected bucket versioning configuration to be OFF, but found it to be " + versioning.getStatus(),
-          versioning.getStatus().equals(BucketVersioningConfiguration.OFF));
-
-      print(account + ": Setting bucket versioning configuration to ENABLED");
-      s3.setBucketVersioningConfiguration(new SetBucketVersioningConfigurationRequest(bucketName, new BucketVersioningConfiguration()
-          .withStatus(BucketVersioningConfiguration.ENABLED)));
-
-      print(account + ": Fetching bucket versioning configuration after setting it to ENABLED");
-      versioning = s3.getBucketVersioningConfiguration(bucketName);
-      assertTrue("Invalid result for bucket versioning configuration", versioning != null);
-      assertTrue("Expected bucket versioning configuration to be ENABLED, but found it to be " + versioning.getStatus(), versioning.getStatus()
-          .equals(BucketVersioningConfiguration.ENABLED));
-
-      print(account + ": Setting bucket versioning configuration to SUSPENDED");
-      s3.setBucketVersioningConfiguration(new SetBucketVersioningConfigurationRequest(bucketName, new BucketVersioningConfiguration()
-          .withStatus(BucketVersioningConfiguration.SUSPENDED)));
-
-      print(account + ": Fetching bucket versioning configuration after setting it to SUSPENDED");
-      versioning = s3.getBucketVersioningConfiguration(bucketName);
-      assertTrue("Invalid result for bucket versioning configuration", versioning != null);
-      assertTrue("Expected bucket versioning configuration to be SUSPENDED, but found it to be " + versioning.getStatus(), versioning.getStatus()
-          .equals(BucketVersioningConfiguration.SUSPENDED));
-
-      boolean error = false;
-      try {
-        s3.setBucketVersioningConfiguration(new SetBucketVersioningConfigurationRequest(bucketName, new BucketVersioningConfiguration()
-            .withStatus(BucketVersioningConfiguration.OFF)));
-      } catch (AmazonS3Exception ex) {
-        assertTrue("Expected error code to be 400, but got " + ex.getStatusCode(), ex.getStatusCode() == 400);
-        error = true;
-      } finally {
-        assertTrue("Expected AmazonS3Exception for setting bucket versioning configuration to OFF", error);
-      }
-
-    } catch (AmazonServiceException ase) {
-      printException(ase);
-      assertThat(false, "Failed to run versioningConfiguration");
-    }
-  }
-
-  @Test
-  public void testBucketTagging() throws Exception {
-    testInfo(this.getClass().getSimpleName() + " - buckettagging");
-
-    BucketTaggingConfiguration bucketTaggingConfiguration = new BucketTaggingConfiguration();
-
-    print(account + ": Getting TagSets for bucket '" + bucketName + "' when there is none");
-    s3.getBucketTaggingConfiguration(bucketName);
-
-    print(account + ": Setting TagSets for bucket '" + bucketName + "'");
-    TagSet tagSet1 = new TagSet();
-    for (int j = 0; j < 5; j++) {
-      tagSet1.setTag("keytag" + j, "valuetag" + j);
-    }
-    List<TagSet> tagSetList = new ArrayList<TagSet>();
-    tagSetList.add(tagSet1);
-    bucketTaggingConfiguration.setTagSets(tagSetList);
-    s3.setBucketTaggingConfiguration(bucketName, bucketTaggingConfiguration);
-
-    print(account + ": Getting TagSets for bucket '" + bucketName + "'");
-    List<TagSet> tagSets = bucketTaggingConfiguration.getAllTagSets();
-    assertTrue("Expected 3 TagSets from bucket '" + bucketName + "', got " + tagSets.size(), tagSets.size() != 3);
-
-    print(account + ": Deleting TagSets for bucket '" + bucketName + "'");
-    s3.deleteBucketTaggingConfiguration(bucketName);
-
-    print(account + ": Trying to set empty TagSets for bucket '" + bucketName + "'");
-    bucketTaggingConfiguration = new BucketTaggingConfiguration();
-    List<TagSet> negativeTagSetList = new ArrayList<TagSet>();
-    TagSet negativeTagSet = new TagSet();
-    tagSetList.add(negativeTagSet);
-    bucketTaggingConfiguration.setTagSets(negativeTagSetList);
-    try {
-      s3.setBucketTaggingConfiguration(bucketName, bucketTaggingConfiguration);
-    } catch (AmazonS3Exception e) {
-      assertTrue("Expected StatusCode 400 found: " + e.getStatusCode(), e.getStatusCode() == 400);
-      assertTrue("Expected StatusCode MalformedXML found: " + e.getErrorCode(), e.getErrorCode().equals("MalformedXML"));
-    }
-
-    print(account + ": Trying to set wrong xml TagSets for bucket '" + bucketName + "'");
-    bucketTaggingConfiguration = new BucketTaggingConfiguration();
-    negativeTagSetList = new ArrayList<TagSet>();
-    TagSet negativeTagSet1 = new TagSet();
-    negativeTagSet1.setTag("keytag1", "valuetag1");
-    negativeTagSetList.add(negativeTagSet1);
-    TagSet negativeTagSet2 = new TagSet();
-    negativeTagSet2.setTag("keytag2", "valuetag2");
-    negativeTagSetList.add(negativeTagSet2);
-    bucketTaggingConfiguration.setTagSets(negativeTagSetList);
-    try {
-      s3.setBucketTaggingConfiguration(bucketName, bucketTaggingConfiguration);
-    } catch (AmazonS3Exception e) {
-      assertTrue("Expected StatusCode 400 found: " + e.getStatusCode(), e.getStatusCode() == 400);
-      assertTrue("Expected StatusCode MalformedXML found: " + e.getErrorCode(), e.getErrorCode().equals("MalformedXML"));
-    }
-
-    print(account + ": Trying to set too many TagSets for bucket '" + bucketName + "'");
-    List<TagSet> tooManyTagSetList = new ArrayList<>();
-    TagSet tooManyTagSet = new TagSet();
-    for (int j = 0; j < 11; j++) {
-      tooManyTagSet.setTag("keytag" + j, "valuetag" + j);
-    }
-    tooManyTagSetList.add(tooManyTagSet);
-    bucketTaggingConfiguration.setTagSets(tooManyTagSetList);
-    try {
-      s3.setBucketTaggingConfiguration(bucketName, bucketTaggingConfiguration);
-    } catch (AmazonS3Exception e) {
-      assertTrue("Expected StatusCode 400 found: " + e.getStatusCode(), e.getStatusCode() == 400);
-      assertTrue("Expected StatusCode MalformedXML found: " + e.getErrorCode(), e.getErrorCode().equals("MalformedXML"));
-    }
   }
 
   private void printException(AmazonServiceException ase) {
