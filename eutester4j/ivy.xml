@@ -6,7 +6,17 @@
         <!-- core dependencies -->
         <dependency org="log4j" name="log4j" rev="1.2.17"/>
         <dependency org="org.testng" name="testng" rev="6.8.5"/>
-        <dependency org="com.amazonaws" name="aws-java-sdk" rev="1.8.9"/>
+        <dependency org="com.amazonaws" name="aws-java-sdk-autoscaling" rev="1.10.+"/>
+        <dependency org="com.amazonaws" name="aws-java-sdk-cloudformation" rev="1.10.+"/>
+        <dependency org="com.amazonaws" name="aws-java-sdk-cloudwatch" rev="1.10.+"/>
+        <dependency org="com.amazonaws" name="aws-java-sdk-core" rev="1.10.+"/>
+        <dependency org="com.amazonaws" name="aws-java-sdk-ec2" rev="1.10.+"/>
+        <dependency org="com.amazonaws" name="aws-java-sdk-elasticloadbalancing" rev="1.10.+"/>
+        <dependency org="com.amazonaws" name="aws-java-sdk-iam" rev="1.10.+"/>
+        <dependency org="com.amazonaws" name="aws-java-sdk-simpleworkflow" rev="1.10.+"/>
+        <dependency org="com.amazonaws" name="aws-java-sdk-sts" rev="1.10.+"/>
+        <dependency org="com.amazonaws" name="aws-java-sdk-s3" rev="1.10.+"/>
+        <dependency org="com.github.sjones4" name="you-are-sdk" rev="1.0.+"/>
         <dependency org="commons-lang" name="commons-lang" rev="2.6"/>
         <dependency org="org.codehaus.groovy" name="groovy-all" rev="1.8.9"/>
 

@@ -202,7 +202,7 @@ public class TestCannedRoles {
                 @Override
                 public void run() {
                     print("Removing user key for account " + account);
-                    youAre.deleteAccessKey(new DeleteAccessKeyRequest(accessKey));
+                    youAre.deleteAccessKey(new DeleteAccessKeyRequest("admin", accessKey));
                 }
             });
 

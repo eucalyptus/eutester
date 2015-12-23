@@ -133,9 +133,8 @@ public class EUCA8948 {
 			print("Expires = " + roleCreds.getExpiration());
 
 			print(account + ": Initializing s3 client with the temporary credentials");
-			final AmazonS3 s3 = new AmazonS3Client(new BasicSessionCredentials(roleCreds.getAccessKeyId(), roleCreds.getSecretAccessKey(),
-					roleCreds.getSessionToken()));
-			s3.setEndpoint(Eutester4j.S3_ENDPOINT);
+			final AmazonS3 s3 = Eutester4j.getS3Client(new BasicSessionCredentials( roleCreds.getAccessKeyId( ), roleCreds.getSecretAccessKey( ),
+					roleCreds.getSessionToken( ) ), Eutester4j.S3_ENDPOINT );
 			print("The owner of the account executing this call is " + s3.getS3AccountOwner());
 
 			print("Sleeping for " + (DURATION + 60) + " seconds to allow the credentials to expire");
