@@ -61,6 +61,8 @@ class MigrationTest(EutesterTestCase):
             if len(self.nodes) < 2:
                 self.tester.debug("Not enough NCs in partition '" + cluster.partition + "' to test instance migration.")
                 exit(0)
+        # TODO
+        if len(self.clusters) > 1:
             self.tester.debug("TBD: handle multiple clusters during instance migration tests")
             exit(0)
 
