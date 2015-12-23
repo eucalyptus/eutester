@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # Software License Agreement (BSD License)
 #
-# Copyright (c) 2009-2011, Eucalyptus Systems, Inc.
+# Copyright (c) 2009-2015, Eucalyptus Systems, Inc.
 # All rights reserved.
 #
 # Redistribution and use of this software in source and binary forms, with or
@@ -30,7 +30,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 # Author: Vic Iglesias vic.iglesias@eucalyptus.com
-# Author: Shaon shaon@eucalyptus.com
+# Author: Shaon imran.hossain@hpe.com
 
 
 import os
@@ -53,10 +53,15 @@ class MigrationTest(EutesterTestCase):
         self.parser.add_argument('--imgurl',
                         help="BFEBS Image to splat down", default=None)
         self.get_args()
-        self.tester = Eucaops( config_file=self.args.config, password=self.args.password)
-        self.numberOfNodes = self.tester.service_manager.get_all_node_controllers()
-        if len(self.numberOfNodes) < 2:
-            self.tester.debug("Not enough NCs to test instance migration.")
+        self.tester = Eucaops(config_file=self.args.config, password=self.args.password)
+
+        self.clusters = self.tester.service_manager.get_all_cluster_controllers()
+        for cluster in self.clusters:
+            self.nodes = self.tester.service_manager.get_all_node_controllers(part_name=cluster.partition)
+            if len(self.nodes) < 2:
+                self.tester.debug("Not enough NCs in partition '" + cluster.partition + "' to test instance migration.")
+                exit(0)
+            self.tester.debug("TBD: handle multiple clusters during instance migration tests")
             exit(0)
 
         self.group = self.tester.add_group(group_name="group-" + str(time.time()))
