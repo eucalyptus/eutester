@@ -4,12 +4,10 @@
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
 	<classpathentry kind="lib" path="dependencies/aopalliance-1.0.jar"/>
 	<classpathentry kind="lib" path="dependencies/asm-3.1.jar"/>
-	<classpathentry kind="lib" path="dependencies/aws-java-sdk-1.8.9.jar"/>
 	<classpathentry kind="lib" path="dependencies/bsh-2.0b4.jar"/>
 	<classpathentry kind="lib" path="dependencies/cglib-2.2.1-v20090111.jar"/>
 	<classpathentry kind="lib" path="dependencies/commons-codec-1.6.jar"/>
 	<classpathentry kind="lib" path="dependencies/commons-lang-2.6.jar"/>
-	<classpathentry kind="lib" path="dependencies/commons-logging-1.1.1.jar"/>
 	<classpathentry kind="lib" path="dependencies/ec2-1.6.0-rc.1.jar"/>
 	<classpathentry kind="lib" path="dependencies/groovy-all-1.8.9.jar"/>
 	<classpathentry kind="lib" path="dependencies/gson-2.2.2.jar"/>
@@ -17,18 +15,12 @@
 	<classpathentry kind="lib" path="dependencies/guice-3.0.jar"/>
 	<classpathentry kind="lib" path="dependencies/guice-assistedinject-3.0.jar"/>
 	<classpathentry kind="lib" path="dependencies/hamcrest-core-1.1.jar"/>
-	<classpathentry kind="lib" path="dependencies/httpclient-4.2.jar"/>
-	<classpathentry kind="lib" path="dependencies/httpcore-4.2.jar"/>
-	<classpathentry kind="lib" path="dependencies/jackson-annotations-2.1.1.jar"/>
-	<classpathentry kind="lib" path="dependencies/jackson-core-2.1.1.jar"/>
-	<classpathentry kind="lib" path="dependencies/jackson-databind-2.1.1.jar"/>
 	<classpathentry kind="lib" path="dependencies/javax.inject-1.jar"/>
 	<classpathentry kind="lib" path="dependencies/jclouds-compute-1.6.0-rc.1.jar"/>
 	<classpathentry kind="lib" path="dependencies/jclouds-core-1.6.0-rc.1.jar"/>
 	<classpathentry kind="lib" path="dependencies/jclouds-log4j-1.6.0-rc.1.jar"/>
 	<classpathentry kind="lib" path="dependencies/jclouds-scriptbuilder-1.6.0-rc.1.jar"/>
 	<classpathentry kind="lib" path="dependencies/jcommander-1.27.jar"/>
-	<classpathentry kind="lib" path="dependencies/joda-time-2.9.1.jar"/>
 	<classpathentry kind="lib" path="dependencies/jsr250-api-1.0.jar"/>
 	<classpathentry kind="lib" path="dependencies/jsr311-api-1.1.1.jar"/>
 	<classpathentry kind="lib" path="dependencies/junit-4.10.jar"/>
@@ -37,6 +29,24 @@
 	<classpathentry kind="lib" path="dependencies/snakeyaml-1.6.jar"/>
 	<classpathentry kind="lib" path="dependencies/sts-1.6.0-rc.1.jar"/>
 	<classpathentry kind="lib" path="dependencies/testng-6.8.5.jar"/>
-	<classpathentry kind="lib" path="dependencies/YouAreSDK.jar"/>
-	<classpathentry kind="output" path="build"/>
+	<classpathentry kind="lib" path="dependencies/aws-java-sdk-autoscaling-1.10.42.jar"/>
+	<classpathentry kind="lib" path="dependencies/aws-java-sdk-cloudformation-1.10.42.jar"/>
+	<classpathentry kind="lib" path="dependencies/aws-java-sdk-cloudwatch-1.10.42.jar"/>
+	<classpathentry kind="lib" path="dependencies/aws-java-sdk-core-1.10.42.jar"/>
+	<classpathentry kind="lib" path="dependencies/aws-java-sdk-ec2-1.10.42.jar"/>
+	<classpathentry kind="lib" path="dependencies/aws-java-sdk-elasticloadbalancing-1.10.42.jar"/>
+	<classpathentry kind="lib" path="dependencies/aws-java-sdk-iam-1.10.42.jar"/>
+	<classpathentry kind="lib" path="dependencies/aws-java-sdk-kms-1.10.42.jar"/>
+	<classpathentry kind="lib" path="dependencies/aws-java-sdk-s3-1.10.42.jar"/>
+	<classpathentry kind="lib" path="dependencies/aws-java-sdk-simpleworkflow-1.10.42.jar"/>
+	<classpathentry kind="lib" path="dependencies/aws-java-sdk-sts-1.10.42.jar"/>
+	<classpathentry kind="lib" path="dependencies/commons-logging-1.1.3.jar"/>
+	<classpathentry kind="lib" path="dependencies/httpclient-4.3.6.jar"/>
+	<classpathentry kind="lib" path="dependencies/httpcore-4.3.3.jar"/>
+	<classpathentry kind="lib" path="dependencies/jackson-annotations-2.5.0.jar"/>
+	<classpathentry kind="lib" path="dependencies/jackson-core-2.5.3.jar"/>
+	<classpathentry kind="lib" path="dependencies/jackson-databind-2.5.3.jar"/>
+	<classpathentry kind="lib" path="dependencies/joda-time-2.8.1.jar"/>
+	<classpathentry kind="lib" path="dependencies/you-are-sdk-1.0.7.jar"/>
+	<classpathentry kind="output" path="build/classes"/>
 </classpath>
