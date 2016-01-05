@@ -1,10 +1,17 @@
 package com.eucalyptus.tests.awssdk;
 
-import static com.eucalyptus.tests.awssdk.Eutester4j.assertThat;
-import static com.eucalyptus.tests.awssdk.Eutester4j.eucaUUID;
-import static com.eucalyptus.tests.awssdk.Eutester4j.initS3ClientWithNewAccount;
 import static com.eucalyptus.tests.awssdk.Eutester4j.print;
 import static com.eucalyptus.tests.awssdk.Eutester4j.testInfo;
+import static com.eucalyptus.tests.awssdk.Eutester4j.assertThat;
+import static com.eucalyptus.tests.awssdk.Eutester4j.eucaUUID;
+
+//LPT The below import is only needed for running against Eucalyptus
+import static com.eucalyptus.tests.awssdk.Eutester4j.initS3ClientWithNewAccount;
+
+//LPT The below two imports are only needed for running against AWS
+import static com.eucalyptus.tests.awssdk.Eutester4j.initS3Client;
+import static com.eucalyptus.tests.awssdk.Eutester4j.s3;
+
 import static org.testng.AssertJUnit.assertTrue;
 
 import java.util.ArrayList;
@@ -28,6 +35,7 @@ import com.amazonaws.services.s3.model.BucketLoggingConfiguration;
 import com.amazonaws.services.s3.model.BucketTaggingConfiguration;
 import com.amazonaws.services.s3.model.BucketVersioningConfiguration;
 import com.amazonaws.services.s3.model.CORSRule;
+import com.amazonaws.services.s3.model.CORSRule.AllowedMethods;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.CanonicalGrantee;
 import com.amazonaws.services.s3.model.Grant;
@@ -40,9 +48,19 @@ import com.amazonaws.services.s3.model.TagSet;
 
 /**
  * <p>
- * This class contains tests for getting, setting, and preflight requests 
- * for Cross-Origin Resource Sharing (CORS) on a bucket.
+ * This class contains tests for getting, setting, verifying, and deleting
+ * rules for Cross-Origin Resource Sharing (CORS) on a bucket.
+ * <p>
+ * It also tests pre-flight requests that normally come from a Web browser
+ * to determine what resources the browser can request from other origins.
+ * <p>
+ * Since CORS is not yet implemented by Eucalyptus, and the tests expect 
+ * a 501 NotImplemented error response, these tests will pass for Eucalyptus
+ * and fail for AWS. 
  * </p>
+ * The next incarnation of these tests will switch to expecting valid
+ * responses, and will thus pass for AWS, and fail for Eucalyptus until the
+ * CORS features is added.
  *
  * @author Lincoln Thomas <lincoln.thomas@hpe.com>
  * 
@@ -51,6 +69,7 @@ public class S3CorsTests {
 
   private static String bucketName = null;
   private static List<Runnable> cleanupTasks = null;
+  //LPT don't declare this local var if running against AWS
   private static AmazonS3 s3 = null;
   private static String account = null;
   private static Owner owner = null;
@@ -62,7 +81,11 @@ public class S3CorsTests {
     print("### PRE SUITE SETUP - " + this.getClass().getSimpleName());
     try {
       account = this.getClass().getSimpleName().toLowerCase();
+      //LPT Declare s3 this way for Eucalyptus only, because AWS won't 
+      //    let you create an account via API.
       s3 = initS3ClientWithNewAccount(account, "admin");
+      //LPT Declare s3 this way for AWS
+      //initS3Client();
     } catch (Exception e) {
       try {
         teardown();
@@ -73,12 +96,13 @@ public class S3CorsTests {
 
     owner = s3.getS3AccountOwner();
     ownerName = owner.getDisplayName();
-    ownerId = owner.getId();
+    ownerId = owner.getId();   
   }
 
   @AfterClass
   public void teardown() throws Exception {
     print("### POST SUITE CLEANUP - " + this.getClass().getSimpleName());
+    //LPT Don't do this with AWS, won't let you create an account via API
     Eutester4j.deleteAccount(account);
     s3 = null;
   }
@@ -107,68 +131,25 @@ public class S3CorsTests {
     for (final Runnable cleanupTask : cleanupTasks) {
       try {
         cleanupTask.run();
-      } catch (Exception e) {
+      } catch (Exception e) {    
         print("Unable to run clean up task: " + e);
       }
     }
   }
 
   /**
-   * Tests for the following S3 APIs
-   * 
-   * <li>getBucketCors</li> 
-   * <li>putBucketCors</li>
-   * <li>deleteBucketCors</li>
-   * <li>preflightBucketCors</li>
-   */
-  @Test
-  public void bucketExists() throws Exception {
-    testInfo(this.getClass().getSimpleName() + " - bucketExists");
-
-    try {
-      print(account + ": Listing all buckets");
-      List<Bucket> bucketList = s3.listBuckets();
-      assertTrue("Invalid or empty bucket list", bucketList != null && !bucketList.isEmpty());
-      boolean found = false;
-      for (Bucket buck : bucketList) {
-        if (buck.getName().equals(bucketName)) {
-          found = true;
-          break;
-        }
-      }
-      assertTrue("Expected newly created bucket to be listed in the buckets but did not", found);
-
-      print(account + ": Checking if the bucket " + bucketName + " exists");
-      assertTrue("Expected to find " + bucketName + ", but the bucket was not found", s3.doesBucketExist(bucketName));
-
-    } catch (AmazonServiceException ase) {
-      printException(ase);
-      assertThat(false, "Failed test bucketExists");
-    }
-  }
-
-  /**
-   * Tests for S3 CORS operations, note yet implemented by Walrus. 
-   * It should fail against S3 and pass against Walrus. 
-   * Every unimplemented operation should return a 501 NotImplemented error response.
+   * Test getting, setting, verifying, and deleting
+   * rules for Cross-Origin Resource Sharing (CORS) on a bucket.
+   * <p>
+   * Test pre-flight requests that normally come from a Web browser
+   * to determine what resources the browser can request from other origins.
+   * <p>
    */
   @Test
   public void testCors() throws Exception {
     testInfo(this.getClass().getSimpleName() + " - testCors");
 
     boolean error;
-
-    //LPT: Might be useful in conjunction with CORS
-    error = false;
-    try {
-      print(account + ": Fetching bucket website configuration for " + bucketName);
-      s3.getBucketWebsiteConfiguration(bucketName);
-    } catch (AmazonServiceException ase) {
-      verifyException(ase);
-      error = true;
-    } finally {
-      assertTrue("Expected to receive a 501 NotImplemented error but did not", error);
-    }
 
     error = false;
     try {
@@ -184,10 +165,38 @@ public class S3CorsTests {
     error = false;
     try {
       print(account + ": Setting bucket CORS config for " + bucketName);
-      CORSRule corsRule1 = new CORSRule();
-      //LPT: Populate one or more corsRules
-      List<CORSRule> corsRuleList = new ArrayList<CORSRule>();
-      corsRuleList.add(corsRule1);
+      /**
+       * Create a CORS configuration of several rules, based on the examples in:
+       * http://docs.aws.amazon.com/AmazonS3/latest/dev/cors.html
+       */
+      List<CORSRule> corsRuleList = new ArrayList<CORSRule>(2);
+      
+      CORSRule corsRuleGets = new CORSRule();
+	  corsRuleGets.setAllowedOrigins("*");
+	  corsRuleGets.setAllowedMethods(AllowedMethods.GET);
+	  corsRuleList.add(corsRuleGets);
+      
+      CORSRule corsRulePuts = new CORSRule();
+	  corsRulePuts.setAllowedOrigins("https", "http://*.example1.com", "http://www.example2.com");
+	  corsRulePuts.setAllowedMethods(
+			  AllowedMethods.PUT, 
+			  AllowedMethods.POST, 
+			  AllowedMethods.DELETE);
+	  corsRulePuts.setAllowedHeaders("*");
+	  corsRuleList.add(corsRulePuts);
+      
+      CORSRule corsRuleExtended = new CORSRule();
+	  corsRuleExtended.setAllowedOrigins("*");
+	  corsRuleExtended.setAllowedMethods(AllowedMethods.GET);
+	  corsRuleExtended.setAllowedHeaders("*");
+	  corsRuleExtended.setId("ManuallyAssignedId1");
+	  corsRuleExtended.setMaxAgeSeconds(3000);
+	  corsRuleExtended.setExposedHeaders(
+			  "x-amz-server-side-encryption",
+			  "x-amz-request-id",
+			  "x-amz-id-2");
+	  corsRuleList.add(corsRuleExtended);      
+      
       BucketCrossOriginConfiguration corsConfig = new BucketCrossOriginConfiguration(corsRuleList);
       s3.setBucketCrossOriginConfiguration(bucketName, corsConfig);
     } catch (AmazonServiceException ase) {
