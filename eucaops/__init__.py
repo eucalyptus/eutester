@@ -857,7 +857,6 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                 component_hostname = self.get_component_ip(hostname)
                 hostname = component_hostname
         return hostname
-
        
     def get_credentials(self, account="eucalyptus", user="admin", force=False):
         """
@@ -874,7 +873,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
         admin_cred_dir = "eucarc-" + clcs[0].hostname + "-" + account + "-" + user 
         cred_file_name = "creds.zip"
         full_cred_path = admin_cred_dir + "/" + cred_file_name
-
+        
         ### IF I dont already have credentials, download and sync them
         if force or self.credpath is None or not self.is_ec2_cert_active():
             ### SETUP directory remotely
@@ -904,23 +903,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
             self.send_creds_to_machine(admin_cred_dir, clc)
 
         return admin_cred_dir
-
-    def create_eucarc_using_nephoria(self, cred_dir, clc, credsaccount='eucalyptus', user='admin'):
-
-        output = self.credential_exist_on_remote_machine(os)
-        if output['status'] == 0:
-            self.debug("Found creds file, skipping euca_conf --get-credentials.")
-        from nephoria.testcontroller import TestController
-        tc = TestController(clc.ssh.host, password=clc.ssh.password,
-                            log_level=self.logger.logger_level)
-        if account == 'eucalyptus' and user == 'admin':
-            user = tc.admin
-        else:
-            user = tc.get_user_by_name(aws_account_name=account, aws_user_name=user)
-        user.create_local_creds(local_destdir=cred_dir)
-        self.setup_remote_creds_dir(cred_dir)
-        return cred_dir
-
+   
     def create_credentials(self, admin_cred_dir, account, user, zipfile='creds.zip'):
         zipfilepath = os.path.join(admin_cred_dir, zipfile)
 
@@ -1013,16 +996,16 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                 self.clc.sys(". {0} &>/dev/null && "
                              "/usr/bin/euare-userdelcert -c {1} --user-name {2}"
                              .format(eucarcpath,
-                                     admin_certs.pop(),
+                                     admin_certs[admin_certs.pop()],
                                      user),
                              code=0)
             else:
                 raise RuntimeWarning('No active certs were found on the clc, and there are 2'
                                      'certs outstanding. Either delete an existing '
-                                     'cert or move an active cert into clc root dir.'
+                                     'cert or move and active cert into clc root dir.'
                                      'The option "force_cert_create" will "delete" an existing'
                                      'cert automatically and replace it.'
-                                     'Warning: deleting existing certs may leave signed '
+                                     'Warning: deleting existing certs may leave signed'
                                      'objects in cloud unrecoverable.')
         self.debug("Creating a new signing certificate for user '{0}' in account '{1}'."
                    .format(user, account))
