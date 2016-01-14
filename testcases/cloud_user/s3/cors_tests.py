@@ -19,6 +19,7 @@ import re
 from eutester.eutestcase import EutesterTestCase
 from eucaops import S3ops
 from boto.exception import S3ResponseError
+from boto.exception import BotoServerError
 from boto.exception import S3CreateError
 import boto
 import boto.s3
@@ -27,6 +28,7 @@ from boto.s3.key import Key
 from boto.s3.acl import ACL, Policy, Grant
 from boto.s3.connection import Location
 from boto.s3.lifecycle import Lifecycle, Rule, Expiration
+from boto.s3.cors import CORSConfiguration, CORSRule
 
 
 class CorsTestSuite(EutesterTestCase):
@@ -59,24 +61,78 @@ class CorsTestSuite(EutesterTestCase):
                 self.tester.s3.delete_bucket(test_bucket)
                 self.fail(test_bucket + " was not created correctly")
         except (S3ResponseError, S3CreateError) as e:
-            self.fail(test_bucket + " create caused exception: " + e.__str__())
+            self.fail(test_bucket + " create caused exception: " + str(e))
         
         # Get the CORS config (none yet). 
         # Should get 404 Not Found, with "NoSuchCORSConfiguration" in the body.
         try :    
+            self.tester.debug("Getting (empty) CORS config")
             bucket.get_cors()
             self.tester.s3.delete_bucket(test_bucket)
             self.fail("Did not get an S3ResponseError getting CORS config when none exists yet.")
         except S3ResponseError as e:
-            self.tester.s3.delete_bucket(test_bucket)
             if (e.status == 404 and e.reason == "Not Found" and e.code == "NoSuchCORSConfiguration"):
                 self.tester.debug("Caught S3ResponseError with expected contents, " + 
                                   "getting CORS config when none exists yet.")
             else:
+                self.tester.s3.delete_bucket(test_bucket)
                 self.fail("Caught S3ResponseError getting CORS config when none exists yet," +
-                          "but exception contents were unexpected: " + e.__str__())
+                          "but exception contents were unexpected: " + str(e))
+
+        # Set a simple CORS config.
+        try :    
+            self.tester.debug("Setting a CORS config")
+            bucket_cors_set = CORSConfiguration()
+            bucket_rule_id = "ManuallyAssignedId1"
+            bucket_allowed_methods = ['GET', 'PUT']
+            bucket_allowed_origins = ['*']
+            bucket_allowed_headers = ['*']
+            bucket_max_age_seconds = 3000
+            #bucket_expose_headers = []
+            bucket_cors_set.add_rule(bucket_allowed_methods, 
+                                     bucket_allowed_origins, 
+                                     bucket_rule_id,
+                                     bucket_allowed_headers, 
+                                     bucket_max_age_seconds)
+            bucket.set_cors(bucket_cors_set)
+        except S3ResponseError as e:
+            self.tester.s3.delete_bucket(test_bucket)
+            self.fail("Caught S3ResponseError setting CORS config: " + str(e))
                     
+        # Get the CORS config. Should get the config we just set.
+        try :    
+            self.tester.debug("Getting the CORS config we just set")
+            bucket_cors_retrieved = bucket.get_cors()
+            assert (bucket_cors_retrieved.to_xml() == bucket_cors_set.to_xml()), 'Bucket CORS config: Expected ' + bucket_cors_set.to_xml() + ', Retrieved ' + bucket_cors_retrieved.to_xml()
+            
+        except S3ResponseError as e:
+            self.tester.s3.delete_bucket(test_bucket)
+            self.fail("Caught S3ResponseError getting CORS config, after setting it successfully: " + str(e))
         
+        # Delete the CORS config.
+        try :    
+            self.tester.debug("Deleting the CORS config")
+            bucket.delete_cors()
+        except S3ResponseError as e:
+            self.tester.s3.delete_bucket(test_bucket)
+            self.fail("Caught S3ResponseError deleting CORS config, after setting and validating it successfully: " + str(e))
+
+        # Get the CORS config (none anymore). 
+        # Should get 404 Not Found, with "NoSuchCORSConfiguration" in the body.
+        try :    
+            self.tester.debug("Getting (empty again) CORS config")
+            bucket.get_cors()
+            self.tester.s3.delete_bucket(test_bucket)
+            self.fail("Did not get an S3ResponseError getting CORS config after being deleted.")
+        except S3ResponseError as e:
+            self.tester.s3.delete_bucket(test_bucket)
+            if (e.status == 404 and e.reason == "Not Found" and e.code == "NoSuchCORSConfiguration"):
+                self.tester.debug("Caught S3ResponseError with expected contents, " + 
+                                  "getting CORS config after being deleted.")
+            else:
+                self.fail("Caught S3ResponseError getting CORS config after being deleted," +
+                          "but exception contents were unexpected: " + str(e))
+
 
     def test_cors_preflight_requests(self):
         '''
@@ -92,18 +148,17 @@ class CorsTestSuite(EutesterTestCase):
         '''This is the teardown method'''
         #Delete the testing bucket if it is left-over
         self.tester.info('Deleting the buckets used for testing')
-        for bucket in self.buckets_used:
+        # Can't iterate over a list if we're deleting from it as we iterate, so make a copy
+        buckets_used = self.buckets_used.copy() 
+        for bucket_name in buckets_used:
             try:
-                self.tester.info('Checking bucket ' + bucket + ' for possible cleaning/delete')
-                if self.tester.s3.bucket_exists(bucket):
-                    self.tester.info('Found bucket exists, cleaning it')
-                    self.tester.clear_bucket(bucket)
-                    self.buckets_used.remove(bucket)
-                else:
-                    self.tester.info('Bucket ' + bucket + ' not found, skipping')
-            except:
-                self.tester.info('Exception checking bucket ' + str(bucket))
-
+                self.tester.info('Checking bucket ' + bucket_name + ' for possible cleaning/delete')
+                self.tester.s3.get_bucket(bucket_name)
+                self.tester.info('Found bucket exists, cleaning and deleting it')
+                self.tester.clear_bucket(bucket_name)
+                self.buckets_used.remove(bucket_name)
+            except BotoServerError as e:
+                self.tester.info('Exception checking bucket' + bucket_name + ': ' + str(e))
         return
           
 if __name__ == "__main__":
