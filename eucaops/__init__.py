@@ -916,10 +916,7 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                                    markups=[35]))
             tc = TestController(self.clc.ssh.host, password=self.clc.ssh.password,
                                 log_level=self.logger.logger_level)
-            if account == 'eucalyptus' and user == 'admin':
-                user = tc.admin
-            else:
-                user = tc.get_user_by_name(aws_account_name=account, aws_user_name=user)
+            user = tc.get_user_by_name(aws_account_name=account, aws_user_name=user)
             user.create_local_creds(local_destdir=cred_dir)
             self.setup_remote_creds_dir(cred_dir)
             for file in os.listdir(cred_dir):

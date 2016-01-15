@@ -640,7 +640,7 @@ class EuserviceManager(object):
                 process_uptime = self.tester.clc.get_eucalyptus_cloud_process_uptime()
                 #Store all CLC's process uptimes in list, compare for youngest later...
                 for x in xrange(0, 2):
-                    out = clc.sys('{0}/usr/sbin/euca-describe-services {1} | grep SERVICE | '
+                    out = clc.sys('{0}/usr/sbin/euca-describe-services {1} 2>1 | grep SERVICE | '
                                   'while read line; do echo $line; done; echo "Done"'
                                   .format(self.eucaprefix, str(type)), code=0,timeout=15)
                     if str(out[-1]).startswith("Done"):
