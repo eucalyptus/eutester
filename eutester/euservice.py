@@ -396,14 +396,23 @@ class Euservice(object):
     activeactive_service_types = ["objectstorage"]
     
     def __init__(self, service_string, tester = None):
-        values = service_string.split()
-        self.type = values[1]
-        self.partition = values[2]
-        self.name = values[3]
-        self.state = values[4]
-        self.uri = values[6]
-        self.fullname = values[7]
-        self.hostname = self.uri.split(":")[1].split("/")[2]
+        try:
+            values = service_string.split()
+            self.type = values[1]
+            self.partition = values[2]
+            self.name = values[3]
+            self.state = values[4]
+            self.uri = values[6]
+            self.fullname = values[7]
+            self.hostname = self.uri.split(":")[1].split("/")[2]
+        except:
+            errmsg = "Failed to parse service string: {0}".format(service_string)
+            try:
+                tester.logger.log.error(errmsg)
+            except:
+                print errmsg
+            raise
+        
         self.running = True
         self.tester = tester
         self.machine = None
