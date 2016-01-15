@@ -408,11 +408,11 @@ class Euservice(object):
         except:
             errmsg = "Failed to parse service string: {0}".format(service_string)
             try:
-                tester.logger.log.error(errmsg)
+                tester.debug(errmsg)
             except:
                 print errmsg
             raise
-        
+
         self.running = True
         self.tester = tester
         self.machine = None
@@ -648,6 +648,8 @@ class EuserviceManager(object):
                     # Something err'd in the cmd output, try again...
                     time.sleep(1)
                 for line in out:
+                    if re.search("warning", line, re.IGNORECASE):
+                        continue
                     if re.search("SERVICE.+"+str(partition), line):
                         describe_services.append(line)
                 if not describe_services:
