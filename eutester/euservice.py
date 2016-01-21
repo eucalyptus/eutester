@@ -678,6 +678,7 @@ class EuserviceManager(object):
             if not describe_services:
                 time.sleep(poll_interval)
             #Create euservice objects from command output and return list of euservices.
+            got_clc = False
             for service_line in describe_services:
                 if not service_line.lstrip().startswith('SERVICEACCOUNT'):
                     new_service = Euservice.create_service(service_line, self.tester)

@@ -917,7 +917,12 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
             tc = TestController(self.clc.ssh.host, password=self.clc.ssh.password,
                                 log_level=self.logger.logger_level)
             user = tc.get_user_by_name(aws_account_name=account, aws_user_name=user)
+            if not getattr(user, 'eucalyptus_cert', None):
+                setattr(user, 'eucalyptus_cert', '${EUCA_KEY_DIR}/cloud-cert.pem')
             user.create_local_creds(local_destdir=cred_dir)
+            cloud_cert_path = os.path.join(cred_dir, 'cloud-cert.pem')
+            if not os.path.exists(cloud_cert_path):
+                tc.sysadmin.write_service_cert_to_file(cloud_cert_path)
             self.setup_remote_creds_dir(cred_dir)
             for file in os.listdir(cred_dir):
                 fpath = os.path.join(cred_dir, file)
@@ -996,8 +1001,6 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                 self.clc.sys('cp {0} {1}'.format(keypath, newkeypath))
                 # Update the existing eucarc with new cert and key path info...
                 self.debug("Setting cert/pk in '" + admin_cred_dir + "/eucarc'")
-                self.sys("echo 'EUCA_KEY_DIR=$(cd $(dirname ${BASH_SOURCE:-$0}); pwd -P)' >> "
-                         + clc_eucarc, code=0)
                 self.sys("echo 'export EC2_CERT=${EUCA_KEY_DIR}/" + "{0}' >> {1}"
                          .format(os.path.basename(newcertpath), clc_eucarc), code=0)
                 self.sys("echo 'export EC2_PRIVATE_KEY=${EUCA_KEY_DIR}/" + "{0}' >> {1}"
