@@ -396,14 +396,23 @@ class Euservice(object):
     activeactive_service_types = ["objectstorage"]
     
     def __init__(self, service_string, tester = None):
-        values = service_string.split()
-        self.type = values[1]
-        self.partition = values[2]
-        self.name = values[3]
-        self.state = values[4]
-        self.uri = values[6]
-        self.fullname = values[7]
-        self.hostname = self.uri.split(":")[1].split("/")[2]
+        try:
+            values = service_string.split()
+            self.type = values[1]
+            self.partition = values[2]
+            self.name = values[3]
+            self.state = values[4]
+            self.uri = values[6]
+            self.fullname = values[7]
+            self.hostname = self.uri.split(":")[1].split("/")[2]
+        except:
+            errmsg = "Failed to parse service string: {0}".format(service_string)
+            try:
+                tester.debug(errmsg)
+            except:
+                print errmsg
+            raise
+
         self.running = True
         self.tester = tester
         self.machine = None
@@ -631,7 +640,7 @@ class EuserviceManager(object):
                 process_uptime = self.tester.clc.get_eucalyptus_cloud_process_uptime()
                 #Store all CLC's process uptimes in list, compare for youngest later...
                 for x in xrange(0, 2):
-                    out = clc.sys('{0}/usr/sbin/euca-describe-services {1} | grep SERVICE | '
+                    out = clc.sys('{0}/usr/sbin/euca-describe-services {1} 2>1 | grep SERVICE | '
                                   'while read line; do echo $line; done; echo "Done"'
                                   .format(self.eucaprefix, str(type)), code=0,timeout=15)
                     if str(out[-1]).startswith("Done"):
@@ -639,6 +648,8 @@ class EuserviceManager(object):
                     # Something err'd in the cmd output, try again...
                     time.sleep(1)
                 for line in out:
+                    if re.search("warning", line, re.IGNORECASE):
+                        continue
                     if re.search("SERVICE.+"+str(partition), line):
                         describe_services.append(line)
                 if not describe_services:
@@ -667,6 +678,7 @@ class EuserviceManager(object):
             if not describe_services:
                 time.sleep(poll_interval)
             #Create euservice objects from command output and return list of euservices.
+            got_clc = False
             for service_line in describe_services:
                 if not service_line.lstrip().startswith('SERVICEACCOUNT'):
                     new_service = Euservice.create_service(service_line, self.tester)
