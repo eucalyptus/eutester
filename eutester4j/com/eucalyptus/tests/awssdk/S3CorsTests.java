@@ -170,37 +170,37 @@ public class S3CorsTests {
        * http://docs.aws.amazon.com/AmazonS3/latest/dev/cors.html
        */
       List<CORSRule> corsRuleList = new ArrayList<CORSRule>(2);
-      
+
       CORSRule corsRuleGets = new CORSRule();
-	  corsRuleGets.setAllowedOrigins("*");
-	  corsRuleGets.setAllowedMethods(AllowedMethods.GET);
-	  corsRuleList.add(corsRuleGets);
-      
+      corsRuleGets.setAllowedOrigins("*");
+      corsRuleGets.setAllowedMethods(AllowedMethods.GET);
+      corsRuleList.add(corsRuleGets);
+
       CORSRule corsRulePuts = new CORSRule();
-	  corsRulePuts.setAllowedOrigins("https", "http://*.example1.com", "http://www.example2.com");
-	  corsRulePuts.setAllowedMethods(
-			  AllowedMethods.PUT, 
-			  AllowedMethods.POST, 
-			  AllowedMethods.DELETE);
-	  corsRulePuts.setAllowedHeaders("*");
-	  corsRuleList.add(corsRulePuts);
-      
+      corsRulePuts.setAllowedOrigins("https", "http://*.example1.com", "http://www.example2.com");
+      corsRulePuts.setAllowedMethods(
+          AllowedMethods.PUT, 
+          AllowedMethods.POST, 
+          AllowedMethods.DELETE);
+      corsRulePuts.setAllowedHeaders("*");
+      corsRuleList.add(corsRulePuts);
+
       CORSRule corsRuleExtended = new CORSRule();
-	  corsRuleExtended.setAllowedOrigins("*");
-	  corsRuleExtended.setAllowedMethods(AllowedMethods.GET);
-	  corsRuleExtended.setAllowedHeaders("*");
-	  corsRuleExtended.setId("ManuallyAssignedId1");
-	  corsRuleExtended.setMaxAgeSeconds(3000);
-	  corsRuleExtended.setExposedHeaders(
-			  "x-amz-server-side-encryption",
-			  "x-amz-request-id",
-			  "x-amz-id-2");
-	  corsRuleList.add(corsRuleExtended);      
-      
+      corsRuleExtended.setAllowedOrigins("*");
+      corsRuleExtended.setAllowedMethods(AllowedMethods.GET);
+      corsRuleExtended.setAllowedHeaders("*");
+      corsRuleExtended.setId("ManuallyAssignedId1");
+      corsRuleExtended.setMaxAgeSeconds(3000);
+      corsRuleExtended.setExposedHeaders(
+          "x-amz-server-side-encryption",
+          "x-amz-request-id",
+          "x-amz-id-2");
+      corsRuleList.add(corsRuleExtended);      
+
       BucketCrossOriginConfiguration corsConfig = new BucketCrossOriginConfiguration(corsRuleList);
       s3.setBucketCrossOriginConfiguration(bucketName, corsConfig);
     } catch (AmazonServiceException ase) {
-    	verifyException(ase);
+      verifyException(ase);
       error = true;
     } finally {
       assertTrue("Expected to receive a 501 NotImplemented error but did not", error);
@@ -223,7 +223,7 @@ public class S3CorsTests {
       aseForced.setServiceName("Amazon S3");
       aseForced.setStatusCode(501);
       throw aseForced;
-      
+
     } catch (AmazonServiceException ase) {
       verifyException(ase);
       error = true;
