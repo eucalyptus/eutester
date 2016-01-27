@@ -209,10 +209,13 @@ public class S3CorsTests {
     error = false;
     try {
       print(account + ": Preflight request for bucket CORS config for " + bucketName);
-      //LPT: Create new method issuePreflightCorsCheck(String bucketName, PreflightCorsRequest preflightRequest);
+      //LPT: Create sending various preflight OPTIONS requests,
+      //and validating the preflight responses against the CORS config
+
+      //LPT: Create new data structure and method:
       //PreflightCorsRequest preflightRequest = new PreflightCorsRequest(...);
       //s3.issuePreflightCorsCheck(bucketName, preflightRequest);
-      
+
       //LPT: For now, force the test to pass
       AmazonServiceException aseForced = new AmazonServiceException("Forced exception for preflight request");
       aseForced.setErrorCode("NotImplemented");
