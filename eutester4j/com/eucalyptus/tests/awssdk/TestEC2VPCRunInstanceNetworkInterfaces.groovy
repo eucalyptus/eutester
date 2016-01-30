@@ -576,12 +576,47 @@ class TestEC2VPCRunInstanceNetworkInterfaces {
           assertThat( e.errorCode == expectedErrorCode, "Expected error code ${expectedErrorCode} but was: ${e.errorCode}" )
         }
 
+        print( "Running instance with specified subnets ${subnetId_1} ${subnetId_2}" )
+        String instanceId_1 = runInstancesWithDefaults( new RunInstancesRequest(
+            networkInterfaces: [
+                new InstanceNetworkInterfaceSpecification(
+                    deviceIndex: 1,
+                    subnetId: subnetId_2,
+                ),
+                new InstanceNetworkInterfaceSpecification(
+                    deviceIndex: 0,
+                    subnetId: subnetId_1,
+                ),
+            ]
+        )).with {
+          reservation?.with {
+            instances?.getAt( 0 )?.instanceId
+          }
+        }
+        print( "Instance launched with identifier ${instanceId_1}" )
+
+        Set<String> instanceIds = [ instanceId_1 ] as Set<String>
+        cleanupTasks.add{
+          print("Terminating instances ${instanceIds}")
+          terminateInstances(new TerminateInstancesRequest(instanceIds: instanceIds))
+
+          instanceIds.each{ String instanceId ->
+            print("Waiting for instance ${instanceId} to terminate")
+            (1..25).find {
+              sleep 5000
+              print("Waiting for instance ${instanceId} to terminate, waited ${it * 5}s")
+              describeInstances(new DescribeInstancesRequest(
+                  instanceIds: [instanceId],
+                  filters: [new Filter(name: "instance-state-name", values: ["terminated"])]
+              )).with {
+                reservations?.getAt(0)?.instances?.getAt(0)?.instanceId == instanceId
+              }
+            }
+          }
+        }
+
         print( "Running instance with specified network interface ${primaryNetworkInterfaceId}" )
-        String instanceId = runInstances( new RunInstancesRequest(
-            minCount: 1,
-            maxCount: 1,
-            imageId: imageId,
-            keyName: keyName,
+        String instanceId_2 = runInstancesWithDefaults( new RunInstancesRequest(
             networkInterfaces: [
                 new InstanceNetworkInterfaceSpecification(
                     deviceIndex: 0,
@@ -599,34 +634,20 @@ class TestEC2VPCRunInstanceNetworkInterfaces {
             instances?.getAt( 0 )?.instanceId
           }
         }
+        print( "Instance launched with identifier ${instanceId_2}" )
+        instanceIds << instanceId_2
 
-        print( "Instance launched with identifier ${instanceId}" )
-        cleanupTasks.add{
-          print( "Terminating instance ${instanceId}" )
-          terminateInstances( new TerminateInstancesRequest( instanceIds: [ instanceId ] ) )
-
-          print( "Waiting for instance ${instanceId} to terminate" )
+        instanceIds.each { String instanceId ->
+          print( "Waiting for instance ${instanceId} to start" )
           ( 1..25 ).find{
             sleep 5000
-            print( "Waiting for instance ${instanceId} to terminate, waited ${it*5}s" )
+            print( "Waiting for instance ${instanceId} to start, waited ${it*5}s" )
             describeInstances( new DescribeInstancesRequest(
                 instanceIds: [ instanceId ],
-                filters: [ new Filter( name: "instance-state-name", values: [ "terminated" ] ) ]
+                filters: [ new Filter( name: "instance-state-name", values: [ "running" ] ) ]
             ) ).with {
               reservations?.getAt( 0 )?.instances?.getAt( 0 )?.instanceId == instanceId
             }
-          }
-        }
-
-        print( "Waiting for instance ${instanceId} to start" )
-        ( 1..25 ).find{
-          sleep 5000
-          print( "Waiting for instance ${instanceId} to start, waited ${it*5}s" )
-          describeInstances( new DescribeInstancesRequest(
-              instanceIds: [ instanceId ],
-              filters: [ new Filter( name: "instance-state-name", values: [ "running" ] ) ]
-          ) ).with {
-            reservations?.getAt( 0 )?.instances?.getAt( 0 )?.instanceId == instanceId
           }
         }
 
@@ -644,7 +665,7 @@ class TestEC2VPCRunInstanceNetworkInterfaces {
             switch ( networkInterface.networkInterfaceId ) {
               case primaryNetworkInterfaceId:
                 assertThat( networkInterface?.privateIpAddress == primaryNetworkInterfacePrivateIp, "Expected private address ${primaryNetworkInterfacePrivateIp}, but was: ${networkInterface.privateIpAddress}" )
-                assertThat( networkInterface?.attachment?.instanceId==instanceId, "Expected instance id ${instanceId}, but was: ${networkInterface.attachment.instanceId}" )
+                assertThat( networkInterface?.attachment?.instanceId==instanceId_2, "Expected instance id ${instanceId_2}, but was: ${networkInterface.attachment.instanceId}" )
                 assertThat( networkInterface?.attachment?.attachTime != null, "Expected attach time" )
                 assertThat( !networkInterface?.attachment?.deleteOnTermination, "Expected delete on terminate false" )
                 assertThat( networkInterface?.attachment?.deviceIndex == 0, "Expected device index 0, but was: ${networkInterface?.attachment?.deviceIndex}" )
@@ -652,7 +673,7 @@ class TestEC2VPCRunInstanceNetworkInterfaces {
                 break
               case secondaryNetworkInterfaceId_1:
                 assertThat( networkInterface?.privateIpAddress == secondaryNetworkInterfacePrivateIp_1, "Expected private address ${secondaryNetworkInterfacePrivateIp_1}, but was: ${networkInterface.privateIpAddress}" )
-                assertThat( networkInterface?.attachment?.instanceId==instanceId, "Expected instance id ${instanceId}, but was: ${networkInterface.attachment.instanceId}" )
+                assertThat( networkInterface?.attachment?.instanceId==instanceId_2, "Expected instance id ${instanceId_2}, but was: ${networkInterface.attachment.instanceId}" )
                 assertThat( networkInterface?.attachment?.attachTime != null, "Expected attach time" )
                 assertThat( networkInterface?.attachment?.deleteOnTermination, "Expected delete on terminate" )
                 assertThat( networkInterface?.attachment?.deviceIndex == 1, "Expected device index 1, but was: ${networkInterface?.attachment?.deviceIndex}" )
