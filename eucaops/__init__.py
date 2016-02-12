@@ -930,16 +930,28 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
             self.clc.sys('zip {0} {1}/*'.format(zipfilepath, os.path.normpath(cred_dir)))
         return zipfilepath
 
-    def create_credentials(self, admin_cred_dir, account, user, zipfile='creds.zip'):
-        try:
-            from nephoria.testcontroller import TestController
-            return self.create_legacy_clc_creds_using_nephoria(cred_dir=admin_cred_dir,
-                                                               zipfile=zipfile,
-                                                               account=account,
-                                                               user=user)
-        except ImportError as IE:
-            self.logger.log.info('Could not import nephoria, using legacy euca_conf to fetch'
-                                 'credentials: "{0}"'.format(IE))
+    def create_credentials(self, admin_cred_dir, account, user, zipfile='creds.zip',
+                           try_alt=False):
+        """
+
+        :param admin_cred_dir: The Directory on both the CLC and local machine create the
+                                credential artifacts in
+        :param account: cloud account to create creds for
+        :param user: cloud user to create creds for
+        :param zipfile: the name of the zip archive file to create within 'admin_cred_dir'
+        :param try_alt: Boolean, to try alternative methods to euca_conf soon to be deprecated
+        :return: path to zip archive file
+        """
+        if try_alt:
+            try:
+                from nephoria.testcontroller import TestController
+                return self.create_legacy_clc_creds_using_nephoria(cred_dir=admin_cred_dir,
+                                                                   zipfile=zipfile,
+                                                                   account=account,
+                                                                   user=user)
+            except ImportError as IE:
+                self.logger.log.info('Could not import nephoria, using legacy euca_conf to fetch'
+                                     'credentials: "{0}"'.format(IE))
         zipfilepath = os.path.join(admin_cred_dir, zipfile)
 
         output = self.credential_exist_on_remote_machine(zipfilepath)
