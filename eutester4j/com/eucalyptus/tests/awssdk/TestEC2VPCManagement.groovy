@@ -1,6 +1,8 @@
 package com.eucalyptus.tests.awssdk
 
 import com.amazonaws.AmazonClientException
+import com.amazonaws.AmazonServiceException
+import com.amazonaws.services.ec2.model.AttachInternetGatewayRequest
 import com.amazonaws.services.ec2.model.CreateDhcpOptionsRequest
 import com.amazonaws.services.ec2.model.CreateInternetGatewayRequest
 import com.amazonaws.services.ec2.model.CreateNetworkAclRequest
@@ -25,6 +27,7 @@ import com.amazonaws.services.ec2.model.DescribeNetworkInterfacesRequest
 import com.amazonaws.services.ec2.model.DescribeRouteTablesRequest
 import com.amazonaws.services.ec2.model.DescribeSubnetsRequest
 import com.amazonaws.services.ec2.model.DescribeVpcsRequest
+import com.amazonaws.services.ec2.model.DetachInternetGatewayRequest
 import com.amazonaws.services.ec2.model.DhcpConfiguration
 
 import org.testng.annotations.Test;
@@ -140,6 +143,22 @@ class TestEC2VPCManagement {
             assertThat( 'available' == state || 'pending' == state, "Expected available or pending state, but was: ${state}" )
             assertThat( '10.1.2.0/24' == cidrBlock, "Expected cidr 10.1.2.0/24, but was: ${cidrBlock}" )
             assertThat( !isDefault, "Expected non-default vpc" )
+          }
+        }
+        print( "Attaching internet gateway ${internetGatewayId} to VPC ${vpcId}" )
+        attachInternetGateway( new AttachInternetGatewayRequest(
+            internetGatewayId: internetGatewayId,
+            vpcId: vpcId
+        ) )
+        cleanupTasks.add{
+          print( "Detaching internet gateway ${internetGatewayId} from VPC ${vpcId}" )
+          try {
+            detachInternetGateway( new DetachInternetGatewayRequest(
+                internetGatewayId: internetGatewayId,
+                vpcId: vpcId
+            ) )
+          } catch( AmazonServiceException e ) {
+            println( e.toString( ) )
           }
         }
 
@@ -335,6 +354,12 @@ class TestEC2VPCManagement {
         } catch ( AmazonClientException e ) {
           // OK
         }
+
+        print( "Detaching internet gateway ${internetGatewayId} from VPC ${vpcId}" )
+        detachInternetGateway( new DetachInternetGatewayRequest(
+            internetGatewayId: internetGatewayId,
+            vpcId: vpcId
+        ) )
 
         print( "Deleting vpc ${vpcId}" )
         deleteVpc( new DeleteVpcRequest( vpcId: vpcId ) )

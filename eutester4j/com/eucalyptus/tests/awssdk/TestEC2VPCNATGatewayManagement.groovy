@@ -506,6 +506,38 @@ class TestEC2VPCNATGatewayManagement {
           assertThat( routeTables != null && routeTables.size()==1, "Expected one route table" )
         }
 
+        print( "Replacing route table ${routeTableId} route 1.1.1.1/32 with ENI ${networkInterfaceId}" )
+        replaceRoute( new ReplaceRouteRequest(
+            routeTableId: routeTableId,
+            destinationCidrBlock: '1.1.1.1/32',
+            networkInterfaceId: networkInterfaceId
+        ) )
+
+        print( "Describing route table ${routeTableId} to verify route replacement" )
+        describeRouteTables( new DescribeRouteTablesRequest(
+            routeTableIds: [ routeTableId ]
+        )).with {
+          assertThat( routeTables != null && routeTables.size()==1, "Expected one route table" )
+          routeTables.get( 0 ).with {
+            assertThat( routes.size( ) == 2, "Expected two routes" )
+            assertThat( routes*.networkInterfaceId.contains( networkInterfaceId ), "Expected route for network interface" )
+          }
+        }
+
+        print( "Replacing route table ${routeTableId} route 1.1.1.1/32 with NAT gateway ${natGatewayId}" )
+        replaceRoute( new ReplaceRouteRequest(
+            routeTableId: routeTableId,
+            destinationCidrBlock: '1.1.1.1/32',
+            natGatewayId: natGatewayId
+        ) )
+
+        print( "Describing route table ${routeTableId} to verify route replacement" )
+        describeRouteTables( new DescribeRouteTablesRequest(
+            filters: [ new Filter( 'route.nat-gateway-id', [ natGatewayId ] ) ]
+        )).with {
+          assertThat( routeTables != null && routeTables.size()==1, "Expected one route table" )
+        }
+
         print( "Deleting NAT gateway ${natGatewayId}" )
         deleteNatGateway( new DeleteNatGatewayRequest(
             natGatewayId: natGatewayId
