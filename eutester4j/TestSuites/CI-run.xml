@@ -52,7 +52,7 @@
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingELBAddRemoveInstances"/>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingELBInstanceHealthMonitoring"/>
             <class name="com.eucalyptus.tests.awssdk.TestAutoScalingELBReferenceValidation"/>
-        </classes>>
+        </classes>
     </test>
     <test name="S3_Tests">
         <classes>
