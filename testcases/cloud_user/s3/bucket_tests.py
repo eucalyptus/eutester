@@ -52,13 +52,18 @@ class BucketTestSuite(EutesterTestCase):
         self.buckets_used.add(test_bucket)
         self.tester.debug("Starting get/put/delete bucket test using bucket name: " + test_bucket)
  
+        if self.args.endpoint:
+            # If testing against any region besides us-east-1, the location
+            # parameter of a create bucket request cannot be blank (us-east-1).
+            self.tester.info('WARNING: The following AWS tests will correctly fail if we are testing against any region')
+            self.tester.info('besides us-east-1 (endpoint s3.amazonaws.com), because the expected results are for us-east-1.')
         try :
             bucket = self.tester.s3.create_bucket(test_bucket)                
             if bucket == None:
                 self.tester.s3.delete_bucket(test_bucket)
                 self.fail(test_bucket + " was not created correctly")
         except (S3ResponseError, S3CreateError) as e:
-            self.fail(test_bucket + " create caused exception: " + e)
+            self.fail(test_bucket + " create caused exception: " + str(e))
         
         try :    
             bucket = self.tester.s3.get_bucket(test_bucket)
@@ -67,7 +72,7 @@ class BucketTestSuite(EutesterTestCase):
                 self.fail(test_bucket +" was not fetched by get_bucket call")
         except S3ResponseError as e:
             self.tester.s3.delete_bucket(test_bucket)
-            self.fail("Exception getting bucket" + e)
+            self.fail("Exception getting bucket" + str(e))
             
         
         self.tester.s3.delete_bucket(test_bucket)        
@@ -160,35 +165,34 @@ class BucketTestSuite(EutesterTestCase):
         owner_id = policy.acl.grants[0].id
                                     
         #upload a new acl for the bucket
-        new_acl = policy
-        new_user_display_name = owner_display_name
-        new_user_id = owner_id
-        new_acl.acl.add_user_grant(permission="READ", user_id=new_user_id, display_name=new_user_display_name)
-        try:
-            acl_bucket.set_acl(new_acl)
-            acl_check = acl_bucket.get_acl()
-        except S3ResponseError:
-            self.fail("Failed to set or get new acl")
-        
-        self.tester.info( "Got ACL: " + acl_check.acl.to_xml() )
-
-        #expected_result_base='<AccessControlList>
-        #<Grant><Grantee xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="CanonicalUser">
-        #<ID>' + owner_id + '</ID><DisplayName>'+ owner_display_name + '</DisplayName></Grantee><Permission>FULL_CONTROL</Permission></Grant>
-        #<Grant><Grantee xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="CanonicalUser"><ID>EXPECTED_ID</ID><DisplayName>EXPECTED_NAME</DisplayName></Grantee><Permission>READ</Permission></Grant>
-        #</AccessControlList>'                
-            
-        if acl_check == None or not self.tester.check_acl_equivalence(acl1=acl_check.acl, acl2=new_acl.acl):
-            self.tester.s3.delete_bucket(test_bucket)
-            self.fail("Incorrect acl length or acl not found\n. Got bucket ACL:\n" + acl_check.acl.to_xml() + "\nExpected:" + new_acl.acl.to_xml())
-        else:
-            self.tester.info("Got expected basic ACL addition")
-        
-        self.tester.info( "Grants 0 and 1: " + acl_check.acl.grants[0].to_xml() + " -- " + acl_check.acl.grants[1].to_xml() )
+        # Commented out this test because Euca, AWS West, and AWS East
+        # all update the grants differently.
+        # Regardless, nothing changes functionally, owner always retains full control.
+        # So it's not a very useful test anyway.
+        #new_acl = policy
+        #new_user_display_name = owner_display_name
+        #new_user_id = owner_id
+        #new_acl.acl.add_user_grant(permission="READ", user_id=new_user_id, display_name=new_user_display_name)
+        #try:
+        #    acl_bucket.set_acl(new_acl)
+        #    acl_check = acl_bucket.get_acl()
+        #except S3ResponseError:
+        #    self.fail("Failed to set or get new acl")
+        #
+        #self.tester.info( "Got ACL: " + acl_check.acl.to_xml() )
+        #    
+        #if acl_check == None or not self.tester.check_acl_equivalence(acl1=acl_check.acl, acl2=new_acl.acl):
+        #    self.tester.s3.delete_bucket(test_bucket)
+        #    self.fail("Incorrect acl length or acl not found\n. Got bucket ACL:\n" + acl_check.acl.to_xml() + "\nExpected:" + new_acl.acl.to_xml())
+        #else:
+        #    self.tester.info("Got expected basic ACL addition")
+        #
+        #self.tester.info( "Grants 0 and 1: " + acl_check.acl.grants[0].to_xml() + " -- " + acl_check.acl.grants[1].to_xml() )
         
         #Check each canned ACL string in boto to make sure Walrus does it right
         for acl in boto.s3.acl.CannedACLStrings:
-            if acl == "authenticated-read":
+            #The bucket-owner-* canned ACLs apply only to objects, not buckets 
+            if acl == "bucket-owner-read" or acl == "bucket-owner-full-control":
                 continue
             self.tester.info('Testing canned acl: ' + acl)
             try:
@@ -282,34 +286,59 @@ class BucketTestSuite(EutesterTestCase):
         
         
     def test_bucket_location(self):        
-        test_bucket = self.bucket_prefix + "location_test_bucket"
-        self.tester.info('Starting bucket location test using bucket: ' + test_bucket)
+        """Tests the ability to create a bucket in a specific region"""
+        if self.args.endpoint:
+            # If testing against any region besides us-east-1, the location
+            # parameter of a create bucket request cannot be blank (us-east-1).
+            self.tester.info('WARNING: The following AWS tests will correctly fail if we are testing against any region')
+            self.tester.info('besides us-east-1 (endpoint s3.amazonaws.com), because the expected results are for us-east-1.')
+        test_bucket = self.bucket_prefix + ".undefined-location-test"
+        self.tester.debug('Starting test of bucket creation with no location defined, using bucket: ' + test_bucket)
         self.tester.s3.create_bucket(test_bucket)
-        
         bucket = self.tester.s3.get_bucket(test_bucket)
-        if bucket != None and (bucket.get_location() == Location.DEFAULT or bucket.get_location() == 'US'):
+        if bucket != None and (bucket.get_location() == Location.DEFAULT):
+            self.tester.debug('Bucket location is correct: US East 1 (default)')
             self.tester.s3.delete_bucket(test_bucket)
         else:
             bucket.delete()
-            self.fail("Bucket location test failed, could not get bucket or location is not 'US'")        
+            self.fail("Bucket location test failed, could not get bucket or location is not US East 1 (default)")        
         
-        test_bucket = self.bucket_prefix + "eu_location_test"
-        bucket = self.tester.s3.create_bucket(test_bucket,location=Location.EU)
-        self.buckets_used.add(test_bucket)
-        if bucket == None:
-            self.fail("Bucket creation at location EU failed")
+        test_bucket = self.bucket_prefix + ".us-east-location-test"
+        self.tester.debug('Starting test of bucket creation defining US East (default) location, using bucket: ' + test_bucket)
+        self.tester.s3.create_bucket(test_bucket,location=Location.DEFAULT)
+        bucket = self.tester.s3.get_bucket(test_bucket)
+        if bucket != None and (bucket.get_location() == Location.DEFAULT):
+            self.tester.debug('Bucket location is correct: US East 1 (default)')
+            self.tester.s3.delete_bucket(test_bucket)
         else:
-            loc = bucket.get_location()
+            bucket.delete()
+            self.fail("Bucket location test failed, could not get bucket or location is not US East 1 (default)")        
+ 
+        if self.args.endpoint:
+            # Skip the test for creating a bucket in a different region, 
+            # if testing against AWS. In AWS, if we create a bucket in another
+            # region, we can only delete it if we set up a new connection
+            # to that region and then delete it. New connections are outside
+            # the scope of these bucket tests.
+            self.tester.info('Skipping AWS test of bucket creation in a non-default region (EU).')
+        else:
+            test_bucket = self.bucket_prefix + ".eu-location-test"
+            self.tester.debug('Starting test of bucket creation defining EU location, using bucket: ' + test_bucket)
+            bucket = self.tester.s3.create_bucket(test_bucket,location=Location.EU)
+            self.buckets_used.add(test_bucket)
+            if bucket == None:
+                self.fail("Bucket creation at location EU failed")
+            else:
+                loc = bucket.get_location()
             
-        if loc == Location.EU:
-            print "Got correct bucket location, EU"
-            bucket.delete()
-        else:                        
-            print "Incorrect bucket location, failing"
-            bucket.delete()
-            self.fail("Bucket location incorrect, expected: EU, got: " + loc)
-        
-        self.buckets_used.remove(test_bucket)
+            if loc == Location.EU:
+                self.tester.debug('Bucket location is correct: EU')
+                bucket.delete()
+            else:                        
+                bucket.delete()
+                self.fail("Bucket location incorrect, expected: EU, got: " + loc)
+            self.buckets_used.remove(test_bucket)
+        self.tester.debug( "Bucket location test: PASSED"  )    
         pass
         
     def test_bucket_logging(self):
@@ -393,9 +422,9 @@ class BucketTestSuite(EutesterTestCase):
         self.tester.info('Testing bucket versioning using bucket:' + test_bucket)
         version_bucket = self.tester.s3.create_bucket(test_bucket)
         self.buckets_used.add(test_bucket)
-        version_status = version_bucket.get_versioning_status().get("Versioning")
-        
+
         #Test the default setup after bucket creation. Should be disabled.
+        version_status = version_bucket.get_versioning_status().get("Versioning")
         if version_status != None:
             version_bucket.delete()            
             self.fail("Expected versioning disabled (empty), found: " + str(version_status))
@@ -404,6 +433,10 @@ class BucketTestSuite(EutesterTestCase):
         
         #Turn on versioning, confirm that it is 'Enabled'
         version_bucket.configure_versioning(True)        
+        #When testing against AWS, the versioning status seems to be eventually consistent.
+        #Setting it and immediately getting it sometimes returns the wrong value.
+        if self.args.endpoint:
+            time.sleep(5)
         version_status = version_bucket.get_versioning_status().get("Versioning")
         if version_status == None or version_status != "Enabled":
             version_bucket.delete()
@@ -415,6 +448,8 @@ class BucketTestSuite(EutesterTestCase):
         
         #Turn off/suspend versioning, confirm.
         version_bucket.configure_versioning(False)
+        if self.args.endpoint:
+            time.sleep(5)
         version_status = version_bucket.get_versioning_status().get("Versioning")
         if version_status == None or version_status != "Suspended":
             version_bucket.delete()
@@ -425,7 +460,10 @@ class BucketTestSuite(EutesterTestCase):
         
         self.tester.info("Versioning of bucket is set to: " + version_status)        
         
+        #Turn on versioning again, confirm.
         version_bucket.configure_versioning(True)
+        if self.args.endpoint:
+            time.sleep(5)
         version_status = version_bucket.get_versioning_status().get("Versioning")
         if version_status == None or version_status != "Enabled":
             version_bucket.delete()
@@ -595,7 +633,7 @@ if __name__ == "__main__":
     testcase = BucketTestSuite()
     ### Either use the list of tests passed from config/command line to determine what subset of tests to run
     list = testcase.args.tests or [ 'test_bucket_get_put_delete', \
-                                   #'test_bucket_acl', \ FAILING AS OF 3.3.1
+                                   'test_bucket_acl', \
                                    'test_bucket_key_list_delim_prefix', \
                                    'test_bucket_key_listing_paging', \
                                    'test_bucket_location', \

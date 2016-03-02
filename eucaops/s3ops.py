@@ -319,6 +319,7 @@ class S3ops(Eutester):
             built_acl.add_grant(Grant(permission="READ",type='Group',uri=self.s3_groups["authenticated_users"]))        
         elif canned_acl == "log-delivery-write":
             built_acl.add_grant(Grant(permission="WRITE",type='Group',uri=self.s3_groups["log_delivery"]))        
+            built_acl.add_grant(Grant(permission="READ_ACP",type='Group',uri=self.s3_groups["log_delivery"]))        
         elif canned_acl == "bucket-owner-read":
             if bucket_owner_id is None:
                 raise Exception("No bucket_owner_id passed when trying to create bucket-owner-read canned acl ")
