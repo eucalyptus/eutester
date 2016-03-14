@@ -812,7 +812,7 @@ class Net_Tests(EutesterTestCase):
         self.status('Auth group1 access to group2...')
         self.tester.authorize_group(self.group2, cidr_ip=None, port=22,
                                     protocol='tcp', src_security_group_name=self.group1.name )
-        self.tester.authorize_group(self.group2, cidr_ip=None, port=None,
+        self.tester.authorize_group(self.group2, cidr_ip=None, port=-1,
                                     protocol='icmp', src_security_group_name=self.group1.name )
         self.status('Group2 should now allow access from source group1 on tcp/22 and icmp...')
         self.tester.show_security_group(self.group2)
