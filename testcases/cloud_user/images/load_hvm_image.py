@@ -30,6 +30,10 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 #
+from urllib2 import Request, urlopen, URLError
+
+import time
+
 from eutester.eutestcase import EutesterTestCase
 from testcases.cloud_user.images.imageutils import ImageUtils
 
@@ -63,6 +67,29 @@ testcase.parser.add_argument('--overwrite', help='Will overwrite files in matchi
 testcase.parser.add_argument('--time_per_gig', help='Time allowed per image size in GB before timing out. Default:300 seconds', default=300)
 
 testcase.get_args()
+
+retries = 12
+retry_delay = 10
+req = Request(testcase.args.url)
+for x in range(retries + 1):
+    try:
+        response = urlopen(req)
+        testcase.debug('URL: ' + str(testcase.args.url) + ' is valid and reachable!')
+    except URLError, e:
+        if x < retries:
+            if hasattr(e, 'reason'):
+                testcase.debug("Retrying to resolve " + str(testcase.args.url) + " and got: " + str(e.reason))
+            elif hasattr(e, 'code'):
+                testcase.debug("Retrying to resolve " + str(testcase.args.url) + " and got: " + str(e.code))
+            time.sleep(retry_delay)
+            continue
+        else:
+            if hasattr(e, 'reason'):
+                raise AssertionError("INVALID URL: " + str(testcase.args.url) + "  " + str(e.reason))
+            elif hasattr(e, 'code'):
+                raise AssertionError("INVALID REQUEST: " + str(testcase.args.url) + "  " + str(e.code))
+    break
+
 
 testcase.args.worker_password = testcase.args.worker_password or testcase.args.password
 testcase.args.worker_keypath = testcase.args.worker_keypath or testcase.args.keypair

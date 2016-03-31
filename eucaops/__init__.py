@@ -903,8 +903,55 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
             self.send_creds_to_machine(admin_cred_dir, clc)
 
         return admin_cred_dir
-   
-    def create_credentials(self, admin_cred_dir, account, user, zipfile='creds.zip'):
+
+    def create_legacy_clc_creds_using_nephoria(self, cred_dir, zipfile='creds.zip',
+                                               account='eucalyptus', user='admin'):
+        zipfilepath = os.path.join(cred_dir, zipfile)
+        output = self.credential_exist_on_remote_machine(os.path.join(zipfilepath))
+        if output['status'] == 0:
+            self.debug("Found creds file, skipping euca_conf --get-credentials.")
+        else:
+            from nephoria.testcontroller import TestController
+            self.debug(self.markup('Using temporary Nephoria method to create legacy creds',
+                                   markups=[35]))
+            tc = TestController(self.clc.ssh.host, password=self.clc.ssh.password,
+                                log_level=self.logger.logger_level)
+            user = tc.get_user_by_name(aws_account_name=account, aws_user_name=user)
+            if not getattr(user, 'eucalyptus_cert', None):
+                setattr(user, 'eucalyptus_cert', '${EUCA_KEY_DIR}/cloud-cert.pem')
+            user.create_local_creds(local_destdir=cred_dir)
+            cloud_cert_path = os.path.join(cred_dir, 'cloud-cert.pem')
+            if not os.path.exists(cloud_cert_path):
+                tc.sysadmin.write_service_cert_to_file(cloud_cert_path)
+            self.setup_remote_creds_dir(cred_dir)
+            for file in os.listdir(cred_dir):
+                fpath = os.path.join(cred_dir, file)
+                self.clc.ssh.sftp_put(fpath, fpath)
+            self.clc.sys('zip {0} {1}/*'.format(zipfilepath, os.path.normpath(cred_dir)))
+        return zipfilepath
+
+    def create_credentials(self, admin_cred_dir, account, user, zipfile='creds.zip',
+                           try_alt=False):
+        """
+
+        :param admin_cred_dir: The Directory on both the CLC and local machine create the
+                                credential artifacts in
+        :param account: cloud account to create creds for
+        :param user: cloud user to create creds for
+        :param zipfile: the name of the zip archive file to create within 'admin_cred_dir'
+        :param try_alt: Boolean, to try alternative methods to euca_conf soon to be deprecated
+        :return: path to zip archive file
+        """
+        if try_alt:
+            try:
+                from nephoria.testcontroller import TestController
+                return self.create_legacy_clc_creds_using_nephoria(cred_dir=admin_cred_dir,
+                                                                   zipfile=zipfile,
+                                                                   account=account,
+                                                                   user=user)
+            except ImportError as IE:
+                self.logger.log.info('Could not import nephoria, using legacy euca_conf to fetch'
+                                     'credentials: "{0}"'.format(IE))
         zipfilepath = os.path.join(admin_cred_dir, zipfile)
 
         output = self.credential_exist_on_remote_machine(zipfilepath)
@@ -967,9 +1014,9 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
                 # Update the existing eucarc with new cert and key path info...
                 self.debug("Setting cert/pk in '" + admin_cred_dir + "/eucarc'")
                 self.sys("echo 'export EC2_CERT=${EUCA_KEY_DIR}/" + "{0}' >> {1}"
-                         .format(os.path.basename(newcertpath), clc_eucarc))
+                         .format(os.path.basename(newcertpath), clc_eucarc), code=0)
                 self.sys("echo 'export EC2_PRIVATE_KEY=${EUCA_KEY_DIR}/" + "{0}' >> {1}"
-                         .format(os.path.basename(newkeypath), clc_eucarc))
+                         .format(os.path.basename(newkeypath), clc_eucarc), code=0)
                 self.debug('updating zip file with new cert, key and eucarc: {0}'
                            .format(credzippath))
                 for updatefile in [os.path.basename(newcertpath), os.path.basename(newkeypath),
@@ -1192,10 +1239,12 @@ class Eucaops(EC2ops,S3ops,IAMops,STSops,CWops, ASops, ELBops, CFNops):
         self.sftp.get(remotekeypath, localkeypath)
         if update_eucarc:
             self.debug("Setting cert/pk in '{0}".format(local_eucarc))
+            self.local("echo 'EUCA_KEY_DIR=$(cd $(dirname ${BASH_SOURCE:-$0}); pwd -P)' >> " +
+                       local_eucarc)
             self.local("echo 'export EC2_CERT=${EUCA_KEY_DIR}/" +
                        str(os.path.basename(localcertpath)) + "' >> " + local_eucarc)
             self.local("echo 'export EC2_PRIVATE_KEY=${EUCA_KEY_DIR}/" +
-                       str(os.path.basename(localkeypath)) + "' >> " +local_eucarc)
+                       str(os.path.basename(localkeypath)) + "' >> " + local_eucarc)
         return {'certpath':localcertpath, 'keypath':localkeypath}
 
     def send_creds_to_machine(self, admin_cred_dir, machine, filename='creds.zip'):

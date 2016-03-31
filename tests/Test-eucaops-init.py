@@ -31,7 +31,6 @@
 #
 # Author: Vic Iglesias vic.iglesias@eucalyptus.com
 #
-import mock
 import unittest
 from eucaops import Eucaops
 class EucaopsTest(unittest.TestCase):

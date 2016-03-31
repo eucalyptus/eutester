@@ -1,6 +1,7 @@
 package com.eucalyptus.tests.awssdk;
 
 import com.amazonaws.AmazonServiceException;
+import com.amazonaws.ClientConfiguration;
 import com.amazonaws.Request;
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSCredentialsProvider;
@@ -11,6 +12,7 @@ import com.amazonaws.services.autoscaling.AmazonAutoScaling;
 import com.amazonaws.services.autoscaling.AmazonAutoScalingClient;
 import com.amazonaws.services.autoscaling.model.*;
 import com.amazonaws.services.autoscaling.model.BlockDeviceMapping;
+import com.amazonaws.services.autoscaling.model.DeletePolicyRequest;
 import com.amazonaws.services.autoscaling.model.InstanceMonitoring;
 import com.amazonaws.services.autoscaling.model.Tag;
 import com.amazonaws.services.cloudwatch.AmazonCloudWatch;
@@ -23,6 +25,8 @@ import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancing;
 import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancingClient;
 import com.amazonaws.services.elasticloadbalancing.model.*;
+import com.amazonaws.services.elasticloadbalancing.model.DescribeLoadBalancersRequest;
+import com.amazonaws.services.elasticloadbalancing.model.DescribeLoadBalancersResult;
 import com.amazonaws.services.identitymanagement.model.*;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3Client;
@@ -274,8 +278,12 @@ class Eutester4j {
 
     public static AmazonS3 getS3Client(String accessKey, String secretKey,
                                        String endpoint) {
-        AWSCredentials creds = new BasicAWSCredentials(accessKey, secretKey);
-        final AmazonS3 s3 = new AmazonS3Client(creds);
+        return getS3Client(new BasicAWSCredentials(accessKey, secretKey), endpoint);
+    }
+
+    public static AmazonS3 getS3Client(AWSCredentials credentials, String endpoint) {
+        final AmazonS3 s3 =
+            new AmazonS3Client(credentials, new ClientConfiguration( ).withSignerOverride("S3SignerType"));
         s3.setEndpoint(endpoint);
         return s3;
     }
@@ -800,14 +808,14 @@ class Eutester4j {
                 .withLaunchConfigurationName(launchConfig)
                 .withImageId(imageId)
                 .withInstanceType(instanceType)
-                .withSecurityGroups(securityGroups)
-                .withKeyName(keyName)
-                .withKernelId(kernelId)
-                .withRamdiskId(ramdiskId)
-                .withBlockDeviceMappings(blockDeviceMapping)
-                .withIamInstanceProfile(iamInstanceProfile)
-                .withInstanceMonitoring(instanceMonitoring)
-                .withUserData(userData);
+                .withSecurityGroups(list(securityGroups))
+                .withKeyName( keyName )
+                .withKernelId( kernelId )
+                .withRamdiskId( ramdiskId )
+                .withBlockDeviceMappings(list(blockDeviceMapping))
+                .withIamInstanceProfile( iamInstanceProfile )
+                .withInstanceMonitoring( instanceMonitoring )
+                .withUserData( userData );
         as.createLaunchConfiguration(createLaunchConfigurationRequest);
         print("Created Launch Configuration: " + launchConfig);
     }
@@ -845,13 +853,13 @@ class Eutester4j {
                 .withMinSize(minSize)
                 .withMaxSize(maxSize)
                 .withDesiredCapacity(desiredCapacity)
-                .withAvailabilityZones(availabilityZone)
+                .withAvailabilityZones(list(availabilityZone))
                 .withDefaultCooldown(cooldown)
                 .withHealthCheckGracePeriod(healthCheckGracePeriod)
                 .withHealthCheckType(healthCheckType)
-                .withLoadBalancerNames(loadBalancer)
-                .withTags(tag)
-                .withTerminationPolicies(terminationPolicy);
+                .withLoadBalancerNames(list(loadBalancer))
+                .withTags(list(tag))
+                .withTerminationPolicies(list(terminationPolicy));
         as.createAutoScalingGroup(createAutoScalingGroupRequest);
         print("Created Auto Scaling Group: " + groupName);
     }
@@ -935,11 +943,11 @@ class Eutester4j {
     public static void createLoadBalancer(String loadBalancerName) {
         elb.createLoadBalancer(new CreateLoadBalancerRequest()
                 .withLoadBalancerName(loadBalancerName)
-                .withAvailabilityZones(AVAILABILITY_ZONE)
+                .withAvailabilityZones( list( AVAILABILITY_ZONE ) )
                 .withListeners(
-                        new Listener().withInstancePort(80)
-                                .withLoadBalancerPort(80)
-                                .withProtocol("HTTP")));
+                    new Listener( ).withInstancePort( 80 )
+                        .withLoadBalancerPort( 80 )
+                        .withProtocol( "HTTP" ) ));
         print("Created load balancer: " + loadBalancerName);
     }
 
@@ -1107,5 +1115,10 @@ class Eutester4j {
         keys.put("sk", secretKey);
 
         return keys;
+    }
+
+    @SafeVarargs
+    private static <T> List<T> list( T... ts ) {
+        return ts == null || (ts.length == 1 && ts[0] == null) ? Collections.<T>emptyList( ) : Arrays.<T>asList( ts );
     }
 }

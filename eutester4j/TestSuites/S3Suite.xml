@@ -6,6 +6,9 @@
             <class name="com.eucalyptus.tests.awssdk.S3BucketACLTests"/>
             <class name="com.eucalyptus.tests.awssdk.S3BucketTests"/>
             <class name="com.eucalyptus.tests.awssdk.S3CopyObjectTests"/>
+            <!-- S3CorsTests still in progress.
+            <class name="com.eucalyptus.tests.awssdk.S3CorsTests"/>
+            -->
             <class name="com.eucalyptus.tests.awssdk.S3ListMpuTests"/>
             <class name="com.eucalyptus.tests.awssdk.S3ListObjectsTests"/>
             <class name="com.eucalyptus.tests.awssdk.S3ListVersionsTests"/>
