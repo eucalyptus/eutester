@@ -101,7 +101,7 @@ class MigrationTest(EutesterTestCase):
         self.tester.service_manager.populate_nodes()
         source_nc = self.tester.service_manager.get_all_node_controllers(instance_id=instance.id)[0]
         enabled_clc.sys( "source " + self.tester.credpath + "/eucarc &&" +
-                         self.tester.eucapath + "/usr/sbin/euca-migrate-instances -i " + instance.id )
+                         self.tester.eucapath + "/usr/sbin/euca-migrate-instances -i " + instance.id, code=0)
 
         def wait_for_new_nc():
             self.tester.service_manager.populate_nodes()
@@ -153,7 +153,7 @@ class MigrationTest(EutesterTestCase):
                 self.destination_nc = nc
                 enabled_clc.sys("source " + self.tester.credpath + "/eucarc && " +
                                     self.tester.eucapath + "/usr/sbin/euca-migrate-instances -i " +
-                                    instance.id + " --dest " + self.destination_nc.machine.hostname)
+                                    instance.id + " --dest " + self.destination_nc.machine.hostname, code=0)
 
                 def wait_for_new_nc():
                     self.tester.service_manager.populate_nodes()
@@ -167,7 +167,7 @@ class MigrationTest(EutesterTestCase):
         self.destination_nc = self.source_nc
         enabled_clc.sys("source " + self.tester.credpath + "/eucarc && " +
                             self.tester.eucapath + "/usr/sbin/euca-migrate-instances -i " +
-                            instance.id + " --dest " + self.destination_nc.machine.hostname)
+                            instance.id + " --dest " + self.destination_nc.machine.hostname, code=0)
 
         self.tester.wait_for_result(wait_for_new_nc, True, timeout=600, poll_wait=60)
         self.assertTrue(self.tester.ping(instance.public_dns_name), 'Could not ping instance')
@@ -189,7 +189,7 @@ class MigrationTest(EutesterTestCase):
             # retrying, see EUCA-6389
             while node.state != state:
                 self.tester.debug(node.hostname + ": SET STATE TO " + state)
-                enabled_clc.sys("euca-modify-service -s " + state + " " + node.hostname)
+                enabled_clc.sys("euca-modify-service -s " + state + " " + node.hostname, code=0)
                 self.tester.sleep(10)
                 tmpnodes = self.tester.service_manager.populate_nodes()
                 for tmpnode in tmpnodes:
@@ -221,7 +221,7 @@ class MigrationTest(EutesterTestCase):
         # evacuate source NC
         enabled_clc.sys("source " + self.tester.credpath + "/eucarc && " +
                             self.tester.eucapath + "/usr/sbin/euca-migrate-instances --source " +
-                        self.source_nc.machine.hostname)
+                        self.source_nc.machine.hostname, code=0)
 
         def wait_for_evacuation():
             self.tester.service_manager.populate_nodes()
