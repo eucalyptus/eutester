@@ -98,7 +98,6 @@ import sys
 import termios
 import tty
 from paramiko.sftp_client import SFTPClient
-import eucaops
 
 
 class SFTPifc(SFTPClient):
