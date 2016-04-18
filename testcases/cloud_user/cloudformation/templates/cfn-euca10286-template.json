@@ -3,7 +3,8 @@
     "Parameters": {
         "Zone": {
             "Description": "Availability zone",
-            "Type": "String"
+            "Type": "String",
+            "Default": "one"
         }
     },
     "Resources": {
