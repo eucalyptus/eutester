@@ -5,13 +5,13 @@
     "Description" : "Cloudformation Example => Run instance with userdata in security group",
 
     "Parameters": {
-        "UbuntuImageId": {
+        "ImageId": {
             "Description":"Ubuntu Image id",
             "Type":"String",
             "NoEcho":"False"
         },
 
-        "UserKeyPair": {
+        "KeyName": {
             "Description":"User Key Pair",
             "Type":"String",
             "NoEcho":"True"
@@ -37,13 +37,13 @@
         "DockerInstance": {
             "Type": "AWS::EC2::Instance",
                 "Properties": {
-                    "ImageId" : { "Ref":"UbuntuImageId" },
+                    "ImageId" : { "Ref":"ImageId" },
                     "InstanceType" : "m1.xlarge",
                     "UserData" : { "Fn::Base64" : "#include https://get.docker.io" },
                     "SecurityGroups" : [
                         { "Ref" : "DockerSecurityGroup" }
                     ],
-            "KeyName" : { "Ref" : "UserKeyPair" }
+            "KeyName" : { "Ref" : "KeyName" }
             }
         },
 

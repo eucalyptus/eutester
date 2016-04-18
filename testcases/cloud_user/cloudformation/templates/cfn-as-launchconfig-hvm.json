@@ -5,7 +5,7 @@
     "Description":"Test Creation of AutoScaling Launch Configuration",
 
     "Parameters": {
-        "EucaImageId": {
+        "ImageId": {
             "Description":"Eucalyptus Machine Image Id",
             "Type":"String",
             "NoEcho":"True"
@@ -18,7 +18,7 @@
             "Default":"True"
         },
 
-        "UserKeyPair": {
+        "KeyName": {
             "Description":"User Key Pair",
             "Type":"String",
             "NoEcho":"True"
@@ -27,7 +27,8 @@
         "VmType": {
             "Description":"Desired VM Type for Instances",
             "Type":"String",
-            "NoEcho":"True"
+            "NoEcho":"True",
+            "Default":"m1.small"
         }
 
     },
