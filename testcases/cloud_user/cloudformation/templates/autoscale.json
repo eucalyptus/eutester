@@ -1,4 +1,4 @@
-i{
+{
   "Parameters" : {
     "KeyName" : {
       "Type" : "String"
@@ -60,4 +60,3 @@ i{
           }
         }
       }
-      
