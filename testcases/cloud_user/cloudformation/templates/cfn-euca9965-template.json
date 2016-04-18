@@ -15,13 +15,13 @@
       "ConstraintDescription" : "must be a valid EC2 instance type."
     },
 
-    "UbuntuImageId": {
+    "ImageId": {
         "Description":"Ubuntu Image id",
         "Type":"String",
         "NoEcho":"False"
     },
 
-    "UserKeyPair" : {
+    "KeyName" : {
       "Description" : "The EC2 Key Pair to allow SSH access to the instances",
       "Type":"String",
       "ConstraintDescription" : "must be the name of an existing EC2 KeyPair."
@@ -41,7 +41,8 @@
 
     "Zone": {
         "Description": "Availability zone",
-        "Type": "String"
+        "Type": "String",
+        "Default": "one"
     }
   },
 
@@ -78,9 +79,9 @@
     "LaunchConfig" : {
         "Type": "AWS::AutoScaling::LaunchConfiguration",
         "Properties": {
-            "ImageId": {"Ref" : "UbuntuImageId"},
+            "ImageId": {"Ref" : "ImageId"},
             "InstanceType": {"Ref": "InstanceType"},
-            "KeyName": {"Ref": "UserKeyPair"},
+            "KeyName": {"Ref": "KeyName"},
             "UserData" : { "Fn::Base64" : { "Fn::Join" : ["",[
                 "#cloud-config","\n",
                 "apt_update: true","\n",
