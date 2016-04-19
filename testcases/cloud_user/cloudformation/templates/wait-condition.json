@@ -35,10 +35,8 @@
               [  "#!/bin/bash", "\n",
                  "SignalURL=\"", { "Ref" : "myWaitHandle" },"\"\n",
                  "echo SignalURL=$SignalURL", "\n",
-                 "apt-get update", "\n",
-                 "apt-get install -y apache2", "\n",
-                 "sleep 60", "\n",
-                 "curl -X PUT -H 'Content-Type:' --data-binary '{\"Status\" : \"SUCCESS\",\"Reason\" : \"Configuration Complete\",\"UniqueId\" : \"ID1234\",\"Data\" : \"Application has completed configuration.\"}' '$SignalURL'", "\n"
+                 "sleep 30", "\n",
+                 "curl -X PUT -H 'Content-Type:' --data-binary '{\"Status\" : \"SUCCESS\",\"Reason\" : \"Configuration Complete\",\"UniqueId\" : \"ID1234\",\"Data\" : \"Application has completed configuration.\"}' $SignalURL", "\n"
               ]
             ]
           }
