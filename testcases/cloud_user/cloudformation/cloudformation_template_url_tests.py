@@ -1,6 +1,6 @@
 # Software License Agreement (BSD License)
 #
-# Copyright (c) 2009-2014, Eucalyptus Systems, Inc.
+# Copyright (c) 2009-2016, Eucalyptus Systems, Inc.
 # All rights reserved.
 #
 # Redistribution and use of this software in source and binary forms, with or
@@ -44,12 +44,16 @@ class CloudFormationTemplateURLTests(EutesterTestCase):
         self.parser.add_argument('--template_urls', dest='template_urls',
                                  help='comma separated list of template_urls',
                                  default=None)
+        self.parser.add_argument('--timeout', dest='timeout',
+                                 help='number of seconds to wait for stacks to complete',
+                                 default=300)
         if extra_args:
             for arg in extra_args:
                 self.parser.add_argument(arg)
         self.get_args()
         self.show_args()
         self.template_urls = self.args.template_urls.split(',')
+        self.timeout = int(self.args.timeout)
         # Setup basic eutester object
         if self.args.region:
             self.tester = CFNops(credpath=self.args.credpath, region=self.args.region)
@@ -81,7 +85,7 @@ class CloudFormationTemplateURLTests(EutesterTestCase):
                             self.debug("Stack Resource Status: " + inf.resource_status)
                             stack_status = True
                 return stack_status
-            self.tester.wait_for_result(stack_completed, True, timeout=300)
+            self.tester.wait_for_result(stack_completed, True, timeout=self.timeout)
             self.tester.delete_stack(self.stack_name)
 
     def clean_method(self):
