@@ -63,12 +63,14 @@ class CloudFormationTemplateURLTests(EutesterTestCase):
         # Generate a keypair for the instance
         self.keypair = self.tester.add_keypair("keypair-" + str(time.time()))
         self.keypath = '%s/%s.pem' % (os.curdir, self.keypair.name)
+        self.stacks = []
 
     def Stack_Template_URL_Test(self):
         for url in self.template_urls:
             # get template name from URL, remove file extension and any "-"
             template = os.path.splitext(url.rsplit('/', 1)[1])[0].replace("-", "")
             self.stack_name = template + str(os.urandom(8).encode('hex'))
+            self.stacks.append(self.stack_name)
             self.template_parameters = [('KeyName', self.keypair.name), ('ImageId', self.tester.get_emi().id)]
             self.tester.create_stack(stack_name=self.stack_name,
                                      template_body=None,
@@ -86,10 +88,11 @@ class CloudFormationTemplateURLTests(EutesterTestCase):
                             stack_status = True
                 return stack_status
             self.tester.wait_for_result(stack_completed, True, timeout=self.timeout)
-            self.tester.delete_stack(self.stack_name)
 
     def clean_method(self):
         self.tester.cleanup_artifacts()
+        for stack in self.stacks:
+            self.tester.delete_stack(stack)
 
 
 if __name__ == "__main__":
