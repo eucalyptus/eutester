@@ -1,13 +1,13 @@
 {
   "AWSTemplateFormatVersion" : "2010-09-09",
 
-  "Description" : "AWS CloudFormation Sample Template AutoScalingSingleAZ: Create a single-az, load balanced and Auto Scaled sample web site running on an Nginx Web Server. The application is configured to span in one availability zone (one cluster) and is Auto-Scaled based on the CPU utilization of the web servers.",
+  "Description" : "AWS CloudFormation Sample Template AutoScalingSingleAZ: Create a single-az, load balanced and Auto Scaled sample web site running on an apache web server. The application is configured to span in one availability zone (one cluster) and is Auto-Scaled based on the CPU utilization of the web servers.",
 
   "Parameters" : {
     "InstanceType" : {
       "Description" : "WebServer EC2 instance type",
       "Type" : "String",
-      "Default" : "m1.large",
+      "Default" : "m1.small",
       "AllowedValues" : [ "t1.micro", "t2.micro", "t2.small", "t2.medium", "m1.small", "m1.medium", "m1.large",
       "m1.xlarge", "m2.xlarge", "m2.2xlarge", "m2.4xlarge", "m3.medium", "m3.large", "m3.xlarge", "m3.2xlarge", "c1.medium", "c1.xlarge", "c3.large", "c3.xlarge", "c3.2xlarge",
       "c3.4xlarge", "c3.8xlarge", "g2.2xlarge", "r3.large", "r3.xlarge", "r3.2xlarge", "r3.4xlarge", "r3.8xlarge", "i2.xlarge", "i2.2xlarge", "i2.4xlarge", "i2.8xlarge",
@@ -39,6 +39,12 @@
         "Default" : "4"
     },
 
+    "CloudFormationUrl" : {
+        "Description" : "Cloudformation endpoint",
+        "Type":"String",
+        "Default" : "http://cloudformation.internal:8773/services/CloudFormation"
+    },
+
     "Zone": {
         "Description": "Availability zone",
         "Type": "String",
@@ -47,6 +53,44 @@
   },
 
   "Resources" : {
+
+    "Role": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version" : "2012-10-17",
+          "Statement": [ {
+            "Effect": "Allow",
+            "Principal": {
+              "Service": [ "ec2.amazonaws.com" ]
+            },
+            "Action": [ "sts:AssumeRole" ]
+          } ]
+        },
+        "Path": "/",
+        "Policies": [ {
+          "PolicyName": "root",
+          "PolicyDocument": {
+            "Version" : "2012-10-17",
+            "Statement": [ {
+              "Effect": "Allow",
+              "Action": "*",
+              "Resource": "*"
+            } ]
+          }
+        } ]
+      }
+    },
+
+    "InstanceProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "Path": "/",
+        "Roles": [ {
+          "Ref": "Role"
+        } ]
+      }
+    },
 
     "WebServerGroup" : {
       "CreationPolicy" : {
@@ -81,19 +125,17 @@
         "Properties": {
             "ImageId": {"Ref" : "ImageId"},
             "InstanceType": {"Ref": "InstanceType"},
+            "IamInstanceProfile" : {"Ref" : "InstanceProfile"},
             "KeyName": {"Ref": "KeyName"},
-            "UserData" : { "Fn::Base64" : { "Fn::Join" : ["",[
-                "#cloud-config","\n",
-                "apt_update: true","\n",
-                "apt_upgrade: true","\n",
-                "disable_root: true","\n",
-                "packages:","\n",
-                " - less","\n",
-                "runcmd:","\n",
-                " - [ apt-get, install, -y, --force-yes, dnsutils ]","\n",
-                " - [ apt-get, install, -y, --force-yes, bind9utils ]","\n",
-                " - [ apt-get, install, -y, --force-yes, mlocate ]","\n",
-                " - [ apt-get, install, -y, --force-yes, nginx ]","\n" ]]}
+            "UserData" : { "Fn::Base64" : { "Fn::Join" : ["",
+              [
+                "#!/bin/bash -ex", "\n",
+                "apt-get update", "\n",
+                "apt-get install -y apache2", "\n",
+                "apt-get -y install python-setuptools", "\n",
+                "easy_install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz", "\n",
+                "/usr/local/bin/cfn-signal -e 0 --url ", {"Ref":"CloudFormationUrl"}, " --stack ", { "Ref":"AWS::StackName" }, " --resource WebServerGroup", " --role ", { "Ref" : "Role" }, " --region ", { "Ref": "AWS::Region" }, "\n"
+              ]]}
             },
             "SecurityGroups": [{"Ref": "InstanceSecurityGroup"}],
             "InstanceMonitoring": true
@@ -172,9 +214,9 @@
         } ],
         "HealthCheck" : {
           "Target" : "HTTP:80/",
-          "HealthyThreshold" : "3",
+          "HealthyThreshold" : "2",
           "UnhealthyThreshold" : "5",
-          "Interval" : "30",
+          "Interval" : "10",
           "Timeout" : "5"
         }
       }
