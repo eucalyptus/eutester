@@ -86,7 +86,7 @@ class SOSreport(EutesterTestCase):
                     already_in_list = 1
             if not already_in_list:
                 newarray.append(machine)
-        return set(newarray)
+        return newarray
 
 if __name__ == "__main__":
     testcase = SOSreport()
