@@ -749,16 +749,78 @@ class EuserviceManager(object):
         #to avoid update() loop allow enabled_clc to be provided as arg
         clc = enabled_clc or self.get_enabled_clc()
         clc_version = clc.machine.get_eucalyptus_version()
-        if not str(clc_version).startswith('3'):
+        (major_v, minor_v, patch) = clc_version.split('-')[0].split('.')
+        if int(major_v) >= 4 and int(minor_v) >= 2:
+            return self.populate_nodes_4_2(enabled_clc)
+        elif int(major_v) >= 3 and int(minor_v) >= 3:
             return self.populate_nodes_3_3(enabled_clc)
-        if self.compare_versions(clc_version,'3.3') >= 0:
-            try:
-                return self.populate_nodes_3_3(enabled_clc)
-            except:
-                return self.populate_nodes_pre_3_3(enabled_clc)
         else:
             return self.populate_nodes_pre_3_3(enabled_clc)
 
+
+    def populate_nodes_4_2(self, enabled_clc=None):
+        """
+        Sort output of 'list nodes cmd' on clc, create/update eunode objects.
+        Returned list is used to update:'service_manager.node_list'
+
+        :param enabled_clc: To avoid an update() or update() loop the current enabled clc can be provided. This can
+                            also be used to test nc lookup on disabled CLC by providing this component obj instead.
+        :return: list of eunode objects
+
+        version >= 4.2 output (note state and instances on lines to follow node(s)
+        [type]  [partition]     [node hostname] [state]
+        NODE    PARTI00         192.168.51.15   enabled
+        NODE    PARTI00         192.168.51.13   enabled
+        [type]           [instances per line] [optional migration info]
+        INSTANCE        i-A1BE4281
+        INSTANCE        i-7881e16a            MIGRATING-TO  10.111.1.125
+        """
+        type_loc = 0
+        partition_loc = 1
+        hostname_loc = 2
+        state_loc = 3
+        instance_id_loc = 1
+        return_list = []
+        instance_list = []
+        last_node = None
+        #to avoid update() loop allow enabled_clc to be provided as arg
+        clc = enabled_clc or self.get_enabled_clc()
+        nodes_strings = clc.machine.sys(self.eucaprefix + \
+                                        "/usr/bin/euserv-describe-node-controllers 2>1 | grep 'NODE\|INSTANCE'")
+        for node_string in nodes_strings:
+            #handle/skip any blank lines first...
+            node_string = node_string.strip()
+            if not node_string:
+                continue
+            partition = None
+            #sort out the node string...
+            split_string = node_string.split()
+            if split_string[type_loc] == 'INSTANCE':
+                node.instance_ids.append(split_string[instance_id_loc])
+            elif(split_string[type_loc] == 'NODE'):
+                hostname = split_string[hostname_loc]
+                partition_name = split_string[partition_loc]
+                state = split_string[state_loc]
+                # grab the list of instances if any found in the string
+                #Try to match the part_name to the partition name it resides in
+                for part in self.get_all_partitions():
+                    if part.name == partition_name:
+                            partition = part
+                            break
+                if not partition:
+                    raise Exception('populate_nodes: Node:' + str(hostname) + ' Failed to find partition for name: '
+                                    + str(partition_name))
+                node = Eunode(self.tester,
+                              hostname,
+                              partition,
+                              state = state) # upper case?
+                return_list.append(node)
+                if node in part.ncs:
+                    part.ncs[part.ncs.index(node)]=node
+                else:
+                    part.ncs.append(node)
+        self.node_list = return_list
+        return return_list
 
     def populate_nodes_3_3(self, enabled_clc=None):
         """
