@@ -191,8 +191,8 @@ class Install(EutesterTestCase):
         clcs = self.tester.get_component_machines("clc")
         if len(clcs) > 1:
             clcs[0].sys("euca_conf --register-cloud -C eucalyptus -P eucalyptus -H " + clcs[1].hostname)
-        walrii = self.tester.get_component_machines("ws")
-        for walrus in walrii:
+        walruses = self.tester.get_component_machines("ws")
+        for walrus in walruses:
             clcs[0].sys("euca_conf --register-walrus -C walrus -P walrus -H " + walrus.hostname)
         ccs = self.tester.get_component_machines("cc")
         registered_clusters = {1:None, 2:None,3:None,4:None,5:None,6:None,7:None,8:None}
