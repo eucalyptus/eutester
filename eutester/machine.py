@@ -1,4 +1,3 @@
-# Software License Agreement (BSD License)
 #
 # Copyright (c) 2009-2011, Eucalyptus Systems, Inc.
 # All rights reserved.
