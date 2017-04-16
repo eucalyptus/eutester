@@ -1,0 +1,26 @@
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
+
+  "Description" : "Cloudformation Example => Create bucket with public-read access control list (ACL) and bucket tagging",
+
+  "Resources" : {
+    "S3Bucket" : {
+      "Type" : "AWS::S3::Bucket",
+      "Properties" : {
+        "BucketName" : "buckettaggingtest",
+        "Tags" : [ {"Key" : "Application", "Value" : "bucket-tagging-test" } ],
+        "AccessControl" : "PublicRead"
+      },
+      "DeletionPolicy" : "Retain"
+    }
+  },
+
+  "Outputs" : {
+      "BucketName": {
+          "Value": {
+              "Ref": "S3Bucket"
+          },
+          "Description": "Name of OSG Bucket Created"
+      }
+  } 
+}

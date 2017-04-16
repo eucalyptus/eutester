@@ -1,0 +1,277 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+
+    "Resources": {
+        "SecurityGroup": {
+            "Properties": {
+                "GroupDescription": "Security group",
+                "Tags": [ {"Key" : "Application", "Value" : { "Ref" : "AWS::StackId"}} ]
+            },
+            "Type": "AWS::EC2::SecurityGroup"
+        },
+        "SecurityGroup1": {
+            "Properties": {
+                "CidrIp": "0.0.0.0/0",
+                "FromPort": "1",
+                "GroupId": {
+                    "Fn::GetAtt" : [ "SecurityGroup" , "GroupId" ]
+                },
+                "IpProtocol": "tcp",
+                "ToPort": "1"
+            },
+            "Type": "AWS::EC2::SecurityGroupIngress"
+        },
+        "SecurityGroup2": {
+            "Properties": {
+                "CidrIp": "0.0.0.0/0",
+                "FromPort": "2",
+                "GroupId": {
+                    "Fn::GetAtt" : [ "SecurityGroup" , "GroupId" ]
+                },
+                "IpProtocol": "tcp",
+                "ToPort": "2"
+            },
+            "Type": "AWS::EC2::SecurityGroupIngress"
+        },
+        "SecurityGroup3": {
+            "Properties": {
+                "CidrIp": "0.0.0.0/0",
+                "FromPort": "3",
+                "GroupId": {
+                    "Fn::GetAtt" : [ "SecurityGroup" , "GroupId" ]
+                },
+                "IpProtocol": "tcp",
+                "ToPort": "3"
+            },
+            "Type": "AWS::EC2::SecurityGroupIngress"
+        },
+        "SecurityGroup4": {
+            "Properties": {
+                "CidrIp": "0.0.0.0/0",
+                "FromPort": "4",
+                "GroupId": {
+                    "Fn::GetAtt" : [ "SecurityGroup" , "GroupId" ]
+                },
+                "IpProtocol": "tcp",
+                "ToPort": "4"
+            },
+            "Type": "AWS::EC2::SecurityGroupIngress"
+        },
+        "SecurityGroup5": {
+            "Properties": {
+                "CidrIp": "0.0.0.0/0",
+                "FromPort": "5",
+                "GroupId": {
+                    "Fn::GetAtt" : [ "SecurityGroup" , "GroupId" ]
+                },
+                "IpProtocol": "tcp",
+                "ToPort": "5"
+            },
+            "Type": "AWS::EC2::SecurityGroupIngress"
+        },
+        "SecurityGroup6": {
+            "Properties": {
+                "CidrIp": "0.0.0.0/0",
+                "FromPort": "6",
+                "GroupId": {
+                    "Fn::GetAtt" : [ "SecurityGroup" , "GroupId" ]
+                },
+                "IpProtocol": "tcp",
+                "ToPort": "6"
+            },
+            "Type": "AWS::EC2::SecurityGroupIngress"
+        },
+        "SecurityGroup7": {
+            "Properties": {
+                "CidrIp": "0.0.0.0/0",
+                "FromPort": "7",
+                "GroupId": {
+                    "Fn::GetAtt" : [ "SecurityGroup" , "GroupId" ]
+                },
+                "IpProtocol": "tcp",
+                "ToPort": "7"
+            },
+            "Type": "AWS::EC2::SecurityGroupIngress"
+        },
+        "SecurityGroup8": {
+            "Properties": {
+                "CidrIp": "0.0.0.0/0",
+                "FromPort": "8",
+                "GroupId": {
+                    "Fn::GetAtt" : [ "SecurityGroup" , "GroupId" ]
+                },
+                "IpProtocol": "tcp",
+                "ToPort": "8"
+            },
+            "Type": "AWS::EC2::SecurityGroupIngress"
+        },
+        "SecurityGroup9": {
+            "Properties": {
+                "CidrIp": "0.0.0.0/0",
+                "FromPort": "9",
+                "GroupId": {
+                    "Fn::GetAtt" : [ "SecurityGroup" , "GroupId" ]
+                },
+                "IpProtocol": "tcp",
+                "ToPort": "9"
+            },
+            "Type": "AWS::EC2::SecurityGroupIngress"
+        },
+        "SecurityGroup10": {
+            "Properties": {
+                "CidrIp": "0.0.0.0/0",
+                "FromPort": "10",
+                "GroupId": {
+                    "Fn::GetAtt" : [ "SecurityGroup" , "GroupId" ]
+                },
+                "IpProtocol": "tcp",
+                "ToPort": "10"
+            },
+            "Type": "AWS::EC2::SecurityGroupIngress"
+        },
+        "SecurityGroup11": {
+            "Properties": {
+                "CidrIp": "0.0.0.0/0",
+                "FromPort": "11",
+                "GroupId": {
+                    "Fn::GetAtt" : [ "SecurityGroup" , "GroupId" ]
+                },
+                "IpProtocol": "tcp",
+                "ToPort": "11"
+            },
+            "Type": "AWS::EC2::SecurityGroupIngress"
+        },
+        "SecurityGroup12": {
+            "Properties": {
+                "CidrIp": "0.0.0.0/0",
+                "FromPort": "12",
+                "GroupId": {
+                    "Fn::GetAtt" : [ "SecurityGroup" , "GroupId" ]
+                },
+                "IpProtocol": "tcp",
+                "ToPort": "12"
+            },
+            "Type": "AWS::EC2::SecurityGroupIngress"
+        },
+        "SecurityGroup13": {
+            "Properties": {
+                "CidrIp": "0.0.0.0/0",
+                "FromPort": "13",
+                "GroupId": {
+                    "Fn::GetAtt" : [ "SecurityGroup" , "GroupId" ]
+                },
+                "IpProtocol": "tcp",
+                "ToPort": "13"
+            },
+            "Type": "AWS::EC2::SecurityGroupIngress"
+        },
+        "SecurityGroup14": {
+            "Properties": {
+                "CidrIp": "0.0.0.0/0",
+                "FromPort": "14",
+                "GroupId": {
+                    "Fn::GetAtt" : [ "SecurityGroup" , "GroupId" ]
+                },
+                "IpProtocol": "tcp",
+                "ToPort": "14"
+            },
+            "Type": "AWS::EC2::SecurityGroupIngress"
+        },
+        "SecurityGroup15": {
+            "Properties": {
+                "CidrIp": "0.0.0.0/0",
+                "FromPort": "15",
+                "GroupId": {
+                    "Fn::GetAtt" : [ "SecurityGroup" , "GroupId" ]
+                },
+                "IpProtocol": "tcp",
+                "ToPort": "15"
+            },
+            "Type": "AWS::EC2::SecurityGroupIngress"
+        },
+        "SecurityGroup16": {
+            "Properties": {
+                "CidrIp": "0.0.0.0/0",
+                "FromPort": "16",
+                "GroupId": {
+                    "Fn::GetAtt" : [ "SecurityGroup" , "GroupId" ]
+                },
+                "IpProtocol": "tcp",
+                "ToPort": "16"
+            },
+            "Type": "AWS::EC2::SecurityGroupIngress"
+        },
+        "SecurityGroup17": {
+            "Properties": {
+                "CidrIp": "0.0.0.0/0",
+                "FromPort": "17",
+                "GroupId": {
+                    "Fn::GetAtt" : [ "SecurityGroup" , "GroupId" ]
+                },
+                "IpProtocol": "tcp",
+                "ToPort": "17"
+            },
+            "Type": "AWS::EC2::SecurityGroupIngress"
+        },
+        "SecurityGroup18": {
+            "Properties": {
+                "CidrIp": "0.0.0.0/0",
+                "FromPort": "18",
+                "GroupId": {
+                    "Fn::GetAtt" : [ "SecurityGroup" , "GroupId" ]
+                },
+                "IpProtocol": "tcp",
+                "ToPort": "18"
+            },
+            "Type": "AWS::EC2::SecurityGroupIngress"
+        },
+        "SecurityGroup19": {
+            "Properties": {
+                "CidrIp": "0.0.0.0/0",
+                "FromPort": "19",
+                "GroupId": {
+                    "Fn::GetAtt" : [ "SecurityGroup" , "GroupId" ]
+                },
+                "IpProtocol": "tcp",
+                "ToPort": "19"
+            },
+            "Type": "AWS::EC2::SecurityGroupIngress"
+        },
+        "SecurityGroup20": {
+            "Properties": {
+                "CidrIp": "0.0.0.0/0",
+                "FromPort": "20",
+                "GroupId": {
+                    "Fn::GetAtt" : [ "SecurityGroup" , "GroupId" ]
+                },
+                "IpProtocol": "tcp",
+                "ToPort": "20"
+            },
+            "Type": "AWS::EC2::SecurityGroupIngress"
+        },
+        "SecurityGroup21": {
+            "Properties": {
+                "CidrIp": "0.0.0.0/0",
+                "FromPort": "21",
+                "GroupId": {
+                    "Fn::GetAtt" : [ "SecurityGroup" , "GroupId" ]
+                },
+                "IpProtocol": "tcp",
+                "ToPort": "21"
+            },
+            "Type": "AWS::EC2::SecurityGroupIngress"
+        },
+        "SecurityGroup22": {
+            "Properties": {
+                "CidrIp": "0.0.0.0/0",
+                "FromPort": "22",
+                "GroupId": {
+                    "Fn::GetAtt" : [ "SecurityGroup" , "GroupId" ]
+                },
+                "IpProtocol": "tcp",
+                "ToPort": "22"
+            },
+            "Type": "AWS::EC2::SecurityGroupIngress"
+        }
+    }
+}

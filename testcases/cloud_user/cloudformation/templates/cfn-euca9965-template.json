@@ -1,0 +1,209 @@
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
+
+  "Description" : "AWS CloudFormation Sample Template AutoScalingSingleAZ: Create a single-az, load balanced and Auto Scaled sample web site running on an Nginx Web Server. The application is configured to span in one availability zone (one cluster) and is Auto-Scaled based on the CPU utilization of the web servers.",
+
+  "Parameters" : {
+    "InstanceType" : {
+      "Description" : "WebServer EC2 instance type",
+      "Type" : "String",
+      "Default" : "m1.large",
+      "AllowedValues" : [ "t1.micro", "t2.micro", "t2.small", "t2.medium", "m1.small", "m1.medium", "m1.large",
+      "m1.xlarge", "m2.xlarge", "m2.2xlarge", "m2.4xlarge", "m3.medium", "m3.large", "m3.xlarge", "m3.2xlarge", "c1.medium", "c1.xlarge", "c3.large", "c3.xlarge", "c3.2xlarge",
+      "c3.4xlarge", "c3.8xlarge", "g2.2xlarge", "r3.large", "r3.xlarge", "r3.2xlarge", "r3.4xlarge", "r3.8xlarge", "i2.xlarge", "i2.2xlarge", "i2.4xlarge", "i2.8xlarge",
+      "hi1.4xlarge", "hs1.8xlarge", "cr1.8xlarge", "cc2.8xlarge", "cg1.4xlarge"],
+      "ConstraintDescription" : "must be a valid EC2 instance type."
+    },
+
+    "UbuntuImageId": {
+        "Description":"Ubuntu Image id",
+        "Type":"String",
+        "NoEcho":"False"
+    },
+
+    "UserKeyPair" : {
+      "Description" : "The EC2 Key Pair to allow SSH access to the instances",
+      "Type":"String",
+      "ConstraintDescription" : "must be the name of an existing EC2 KeyPair."
+    },
+
+    "MinSize" : {
+        "Description" : "Minimum number of EC2 instances.",
+        "Type" : "Number",
+        "Default" : "2"
+    },
+
+    "MaxSize" : {
+        "Description" : "Maximum number of EC2 instances.",
+        "Type" : "Number",
+        "Default" : "4"
+    },
+
+    "Zone": {
+        "Description": "Availability zone",
+        "Type": "String"
+    }
+  },
+
+  "Resources" : {
+
+    "WebServerGroup" : {
+      "CreationPolicy" : {
+        "ResourceSignal" : {
+          "Timeout" : "PT15M",
+          "Count"   : "1"
+        }
+      },
+      "UpdatePolicy" : {
+          "AutoScalingRollingUpdate" : {
+              "MinInstancesInService" : {"Ref" : "MinSize"},
+              "MaxBatchSize" : "3",
+              "PauseTime" : "PT15M"
+          }
+      },
+      "Type": "AWS::AutoScaling::AutoScalingGroup",
+      "Properties": {
+          "AvailabilityZones" : [{ "Ref" : "Zone" }],
+          "Cooldown": "300",
+          "MaxSize": {"Ref" : "MaxSize"},
+          "MinSize": {"Ref" : "MinSize"},
+          "LaunchConfigurationName": {"Ref": "LaunchConfig"},
+          "HealthCheckType" : "EC2",
+          "HealthCheckGracePeriod" : "3600",
+          "LoadBalancerNames" : [ { "Ref" : "ElasticLoadBalancer" } ],
+          "Tags": [{"Key": "Name", "Value": {"Ref": "AWS::StackName"}, "PropagateAtLaunch" : true}]
+      }
+    },
+
+    "LaunchConfig" : {
+        "Type": "AWS::AutoScaling::LaunchConfiguration",
+        "Properties": {
+            "ImageId": {"Ref" : "UbuntuImageId"},
+            "InstanceType": {"Ref": "InstanceType"},
+            "KeyName": {"Ref": "UserKeyPair"},
+            "UserData" : { "Fn::Base64" : { "Fn::Join" : ["",[
+                "#cloud-config","\n",
+                "apt_update: true","\n",
+                "apt_upgrade: true","\n",
+                "disable_root: true","\n",
+                "packages:","\n",
+                " - less","\n",
+                "runcmd:","\n",
+                " - [ apt-get, install, -y, --force-yes, dnsutils ]","\n",
+                " - [ apt-get, install, -y, --force-yes, bind9utils ]","\n",
+                " - [ apt-get, install, -y, --force-yes, mlocate ]","\n",
+                " - [ apt-get, install, -y, --force-yes, nginx ]","\n" ]]}
+            },
+            "SecurityGroups": [{"Ref": "InstanceSecurityGroup"}],
+            "InstanceMonitoring": true
+       }
+    },
+
+    "WebServerScaleUpPolicy" : {
+      "Type" : "AWS::AutoScaling::ScalingPolicy",
+      "Properties" : {
+        "AdjustmentType" : "ChangeInCapacity",
+        "AutoScalingGroupName" : { "Ref" : "WebServerGroup" },
+        "Cooldown" : "60",
+        "ScalingAdjustment" : "1"
+      }
+    },
+    "WebServerScaleDownPolicy" : {
+      "Type" : "AWS::AutoScaling::ScalingPolicy",
+      "Properties" : {
+        "AdjustmentType" : "ChangeInCapacity",
+        "AutoScalingGroupName" : { "Ref" : "WebServerGroup" },
+        "Cooldown" : "60",
+        "ScalingAdjustment" : "-1"
+      }
+    },
+
+    "CPUAlarmHigh": {
+     "Type": "AWS::CloudWatch::Alarm",
+     "Properties": {
+        "AlarmDescription": "Scale-up if CPU > 90% for 10 minutes",
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/EC2",
+        "Statistic": "Average",
+        "Period": "300",
+        "EvaluationPeriods": "2",
+        "Threshold": "90",
+        "AlarmActions": [ { "Ref": "WebServerScaleUpPolicy" } ],
+        "Dimensions": [
+          {
+            "Name": "AutoScalingGroupName",
+            "Value": { "Ref": "WebServerGroup" }
+          }
+        ],
+        "ComparisonOperator": "GreaterThanThreshold"
+      }
+    },
+    "CPUAlarmLow": {
+     "Type": "AWS::CloudWatch::Alarm",
+     "Properties": {
+        "AlarmDescription": "Scale-down if CPU < 70% for 10 minutes",
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/EC2",
+        "Statistic": "Average",
+        "Period": "300",
+        "EvaluationPeriods": "2",
+        "Threshold": "70",
+        "AlarmActions": [ { "Ref": "WebServerScaleDownPolicy" } ],
+        "Dimensions": [
+          {
+            "Name": "AutoScalingGroupName",
+            "Value": { "Ref": "WebServerGroup" }
+          }
+        ],
+        "ComparisonOperator": "LessThanThreshold"
+      }
+    },
+
+    "ElasticLoadBalancer" : {
+      "Type" : "AWS::ElasticLoadBalancing::LoadBalancer",
+      "Properties" : {
+        "AvailabilityZones" : [{ "Ref" : "Zone" }],
+        "CrossZone" : "true",
+        "Listeners" : [ {
+          "LoadBalancerPort" : "80",
+          "InstancePort" : "80",
+          "Protocol" : "HTTP"
+        } ],
+        "HealthCheck" : {
+          "Target" : "HTTP:80/",
+          "HealthyThreshold" : "3",
+          "UnhealthyThreshold" : "5",
+          "Interval" : "30",
+          "Timeout" : "5"
+        }
+      }
+    },
+
+    "InstanceSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "GroupDescription" : "Enable SSH access and HTTP from the load balancer only",
+        "SecurityGroupIngress" : [ {
+          "IpProtocol" : "tcp",
+          "FromPort" : "22",
+          "ToPort" : "22",
+          "CidrIp" : "0.0.0.0/0"
+        },
+        {
+          "IpProtocol" : "tcp",
+          "FromPort" : "80",
+          "ToPort" : "80",
+          "SourceSecurityGroupOwnerId" : {"Fn::GetAtt" : ["ElasticLoadBalancer", "SourceSecurityGroup.OwnerAlias"]},
+          "SourceSecurityGroupName" : {"Fn::GetAtt" : ["ElasticLoadBalancer", "SourceSecurityGroup.GroupName"]}
+        } ]
+      }
+    }
+  },
+
+  "Outputs" : {
+    "URL" : {
+      "Description" : "The URL of the website",
+      "Value" :  { "Fn::Join" : [ "", [ "http://", { "Fn::GetAtt" : [ "ElasticLoadBalancer", "DNSName" ]}]]}
+    }
+  }
+}

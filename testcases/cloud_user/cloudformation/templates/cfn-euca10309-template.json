@@ -1,0 +1,53 @@
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
+
+  "Description" : "Cloudformation Example => Create 3 Volumes; two with Deletion Policy to Create Snapshot",
+  
+
+  "Resources" : {
+     "MyEBSVolume1" : {
+         "Type" : "AWS::EC2::Volume",
+         "Properties" : {
+             "Size" : "5",
+             "AvailabilityZone" : "one" 
+         },
+         "DeletionPolicy" : "Snapshot"
+     },
+     "MyEBSVolume2" : {
+         "Type" : "AWS::EC2::Volume",
+         "Properties" : {
+             "Size" : "5",
+             "AvailabilityZone" : "one" 
+         },
+         "DeletionPolicy" : "Snapshot"
+     },
+     "MyEBSVolume3" : {
+         "Type" : "AWS::EC2::Volume",
+         "Properties" : {
+             "Size" : "5",
+             "AvailabilityZone" : "one" 
+         }
+     }
+  },
+
+  "Outputs" : {
+      "VolumeId1": {
+          "Value": {
+              "Ref": "MyEBSVolume1"
+          },
+          "Description": "ID of Volume Created"
+      },
+      "VolumeId2": {
+          "Value": {
+              "Ref": "MyEBSVolume2"
+          },
+          "Description": "ID of Volume Created"
+      },
+      "VolumeId3": {
+          "Value": {
+              "Ref": "MyEBSVolume3"
+          },
+          "Description": "ID of Volume Created"
+      }
+  }
+}
