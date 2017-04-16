@@ -293,6 +293,7 @@ class Install(EutesterTestCase):
             ### hypervisor's default network
             for node in self.tester.service_manager.get_all_node_controllers():
                 node.sys('virsh net-destroy default')
+                node.sys('virsh net-autostart --disable default')
 
             ### add private interface subnet on NC bridges
             ip_index = 2
@@ -318,7 +319,8 @@ class Install(EutesterTestCase):
             else:
                 public_ips = [public_ips]
 
-            network_config = {"InstanceDnsDomain": "eucalyptus.internal",
+            network_config = {"Mode": "EDGE",
+                              "InstanceDnsDomain": "eucalyptus.internal",
                               "InstanceDnsServers": [enabled_clc.hostname],
                               "PublicIps": public_ips,
                               "Subnets": [],
