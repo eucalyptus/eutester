@@ -620,12 +620,13 @@ class ObjectTestSuite(EutesterTestCase):
         #Restore v1 using copy
         self.tester.info("Restoring version")
         try:
-            self.test_bucket.copy_key(new_key_name=obj_v1.key,src_bucket_name=self.test_bucket_name,src_key_name=keyname,src_version_id=obj_v1.version_id)
+            self.test_bucket.copy_key(new_key_name=obj_v1.key, src_bucket_name=self.test_bucket.name,
+                                      src_key_name=keyname, src_version_id=obj_v1.version_id)
         except S3ResponseError as e:
             self.fail("Failed to restore key from previous version using copy got error: " + str(e.status))
 
         restored_obj = self.test_bucket.get_key(keyname)
-        assert(restored_obj != None)
+        assert(restored_obj is not None)
         self.tester.check_md5(eTag=restored_obj.etag,data=v1data)
         self.print_key_info(keys=[restored_obj])
 
