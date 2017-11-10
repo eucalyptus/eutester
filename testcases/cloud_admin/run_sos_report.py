@@ -29,16 +29,15 @@ class SOSreport(EutesterTestCase):
         """
         This is where the test description goes
         """
-        for machine in self.tester.get_component_machines():
+        for machine in self.uniqify_component_machines():
             assert isinstance(machine, Machine)
             if machine.distro.name is "vmware":
                 continue
-            machine.install("sos")
-            machine.sys("yum install -y --nogpg eucalyptus-sos-plugins")
+            machine.sys("yum install -y --nogpg sos eucalyptus-sos-plugins")
 
     def Run(self):
         error_msg = ""
-        for machine in self.tester.get_component_machines():
+        for machine in self.uniqify_component_machines():
             try:
                 assert isinstance(machine, Machine)
                 if machine.distro.name is "vmware":
@@ -55,7 +54,7 @@ class SOSreport(EutesterTestCase):
 
     def Download(self):
         error_msg = ""
-        for machine in self.tester.get_component_machines():
+        for machine in self.uniqify_component_machines():
             assert isinstance(machine, Machine)
             if machine.distro.name is "vmware":
                 continue
@@ -75,6 +74,18 @@ class SOSreport(EutesterTestCase):
         self.Install()
         self.Run()
         self.Download()
+
+    def uniqify_component_machines(self):
+        newarray = []
+        all_machines = self.tester.get_component_machines()
+        for machine in all_machines:
+            already_in_list = 0
+            for item in newarray:
+                if machine.hostname == item.hostname:
+                    already_in_list = 1
+            if not already_in_list:
+                newarray.append(machine)
+        return newarray
 
 if __name__ == "__main__":
     testcase = SOSreport()

@@ -1,9 +1,16 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
     "Parameters": {
+        "KeyName" : {
+            "Type" : "String"
+        },
+        "ImageId" : {
+            "Type" : "String"
+        },
         "Zone": {
             "Description": "Availability zone",
-            "Type": "String"
+            "Type": "String",
+            "Default": "one"
         }
     },
     "Resources": {

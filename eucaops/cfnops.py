@@ -88,7 +88,8 @@ class CFNops(Eutester):
 
     def create_stack(self, stack_name, template_body, template_url=None, parameters=None):
         self.info("Creating stack: {0}".format(stack_name))
-        self.cloudformation.create_stack(stack_name, template_body, template_url=template_url, parameters=parameters)
+        self.cloudformation.create_stack(stack_name, template_body, capabilities=['CAPABILITY_IAM'],
+                                         template_url=template_url, parameters=parameters)
 
     def delete_stack(self, stack_name):
         self.info("Deleting stack: {0}".format(stack_name))

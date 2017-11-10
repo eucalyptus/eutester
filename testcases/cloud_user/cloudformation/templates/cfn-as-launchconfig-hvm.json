@@ -5,7 +5,7 @@
     "Description":"Test Creation of AutoScaling Launch Configuration",
 
     "Parameters": {
-        "EucaImageId": {
+        "ImageId": {
             "Description":"Eucalyptus Machine Image Id",
             "Type":"String",
             "NoEcho":"True"
@@ -18,7 +18,7 @@
             "Default":"True"
         },
 
-        "UserKeyPair": {
+        "KeyName": {
             "Description":"User Key Pair",
             "Type":"String",
             "NoEcho":"True"
@@ -27,7 +27,8 @@
         "VmType": {
             "Description":"Desired VM Type for Instances",
             "Type":"String",
-            "NoEcho":"True"
+            "NoEcho":"True",
+            "Default":"m1.small"
         }
 
     },
@@ -37,7 +38,7 @@
         "EucaLaunchConfig" : {
             "Type" : "AWS::AutoScaling::LaunchConfiguration",
             "Properties": {
-                "ImageId" : { "Ref":"EucaImageId" },
+                "ImageId" : { "Ref":"ImageId" },
                 "InstanceType" : { "Ref" : "VmType" },
                 "InstanceMonitoring" : { "Ref" : "EucaMonitor" },
                 "UserData" : { "Fn::Base64" : "#include https://get.docker.io" },
@@ -50,7 +51,7 @@
                       "Ebs" : { "VolumeSize" : "5", "DeleteOnTermination" : "true" }
                     }
                 ],
-                "KeyName" : { "Ref" : "UserKeyPair" }
+                "KeyName" : { "Ref" : "KeyName" }
             }
         },
 
